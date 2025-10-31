@@ -1,122 +1,225 @@
-# Auto Forex Trading System - Docker Compose Configuration
+version: '3.8'
 
 services:
+  # PostgreSQL Database
   postgres:
-    image: postgres:17
-    container_name: forex-postgres
+    image: postgres:17-alpine
+    container_name: forex_postgres
     environment:
-      POSTGRES_DB: forex_trading
-      POSTGRES_USER: forex_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${DB_NAME:-forex_trading}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Database password required}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-    networks:
-      - forex-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-forex_trading}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
+    networks:
+      - forex_network
 
+  # Redis Cache and Message Broker
   redis:
-    image: redis:7
-    container_name: forex-redis
-    ports:
-      - "6379:6379"
+    image: redis:7-alpine
+    container_name: forex_redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
     volumes:
       - redis_data:/data
-    networks:
-      - forex-network
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
+    networks:
+      - forex_network
 
+  # Django Backend Application
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: forex-backend
+    container_name: forex_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://forex_user:${POSTGRES_PASSWORD:-changeme}@postgres:5432/forex_trading
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY:-changeme-in-production}
+      # Database
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-forex_trading}
+      
+      # Redis
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      
+      # Django
+      SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       DEBUG: ${DEBUG:-False}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      
+      # OANDA API
+      OANDA_PRACTICE_API: ${OANDA_PRACTICE_API:-https://api-fxpractice.oanda.com}
+      OANDA_LIVE_API: ${OANDA_LIVE_API:-https://api-fxtrade.oanda.com}
+      
+      # AWS (for backtesting)
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      
+      # Celery
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      
+      # Security
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Encryption key required}
     volumes:
       - ./backend:/app
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
     ports:
       - "8000:8000"
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - forex-network
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             daphne -b 0.0.0.0 -p 8000 trading_system.asgi:application"
     restart: unless-stopped
+    networks:
+      - forex_network
 
+  # Celery Worker for Background Tasks
   celery:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: forex-celery
-    command: celery -A config worker -l info
+    container_name: forex_celery
+    depends_on:
+      - backend
+      - redis
+      - postgres
     environment:
-      DATABASE_URL: postgresql://forex_user:${POSTGRES_PASSWORD:-changeme}@postgres:5432/forex_trading
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY:-changeme-in-production}
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-forex_trading}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      OANDA_PRACTICE_API: ${OANDA_PRACTICE_API:-https://api-fxpractice.oanda.com}
+      OANDA_LIVE_API: ${OANDA_LIVE_API:-https://api-fxtrade.oanda.com}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     volumes:
       - ./backend:/app
-    depends_on:
-      - postgres
-      - redis
-      - backend
-    networks:
-      - forex-network
+      - ./config:/app/config
+      - ./logs:/app/logs
+    command: celery -A trading_system worker -l info --concurrency=4
     restart: unless-stopped
+    networks:
+      - forex_network
 
+  # Celery Beat for Scheduled Tasks
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: forex_celery_beat
+    depends_on:
+      - backend
+      - redis
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-forex_trading}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+    volumes:
+      - ./backend:/app
+      - ./config:/app/config
+      - ./logs:/app/logs
+    command: celery -A trading_system beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    restart: unless-stopped
+    networks:
+      - forex_network
+
+  # React Frontend Application
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: forex-frontend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    ports:
-      - "5173:5173"
-    networks:
-      - forex-network
+    container_name: forex_frontend
+    depends_on:
+      - backend
     restart: unless-stopped
+    networks:
+      - forex_network
 
+  # Nginx Reverse Proxy with SSL
   nginx:
     build:
       context: ./nginx
       dockerfile: Dockerfile
-    container_name: forex-nginx
+    container_name: forex_nginx
+    depends_on:
+      - backend
+      - frontend
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - certbot_data:/var/www/certbot
-    depends_on:
-      - backend
-      - frontend
-    networks:
-      - forex-network
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+      - static_volume:/app/staticfiles:ro
+      - media_volume:/app/media:ro
+    command: >
+      sh -c "while :; do
+        sleep 6h & wait $${!};
+        nginx -s reload;
+      done & nginx -g 'daemon off;'"
     restart: unless-stopped
-
-  certbot:
-    image: certbot/certbot
-    container_name: forex-certbot
-    volumes:
-      - certbot_data:/var/www/certbot
-      - certbot_conf:/etc/letsencrypt
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
     networks:
-      - forex-network
+      - forex_network
 
+  # Certbot for SSL Certificate Management
+  certbot:
+    image: certbot/certbot:latest
+    container_name: forex_certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: >
+      sh -c "trap exit TERM;
+      while :; do
+        certbot renew --webroot -w /var/www/certbot --quiet;
+        sleep 12h & wait $${!};
+      done"
+    restart: unless-stopped
+    networks:
+      - forex_network
+
+# Named volumes for data persistence
 volumes:
   postgres_data:
+    driver: local
   redis_data:
-  certbot_data:
-  certbot_conf:
+    driver: local
+  static_volume:
+    driver: local
+  media_volume:
+    driver: local
 
+# Custom network for service communication
 networks:
-  forex-network:
+  forex_network:
     driver: bridge
