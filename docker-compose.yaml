@@ -1,0 +1,122 @@
+# Auto Forex Trading System - Docker Compose Configuration
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: forex-postgres
+    environment:
+      POSTGRES_DB: forex_trading
+      POSTGRES_USER: forex_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - forex-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: forex-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - forex-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: forex-backend
+    environment:
+      DATABASE_URL: postgresql://forex_user:${POSTGRES_PASSWORD:-changeme}@postgres:5432/forex_trading
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-changeme-in-production}
+      DEBUG: ${DEBUG:-False}
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - forex-network
+    restart: unless-stopped
+
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: forex-celery
+    command: celery -A config worker -l info
+    environment:
+      DATABASE_URL: postgresql://forex_user:${POSTGRES_PASSWORD:-changeme}@postgres:5432/forex_trading
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-changeme-in-production}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - postgres
+      - redis
+      - backend
+    networks:
+      - forex-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: forex-frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    networks:
+      - forex-network
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: forex-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - certbot_data:/var/www/certbot
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - forex-network
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot
+    container_name: forex-certbot
+    volumes:
+      - certbot_data:/var/www/certbot
+      - certbot_conf:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - forex-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  certbot_data:
+  certbot_conf:
+
+networks:
+  forex-network:
+    driver: bridge
