@@ -4,7 +4,8 @@
   "kiroAgent.trustedCommands": [
     "npm *",
     "ls *",
-    "npx *"
+    "npx *",
+    "which *"
   ],
   "editor.rulers": [
     100,
