@@ -156,6 +156,7 @@ jobs:
           DJANGO_ALLOWED_HOSTS=localhost
           REDIS_HOST=redis
           REDIS_PORT=6379
+          ENCRYPTION_KEY=dummy-encryption-key-for-validation-only-32-chars
           OANDA_PRACTICE_API=https://api-fxpractice.oanda.com
           OANDA_LIVE_API=https://api-fxtrade.oanda.com
           EOF
