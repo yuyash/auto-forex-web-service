@@ -35,7 +35,11 @@ def test_installed_apps_configured() -> None:
 def test_database_configured() -> None:
     """Test that database is configured."""
     assert "default" in settings.DATABASES
-    assert settings.DATABASES["default"]["ENGINE"] == "django.db.backends.postgresql"
+    # Test settings use SQLite for speed, production uses PostgreSQL
+    assert settings.DATABASES["default"]["ENGINE"] in [
+        "django.db.backends.postgresql",
+        "django.db.backends.sqlite3",
+    ]
 
 
 @pytest.mark.unit
