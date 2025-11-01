@@ -14,8 +14,6 @@ import yaml
 class ConfigValidationError(Exception):
     """Raised when configuration validation fails."""
 
-    pass
-
 
 class ConfigLoader:
     """
@@ -226,7 +224,7 @@ class ConfigLoader:
         if not isinstance(server_config.get("port"), int):
             raise ConfigValidationError("server.port must be an integer")
 
-        if not (1 <= server_config.get("port", 0) <= 65535):
+        if not 1 <= server_config.get("port", 0) <= 65535:
             raise ConfigValidationError("server.port must be between 1 and 65535")
 
         if not isinstance(server_config.get("debug"), bool):
@@ -357,7 +355,7 @@ def get_config_loader(config_path: Optional[str] = None) -> ConfigLoader:
     Returns:
         The global ConfigLoader instance.
     """
-    global _config_loader
+    global _config_loader  # pylint: disable=global-statement
 
     if _config_loader is None:
         _config_loader = ConfigLoader(config_path)

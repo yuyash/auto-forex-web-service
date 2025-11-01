@@ -10,10 +10,13 @@ Tests cover:
 Requirements: 1.1, 1.2, 2.1, 2.2
 """
 
-import pytest
-from django.utils import timezone
 from datetime import timedelta
-from accounts.models import User, UserSettings, UserSession, BlockedIP
+
+from django.utils import timezone
+
+import pytest
+
+from accounts.models import BlockedIP, User, UserSession, UserSettings
 
 
 @pytest.mark.django_db
@@ -37,12 +40,14 @@ class TestUserModel:
 
     def test_user_email_unique_constraint(self) -> None:
         """Test that email must be unique."""
+        from django.db import IntegrityError
+
         User.objects.create_user(
             username="user1",
             email="test@example.com",
             password="pass123",
         )
-        with pytest.raises(Exception):  # IntegrityError
+        with pytest.raises(IntegrityError):
             User.objects.create_user(
                 username="user2",
                 email="test@example.com",
@@ -176,6 +181,8 @@ class TestUserSettingsModel:
 
     def test_user_settings_one_to_one_relationship(self) -> None:
         """Test that each user can have only one settings object."""
+        from django.db import IntegrityError
+
         user = User.objects.create_user(
             username="testuser",
             email="test@example.com",
@@ -183,7 +190,7 @@ class TestUserSettingsModel:
         )
         UserSettings.objects.create(user=user)
 
-        with pytest.raises(Exception):  # IntegrityError
+        with pytest.raises(IntegrityError):
             UserSettings.objects.create(user=user)
 
     def test_user_settings_json_field(self) -> None:
@@ -234,6 +241,8 @@ class TestUserSessionModel:
 
     def test_user_session_unique_session_key(self) -> None:
         """Test that session_key must be unique."""
+        from django.db import IntegrityError
+
         user = User.objects.create_user(
             username="testuser",
             email="test@example.com",
@@ -245,7 +254,7 @@ class TestUserSessionModel:
             ip_address="192.168.1.1",
         )
 
-        with pytest.raises(Exception):  # IntegrityError
+        with pytest.raises(IntegrityError):
             UserSession.objects.create(
                 user=user,
                 session_key="unique_key",
@@ -343,6 +352,8 @@ class TestBlockedIPModel:
 
     def test_blocked_ip_unique_constraint(self) -> None:
         """Test that IP address must be unique."""
+        from django.db import IntegrityError
+
         blocked_until = timezone.now() + timedelta(hours=1)
         BlockedIP.objects.create(
             ip_address="192.168.1.100",
@@ -350,7 +361,7 @@ class TestBlockedIPModel:
             blocked_until=blocked_until,
         )
 
-        with pytest.raises(Exception):  # IntegrityError
+        with pytest.raises(IntegrityError):
             BlockedIP.objects.create(
                 ip_address="192.168.1.100",
                 reason="Another test",
@@ -524,6 +535,8 @@ class TestOandaAccountModel:
 
     def test_oanda_account_unique_constraint(self) -> None:
         """Test unique constraint on user + account_id."""
+        from django.db import IntegrityError
+
         user = User.objects.create_user(
             username="testuser",
             email="test@example.com",
@@ -541,7 +554,7 @@ class TestOandaAccountModel:
         account1.save()
 
         # Try to create another account with same user + account_id
-        with pytest.raises(Exception):  # IntegrityError
+        with pytest.raises(IntegrityError):
             account2 = OandaAccount.objects.create(
                 user=user,
                 account_id="001-001-1234567-001",
@@ -593,8 +606,9 @@ class TestOandaAccountModel:
             password="pass123",
         )
 
-        from accounts.models import OandaAccount
         from decimal import Decimal
+
+        from accounts.models import OandaAccount
 
         account = OandaAccount.objects.create(
             user=user,
@@ -651,8 +665,9 @@ class TestOandaAccountModel:
             password="pass123",
         )
 
-        from accounts.models import OandaAccount
         from django.conf import settings
+
+        from accounts.models import OandaAccount
 
         # Practice account
         practice_account = OandaAccount.objects.create(

@@ -88,7 +88,6 @@ Before you begin, ensure you have:
    ```bash
    cat ~/.ssh/github-actions-forex
    ```
-   Copy the entire output including the `-----BEGIN OPENSSH PRIVATE KEY-----` and `-----END OPENSSH PRIVATE KEY-----` lines.
 
 ## Step 4: Configure GitHub Secrets
 
@@ -99,15 +98,15 @@ Before you begin, ensure you have:
 
 ### Required Secrets
 
-| Secret Name           | Description                        | Example Value                              |
-| --------------------- | ---------------------------------- | ------------------------------------------ |
-| `DOCKERHUB_USERNAME`  | Your DockerHub username            | `myusername`                               |
-| `DOCKERHUB_TOKEN`     | DockerHub access token from Step 1 | `dckr_pat_abc123...`                       |
-| `SSH_PRIVATE_KEY`     | Private SSH key from Step 3        | `-----BEGIN OPENSSH PRIVATE KEY-----\n...` |
-| `SERVER_HOST`         | Production server hostname or IP   | `trading.example.com` or `192.168.1.100`   |
-| `SERVER_USER`         | SSH username on the server         | `ubuntu` or `deploy`                       |
-| `DEPLOY_PATH`         | Deployment directory path          | `/home/ubuntu/forex-trading-system`        |
-| `SSH_PORT` (optional) | SSH port number (default: 22)      | `22` or `2222`                             |
+| Secret Name           | Description                        | Example Value                            |
+| --------------------- | ---------------------------------- | ---------------------------------------- |
+| `DOCKERHUB_USERNAME`  | Your DockerHub username            | `myusername`                             |
+| `DOCKERHUB_TOKEN`     | DockerHub access token from Step 1 | `dckr_pat_abc123...`                     |
+| `SSH_PRIVATE_KEY`     | Private SSH key from Step 3        | `private key`                            |
+| `SERVER_HOST`         | Production server hostname or IP   | `trading.example.com` or `192.168.1.100` |
+| `SERVER_USER`         | SSH username on the server         | `ubuntu` or `deploy`                     |
+| `DEPLOY_PATH`         | Deployment directory path          | `/home/ubuntu/forex-trading-system`      |
+| `SSH_PORT` (optional) | SSH port number (default: 22)      | `22` or `2222`                           |
 
 ### Adding a Secret
 

@@ -35,6 +35,15 @@ dev = [
     "pylint>=3.3.0",
     "django-stubs>=5.1.0",
     "djangorestframework-stubs>=3.15.0",
+    "pre-commit>=4.0.0",
+    "isort>=5.13.0",
+    "bandit>=1.7.0",
+    "flake8-bugbear>=24.0.0",
+    "flake8-comprehensions>=3.15.0",
+    "flake8-simplify>=0.21.0",
+    "interrogate>=1.7.0",
+    "types-PyYAML>=6.0.0",
+    "types-redis>=4.6.0",
 ]
 
 [build-system]
@@ -152,10 +161,15 @@ disable = [
     "too-few-public-methods",
     "invalid-name",
     "no-member",  # Django models have dynamic attributes
+    "duplicate-code",  # Migrations and models naturally have similar code
 ]
 
 [tool.pylint.format]
 max-line-length = 100
+
+[tool.flake8]
+max-line-length = 100
+ignore = []
 
 [tool.pylint.basic]
 good-names = ["i", "j", "k", "ex", "Run", "_", "id", "pk"]
@@ -163,3 +177,33 @@ good-names = ["i", "j", "k", "ex", "Run", "_", "id", "pk"]
 [tool.pylint.design]
 max-attributes = 15
 max-args = 10
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_gitignore = true
+known_django = "django"
+known_first_party = ["trading_system", "trading", "accounts"]
+sections = ["FUTURE", "STDLIB", "DJANGO", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+
+[tool.bandit]
+exclude_dirs = [".venv", "tests", "migrations"]
+skips = ["B101", "B601"]
+
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = false
+ignore-magic = false
+ignore-semiprivate = false
+ignore-private = false
+ignore-property-decorators = false
+ignore-module = false
+ignore-nested-functions = false
+ignore-nested-classes = true
+ignore-setters = false
+fail-under = 0
+exclude = ["setup.py", "docs", "build", "migrations", "tests"]
+verbose = 0
+quiet = false
+whitelist-regex = []
+color = true

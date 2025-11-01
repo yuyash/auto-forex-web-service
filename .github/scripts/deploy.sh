@@ -28,13 +28,13 @@ print_error() {
 check_env_vars() {
     local required_vars=("SERVER_HOST" "SERVER_USER" "DEPLOY_PATH")
     local missing_vars=()
-    
+
     for var in "${required_vars[@]}"; do
         if [ -z "${!var}" ]; then
             missing_vars+=("$var")
         fi
     done
-    
+
     if [ ${#missing_vars[@]} -ne 0 ]; then
         print_error "Missing required environment variables: ${missing_vars[*]}"
         print_info "Please set the following variables:"
@@ -44,7 +44,7 @@ check_env_vars() {
         print_info "  export SSH_PORT=22 (optional, defaults to 22)"
         exit 1
     fi
-    
+
     # Set default SSH port if not specified
     if [ -z "${SSH_PORT}" ]; then
         SSH_PORT=22
@@ -57,7 +57,7 @@ check_env_vars() {
 # Test SSH connection
 test_ssh_connection() {
     print_info "Testing SSH connection to ${SERVER_USER}@${SERVER_HOST}:${SSH_PORT}..."
-    
+
     if ssh -p "${SSH_PORT}" -o ConnectTimeout=10 -o BatchMode=yes "${SERVER_USER}@${SERVER_HOST}" "echo 'SSH connection successful'" > /dev/null 2>&1; then
         print_info "SSH connection successful"
     else
@@ -74,26 +74,26 @@ test_ssh_connection() {
 # Copy files to server
 copy_files() {
     print_info "Copying files to server..."
-    
+
     # Check if docker-compose.prod.yaml exists
     if [ ! -f docker-compose.prod.yaml ]; then
         print_error "docker-compose.prod.yaml not found"
         exit 1
     fi
-    
+
     # Copy docker-compose.prod.yaml as docker-compose.yaml
     print_info "Copying docker-compose.prod.yaml as docker-compose.yaml..."
     scp -P "${SSH_PORT}" docker-compose.prod.yaml "${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/docker-compose.yaml" || {
         print_error "Failed to copy docker-compose.prod.yaml"
         exit 1
     }
-    
+
     # Copy nginx configuration
     scp -P "${SSH_PORT}" -r nginx "${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/" || {
         print_error "Failed to copy nginx configuration"
         exit 1
     }
-    
+
     # Copy .env file if it exists
     if [ -f .env ]; then
         print_warning "Copying .env file - ensure it contains production values"
@@ -104,26 +104,26 @@ copy_files() {
     else
         print_warning ".env file not found - ensure it exists on the server"
     fi
-    
+
     print_info "Files copied successfully"
 }
 
 # Sync PostgreSQL password with .env
 sync_postgres_password() {
     print_info "Checking PostgreSQL password synchronization..."
-    
+
     ssh -p "${SSH_PORT}" "${SERVER_USER}@${SERVER_HOST}" << 'EOF'
         set -e
         cd ${DEPLOY_PATH}
-        
+
         # Check if postgres container is running
         if docker compose ps postgres | grep -q "Up"; then
             # Extract password from .env
             DB_PASSWORD=$(grep "^DB_PASSWORD=" .env | cut -d '=' -f2)
-            
+
             if [ -n "$DB_PASSWORD" ]; then
                 echo "Testing current PostgreSQL password..."
-                
+
                 # Test if password is already correct by trying to connect
                 if PGPASSWORD="$DB_PASSWORD" docker exec -e PGPASSWORD="$DB_PASSWORD" forex_postgres psql -U postgres -c "SELECT 1;" > /dev/null 2>&1; then
                     echo "✓ PostgreSQL password is already correct, no action needed"
@@ -146,35 +146,35 @@ EOF
 # Deploy application
 deploy_application() {
     print_info "Deploying application on server..."
-    
+
     ssh -p "${SSH_PORT}" "${SERVER_USER}@${SERVER_HOST}" << EOF
         set -e
         cd ${DEPLOY_PATH}
-        
+
         echo "Pulling latest Docker images..."
         docker compose pull
-        
+
         echo "Stopping old containers..."
         docker compose down
-        
+
         echo "Starting new containers..."
         docker compose up -d
-        
+
         echo "Waiting for services to start..."
         sleep 10
-        
+
         echo "Checking service status..."
         docker compose ps
-        
+
         echo "Cleaning up old images..."
         docker image prune -af
-        
+
         echo "Deployment completed"
 EOF
-    
+
     # Sync password after deployment
     sync_postgres_password
-    
+
     if [ $? -eq 0 ]; then
         print_info "Deployment successful"
     else
@@ -186,11 +186,11 @@ EOF
 # Verify deployment
 verify_deployment() {
     print_info "Verifying deployment..."
-    
+
     ssh -p "${SSH_PORT}" "${SERVER_USER}@${SERVER_HOST}" << EOF
         set -e
         cd ${DEPLOY_PATH}
-        
+
         # Check if containers are running
         if docker compose ps | grep -q "Up"; then
             echo "✅ All services are running"
@@ -205,7 +205,7 @@ verify_deployment() {
             exit 1
         fi
 EOF
-    
+
     if [ $? -eq 0 ]; then
         print_info "Verification successful"
     else
@@ -217,14 +217,14 @@ EOF
 # Rollback to previous version
 rollback() {
     print_warning "Rolling back to previous version..."
-    
+
     ssh -p "${SSH_PORT}" "${SERVER_USER}@${SERVER_HOST}" << EOF
         set -e
         cd ${DEPLOY_PATH}
-        
+
         echo "Stopping current containers..."
         docker compose down
-        
+
         echo "Starting previous version..."
         # This assumes you have a backup of the previous docker-compose.yaml
         if [ -f docker-compose.yaml.backup ]; then
@@ -242,13 +242,13 @@ EOF
 main() {
     print_info "Starting deployment process..."
     print_info "Target: ${SERVER_USER}@${SERVER_HOST}:${SSH_PORT}:${DEPLOY_PATH}"
-    
+
     check_env_vars
     test_ssh_connection
     copy_files
     deploy_application
     verify_deployment
-    
+
     print_info "🎉 Deployment completed successfully!"
 }
 

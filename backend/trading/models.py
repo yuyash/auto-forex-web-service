@@ -13,10 +13,11 @@ Requirements: 5.1, 5.2, 8.1, 8.2, 9.1, 9.2, 18.1
 
 from decimal import Decimal
 
-from accounts.models import OandaAccount
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.utils import timezone
+
+from accounts.models import OandaAccount
 
 User = get_user_model()
 
@@ -581,11 +582,10 @@ class Trade(models.Model):
             if hours < 1:
                 minutes = delta.total_seconds() / 60
                 return f"{minutes:.0f}m"
-            elif hours < 24:
+            if hours < 24:
                 return f"{hours:.1f}h"
-            else:
-                days = hours / 24
-                return f"{days:.1f}d"
+            days = hours / 24
+            return f"{days:.1f}d"
         return "N/A"
 
     @property

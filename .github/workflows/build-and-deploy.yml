@@ -188,30 +188,30 @@ jobs:
           # SSH into server and deploy
           ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} << EOF
             cd ${DEPLOY_PATH}
-            
+
             # Add DOCKERHUB_USERNAME to .env if not present
             if ! grep -q "DOCKERHUB_USERNAME" .env; then
               echo "DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME}" >> .env
             fi
-            
+
             # Pull latest images from DockerHub
             docker compose pull
-            
+
             # Stop and remove old containers
             docker compose down
-            
+
             # Start new containers
             docker compose up -d
-            
+
             # Wait for PostgreSQL to be ready
             echo "Waiting for PostgreSQL to be healthy..."
             sleep 15
-            
+
             # Sync PostgreSQL password with .env to prevent authentication issues
             DB_PASSWORD=\$(grep "^DB_PASSWORD=" .env | cut -d '=' -f2)
             if [ -n "\${DB_PASSWORD}" ]; then
               echo "Checking PostgreSQL password..."
-              
+
               # Test if current password works
               if docker exec forex_postgres psql -U postgres -c "SELECT 1;" > /dev/null 2>&1; then
                 echo "✓ PostgreSQL password is already correct, no restart needed"
@@ -223,10 +223,10 @@ jobs:
                 echo "✓ Password sync and restart completed"
               fi
             fi
-            
+
             # Clean up old images
             docker image prune -af
-            
+
             # Show running containers
             docker compose ps
           EOF
@@ -240,16 +240,16 @@ jobs:
         run: |
           ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} << EOF
             cd ${DEPLOY_PATH}
-            
+
             # Wait for services to be healthy
             sleep 10
-            
+
             # Check if all services are running
             RUNNING_COUNT=\$(docker compose ps --status running --format json | wc -l)
             TOTAL_COUNT=\$(docker compose ps --format json | wc -l)
-            
+
             echo "Running services: \${RUNNING_COUNT}/\${TOTAL_COUNT}"
-            
+
             if [ "\${RUNNING_COUNT}" -eq "\${TOTAL_COUNT}" ] && [ "\${RUNNING_COUNT}" -gt 0 ]; then
               echo "✅ Deployment successful - all services are running"
               docker compose ps

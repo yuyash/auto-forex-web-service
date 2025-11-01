@@ -20,8 +20,6 @@ help:
 	@echo "  make clean          - Remove containers and volumes"
 	@echo "  make backup         - Backup database"
 	@echo "  make restore        - Restore database from backup"
-	@echo "  make ssl-init       - Initialize SSL certificates"
-	@echo "  make ssl-renew      - Renew SSL certificates"
 	@echo "  make ps             - Show service status"
 	@echo "  make stats          - Show resource usage"
 
@@ -93,14 +91,6 @@ restore:
 	@echo ""
 	@read -p "Enter backup filename: " backup; \
 	gunzip -c backups/$$backup | docker-compose exec -T postgres psql -U postgres forex_trading
-
-# SSL certificate initialization
-ssl-init:
-	./init-letsencrypt.sh
-
-# SSL certificate renewal
-ssl-renew:
-	docker-compose run --rm certbot renew
 
 # Show service status
 ps:

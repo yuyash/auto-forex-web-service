@@ -35,7 +35,7 @@ check_workflow_exists() {
 # Validate YAML syntax
 validate_yaml_syntax() {
     print_info "Validating YAML syntax..."
-    
+
     if command -v yamllint &> /dev/null; then
         yamllint .github/workflows/build-and-deploy.yml || {
             print_error "YAML syntax validation failed"
@@ -51,7 +51,7 @@ validate_yaml_syntax() {
 # Check for required secrets in workflow
 check_required_secrets() {
     print_info "Checking for required secrets..."
-    
+
     local workflow_file=".github/workflows/build-and-deploy.yml"
     local required_secrets=(
         "DOCKERHUB_USERNAME"
@@ -61,15 +61,15 @@ check_required_secrets() {
         "SERVER_USER"
         "DEPLOY_PATH"
     )
-    
+
     local missing_secrets=()
-    
+
     for secret in "${required_secrets[@]}"; do
         if ! grep -q "secrets\.${secret}" "$workflow_file"; then
             missing_secrets+=("$secret")
         fi
     done
-    
+
     if [ ${#missing_secrets[@]} -ne 0 ]; then
         print_warning "The following secrets are not referenced in the workflow:"
         for secret in "${missing_secrets[@]}"; do
@@ -83,19 +83,19 @@ check_required_secrets() {
 # Validate Docker Compose configuration
 validate_docker_compose() {
     print_info "Validating Docker Compose configuration..."
-    
+
     if [ ! -f docker-compose.yaml ]; then
         print_error "docker-compose.yaml not found"
         exit 1
     fi
-    
+
     # Check if .env file exists
     if [ ! -f .env ]; then
         print_warning "No .env file found - Docker Compose validation may fail"
         print_info "Create .env from .env.example if needed"
         return 0
     fi
-    
+
     # Validate with environment variables
     docker compose config > /dev/null 2>&1 || {
         print_warning "Docker Compose configuration validation failed"
@@ -103,28 +103,28 @@ validate_docker_compose() {
         print_info "Ensure .env file is properly configured for deployment"
         return 0
     }
-    
+
     print_info "Docker Compose configuration is valid"
 }
 
 # Check Dockerfile existence
 check_dockerfiles() {
     print_info "Checking for Dockerfiles..."
-    
+
     local dockerfiles=(
         "backend/Dockerfile"
         "frontend/Dockerfile"
         "nginx/Dockerfile.prod"
     )
-    
+
     local missing_files=()
-    
+
     for dockerfile in "${dockerfiles[@]}"; do
         if [ ! -f "$dockerfile" ]; then
             missing_files+=("$dockerfile")
         fi
     done
-    
+
     if [ ${#missing_files[@]} -ne 0 ]; then
         print_error "Missing Dockerfiles:"
         for file in "${missing_files[@]}"; do
@@ -139,15 +139,15 @@ check_dockerfiles() {
 # Check workflow triggers
 check_workflow_triggers() {
     print_info "Checking workflow triggers..."
-    
+
     local workflow_file=".github/workflows/build-and-deploy.yml"
-    
+
     if grep -q "on:" "$workflow_file" && grep -q "push:" "$workflow_file"; then
         print_info "Workflow has push trigger configured"
     else
         print_warning "Workflow may not have push trigger configured"
     fi
-    
+
     if grep -q "pull_request:" "$workflow_file"; then
         print_info "Workflow has pull request trigger configured"
     else
@@ -158,9 +158,9 @@ check_workflow_triggers() {
 # Check for deployment conditions
 check_deployment_conditions() {
     print_info "Checking deployment conditions..."
-    
+
     local workflow_file=".github/workflows/build-and-deploy.yml"
-    
+
     if grep -q "if:.*main" "$workflow_file"; then
         print_info "Deployment is conditional on main branch"
     else
@@ -187,7 +187,7 @@ print_summary() {
 main() {
     print_info "Starting workflow validation..."
     echo ""
-    
+
     check_workflow_exists
     validate_yaml_syntax
     check_required_secrets
@@ -195,7 +195,7 @@ main() {
     check_dockerfiles
     check_workflow_triggers
     check_deployment_conditions
-    
+
     print_summary
 }
 

@@ -23,7 +23,7 @@ class TestConfigLoader:
     """Test suite for ConfigLoader class."""
 
     @pytest.fixture
-    def valid_config(self):
+    def valid_config(self) -> dict[str, dict[str, object]]:
         """Fixture providing a valid configuration dictionary."""
         return {
             "server": {
@@ -51,7 +51,7 @@ class TestConfigLoader:
         }
 
     @pytest.fixture
-    def temp_config_file(self, valid_config):
+    def temp_config_file(self, valid_config: dict[str, dict[str, object]]) -> object:
         """Fixture providing a temporary configuration file."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(valid_config, f)
@@ -62,7 +62,7 @@ class TestConfigLoader:
         # Cleanup
         Path(temp_path).unlink(missing_ok=True)
 
-    def test_load_valid_config(self, temp_config_file):
+    def test_load_valid_config(self, temp_config_file: str) -> None:
         """Test loading a valid configuration file."""
         loader = ConfigLoader(temp_config_file)
         config = loader.load()
@@ -73,14 +73,14 @@ class TestConfigLoader:
         assert "security" in config
         assert "logging" in config
 
-    def test_load_nonexistent_file(self):
+    def test_load_nonexistent_file(self) -> None:
         """Test loading a non-existent configuration file."""
         loader = ConfigLoader("/nonexistent/path/config.yaml")
 
         with pytest.raises(FileNotFoundError):
             loader.load()
 
-    def test_load_empty_file(self):
+    def test_load_empty_file(self) -> None:
         """Test loading an empty configuration file."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("")
@@ -93,7 +93,7 @@ class TestConfigLoader:
         finally:
             Path(temp_path).unlink(missing_ok=True)
 
-    def test_load_invalid_yaml(self):
+    def test_load_invalid_yaml(self) -> None:
         """Test loading a malformed YAML file."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("invalid: yaml: content:\n  - broken")
@@ -106,7 +106,7 @@ class TestConfigLoader:
         finally:
             Path(temp_path).unlink(missing_ok=True)
 
-    def test_missing_required_section(self):
+    def test_missing_required_section(self) -> None:
         """Test validation fails when required section is missing."""
         # Create config without required section
         config = {
@@ -142,7 +142,7 @@ class TestConfigLoader:
         finally:
             Path(temp_path).unlink(missing_ok=True)
 
-    def test_missing_required_field(self, temp_config_file):
+    def test_missing_required_field(self, temp_config_file: str) -> None:
         """Test validation fails when required field is missing."""
         # Load and modify config to remove required field
         with open(temp_config_file, "r") as f:
@@ -159,7 +159,7 @@ class TestConfigLoader:
         ):
             loader.load()
 
-    def test_default_values_applied(self, temp_config_file):
+    def test_default_values_applied(self, temp_config_file: str) -> None:
         """Test that default values are applied for optional fields."""
         loader = ConfigLoader(temp_config_file)
         config = loader.load()
@@ -174,7 +174,7 @@ class TestConfigLoader:
         assert "account_lock_threshold" in config["security"]
         assert config["security"]["account_lock_threshold"] == 10
 
-    def test_invalid_port_type(self, temp_config_file):
+    def test_invalid_port_type(self, temp_config_file: str) -> None:
         """Test validation fails for invalid port type."""
         with open(temp_config_file, "r") as f:
             config = yaml.safe_load(f)
@@ -188,7 +188,7 @@ class TestConfigLoader:
         with pytest.raises(ConfigValidationError, match="server.port must be an integer"):
             loader.load()
 
-    def test_invalid_port_range(self, temp_config_file):
+    def test_invalid_port_range(self, temp_config_file: str) -> None:
         """Test validation fails for port out of valid range."""
         with open(temp_config_file, "r") as f:
             config = yaml.safe_load(f)
@@ -202,7 +202,7 @@ class TestConfigLoader:
         with pytest.raises(ConfigValidationError, match="server.port must be between 1 and 65535"):
             loader.load()
 
-    def test_invalid_debug_type(self, temp_config_file):
+    def test_invalid_debug_type(self, temp_config_file: str) -> None:
         """Test validation fails for invalid debug type."""
         with open(temp_config_file, "r") as f:
             config = yaml.safe_load(f)
@@ -216,7 +216,7 @@ class TestConfigLoader:
         with pytest.raises(ConfigValidationError, match="server.debug must be a boolean"):
             loader.load()
 
-    def test_invalid_jwt_expiration(self, temp_config_file):
+    def test_invalid_jwt_expiration(self, temp_config_file: str) -> None:
         """Test validation fails for invalid JWT expiration."""
         with open(temp_config_file, "r") as f:
             config = yaml.safe_load(f)
@@ -230,7 +230,7 @@ class TestConfigLoader:
         with pytest.raises(ConfigValidationError, match="security.jwt_expiration must be positive"):
             loader.load()
 
-    def test_invalid_logging_level(self, temp_config_file):
+    def test_invalid_logging_level(self, temp_config_file: str) -> None:
         """Test validation fails for invalid logging level."""
         with open(temp_config_file, "r") as f:
             config = yaml.safe_load(f)
@@ -244,7 +244,7 @@ class TestConfigLoader:
         with pytest.raises(ConfigValidationError, match="logging.level must be one of"):
             loader.load()
 
-    def test_invalid_logging_format(self, temp_config_file):
+    def test_invalid_logging_format(self, temp_config_file: str) -> None:
         """Test validation fails for invalid logging format."""
         with open(temp_config_file, "r") as f:
             config = yaml.safe_load(f)
@@ -258,7 +258,7 @@ class TestConfigLoader:
         with pytest.raises(ConfigValidationError, match="logging.format must be one of"):
             loader.load()
 
-    def test_get_config_value(self, temp_config_file):
+    def test_get_config_value(self, temp_config_file: str) -> None:
         """Test getting configuration values by key."""
         loader = ConfigLoader(temp_config_file)
         loader.load()
@@ -267,14 +267,14 @@ class TestConfigLoader:
         assert loader.get("server.host") == "0.0.0.0"
         assert loader.get("security.jwt_expiration") == 86400
 
-    def test_get_config_value_with_default(self, temp_config_file):
+    def test_get_config_value_with_default(self, temp_config_file: str) -> None:
         """Test getting configuration value with default."""
         loader = ConfigLoader(temp_config_file)
         loader.load()
 
         assert loader.get("nonexistent.key", "default_value") == "default_value"
 
-    def test_get_section(self, temp_config_file):
+    def test_get_section(self, temp_config_file: str) -> None:
         """Test getting entire configuration section."""
         loader = ConfigLoader(temp_config_file)
         loader.load()
@@ -285,7 +285,7 @@ class TestConfigLoader:
         assert "port" in server_config
         assert "debug" in server_config
 
-    def test_get_nonexistent_section(self, temp_config_file):
+    def test_get_nonexistent_section(self, temp_config_file: str) -> None:
         """Test getting non-existent section raises KeyError."""
         loader = ConfigLoader(temp_config_file)
         loader.load()
@@ -293,7 +293,7 @@ class TestConfigLoader:
         with pytest.raises(KeyError, match="Configuration section 'nonexistent' not found"):
             loader.get_section("nonexistent")
 
-    def test_reload_config(self, temp_config_file):
+    def test_reload_config(self, temp_config_file: str) -> None:
         """Test reloading configuration from file."""
         loader = ConfigLoader(temp_config_file)
         config1 = loader.load()
@@ -313,7 +313,7 @@ class TestConfigLoader:
         assert config2["server"]["port"] == 9000
         assert config1["server"]["port"] != config2["server"]["port"]
 
-    def test_config_property(self, temp_config_file):
+    def test_config_property(self, temp_config_file: str) -> None:
         """Test accessing full configuration via property."""
         loader = ConfigLoader(temp_config_file)
         config = loader.config
@@ -322,14 +322,16 @@ class TestConfigLoader:
         assert isinstance(config, dict)
         assert "server" in config
 
-    def test_global_config_loader(self, temp_config_file):
+    def test_global_config_loader(self, temp_config_file: str) -> None:
         """Test global config loader singleton."""
         loader1 = get_config_loader(temp_config_file)
         loader2 = get_config_loader()
 
         assert loader1 is loader2
 
-    def test_get_config_convenience_function(self, valid_config):
+    def test_get_config_convenience_function(
+        self, valid_config: dict[str, dict[str, object]]
+    ) -> None:
         """Test convenience function for getting config values."""
         # Create a persistent temp file for this test
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:

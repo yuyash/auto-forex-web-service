@@ -11,11 +11,14 @@ Tests cover:
 Requirements: 5.1, 8.1, 9.1
 """
 
+from datetime import timedelta
 from decimal import Decimal
 
-import pytest
-from accounts.models import OandaAccount, User
 from django.utils import timezone
+
+import pytest
+
+from accounts.models import OandaAccount, User
 from trading.models import Order, Position, Strategy, StrategyState, Trade
 
 
@@ -23,7 +26,7 @@ from trading.models import Order, Position, Strategy, StrategyState, Trade
 class TestStrategyModel:
     """Test Strategy model functionality."""
 
-    def test_strategy_creation(self):
+    def test_strategy_creation(self) -> None:
         """Test creating a strategy with config JSON field."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -56,7 +59,7 @@ class TestStrategyModel:
         assert "EUR_USD" in strategy.instruments
         assert strategy.is_active is False
 
-    def test_strategy_start_stop(self):
+    def test_strategy_start_stop(self) -> None:
         """Test starting and stopping a strategy."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -89,7 +92,7 @@ class TestStrategyModel:
         assert strategy.is_active is False
         assert strategy.stopped_at is not None
 
-    def test_strategy_update_config(self):
+    def test_strategy_update_config(self) -> None:
         """Test updating strategy configuration."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -123,7 +126,7 @@ class TestStrategyModel:
 class TestStrategyStateModel:
     """Test StrategyState model functionality."""
 
-    def test_strategy_state_creation(self):
+    def test_strategy_state_creation(self) -> None:
         """Test creating strategy state with layer states."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -161,7 +164,7 @@ class TestStrategyStateModel:
         assert state.atr_values["EUR_USD"] == "0.00050"
         assert state.normal_atr == Decimal("0.00045")
 
-    def test_update_layer_state(self):
+    def test_update_layer_state(self) -> None:
         """Test updating layer state."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -195,7 +198,7 @@ class TestStrategyStateModel:
         assert state.layer_states["1"]["position_count"] == 5
         assert state.layer_states["1"]["entry_price"] == "1.1050"
 
-    def test_update_atr(self):
+    def test_update_atr(self) -> None:
         """Test updating ATR values."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -233,7 +236,7 @@ class TestStrategyStateModel:
 class TestOrderModel:
     """Test Order model functionality."""
 
-    def test_order_creation_with_choices(self):
+    def test_order_creation_with_choices(self) -> None:
         """Test creating orders with different types and directions."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -277,7 +280,7 @@ class TestOrderModel:
         assert limit_order.direction == "short"
         assert limit_order.price == Decimal("1.2500")
 
-    def test_order_status_transitions(self):
+    def test_order_status_transitions(self) -> None:
         """Test order status transitions."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -338,7 +341,7 @@ class TestOrderModel:
 class TestPositionModel:
     """Test Position model functionality."""
 
-    def test_position_creation(self):
+    def test_position_creation(self) -> None:
         """Test creating a position."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -368,7 +371,7 @@ class TestPositionModel:
         assert position.entry_price == Decimal("1.1000")
         assert position.unrealized_pnl == Decimal("0")
 
-    def test_calculate_unrealized_pnl_long(self):
+    def test_calculate_unrealized_pnl_long(self) -> None:
         """Test calculating unrealized P&L for long positions."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -403,7 +406,7 @@ class TestPositionModel:
         # (1.0950 - 1.1000) * 10000 = -0.0050 * 10000 = -50
         assert pnl == Decimal("-50.000000")
 
-    def test_calculate_unrealized_pnl_short(self):
+    def test_calculate_unrealized_pnl_short(self) -> None:
         """Test calculating unrealized P&L for short positions."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -438,7 +441,7 @@ class TestPositionModel:
         # -(1.1050 - 1.1000) * 10000 = -(0.0050 * 10000) = -50
         assert pnl == Decimal("-50.000000")
 
-    def test_update_price(self):
+    def test_update_price(self) -> None:
         """Test updating position price and P&L."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -470,7 +473,7 @@ class TestPositionModel:
         # 0.0050 * 10000 = 50
         assert position.unrealized_pnl == Decimal("50.00")
 
-    def test_close_position(self):
+    def test_close_position(self) -> None:
         """Test closing a position and calculating realized P&L."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -508,7 +511,7 @@ class TestPositionModel:
 class TestTradeModel:
     """Test Trade model functionality."""
 
-    def test_trade_creation(self):
+    def test_trade_creation(self) -> None:
         """Test creating a completed trade record."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -544,7 +547,7 @@ class TestTradeModel:
         assert trade.pnl == Decimal("500.00")
         assert trade.commission == Decimal("2.50")
 
-    def test_trade_net_pnl(self):
+    def test_trade_net_pnl(self) -> None:
         """Test calculating net P&L after commission."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -577,7 +580,7 @@ class TestTradeModel:
 
         assert trade.net_pnl == Decimal("497.50")  # 500.00 - 2.50
 
-    def test_trade_duration(self):
+    def test_trade_duration(self) -> None:
         """Test calculating trade duration."""
         user = User.objects.create_user(
             email="test@example.com",
@@ -593,7 +596,7 @@ class TestTradeModel:
         account.save()
 
         opened_at = timezone.now()
-        closed_at = opened_at + timezone.timedelta(hours=2, minutes=30)
+        closed_at = opened_at + timedelta(hours=2, minutes=30)
 
         trade = Trade.objects.create(
             account=account,

@@ -4,8 +4,9 @@ Test Django settings configuration.
 This test verifies that the Django settings are properly configured.
 """
 
-import pytest
 from django.conf import settings
+
+import pytest
 
 
 @pytest.mark.unit

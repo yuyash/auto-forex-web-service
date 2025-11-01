@@ -1,6 +1,6 @@
 """Test settings - uses SQLite in-memory database for fast unit tests."""
 
-from .settings import *  # noqa
+from .settings import *  # noqa: F401,F403 pylint: disable=wildcard-import,unused-wildcard-import
 
 # Use SQLite in-memory database for tests
 DATABASES = {
@@ -11,15 +11,17 @@ DATABASES = {
 }
 
 
-# Disable migrations for faster tests
 class DisableMigrations:
-    def __contains__(self, item):
+    """Helper class to disable migrations during tests for better performance."""
+
+    def __contains__(self, item: str) -> bool:
         return True
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: str) -> None:
         return None
 
 
+# Disable migrations for faster tests
 MIGRATION_MODULES = DisableMigrations()
 
 # Speed up password hashing in tests

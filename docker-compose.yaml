@@ -73,22 +73,22 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       DB_HOST: postgres
       DB_PORT: 5432
-      
+
       # Django
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       DEBUG: ${DEBUG:-True}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
-      
+
       # Redis
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      
+
       # Security
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Encryption key required}
-      
+
       # OANDA API (optional)
       OANDA_PRACTICE_API: ${OANDA_PRACTICE_API:-https://api-fxpractice.oanda.com}
       OANDA_LIVE_API: ${OANDA_LIVE_API:-https://api-fxtrade.oanda.com}
-      
+
       # AWS (optional)
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
@@ -127,26 +127,26 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       DB_HOST: postgres
       DB_PORT: 5432
-      
+
       # Django
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       DEBUG: ${DEBUG:-True}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
-      
+
       # Redis
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      
+
       # Celery
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
-      
+
       # Security
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Encryption key required}
-      
+
       # OANDA API (optional)
       OANDA_PRACTICE_API: ${OANDA_PRACTICE_API:-https://api-fxpractice.oanda.com}
       OANDA_LIVE_API: ${OANDA_LIVE_API:-https://api-fxtrade.oanda.com}
-      
+
       # AWS (optional)
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
@@ -178,19 +178,19 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       DB_HOST: postgres
       DB_PORT: 5432
-      
+
       # Django
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       DEBUG: ${DEBUG:-True}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
-      
+
       # Redis
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      
+
       # Celery
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
-      
+
       # Security
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Encryption key required}
     volumes:

@@ -5,6 +5,7 @@ This module configures Celery for asynchronous task processing.
 """
 
 import os
+
 from celery import Celery
 
 # Set the default Django settings module for the 'celery' program.
