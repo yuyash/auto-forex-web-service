@@ -152,7 +152,7 @@ For each secret:
    DEBUG=False
    ALLOWED_HOSTS=your-domain.com,www.your-domain.com
 
-   # Redis
+   # Redis (optional - leave empty for no authentication)
    REDIS_PASSWORD=your-redis-password
 
    # Security

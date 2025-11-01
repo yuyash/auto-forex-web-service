@@ -65,7 +65,9 @@ SECRET_KEY=your-django-secret-key
 DEBUG=False
 ALLOWED_HOSTS=your-domain.com
 
-# Redis
+# Redis (optional - leave empty for no authentication)
+# Note: If empty, Redis will run without password authentication
+# Recommended: Set a strong password for production environments
 REDIS_PASSWORD=your-redis-password
 
 # Security
@@ -75,6 +77,12 @@ ENCRYPTION_KEY=your-encryption-key
 OANDA_PRACTICE_API=https://api-fxpractice.oanda.com
 OANDA_LIVE_API=https://api-fxtrade.oanda.com
 ```
+
+**Important Notes:**
+
+- `REDIS_PASSWORD` is optional. If left empty or unset, Redis will run without authentication
+- For production, it's recommended to set a strong Redis password
+- The Redis configuration automatically adapts based on whether a password is provided
 
 ### In GitHub Secrets
 
@@ -190,6 +198,35 @@ docker compose up -d
 2. Check file was copied correctly: `cat docker-compose.yaml | grep "image:"`
 3. Ensure no `build:` directives exist in production compose file
 
+### Redis Configuration Issues
+
+**Problem**: Redis fails to start with "wrong number of arguments" error
+
+**Solutions**:
+
+1. Check if `REDIS_PASSWORD` is properly set in `.env`
+2. If you don't want authentication, ensure `REDIS_PASSWORD` is either:
+   - Not set in `.env` at all, OR
+   - Set to empty value: `REDIS_PASSWORD=`
+3. Restart Redis: `docker compose restart redis`
+4. Check Redis logs: `docker compose logs redis`
+
+**Problem**: Cannot connect to Redis
+
+**Solutions**:
+
+1. If using password: Verify `REDIS_PASSWORD` matches in all services
+2. Check Redis is running: `docker compose ps redis`
+3. Test connection:
+
+   ```bash
+   # With password
+   docker compose exec redis redis-cli -a "your-password" ping
+
+   # Without password
+   docker compose exec redis redis-cli ping
+   ```
+
 ## Best Practices
 
 1. **Always use docker-compose.prod.yaml for production**
@@ -258,16 +295,16 @@ Before your first production deployment, you need to set up SSL certificates for
    mkdir -p nginx/conf.d
    cat > nginx/conf.d/default.conf << 'EOF'
    server {
-       listen 80;
-       server_name your-domain.com www.your-domain.com;
+      listen 80;
+      server_name your-domain.com www.your-domain.com;
 
-       location /.well-known/acme-challenge/ {
-           root /var/www/certbot;
-       }
+      location /.well-known/acme-challenge/ {
+         root /var/www/certbot;
+      }
 
-       location / {
-           return 301 https://$host$request_uri;
-       }
+      location / {
+         return 301 https://$host$request_uri;
+      }
    }
    EOF
    ```
