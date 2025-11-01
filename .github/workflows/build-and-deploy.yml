@@ -142,6 +142,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Create dummy .env file for validation
+        run: |
+          cat > .env << EOF
+          # Dummy values for validation only
+          DB_NAME=forex_trading
+          DB_USER=postgres
+          DB_PASSWORD=dummy_password
+          DB_HOST=postgres
+          DB_PORT=5432
+          DJANGO_SECRET_KEY=dummy-secret-key-for-validation-only
+          DJANGO_DEBUG=False
+          DJANGO_ALLOWED_HOSTS=localhost
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          OANDA_PRACTICE_API=https://api-fxpractice.oanda.com
+          OANDA_LIVE_API=https://api-fxtrade.oanda.com
+          EOF
+
       - name: Validate docker-compose.yaml
         run: |
           docker compose config > /dev/null
