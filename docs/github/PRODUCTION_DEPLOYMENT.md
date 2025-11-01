@@ -25,15 +25,18 @@ The CI/CD pipeline uses a production-specific docker-compose configuration that 
 
 When code is pushed to GitHub:
 
-1. Three Docker images are built in parallel:
+1. Three Docker images are built in parallel for multiple architectures:
    - `${DOCKERHUB_USERNAME}/forex-trading-backend:latest`
    - `${DOCKERHUB_USERNAME}/forex-trading-frontend:latest`
    - `${DOCKERHUB_USERNAME}/forex-trading-nginx:latest`
-2. Images are tagged with:
+2. Images are built for both:
+   - **linux/amd64** (x86_64) - Intel/AMD processors
+   - **linux/arm64** (aarch64) - ARM processors (Raspberry Pi, Apple Silicon, AWS Graviton)
+3. Images are tagged with:
    - Branch name (e.g., `main`, `develop`)
    - Commit SHA (e.g., `main-abc1234`)
    - `latest` (only for main branch)
-3. Images are pushed to DockerHub
+4. Multi-architecture manifest is pushed to DockerHub
 
 ### 2. Deploy Phase (GitHub Actions)
 
