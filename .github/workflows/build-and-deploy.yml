@@ -145,20 +145,35 @@ jobs:
       - name: Create dummy .env file for validation
         run: |
           cat > .env << EOF
-          # Dummy values for validation only
+          # Dummy values for validation only - DO NOT USE IN PRODUCTION
+
+          # Database
           DB_NAME=forex_trading
           DB_USER=postgres
-          DB_PASSWORD=dummy_password
+          DB_PASSWORD=dummy_password_for_validation
           DB_HOST=postgres
           DB_PORT=5432
-          DJANGO_SECRET_KEY=dummy-secret-key-for-validation-only
-          DJANGO_DEBUG=False
-          DJANGO_ALLOWED_HOSTS=localhost
-          REDIS_HOST=redis
-          REDIS_PORT=6379
-          ENCRYPTION_KEY=dummy-encryption-key-for-validation-only-32-chars
+
+          # Redis
+          REDIS_PASSWORD=dummy_redis_password
+
+          # Django
+          SECRET_KEY=dummy-secret-key-for-validation-only-min-50-chars-long
+          DEBUG=False
+          ALLOWED_HOSTS=localhost,127.0.0.1
+
+          # Security
+          ENCRYPTION_KEY=dummy-encryption-key-32-chars-min
+
+          # OANDA API
           OANDA_PRACTICE_API=https://api-fxpractice.oanda.com
           OANDA_LIVE_API=https://api-fxtrade.oanda.com
+
+          # AWS (optional - empty values are fine for validation)
+          AWS_ACCESS_KEY_ID=
+          AWS_SECRET_ACCESS_KEY=
+          AWS_S3_BUCKET=
+          AWS_REGION=us-east-1
           EOF
 
       - name: Validate docker-compose.yaml
