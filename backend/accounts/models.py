@@ -6,10 +6,15 @@ This module contains models for:
 - UserSettings: User preferences and strategy defaults
 - UserSession: Session tracking for security monitoring
 - BlockedIP: IP blocking for security
+- OandaAccount: OANDA trading account with encrypted API token
 """
 
+import base64
+import hashlib
 from datetime import timedelta
 
+from cryptography.fernet import Fernet
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
@@ -316,3 +321,200 @@ class BlockedIP(models.Model):
         if not self.is_permanent:
             self.blocked_until = timezone.now()
             self.save(update_fields=["blocked_until"])
+
+
+class OandaAccount(models.Model):
+    """
+    OANDA trading account with encrypted API token.
+
+    Requirements: 4.1, 4.2, 4.4, 4.5
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="oanda_accounts",
+        help_text="User who owns this OANDA account",
+    )
+    account_id = models.CharField(
+        max_length=100,
+        help_text="OANDA account ID",
+    )
+    api_token = models.CharField(
+        max_length=500,
+        help_text="Encrypted OANDA API token",
+    )
+    api_type = models.CharField(
+        max_length=10,
+        choices=[
+            ("practice", "Practice"),
+            ("live", "Live"),
+        ],
+        default="practice",
+        help_text="API endpoint type (practice or live)",
+    )
+    currency = models.CharField(
+        max_length=3,
+        default="USD",
+        help_text="Account base currency",
+    )
+    balance = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        help_text="Current account balance",
+    )
+    margin_used = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        help_text="Margin currently used by open positions",
+    )
+    margin_available = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        help_text="Margin available for new positions",
+    )
+    unrealized_pnl = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        help_text="Unrealized profit/loss from open positions",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether the account is active",
+    )
+    status = models.CharField(
+        max_length=20,
+        default="idle",
+        choices=[
+            ("idle", "Idle"),
+            ("trading", "Trading"),
+            ("paused", "Paused"),
+            ("error", "Error"),
+        ],
+        help_text="Current account status",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp when the account was added",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Timestamp when the account was last updated",
+    )
+
+    class Meta:
+        db_table = "oanda_accounts"
+        verbose_name = "OANDA Account"
+        verbose_name_plural = "OANDA Accounts"
+        unique_together = [["user", "account_id"]]
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["account_id"]),
+            models.Index(fields=["created_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.user.email} - {self.account_id} ({self.api_type})"
+
+    @staticmethod
+    def _get_cipher() -> Fernet:
+        """
+        Get Fernet cipher for encryption/decryption.
+        Uses Django SECRET_KEY to derive encryption key.
+        """
+        # Derive a 32-byte key from Django's SECRET_KEY
+        key = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
+        # Fernet requires base64-encoded key
+        fernet_key = base64.urlsafe_b64encode(key)
+        return Fernet(fernet_key)
+
+    def set_api_token(self, token: str) -> None:
+        """
+        Encrypt and store the API token.
+
+        Args:
+            token: Plain text API token
+        """
+        cipher = self._get_cipher()
+        encrypted_token = cipher.encrypt(token.encode())
+        self.api_token = encrypted_token.decode()
+
+    def get_api_token(self) -> str:
+        """
+        Decrypt and return the API token.
+
+        Returns:
+            Plain text API token
+        """
+        cipher = self._get_cipher()
+        decrypted_token = cipher.decrypt(self.api_token.encode())
+        return decrypted_token.decode()
+
+    @property
+    def api_hostname(self) -> str:
+        """
+        Get the OANDA API hostname based on api_type.
+
+        Returns:
+            OANDA API hostname URL
+        """
+        if self.api_type == "live":
+            return settings.OANDA_LIVE_API
+        return settings.OANDA_PRACTICE_API
+
+    def update_balance(
+        self,
+        balance: float,
+        margin_used: float,
+        margin_available: float,
+        unrealized_pnl: float,
+    ) -> None:
+        """
+        Update account balance and margin information.
+
+        Args:
+            balance: Current account balance
+            margin_used: Margin used by open positions
+            margin_available: Margin available for new positions
+            unrealized_pnl: Unrealized profit/loss
+        """
+        self.balance = balance
+        self.margin_used = margin_used
+        self.margin_available = margin_available
+        self.unrealized_pnl = unrealized_pnl
+        self.save(
+            update_fields=[
+                "balance",
+                "margin_used",
+                "margin_available",
+                "unrealized_pnl",
+                "updated_at",
+            ]
+        )
+
+    def set_status(self, status: str) -> None:
+        """
+        Update account status.
+
+        Args:
+            status: New status (idle, trading, paused, error)
+        """
+        if status in ["idle", "trading", "paused", "error"]:
+            self.status = status
+            self.save(update_fields=["status", "updated_at"])
+
+    def activate(self) -> None:
+        """Activate the account."""
+        self.is_active = True
+        self.save(update_fields=["is_active", "updated_at"])
+
+    def deactivate(self) -> None:
+        """Deactivate the account."""
+        self.is_active = False
+        self.status = "idle"
+        self.save(update_fields=["is_active", "status", "updated_at"])

@@ -428,3 +428,374 @@ class TestBlockedIPModel:
         )
 
         assert blocked_ip.created_by == admin_user
+
+
+@pytest.mark.django_db
+class TestOandaAccountModel:
+    """Test cases for OandaAccount model.
+
+    Requirements: 4.1, 4.2, 4.4
+    """
+
+    def test_oanda_account_creation(self) -> None:
+        """Test creating an OANDA account."""
+        user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="pass123",
+        )
+
+        from accounts.models import OandaAccount
+
+        account = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+            currency="USD",
+        )
+        # Set token using encryption method
+        account.set_api_token("test_api_token_12345")
+        account.save()
+
+        assert account.user == user
+        assert account.account_id == "001-001-1234567-001"
+        assert account.api_type == "practice"
+        assert account.currency == "USD"
+        assert account.balance == 0
+        assert account.margin_used == 0
+        assert account.margin_available == 0
+        assert account.unrealized_pnl == 0
+        assert account.is_active is True
+        assert account.status == "idle"
+
+    def test_oanda_account_api_token_encryption(self) -> None:
+        """Test API token encryption and decryption."""
+        user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="pass123",
+        )
+
+        from accounts.models import OandaAccount
+
+        account = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+        )
+
+        original_token = "my_secret_api_token_12345"
+        account.set_api_token(original_token)
+        account.save()
+
+        # Verify token is encrypted in database
+        account.refresh_from_db()
+        assert account.api_token != original_token
+
+        # Verify token can be decrypted
+        decrypted_token = account.get_api_token()
+        assert decrypted_token == original_token
+
+    def test_oanda_account_api_token_decryption(self) -> None:
+        """Test that encrypted token can be decrypted correctly."""
+        user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="pass123",
+        )
+
+        from accounts.models import OandaAccount
+
+        account = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-001",
+            api_type="live",
+        )
+
+        test_token = "live_api_token_abcdef123456"
+        account.set_api_token(test_token)
+        account.save()
+
+        # Retrieve from database and decrypt
+        account_from_db = OandaAccount.objects.get(id=account.id)
+        retrieved_token = account_from_db.get_api_token()
+
+        assert retrieved_token == test_token
+
+    def test_oanda_account_unique_constraint(self) -> None:
+        """Test unique constraint on user + account_id."""
+        user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="pass123",
+        )
+
+        from accounts.models import OandaAccount
+
+        account1 = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+        )
+        account1.set_api_token("token1")
+        account1.save()
+
+        # Try to create another account with same user + account_id
+        with pytest.raises(Exception):  # IntegrityError
+            account2 = OandaAccount.objects.create(
+                user=user,
+                account_id="001-001-1234567-001",
+                api_type="live",
+            )
+            account2.set_api_token("token2")
+            account2.save()
+
+    def test_oanda_account_different_users_same_account_id(self) -> None:
+        """Test that different users can have the same account_id."""
+        user1 = User.objects.create_user(
+            username="user1",
+            email="user1@example.com",
+            password="pass123",
+        )
+        user2 = User.objects.create_user(
+            username="user2",
+            email="user2@example.com",
+            password="pass123",
+        )
+
+        from accounts.models import OandaAccount
+
+        account1 = OandaAccount.objects.create(
+            user=user1,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+        )
+        account1.set_api_token("token1")
+        account1.save()
+
+        # Different user can have same account_id
+        account2 = OandaAccount.objects.create(
+            user=user2,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+        )
+        account2.set_api_token("token2")
+        account2.save()
+
+        assert account1.account_id == account2.account_id
+        assert account1.user != account2.user
+
+    def test_oanda_account_balance_validation(self) -> None:
+        """Test balance and margin field validation."""
+        user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="pass123",
+        )
+
+        from accounts.models import OandaAccount
+        from decimal import Decimal
+
+        account = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+            balance=Decimal("10000.50"),
+            margin_used=Decimal("2500.25"),
+            margin_available=Decimal("7500.25"),
+            unrealized_pnl=Decimal("-150.75"),
+        )
+        account.set_api_token("token")
+        account.save()
+
+        assert account.balance == Decimal("10000.50")
+        assert account.margin_used == Decimal("2500.25")
+        assert account.margin_available == Decimal("7500.25")
+        assert account.unrealized_pnl == Decimal("-150.75")
+
+    def test_oanda_account_api_type_choices(self) -> None:
+        """Test api_type choices (practice/live)."""
+        user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="pass123",
+        )
+
+        from accounts.models import OandaAccount
+
+        # Test practice account
+        practice_account = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+        )
+        practice_account.set_api_token("practice_token")
+        practice_account.save()
+        assert practice_account.api_type == "practice"
+
+        # Test live account
+        live_account = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-002",
+            api_type="live",
+        )
+        live_account.set_api_token("live_token")
+        live_account.save()
+        assert live_account.api_type == "live"
+
+    def test_oanda_account_api_hostname_property(self) -> None:
+        """Test api_hostname property returns correct URL."""
+        user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="pass123",
+        )
+
+        from accounts.models import OandaAccount
+        from django.conf import settings
+
+        # Practice account
+        practice_account = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+        )
+        practice_account.set_api_token("token")
+        practice_account.save()
+        assert practice_account.api_hostname == settings.OANDA_PRACTICE_API
+
+        # Live account
+        live_account = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-002",
+            api_type="live",
+        )
+        live_account.set_api_token("token")
+        live_account.save()
+        assert live_account.api_hostname == settings.OANDA_LIVE_API
+
+    def test_oanda_account_update_balance(self) -> None:
+        """Test updating account balance and margin."""
+        user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="pass123",
+        )
+
+        from accounts.models import OandaAccount
+
+        account = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+        )
+        account.set_api_token("token")
+        account.save()
+
+        # Update balance
+        account.update_balance(
+            balance=15000.00,
+            margin_used=3000.00,
+            margin_available=12000.00,
+            unrealized_pnl=250.50,
+        )
+
+        account.refresh_from_db()
+        assert float(account.balance) == 15000.00
+        assert float(account.margin_used) == 3000.00
+        assert float(account.margin_available) == 12000.00
+        assert float(account.unrealized_pnl) == 250.50
+
+    def test_oanda_account_set_status(self) -> None:
+        """Test setting account status."""
+        user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="pass123",
+        )
+
+        from accounts.models import OandaAccount
+
+        account = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+        )
+        account.set_api_token("token")
+        account.save()
+
+        assert account.status == "idle"
+
+        # Test status changes
+        account.set_status("trading")
+        account.refresh_from_db()
+        assert account.status == "trading"
+
+        account.set_status("paused")
+        account.refresh_from_db()
+        assert account.status == "paused"
+
+        account.set_status("error")
+        account.refresh_from_db()
+        assert account.status == "error"
+
+    def test_oanda_account_activate_deactivate(self) -> None:
+        """Test activating and deactivating account."""
+        user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="pass123",
+        )
+
+        from accounts.models import OandaAccount
+
+        account = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+        )
+        account.set_api_token("token")
+        account.save()
+
+        assert account.is_active is True
+
+        # Deactivate
+        account.deactivate()
+        account.refresh_from_db()
+        assert account.is_active is False
+        assert account.status == "idle"
+
+        # Activate
+        account.activate()
+        account.refresh_from_db()
+        assert account.is_active is True
+
+    def test_oanda_account_multiple_accounts_per_user(self) -> None:
+        """Test that a user can have multiple OANDA accounts."""
+        user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="pass123",
+        )
+
+        from accounts.models import OandaAccount
+
+        account1 = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+        )
+        account1.set_api_token("token1")
+        account1.save()
+
+        account2 = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-002",
+            api_type="live",
+        )
+        account2.set_api_token("token2")
+        account2.save()
+
+        assert user.oanda_accounts.count() == 2
+        assert account1 in user.oanda_accounts.all()
+        assert account2 in user.oanda_accounts.all()

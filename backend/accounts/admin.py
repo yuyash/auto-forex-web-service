@@ -4,7 +4,7 @@ Admin interface for accounts app.
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, UserSettings, UserSession, BlockedIP
+from .models import User, UserSettings, UserSession, BlockedIP, OandaAccount
 
 
 @admin.register(User)
@@ -20,11 +20,17 @@ class UserAdmin(BaseUserAdmin):
         "failed_login_attempts",
         "created_at",
     ]
-    list_filter = ["is_staff", "is_active", "is_locked", "language", "created_at"]
+    list_filter = [
+        "is_staff",
+        "is_active",
+        "is_locked",
+        "language",
+        "created_at",
+    ]
     search_fields = ["email", "username"]
     ordering = ["-created_at"]
 
-    fieldsets = BaseUserAdmin.fieldsets + (
+    fieldsets = BaseUserAdmin.fieldsets + (  # type: ignore[operator]
         (
             "Additional Info",
             {
@@ -96,3 +102,68 @@ class BlockedIPAdmin(admin.ModelAdmin):
     search_fields = ["ip_address", "reason"]
     readonly_fields = ["blocked_at"]
     ordering = ["-blocked_at"]
+
+
+@admin.register(OandaAccount)
+class OandaAccountAdmin(admin.ModelAdmin):
+    """Admin interface for OandaAccount model."""
+
+    list_display = [
+        "user",
+        "account_id",
+        "api_type",
+        "balance",
+        "status",
+        "is_active",
+        "created_at",
+    ]
+    list_filter = ["api_type", "status", "is_active", "created_at"]
+    search_fields = ["user__email", "account_id"]
+    readonly_fields = ["created_at", "updated_at"]
+    ordering = ["-created_at"]
+
+    fieldsets = (
+        (
+            "Account Information",
+            {
+                "fields": (
+                    "user",
+                    "account_id",
+                    "api_type",
+                    "currency",
+                )
+            },
+        ),
+        (
+            "Balance & Margin",
+            {
+                "fields": (
+                    "balance",
+                    "margin_used",
+                    "margin_available",
+                    "unrealized_pnl",
+                )
+            },
+        ),
+        (
+            "Status",
+            {
+                "fields": (
+                    "is_active",
+                    "status",
+                )
+            },
+        ),
+        (
+            "Timestamps",
+            {
+                "fields": (
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+
+    # Don't show api_token in admin for security
+    exclude = ["api_token"]
