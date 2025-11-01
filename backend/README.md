@@ -180,12 +180,16 @@ See `.env.example` for all available environment variables.
 
 Key variables:
 
-- `DJANGO_SECRET_KEY`: Django secret key
-- `DJANGO_DEBUG`: Debug mode (True/False)
-- `POSTGRES_*`: PostgreSQL connection settings
+- `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`: PostgreSQL connection settings
+- `SECRET_KEY`: Django secret key (min 50 characters)
+- `DEBUG`: Debug mode (True/False)
+- `ALLOWED_HOSTS`: Comma-separated list of allowed hosts
 - `REDIS_URL`: Redis connection URL
+- `REDIS_PASSWORD`: Redis password (optional)
 - `CELERY_BROKER_URL`: Celery broker URL
-- `AWS_*`: AWS credentials for S3/Athena
+- `CELERY_RESULT_BACKEND`: Celery result backend URL
+- `ENCRYPTION_KEY`: Encryption key for API tokens (min 32 characters)
+- `AWS_*`: AWS credentials for S3/Athena (optional)
 
 ### Django Settings
 

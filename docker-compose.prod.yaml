@@ -11,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-forex_trading}"]
       interval: 10s
@@ -66,32 +66,32 @@ services:
         condition: service_healthy
     environment:
       # Database
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-forex_trading}
-      
-      # Redis
-      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      DB_NAME: ${DB_NAME:-forex_trading}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:?Database password required}
+      DB_HOST: postgres
+      DB_PORT: 5432
       
       # Django
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       DEBUG: ${DEBUG:-False}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
       
-      # OANDA API
+      # Redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      
+      # Security
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Encryption key required}
+      
+      # OANDA API (optional)
       OANDA_PRACTICE_API: ${OANDA_PRACTICE_API:-https://api-fxpractice.oanda.com}
       OANDA_LIVE_API: ${OANDA_LIVE_API:-https://api-fxtrade.oanda.com}
       
-      # AWS (for backtesting)
+      # AWS (optional)
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
       AWS_REGION: ${AWS_REGION:-us-east-1}
-      
-      # Celery
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
-      
-      # Security
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Encryption key required}
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
@@ -112,18 +112,37 @@ services:
       - redis
       - postgres
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-forex_trading}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
-      SECRET_KEY: ${SECRET_KEY}
+      # Database
+      DB_NAME: ${DB_NAME:-forex_trading}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:?Database password required}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      
+      # Django
+      SECRET_KEY: ${SECRET_KEY:?Django secret key required}
+      DEBUG: ${DEBUG:-False}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      
+      # Redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      
+      # Celery
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      
+      # Security
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Encryption key required}
+      
+      # OANDA API (optional)
       OANDA_PRACTICE_API: ${OANDA_PRACTICE_API:-https://api-fxpractice.oanda.com}
       OANDA_LIVE_API: ${OANDA_LIVE_API:-https://api-fxtrade.oanda.com}
+      
+      # AWS (optional)
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
       AWS_REGION: ${AWS_REGION:-us-east-1}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
@@ -141,15 +160,31 @@ services:
       - redis
       - postgres
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-forex_trading}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
-      SECRET_KEY: ${SECRET_KEY}
+      # Database
+      DB_NAME: ${DB_NAME:-forex_trading}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:?Database password required}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      
+      # Django
+      SECRET_KEY: ${SECRET_KEY:?Django secret key required}
+      DEBUG: ${DEBUG:-False}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      
+      # Redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      
+      # Celery
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      
+      # Security
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Encryption key required}
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
-    command: celery -A trading_system beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    command: celery -A trading_system beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler --pidfile=/tmp/celerybeat.pid
     restart: unless-stopped
     networks:
       - forex_network
@@ -166,7 +201,9 @@ services:
 
   # Nginx Reverse Proxy with SSL
   nginx:
-    image: ${DOCKERHUB_USERNAME}/forex-trading-nginx:latest
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile.prod
     container_name: forex_nginx
     depends_on:
       - backend
@@ -175,7 +212,6 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./certbot/conf:/etc/letsencrypt:ro
       - ./certbot/www:/var/www/certbot:ro
       - static_volume:/app/staticfiles:ro

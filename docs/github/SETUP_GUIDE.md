@@ -137,31 +137,35 @@ For each secret:
 2. **Add required environment variables**:
 
    ```env
-   # DockerHub (required for pulling images)
-   DOCKERHUB_USERNAME=your-dockerhub-username
-
-   # Database
+   # Database Configuration
    DB_NAME=forex_trading
    DB_USER=postgres
-   DB_PASSWORD=your-secure-password
-   DB_HOST=postgres
-   DB_PORT=5432
+   DB_PASSWORD=your-secure-password-here
 
-   # Django
-   SECRET_KEY=your-django-secret-key
+   # Django Configuration
+   SECRET_KEY=your-django-secret-key-min-50-chars
    DEBUG=False
    ALLOWED_HOSTS=your-domain.com,www.your-domain.com
 
-   # Redis (optional - leave empty for no authentication)
-   REDIS_PASSWORD=your-redis-password
+   # Redis Configuration (optional password)
+   REDIS_PASSWORD=your-redis-password-here
 
-   # Security
+   # Security Configuration
    ENCRYPTION_KEY=your-encryption-key-32-chars-minimum
 
-   # OANDA (optional for initial setup)
+   # OANDA API Configuration (optional for initial setup)
    OANDA_PRACTICE_API=https://api-fxpractice.oanda.com
    OANDA_LIVE_API=https://api-fxtrade.oanda.com
+
+   # Docker Configuration (required for production)
+   DOCKERHUB_USERNAME=your-dockerhub-username
+
+   # SSL/Domain Configuration (required for HTTPS)
+   DOMAIN=your-domain.com
+   EMAIL=your-email@example.com
    ```
+
+   **📖 For complete environment variable reference, see [docs/ENVIRONMENT_VARIABLES.md](../ENVIRONMENT_VARIABLES.md)**
 
 3. **Save and exit** (Ctrl+X, then Y, then Enter)
 
@@ -243,27 +247,31 @@ Before your first production deployment, you need to set up SSL certificates for
 
    **Note**: The `nginx/conf.d` directory will contain your nginx configuration files that will be mounted into the nginx container.
 
-4. **Start nginx**:
+4. **Stop all Docker services** (certbot standalone needs port 80):
 
    ```bash
-   docker compose up -d nginx
+   docker compose down
    ```
 
-5. **Request certificate**:
+5. **Request certificate using standalone mode**:
 
    ```bash
-   docker compose run --rm certbot certonly \
-     --webroot \
-     --webroot-path=/var/www/certbot \
-     --email your-email@example.com \
-     --agree-tos \
-     -d your-domain.com \
-     -d www.your-domain.com
+   docker run --rm -it --network host \
+   -v $(pwd)/certbot/conf:/etc/letsencrypt \
+   -v $(pwd)/certbot/www:/var/www/certbot \
+   certbot/certbot certonly \
+   --standalone \
+   --email yuya.shinde@gmail.com \
+   --agree-tos \
+   --no-eff-email \
+   -d www.auto-forex.com
    ```
+
+   **Note**: Uses `--network host` for direct port 80 access. Only include domains that point to your server.
 
 6. **Configure nginx for HTTPS** (see full config in PRODUCTION_DEPLOYMENT.md)
 
-7. **Restart nginx**:
+7. **Start nginx**:
 
    ```bash
    docker compose restart nginx
@@ -424,6 +432,46 @@ If you encounter issues:
 3. Check server logs: `docker compose logs`
 4. Consult the main README.md and DEPLOYMENT.md
 
+## Production Deployment Notes
+
+### Docker Compose Files
+
+- **docker-compose.yaml**: For local development (builds from source)
+- **docker-compose.prod.yaml**: For production (pulls pre-built images from DockerHub)
+
+### Multi-Architecture Support
+
+Images are built for both:
+
+- **linux/amd64** (x86_64) - Intel/AMD processors
+- **linux/arm64** (aarch64) - ARM processors (Raspberry Pi, Apple Silicon, AWS Graviton)
+
+### Manual Production Deployment
+
+```bash
+# Copy production compose file
+scp docker-compose.prod.yaml user@server:/path/to/deploy/docker-compose.yaml
+
+# SSH into server
+ssh user@server
+cd /path/to/deploy
+
+# Ensure DOCKERHUB_USERNAME is in .env
+echo "DOCKERHUB_USERNAME=your-username" >> .env
+
+# Pull and start services
+docker compose pull
+docker compose up -d
+```
+
+### Troubleshooting Production
+
+**Images not pulling**: Verify `DOCKERHUB_USERNAME` in `.env` and check DockerHub
+
+**Redis issues**: Ensure `REDIS_PASSWORD` is set correctly (or empty for no auth)
+
+**SSL renewal fails**: Check certbot logs with `docker compose logs certbot`
+
 ## Additional Resources
 
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
@@ -431,3 +479,5 @@ If you encounter issues:
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
 - [DockerHub Documentation](https://docs.docker.com/docker-hub/)
 - [SSH Key Management](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
+- [Let's Encrypt Documentation](https://letsencrypt.org/docs/)
+- [Certbot Documentation](https://certbot.eff.org/docs/)

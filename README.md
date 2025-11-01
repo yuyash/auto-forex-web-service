@@ -18,6 +18,7 @@ A full-stack web application for managing algorithmic forex trading operations a
 ## Technology Stack
 
 ### Backend
+
 - Django 5.2 LTS
 - Django REST Framework
 - Django Channels (WebSocket)
@@ -28,6 +29,7 @@ A full-stack web application for managing algorithmic forex trading operations a
 - AWS boto3
 
 ### Frontend
+
 - React 18
 - TypeScript
 - Vite
@@ -36,6 +38,7 @@ A full-stack web application for managing algorithmic forex trading operations a
 - react-i18next
 
 ### Infrastructure
+
 - Docker & Docker Compose
 - Nginx with Let's Encrypt SSL
 - GitHub Actions CI/CD
@@ -77,19 +80,39 @@ cd auto-forex-trading-system
 
 ### 2. Environment Configuration
 
-Create a `.env` file in the project root:
+Copy the example environment file and configure it:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your values. See [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md) for complete reference.
+
+**Minimum required configuration:**
 
 ```bash
 # Database
-POSTGRES_PASSWORD=your_secure_password
+DB_NAME=forex_trading
+DB_USER=postgres
+DB_PASSWORD=your_secure_password
 
 # Django
-SECRET_KEY=your_secret_key_here
+SECRET_KEY=your_secret_key_here_min_50_chars
 DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
 
-# OANDA API (add your credentials)
-OANDA_PRACTICE_TOKEN=your_practice_token
-OANDA_LIVE_TOKEN=your_live_token
+# Security
+ENCRYPTION_KEY=your_encryption_key_32_chars_min
+```
+
+**Generate secure keys:**
+
+```bash
+# Django SECRET_KEY
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+
+# ENCRYPTION_KEY
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
 ### 3. Build and Start Services
@@ -244,6 +267,7 @@ The Floor Strategy implements multi-layer position management with dynamic scali
 ### Event Logging
 
 All system events are logged with:
+
 - Trading events (orders, positions, P&L)
 - System events (connections, health checks)
 - Security events (authentication, access attempts)
@@ -252,6 +276,7 @@ All system events are logged with:
 ## API Documentation
 
 API documentation is available at:
+
 - Swagger UI: http://localhost:8000/api/docs
 - ReDoc: http://localhost:8000/api/redoc
 

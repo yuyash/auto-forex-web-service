@@ -114,7 +114,7 @@ check_dockerfiles() {
     local dockerfiles=(
         "backend/Dockerfile"
         "frontend/Dockerfile"
-        "nginx/Dockerfile"
+        "nginx/Dockerfile.prod"
     )
     
     local missing_files=()

@@ -41,22 +41,32 @@ check_env_vars() {
         print_info "  export SERVER_HOST=your-server-host"
         print_info "  export SERVER_USER=your-ssh-user"
         print_info "  export DEPLOY_PATH=/path/to/deployment"
+        print_info "  export SSH_PORT=22 (optional, defaults to 22)"
         exit 1
+    fi
+    
+    # Set default SSH port if not specified
+    if [ -z "${SSH_PORT}" ]; then
+        SSH_PORT=22
+        print_info "SSH_PORT not set, using default: 22"
+    else
+        print_info "Using SSH port: ${SSH_PORT}"
     fi
 }
 
 # Test SSH connection
 test_ssh_connection() {
-    print_info "Testing SSH connection to ${SERVER_USER}@${SERVER_HOST}..."
+    print_info "Testing SSH connection to ${SERVER_USER}@${SERVER_HOST}:${SSH_PORT}..."
     
-    if ssh -o ConnectTimeout=10 -o BatchMode=yes "${SERVER_USER}@${SERVER_HOST}" "echo 'SSH connection successful'" > /dev/null 2>&1; then
+    if ssh -p "${SSH_PORT}" -o ConnectTimeout=10 -o BatchMode=yes "${SERVER_USER}@${SERVER_HOST}" "echo 'SSH connection successful'" > /dev/null 2>&1; then
         print_info "SSH connection successful"
     else
-        print_error "Failed to connect to ${SERVER_USER}@${SERVER_HOST}"
+        print_error "Failed to connect to ${SERVER_USER}@${SERVER_HOST}:${SSH_PORT}"
         print_info "Please ensure:"
         print_info "  1. SSH key is added to ssh-agent: ssh-add ~/.ssh/your-key"
         print_info "  2. Server is reachable: ping ${SERVER_HOST}"
         print_info "  3. SSH key is authorized on server"
+        print_info "  4. SSH port ${SSH_PORT} is correct and open"
         exit 1
     fi
 }
@@ -65,14 +75,21 @@ test_ssh_connection() {
 copy_files() {
     print_info "Copying files to server..."
     
-    # Copy docker-compose.yaml
-    scp docker-compose.yaml "${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/" || {
-        print_error "Failed to copy docker-compose.yaml"
+    # Check if docker-compose.prod.yaml exists
+    if [ ! -f docker-compose.prod.yaml ]; then
+        print_error "docker-compose.prod.yaml not found"
+        exit 1
+    fi
+    
+    # Copy docker-compose.prod.yaml as docker-compose.yaml
+    print_info "Copying docker-compose.prod.yaml as docker-compose.yaml..."
+    scp -P "${SSH_PORT}" docker-compose.prod.yaml "${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/docker-compose.yaml" || {
+        print_error "Failed to copy docker-compose.prod.yaml"
         exit 1
     }
     
     # Copy nginx configuration
-    scp -r nginx "${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/" || {
+    scp -P "${SSH_PORT}" -r nginx "${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/" || {
         print_error "Failed to copy nginx configuration"
         exit 1
     }
@@ -80,7 +97,7 @@ copy_files() {
     # Copy .env file if it exists
     if [ -f .env ]; then
         print_warning "Copying .env file - ensure it contains production values"
-        scp .env "${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/" || {
+        scp -P "${SSH_PORT}" .env "${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/" || {
             print_error "Failed to copy .env file"
             exit 1
         }
@@ -95,7 +112,7 @@ copy_files() {
 deploy_application() {
     print_info "Deploying application on server..."
     
-    ssh "${SERVER_USER}@${SERVER_HOST}" << EOF
+    ssh -p "${SSH_PORT}" "${SERVER_USER}@${SERVER_HOST}" << EOF
         set -e
         cd ${DEPLOY_PATH}
         
@@ -132,7 +149,7 @@ EOF
 verify_deployment() {
     print_info "Verifying deployment..."
     
-    ssh "${SERVER_USER}@${SERVER_HOST}" << EOF
+    ssh -p "${SSH_PORT}" "${SERVER_USER}@${SERVER_HOST}" << EOF
         set -e
         cd ${DEPLOY_PATH}
         
@@ -163,7 +180,7 @@ EOF
 rollback() {
     print_warning "Rolling back to previous version..."
     
-    ssh "${SERVER_USER}@${SERVER_HOST}" << EOF
+    ssh -p "${SSH_PORT}" "${SERVER_USER}@${SERVER_HOST}" << EOF
         set -e
         cd ${DEPLOY_PATH}
         
@@ -186,7 +203,7 @@ EOF
 # Main deployment flow
 main() {
     print_info "Starting deployment process..."
-    print_info "Target: ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}"
+    print_info "Target: ${SERVER_USER}@${SERVER_HOST}:${SSH_PORT}:${DEPLOY_PATH}"
     
     check_env_vars
     test_ssh_connection
@@ -226,6 +243,14 @@ case "${1:-deploy}" in
         echo "  SERVER_HOST  - Production server hostname or IP"
         echo "  SERVER_USER  - SSH username"
         echo "  DEPLOY_PATH  - Deployment directory path"
+        echo "  SSH_PORT     - SSH port (optional, defaults to 22)"
+        echo ""
+        echo "Example:"
+        echo "  export SERVER_HOST=example.com"
+        echo "  export SERVER_USER=deploy"
+        echo "  export DEPLOY_PATH=/opt/forex-trading"
+        echo "  export SSH_PORT=2222"
+        echo "  $0 deploy"
         exit 1
         ;;
 esac

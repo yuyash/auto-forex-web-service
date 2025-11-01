@@ -17,13 +17,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv(
-    "DJANGO_SECRET_KEY", "django-insecure-*6sf5x8=a0@4y+y1wwckk&vlp+)nv5%gl+-az@tt*ahkx3zav0"
+    "SECRET_KEY",
+    "django-insecure-*6sf5x8=a0@4y+y1wwckk&vlp+)nv5%gl+-az@tt*ahkx3zav0",
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
+DEBUG = os.getenv("DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
 
 # Application definition
@@ -40,6 +41,7 @@ INSTALLED_APPS = [
     # Third-party apps
     "rest_framework",
     "channels",
+    "django_celery_beat",
     # Local apps will be added here as they are created
 ]
 
@@ -80,11 +82,11 @@ ASGI_APPLICATION = "trading_system.asgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", "trading_system"),
-        "USER": os.getenv("POSTGRES_USER", "postgres"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "postgres"),
-        "HOST": os.getenv("POSTGRES_HOST", "localhost"),
-        "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        "NAME": os.getenv("DB_NAME", "forex_trading"),
+        "USER": os.getenv("DB_USER", "postgres"),
+        "PASSWORD": os.getenv("DB_PASSWORD", "postgres"),
+        "HOST": os.getenv("DB_HOST", "localhost"),
+        "PORT": os.getenv("DB_PORT", "5432"),
         "CONN_MAX_AGE": 600,
         "OPTIONS": {
             "connect_timeout": 10,

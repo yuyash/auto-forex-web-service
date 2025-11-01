@@ -1,4 +1,4 @@
-# Nginx Dockerfile with SSL support for Auto Forex Trading System
+# Nginx Dockerfile for Production with SSL support
 
 FROM nginx:alpine
 
@@ -10,7 +10,7 @@ RUN rm /etc/nginx/conf.d/default.conf
 
 # Copy custom nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
-COPY conf.d/ /etc/nginx/conf.d/
+COPY conf.d/prod.conf /etc/nginx/conf.d/default.conf
 
 # Create directories for SSL certificates and challenges
 RUN mkdir -p /var/www/certbot /etc/letsencrypt
