@@ -32,6 +32,7 @@ dev = [
     "black>=24.8.0",
     "flake8>=7.1.0",
     "mypy>=1.11.0",
+    "pylint>=3.3.0",
     "django-stubs>=5.1.0",
     "djangorestframework-stubs>=3.15.0",
 ]
@@ -138,3 +139,27 @@ exclude_lines = [
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
 ]
+
+[tool.pylint.main]
+ignore = ["migrations", "tests"]
+ignore-patterns = ["test_.*?.py"]
+
+[tool.pylint.messages_control]
+disable = [
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "too-few-public-methods",
+    "invalid-name",
+    "no-member",  # Django models have dynamic attributes
+]
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pylint.basic]
+good-names = ["i", "j", "k", "ex", "Run", "_", "id", "pk"]
+
+[tool.pylint.design]
+max-attributes = 15
+max-args = 10

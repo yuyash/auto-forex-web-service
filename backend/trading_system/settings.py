@@ -42,7 +42,8 @@ INSTALLED_APPS = [
     "rest_framework",
     "channels",
     "django_celery_beat",
-    # Local apps will be added here as they are created
+    # Local apps
+    "accounts",
 ]
 
 MIDDLEWARE = [
@@ -229,6 +230,12 @@ MEDIA_ROOT = BASE_DIR / "media"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# Custom User Model
+# https://docs.djangoproject.com/en/5.2/topics/auth/customizing/#substituting-a-custom-user-model
+
+AUTH_USER_MODEL = "accounts.User"
 
 
 # Logging Configuration
