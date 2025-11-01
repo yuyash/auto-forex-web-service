@@ -197,24 +197,27 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Add server to known hosts
+        env:
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -p ${SSH_PORT} -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts 2>&1 || echo "StrictHostKeyChecking no" >> ~/.ssh/config
 
       - name: Deploy to production server
         env:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
         run: |
           # Copy docker-compose.yaml and .env to server
-          scp docker-compose.yaml ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/
+          scp -P ${SSH_PORT} docker-compose.yaml ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/
 
           # Copy nginx configuration
-          scp -r nginx ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/
+          scp -P ${SSH_PORT} -r nginx ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/
 
           # SSH into server and deploy
-          ssh ${SERVER_USER}@${SERVER_HOST} << 'EOF'
+          ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} << 'EOF'
             cd ${DEPLOY_PATH}
             
             # Pull latest images from DockerHub
@@ -238,8 +241,9 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
         run: |
-          ssh ${SERVER_USER}@${SERVER_HOST} << 'EOF'
+          ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} << 'EOF'
             cd ${DEPLOY_PATH}
             
             # Wait for services to be healthy
