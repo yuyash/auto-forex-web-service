@@ -283,28 +283,29 @@ Before your first production deployment, you need to set up SSL certificates for
    cd ${DEPLOY_PATH}
    ```
 
-3. **Create directories for certificates**:
+3. **Create required directories**:
 
    ```bash
-   mkdir -p certbot/conf certbot/www
+   mkdir -p certbot/conf certbot/www nginx/conf.d config logs
    ```
+
+   **Important**: The `nginx/conf.d` directory will be mounted into the nginx container to provide custom configuration.
 
 4. **Create initial HTTP-only nginx config**:
 
    ```bash
-   mkdir -p nginx/conf.d
    cat > nginx/conf.d/default.conf << 'EOF'
    server {
-      listen 80;
-      server_name your-domain.com www.your-domain.com;
+   listen 80;
+   server_name your-domain.com www.your-domain.com;
 
-      location /.well-known/acme-challenge/ {
-         root /var/www/certbot;
-      }
+   location /.well-known/acme-challenge/ {
+      root /var/www/certbot;
+   }
 
-      location / {
-         return 301 https://$host$request_uri;
-      }
+   location / {
+      return 301 https://$host$request_uri;
+   }
    }
    EOF
    ```

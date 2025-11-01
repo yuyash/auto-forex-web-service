@@ -235,11 +235,13 @@ Before your first production deployment, you need to set up SSL certificates for
    cd ~/forex-trading-system
    ```
 
-3. **Create certificate directories**:
+3. **Create required directories**:
 
    ```bash
-   mkdir -p certbot/conf certbot/www nginx/conf.d
+   mkdir -p certbot/conf certbot/www nginx/conf.d config logs
    ```
+
+   **Note**: The `nginx/conf.d` directory will contain your nginx configuration files that will be mounted into the nginx container.
 
 4. **Start nginx**:
 
