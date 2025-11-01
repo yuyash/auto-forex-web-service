@@ -209,16 +209,22 @@ jobs:
           SERVER_USER: ${{ secrets.SERVER_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          # Copy docker-compose.yaml and .env to server
-          scp -P ${SSH_PORT} docker-compose.yaml ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/
+          # Copy production docker-compose file
+          scp -P ${SSH_PORT} docker-compose.prod.yaml ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/docker-compose.yaml
 
           # Copy nginx configuration
           scp -P ${SSH_PORT} -r nginx ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/
 
           # SSH into server and deploy
-          ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} << 'EOF'
+          ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} << EOF
             cd ${DEPLOY_PATH}
+            
+            # Add DOCKERHUB_USERNAME to .env if not present
+            if ! grep -q "DOCKERHUB_USERNAME" .env; then
+              echo "DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME}" >> .env
+            fi
             
             # Pull latest images from DockerHub
             docker compose pull

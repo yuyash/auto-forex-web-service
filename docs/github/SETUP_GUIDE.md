@@ -137,6 +137,9 @@ For each secret:
 2. **Add required environment variables**:
 
    ```env
+   # DockerHub (required for pulling images)
+   DOCKERHUB_USERNAME=your-dockerhub-username
+
    # Database
    DB_NAME=forex_trading
    DB_USER=postgres
@@ -145,13 +148,15 @@ For each secret:
    DB_PORT=5432
 
    # Django
-   DJANGO_SECRET_KEY=your-django-secret-key
-   DJANGO_DEBUG=False
-   DJANGO_ALLOWED_HOSTS=your-domain.com,www.your-domain.com
+   SECRET_KEY=your-django-secret-key
+   DEBUG=False
+   ALLOWED_HOSTS=your-domain.com,www.your-domain.com
 
    # Redis
-   REDIS_HOST=redis
-   REDIS_PORT=6379
+   REDIS_PASSWORD=your-redis-password
+
+   # Security
+   ENCRYPTION_KEY=your-encryption-key-32-chars-minimum
 
    # OANDA (optional for initial setup)
    OANDA_PRACTICE_API=https://api-fxpractice.oanda.com
@@ -208,7 +213,73 @@ For each secret:
    - Images should be pushed to DockerHub
    - Deployment should be skipped (not on main branch)
 
-## Step 8: Deploy to Production
+## Step 8: Set Up SSL Certificates (One-Time Setup)
+
+Before your first production deployment, you need to set up SSL certificates for HTTPS.
+
+**📖 For complete SSL setup instructions, see [.github/PRODUCTION_DEPLOYMENT.md - SSL/TLS Certificate Setup](./PRODUCTION_DEPLOYMENT.md#ssltls-certificate-setup-one-time)**
+
+### Quick SSL Setup (Let's Encrypt)
+
+1. **Verify DNS is configured**:
+
+   ```bash
+   nslookup your-domain.com
+   # Should return your server's IP address
+   ```
+
+2. **SSH into server**:
+
+   ```bash
+   ssh user@your-server-host
+   cd ~/forex-trading-system
+   ```
+
+3. **Create certificate directories**:
+
+   ```bash
+   mkdir -p certbot/conf certbot/www nginx/conf.d
+   ```
+
+4. **Start nginx**:
+
+   ```bash
+   docker compose up -d nginx
+   ```
+
+5. **Request certificate**:
+
+   ```bash
+   docker compose run --rm certbot certonly \
+     --webroot \
+     --webroot-path=/var/www/certbot \
+     --email your-email@example.com \
+     --agree-tos \
+     -d your-domain.com \
+     -d www.your-domain.com
+   ```
+
+6. **Configure nginx for HTTPS** (see full config in PRODUCTION_DEPLOYMENT.md)
+
+7. **Restart nginx**:
+
+   ```bash
+   docker compose restart nginx
+   ```
+
+8. **Verify HTTPS**:
+   ```bash
+   curl -I https://your-domain.com
+   ```
+
+### Important Notes
+
+- DNS must be configured before requesting certificates
+- Ports 80 and 443 must be open in firewall
+- Certificates auto-renew every 12 hours
+- See PRODUCTION_DEPLOYMENT.md for full nginx configuration and troubleshooting
+
+## Step 9: Deploy to Production
 
 1. **Merge to main branch**:
 
