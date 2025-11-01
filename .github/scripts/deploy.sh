@@ -108,6 +108,41 @@ copy_files() {
     print_info "Files copied successfully"
 }
 
+# Sync PostgreSQL password with .env
+sync_postgres_password() {
+    print_info "Checking PostgreSQL password synchronization..."
+    
+    ssh -p "${SSH_PORT}" "${SERVER_USER}@${SERVER_HOST}" << 'EOF'
+        set -e
+        cd ${DEPLOY_PATH}
+        
+        # Check if postgres container is running
+        if docker compose ps postgres | grep -q "Up"; then
+            # Extract password from .env
+            DB_PASSWORD=$(grep "^DB_PASSWORD=" .env | cut -d '=' -f2)
+            
+            if [ -n "$DB_PASSWORD" ]; then
+                echo "Testing current PostgreSQL password..."
+                
+                # Test if password is already correct by trying to connect
+                if PGPASSWORD="$DB_PASSWORD" docker exec -e PGPASSWORD="$DB_PASSWORD" forex_postgres psql -U postgres -c "SELECT 1;" > /dev/null 2>&1; then
+                    echo "✓ PostgreSQL password is already correct, no action needed"
+                else
+                    echo "Password mismatch detected, updating PostgreSQL..."
+                    docker exec forex_postgres psql -U postgres -c "ALTER USER postgres PASSWORD '$DB_PASSWORD';" 2>/dev/null || true
+                    echo "Password updated, restarting backend services..."
+                    docker compose restart backend celery celery-beat
+                    echo "✓ Password sync and restart completed"
+                fi
+            else
+                echo "Warning: DB_PASSWORD not found in .env"
+            fi
+        else
+            echo "PostgreSQL container not running, skipping password sync"
+        fi
+EOF
+}
+
 # Deploy application
 deploy_application() {
     print_info "Deploying application on server..."
@@ -136,6 +171,9 @@ deploy_application() {
         
         echo "Deployment completed"
 EOF
+    
+    # Sync password after deployment
+    sync_postgres_password
     
     if [ $? -eq 0 ]; then
         print_info "Deployment successful"

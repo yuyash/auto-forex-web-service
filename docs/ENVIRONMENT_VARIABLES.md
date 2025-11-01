@@ -26,6 +26,16 @@ These variables MUST be set for the system to function:
 - For local development, use `localhost`
 - `DB_PASSWORD` has no default and must be set
 
+**⚠️ IMPORTANT - Password Management:**
+
+PostgreSQL stores its password in the data volume when first initialized. Once set, changing `DB_PASSWORD` in `.env` alone won't update the actual database password. You must update both:
+
+1. Update `.env` file with new password
+2. Update PostgreSQL: `docker exec forex_postgres psql -U postgres -c "ALTER USER postgres PASSWORD 'new_password';"`
+3. Restart services: `docker compose restart backend celery celery-beat`
+
+The deployment script (`deploy.sh`) automatically syncs the password on each deployment to prevent mismatches.
+
 ### Django Configuration
 
 | Variable        | Description                      | Default               | Example                                 |

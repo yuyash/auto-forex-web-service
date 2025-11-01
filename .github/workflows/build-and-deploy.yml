@@ -203,6 +203,27 @@ jobs:
             # Start new containers
             docker compose up -d
             
+            # Wait for PostgreSQL to be ready
+            echo "Waiting for PostgreSQL to be healthy..."
+            sleep 15
+            
+            # Sync PostgreSQL password with .env to prevent authentication issues
+            DB_PASSWORD=\$(grep "^DB_PASSWORD=" .env | cut -d '=' -f2)
+            if [ -n "\${DB_PASSWORD}" ]; then
+              echo "Checking PostgreSQL password..."
+              
+              # Test if current password works
+              if docker exec forex_postgres psql -U postgres -c "SELECT 1;" > /dev/null 2>&1; then
+                echo "✓ PostgreSQL password is already correct, no restart needed"
+              else
+                echo "Updating PostgreSQL password to match .env..."
+                docker exec forex_postgres psql -U postgres -c "ALTER USER postgres PASSWORD '\${DB_PASSWORD}';" 2>/dev/null || true
+                echo "Password updated, restarting backend services..."
+                docker compose restart backend celery celery-beat
+                echo "✓ Password sync and restart completed"
+              fi
+            fi
+            
             # Clean up old images
             docker image prune -af
             
@@ -217,18 +238,27 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
         run: |
-          ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} << 'EOF'
+          ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} << EOF
             cd ${DEPLOY_PATH}
             
             # Wait for services to be healthy
             sleep 10
             
             # Check if all services are running
-            if docker compose ps | grep -q "Up"; then
-              echo "Deployment successful - services are running"
+            RUNNING_COUNT=\$(docker compose ps --status running --format json | wc -l)
+            TOTAL_COUNT=\$(docker compose ps --format json | wc -l)
+            
+            echo "Running services: \${RUNNING_COUNT}/\${TOTAL_COUNT}"
+            
+            if [ "\${RUNNING_COUNT}" -eq "\${TOTAL_COUNT}" ] && [ "\${RUNNING_COUNT}" -gt 0 ]; then
+              echo "✅ Deployment successful - all services are running"
+              docker compose ps
               exit 0
             else
-              echo "Deployment failed - services are not running"
+              echo "❌ Deployment failed - not all services are running"
+              docker compose ps
+              echo ""
+              echo "Recent logs:"
               docker compose logs --tail=50
               exit 1
             fi
