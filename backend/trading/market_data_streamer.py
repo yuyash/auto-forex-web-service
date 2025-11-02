@@ -5,6 +5,7 @@ This module handles real-time market data streaming from OANDA v20 API.
 """
 
 import logging
+import time
 from typing import Any, Callable, Dict, List, Optional
 
 import v20
@@ -14,6 +15,117 @@ from accounts.models import OandaAccount
 logger = logging.getLogger(__name__)
 
 
+class ReconnectionManager:
+    """
+    Manages reconnection logic with exponential backoff.
+
+    This class implements:
+    - Exponential backoff intervals (1s, 2s, 4s, 8s, 16s)
+    - Maximum 5 retry attempts
+    - Connection failure logging
+    - Reconnection attempt tracking
+    """
+
+    def __init__(self, max_attempts: int = 5):
+        """
+        Initialize the reconnection manager.
+
+        Args:
+            max_attempts: Maximum number of reconnection attempts (default: 5)
+        """
+        self.max_attempts = max_attempts
+        self.current_attempt = 0
+        self.backoff_intervals = [1, 2, 4, 8, 16]  # seconds
+
+    def should_retry(self) -> bool:
+        """
+        Check if another retry attempt should be made.
+
+        Returns:
+            True if retry attempts remain, False otherwise
+        """
+        return self.current_attempt < self.max_attempts
+
+    def get_backoff_interval(self) -> float:
+        """
+        Get the backoff interval for the current attempt.
+
+        Returns:
+            Backoff interval in seconds
+        """
+        if self.current_attempt < len(self.backoff_intervals):
+            return self.backoff_intervals[self.current_attempt]
+        # If we exceed predefined intervals, use the last one
+        return self.backoff_intervals[-1]
+
+    def wait_before_retry(self) -> None:
+        """
+        Wait for the appropriate backoff interval before retrying.
+
+        This method blocks for the duration of the backoff interval.
+        """
+        interval = self.get_backoff_interval()
+        logger.info(
+            "Waiting %s seconds before retry attempt %d/%d",
+            interval,
+            self.current_attempt + 1,
+            self.max_attempts,
+        )
+        time.sleep(interval)
+
+    def record_attempt(self) -> None:
+        """
+        Record a reconnection attempt.
+
+        This increments the attempt counter.
+        """
+        self.current_attempt += 1
+        logger.info("Reconnection attempt %d/%d", self.current_attempt, self.max_attempts)
+
+    def reset(self) -> None:
+        """
+        Reset the reconnection manager after a successful connection.
+
+        This resets the attempt counter to 0.
+        """
+        logger.info("Connection successful, resetting reconnection manager")
+        self.current_attempt = 0
+
+    def log_failure(self, error: Exception) -> None:
+        """
+        Log a connection failure.
+
+        Args:
+            error: The exception that caused the failure
+        """
+        logger.error(
+            "Connection attempt %d/%d failed: %s",
+            self.current_attempt,
+            self.max_attempts,
+            str(error),
+        )
+
+    def log_max_attempts_reached(self) -> None:
+        """
+        Log that maximum retry attempts have been reached.
+        """
+        logger.error("Maximum reconnection attempts (%d) reached. Giving up.", self.max_attempts)
+
+    def get_status(self) -> Dict[str, Any]:
+        """
+        Get the current status of the reconnection manager.
+
+        Returns:
+            Dictionary with status information
+        """
+        return {
+            "current_attempt": self.current_attempt,
+            "max_attempts": self.max_attempts,
+            "can_retry": self.should_retry(),
+            "next_backoff_interval": self.get_backoff_interval() if self.should_retry() else None,
+        }
+
+
 class TickData:
     """Normalized tick data structure"""
 
@@ -21,7 +133,7 @@ class TickData:
     def __init__(
         self,
         instrument: str,
-        time: str,
+        time: str,  # pylint: disable=redefined-outer-name
         bid: float,
         ask: float,
         bid_liquidity: Optional[int] = None,
@@ -74,6 +186,7 @@ class MarketDataStreamer:
         self.is_connected = False
         self.instruments: List[str] = []
         self.tick_callback: Optional[Callable[[TickData], None]] = None
+        self.reconnection_manager = ReconnectionManager(max_attempts=5)
 
     def initialize_connection(self) -> None:
         """
@@ -135,6 +248,8 @@ class MarketDataStreamer:
 
             self.stream = response
             self.is_connected = True
+            # Reset reconnection manager on successful connection
+            self.reconnection_manager.reset()
 
             logger.info(
                 "Started market data stream for account %s, instruments: %s",
@@ -235,7 +350,8 @@ class MarketDataStreamer:
         Args:
             heartbeat_msg: Heartbeat message from v20 stream
         """
-        logger.debug("Received heartbeat at %s", heartbeat_msg.time)
+        heartbeat_time = heartbeat_msg.time
+        logger.debug("Received heartbeat at %s", heartbeat_time)
 
     def register_tick_callback(self, callback: Callable[[TickData], None]) -> None:
         """
@@ -246,6 +362,53 @@ class MarketDataStreamer:
         """
         self.tick_callback = callback
         logger.info("Registered tick callback")
+
+    def reconnect(self) -> bool:
+        """
+        Attempt to reconnect to the market data stream with exponential backoff.
+
+        This method will retry up to max_attempts times with exponential backoff
+        intervals (1s, 2s, 4s, 8s, 16s).
+
+        Returns:
+            True if reconnection was successful, False otherwise
+        """
+        if not self.instruments:
+            logger.error("Cannot reconnect: no instruments configured")
+            return False
+
+        logger.info("Starting reconnection process for account %s", self.account.account_id)
+
+        while self.reconnection_manager.should_retry():
+            try:
+                # Wait before attempting reconnection
+                self.reconnection_manager.wait_before_retry()
+
+                # Record the attempt
+                self.reconnection_manager.record_attempt()
+
+                # Attempt to start the stream
+                self.start_stream(self.instruments)
+
+                # If we get here, connection was successful
+                logger.info(
+                    "Successfully reconnected to market data stream for account %s",
+                    self.account.account_id,
+                )
+                return True
+
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                # Log the failure
+                self.reconnection_manager.log_failure(e)
+
+                # Check if we should continue retrying
+                if not self.reconnection_manager.should_retry():
+                    self.reconnection_manager.log_max_attempts_reached()
+                    return False
+
+        # If we exit the loop without success
+        self.reconnection_manager.log_max_attempts_reached()
+        return False
 
     def stop_stream(self) -> None:
         """
@@ -274,4 +437,5 @@ class MarketDataStreamer:
             "account_id": self.account.account_id,
             "instruments": self.instruments,
             "api_type": self.account.api_type,
+            "reconnection_status": self.reconnection_manager.get_status(),
         }

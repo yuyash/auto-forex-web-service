@@ -5,6 +5,7 @@ Tests cover:
 - Stream initialization with mocked v20 API
 - Tick data processing and normalization
 - Connection handling
+- Reconnection logic with exponential backoff
 """
 
 from unittest.mock import MagicMock, patch
@@ -12,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from accounts.models import OandaAccount
-from trading.market_data_streamer import MarketDataStreamer, TickData
+from trading.market_data_streamer import MarketDataStreamer, ReconnectionManager, TickData
 
 
 @pytest.fixture
@@ -367,3 +368,282 @@ class TestMarketDataStreamer:
         assert status["account_id"] == "001-001-1234567-001"
         assert status["instruments"] == []
         assert status["api_type"] == "practice"
+
+
+@pytest.mark.django_db
+class TestReconnectionManager:
+    """Test ReconnectionManager class"""
+
+    def test_initialization(self):
+        """Test ReconnectionManager initialization"""
+        manager = ReconnectionManager(max_attempts=5)
+
+        assert manager.max_attempts == 5
+        assert manager.current_attempt == 0
+        assert manager.backoff_intervals == [1, 2, 4, 8, 16]
+
+    def test_should_retry_initial(self):
+        """Test should_retry returns True initially"""
+        manager = ReconnectionManager(max_attempts=5)
+
+        assert manager.should_retry() is True
+
+    def test_should_retry_after_max_attempts(self):
+        """Test should_retry returns False after max attempts"""
+        manager = ReconnectionManager(max_attempts=5)
+
+        # Simulate 5 attempts
+        for _ in range(5):
+            manager.record_attempt()
+
+        assert manager.should_retry() is False
+
+    def test_get_backoff_interval_sequence(self):
+        """Test exponential backoff intervals (1s, 2s, 4s, 8s, 16s)"""
+        manager = ReconnectionManager(max_attempts=5)
+
+        # Test each interval
+        assert manager.get_backoff_interval() == 1  # Attempt 0
+        manager.record_attempt()
+
+        assert manager.get_backoff_interval() == 2  # Attempt 1
+        manager.record_attempt()
+
+        assert manager.get_backoff_interval() == 4  # Attempt 2
+        manager.record_attempt()
+
+        assert manager.get_backoff_interval() == 8  # Attempt 3
+        manager.record_attempt()
+
+        assert manager.get_backoff_interval() == 16  # Attempt 4
+        manager.record_attempt()
+
+        # After max attempts, should still return last interval
+        assert manager.get_backoff_interval() == 16
+
+    @patch("trading.market_data_streamer.time.sleep")
+    def test_wait_before_retry(self, mock_sleep):
+        """Test wait_before_retry waits for correct interval"""
+        manager = ReconnectionManager(max_attempts=5)
+
+        # First wait should be 1 second
+        manager.wait_before_retry()
+        mock_sleep.assert_called_with(1)
+
+        # Record attempt and test next interval
+        manager.record_attempt()
+        manager.wait_before_retry()
+        mock_sleep.assert_called_with(2)
+
+    def test_record_attempt(self):
+        """Test recording reconnection attempts"""
+        manager = ReconnectionManager(max_attempts=5)
+
+        assert manager.current_attempt == 0
+
+        manager.record_attempt()
+        assert manager.current_attempt == 1
+
+        manager.record_attempt()
+        assert manager.current_attempt == 2
+
+    def test_reset(self):
+        """Test resetting reconnection manager"""
+        manager = ReconnectionManager(max_attempts=5)
+
+        # Simulate some attempts
+        manager.record_attempt()
+        manager.record_attempt()
+        assert manager.current_attempt == 2
+
+        # Reset
+        manager.reset()
+        assert manager.current_attempt == 0
+
+    def test_log_failure(self):
+        """Test logging connection failure"""
+        manager = ReconnectionManager(max_attempts=5)
+        manager.record_attempt()
+
+        # Should not raise exception
+        error = Exception("Connection timeout")
+        manager.log_failure(error)
+
+    def test_log_max_attempts_reached(self):
+        """Test logging max attempts reached"""
+        manager = ReconnectionManager(max_attempts=5)
+
+        # Should not raise exception
+        manager.log_max_attempts_reached()
+
+    def test_get_status(self):
+        """Test getting reconnection manager status"""
+        manager = ReconnectionManager(max_attempts=5)
+
+        status = manager.get_status()
+        assert status["current_attempt"] == 0
+        assert status["max_attempts"] == 5
+        assert status["can_retry"] is True
+        assert status["next_backoff_interval"] == 1
+
+        # After some attempts
+        manager.record_attempt()
+        manager.record_attempt()
+
+        status = manager.get_status()
+        assert status["current_attempt"] == 2
+        assert status["can_retry"] is True
+        assert status["next_backoff_interval"] == 4
+
+        # After max attempts
+        for _ in range(3):
+            manager.record_attempt()
+
+        status = manager.get_status()
+        assert status["current_attempt"] == 5
+        assert status["can_retry"] is False
+        assert status["next_backoff_interval"] is None
+
+
+@pytest.mark.django_db
+class TestStreamReconnection:
+    """Test stream reconnection logic"""
+
+    @patch("trading.market_data_streamer.v20.Context")
+    @patch("trading.market_data_streamer.time.sleep")
+    def test_successful_reconnection_first_attempt(
+        self, mock_sleep, mock_v20_context, mock_oanda_account
+    ):
+        """Test successful reconnection on first attempt"""
+        # Setup mock context and pricing stream
+        mock_context_instance = MagicMock()
+        mock_v20_context.return_value = mock_context_instance
+
+        mock_response = MagicMock()
+        mock_context_instance.pricing.stream.return_value = mock_response
+
+        streamer = MarketDataStreamer(mock_oanda_account)
+        streamer.initialize_connection()
+
+        # Set instruments (normally done by start_stream)
+        streamer.instruments = ["EUR_USD"]
+
+        # Attempt reconnection
+        result = streamer.reconnect()
+
+        # Verify successful reconnection
+        assert result is True
+        assert streamer.is_connected is True
+        # After successful connection, reconnection manager is reset to 0
+        assert streamer.reconnection_manager.current_attempt == 0
+        mock_sleep.assert_called_once_with(1)  # First backoff interval
+
+    @patch("trading.market_data_streamer.v20.Context")
+    @patch("trading.market_data_streamer.time.sleep")
+    def test_successful_reconnection_after_failures(
+        self, mock_sleep, mock_v20_context, mock_oanda_account
+    ):
+        """Test successful reconnection after some failures"""
+        # Setup mock context
+        mock_context_instance = MagicMock()
+        mock_v20_context.return_value = mock_context_instance
+
+        # First two attempts fail, third succeeds
+        mock_context_instance.pricing.stream.side_effect = [
+            Exception("Connection failed"),
+            Exception("Connection failed"),
+            MagicMock(),  # Success on third attempt
+        ]
+
+        streamer = MarketDataStreamer(mock_oanda_account)
+        streamer.initialize_connection()
+        streamer.instruments = ["EUR_USD"]
+
+        # Attempt reconnection
+        result = streamer.reconnect()
+
+        # Verify successful reconnection after 3 attempts
+        assert result is True
+        assert streamer.is_connected is True
+        # After successful connection, reconnection manager is reset to 0
+        assert streamer.reconnection_manager.current_attempt == 0
+        # Should have called sleep 3 times (1s, 2s, 4s)
+        assert mock_sleep.call_count == 3
+
+    @patch("trading.market_data_streamer.v20.Context")
+    @patch("trading.market_data_streamer.time.sleep")
+    def test_reconnection_max_attempts_reached(
+        self, mock_sleep, mock_v20_context, mock_oanda_account
+    ):
+        """Test reconnection fails after maximum attempts (5)"""
+        # Setup mock context
+        mock_context_instance = MagicMock()
+        mock_v20_context.return_value = mock_context_instance
+
+        # All attempts fail
+        mock_context_instance.pricing.stream.side_effect = Exception("Connection failed")
+
+        streamer = MarketDataStreamer(mock_oanda_account)
+        streamer.initialize_connection()
+        streamer.instruments = ["EUR_USD"]
+
+        # Attempt reconnection
+        result = streamer.reconnect()
+
+        # Verify reconnection failed
+        assert result is False
+        assert streamer.is_connected is False
+        assert streamer.reconnection_manager.current_attempt == 5
+        # Should have called sleep 5 times (1s, 2s, 4s, 8s, 16s)
+        assert mock_sleep.call_count == 5
+
+    @patch("trading.market_data_streamer.v20.Context")
+    def test_reconnection_no_instruments(self, mock_v20_context, mock_oanda_account):
+        """Test reconnection fails when no instruments configured"""
+        streamer = MarketDataStreamer(mock_oanda_account)
+        streamer.initialize_connection()
+
+        # Don't set instruments
+        result = streamer.reconnect()
+
+        # Verify reconnection failed
+        assert result is False
+
+    @patch("trading.market_data_streamer.v20.Context")
+    @patch("trading.market_data_streamer.time.sleep")
+    def test_reconnection_manager_reset_on_success(
+        self, mock_sleep, mock_v20_context, mock_oanda_account
+    ):
+        """Test reconnection manager is reset after successful connection"""
+        # Setup mock context
+        mock_context_instance = MagicMock()
+        mock_v20_context.return_value = mock_context_instance
+
+        mock_response = MagicMock()
+        mock_context_instance.pricing.stream.return_value = mock_response
+
+        streamer = MarketDataStreamer(mock_oanda_account)
+        streamer.initialize_connection()
+        streamer.start_stream(["EUR_USD"])
+
+        # Verify reconnection manager was reset
+        assert streamer.reconnection_manager.current_attempt == 0
+
+    @patch("trading.market_data_streamer.v20.Context")
+    def test_connection_status_includes_reconnection_status(
+        self, mock_v20_context, mock_oanda_account
+    ):
+        """Test connection status includes reconnection manager status"""
+        mock_context_instance = MagicMock()
+        mock_v20_context.return_value = mock_context_instance
+
+        streamer = MarketDataStreamer(mock_oanda_account)
+        streamer.initialize_connection()
+
+        status = streamer.get_connection_status()
+
+        # Verify reconnection status is included
+        assert "reconnection_status" in status
+        assert status["reconnection_status"]["current_attempt"] == 0
+        assert status["reconnection_status"]["max_attempts"] == 5
+        assert status["reconnection_status"]["can_retry"] is True
