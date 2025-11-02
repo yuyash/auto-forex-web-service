@@ -5,7 +5,10 @@
     "npm *",
     "ls *",
     "npx *",
-    "which *"
+    "which *",
+    "python *",
+    "pre-commit *",
+    "sed *"
   ],
   "editor.rulers": [
     100,
