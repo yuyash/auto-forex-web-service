@@ -6,18 +6,26 @@ This module contains Celery tasks for:
 - Processing tick data and broadcasting to strategy executors
 - Managing one stream per active OANDA account
 
-Requirements: 7.1, 7.2
+Requirements: 7.1, 7.2, 12.1
 """
 
 import logging
-from typing import Any, Dict
+import threading
+import time
+from datetime import datetime
+from decimal import Decimal
+from typing import Any, Dict, List
 
 from django.core.cache import cache
+from django.db import DatabaseError, transaction
+from django.utils import timezone
 
 from celery import shared_task
 
 from accounts.models import OandaAccount
 from trading.market_data_streamer import MarketDataStreamer, TickData
+from trading.tick_data_models import TickData as TickDataModel
+from trading_system.config_loader import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +33,186 @@ logger = logging.getLogger(__name__)
 STREAM_CACHE_PREFIX = "market_data_stream:"
 
 
+class TickDataBuffer:
+    """
+    Buffer for batch insertion of tick data.
+
+    This class accumulates tick data and performs batch insertions to the database
+    for improved performance. It supports both size-based and time-based flushing.
+
+    Requirements: 7.1, 7.2, 12.1
+    """
+
+    def __init__(
+        self,
+        account: OandaAccount,
+        batch_size: int = 100,
+        batch_timeout: float = 1.0,
+    ):
+        """
+        Initialize the tick data buffer.
+
+        Args:
+            account: OandaAccount instance
+            batch_size: Number of ticks to buffer before flushing (default: 100)
+            batch_timeout: Maximum time in seconds to wait before flushing (default: 1.0)
+        """
+        self.account = account
+        self.batch_size = batch_size
+        self.batch_timeout = batch_timeout
+        self.buffer: List[TickDataModel] = []
+        self.lock = threading.Lock()
+        self.last_flush_time = time.time()
+        self.total_stored = 0
+        self.total_errors = 0
+
+    def add_tick(self, tick: TickData) -> None:
+        """
+        Add a tick to the buffer.
+
+        If the buffer reaches batch_size or batch_timeout has elapsed,
+        the buffer will be flushed to the database.
+
+        Args:
+            tick: TickData object to add to buffer
+        """
+        with self.lock:
+            try:
+                # Create TickDataModel instance
+                tick_model = TickDataModel(
+                    account=self.account,
+                    instrument=tick.instrument,
+                    timestamp=self._parse_timestamp(tick.time),
+                    bid=Decimal(str(tick.bid)),
+                    ask=Decimal(str(tick.ask)),
+                    mid=Decimal(str(tick.mid)),
+                    spread=Decimal(str(tick.spread)),
+                )
+
+                self.buffer.append(tick_model)
+
+                # Check if we should flush
+                current_time = time.time()
+                should_flush_size = len(self.buffer) >= self.batch_size
+                should_flush_time = (current_time - self.last_flush_time) >= self.batch_timeout
+
+                if should_flush_size or should_flush_time:
+                    self._flush()
+
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error("Error adding tick to buffer: %s", e, exc_info=True)
+                self.total_errors += 1
+
+    def _parse_timestamp(self, time_str: str) -> datetime:
+        """
+        Parse OANDA timestamp string to datetime object.
+
+        Args:
+            time_str: ISO 8601 timestamp string from OANDA
+
+        Returns:
+            Timezone-aware datetime object
+        """
+        # OANDA returns timestamps in RFC3339 format
+        # Example: "2024-01-15T10:30:45.123456789Z"
+        try:
+            # Parse the timestamp
+            dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+            # Ensure it's timezone-aware
+            if dt.tzinfo is None:
+                dt = timezone.make_aware(dt)
+            return dt
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error parsing timestamp '%s': %s", time_str, e)
+            # Fallback to current time
+            return timezone.now()
+
+    def _flush(self) -> None:
+        """
+        Flush the buffer to the database using bulk_create.
+
+        This method performs a batch insert of all buffered tick data.
+        It handles database errors gracefully and logs the operation.
+        """
+        if not self.buffer:
+            return
+
+        buffer_size = len(self.buffer)
+
+        try:
+            # Use bulk_create for efficient batch insertion
+            with transaction.atomic():
+                TickDataModel.objects.bulk_create(
+                    self.buffer,
+                    batch_size=self.batch_size,
+                    ignore_conflicts=False,
+                )
+
+            self.total_stored += buffer_size
+            logger.info(
+                "Flushed %d ticks to database for account %s (total stored: %d)",
+                buffer_size,
+                self.account.account_id,
+                self.total_stored,
+            )
+
+        except DatabaseError as e:
+            self.total_errors += buffer_size
+            logger.error(
+                "Database error flushing %d ticks for account %s: %s",
+                buffer_size,
+                self.account.account_id,
+                e,
+                exc_info=True,
+            )
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            self.total_errors += buffer_size
+            logger.error(
+                "Unexpected error flushing %d ticks for account %s: %s",
+                buffer_size,
+                self.account.account_id,
+                e,
+                exc_info=True,
+            )
+
+        finally:
+            # Clear the buffer and update flush time
+            self.buffer.clear()
+            self.last_flush_time = time.time()
+
+    def flush(self) -> None:
+        """
+        Manually flush the buffer to the database.
+
+        This is a public method that can be called to force a flush.
+        """
+        with self.lock:
+            self._flush()
+
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Get buffer statistics.
+
+        Returns:
+            Dictionary with buffer statistics
+        """
+        with self.lock:
+            return {
+                "buffer_size": len(self.buffer),
+                "total_stored": self.total_stored,
+                "total_errors": self.total_errors,
+                "last_flush_time": self.last_flush_time,
+            }
+
+
 @shared_task(bind=True, max_retries=3)
-def start_market_data_stream(  # type: ignore[no-untyped-def]  # pylint: disable=unused-argument
-    self, account_id: int, instruments: list[str]
+def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
+    self,  # pylint: disable=unused-argument
+    account_id: int,
+    instruments: list[str],
 ) -> Dict[str, Any]:
+    # pylint: disable=too-many-locals,too-many-statements
     """
     Start market data streaming for an OANDA account.
 
@@ -36,6 +220,7 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # pylint: disable
     - Initializes a MarketDataStreamer instance
     - Starts streaming for specified instruments
     - Processes ticks and broadcasts to strategy executor
+    - Stores ticks to database (if enabled in configuration)
     - Handles reconnection on failures
 
     Args:
@@ -48,9 +233,13 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # pylint: disable
             - account_id: OANDA account ID
             - instruments: List of instruments being streamed
             - error: Error message if stream failed to start
+            - tick_storage_enabled: Whether tick storage is enabled
+            - tick_storage_stats: Statistics about tick storage (if enabled)
 
-    Requirements: 7.1, 7.2
+    Requirements: 7.1, 7.2, 12.1
     """
+    tick_buffer = None
+
     try:
         # Fetch the OandaAccount from database
         try:
@@ -91,6 +280,30 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # pylint: disable
                 "message": "Stream already running",
             }
 
+        # Load tick storage configuration
+        tick_storage_enabled = get_config("tick_storage.enabled", True)
+        batch_size = get_config("tick_storage.batch_size", 100)
+        batch_timeout = get_config("tick_storage.batch_timeout", 1.0)
+
+        logger.info(
+            "Tick storage configuration: enabled=%s, batch_size=%d, batch_timeout=%.1fs",
+            tick_storage_enabled,
+            batch_size,
+            batch_timeout,
+        )
+
+        # Initialize tick data buffer if storage is enabled
+        if tick_storage_enabled:
+            tick_buffer = TickDataBuffer(
+                account=oanda_account,
+                batch_size=batch_size,
+                batch_timeout=batch_timeout,
+            )
+            logger.info(
+                "Initialized tick data buffer for account %s",
+                oanda_account.account_id,
+            )
+
         # Create and initialize the market data streamer
         streamer = MarketDataStreamer(oanda_account)
         streamer.initialize_connection()
@@ -102,13 +315,26 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # pylint: disable
 
             This callback is called for each tick received from the stream.
             It will:
-            1. Log the tick data
-            2. Broadcast to strategy executor (TODO: implement in task 6.5)
-            3. Broadcast to frontend via Django Channels (TODO: implement in task 5.4)
+            1. Store tick to database (if enabled)
+            2. Log the tick data
+            3. Broadcast to strategy executor (TODO: implement in task 6.5)
+            4. Broadcast to frontend via Django Channels (TODO: implement in task 5.4)
 
             Args:
                 tick: Normalized tick data
             """
+            # Store tick to database if enabled
+            if tick_storage_enabled and tick_buffer:
+                try:
+                    tick_buffer.add_tick(tick)
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    logger.error(
+                        "Error storing tick for %s: %s",
+                        tick.instrument,
+                        e,
+                        exc_info=True,
+                    )
+
             logger.debug(
                 "Received tick for %s: bid=%s, ask=%s, mid=%s",
                 tick.instrument,
@@ -154,6 +380,11 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # pylint: disable
                 stream_error,
             )
 
+            # Flush any remaining ticks before attempting reconnection
+            if tick_buffer:
+                logger.info("Flushing tick buffer before reconnection attempt")
+                tick_buffer.flush()
+
             # Attempt reconnection
             if streamer.reconnect():
                 logger.info(
@@ -167,11 +398,25 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # pylint: disable
                 cache.delete(cache_key)
                 raise
 
+        # Get final tick storage statistics
+        tick_storage_stats = None
+        if tick_buffer:
+            # Flush any remaining ticks
+            tick_buffer.flush()
+            tick_storage_stats = tick_buffer.get_stats()
+            logger.info(
+                "Final tick storage stats for account %s: %s",
+                oanda_account.account_id,
+                tick_storage_stats,
+            )
+
         return {
             "success": True,
             "account_id": oanda_account.account_id,
             "instruments": instruments,
             "error": None,
+            "tick_storage_enabled": tick_storage_enabled,
+            "tick_storage_stats": tick_storage_stats,
         }
 
     except Exception as e:  # pylint: disable=broad-exception-caught
@@ -182,6 +427,14 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # pylint: disable
             error_msg,
             exc_info=True,
         )
+
+        # Flush any remaining ticks before cleanup
+        if tick_buffer:
+            try:
+                logger.info("Flushing tick buffer before cleanup")
+                tick_buffer.flush()
+            except Exception as flush_error:  # pylint: disable=broad-exception-caught
+                logger.error("Error flushing tick buffer: %s", flush_error)
 
         # Clean up cache entry
         cache_key = f"{STREAM_CACHE_PREFIX}{account_id}"

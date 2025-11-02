@@ -260,3 +260,145 @@ class TestGetStreamStatus:
         assert result["is_active"] is False
         assert "does not exist" in result["error"]
         assert result["account_id"] is None
+
+
+@pytest.mark.django_db
+class TestTickDataStorage:
+    """Test tick data storage functionality in market data streaming"""
+
+    @patch("trading.tasks.get_config")
+    @patch("trading.tasks.MarketDataStreamer")
+    def test_tick_storage_enabled(self, mock_streamer_class, mock_get_config, mock_oanda_account):
+        """Test that tick storage is enabled when configured"""
+
+        # Configure tick storage as enabled
+        def config_side_effect(key, default=None):
+            config_map = {
+                "tick_storage.enabled": True,
+                "tick_storage.batch_size": 100,
+                "tick_storage.batch_timeout": 1.0,
+            }
+            return config_map.get(key, default)
+
+        mock_get_config.side_effect = config_side_effect
+
+        # Setup mock streamer
+        mock_streamer = MagicMock()
+        mock_streamer_class.return_value = mock_streamer
+        mock_streamer.process_stream.return_value = None
+
+        # Start the stream
+        result = start_market_data_stream(mock_oanda_account.id, ["EUR_USD"])
+
+        # Verify tick storage is enabled in result
+        assert result["success"] is True
+        assert result["tick_storage_enabled"] is True
+        assert result["tick_storage_stats"] is not None
+
+    @patch("trading.tasks.get_config")
+    @patch("trading.tasks.MarketDataStreamer")
+    def test_tick_storage_disabled(self, mock_streamer_class, mock_get_config, mock_oanda_account):
+        """Test that tick storage is disabled when configured"""
+
+        # Configure tick storage as disabled
+        def config_side_effect(key, default=None):
+            config_map = {
+                "tick_storage.enabled": False,
+                "tick_storage.batch_size": 100,
+                "tick_storage.batch_timeout": 1.0,
+            }
+            return config_map.get(key, default)
+
+        mock_get_config.side_effect = config_side_effect
+
+        # Setup mock streamer
+        mock_streamer = MagicMock()
+        mock_streamer_class.return_value = mock_streamer
+        mock_streamer.process_stream.return_value = None
+
+        # Start the stream
+        result = start_market_data_stream(mock_oanda_account.id, ["EUR_USD"])
+
+        # Verify tick storage is disabled in result
+        assert result["success"] is True
+        assert result["tick_storage_enabled"] is False
+
+    @patch("trading.tasks.get_config")
+    @patch("trading.tasks.MarketDataStreamer")
+    @patch("trading.tasks.TickDataBuffer")
+    def test_tick_buffer_initialization(
+        self, mock_buffer_class, mock_streamer_class, mock_get_config, mock_oanda_account
+    ):
+        """Test that TickDataBuffer is initialized with correct parameters"""
+
+        # Configure tick storage
+        def config_side_effect(key, default=None):
+            config_map = {
+                "tick_storage.enabled": True,
+                "tick_storage.batch_size": 50,
+                "tick_storage.batch_timeout": 2.0,
+            }
+            return config_map.get(key, default)
+
+        mock_get_config.side_effect = config_side_effect
+
+        # Setup mocks
+        mock_streamer = MagicMock()
+        mock_streamer_class.return_value = mock_streamer
+        mock_streamer.process_stream.return_value = None
+
+        mock_buffer = MagicMock()
+        mock_buffer.get_stats.return_value = {
+            "buffer_size": 0,
+            "total_stored": 0,
+            "total_errors": 0,
+        }
+        mock_buffer_class.return_value = mock_buffer
+
+        # Start the stream
+        start_market_data_stream(mock_oanda_account.id, ["EUR_USD"])
+
+        # Verify buffer was initialized with correct parameters
+        mock_buffer_class.assert_called_once_with(
+            account=mock_oanda_account, batch_size=50, batch_timeout=2.0
+        )
+
+    @patch("trading.tasks.get_config")
+    @patch("trading.tasks.MarketDataStreamer")
+    @patch("trading.tasks.TickDataBuffer")
+    def test_tick_buffer_flush_on_error(
+        self, mock_buffer_class, mock_streamer_class, mock_get_config, mock_oanda_account
+    ):
+        """Test that tick buffer is flushed when stream encounters an error"""
+
+        # Configure tick storage
+        def config_side_effect(key, default=None):
+            config_map = {
+                "tick_storage.enabled": True,
+                "tick_storage.batch_size": 100,
+                "tick_storage.batch_timeout": 1.0,
+            }
+            return config_map.get(key, default)
+
+        mock_get_config.side_effect = config_side_effect
+
+        # Setup mocks
+        mock_streamer = MagicMock()
+        mock_streamer_class.return_value = mock_streamer
+        mock_streamer.process_stream.side_effect = Exception("Stream error")
+        mock_streamer.reconnect.return_value = False
+
+        mock_buffer = MagicMock()
+        mock_buffer.get_stats.return_value = {
+            "buffer_size": 0,
+            "total_stored": 10,
+            "total_errors": 0,
+        }
+        mock_buffer_class.return_value = mock_buffer
+
+        # Start the stream (will fail)
+        result = start_market_data_stream(mock_oanda_account.id, ["EUR_USD"])
+
+        # Verify buffer was flushed before cleanup
+        assert mock_buffer.flush.call_count >= 1
+        assert result["success"] is False

@@ -103,6 +103,11 @@ class ConfigLoader:
             "max_concurrent_backtests": 5,
             "data_source": "s3",
         },
+        "tick_storage": {
+            "enabled": True,
+            "batch_size": 100,
+            "batch_timeout": 1.0,
+        },
     }
 
     def __init__(self, config_path: Optional[str] = None):

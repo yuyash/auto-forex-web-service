@@ -77,3 +77,8 @@ backtesting:
   data_source: s3
   s3_bucket: forex-historical-data
   athena_database: forex_data
+
+tick_storage:
+  enabled: true
+  batch_size: 100
+  batch_timeout: 1.0 # seconds
