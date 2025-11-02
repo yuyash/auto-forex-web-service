@@ -9,6 +9,8 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 import v20
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
 from accounts.models import OandaAccount
 
@@ -257,9 +259,14 @@ class MarketDataStreamer:
                 ", ".join(instruments),
             )
 
+            # Broadcast connection status
+            self._broadcast_connection_status("connected", "Stream connected successfully")
+
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Failed to start market data stream: %s", e)
             self.is_connected = False
+            # Broadcast error status
+            self._broadcast_connection_status("error", f"Failed to connect: {str(e)}")
             raise
 
     def process_stream(self) -> None:
@@ -327,6 +334,9 @@ class MarketDataStreamer:
                 ask_liquidity=ask_liquidity,
             )
 
+            # Broadcast tick data to WebSocket consumers
+            self._broadcast_tick_to_websocket(tick)
+
             # Call tick callback if registered
             if self.tick_callback:
                 self.tick_callback(tick)
@@ -342,6 +352,39 @@ class MarketDataStreamer:
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error processing price message: %s", e)
+
+    def _broadcast_tick_to_websocket(self, tick: TickData) -> None:
+        """
+        Broadcast tick data to WebSocket consumers via Django Channels.
+
+        This method sends the tick data to the channel layer, which then
+        broadcasts it to all connected WebSocket clients for this account.
+
+        Args:
+            tick: Normalized tick data to broadcast
+        """
+        try:
+            channel_layer = get_channel_layer()
+            if not channel_layer:
+                logger.warning("Channel layer not configured, skipping WebSocket broadcast")
+                return
+
+            # Create group name for this account
+            group_name = f"market_data_{self.account.id}"
+
+            # Send message to the group
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {
+                    "type": "market_data_update",
+                    "data": tick.to_dict(),
+                },
+            )
+
+            logger.debug("Broadcasted tick to WebSocket group: %s", group_name)
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error broadcasting tick to WebSocket: %s", e)
 
     def _process_heartbeat_message(self, heartbeat_msg: Any) -> None:
         """
@@ -379,6 +422,9 @@ class MarketDataStreamer:
 
         logger.info("Starting reconnection process for account %s", self.account.account_id)
 
+        # Broadcast reconnecting status
+        self._broadcast_connection_status("reconnecting", "Attempting to reconnect...")
+
         while self.reconnection_manager.should_retry():
             try:
                 # Wait before attempting reconnection
@@ -404,10 +450,19 @@ class MarketDataStreamer:
                 # Check if we should continue retrying
                 if not self.reconnection_manager.should_retry():
                     self.reconnection_manager.log_max_attempts_reached()
+                    # Broadcast final failure
+                    max_attempts = self.reconnection_manager.max_attempts
+                    self._broadcast_connection_status(
+                        "error", f"Failed to reconnect after {max_attempts} attempts"
+                    )
                     return False
 
         # If we exit the loop without success
         self.reconnection_manager.log_max_attempts_reached()
+        max_attempts = self.reconnection_manager.max_attempts
+        self._broadcast_connection_status(
+            "error", f"Failed to reconnect after {max_attempts} attempts"
+        )
         return False
 
     def stop_stream(self) -> None:
@@ -419,11 +474,49 @@ class MarketDataStreamer:
                 # Close the stream
                 self.stream.terminate("User requested stop")
                 logger.info("Stopped market data stream for account %s", self.account.account_id)
+
+                # Broadcast disconnection status
+                self._broadcast_connection_status("disconnected", "Stream stopped by user")
             except Exception as e:  # pylint: disable=broad-exception-caught
                 logger.error("Error stopping stream: %s", e)
             finally:
                 self.stream = None
                 self.is_connected = False
+
+    def _broadcast_connection_status(self, status: str, message: str = "") -> None:
+        """
+        Broadcast connection status updates to WebSocket consumers.
+
+        Args:
+            status: Connection status (connected, disconnected, reconnecting, error)
+            message: Optional status message
+        """
+        try:
+            channel_layer = get_channel_layer()
+            if not channel_layer:
+                return
+
+            group_name = f"market_data_{self.account.id}"
+
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {
+                    "type": "connection_status",
+                    "data": {
+                        "status": status,
+                        "message": message,
+                        "account_id": self.account.account_id,
+                        "is_connected": self.is_connected,
+                    },
+                },
+            )
+
+            logger.debug(
+                "Broadcasted connection status '%s' to WebSocket group: %s", status, group_name
+            )
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error broadcasting connection status: %s", e)
 
     def get_connection_status(self) -> Dict[str, Any]:
         """

@@ -21,14 +21,12 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "trading_system.settings")
 django_asgi_app = get_asgi_application()
 
 # Import routing after Django is initialized
-# from trading_system.routing import websocket_urlpatterns
+# pylint: disable=wrong-import-position
+from trading_system.routing import websocket_urlpatterns  # noqa: E402
 
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
-        "websocket": AllowedHostsOriginValidator(
-            # URLRouter(websocket_urlpatterns)  # Will be uncommented when routing is created
-            URLRouter([])  # Empty for now
-        ),
+        "websocket": AllowedHostsOriginValidator(URLRouter(websocket_urlpatterns)),
     }
 )
