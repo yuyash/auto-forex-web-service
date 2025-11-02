@@ -154,6 +154,18 @@ CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
 
+# Celery Beat Schedule
+# https://docs.celeryq.dev/en/stable/userguide/periodic-tasks.html
+CELERY_BEAT_SCHEDULE = {
+    "fetch-all-account-balances": {
+        "task": "accounts.tasks.fetch_all_active_account_balances",
+        "schedule": 120.0,  # Every 2 minutes (120 seconds)
+        "options": {
+            "expires": 60.0,  # Task expires after 60 seconds if not executed
+        },
+    },
+}
+
 
 # Django REST Framework Configuration
 # https://www.django-rest-framework.org/api-guide/settings/
