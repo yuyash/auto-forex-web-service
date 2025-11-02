@@ -4,6 +4,7 @@ Django admin configuration for trading models.
 
 from django.contrib import admin
 
+from .event_models import Event, Notification
 from .models import Order, Position, Strategy, StrategyState, Trade
 
 
@@ -91,3 +92,99 @@ class TradeAdmin(admin.ModelAdmin):
     search_fields = ["instrument", "account__account_id"]
     readonly_fields = ["created_at"]
     date_hierarchy = "closed_at"
+
+
+@admin.register(Event)
+class EventAdmin(admin.ModelAdmin):
+    """Admin interface for Event model."""
+
+    list_display = [
+        "id",
+        "timestamp",
+        "category",
+        "event_type",
+        "severity",
+        "user",
+        "description",
+    ]
+    list_filter = ["category", "severity", "event_type", "timestamp"]
+    search_fields = [
+        "event_type",
+        "description",
+        "user__email",
+        "account__account_id",
+        "ip_address",
+    ]
+    readonly_fields = ["timestamp"]
+    date_hierarchy = "timestamp"
+    fieldsets = (
+        (
+            "Event Information",
+            {
+                "fields": (
+                    "timestamp",
+                    "category",
+                    "event_type",
+                    "severity",
+                )
+            },
+        ),
+        (
+            "Associated Entities",
+            {
+                "fields": (
+                    "user",
+                    "account",
+                )
+            },
+        ),
+        (
+            "Event Details",
+            {
+                "fields": (
+                    "description",
+                    "details",
+                )
+            },
+        ),
+        (
+            "Request Information",
+            {
+                "fields": (
+                    "ip_address",
+                    "user_agent",
+                )
+            },
+        ),
+    )
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    """Admin interface for Notification model."""
+
+    list_display = [
+        "id",
+        "timestamp",
+        "notification_type",
+        "title",
+        "severity",
+        "is_read",
+    ]
+    list_filter = ["severity", "is_read", "notification_type", "timestamp"]
+    search_fields = ["title", "message", "notification_type"]
+    readonly_fields = ["timestamp", "created_at"]
+    date_hierarchy = "timestamp"
+    actions = ["mark_as_read", "mark_as_unread"]
+
+    @admin.action(description="Mark selected notifications as read")
+    def mark_as_read(self, request, queryset):  # type: ignore[no-untyped-def]
+        """Mark selected notifications as read."""
+        queryset.update(is_read=True)
+        self.message_user(request, f"{queryset.count()} notifications marked as read.")
+
+    @admin.action(description="Mark selected notifications as unread")
+    def mark_as_unread(self, request, queryset):  # type: ignore[no-untyped-def]
+        """Mark selected notifications as unread."""
+        queryset.update(is_read=False)
+        self.message_user(request, f"{queryset.count()} notifications marked as unread.")
