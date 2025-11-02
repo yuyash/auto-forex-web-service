@@ -22,6 +22,7 @@ from .models import SystemSettings, UserSession
 from .permissions import IsAdminUser
 from .rate_limiter import RateLimiter
 from .serializers import (
+    OandaAccountSerializer,
     PublicSystemSettingsSerializer,
     SystemSettingsSerializer,
     UserLoginSerializer,
@@ -610,3 +611,265 @@ class AdminSystemSettingsView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class OandaAccountListCreateView(APIView):
+    """
+    API endpoint for listing and creating OANDA accounts.
+
+    GET /api/accounts
+    - List all OANDA accounts for the authenticated user
+
+    POST /api/accounts
+    - Create a new OANDA account for the authenticated user
+
+    Requirements: 4.1, 4.5
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = OandaAccountSerializer
+
+    def get(self, request: Request) -> Response:
+        """
+        List all OANDA accounts for the authenticated user.
+
+        Args:
+            request: HTTP request
+
+        Returns:
+            Response with list of OANDA accounts
+        """
+        from accounts.models import OandaAccount  # pylint: disable=import-outside-toplevel
+
+        if not request.user.is_authenticated:
+            return Response(
+                {"error": "Authentication required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        accounts = OandaAccount.objects.filter(user=request.user).order_by("-created_at")
+        serializer = self.serializer_class(accounts, many=True)
+
+        logger.info(
+            "User %s retrieved %s OANDA accounts",
+            request.user.email,
+            accounts.count(),
+            extra={
+                "user_id": request.user.id,
+                "email": request.user.email,
+                "account_count": accounts.count(),
+            },
+        )
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request: Request) -> Response:
+        """
+        Create a new OANDA account for the authenticated user.
+
+        Args:
+            request: HTTP request with account_id, api_token, api_type, currency
+
+        Returns:
+            Response with created OANDA account or validation errors
+        """
+        if not request.user.is_authenticated:
+            return Response(
+                {"error": "Authentication required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        serializer = self.serializer_class(data=request.data, context={"request": request})
+
+        if serializer.is_valid():
+            account = serializer.save()
+
+            logger.info(
+                "User %s created OANDA account %s (%s)",
+                request.user.email,
+                account.account_id,
+                account.api_type,
+                extra={
+                    "user_id": request.user.id,
+                    "email": request.user.email,
+                    "account_id": account.account_id,
+                    "api_type": account.api_type,
+                },
+            )
+
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class OandaAccountDetailView(APIView):
+    """
+    API endpoint for retrieving, updating, and deleting a specific OANDA account.
+
+    GET /api/accounts/{id}
+    - Retrieve details of a specific OANDA account
+
+    PUT /api/accounts/{id}
+    - Update a specific OANDA account
+
+    DELETE /api/accounts/{id}
+    - Delete a specific OANDA account
+
+    Requirements: 4.1, 4.5
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = OandaAccountSerializer
+
+    def get_object(
+        self, request: Request, account_id: int
+    ) -> "OandaAccount | None":  # type: ignore[name-defined]  # noqa: F821
+        """
+        Get OANDA account by ID, ensuring it belongs to the authenticated user.
+
+        Args:
+            request: HTTP request
+            account_id: OANDA account ID
+
+        Returns:
+            OandaAccount instance or None if not found
+        """
+        from accounts.models import OandaAccount  # pylint: disable=import-outside-toplevel
+
+        if not request.user.is_authenticated:
+            return None
+
+        try:
+            account = OandaAccount.objects.get(id=account_id, user=request.user)
+            return account
+        except OandaAccount.DoesNotExist:
+            return None
+
+    def get(self, request: Request, account_id: int) -> Response:
+        """
+        Retrieve details of a specific OANDA account.
+
+        Args:
+            request: HTTP request
+            account_id: OANDA account ID
+
+        Returns:
+            Response with OANDA account details or error
+        """
+        if not request.user.is_authenticated:
+            return Response(
+                {"error": "Authentication required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        account = self.get_object(request, account_id)
+        if account is None:
+            return Response(
+                {"error": "Account not found or you don't have permission to access it."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = self.serializer_class(account)
+
+        logger.info(
+            "User %s retrieved OANDA account %s",
+            request.user.email,
+            account.account_id,
+            extra={
+                "user_id": request.user.id,
+                "email": request.user.email,
+                "account_id": account.account_id,
+            },
+        )
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request: Request, account_id: int) -> Response:
+        """
+        Update a specific OANDA account.
+
+        Args:
+            request: HTTP request with updated account data
+            account_id: OANDA account ID
+
+        Returns:
+            Response with updated OANDA account or validation errors
+        """
+        if not request.user.is_authenticated:
+            return Response(
+                {"error": "Authentication required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        account = self.get_object(request, account_id)
+        if account is None:
+            return Response(
+                {"error": "Account not found or you don't have permission to access it."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = self.serializer_class(
+            account, data=request.data, partial=True, context={"request": request}
+        )
+
+        if serializer.is_valid():
+            updated_account = serializer.save()
+
+            logger.info(
+                "User %s updated OANDA account %s",
+                request.user.email,
+                updated_account.account_id,
+                extra={
+                    "user_id": request.user.id,
+                    "email": request.user.email,
+                    "account_id": updated_account.account_id,
+                    "updated_fields": list(request.data.keys()),
+                },
+            )
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request: Request, account_id: int) -> Response:
+        """
+        Delete a specific OANDA account.
+
+        Args:
+            request: HTTP request
+            account_id: OANDA account ID
+
+        Returns:
+            Response with success message or error
+        """
+        if not request.user.is_authenticated:
+            return Response(
+                {"error": "Authentication required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        account = self.get_object(request, account_id)
+        if account is None:
+            return Response(
+                {"error": "Account not found or you don't have permission to access it."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        account_id_str = account.account_id
+        account.delete()
+
+        logger.info(
+            "User %s deleted OANDA account %s",
+            request.user.email,
+            account_id_str,
+            extra={
+                "user_id": request.user.id,
+                "email": request.user.email,
+                "account_id": account_id_str,
+            },
+        )
+
+        return Response(
+            {"message": "Account deleted successfully."},
+            status=status.HTTP_200_OK,
+        )

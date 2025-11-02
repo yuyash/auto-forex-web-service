@@ -8,6 +8,8 @@ from django.urls import path
 
 from .views import (
     AdminSystemSettingsView,
+    OandaAccountDetailView,
+    OandaAccountListCreateView,
     PublicSystemSettingsView,
     TokenRefreshView,
     UserLoginView,
@@ -31,5 +33,9 @@ urlpatterns = [
         "admin/system/settings",
         AdminSystemSettingsView.as_view(),
         name="admin_system_settings",
+    ),
+    path("accounts", OandaAccountListCreateView.as_view(), name="oanda_accounts_list"),
+    path(
+        "accounts/<int:account_id>", OandaAccountDetailView.as_view(), name="oanda_account_detail"
     ),
 ]

@@ -238,3 +238,158 @@ class PublicSystemSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = SystemSettingsType
         fields = ["registration_enabled", "login_enabled"]
+
+
+class OandaAccountSerializer(serializers.ModelSerializer):
+    """
+    Serializer for OANDA account.
+
+    Requirements: 4.1, 4.5
+    """
+
+    api_token = serializers.CharField(
+        write_only=True,
+        required=True,
+        help_text="OANDA API token (will be encrypted)",
+    )
+
+    class Meta:
+        from accounts.models import OandaAccount  # pylint: disable=import-outside-toplevel
+
+        model = OandaAccount
+        fields = [
+            "id",
+            "account_id",
+            "api_token",
+            "api_type",
+            "currency",
+            "balance",
+            "margin_used",
+            "margin_available",
+            "unrealized_pnl",
+            "is_active",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "balance",
+            "margin_used",
+            "margin_available",
+            "unrealized_pnl",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate_account_id(self, value: str) -> str:
+        """
+        Validate account_id format and uniqueness for the user.
+
+        Args:
+            value: Account ID to validate
+
+        Returns:
+            Validated account ID
+
+        Raises:
+            serializers.ValidationError: If account_id is invalid or already exists
+        """
+        from accounts.models import OandaAccount  # pylint: disable=import-outside-toplevel
+
+        # Check if this is an update operation
+        if self.instance:
+            # For updates, allow the same account_id if it's the same instance
+            user = self.instance.user
+            if self.instance.account_id == value:
+                return value
+        else:
+            # For create operations, get user from context
+            request = self.context.get("request")
+            user = request.user if request and hasattr(request, "user") else None
+
+        # Check uniqueness for authenticated user
+        if (
+            user
+            and hasattr(user, "is_authenticated")
+            and user.is_authenticated
+            and OandaAccount.objects.filter(user=user, account_id=value).exists()
+        ):
+            raise serializers.ValidationError("You already have an account with this account ID.")
+
+        return value
+
+    def validate_api_type(self, value: str) -> str:
+        """
+        Validate api_type is either 'practice' or 'live'.
+
+        Args:
+            value: API type to validate
+
+        Returns:
+            Validated API type
+
+        Raises:
+            serializers.ValidationError: If api_type is invalid
+        """
+        if value not in ["practice", "live"]:
+            raise serializers.ValidationError("API type must be either 'practice' or 'live'.")
+
+        return value
+
+    def create(self, validated_data: Dict[str, Any]) -> Any:
+        """
+        Create a new OANDA account with encrypted API token.
+
+        Args:
+            validated_data: Validated account data
+
+        Returns:
+            Created OandaAccount instance
+        """
+        from accounts.models import OandaAccount  # pylint: disable=import-outside-toplevel
+
+        # Extract api_token before creating the account
+        api_token = validated_data.pop("api_token")
+
+        # Get user from request context
+        request = self.context.get("request")
+        if not request or not hasattr(request, "user"):
+            raise serializers.ValidationError("User context is required")
+
+        user = request.user
+
+        # Create account
+        account = OandaAccount.objects.create(user=user, **validated_data)
+
+        # Set encrypted API token
+        account.set_api_token(api_token)
+        account.save()
+
+        return account
+
+    def update(self, instance: Any, validated_data: Dict[str, Any]) -> Any:
+        """
+        Update an existing OANDA account.
+
+        Args:
+            instance: Existing OandaAccount instance
+            validated_data: Validated account data
+
+        Returns:
+            Updated OandaAccount instance
+        """
+        # Extract api_token if provided
+        api_token = validated_data.pop("api_token", None)
+
+        # Update fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        # Update API token if provided
+        if api_token:
+            instance.set_api_token(api_token)
+
+        instance.save()
+        return instance
