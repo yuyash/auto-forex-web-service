@@ -17,8 +17,11 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 if TYPE_CHECKING:
+    from accounts.models import SystemSettings as SystemSettingsType
     from accounts.models import User as UserType
 else:
+    from accounts.models import SystemSettings as SystemSettingsType
+
     UserType = get_user_model()
 
 User = get_user_model()
@@ -208,3 +211,30 @@ class UserLoginSerializer(serializers.Serializer):  # pylint: disable=abstract-m
 
         attrs["user"] = user
         return attrs
+
+
+class SystemSettingsSerializer(serializers.ModelSerializer):
+    """
+    Serializer for system settings.
+
+    Requirements: 1.1, 2.1, 19.5, 28.5
+    """
+
+    class Meta:
+        model = SystemSettingsType
+        fields = ["registration_enabled", "login_enabled", "updated_at"]
+        read_only_fields = ["updated_at"]
+
+
+class PublicSystemSettingsSerializer(serializers.ModelSerializer):
+    """
+    Serializer for public system settings (no auth required).
+
+    Only exposes the enabled flags without sensitive information.
+
+    Requirements: 1.1, 2.1
+    """
+
+    class Meta:
+        model = SystemSettingsType
+        fields = ["registration_enabled", "login_enabled"]

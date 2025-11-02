@@ -18,9 +18,15 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .jwt_utils import generate_jwt_token, get_user_from_token, refresh_jwt_token
-from .models import UserSession
+from .models import SystemSettings, UserSession
+from .permissions import IsAdminUser
 from .rate_limiter import RateLimiter
-from .serializers import UserLoginSerializer, UserRegistrationSerializer
+from .serializers import (
+    PublicSystemSettingsSerializer,
+    SystemSettingsSerializer,
+    UserLoginSerializer,
+    UserRegistrationSerializer,
+)
 
 User = get_user_model()
 
@@ -51,6 +57,20 @@ class UserRegistrationView(APIView):
         Returns:
             Response with user data or validation errors
         """
+        # Check if registration is enabled
+        system_settings = SystemSettings.get_settings()
+        if not system_settings.registration_enabled:
+            logger.warning(
+                "Registration attempt blocked - registration is disabled",
+                extra={
+                    "ip_address": self.get_client_ip(request),
+                },
+            )
+            return Response(
+                {"error": "Registration is currently disabled."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         serializer = self.serializer_class(data=request.data)
 
         if serializer.is_valid():
@@ -74,6 +94,23 @@ class UserRegistrationView(APIView):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_client_ip(self, request: Request) -> str:
+        """
+        Get client IP address from request.
+
+        Args:
+            request: HTTP request
+
+        Returns:
+            Client IP address
+        """
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            ip: str = x_forwarded_for.split(",")[0].strip()
+        else:
+            ip = str(request.META.get("REMOTE_ADDR", ""))
+        return ip
 
 
 class UserLoginView(APIView):
@@ -119,6 +156,20 @@ class UserLoginView(APIView):
         Returns:
             Response with JWT token or error message
         """
+        # Check if login is enabled
+        system_settings = SystemSettings.get_settings()
+        if not system_settings.login_enabled:
+            logger.warning(
+                "Login attempt blocked - login is disabled",
+                extra={
+                    "ip_address": self.get_client_ip(request),
+                },
+            )
+            return Response(
+                {"error": "Login is currently disabled."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         ip_address = self.get_client_ip(request)
 
         # Check if IP is blocked
@@ -454,3 +505,108 @@ class TokenRefreshView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class PublicSystemSettingsView(APIView):
+    """
+    API endpoint for public system settings (no authentication required).
+
+    GET /api/system/settings/public
+    - Return registration_enabled and login_enabled flags
+    - Used by frontend to check if features are available
+
+    Requirements: 1.1, 2.1
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request: Request) -> Response:  # pylint: disable=unused-argument
+        """
+        Get public system settings.
+
+        Args:
+            request: HTTP request
+
+        Returns:
+            Response with registration_enabled and login_enabled flags
+        """
+        system_settings = SystemSettings.get_settings()
+        serializer = PublicSystemSettingsSerializer(system_settings)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class AdminSystemSettingsView(APIView):
+    """
+    API endpoint for admin system settings management.
+
+    GET /api/admin/system/settings
+    - Retrieve current system settings (admin only)
+
+    PUT /api/admin/system/settings
+    - Update system settings (admin only)
+
+    Requirements: 1.1, 2.1, 19.5, 28.5
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request: Request) -> Response:
+        """
+        Get system settings.
+
+        Args:
+            request: HTTP request
+
+        Returns:
+            Response with system settings
+        """
+        system_settings = SystemSettings.get_settings()
+        serializer = SystemSettingsSerializer(system_settings)
+
+        if request.user.is_authenticated:
+            logger.info(
+                "Admin %s retrieved system settings",
+                request.user.email,
+                extra={
+                    "user_id": request.user.id,
+                    "email": request.user.email,
+                },
+            )
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request: Request) -> Response:
+        """
+        Update system settings.
+
+        Args:
+            request: HTTP request with registration_enabled and/or login_enabled
+
+        Returns:
+            Response with updated system settings
+        """
+        system_settings = SystemSettings.get_settings()
+        serializer = SystemSettingsSerializer(system_settings, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            # Update the updated_by field
+            if request.user.is_authenticated:
+                system_settings.updated_by = request.user
+            serializer.save()
+
+            if request.user.is_authenticated:
+                logger.info(
+                    "Admin %s updated system settings: %s",
+                    request.user.email,
+                    request.data,
+                    extra={
+                        "user_id": request.user.id,
+                        "email": request.user.email,
+                        "settings": request.data,
+                    },
+                )
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

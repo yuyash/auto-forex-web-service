@@ -21,6 +21,75 @@ from django.utils import timezone
 from cryptography.fernet import Fernet
 
 
+class SystemSettings(models.Model):
+    """
+    System-wide settings (singleton pattern).
+
+    This model stores global system settings that affect all users.
+    Only one instance should exist in the database.
+
+    Requirements: 1.1, 2.1, 19.5, 28.5
+    """
+
+    registration_enabled = models.BooleanField(
+        default=True,
+        help_text="Whether new user registration is enabled",
+    )
+    login_enabled = models.BooleanField(
+        default=True,
+        help_text="Whether user login is enabled",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Timestamp when settings were last updated",
+    )
+    updated_by = models.ForeignKey(
+        "User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="system_settings_updates",
+        help_text="Admin user who last updated the settings",
+    )
+
+    class Meta:
+        db_table = "system_settings"
+        verbose_name = "System Settings"
+        verbose_name_plural = "System Settings"
+
+    def __str__(self) -> str:
+        return (
+            f"System Settings (Registration: {self.registration_enabled}, "
+            f"Login: {self.login_enabled})"
+        )
+
+    def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        """
+        Override save to enforce singleton pattern.
+        Only one SystemSettings instance should exist.
+        """
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_settings(cls) -> "SystemSettings":
+        """
+        Get the singleton SystemSettings instance.
+        Creates one with defaults if it doesn't exist.
+
+        Returns:
+            SystemSettings instance
+        """
+        obj, _ = cls.objects.get_or_create(
+            pk=1,
+            defaults={
+                "registration_enabled": True,
+                "login_enabled": True,
+            },
+        )
+        return obj
+
+
 class User(AbstractUser):
     """
     Extended Django user model with additional fields for the trading system.
