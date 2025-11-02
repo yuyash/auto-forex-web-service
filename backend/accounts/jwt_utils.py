@@ -93,3 +93,30 @@ def get_user_from_token(token: str) -> Optional[Any]:
         return user
     except User.DoesNotExist:
         return None
+
+
+def refresh_jwt_token(token: str) -> Optional[str]:
+    """
+    Refresh a JWT token if it's valid.
+
+    Args:
+        token: JWT token string
+
+    Returns:
+        New JWT token string or None if token is invalid
+
+    Requirements: 2.3, 2.4
+    """
+    user = get_user_from_token(token)
+    if not user:
+        return None
+
+    if not user.is_active:
+        return None
+
+    if user.is_locked:
+        return None
+
+    # Generate new token
+    new_token = generate_jwt_token(user)
+    return new_token

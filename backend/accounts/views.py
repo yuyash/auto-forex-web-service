@@ -17,7 +17,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .jwt_utils import generate_jwt_token, get_user_from_token
+from .jwt_utils import generate_jwt_token, get_user_from_token, refresh_jwt_token
 from .models import UserSession
 from .rate_limiter import RateLimiter
 from .serializers import UserLoginSerializer, UserRegistrationSerializer
@@ -372,6 +372,85 @@ class UserLogoutView(APIView):
             {
                 "message": "Logged out successfully.",
                 "sessions_terminated": active_sessions.count(),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class TokenRefreshView(APIView):
+    """
+    API endpoint for JWT token refresh.
+
+    POST /api/auth/refresh
+    - Refresh JWT token if valid
+    - Return new token with extended expiration
+
+    Requirements: 2.3, 2.4
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request: Request) -> Response:
+        """
+        Handle token refresh.
+
+        Args:
+            request: HTTP request with Authorization header containing JWT token
+
+        Returns:
+            Response with new JWT token or error
+        """
+        # Get token from Authorization header
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+        if not auth_header.startswith("Bearer "):
+            return Response(
+                {"error": "Invalid authorization header format."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        token = auth_header.split(" ")[1] if len(auth_header.split(" ")) > 1 else ""
+        if not token:
+            return Response(
+                {"error": "No token provided."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        # Refresh token
+        new_token = refresh_jwt_token(token)
+        if not new_token:
+            return Response(
+                {"error": "Invalid or expired token."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        # Get user info for response
+        user = get_user_from_token(new_token)
+        if not user:
+            return Response(
+                {"error": "Failed to retrieve user information."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        logger.info(
+            "Token refreshed for user %s",
+            user.email,
+            extra={
+                "user_id": user.id,
+                "email": user.email,
+            },
+        )
+
+        return Response(
+            {
+                "token": new_token,
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "username": user.username,
+                    "is_staff": user.is_staff,
+                    "timezone": user.timezone,
+                    "language": user.language,
+                },
             },
             status=status.HTTP_200_OK,
         )
