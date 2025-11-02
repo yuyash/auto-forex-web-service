@@ -7,6 +7,7 @@ Auto Forex Trading System Backend Configuration
 import os
 from pathlib import Path
 
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -162,6 +163,13 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 120.0,  # Every 2 minutes (120 seconds)
         "options": {
             "expires": 60.0,  # Task expires after 60 seconds if not executed
+        },
+    },
+    "cleanup-old-tick-data": {
+        "task": "trading.tasks.cleanup_old_tick_data",
+        "schedule": crontab(hour=2, minute=0),  # Daily at 2:00 AM UTC
+        "options": {
+            "expires": 3600.0,  # Task expires after 1 hour if not executed
         },
     },
 }

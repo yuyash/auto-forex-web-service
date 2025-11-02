@@ -12,7 +12,7 @@ Requirements: 7.1, 7.2, 12.1
 import logging
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List
 
@@ -575,5 +575,75 @@ def get_stream_status(account_id: int) -> Dict[str, Any]:
         return {
             "is_active": False,
             "account_id": account_id,
+            "error": error_msg,
+        }
+
+
+@shared_task
+def cleanup_old_tick_data(retention_days: int | None = None) -> Dict[str, Any]:
+    """
+    Delete tick data older than the retention period.
+
+    This task is scheduled to run daily at 2 AM to clean up old tick data
+    and prevent the database from growing indefinitely. The retention period
+    can be configured via the TICK_DATA_RETENTION_DAYS setting (default: 90 days).
+
+    Args:
+        retention_days: Number of days to retain tick data (uses default if None)
+
+    Returns:
+        Dictionary containing:
+            - success: Whether the cleanup was successful
+            - deleted_count: Number of records deleted
+            - retention_days: Retention period used
+            - cutoff_date: Date before which data was deleted
+            - error: Error message if cleanup failed
+
+    Requirements: 7.1, 7.2
+    """
+    try:
+        # Use default retention period if not specified
+        if retention_days is None:
+            retention_days = TickDataModel.get_retention_days()
+
+        # Calculate cutoff date
+        cutoff_date = timezone.now() - timedelta(days=retention_days)
+
+        logger.info(
+            "Starting tick data cleanup: retention_days=%d, cutoff_date=%s",
+            retention_days,
+            cutoff_date.isoformat(),
+        )
+
+        # Perform cleanup
+        deleted_count = TickDataModel.cleanup_old_data(retention_days)
+
+        logger.info(
+            "Tick data cleanup completed: deleted %d records older than %s",
+            deleted_count,
+            cutoff_date.isoformat(),
+        )
+
+        return {
+            "success": True,
+            "deleted_count": deleted_count,
+            "retention_days": retention_days,
+            "cutoff_date": cutoff_date.isoformat(),
+            "error": None,
+        }
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"Failed to cleanup old tick data: {str(e)}"
+        logger.error(
+            "Error during tick data cleanup: %s",
+            error_msg,
+            exc_info=True,
+        )
+
+        return {
+            "success": False,
+            "deleted_count": 0,
+            "retention_days": retention_days,
+            "cutoff_date": None,
             "error": error_msg,
         }
