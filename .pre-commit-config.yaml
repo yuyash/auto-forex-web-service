@@ -69,6 +69,7 @@ repos:
             "pyyaml>=6.0.0",
             "python-dotenv>=1.0.0",
             "cryptography>=43.0.0",
+            "v20>=3.0.25",
           ]
 
   # Security checks
