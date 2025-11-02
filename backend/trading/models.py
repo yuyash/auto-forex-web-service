@@ -23,6 +23,7 @@ from accounts.models import OandaAccount
 # pylint: disable=unused-import
 from .backtest_models import Backtest, BacktestResult  # noqa: F401
 from .event_models import Event, Notification  # noqa: F401
+from .tick_data_models import TickData  # noqa: F401
 
 User = get_user_model()
 

@@ -362,3 +362,6 @@ MAX_LOGIN_ATTEMPTS = 5
 LOCKOUT_DURATION = 900  # 15 minutes in seconds
 RATE_LIMIT_REQUESTS = 100
 RATE_LIMIT_WINDOW = 60  # 1 minute in seconds
+
+# Tick data retention policy
+TICK_DATA_RETENTION_DAYS = int(os.getenv("TICK_DATA_RETENTION_DAYS", "90"))

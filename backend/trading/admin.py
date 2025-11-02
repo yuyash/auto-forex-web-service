@@ -6,6 +6,7 @@ from django.contrib import admin
 
 from .event_models import Event, Notification
 from .models import Order, Position, Strategy, StrategyState, Trade
+from .tick_data_models import TickData
 
 
 @admin.register(Strategy)
@@ -188,3 +189,28 @@ class NotificationAdmin(admin.ModelAdmin):
         """Mark selected notifications as unread."""
         queryset.update(is_read=False)
         self.message_user(request, f"{queryset.count()} notifications marked as unread.")
+
+
+@admin.register(TickData)
+class TickDataAdmin(admin.ModelAdmin):
+    """Admin interface for TickData model."""
+
+    list_display = [
+        "id",
+        "instrument",
+        "timestamp",
+        "bid",
+        "ask",
+        "mid",
+        "spread",
+        "account",
+    ]
+    list_filter = ["instrument", "timestamp", "account"]
+    search_fields = ["instrument", "account__account_id"]
+    readonly_fields = ["created_at", "mid", "spread"]
+    date_hierarchy = "timestamp"
+    ordering = ["-timestamp"]
+
+    def has_add_permission(self, request):  # type: ignore[no-untyped-def]
+        """Disable manual addition of tick data through admin."""
+        return False
