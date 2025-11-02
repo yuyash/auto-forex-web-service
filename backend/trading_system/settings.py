@@ -160,8 +160,8 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "accounts.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
-        # JWT authentication will be added later
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",

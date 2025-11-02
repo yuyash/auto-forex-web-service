@@ -12,12 +12,13 @@ import logging
 from django.contrib.auth import get_user_model
 
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .jwt_utils import generate_jwt_token
+from .jwt_utils import generate_jwt_token, get_user_from_token
+from .models import UserSession
 from .rate_limiter import RateLimiter
 from .serializers import UserLoginSerializer, UserRegistrationSerializer
 
@@ -259,6 +260,118 @@ class UserLoginView(APIView):
                     "timezone": user.timezone,
                     "language": user.language,
                 },
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class UserLogoutView(APIView):
+    """
+    API endpoint for user logout.
+
+    POST /api/auth/logout
+    - Invalidate JWT token
+    - Close active v20 streams for user
+    - Terminate user session
+
+    Requirements: 3.1, 3.2, 3.3, 3.5
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_client_ip(self, request: Request) -> str:
+        """
+        Get client IP address from request.
+
+        Args:
+            request: HTTP request
+
+        Returns:
+            Client IP address
+        """
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            ip: str = x_forwarded_for.split(",")[0].strip()
+        else:
+            ip = str(request.META.get("REMOTE_ADDR", ""))
+        return ip
+
+    def post(self, request: Request) -> Response:
+        """
+        Handle user logout.
+
+        Args:
+            request: HTTP request with Authorization header containing JWT token
+
+        Returns:
+            Response with success message or error
+        """
+        # Get token from Authorization header
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+        if not auth_header.startswith("Bearer "):
+            return Response(
+                {"error": "Invalid authorization header format."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        token = auth_header.split(" ")[1] if len(auth_header.split(" ")) > 1 else ""
+        if not token:
+            return Response(
+                {"error": "No token provided."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        # Get user from token
+        user = get_user_from_token(token)
+        if not user:
+            return Response(
+                {"error": "Invalid or expired token."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        ip_address = self.get_client_ip(request)
+
+        # NOTE: Close active v20 streams for user
+        # This will be implemented when the market data streaming module is created
+        # For now, we'll log that this should happen
+        logger.info(
+            "User logout - v20 streams should be closed for user %s",
+            user.email,
+            extra={
+                "user_id": user.id,
+                "email": user.email,
+                "ip_address": ip_address,
+            },
+        )
+
+        # NOTE: Invalidate JWT token
+        # JWT tokens are stateless, so we can't truly invalidate them server-side
+        # without maintaining a blacklist. For now, we rely on client-side token removal.
+        # A token blacklist can be implemented using Redis in the future.
+        # The token will naturally expire after JWT_EXPIRATION_DELTA seconds.
+
+        # Terminate user sessions
+        active_sessions = UserSession.objects.filter(user=user, is_active=True)
+        for session in active_sessions:
+            session.terminate()
+
+        logger.info(
+            "User %s logged out successfully from %s",
+            user.email,
+            ip_address,
+            extra={
+                "user_id": user.id,
+                "email": user.email,
+                "ip_address": ip_address,
+                "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+                "sessions_terminated": active_sessions.count(),
+            },
+        )
+
+        return Response(
+            {
+                "message": "Logged out successfully.",
+                "sessions_terminated": active_sessions.count(),
             },
             status=status.HTTP_200_OK,
         )
