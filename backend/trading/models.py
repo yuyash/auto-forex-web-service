@@ -19,6 +19,11 @@ from django.utils import timezone
 
 from accounts.models import OandaAccount
 
+# Import backtest models to make them discoverable by Django
+# pylint: disable=unused-import
+from .backtest_models import Backtest, BacktestResult  # noqa: F401
+from .event_models import Event, Notification  # noqa: F401
+
 User = get_user_model()
 
 

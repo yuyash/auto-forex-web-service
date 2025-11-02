@@ -99,6 +99,10 @@ services:
       - media_volume:/app/media
     ports:
       - "8000:8000"
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             daphne -b 0.0.0.0 -p 8000 trading_system.asgi:application"
     restart: unless-stopped
     networks:
       - forex_network
