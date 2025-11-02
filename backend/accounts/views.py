@@ -7,13 +7,23 @@ This module contains views for:
 - User logout
 """
 
+import logging
+
+from django.contrib.auth import get_user_model
+
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .serializers import UserRegistrationSerializer
+from .jwt_utils import generate_jwt_token
+from .rate_limiter import RateLimiter
+from .serializers import UserLoginSerializer, UserRegistrationSerializer
+
+User = get_user_model()
+
+logger = logging.getLogger(__name__)
 
 
 class UserRegistrationView(APIView):
@@ -63,3 +73,192 @@ class UserRegistrationView(APIView):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserLoginView(APIView):
+    """
+    API endpoint for user login.
+
+    POST /api/auth/login
+    - Authenticate user with email and password
+    - Generate JWT token
+    - Implement rate limiting (5 attempts per 15 minutes)
+    - Log failed login attempts
+
+    Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 34.1, 34.2
+    """
+
+    permission_classes = [AllowAny]
+    serializer_class = UserLoginSerializer
+
+    def get_client_ip(self, request: Request) -> str:
+        """
+        Get client IP address from request.
+
+        Args:
+            request: HTTP request
+
+        Returns:
+            Client IP address
+        """
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            ip: str = x_forwarded_for.split(",")[0].strip()
+        else:
+            ip = str(request.META.get("REMOTE_ADDR", ""))
+        return ip
+
+    def post(self, request: Request) -> Response:
+        """
+        Handle user login.
+
+        Args:
+            request: HTTP request with email and password
+
+        Returns:
+            Response with JWT token or error message
+        """
+        ip_address = self.get_client_ip(request)
+
+        # Check if IP is blocked
+        is_blocked, block_reason = RateLimiter.is_ip_blocked(ip_address)
+        if is_blocked:
+            logger.warning(
+                "Login attempt from blocked IP: %s",
+                ip_address,
+                extra={
+                    "ip_address": ip_address,
+                    "reason": block_reason,
+                },
+            )
+            return Response(
+                {"error": block_reason},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        # Check if user exists and is locked before validating credentials
+        email = request.data.get("email", "").lower()
+        if email:
+            try:
+                user_check = User.objects.get(email__iexact=email)
+                if user_check.is_locked:
+                    logger.warning(
+                        "Login attempt for locked account %s from %s",
+                        email,
+                        ip_address,
+                        extra={
+                            "email": email,
+                            "ip_address": ip_address,
+                            "user_id": user_check.id,
+                        },
+                    )
+                    return Response(
+                        {
+                            "error": (
+                                "Account is locked due to excessive failed login attempts. "
+                                "Please contact support."
+                            )
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+            except User.DoesNotExist:
+                pass
+
+        # Validate credentials
+        serializer = self.serializer_class(data=request.data)
+
+        if not serializer.is_valid():
+            # Increment IP-based failed attempts
+            ip_attempts = RateLimiter.increment_failed_attempts(ip_address)
+
+            # Log failed login attempt
+            logger.warning(
+                "Failed login attempt for %s from %s (IP attempt %s)",
+                email,
+                ip_address,
+                ip_attempts,
+                extra={
+                    "email": email,
+                    "ip_address": ip_address,
+                    "ip_attempts": ip_attempts,
+                    "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+                },
+            )
+
+            # Increment user-level failed attempts if user exists
+            try:
+                user = User.objects.get(email__iexact=email)
+                user.increment_failed_login()
+
+                # Check if account should be locked after increment
+                if user.failed_login_attempts >= RateLimiter.ACCOUNT_LOCK_THRESHOLD:
+                    user.lock_account()
+                    logger.error(
+                        "Account locked for user %s after %s failed attempts",
+                        user.email,
+                        user.failed_login_attempts,
+                        extra={
+                            "user_id": user.id,
+                            "email": user.email,
+                            "failed_attempts": user.failed_login_attempts,
+                        },
+                    )
+            except User.DoesNotExist:
+                # User doesn't exist, just log the attempt
+                pass
+
+            # Block IP if threshold reached
+            if ip_attempts >= RateLimiter.MAX_ATTEMPTS:
+                RateLimiter.block_ip_address(ip_address)
+                logger.error(
+                    "IP address %s blocked due to excessive failed login attempts",
+                    ip_address,
+                    extra={
+                        "ip_address": ip_address,
+                        "attempts": ip_attempts,
+                    },
+                )
+
+            # Return generic error message
+            return Response(
+                {"error": "Invalid credentials."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        # Get authenticated user
+        user = serializer.validated_data["user"]
+
+        # Successful login - reset counters
+        user.reset_failed_login()
+        RateLimiter.reset_failed_attempts(ip_address)
+
+        # Generate JWT token
+        token = generate_jwt_token(user)
+
+        # Log successful login
+        logger.info(
+            "Successful login for user %s from %s",
+            user.email,
+            ip_address,
+            extra={
+                "user_id": user.id,
+                "email": user.email,
+                "ip_address": ip_address,
+                "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+            },
+        )
+
+        return Response(
+            {
+                "token": token,
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "username": user.username,
+                    "is_staff": user.is_staff,
+                    "timezone": user.timezone,
+                    "language": user.language,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )

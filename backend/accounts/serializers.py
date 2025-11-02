@@ -10,7 +10,7 @@ This module contains serializers for:
 import re
 from typing import TYPE_CHECKING, Any, Dict
 
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 
@@ -152,3 +152,59 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         )
 
         return user
+
+
+class UserLoginSerializer(serializers.Serializer):  # pylint: disable=abstract-method
+    """
+    Serializer for user login.
+
+    Requirements: 2.1, 2.2, 2.3
+
+    Note: This is a read-only serializer used only for validation.
+    It does not implement create() or update() methods as it never persists data.
+    """
+
+    email = serializers.EmailField(required=True, help_text="User's email address")
+    password = serializers.CharField(
+        required=True,
+        write_only=True,
+        style={"input_type": "password"},
+        help_text="User's password",
+    )
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate login credentials.
+
+        Args:
+            attrs: Dictionary of field values
+
+        Returns:
+            Validated attributes with user instance
+
+        Raises:
+            serializers.ValidationError: If credentials are invalid
+        """
+        email = attrs.get("email", "").lower()
+        password = attrs.get("password", "")
+
+        if not email or not password:
+            raise serializers.ValidationError("Email and password are required.")
+
+        # Authenticate user
+        user = authenticate(username=email, password=password)
+
+        if user is None:
+            # Don't reveal whether email or password is incorrect
+            raise serializers.ValidationError("Invalid credentials.")
+
+        if not user.is_active:
+            raise serializers.ValidationError("User account is disabled.")
+
+        if user.is_locked:
+            raise serializers.ValidationError(
+                "Account is locked due to excessive failed login attempts. Please contact support."
+            )
+
+        attrs["user"] = user
+        return attrs
