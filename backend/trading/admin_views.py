@@ -431,3 +431,244 @@ def get_admin_dashboard(request: Request) -> Response:  # pylint: disable=unused
             {"error": "Failed to retrieve admin dashboard data"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+
+def _get_failed_logins_data(one_day_ago):  # type: ignore[no-untyped-def]
+    """Get failed login attempts data."""
+    from trading.event_models import Event
+
+    failed_logins = Event.objects.filter(
+        category="security",
+        event_type="login_failed",
+        timestamp__gte=one_day_ago,
+    ).order_by("-timestamp")[:50]
+
+    return [
+        {
+            "id": event.id,
+            "timestamp": event.timestamp.isoformat(),
+            "ip_address": event.ip_address,
+            "user_email": event.details.get("email", "unknown"),
+            "user_agent": event.user_agent,
+            "description": event.description,
+        }
+        for event in failed_logins
+    ], failed_logins.count()
+
+
+def _get_blocked_ips_data():  # type: ignore[no-untyped-def]
+    """Get blocked IP addresses data."""
+    from accounts.models import BlockedIP
+
+    blocked_ips = BlockedIP.objects.filter(blocked_until__gt=timezone.now()).order_by("-blocked_at")
+
+    return [
+        {
+            "id": blocked_ip.id,
+            "ip_address": blocked_ip.ip_address,
+            "reason": blocked_ip.reason,
+            "failed_attempts": blocked_ip.failed_attempts,
+            "blocked_at": blocked_ip.blocked_at.isoformat(),
+            "blocked_until": blocked_ip.blocked_until.isoformat(),
+            "is_permanent": blocked_ip.is_permanent,
+        }
+        for blocked_ip in blocked_ips
+    ]
+
+
+def _get_locked_accounts_data():  # type: ignore[no-untyped-def]
+    """Get locked user accounts data."""
+    locked_accounts = User.objects.filter(is_locked=True).order_by("-last_login_attempt")
+
+    return [
+        {
+            "id": user.id,
+            "email": user.email,
+            "username": user.username,
+            "failed_attempts": user.failed_login_attempts,
+            "last_login_attempt": (
+                user.last_login_attempt.isoformat() if user.last_login_attempt else None
+            ),
+            "locked_since": user.updated_at.isoformat(),
+        }
+        for user in locked_accounts
+    ]
+
+
+def _get_http_access_patterns(one_hour_ago):  # type: ignore[no-untyped-def]
+    """Get HTTP access patterns data."""
+    from trading.event_models import Event
+
+    http_events = Event.objects.filter(
+        category="security",
+        event_type__in=["http_request", "api_request"],
+        timestamp__gte=one_hour_ago,
+    )
+
+    # Aggregate requests by IP address
+    ip_request_counts: dict[str, int] = {}
+    for event in http_events:
+        ip = event.ip_address
+        if ip:
+            ip_request_counts[ip] = ip_request_counts.get(ip, 0) + 1
+
+    # Sort by request count (descending) and get top 20
+    return [
+        {"ip_address": ip, "request_count": count}
+        for ip, count in sorted(
+            ip_request_counts.items(),
+            key=lambda x: x[1],
+            reverse=True,
+        )[:20]
+    ]
+
+
+def _get_suspicious_patterns_data(one_day_ago):  # type: ignore[no-untyped-def]
+    """Get suspicious activity patterns data."""
+    from trading.event_models import Event
+
+    suspicious_events = Event.objects.filter(
+        category="security",
+        event_type__in=[
+            "suspicious_activity",
+            "sql_injection_attempt",
+            "path_traversal_attempt",
+            "rate_limit_exceeded",
+        ],
+        timestamp__gte=one_day_ago,
+    ).order_by("-timestamp")[:50]
+
+    return [
+        {
+            "id": event.id,
+            "timestamp": event.timestamp.isoformat(),
+            "event_type": event.event_type,
+            "ip_address": event.ip_address,
+            "severity": event.severity,
+            "description": event.description,
+            "details": event.details,
+        }
+        for event in suspicious_events
+    ], suspicious_events.count()
+
+
+def _get_filtered_events_data(security_events_query):  # type: ignore[no-untyped-def]
+    """Get filtered security events data."""
+    filtered_events = security_events_query.order_by("-timestamp")[:100]
+
+    return [
+        {
+            "id": event.id,
+            "timestamp": event.timestamp.isoformat(),
+            "event_type": event.event_type,
+            "severity": event.severity,
+            "ip_address": event.ip_address,
+            "user_email": event.user.email if event.user else None,
+            "description": event.description,
+            "details": event.details,
+        }
+        for event in filtered_events
+    ]
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsAdminUser])
+def get_security_dashboard(request: Request) -> Response:  # pylint: disable=too-many-locals
+    """
+    Get comprehensive security monitoring dashboard data.
+
+    This endpoint provides security event monitoring including:
+    - Failed login attempts
+    - Blocked IP addresses
+    - Locked user accounts
+    - HTTP access patterns
+    - Suspicious activity patterns
+
+    Supports filtering by:
+    - event_type: Type of security event
+    - severity: Event severity level
+    - ip_address: Specific IP address
+    - start_date: Start of date range (ISO format)
+    - end_date: End of date range (ISO format)
+
+    Requirements: 37.1, 37.2, 37.3, 37.4
+
+    Args:
+        request: HTTP request object with optional query parameters
+
+    Returns:
+        Response with security dashboard data
+    """
+    try:
+        # Import here to avoid circular imports
+        from trading.event_models import Event
+
+        # Get query parameters for filtering
+        filters = {
+            "event_type": request.query_params.get("event_type"),
+            "severity": request.query_params.get("severity"),
+            "ip_address": request.query_params.get("ip_address"),
+            "start_date": request.query_params.get("start_date"),
+            "end_date": request.query_params.get("end_date"),
+        }
+
+        # Build base query for security events
+        security_events_query = Event.objects.filter(category="security")
+
+        # Apply filters
+        if filters["event_type"]:
+            security_events_query = security_events_query.filter(event_type=filters["event_type"])
+        if filters["severity"]:
+            security_events_query = security_events_query.filter(severity=filters["severity"])
+        if filters["ip_address"]:
+            security_events_query = security_events_query.filter(ip_address=filters["ip_address"])
+        if filters["start_date"]:
+            security_events_query = security_events_query.filter(
+                timestamp__gte=filters["start_date"]
+            )
+        if filters["end_date"]:
+            security_events_query = security_events_query.filter(timestamp__lte=filters["end_date"])
+
+        # Get time ranges
+        one_day_ago = timezone.now() - timedelta(days=1)
+        one_hour_ago = timezone.now() - timedelta(hours=1)
+
+        # Get all data sections using helper functions
+        failed_logins_data, failed_logins_count = _get_failed_logins_data(one_day_ago)
+        blocked_ips_data = _get_blocked_ips_data()
+        locked_accounts_data = _get_locked_accounts_data()
+        http_access_patterns = _get_http_access_patterns(one_hour_ago)
+        suspicious_patterns_data, suspicious_count = _get_suspicious_patterns_data(one_day_ago)
+        filtered_events_data = _get_filtered_events_data(security_events_query)
+
+        # Build response
+        dashboard_data = {
+            "timestamp": timezone.now().isoformat(),
+            "summary": {
+                "failed_logins_24h": failed_logins_count,
+                "blocked_ips_active": len(blocked_ips_data),
+                "locked_accounts": len(locked_accounts_data),
+                "suspicious_events_24h": suspicious_count,
+            },
+            "failed_logins": failed_logins_data,
+            "blocked_ips": blocked_ips_data,
+            "locked_accounts": locked_accounts_data,
+            "http_access_patterns": http_access_patterns,
+            "suspicious_patterns": suspicious_patterns_data,
+            "filtered_events": filtered_events_data,
+            "filters_applied": filters,
+        }
+
+        logger.info(
+            "Security dashboard accessed by admin %s",
+            request.user.email if hasattr(request.user, "email") else "unknown",
+        )
+
+        return Response(dashboard_data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error("Failed to get security dashboard: %s", e, exc_info=True)
+        return Response(
+            {"error": "Failed to retrieve security dashboard data"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
