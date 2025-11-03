@@ -1,0 +1,62 @@
+{
+  "title": "ダッシュボード",
+  "welcome": "自動外国為替取引システムへようこそ",
+  "chart": {
+    "title": "価格チャート",
+    "currencyPair": "通貨ペア",
+    "granularity": "時間枠",
+    "indicators": "インジケーター",
+    "chartType": "チャートタイプ",
+    "candlestick": "ローソク足",
+    "line": "ライン",
+    "bar": "バー"
+  },
+  "positions": {
+    "title": "オープンポジション",
+    "noPositions": "オープンポジションがありません",
+    "instrument": "通貨ペア",
+    "direction": "方向",
+    "units": "数量",
+    "entryPrice": "エントリー価格",
+    "currentPrice": "現在価格",
+    "unrealizedPnL": "未実現損益",
+    "long": "ロング",
+    "short": "ショート",
+    "closePosition": "ポジションを閉じる"
+  },
+  "orders": {
+    "title": "オープン注文",
+    "noOrders": "オープン注文がありません",
+    "orderId": "注文ID",
+    "type": "タイプ",
+    "instrument": "通貨ペア",
+    "price": "価格",
+    "units": "数量",
+    "status": "ステータス",
+    "cancelOrder": "注文をキャンセル",
+    "market": "成行",
+    "limit": "指値",
+    "stop": "逆指値",
+    "oco": "OCO"
+  },
+  "account": {
+    "balance": "残高",
+    "margin": "証拠金",
+    "marginUsed": "使用証拠金",
+    "marginAvailable": "利用可能証拠金",
+    "unrealizedPnL": "未実現損益",
+    "selectAccount": "アカウントを選択"
+  },
+  "connection": {
+    "status": "接続状態",
+    "connected": "OANDAに接続済み",
+    "disconnected": "OANDAから切断",
+    "reconnecting": "再接続中..."
+  },
+  "strategy": {
+    "status": "戦略ステータス",
+    "running": "実行中",
+    "stopped": "停止中",
+    "paused": "一時停止中"
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "app": {
+    "name": "自動外国為替取引システム",
+    "title": "外国為替取引"
+  },
+  "navigation": {
+    "dashboard": "ダッシュボード",
+    "orders": "注文",
+    "positions": "ポジション",
+    "strategy": "戦略",
+    "backtest": "バックテスト",
+    "settings": "設定",
+    "admin": "管理者",
+    "logout": "ログアウト"
+  },
+  "auth": {
+    "login": "サインイン",
+    "register": "サインアップ",
+    "logout": "ログアウト",
+    "email": "メールアドレス",
+    "password": "パスワード",
+    "confirmPassword": "パスワード確認",
+    "username": "ユーザー名",
+    "forgotPassword": "パスワードをお忘れですか？",
+    "noAccount": "アカウントをお持ちでないですか？",
+    "hasAccount": "既にアカウントをお持ちですか？",
+    "signInHere": "こちらからサインイン",
+    "signUpHere": "こちらからサインアップ"
+  },
+  "actions": {
+    "submit": "送信",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "delete": "削除",
+    "edit": "編集",
+    "close": "閉じる",
+    "confirm": "確認",
+    "back": "戻る",
+    "next": "次へ",
+    "search": "検索",
+    "filter": "フィルター",
+    "export": "エクスポート",
+    "refresh": "更新",
+    "start": "開始",
+    "stop": "停止"
+  },
+  "status": {
+    "active": "アクティブ",
+    "inactive": "非アクティブ",
+    "pending": "保留中",
+    "completed": "完了",
+    "failed": "失敗",
+    "cancelled": "キャンセル済み",
+    "online": "オンライン",
+    "offline": "オフライン",
+    "connected": "接続済み",
+    "disconnected": "切断済み"
+  },
+  "messages": {
+    "loading": "読み込み中...",
+    "noData": "データがありません",
+    "error": "エラーが発生しました",
+    "success": "操作が成功しました",
+    "confirmDelete": "このアイテムを削除してもよろしいですか？",
+    "unsavedChanges": "保存されていない変更があります。本当に離れますか？"
+  },
+  "time": {
+    "today": "今日",
+    "yesterday": "昨日",
+    "thisWeek": "今週",
+    "thisMonth": "今月",
+    "lastMonth": "先月",
+    "custom": "カスタム範囲"
+  },
+  "language": {
+    "english": "英語",
+    "japanese": "日本語",
+    "selectLanguage": "言語を選択"
+  }
+}

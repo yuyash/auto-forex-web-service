@@ -1,0 +1,82 @@
+{
+  "title": "Admin Dashboard",
+  "systemHealth": {
+    "title": "System Health",
+    "cpu": "CPU Usage",
+    "memory": "Memory Usage",
+    "database": "Database",
+    "redis": "Redis",
+    "celery": "Celery Workers",
+    "oandaApi": "OANDA API",
+    "healthy": "Healthy",
+    "warning": "Warning",
+    "critical": "Critical"
+  },
+  "users": {
+    "title": "Online Users",
+    "username": "Username",
+    "loginTime": "Login Time",
+    "ipAddress": "IP Address",
+    "lastActivity": "Last Activity",
+    "sessions": "Sessions",
+    "kickoff": "Kick Off",
+    "confirmKickoff": "Are you sure you want to kick off this user?"
+  },
+  "strategies": {
+    "title": "Running Strategies",
+    "user": "User",
+    "account": "Account",
+    "strategyName": "Strategy",
+    "startTime": "Start Time",
+    "positions": "Positions",
+    "unrealizedPnL": "Unrealized P&L",
+    "instruments": "Instruments",
+    "stop": "Stop Strategy",
+    "confirmStop": "Are you sure you want to stop this strategy?"
+  },
+  "events": {
+    "title": "System Events",
+    "timestamp": "Timestamp",
+    "category": "Category",
+    "type": "Type",
+    "severity": "Severity",
+    "description": "Description",
+    "user": "User",
+    "details": "Details",
+    "categories": {
+      "trading": "Trading",
+      "system": "System",
+      "security": "Security",
+      "admin": "Admin"
+    },
+    "severities": {
+      "info": "Info",
+      "warning": "Warning",
+      "error": "Error",
+      "critical": "Critical"
+    }
+  },
+  "security": {
+    "title": "Security Monitoring",
+    "failedLogins": "Failed Login Attempts",
+    "blockedIPs": "Blocked IP Addresses",
+    "lockedAccounts": "Locked Accounts",
+    "suspiciousActivity": "Suspicious Activity",
+    "unblock": "Unblock",
+    "unlock": "Unlock"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "marginWarning": "Margin warning for account {{account}}",
+    "connectionFailed": "Connection failed for account {{account}}",
+    "systemError": "System error: {{error}}",
+    "strategyError": "Strategy error for {{user}}: {{error}}"
+  },
+  "settings": {
+    "title": "System Settings",
+    "registrationEnabled": "Registration Enabled",
+    "loginEnabled": "Login Enabled",
+    "maintenanceMode": "Maintenance Mode",
+    "save": "Save Settings"
+  }
+}

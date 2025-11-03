@@ -1,7 +1,11 @@
 import { AppBar, Toolbar, Typography, Button, Box } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '../common/LanguageSelector';
 
 const AppHeader = () => {
+  const { t } = useTranslation('common');
+
   return (
     <AppBar position="static">
       <Toolbar>
@@ -15,27 +19,28 @@ const AppHeader = () => {
             color: 'inherit',
           }}
         >
-          Auto Forex Trading System
+          {t('app.name')}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <Button color="inherit" component={RouterLink} to="/dashboard">
-            Dashboard
+            {t('navigation.dashboard')}
           </Button>
           <Button color="inherit" component={RouterLink} to="/orders">
-            Orders
+            {t('navigation.orders')}
           </Button>
           <Button color="inherit" component={RouterLink} to="/positions">
-            Positions
+            {t('navigation.positions')}
           </Button>
           <Button color="inherit" component={RouterLink} to="/strategy">
-            Strategy
+            {t('navigation.strategy')}
           </Button>
           <Button color="inherit" component={RouterLink} to="/backtest">
-            Backtest
+            {t('navigation.backtest')}
           </Button>
           <Button color="inherit" component={RouterLink} to="/settings">
-            Settings
+            {t('navigation.settings')}
           </Button>
+          <LanguageSelector />
         </Box>
       </Toolbar>
     </AppBar>

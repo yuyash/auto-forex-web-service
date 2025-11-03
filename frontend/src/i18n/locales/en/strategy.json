@@ -1,0 +1,61 @@
+{
+  "title": "Trading Strategy",
+  "selectStrategy": "Select Strategy",
+  "configuration": "Configuration",
+  "performance": "Performance",
+  "control": {
+    "start": "Start Strategy",
+    "stop": "Stop Strategy",
+    "pause": "Pause Strategy",
+    "resume": "Resume Strategy"
+  },
+  "types": {
+    "floor": "Floor Strategy",
+    "trendFollowing": "Trend Following",
+    "maCrossover": "MA Crossover",
+    "breakout": "Breakout",
+    "rsi": "RSI Strategy",
+    "macd": "MACD Strategy",
+    "meanReversion": "Mean Reversion",
+    "londonBreakout": "London Breakout",
+    "asianRange": "Asian Range",
+    "scalping": "Scalping",
+    "swingTrading": "Swing Trading",
+    "newsSpike": "News/Spike"
+  },
+  "parameters": {
+    "lotSize": "Lot Size",
+    "scalingMode": "Scaling Mode",
+    "retracementPips": "Retracement (Pips)",
+    "takeProfitPips": "Take Profit (Pips)",
+    "stopLossPips": "Stop Loss (Pips)",
+    "maxLayers": "Max Layers",
+    "instruments": "Instruments",
+    "additive": "Additive",
+    "multiplicative": "Multiplicative"
+  },
+  "metrics": {
+    "totalTrades": "Total Trades",
+    "winRate": "Win Rate",
+    "totalPnL": "Total P&L",
+    "averageWin": "Average Win",
+    "averageLoss": "Average Loss",
+    "profitFactor": "Profit Factor",
+    "maxDrawdown": "Max Drawdown",
+    "sharpeRatio": "Sharpe Ratio"
+  },
+  "status": {
+    "notConfigured": "Strategy not configured",
+    "ready": "Ready to start",
+    "running": "Running",
+    "stopped": "Stopped",
+    "paused": "Paused due to volatility",
+    "error": "Error occurred"
+  },
+  "messages": {
+    "startSuccess": "Strategy started successfully",
+    "stopSuccess": "Strategy stopped successfully",
+    "configSaved": "Configuration saved",
+    "invalidConfig": "Invalid configuration"
+  }
+}

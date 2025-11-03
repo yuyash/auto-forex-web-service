@@ -1,0 +1,61 @@
+{
+  "title": "取引戦略",
+  "selectStrategy": "戦略を選択",
+  "configuration": "設定",
+  "performance": "パフォーマンス",
+  "control": {
+    "start": "戦略を開始",
+    "stop": "戦略を停止",
+    "pause": "戦略を一時停止",
+    "resume": "戦略を再開"
+  },
+  "types": {
+    "floor": "フロア戦略",
+    "trendFollowing": "トレンドフォロー",
+    "maCrossover": "移動平均クロスオーバー",
+    "breakout": "ブレイクアウト",
+    "rsi": "RSI戦略",
+    "macd": "MACD戦略",
+    "meanReversion": "平均回帰",
+    "londonBreakout": "ロンドンブレイクアウト",
+    "asianRange": "アジアンレンジ",
+    "scalping": "スキャルピング",
+    "swingTrading": "スイングトレード",
+    "newsSpike": "ニュース/スパイク"
+  },
+  "parameters": {
+    "lotSize": "ロットサイズ",
+    "scalingMode": "スケーリングモード",
+    "retracementPips": "リトレースメント（ピップス）",
+    "takeProfitPips": "利益確定（ピップス）",
+    "stopLossPips": "損切り（ピップス）",
+    "maxLayers": "最大レイヤー数",
+    "instruments": "通貨ペア",
+    "additive": "加算",
+    "multiplicative": "乗算"
+  },
+  "metrics": {
+    "totalTrades": "総取引数",
+    "winRate": "勝率",
+    "totalPnL": "総損益",
+    "averageWin": "平均利益",
+    "averageLoss": "平均損失",
+    "profitFactor": "プロフィットファクター",
+    "maxDrawdown": "最大ドローダウン",
+    "sharpeRatio": "シャープレシオ"
+  },
+  "status": {
+    "notConfigured": "戦略が設定されていません",
+    "ready": "開始準備完了",
+    "running": "実行中",
+    "stopped": "停止中",
+    "paused": "ボラティリティにより一時停止",
+    "error": "エラーが発生しました"
+  },
+  "messages": {
+    "startSuccess": "戦略が正常に開始されました",
+    "stopSuccess": "戦略が正常に停止されました",
+    "configSaved": "設定が保存されました",
+    "invalidConfig": "無効な設定です"
+  }
+}

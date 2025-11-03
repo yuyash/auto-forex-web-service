@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
 
 describe('AppLayout', () => {
-  it('renders header, footer, and content', () => {
+  it('renders header, footer, and content', async () => {
     render(
       <BrowserRouter>
         <Routes>
@@ -15,8 +15,11 @@ describe('AppLayout', () => {
       </BrowserRouter>
     );
 
-    // Check header
-    expect(screen.getByText('Auto Forex Trading System')).toBeInTheDocument();
+    // Wait for i18n to load translations
+    await waitFor(() => {
+      // Check header
+      expect(screen.getByText('Auto Forex Trading System')).toBeInTheDocument();
+    });
 
     // Check navigation links
     expect(screen.getByText('Dashboard')).toBeInTheDocument();

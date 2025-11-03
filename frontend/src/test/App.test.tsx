@@ -1,12 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
 
 describe('App', () => {
-  it('renders without crashing', () => {
+  it('renders without crashing', async () => {
     render(<App />);
     // Since user is not authenticated, should redirect to login
-    expect(screen.getByText(/Sign In/i)).toBeInTheDocument();
+    // Wait for i18n to load translations
+    await waitFor(() => {
+      expect(screen.getByText('Sign In')).toBeInTheDocument();
+    });
   });
 
   it('renders login page for unauthenticated users', () => {

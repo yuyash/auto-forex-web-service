@@ -1,14 +1,17 @@
 import { Container, Typography, Box } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 const DashboardPage = () => {
+  const { t } = useTranslation('dashboard');
+
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       <Box>
         <Typography variant="h4" gutterBottom>
-          Dashboard
+          {t('title')}
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Dashboard content will be implemented in a future task
+          {t('welcome')}
         </Typography>
       </Box>
     </Container>

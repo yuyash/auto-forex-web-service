@@ -1,0 +1,80 @@
+{
+  "app": {
+    "name": "Auto Forex Trading System",
+    "title": "Forex Trading"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "orders": "Orders",
+    "positions": "Positions",
+    "strategy": "Strategy",
+    "backtest": "Backtest",
+    "settings": "Settings",
+    "admin": "Admin",
+    "logout": "Logout"
+  },
+  "auth": {
+    "login": "Sign In",
+    "register": "Sign Up",
+    "logout": "Logout",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "username": "Username",
+    "forgotPassword": "Forgot Password?",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "signInHere": "Sign in here",
+    "signUpHere": "Sign up here"
+  },
+  "actions": {
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "refresh": "Refresh",
+    "start": "Start",
+    "stop": "Stop"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive",
+    "pending": "Pending",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "online": "Online",
+    "offline": "Offline",
+    "connected": "Connected",
+    "disconnected": "Disconnected"
+  },
+  "messages": {
+    "loading": "Loading...",
+    "noData": "No data available",
+    "error": "An error occurred",
+    "success": "Operation successful",
+    "confirmDelete": "Are you sure you want to delete this item?",
+    "unsavedChanges": "You have unsaved changes. Are you sure you want to leave?"
+  },
+  "time": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "thisWeek": "This Week",
+    "thisMonth": "This Month",
+    "lastMonth": "Last Month",
+    "custom": "Custom Range"
+  },
+  "language": {
+    "english": "English",
+    "japanese": "Japanese",
+    "selectLanguage": "Select Language"
+  }
+}

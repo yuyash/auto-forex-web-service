@@ -1,0 +1,82 @@
+{
+  "title": "管理者ダッシュボード",
+  "systemHealth": {
+    "title": "システムヘルス",
+    "cpu": "CPU使用率",
+    "memory": "メモリ使用率",
+    "database": "データベース",
+    "redis": "Redis",
+    "celery": "Celeryワーカー",
+    "oandaApi": "OANDA API",
+    "healthy": "正常",
+    "warning": "警告",
+    "critical": "重大"
+  },
+  "users": {
+    "title": "オンラインユーザー",
+    "username": "ユーザー名",
+    "loginTime": "ログイン時刻",
+    "ipAddress": "IPアドレス",
+    "lastActivity": "最終アクティビティ",
+    "sessions": "セッション",
+    "kickoff": "強制ログアウト",
+    "confirmKickoff": "このユーザーを強制ログアウトしてもよろしいですか？"
+  },
+  "strategies": {
+    "title": "実行中の戦略",
+    "user": "ユーザー",
+    "account": "アカウント",
+    "strategyName": "戦略",
+    "startTime": "開始時刻",
+    "positions": "ポジション",
+    "unrealizedPnL": "未実現損益",
+    "instruments": "通貨ペア",
+    "stop": "戦略を停止",
+    "confirmStop": "この戦略を停止してもよろしいですか？"
+  },
+  "events": {
+    "title": "システムイベント",
+    "timestamp": "タイムスタンプ",
+    "category": "カテゴリー",
+    "type": "タイプ",
+    "severity": "重要度",
+    "description": "説明",
+    "user": "ユーザー",
+    "details": "詳細",
+    "categories": {
+      "trading": "取引",
+      "system": "システム",
+      "security": "セキュリティ",
+      "admin": "管理者"
+    },
+    "severities": {
+      "info": "情報",
+      "warning": "警告",
+      "error": "エラー",
+      "critical": "重大"
+    }
+  },
+  "security": {
+    "title": "セキュリティ監視",
+    "failedLogins": "ログイン失敗試行",
+    "blockedIPs": "ブロックされたIPアドレス",
+    "lockedAccounts": "ロックされたアカウント",
+    "suspiciousActivity": "不審なアクティビティ",
+    "unblock": "ブロック解除",
+    "unlock": "ロック解除"
+  },
+  "notifications": {
+    "title": "通知",
+    "marginWarning": "アカウント{{account}}の証拠金警告",
+    "connectionFailed": "アカウント{{account}}の接続失敗",
+    "systemError": "システムエラー: {{error}}",
+    "strategyError": "{{user}}の戦略エラー: {{error}}"
+  },
+  "settings": {
+    "title": "システム設定",
+    "registrationEnabled": "登録有効",
+    "loginEnabled": "ログイン有効",
+    "maintenanceMode": "メンテナンスモード",
+    "save": "設定を保存"
+  }
+}
