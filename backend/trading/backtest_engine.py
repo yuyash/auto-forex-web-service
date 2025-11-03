@@ -200,7 +200,7 @@ class BacktestEngine:
         self.resource_monitor: ResourceMonitor | None = None
         self.terminated = False
 
-    def run(self, tick_data: list[TickDataPoint]) -> tuple[list[dict], list[dict]]:
+    def run(self, tick_data: list[TickDataPoint]) -> tuple[list[dict], list[dict], dict[str, Any]]:
         """
         Run backtest on historical tick data.
 
@@ -208,7 +208,7 @@ class BacktestEngine:
             tick_data: List of historical tick data points
 
         Returns:
-            Tuple of (trade_log, equity_curve)
+            Tuple of (trade_log, equity_curve, performance_metrics)
 
         Raises:
             RuntimeError: If backtest fails or resource limit exceeded
@@ -253,12 +253,15 @@ class BacktestEngine:
             # Record final equity
             self._record_equity(tick_data[-1].timestamp if tick_data else datetime.now())
 
+            # Calculate performance metrics
+            performance_metrics = self.calculate_performance_metrics()
+
             logger.info(
                 f"Backtest completed: {len(self.trade_log)} trades, "
                 f"final balance: {self.balance}"
             )
 
-            return self.trade_log, self.equity_curve
+            return self.trade_log, self.equity_curve, performance_metrics
 
         except Exception as e:
             logger.error(f"Backtest failed: {e}")
@@ -512,3 +515,205 @@ class BacktestEngine:
         system_config = getattr(settings, "SYSTEM_CONFIG", {})
         if system_config:
             logger.info(f"CPU limit: {self.config.cpu_limit} cores")
+
+    def calculate_performance_metrics(self) -> dict[str, Any]:
+        """
+        Calculate comprehensive performance metrics from backtest results.
+
+        This method calculates:
+        - Total return and P&L
+        - Maximum drawdown (percentage and amount)
+        - Sharpe ratio (risk-adjusted return)
+        - Win rate and trade statistics
+        - Average win/loss and profit factor
+
+        Returns:
+            Dictionary containing all performance metrics
+
+        Requirements: 12.4
+        """
+        if not self.trade_log:
+            return self._get_zero_metrics()
+
+        metrics: dict[str, Any] = {}
+
+        # Basic metrics
+        metrics["total_trades"] = len(self.trade_log)
+        metrics["final_balance"] = float(self.balance)
+        metrics["initial_balance"] = float(self.config.initial_balance)
+
+        # Calculate total P&L and return
+        total_pnl = self.balance - self.config.initial_balance
+        metrics["total_pnl"] = float(total_pnl)
+        metrics["total_return"] = (
+            float((total_pnl / self.config.initial_balance) * 100)
+            if self.config.initial_balance > 0
+            else 0.0
+        )
+
+        # Calculate win/loss statistics
+        winning_trades = [t for t in self.trade_log if t.get("pnl", 0) > 0]
+        losing_trades = [t for t in self.trade_log if t.get("pnl", 0) < 0]
+
+        metrics["winning_trades"] = len(winning_trades)
+        metrics["losing_trades"] = len(losing_trades)
+        metrics["win_rate"] = (
+            (len(winning_trades) / len(self.trade_log)) * 100 if self.trade_log else 0.0
+        )
+
+        # Calculate average win/loss
+        if winning_trades:
+            total_wins = sum(t.get("pnl", 0) for t in winning_trades)
+            metrics["average_win"] = total_wins / len(winning_trades)
+            metrics["largest_win"] = max(t.get("pnl", 0) for t in winning_trades)
+        else:
+            metrics["average_win"] = 0.0
+            metrics["largest_win"] = 0.0
+
+        if losing_trades:
+            total_losses = sum(t.get("pnl", 0) for t in losing_trades)
+            metrics["average_loss"] = total_losses / len(losing_trades)
+            metrics["largest_loss"] = min(t.get("pnl", 0) for t in losing_trades)
+        else:
+            metrics["average_loss"] = 0.0
+            metrics["largest_loss"] = 0.0
+
+        # Calculate profit factor
+        if losing_trades:
+            gross_profit = sum(t.get("pnl", 0) for t in winning_trades)
+            gross_loss = abs(sum(t.get("pnl", 0) for t in losing_trades))
+            metrics["profit_factor"] = gross_profit / gross_loss if gross_loss > 0 else None
+        else:
+            metrics["profit_factor"] = None
+
+        # Calculate maximum drawdown
+        max_dd_metrics = self._calculate_max_drawdown()
+        metrics.update(max_dd_metrics)
+
+        # Calculate Sharpe ratio
+        metrics["sharpe_ratio"] = self._calculate_sharpe_ratio()
+
+        # Calculate average trade duration
+        if self.trade_log:
+            total_duration = sum(t.get("duration", 0) for t in self.trade_log)
+            metrics["average_trade_duration"] = total_duration / len(self.trade_log)
+        else:
+            metrics["average_trade_duration"] = 0.0
+
+        sharpe_str = (
+            f"{metrics['sharpe_ratio']:.2f}" if metrics["sharpe_ratio"] is not None else "N/A"
+        )
+        logger.info(
+            f"Performance metrics calculated: Return={metrics['total_return']:.2f}%, "
+            f"Win Rate={metrics['win_rate']:.2f}%, "
+            f"Sharpe={sharpe_str}"
+        )
+
+        return metrics
+
+    def _get_zero_metrics(self) -> dict[str, Any]:
+        """
+        Get zero/default metrics when no trades were executed.
+
+        Returns:
+            Dictionary with zero metrics
+        """
+        return {
+            "total_trades": 0,
+            "final_balance": float(self.config.initial_balance),
+            "initial_balance": float(self.config.initial_balance),
+            "total_pnl": 0.0,
+            "total_return": 0.0,
+            "winning_trades": 0,
+            "losing_trades": 0,
+            "win_rate": 0.0,
+            "average_win": 0.0,
+            "average_loss": 0.0,
+            "largest_win": 0.0,
+            "largest_loss": 0.0,
+            "profit_factor": None,
+            "max_drawdown": 0.0,
+            "max_drawdown_amount": 0.0,
+            "sharpe_ratio": None,
+            "average_trade_duration": 0.0,
+        }
+
+    def _calculate_max_drawdown(self) -> dict[str, float]:
+        """
+        Calculate maximum drawdown from equity curve.
+
+        Maximum drawdown is the largest peak-to-trough decline in the equity curve,
+        expressed both as a percentage and absolute amount.
+
+        Returns:
+            Dictionary with max_drawdown (%) and max_drawdown_amount
+
+        Requirements: 12.4
+        """
+        if not self.equity_curve:
+            return {"max_drawdown": 0.0, "max_drawdown_amount": 0.0}
+
+        peak = float(self.config.initial_balance)
+        max_dd = 0.0
+        max_dd_amount = 0.0
+
+        for point in self.equity_curve:
+            balance = point.get("balance", 0)
+            peak = max(peak, balance)
+
+            drawdown_amount = peak - balance
+            if drawdown_amount > max_dd_amount:
+                max_dd_amount = drawdown_amount
+                max_dd = (drawdown_amount / peak) * 100 if peak > 0 else 0.0
+
+        return {
+            "max_drawdown": max_dd,
+            "max_drawdown_amount": max_dd_amount,
+        }
+
+    def _calculate_sharpe_ratio(self) -> float | None:
+        """
+        Calculate Sharpe ratio from equity curve.
+
+        The Sharpe ratio measures risk-adjusted return by comparing the average return
+        to the volatility (standard deviation) of returns. Higher values indicate
+        better risk-adjusted performance.
+
+        Formula: Sharpe = (Mean Return - Risk-Free Rate) / Std Dev of Returns
+        Assumes risk-free rate = 0 and annualizes based on 252 trading days.
+
+        Returns:
+            Sharpe ratio or None if insufficient data
+
+        Requirements: 12.4
+        """
+        if len(self.equity_curve) < 2:
+            return None
+
+        # Calculate returns between equity curve points
+        returns = []
+        for i in range(1, len(self.equity_curve)):
+            prev_balance = self.equity_curve[i - 1].get("balance", 0)
+            curr_balance = self.equity_curve[i].get("balance", 0)
+
+            if prev_balance > 0:
+                daily_return = (curr_balance - prev_balance) / prev_balance
+                returns.append(daily_return)
+
+        if not returns:
+            return None
+
+        # Calculate mean and standard deviation
+        mean_return = sum(returns) / len(returns)
+        variance = sum((r - mean_return) ** 2 for r in returns) / len(returns)
+        std_dev = variance**0.5
+
+        # Calculate Sharpe ratio (assuming risk-free rate = 0)
+        if std_dev > 0:
+            # Annualize (assuming 252 trading days)
+            annualized_return = mean_return * 252
+            annualized_std = std_dev * (252**0.5)
+            sharpe_ratio: float = annualized_return / annualized_std
+            return sharpe_ratio
+
+        return None
