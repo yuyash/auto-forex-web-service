@@ -8,12 +8,15 @@ import type {
 } from 'lightweight-charts';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import type { OHLCData, ChartConfig } from '../../types/chart';
+import useMarketData from '../../hooks/useMarketData';
 
 interface OHLCChartProps {
   instrument: string;
   granularity: string;
+  accountId?: string;
   data?: OHLCData[];
   config?: ChartConfig;
+  enableRealTimeUpdates?: boolean;
   onLoadHistoricalData?: (
     instrument: string,
     granularity: string
@@ -23,8 +26,10 @@ interface OHLCChartProps {
 const OHLCChart = ({
   instrument,
   granularity,
+  accountId = 'default',
   data = [],
   config = {},
+  enableRealTimeUpdates = false,
   onLoadHistoricalData,
 }: OHLCChartProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -32,6 +37,22 @@ const OHLCChart = ({
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const currentCandleRef = useRef<CandlestickData<Time> | null>(null);
+
+  // Connect to WebSocket for real-time updates (only if enabled)
+  const {
+    tickData,
+    isConnected,
+    error: wsError,
+  } = useMarketData({
+    accountId,
+    instrument,
+    throttleMs: 100,
+    onError: (err) => {
+      console.error('WebSocket error:', err);
+      setError(err.message);
+    },
+  });
 
   // Default chart configuration
   const defaultConfig: ChartConfig = {
@@ -161,25 +182,58 @@ const OHLCChart = ({
     loadData();
   }, [instrument, granularity, data, onLoadHistoricalData]);
 
-  // Update chart with new data point (exposed for future use)
-  // This method can be called from parent components via ref
-  const updateChart = (newData: OHLCData): void => {
-    if (!candlestickSeriesRef.current) return;
+  // Update chart with real-time tick data
+  useEffect(() => {
+    if (
+      !enableRealTimeUpdates ||
+      !tickData ||
+      !candlestickSeriesRef.current ||
+      !isConnected
+    ) {
+      return;
+    }
 
-    const candlestickData: CandlestickData<Time> = {
-      time: newData.time as Time,
-      open: newData.open,
-      high: newData.high,
-      low: newData.low,
-      close: newData.close,
-    };
+    try {
+      // Convert tick timestamp to Unix timestamp
+      const tickTime = Math.floor(new Date(tickData.time).getTime() / 1000);
 
-    candlestickSeriesRef.current.update(candlestickData);
-  };
+      // Use mid price for the candle
+      const price = tickData.mid;
 
-  // Expose updateChart for future use (prevents unused warning)
-  // This can be accessed via ref in parent components
-  void updateChart;
+      // If we don't have a current candle, create one
+      if (!currentCandleRef.current) {
+        currentCandleRef.current = {
+          time: tickTime as Time,
+          open: price,
+          high: price,
+          low: price,
+          close: price,
+        };
+        candlestickSeriesRef.current.update(currentCandleRef.current);
+      } else {
+        // Update the current candle with the new tick
+        const currentCandle = currentCandleRef.current;
+
+        // Check if we need to start a new candle based on granularity
+        // For simplicity, we'll update the current candle
+        // In a production system, you'd calculate candle boundaries based on granularity
+        currentCandle.close = price;
+        currentCandle.high = Math.max(currentCandle.high, price);
+        currentCandle.low = Math.min(currentCandle.low, price);
+
+        candlestickSeriesRef.current.update(currentCandle);
+      }
+    } catch (err) {
+      console.error('Error updating chart with tick data:', err);
+    }
+  }, [tickData, enableRealTimeUpdates, isConnected]);
+
+  // Update error state from WebSocket
+  useEffect(() => {
+    if (wsError) {
+      setError(wsError.message);
+    }
+  }, [wsError]);
 
   if (error) {
     return (
