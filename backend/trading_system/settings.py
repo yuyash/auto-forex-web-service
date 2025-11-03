@@ -111,7 +111,6 @@ CACHES = {
         "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         "OPTIONS": {
             "db": 0,
-            "parser_class": "redis.connection.PythonParser",
             "pool_class": "redis.BlockingConnectionPool",
         },
         "KEY_PREFIX": "trading_system",
