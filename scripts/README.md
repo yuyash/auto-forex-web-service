@@ -8,6 +8,12 @@ This directory contains production-ready scripts for managing the Forex Trading 
 - `.env` file configured with production settings
 - Services running via `docker-compose.yaml`
 
+## Important Notes
+
+- **Scripts can be run from any directory** - they automatically find the project root
+- All scripts change to the project root directory before executing commands
+- You can run scripts from within the `scripts/` directory or from the project root
+
 ## Scripts Overview
 
 ### Deployment

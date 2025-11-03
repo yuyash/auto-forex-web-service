@@ -4,6 +4,14 @@
 
 set -e
 
+# Get the directory where the script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get the project root (parent of scripts directory)
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Change to project root
+cd "$PROJECT_ROOT"
+
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yaml}"
 
 # Colors for output
