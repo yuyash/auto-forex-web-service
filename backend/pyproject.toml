@@ -54,11 +54,12 @@ build-backend = "hatchling.build"
 packages = ["trading_system"]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "trading_system.settings"
+DJANGO_SETTINGS_MODULE = "trading_system.settings_test"
 python_files = ["test_*.py", "*_test.py", "tests.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
+    "--reuse-db",
     "--strict-markers",
     "--strict-config",
     "--cov=.",
@@ -68,7 +69,7 @@ addopts = [
 ]
 testpaths = ["tests"]
 markers = [
-    "unit: Unit tests",
+    "unit: marks tests as unit tests (deselect with '-m \"not unit\"')",
     "integration: Integration tests",
     "slow: Slow running tests",
 ]

@@ -192,3 +192,6 @@ static_root/
 
 # Kiro
 .kiro
+
+# Pytest+cov
+coverage.xml
