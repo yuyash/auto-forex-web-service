@@ -1,17 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from '../contexts/AuthContext';
 import AppLayout from '../components/layout/AppLayout';
 
 describe('AppLayout', () => {
   it('renders header, footer, and content', async () => {
     render(
       <BrowserRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<div>Test Content</div>} />
-          </Route>
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<div>Test Content</div>} />
+            </Route>
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     );
 
