@@ -7,7 +7,7 @@ import { AuthProvider } from '../contexts/AuthContext';
 
 // Mock fetch
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch as unknown as typeof fetch;
 
 // Mock useNavigate
 const mockNavigate = vi.fn();
@@ -23,9 +23,17 @@ describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    // Mock system settings API call that AuthProvider makes on mount
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        registration_enabled: true,
+        login_enabled: true,
+      }),
+    });
   });
 
-  it('renders login form with email and password fields', () => {
+  it('renders login form with email and password fields', async () => {
     render(
       <MemoryRouter>
         <AuthProvider>
@@ -34,7 +42,11 @@ describe('LoginPage', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    });
+
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /sign in/i })
@@ -51,6 +63,11 @@ describe('LoginPage', () => {
         </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    });
 
     const emailInput = screen.getByLabelText(/email/i);
     const submitButton = screen.getByRole('button', { name: /sign in/i });
@@ -74,6 +91,13 @@ describe('LoginPage', () => {
       </MemoryRouter>
     );
 
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /sign in/i })
+      ).toBeInTheDocument();
+    });
+
     const submitButton = screen.getByRole('button', { name: /sign in/i });
     await user.click(submitButton);
 
@@ -86,20 +110,29 @@ describe('LoginPage', () => {
   it('calls login API with correct credentials', async () => {
     const user = userEvent.setup();
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        token: 'test-token',
-        user: {
-          id: 1,
-          email: 'test@example.com',
-          username: 'testuser',
-          is_staff: false,
-          timezone: 'UTC',
-          language: 'en',
-        },
-      }),
-    });
+    // Mock login API response (system settings already mocked in beforeEach)
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          registration_enabled: true,
+          login_enabled: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token: 'test-token',
+          user: {
+            id: 1,
+            email: 'test@example.com',
+            username: 'testuser',
+            is_staff: false,
+            timezone: 'UTC',
+            language: 'en',
+          },
+        }),
+      });
 
     render(
       <MemoryRouter>
@@ -108,6 +141,11 @@ describe('LoginPage', () => {
         </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    });
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
@@ -134,20 +172,28 @@ describe('LoginPage', () => {
   it('stores token in localStorage on successful login', async () => {
     const user = userEvent.setup();
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        token: 'test-token',
-        user: {
-          id: 1,
-          email: 'test@example.com',
-          username: 'testuser',
-          is_staff: false,
-          timezone: 'UTC',
-          language: 'en',
-        },
-      }),
-    });
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          registration_enabled: true,
+          login_enabled: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token: 'test-token',
+          user: {
+            id: 1,
+            email: 'test@example.com',
+            username: 'testuser',
+            is_staff: false,
+            timezone: 'UTC',
+            language: 'en',
+          },
+        }),
+      });
 
     render(
       <MemoryRouter>
@@ -156,6 +202,11 @@ describe('LoginPage', () => {
         </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    });
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
@@ -174,20 +225,28 @@ describe('LoginPage', () => {
   it('redirects to dashboard on successful login', async () => {
     const user = userEvent.setup();
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        token: 'test-token',
-        user: {
-          id: 1,
-          email: 'test@example.com',
-          username: 'testuser',
-          is_staff: false,
-          timezone: 'UTC',
-          language: 'en',
-        },
-      }),
-    });
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          registration_enabled: true,
+          login_enabled: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token: 'test-token',
+          user: {
+            id: 1,
+            email: 'test@example.com',
+            username: 'testuser',
+            is_staff: false,
+            timezone: 'UTC',
+            language: 'en',
+          },
+        }),
+      });
 
     render(
       <MemoryRouter>
@@ -196,6 +255,11 @@ describe('LoginPage', () => {
         </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    });
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
@@ -213,12 +277,20 @@ describe('LoginPage', () => {
   it('displays error message on failed login', async () => {
     const user = userEvent.setup();
 
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({
-        error: 'Invalid credentials.',
-      }),
-    });
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          registration_enabled: true,
+          login_enabled: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({
+          error: 'Invalid credentials.',
+        }),
+      });
 
     render(
       <MemoryRouter>
@@ -227,6 +299,11 @@ describe('LoginPage', () => {
         </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    });
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
@@ -244,29 +321,37 @@ describe('LoginPage', () => {
   it('shows loading state during login', async () => {
     const user = userEvent.setup();
 
-    mockFetch.mockImplementationOnce(
-      () =>
-        new Promise((resolve) =>
-          setTimeout(
-            () =>
-              resolve({
-                ok: true,
-                json: async () => ({
-                  token: 'test-token',
-                  user: {
-                    id: 1,
-                    email: 'test@example.com',
-                    username: 'testuser',
-                    is_staff: false,
-                    timezone: 'UTC',
-                    language: 'en',
-                  },
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          registration_enabled: true,
+          login_enabled: true,
+        }),
+      })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  ok: true,
+                  json: async () => ({
+                    token: 'test-token',
+                    user: {
+                      id: 1,
+                      email: 'test@example.com',
+                      username: 'testuser',
+                      is_staff: false,
+                      timezone: 'UTC',
+                      language: 'en',
+                    },
+                  }),
                 }),
-              }),
-            100
+              100
+            )
           )
-        )
-    );
+      );
 
     render(
       <MemoryRouter>
@@ -275,6 +360,11 @@ describe('LoginPage', () => {
         </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    });
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);

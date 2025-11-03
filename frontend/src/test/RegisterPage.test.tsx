@@ -3,10 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import RegisterPage from '../pages/RegisterPage';
+import { AuthProvider } from '../contexts/AuthContext';
 
 // Mock fetch
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch as unknown as typeof fetch;
 
 // Mock useNavigate
 const mockNavigate = vi.fn();
@@ -21,16 +22,30 @@ vi.mock('react-router-dom', async () => {
 describe('RegisterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Mock system settings API call that AuthProvider makes on mount
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        registration_enabled: true,
+        login_enabled: true,
+      }),
+    });
   });
 
-  it('renders registration form with all required fields', () => {
+  it('renders registration form with all required fields', async () => {
     render(
       <MemoryRouter>
-        <RegisterPage />
+        <AuthProvider>
+          <RegisterPage />
+        </AuthProvider>
       </MemoryRouter>
     );
 
-    expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+    });
+
     expect(screen.getByLabelText(/^email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^password/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
@@ -44,9 +59,16 @@ describe('RegisterPage', () => {
 
     render(
       <MemoryRouter>
-        <RegisterPage />
+        <AuthProvider>
+          <RegisterPage />
+        </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+    });
 
     const emailInput = screen.getByLabelText(/^email/i);
     const submitButton = screen.getByRole('button', { name: /sign up/i });
@@ -64,9 +86,18 @@ describe('RegisterPage', () => {
 
     render(
       <MemoryRouter>
-        <RegisterPage />
+        <AuthProvider>
+          <RegisterPage />
+        </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /sign up/i })
+      ).toBeInTheDocument();
+    });
 
     const submitButton = screen.getByRole('button', { name: /sign up/i });
     await user.click(submitButton);
@@ -86,9 +117,16 @@ describe('RegisterPage', () => {
 
     render(
       <MemoryRouter>
-        <RegisterPage />
+        <AuthProvider>
+          <RegisterPage />
+        </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^password/i)).toBeInTheDocument();
+    });
 
     const passwordInput = screen.getByLabelText(/^password/i);
     const submitButton = screen.getByRole('button', { name: /sign up/i });
@@ -142,9 +180,16 @@ describe('RegisterPage', () => {
 
     render(
       <MemoryRouter>
-        <RegisterPage />
+        <AuthProvider>
+          <RegisterPage />
+        </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^password/i)).toBeInTheDocument();
+    });
 
     const passwordInput = screen.getByLabelText(/^password/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
@@ -164,9 +209,16 @@ describe('RegisterPage', () => {
 
     render(
       <MemoryRouter>
-        <RegisterPage />
+        <AuthProvider>
+          <RegisterPage />
+        </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^password/i)).toBeInTheDocument();
+    });
 
     const passwordInput = screen.getByLabelText(/^password/i);
 
@@ -190,23 +242,38 @@ describe('RegisterPage', () => {
   it('calls register API with correct data', async () => {
     const user = userEvent.setup();
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        message: 'Registration successful',
-        user: {
-          id: 1,
-          email: 'test@example.com',
-          username: 'testuser',
-        },
-      }),
-    });
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          registration_enabled: true,
+          login_enabled: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          message: 'Registration successful',
+          user: {
+            id: 1,
+            email: 'test@example.com',
+            username: 'testuser',
+          },
+        }),
+      });
 
     render(
       <MemoryRouter>
-        <RegisterPage />
+        <AuthProvider>
+          <RegisterPage />
+        </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+    });
 
     const usernameInput = screen.getByLabelText(/username/i);
     const emailInput = screen.getByLabelText(/^email/i);
@@ -238,23 +305,38 @@ describe('RegisterPage', () => {
   it('shows success message and redirects to login on successful registration', async () => {
     const user = userEvent.setup();
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        message: 'Registration successful',
-        user: {
-          id: 1,
-          email: 'test@example.com',
-          username: 'testuser',
-        },
-      }),
-    });
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          registration_enabled: true,
+          login_enabled: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          message: 'Registration successful',
+          user: {
+            id: 1,
+            email: 'test@example.com',
+            username: 'testuser',
+          },
+        }),
+      });
 
     render(
       <MemoryRouter>
-        <RegisterPage />
+        <AuthProvider>
+          <RegisterPage />
+        </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+    });
 
     const usernameInput = screen.getByLabelText(/username/i);
     const emailInput = screen.getByLabelText(/^email/i);
@@ -289,18 +371,33 @@ describe('RegisterPage', () => {
   it('displays error message on failed registration', async () => {
     const user = userEvent.setup();
 
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({
-        error: 'Email already exists',
-      }),
-    });
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          registration_enabled: true,
+          login_enabled: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({
+          error: 'Email already exists',
+        }),
+      });
 
     render(
       <MemoryRouter>
-        <RegisterPage />
+        <AuthProvider>
+          <RegisterPage />
+        </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+    });
 
     const usernameInput = screen.getByLabelText(/username/i);
     const emailInput = screen.getByLabelText(/^email/i);
@@ -330,13 +427,28 @@ describe('RegisterPage', () => {
       resolvePromise = resolve;
     });
 
-    mockFetch.mockReturnValueOnce(promise as Promise<Response>);
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          registration_enabled: true,
+          login_enabled: true,
+        }),
+      })
+      .mockReturnValueOnce(promise as Promise<Response>);
 
     render(
       <MemoryRouter>
-        <RegisterPage />
+        <AuthProvider>
+          <RegisterPage />
+        </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+    });
 
     const usernameInput = screen.getByLabelText(/username/i);
     const emailInput = screen.getByLabelText(/^email/i);
@@ -378,9 +490,16 @@ describe('RegisterPage', () => {
 
     render(
       <MemoryRouter>
-        <RegisterPage />
+        <AuthProvider>
+          <RegisterPage />
+        </AuthProvider>
       </MemoryRouter>
     );
+
+    // Wait for system settings to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^email/i)).toBeInTheDocument();
+    });
 
     const emailInput = screen.getByLabelText(/^email/i);
     const submitButton = screen.getByRole('button', { name: /sign up/i });
