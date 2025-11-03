@@ -9,7 +9,8 @@
     "python *",
     "pre-commit *",
     "sed *",
-    "mypy *"
+    "mypy *",
+    "wc -l *"
   ],
   "editor.rulers": [
     100,

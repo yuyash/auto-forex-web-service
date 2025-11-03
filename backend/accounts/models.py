@@ -480,6 +480,24 @@ class OandaAccount(models.Model):
         ],
         help_text="Current account status",
     )
+    enable_position_differentiation = models.BooleanField(
+        default=False,
+        help_text="Enable automatic position differentiation for FIFO flexibility",
+    )
+    position_diff_increment = models.IntegerField(
+        default=1,
+        help_text="Increment amount for position differentiation (1-100 units)",
+    )
+    position_diff_pattern = models.CharField(
+        max_length=20,
+        default="increment",
+        choices=[
+            ("increment", "Increment"),
+            ("decrement", "Decrement"),
+            ("alternating", "Alternating"),
+        ],
+        help_text="Pattern for position differentiation",
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         help_text="Timestamp when the account was added",

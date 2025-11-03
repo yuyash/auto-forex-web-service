@@ -270,6 +270,9 @@ class OandaAccountSerializer(serializers.ModelSerializer):
             "unrealized_pnl",
             "is_active",
             "status",
+            "enable_position_differentiation",
+            "position_diff_increment",
+            "position_diff_pattern",
             "created_at",
             "updated_at",
         ]
@@ -356,6 +359,45 @@ class OandaAccountSerializer(serializers.ModelSerializer):
         if value not in valid_jurisdictions:
             raise serializers.ValidationError(
                 f"Jurisdiction must be one of: {', '.join(valid_jurisdictions)}"
+            )
+
+        return value
+
+    def validate_position_diff_increment(self, value: int) -> int:
+        """
+        Validate position differentiation increment is within allowed range.
+
+        Args:
+            value: Increment amount to validate
+
+        Returns:
+            Validated increment amount
+
+        Raises:
+            serializers.ValidationError: If increment is out of range
+        """
+        if value < 1 or value > 100:
+            raise serializers.ValidationError("Increment amount must be between 1 and 100 units.")
+
+        return value
+
+    def validate_position_diff_pattern(self, value: str) -> str:
+        """
+        Validate position differentiation pattern is a valid choice.
+
+        Args:
+            value: Pattern to validate
+
+        Returns:
+            Validated pattern
+
+        Raises:
+            serializers.ValidationError: If pattern is invalid
+        """
+        valid_patterns = ["increment", "decrement", "alternating"]
+        if value not in valid_patterns:
+            raise serializers.ValidationError(
+                f"Pattern must be one of: {', '.join(valid_patterns)}"
             )
 
         return value

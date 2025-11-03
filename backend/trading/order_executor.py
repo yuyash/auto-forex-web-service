@@ -18,6 +18,7 @@ from v20.transaction import StopLossDetails, TakeProfitDetails
 from accounts.models import OandaAccount
 from trading.event_models import Event
 from trading.models import Order
+from trading.position_differentiation import PositionDifferentiationManager
 from trading.regulatory_compliance import ComplianceViolationError, RegulatoryComplianceManager
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ class OrderExecutor:
         self.max_retries = 3
         self.retry_delay = 0.5  # 500ms
         self.compliance_manager = RegulatoryComplianceManager(account)
+        self.position_diff_manager = PositionDifferentiationManager(account)
 
     def _validate_compliance(self, order_request: Dict[str, Any]) -> None:
         """
@@ -82,6 +84,63 @@ class OrderExecutor:
 
             raise ComplianceViolationError(error_message)
 
+    def _apply_position_differentiation(
+        self,
+        instrument: str,
+        units: Decimal,
+        min_units: Optional[Decimal] = None,
+        max_units: Optional[Decimal] = None,
+    ) -> Decimal:
+        """
+        Apply position differentiation to order units.
+
+        Args:
+            instrument: Currency pair
+            units: Original order units
+            min_units: Minimum allowed order size
+            max_units: Maximum allowed order size
+
+        Returns:
+            Adjusted units (may be same as original if differentiation disabled)
+        """
+        adjusted_units, was_adjusted = self.position_diff_manager.adjust_order_units(
+            instrument=instrument,
+            original_units=abs(units),
+            min_units=min_units,
+            max_units=max_units,
+        )
+
+        if was_adjusted:
+            logger.info(
+                "Position differentiation applied: %s -> %s units for %s",
+                abs(units),
+                adjusted_units,
+                instrument,
+            )
+
+            # Log the adjustment
+            description = (
+                f"Order units adjusted for position differentiation: "
+                f"{abs(units)} -> {adjusted_units}"
+            )
+            Event.log_trading_event(
+                event_type="position_differentiation_applied",
+                description=description,
+                severity="info",
+                user=self.account.user,
+                account=self.account,
+                details={
+                    "instrument": instrument,
+                    "original_units": str(abs(units)),
+                    "adjusted_units": str(adjusted_units),
+                    "pattern": self.position_diff_manager.get_pattern(),
+                    "increment": self.position_diff_manager.get_increment_amount(),
+                },
+            )
+
+        # Preserve the sign (positive for long, negative for short)
+        return adjusted_units if units > 0 else -adjusted_units
+
     def submit_market_order(
         self,
         instrument: str,
@@ -106,20 +165,30 @@ class OrderExecutor:
             ComplianceViolationError: If order violates compliance rules
         """
         direction = "long" if units > 0 else "short"
-        abs_units = abs(units)
+        original_abs_units = abs(units)
 
         logger.info(
             "Submitting market order: %s %s %s for account %s",
             direction,
-            abs_units,
+            original_abs_units,
             instrument,
             self.account.account_id,
         )
 
+        # Apply position differentiation if enabled
+        # Note: min/max units would typically come from OANDA instrument specs
+        adjusted_units = self._apply_position_differentiation(
+            instrument=instrument,
+            units=units,
+            min_units=Decimal("1"),  # Minimum 1 unit
+            max_units=None,  # No maximum by default
+        )
+        abs_units = abs(adjusted_units)
+
         # Validate compliance before submitting order
         order_request = {
             "instrument": instrument,
-            "units": int(units),
+            "units": int(adjusted_units),
             "order_type": "market",
         }
         self._validate_compliance(order_request)
@@ -127,7 +196,7 @@ class OrderExecutor:
         # Prepare order request
         order_data: Dict[str, Any] = {
             "instrument": instrument,
-            "units": str(units),
+            "units": str(adjusted_units),
             "type": "MARKET",
             "timeInForce": "FOK",  # Fill or Kill
         }
@@ -210,21 +279,30 @@ class OrderExecutor:
             ComplianceViolationError: If order violates compliance rules
         """
         direction = "long" if units > 0 else "short"
-        abs_units = abs(units)
+        original_abs_units = abs(units)
 
         logger.info(
             "Submitting limit order: %s %s %s @ %s for account %s",
             direction,
-            abs_units,
+            original_abs_units,
             instrument,
             price,
             self.account.account_id,
         )
 
+        # Apply position differentiation if enabled
+        adjusted_units = self._apply_position_differentiation(
+            instrument=instrument,
+            units=units,
+            min_units=Decimal("1"),
+            max_units=None,
+        )
+        abs_units = abs(adjusted_units)
+
         # Validate compliance before submitting order
         order_request = {
             "instrument": instrument,
-            "units": int(units),
+            "units": int(adjusted_units),
             "order_type": "limit",
             "price": float(price),
         }
@@ -233,7 +311,7 @@ class OrderExecutor:
         # Prepare order request
         order_data: Dict[str, Any] = {
             "instrument": instrument,
-            "units": str(units),
+            "units": str(adjusted_units),
             "price": str(price),
             "type": "LIMIT",
             "timeInForce": "GTC",  # Good Till Cancelled
@@ -313,21 +391,30 @@ class OrderExecutor:
             ComplianceViolationError: If order violates compliance rules
         """
         direction = "long" if units > 0 else "short"
-        abs_units = abs(units)
+        original_abs_units = abs(units)
 
         logger.info(
             "Submitting stop order: %s %s %s @ %s for account %s",
             direction,
-            abs_units,
+            original_abs_units,
             instrument,
             price,
             self.account.account_id,
         )
 
+        # Apply position differentiation if enabled
+        adjusted_units = self._apply_position_differentiation(
+            instrument=instrument,
+            units=units,
+            min_units=Decimal("1"),
+            max_units=None,
+        )
+        abs_units = abs(adjusted_units)
+
         # Validate compliance before submitting order
         order_request = {
             "instrument": instrument,
-            "units": int(units),
+            "units": int(adjusted_units),
             "order_type": "stop",
             "price": float(price),
         }
@@ -336,7 +423,7 @@ class OrderExecutor:
         # Prepare order request
         order_data: Dict[str, Any] = {
             "instrument": instrument,
-            "units": str(units),
+            "units": str(adjusted_units),
             "price": str(price),
             "type": "STOP",
             "timeInForce": "GTC",  # Good Till Cancelled
@@ -414,22 +501,31 @@ class OrderExecutor:
             ComplianceViolationError: If order violates compliance rules
         """
         direction = "long" if units > 0 else "short"
-        abs_units = abs(units)
+        original_abs_units = abs(units)
 
         logger.info(
             "Submitting OCO order: %s %s %s limit @ %s, stop @ %s for account %s",
             direction,
-            abs_units,
+            original_abs_units,
             instrument,
             limit_price,
             stop_price,
             self.account.account_id,
         )
 
+        # Apply position differentiation if enabled
+        adjusted_units = self._apply_position_differentiation(
+            instrument=instrument,
+            units=units,
+            min_units=Decimal("1"),
+            max_units=None,
+        )
+        abs_units = abs(adjusted_units)
+
         # Validate compliance before submitting order
         order_request = {
             "instrument": instrument,
-            "units": int(units),
+            "units": int(adjusted_units),
             "order_type": "oco",
             "limit_price": float(limit_price),
             "stop_price": float(stop_price),
@@ -439,7 +535,7 @@ class OrderExecutor:
         # Submit limit order first
         limit_order_data: Dict[str, Any] = {
             "instrument": instrument,
-            "units": str(units),
+            "units": str(adjusted_units),
             "price": str(limit_price),
             "type": "LIMIT",
             "timeInForce": "GTC",
@@ -451,7 +547,7 @@ class OrderExecutor:
         # Submit stop order with OCO link
         stop_order_data: Dict[str, Any] = {
             "instrument": instrument,
-            "units": str(units),
+            "units": str(adjusted_units),
             "price": str(stop_price),
             "type": "STOP",
             "timeInForce": "GTC",

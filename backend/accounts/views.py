@@ -7,6 +7,8 @@ This module contains views for:
 - User logout
 """
 
+# pylint: disable=too-many-lines
+
 import logging
 
 from django.contrib.auth import get_user_model
@@ -873,3 +875,170 @@ class OandaAccountDetailView(APIView):
             {"message": "Account deleted successfully."},
             status=status.HTTP_200_OK,
         )
+
+
+class PositionDifferentiationView(APIView):
+    """
+    API endpoint for managing position differentiation settings.
+
+    GET /api/accounts/{id}/position-diff
+    - Get position differentiation settings for an account
+
+    PUT /api/accounts/{id}/position-diff
+    - Update position differentiation settings for an account
+
+    Requirements: 8.1
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_object(
+        self, request: Request, account_id: int
+    ) -> "OandaAccount | None":  # type: ignore[name-defined]  # noqa: F821
+        """
+        Get OANDA account by ID, ensuring it belongs to the authenticated user.
+
+        Args:
+            request: HTTP request
+            account_id: OANDA account ID
+
+        Returns:
+            OandaAccount instance or None if not found
+        """
+        from accounts.models import OandaAccount  # pylint: disable=import-outside-toplevel
+
+        if not request.user.is_authenticated:
+            return None
+
+        try:
+            account = OandaAccount.objects.get(id=account_id, user=request.user)
+            return account
+        except OandaAccount.DoesNotExist:
+            return None
+
+    def get(self, request: Request, account_id: int) -> Response:
+        """
+        Get position differentiation settings for an account.
+
+        Args:
+            request: HTTP request
+            account_id: OANDA account ID
+
+        Returns:
+            Response with position differentiation settings
+        """
+        if not request.user.is_authenticated:
+            return Response(
+                {"error": "Authentication required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        account = self.get_object(request, account_id)
+        if account is None:
+            return Response(
+                {"error": "Account not found or you don't have permission to access it."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        data = {
+            "enable_position_differentiation": account.enable_position_differentiation,
+            "position_diff_increment": account.position_diff_increment,
+            "position_diff_pattern": account.position_diff_pattern,
+        }
+
+        logger.info(
+            "User %s retrieved position differentiation settings for account %s",
+            request.user.email,
+            account.account_id,
+            extra={
+                "user_id": request.user.id,
+                "email": request.user.email,
+                "account_id": account.account_id,
+            },
+        )
+
+        return Response(data, status=status.HTTP_200_OK)
+
+    def put(self, request: Request, account_id: int) -> Response:
+        """
+        Update position differentiation settings for an account.
+
+        Args:
+            request: HTTP request with updated settings
+            account_id: OANDA account ID
+
+        Returns:
+            Response with updated settings or validation errors
+        """
+        if not request.user.is_authenticated:
+            return Response(
+                {"error": "Authentication required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        account = self.get_object(request, account_id)
+        if account is None:
+            return Response(
+                {"error": "Account not found or you don't have permission to access it."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Validate increment amount
+        increment = request.data.get("position_diff_increment")
+        if increment is not None:
+            try:
+                increment = int(increment)
+                if increment < 1 or increment > 100:
+                    return Response(
+                        {"error": "Increment amount must be between 1 and 100 units."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            except (ValueError, TypeError):
+                return Response(
+                    {"error": "Increment amount must be a valid integer."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Validate pattern
+        pattern = request.data.get("position_diff_pattern")
+        if pattern is not None:
+            valid_patterns = ["increment", "decrement", "alternating"]
+            if pattern not in valid_patterns:
+                return Response(
+                    {"error": f"Pattern must be one of: {', '.join(valid_patterns)}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Update fields
+        if "enable_position_differentiation" in request.data:
+            account.enable_position_differentiation = request.data[
+                "enable_position_differentiation"
+            ]
+
+        if increment is not None:
+            account.position_diff_increment = increment
+
+        if pattern is not None:
+            account.position_diff_pattern = pattern
+
+        account.save()
+
+        logger.info(
+            "User %s updated position differentiation settings for account %s",
+            request.user.email,
+            account.account_id,
+            extra={
+                "user_id": request.user.id,
+                "email": request.user.email,
+                "account_id": account.account_id,
+                "updated_fields": list(request.data.keys()),
+            },
+        )
+
+        data = {
+            "enable_position_differentiation": account.enable_position_differentiation,
+            "position_diff_increment": account.position_diff_increment,
+            "position_diff_pattern": account.position_diff_pattern,
+        }
+
+        return Response(data, status=status.HTTP_200_OK)

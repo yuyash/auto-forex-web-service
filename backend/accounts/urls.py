@@ -10,6 +10,7 @@ from .views import (
     AdminSystemSettingsView,
     OandaAccountDetailView,
     OandaAccountListCreateView,
+    PositionDifferentiationView,
     PublicSystemSettingsView,
     TokenRefreshView,
     UserLoginView,
@@ -37,5 +38,10 @@ urlpatterns = [
     path("accounts", OandaAccountListCreateView.as_view(), name="oanda_accounts_list"),
     path(
         "accounts/<int:account_id>", OandaAccountDetailView.as_view(), name="oanda_account_detail"
+    ),
+    path(
+        "accounts/<int:account_id>/position-diff",
+        PositionDifferentiationView.as_view(),
+        name="position_differentiation",
     ),
 ]
