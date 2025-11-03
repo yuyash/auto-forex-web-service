@@ -185,9 +185,15 @@ jobs:
           # Copy nginx configuration
           scp -P ${SSH_PORT} -r nginx ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/
 
+          # Copy production scripts
+          scp -P ${SSH_PORT} -r scripts ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/
+
           # SSH into server and deploy
           ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} << EOF
             cd ${DEPLOY_PATH}
+
+            # Make scripts executable
+            chmod +x scripts/*.sh
 
             # Add DOCKERHUB_USERNAME to .env if not present
             if ! grep -q "DOCKERHUB_USERNAME" .env; then
