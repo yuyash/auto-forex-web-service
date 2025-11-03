@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -8,49 +8,168 @@ import {
   IconButton,
   Menu,
   MenuItem,
+  Select,
+  FormControl,
+  Badge,
+  Divider,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
-import { AccountCircle } from '@mui/icons-material';
+import {
+  AccountCircle,
+  Notifications,
+  Person,
+  Settings,
+  Logout,
+} from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import LanguageSelector from '../common/LanguageSelector';
 
+interface OandaAccount {
+  id: number;
+  account_id: string;
+  api_type: string;
+  balance: number;
+  currency: string;
+}
+
 const AppHeader = () => {
   const { t } = useTranslation('common');
-  const { logout, user } = useAuth();
+  const { logout, user, token } = useAuth();
   const navigate = useNavigate();
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [userMenuAnchorEl, setUserMenuAnchorEl] = useState<null | HTMLElement>(
+    null
+  );
+  const [accounts, setAccounts] = useState<OandaAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [notificationCount] = useState<number>(0);
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
+  // Fetch OANDA accounts
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      if (!token) return;
+
+      try {
+        const response = await fetch('/api/accounts', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setAccounts(data);
+          // Set first account as default if available
+          if (data.length > 0 && !selectedAccountId) {
+            setSelectedAccountId(data[0].id.toString());
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch accounts:', error);
+      }
+    };
+
+    fetchAccounts();
+  }, [token, selectedAccountId]);
+
+  const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setUserMenuAnchorEl(event.currentTarget);
   };
 
-  const handleMenuClose = () => {
-    setAnchorEl(null);
+  const handleUserMenuClose = () => {
+    setUserMenuAnchorEl(null);
+  };
+
+  const handleProfileClick = () => {
+    handleUserMenuClose();
+    navigate('/settings');
+  };
+
+  const handleSettingsClick = () => {
+    handleUserMenuClose();
+    navigate('/settings');
   };
 
   const handleLogout = async () => {
-    handleMenuClose();
+    handleUserMenuClose();
     await logout();
     navigate('/login');
+  };
+
+  const handleAccountChange = (
+    event: React.ChangeEvent<{ value: unknown }>
+  ) => {
+    setSelectedAccountId(String(event.target.value));
+  };
+
+  const handleNotificationClick = () => {
+    // TODO: Implement notification panel
+    console.log('Notifications clicked');
   };
 
   return (
     <AppBar position="static">
       <Toolbar>
+        {/* Logo */}
         <Typography
           variant="h6"
           component={RouterLink}
           to="/"
           sx={{
-            flexGrow: 1,
             textDecoration: 'none',
             color: 'inherit',
+            mr: 3,
           }}
         >
           {t('app.name')}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+
+        {/* Account Selector */}
+        {accounts.length > 0 && (
+          <FormControl
+            size="small"
+            sx={{
+              minWidth: 200,
+              mr: 2,
+              '& .MuiOutlinedInput-root': {
+                color: 'inherit',
+                '& fieldset': {
+                  borderColor: 'rgba(255, 255, 255, 0.3)',
+                },
+                '&:hover fieldset': {
+                  borderColor: 'rgba(255, 255, 255, 0.5)',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: 'rgba(255, 255, 255, 0.7)',
+                },
+              },
+              '& .MuiSelect-icon': {
+                color: 'inherit',
+              },
+            }}
+          >
+            <Select
+              value={selectedAccountId}
+              onChange={handleAccountChange}
+              displayEmpty
+              inputProps={{ 'aria-label': 'Select OANDA Account' }}
+            >
+              {accounts.map((account) => (
+                <MenuItem key={account.id} value={account.id.toString()}>
+                  {account.account_id} ({account.api_type}) - {account.currency}{' '}
+                  {account.balance.toFixed(2)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+
+        {/* Navigation Buttons */}
+        <Box
+          sx={{ display: 'flex', gap: 1, alignItems: 'center', flexGrow: 1 }}
+        >
           <Button color="inherit" component={RouterLink} to="/dashboard">
             {t('navigation.dashboard')}
           </Button>
@@ -63,29 +182,50 @@ const AppHeader = () => {
           <Button color="inherit" component={RouterLink} to="/strategy">
             {t('navigation.strategy')}
           </Button>
-          <Button color="inherit" component={RouterLink} to="/backtest">
-            {t('navigation.backtest')}
-          </Button>
           <Button color="inherit" component={RouterLink} to="/settings">
             {t('navigation.settings')}
           </Button>
+          {user?.is_staff && (
+            <Button color="inherit" component={RouterLink} to="/admin">
+              {t('navigation.admin')}
+            </Button>
+          )}
+        </Box>
+
+        {/* Right side icons */}
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          {/* Language Selector */}
           <LanguageSelector />
+
+          {/* Notification Bell */}
+          <IconButton
+            size="large"
+            aria-label={`show ${notificationCount} new notifications`}
+            color="inherit"
+            onClick={handleNotificationClick}
+          >
+            <Badge badgeContent={notificationCount} color="error">
+              <Notifications />
+            </Badge>
+          </IconButton>
+
+          {/* User Menu */}
           <IconButton
             size="large"
             edge="end"
             aria-label="account of current user"
             aria-controls="user-menu"
             aria-haspopup="true"
-            onClick={handleMenuOpen}
+            onClick={handleUserMenuOpen}
             color="inherit"
           >
             <AccountCircle />
           </IconButton>
           <Menu
             id="user-menu"
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleMenuClose}
+            anchorEl={userMenuAnchorEl}
+            open={Boolean(userMenuAnchorEl)}
+            onClose={handleUserMenuClose}
             anchorOrigin={{
               vertical: 'bottom',
               horizontal: 'right',
@@ -100,7 +240,26 @@ const AppHeader = () => {
                 {user?.email}
               </Typography>
             </MenuItem>
-            <MenuItem onClick={handleLogout}>{t('navigation.logout')}</MenuItem>
+            <Divider />
+            <MenuItem onClick={handleProfileClick}>
+              <ListItemIcon>
+                <Person fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Profile</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={handleSettingsClick}>
+              <ListItemIcon>
+                <Settings fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>{t('navigation.settings')}</ListItemText>
+            </MenuItem>
+            <Divider />
+            <MenuItem onClick={handleLogout}>
+              <ListItemIcon>
+                <Logout fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>{t('navigation.logout')}</ListItemText>
+            </MenuItem>
           </Menu>
         </Box>
       </Toolbar>

@@ -6,32 +6,7 @@ import {
   useCallback,
 } from 'react';
 import type { ReactNode } from 'react';
-
-interface User {
-  id: number;
-  email: string;
-  username: string;
-  is_staff: boolean;
-  timezone: string;
-  language: string;
-}
-
-export interface SystemSettings {
-  registration_enabled: boolean;
-  login_enabled: boolean;
-}
-
-interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
-  systemSettings: SystemSettings | null;
-  systemSettingsLoading: boolean;
-  login: (token: string, user: User) => void;
-  logout: () => Promise<void>;
-  refreshToken: () => Promise<boolean>;
-  refetchSystemSettings: () => Promise<void>;
-}
+import type { User, SystemSettings, AuthContextType } from '../types/auth';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -186,6 +161,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
