@@ -16,6 +16,7 @@ from .views import (
     UserLoginView,
     UserLogoutView,
     UserRegistrationView,
+    UserSettingsView,
 )
 
 app_name = "accounts"
@@ -44,4 +45,5 @@ urlpatterns = [
         PositionDifferentiationView.as_view(),
         name="position_differentiation",
     ),
+    path("settings", UserSettingsView.as_view(), name="user_settings"),
 ]

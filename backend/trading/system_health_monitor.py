@@ -1,0 +1,326 @@
+"""
+System health monitoring module.
+
+This module provides system health monitoring functionality including:
+- CPU and memory usage monitoring
+- Database connection health checks
+- Redis connection health checks
+- OANDA API connection health checks
+- Active stream and task monitoring
+
+Requirements: 19.1, 19.2, 19.3, 19.4
+"""
+
+import logging
+import time
+from typing import Any, Dict
+
+from django.conf import settings
+from django.db import connection
+from django.utils import timezone
+
+import psutil
+import redis
+
+logger = logging.getLogger(__name__)
+
+
+class SystemHealthMonitor:
+    """
+    Monitor system health metrics and service connections.
+
+    This class provides methods to check the health of various system
+    components including CPU, memory, database, Redis, and external APIs.
+
+    Requirements: 19.1, 19.2, 19.3, 19.4
+    """
+
+    def __init__(self) -> None:
+        """Initialize the system health monitor."""
+        self.redis_client = None
+        try:
+            # Parse Redis URL from settings
+            redis_url = getattr(settings, "CELERY_BROKER_URL", "redis://localhost:6379/0")
+            self.redis_client = redis.from_url(
+                redis_url,
+                socket_connect_timeout=2,
+                socket_timeout=2,
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize Redis client: {e}")
+
+    def get_cpu_usage(self) -> Dict[str, Any]:
+        """
+        Get current CPU usage metrics.
+
+        Returns:
+            Dictionary containing CPU usage information
+        """
+        try:
+            cpu_percent = psutil.cpu_percent(interval=1)
+            cpu_count = psutil.cpu_count()
+            load_avg = psutil.getloadavg() if hasattr(psutil, "getloadavg") else (0, 0, 0)
+
+            return {
+                "status": "healthy" if cpu_percent < 80 else "warning",
+                "cpu_percent": cpu_percent,
+                "cpu_count": cpu_count,
+                "load_average": {
+                    "1min": load_avg[0],
+                    "5min": load_avg[1],
+                    "15min": load_avg[2],
+                },
+            }
+        except Exception as e:
+            logger.error(f"Failed to get CPU usage: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+            }
+
+    def get_memory_usage(self) -> Dict[str, Any]:
+        """
+        Get current memory usage metrics.
+
+        Returns:
+            Dictionary containing memory usage information
+        """
+        try:
+            memory = psutil.virtual_memory()
+            swap = psutil.swap_memory()
+
+            return {
+                "status": "healthy" if memory.percent < 80 else "warning",
+                "total_mb": memory.total / (1024 * 1024),
+                "available_mb": memory.available / (1024 * 1024),
+                "used_mb": memory.used / (1024 * 1024),
+                "percent": memory.percent,
+                "swap_total_mb": swap.total / (1024 * 1024),
+                "swap_used_mb": swap.used / (1024 * 1024),
+                "swap_percent": swap.percent,
+            }
+        except Exception as e:
+            logger.error(f"Failed to get memory usage: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+            }
+
+    def check_database_connection(self) -> Dict[str, Any]:
+        """
+        Check PostgreSQL database connection health.
+
+        Returns:
+            Dictionary containing database connection status
+        """
+        try:
+            start_time = time.time()
+            connection.ensure_connection()
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            response_time = (time.time() - start_time) * 1000  # Convert to ms
+
+            return {
+                "status": "healthy",
+                "connected": True,
+                "response_time_ms": round(response_time, 2),
+                "database": settings.DATABASES["default"]["NAME"],
+                "host": settings.DATABASES["default"]["HOST"],
+            }
+        except Exception as e:
+            logger.error(f"Database connection check failed: {e}")
+            return {
+                "status": "error",
+                "connected": False,
+                "error": str(e),
+            }
+
+    def check_redis_connection(self) -> Dict[str, Any]:
+        """
+        Check Redis connection health.
+
+        Returns:
+            Dictionary containing Redis connection status
+        """
+        if not self.redis_client:
+            return {
+                "status": "error",
+                "connected": False,
+                "error": "Redis client not initialized",
+            }
+
+        try:
+            start_time = time.time()
+            self.redis_client.ping()
+            response_time = (time.time() - start_time) * 1000  # Convert to ms
+
+            info = self.redis_client.info()
+            return {
+                "status": "healthy",
+                "connected": True,
+                "response_time_ms": round(response_time, 2),
+                "version": info.get("redis_version", "unknown"),
+                "used_memory_mb": info.get("used_memory", 0) / (1024 * 1024),
+                "connected_clients": info.get("connected_clients", 0),
+            }
+        except Exception as e:
+            logger.error(f"Redis connection check failed: {e}")
+            return {
+                "status": "error",
+                "connected": False,
+                "error": str(e),
+            }
+
+    def check_oanda_api_connection(self) -> Dict[str, Any]:
+        """
+        Check OANDA API connection health.
+
+        This checks if the OANDA API endpoints are reachable.
+        Note: This does not validate specific account credentials.
+
+        Returns:
+            Dictionary containing OANDA API connection status
+        """
+        try:
+            import requests
+
+            practice_url = f"{settings.OANDA_PRACTICE_API}/v3/accounts"
+            live_url = f"{settings.OANDA_LIVE_API}/v3/accounts"
+
+            practice_status = "unknown"
+            live_status = "unknown"
+
+            # Check practice API (without auth, just to see if endpoint is reachable)
+            try:
+                response = requests.get(practice_url, timeout=5)
+                # 401 is expected without auth, but means endpoint is reachable
+                practice_status = "reachable" if response.status_code in [401, 403] else "error"
+            except Exception as e:
+                logger.warning(f"Practice API check failed: {e}")
+                practice_status = "unreachable"
+
+            # Check live API
+            try:
+                response = requests.get(live_url, timeout=5)
+                live_status = "reachable" if response.status_code in [401, 403] else "error"
+            except Exception as e:
+                logger.warning(f"Live API check failed: {e}")
+                live_status = "unreachable"
+
+            overall_status = (
+                "healthy"
+                if practice_status == "reachable" or live_status == "reachable"
+                else "error"
+            )
+
+            return {
+                "status": overall_status,
+                "practice_api": {
+                    "status": practice_status,
+                    "url": settings.OANDA_PRACTICE_API,
+                },
+                "live_api": {
+                    "status": live_status,
+                    "url": settings.OANDA_LIVE_API,
+                },
+            }
+        except Exception as e:
+            logger.error(f"OANDA API connection check failed: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+            }
+
+    def get_active_streams_count(self) -> int:
+        """
+        Get count of active v20 streaming connections.
+
+        Returns:
+            Number of active streaming connections
+        """
+        try:
+            # Check Redis for active stream keys
+            if self.redis_client:
+                stream_keys = self.redis_client.keys("stream:*")
+                return len(stream_keys)
+            return 0
+        except Exception as e:
+            logger.error(f"Failed to get active streams count: {e}")
+            return 0
+
+    def get_celery_tasks_count(self) -> Dict[str, int]:
+        """
+        Get count of Celery worker tasks.
+
+        Returns:
+            Dictionary with counts of active, scheduled, and reserved tasks
+        """
+        try:
+            from celery import current_app
+
+            inspect = current_app.control.inspect()
+
+            active_tasks = inspect.active()
+            scheduled_tasks = inspect.scheduled()
+            reserved_tasks = inspect.reserved()
+
+            active_count = sum(len(tasks) for tasks in (active_tasks or {}).values())
+            scheduled_count = sum(len(tasks) for tasks in (scheduled_tasks or {}).values())
+            reserved_count = sum(len(tasks) for tasks in (reserved_tasks or {}).values())
+
+            return {
+                "active": active_count,
+                "scheduled": scheduled_count,
+                "reserved": reserved_count,
+                "total": active_count + scheduled_count + reserved_count,
+            }
+        except Exception as e:
+            logger.error(f"Failed to get Celery tasks count: {e}")
+            return {
+                "active": 0,
+                "scheduled": 0,
+                "reserved": 0,
+                "total": 0,
+            }
+
+    def get_health_summary(self) -> Dict[str, Any]:
+        """
+        Get comprehensive system health summary.
+
+        Returns:
+            Dictionary containing all health metrics
+        """
+        return {
+            "timestamp": timezone.now().isoformat(),
+            "cpu": self.get_cpu_usage(),
+            "memory": self.get_memory_usage(),
+            "database": self.check_database_connection(),
+            "redis": self.check_redis_connection(),
+            "oanda_api": self.check_oanda_api_connection(),
+            "active_streams": self.get_active_streams_count(),
+            "celery_tasks": self.get_celery_tasks_count(),
+            "overall_status": self._calculate_overall_status(),
+        }
+
+    def _calculate_overall_status(self) -> str:
+        """
+        Calculate overall system health status.
+
+        Returns:
+            Overall status: 'healthy', 'warning', or 'error'
+        """
+        cpu = self.get_cpu_usage()
+        memory = self.get_memory_usage()
+        database = self.check_database_connection()
+        redis = self.check_redis_connection()
+
+        # Critical services must be healthy
+        if database["status"] == "error" or redis["status"] == "error":
+            return "error"
+
+        # Warning if CPU or memory is high
+        if cpu["status"] == "warning" or memory["status"] == "warning":
+            return "warning"
+
+        return "healthy"

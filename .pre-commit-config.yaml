@@ -37,10 +37,22 @@ repos:
     rev: 7.1.1
     hooks:
       - id: flake8
-        args: ["--max-line-length=100", "--extend-ignore=E203,W503"]
+        args:
+          [
+            "--max-line-length=100",
+            "--extend-ignore=E203,W503",
+            "--max-complexity=20",
+            "--per-file-ignores=__init__.py:F401",
+          ]
         files: ^backend/
+        exclude: ^backend/(migrations|\.venv|venv|env|build|dist)/
         additional_dependencies:
-          ["flake8-bugbear", "flake8-comprehensions", "flake8-simplify"]
+          [
+            "flake8-bugbear",
+            "flake8-comprehensions",
+            "flake8-simplify",
+            "flake8-pyproject",
+          ]
 
   # Type checking with mypy
   - repo: local
@@ -70,6 +82,8 @@ repos:
             "python-dotenv>=1.0.0",
             "cryptography>=43.0.0",
             "v20>=3.0.25",
+            "psutil>=6.1.0",
+            "redis>=5.0.0",
           ]
 
   # Security checks

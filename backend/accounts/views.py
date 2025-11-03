@@ -30,7 +30,9 @@ from .serializers import (
     PublicSystemSettingsSerializer,
     SystemSettingsSerializer,
     UserLoginSerializer,
+    UserProfileSerializer,
     UserRegistrationSerializer,
+    UserSettingsSerializer,
 )
 
 User = get_user_model()
@@ -1087,3 +1089,144 @@ class PositionDifferentiationView(APIView):
         }
 
         return Response(data, status=status.HTTP_200_OK)
+
+
+class UserSettingsView(APIView):
+    """
+    API endpoint for managing user settings.
+
+    GET /api/settings
+    - Get user settings including timezone, language, and strategy defaults
+
+    PUT /api/settings
+    - Update user settings
+
+    Requirements: 29.1, 29.2, 29.3, 29.4, 30.1, 30.2, 30.4, 31.1, 31.2, 31.4
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        """
+        Get user settings.
+
+        Args:
+            request: HTTP request
+
+        Returns:
+            Response with user profile and settings
+        """
+        if not request.user.is_authenticated:
+            return Response(
+                {"error": "Authentication required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        from accounts.models import UserSettings  # pylint: disable=import-outside-toplevel
+
+        # Get or create user settings
+        user_settings, _ = UserSettings.objects.get_or_create(user=request.user)
+
+        # Serialize user profile
+        user_serializer = UserProfileSerializer(request.user)
+
+        # Serialize user settings
+        settings_serializer = UserSettingsSerializer(user_settings)
+
+        # Combine both into a single response
+        response_data = {
+            "user": user_serializer.data,
+            "settings": settings_serializer.data,
+        }
+
+        logger.info(
+            "User %s retrieved settings",
+            request.user.email,
+            extra={
+                "user_id": request.user.id,
+                "email": request.user.email,
+            },
+        )
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    def put(self, request: Request) -> Response:
+        """
+        Update user settings.
+
+        Args:
+            request: HTTP request with updated settings
+
+        Returns:
+            Response with updated settings or validation errors
+        """
+        if not request.user.is_authenticated:
+            return Response(
+                {"error": "Authentication required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        from accounts.models import UserSettings  # pylint: disable=import-outside-toplevel
+
+        # Get or create user settings
+        user_settings, _ = UserSettings.objects.get_or_create(user=request.user)
+
+        # Separate user profile fields from settings fields
+        user_data = {}
+        settings_data = {}
+
+        # User profile fields
+        user_fields = ["timezone", "language"]
+        for field in user_fields:
+            if field in request.data:
+                user_data[field] = request.data[field]
+
+        # Settings fields
+        settings_fields = [
+            "default_lot_size",
+            "default_scaling_mode",
+            "default_retracement_pips",
+            "default_take_profit_pips",
+            "notification_enabled",
+            "notification_email",
+            "notification_browser",
+            "settings_json",
+        ]
+        for field in settings_fields:
+            if field in request.data:
+                settings_data[field] = request.data[field]
+
+        # Validate and update user profile
+        user_serializer = UserProfileSerializer(request.user, data=user_data, partial=True)
+        if not user_serializer.is_valid():
+            return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate and update settings
+        settings_serializer = UserSettingsSerializer(
+            user_settings, data=settings_data, partial=True
+        )
+        if not settings_serializer.is_valid():
+            return Response(settings_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Save both if validation passed
+        user_serializer.save()
+        settings_serializer.save()
+
+        # Combine both into a single response
+        response_data = {
+            "user": user_serializer.data,
+            "settings": settings_serializer.data,
+        }
+
+        logger.info(
+            "User %s updated settings: %s",
+            request.user.email,
+            list(request.data.keys()),
+            extra={
+                "user_id": request.user.id,
+                "email": request.user.email,
+                "updated_fields": list(request.data.keys()),
+            },
+        )
+
+        return Response(response_data, status=status.HTTP_200_OK)

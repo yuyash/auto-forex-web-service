@@ -240,6 +240,174 @@ class PublicSystemSettingsSerializer(serializers.ModelSerializer):
         fields = ["registration_enabled", "login_enabled"]
 
 
+class UserSettingsSerializer(serializers.ModelSerializer):
+    """
+    Serializer for user settings.
+
+    Requirements: 29.1, 29.2, 29.3, 29.4, 30.1, 30.2, 30.4, 31.1, 31.2, 31.4
+    """
+
+    class Meta:
+        from accounts.models import UserSettings  # pylint: disable=import-outside-toplevel
+
+        model = UserSettings
+        fields = [
+            "default_lot_size",
+            "default_scaling_mode",
+            "default_retracement_pips",
+            "default_take_profit_pips",
+            "notification_enabled",
+            "notification_email",
+            "notification_browser",
+            "settings_json",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+    def validate_default_lot_size(self, value: float) -> float:
+        """
+        Validate default lot size is positive.
+
+        Args:
+            value: Lot size to validate
+
+        Returns:
+            Validated lot size
+
+        Raises:
+            serializers.ValidationError: If lot size is invalid
+        """
+        if value <= 0:
+            raise serializers.ValidationError("Lot size must be greater than 0.")
+        if value > 1000000:
+            raise serializers.ValidationError("Lot size must not exceed 1,000,000.")
+        return value
+
+    def validate_default_scaling_mode(self, value: str) -> str:
+        """
+        Validate scaling mode is valid.
+
+        Args:
+            value: Scaling mode to validate
+
+        Returns:
+            Validated scaling mode
+
+        Raises:
+            serializers.ValidationError: If scaling mode is invalid
+        """
+        valid_modes = ["additive", "multiplicative"]
+        if value not in valid_modes:
+            raise serializers.ValidationError(
+                f"Scaling mode must be one of: {', '.join(valid_modes)}"
+            )
+        return value
+
+    def validate_default_retracement_pips(self, value: int) -> int:
+        """
+        Validate retracement pips is within valid range.
+
+        Args:
+            value: Retracement pips to validate
+
+        Returns:
+            Validated retracement pips
+
+        Raises:
+            serializers.ValidationError: If retracement pips is invalid
+        """
+        if value < 1:
+            raise serializers.ValidationError("Retracement pips must be at least 1.")
+        if value > 1000:
+            raise serializers.ValidationError("Retracement pips must not exceed 1000.")
+        return value
+
+    def validate_default_take_profit_pips(self, value: int) -> int:
+        """
+        Validate take profit pips is within valid range.
+
+        Args:
+            value: Take profit pips to validate
+
+        Returns:
+            Validated take profit pips
+
+        Raises:
+            serializers.ValidationError: If take profit pips is invalid
+        """
+        if value < 1:
+            raise serializers.ValidationError("Take profit pips must be at least 1.")
+        if value > 1000:
+            raise serializers.ValidationError("Take profit pips must not exceed 1000.")
+        return value
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    """
+    Serializer for user profile including timezone and language preferences.
+
+    Requirements: 29.1, 29.2, 30.1, 30.2, 30.4, 31.1, 31.2, 31.4
+    """
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "email",
+            "username",
+            "timezone",
+            "language",
+            "is_staff",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "email", "username", "is_staff", "created_at", "updated_at"]
+
+    def validate_timezone(self, value: str) -> str:
+        """
+        Validate timezone is a valid IANA timezone identifier.
+
+        Args:
+            value: Timezone to validate
+
+        Returns:
+            Validated timezone
+
+        Raises:
+            serializers.ValidationError: If timezone is invalid
+        """
+        import zoneinfo  # pylint: disable=import-outside-toplevel
+
+        try:
+            zoneinfo.ZoneInfo(value)
+        except zoneinfo.ZoneInfoNotFoundError as exc:
+            raise serializers.ValidationError(
+                f"'{value}' is not a valid IANA timezone identifier."
+            ) from exc
+        return value
+
+    def validate_language(self, value: str) -> str:
+        """
+        Validate language is supported.
+
+        Args:
+            value: Language code to validate
+
+        Returns:
+            Validated language code
+
+        Raises:
+            serializers.ValidationError: If language is not supported
+        """
+        valid_languages = ["en", "ja"]
+        if value not in valid_languages:
+            raise serializers.ValidationError(
+                f"Language must be one of: {', '.join(valid_languages)}"
+            )
+        return value
+
+
 class OandaAccountSerializer(serializers.ModelSerializer):
     """
     Serializer for OANDA account.
@@ -457,3 +625,72 @@ class OandaAccountSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+
+
+class TimezoneAwareDateTimeField(serializers.DateTimeField):
+    """
+    Custom DateTimeField that converts timestamps to user's timezone.
+
+    This field automatically converts datetime values to the user's preferred
+    timezone when serializing (output) and converts from user's timezone to UTC
+    when deserializing (input).
+
+    Requirements: 30.1, 30.2, 30.3, 30.5
+    """
+
+    def to_representation(self, value: Any) -> Any:
+        """
+        Convert datetime to user's timezone for output.
+
+        Args:
+            value: Datetime value to convert
+
+        Returns:
+            ISO 8601 formatted datetime string in user's timezone
+        """
+        from accounts.timezone_utils import (  # pylint: disable=import-outside-toplevel
+            convert_to_user_timezone,
+        )
+
+        if value is None:
+            return None
+
+        # Get user from context
+        request = self.context.get("request")
+        user_timezone = None
+
+        if request and hasattr(request, "user") and request.user.is_authenticated:
+            user_timezone = request.user.timezone
+
+        # Convert to user's timezone (defaults to UTC if not specified)
+        converted_value = convert_to_user_timezone(value, user_timezone)
+
+        # Use parent's to_representation to format as ISO 8601
+        return super().to_representation(converted_value)
+
+    def to_internal_value(self, value: Any) -> Any:
+        """
+        Convert datetime from user's timezone to UTC for storage.
+
+        Args:
+            value: Datetime value to convert
+
+        Returns:
+            Datetime in UTC
+        """
+        from accounts.timezone_utils import (  # pylint: disable=import-outside-toplevel
+            convert_from_user_timezone,
+        )
+
+        # Use parent's to_internal_value to parse the datetime
+        dt = super().to_internal_value(value)
+
+        # Get user from context
+        request = self.context.get("request")
+        user_timezone = None
+
+        if request and hasattr(request, "user") and request.user.is_authenticated:
+            user_timezone = request.user.timezone
+
+        # Convert from user's timezone to UTC
+        return convert_from_user_timezone(dt, user_timezone)

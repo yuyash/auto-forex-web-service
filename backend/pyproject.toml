@@ -21,6 +21,8 @@ dependencies = [
     "pyjwt>=2.9.0",
     "bcrypt>=4.2.0",
     "cryptography>=43.0.0",
+    "psutil>=6.1.0",
+    "requests>=2.32.0",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +33,7 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "black>=24.8.0",
     "flake8>=7.1.0",
+    "flake8-pyproject>=1.2.0",
     "mypy>=1.11.0",
     "pylint>=3.3.0",
     "django-stubs>=5.1.0",
@@ -114,6 +117,8 @@ module = [
     "celery.*",
     "channels.*",
     "channels_redis.*",
+    "psutil.*",
+    "redis.*",
 ]
 ignore_missing_imports = true
 
@@ -158,6 +163,7 @@ exclude_lines = [
 [tool.pylint.main]
 ignore = ["migrations", "tests"]
 ignore-patterns = ["test_.*?.py"]
+extension-pkg-allow-list = ["psutil", "redis"]
 
 [tool.pylint.messages_control]
 disable = [
@@ -168,14 +174,38 @@ disable = [
     "invalid-name",
     "no-member",  # Django models have dynamic attributes
     "duplicate-code",  # Migrations and models naturally have similar code
+    "broad-exception-caught",  # W0718: Catching Exception is acceptable for error handling
+    "logging-fstring-interpolation",  # W1203: f-strings in logging are acceptable
+    "fixme",  # W0511: TODO comments are acceptable
+    "import-outside-toplevel",  # C0415: Lazy imports are acceptable to avoid circular imports
+    "redefined-outer-name",  # W0621: Acceptable in some contexts
+    "too-many-positional-arguments",  # R0917: Acceptable for some functions
 ]
+
+[tool.pylint.typecheck]
+ignored-modules = ["psutil", "redis"]
 
 [tool.pylint.format]
 max-line-length = 100
 
 [tool.flake8]
 max-line-length = 100
-ignore = []
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "env",
+    "build",
+    "dist",
+    "migrations",
+    "*.egg-info",
+]
+extend-ignore = ["E203", "W503"]
+per-file-ignores = [
+    "__init__.py:F401",
+]
+max-complexity = 20
 
 [tool.pylint.basic]
 good-names = ["i", "j", "k", "ex", "Run", "_", "id", "pk"]

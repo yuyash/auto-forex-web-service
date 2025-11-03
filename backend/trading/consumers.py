@@ -515,3 +515,163 @@ class PositionUpdateConsumer(AsyncWebsocketConsumer):
             self.user.username if self.user else "Unknown",
             position_data.get("position_id"),
         )
+
+
+class AdminNotificationConsumer(AsyncWebsocketConsumer):
+    """
+    WebSocket consumer for streaming admin notifications to admin users.
+
+    This consumer:
+    - Accepts WebSocket connections from authenticated admin users only
+    - Subscribes to admin notification updates
+    - Broadcasts critical events to connected admin clients
+    - Handles connection lifecycle (connect, disconnect, receive)
+
+    URL Pattern: ws://host/ws/admin/notifications/
+
+    Requirements: 33.1, 33.2, 33.3, 33.4, 33.5
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        """Initialize the consumer."""
+        super().__init__(*args, **kwargs)
+        self.user = None
+        self.group_name = "admin_notifications"
+
+    async def connect(self) -> None:
+        """
+        Handle WebSocket connection.
+
+        This method:
+        1. Authenticates the user
+        2. Validates admin privileges
+        3. Joins the admin notifications channel group
+        4. Accepts the WebSocket connection
+        """
+        # Get user from scope (set by authentication middleware)
+        self.user = self.scope.get("user")
+
+        # Check if user is authenticated and is admin
+        if not self.user or not self.user.is_authenticated:
+            logger.warning("Unauthenticated WebSocket connection attempt for admin notifications")
+            await self.close(code=4001)
+            return
+
+        if not self.user.is_staff:
+            logger.warning(
+                "Non-admin user %s attempted to connect to admin notifications",
+                self.user.username,
+            )
+            await self.close(code=4003)
+            return
+
+        # Join the admin notifications channel group
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+
+        # Accept the WebSocket connection
+        await self.accept()
+
+        logger.info(
+            "Admin user %s connected to admin notifications stream",
+            self.user.username,
+        )
+
+    async def disconnect(self, code: int) -> None:
+        """
+        Handle WebSocket disconnection.
+
+        This method:
+        1. Leaves the channel group
+        2. Logs the disconnection
+
+        Args:
+            code: WebSocket close code
+        """
+        # Leave the channel group
+        await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+        logger.info(
+            "Admin user %s disconnected from admin notifications (code: %s)",
+            self.user.username if self.user else "Unknown",
+            code,
+        )
+
+    async def receive(
+        self, text_data: Optional[str] = None, bytes_data: Optional[bytes] = None
+    ) -> None:
+        """
+        Handle messages received from the WebSocket client.
+
+        Args:
+            text_data: Text message from client
+            bytes_data: Binary message from client
+        """
+        if text_data:
+            try:
+                data = json.loads(text_data)
+                message_type = data.get("type")
+
+                if message_type == "ping":
+                    # Respond to ping with pong
+                    await self.send(text_data=json.dumps({"type": "pong"}))
+                elif message_type == "mark_read":
+                    # Mark notification as read
+                    notification_id = data.get("notification_id")
+                    if notification_id:
+                        # Import here to avoid circular imports
+                        # pylint: disable=import-outside-toplevel
+                        from channels.db import database_sync_to_async
+
+                        from trading.admin_notification_service import AdminNotificationService
+
+                        @database_sync_to_async
+                        def mark_read() -> bool:
+                            service = AdminNotificationService()
+                            return service.mark_as_read(notification_id)
+
+                        success = await mark_read()
+                        await self.send(
+                            text_data=json.dumps(
+                                {
+                                    "type": "mark_read_response",
+                                    "notification_id": notification_id,
+                                    "success": success,
+                                }
+                            )
+                        )
+                else:
+                    logger.warning("Unknown message type: %s", message_type)
+
+            except json.JSONDecodeError:
+                logger.error("Invalid JSON received from client")
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error("Error processing client message: %s", e)
+
+    async def admin_notification(self, event: Dict[str, Any]) -> None:
+        """
+        Handle admin notification events from the channel layer.
+
+        This method is called when a notification is broadcast to the admin group.
+        It forwards the notification to the WebSocket client.
+
+        Args:
+            event: Event data containing notification information
+        """
+        # Extract notification data from event
+        notification_data = event.get("data", {})
+
+        # Send notification to WebSocket client
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "notification",
+                    "data": notification_data,
+                }
+            )
+        )
+
+        logger.debug(
+            "Admin notification sent to user %s: %s",
+            self.user.username if self.user else "Unknown",
+            notification_data.get("title"),
+        )
