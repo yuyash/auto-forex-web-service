@@ -45,5 +45,8 @@
   },
   "[dockercompose]": {
     "editor.defaultFormatter": "docker.docker"
-  }
+  },
+  "flake8.args": [
+    "--toml-config"
+  ]
 }
