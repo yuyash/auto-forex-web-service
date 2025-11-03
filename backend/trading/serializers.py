@@ -10,7 +10,7 @@ Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 12.1
 
 from rest_framework import serializers
 
-from .models import Order, Strategy, StrategyState
+from .models import Order, Position, Strategy, StrategyState
 from .tick_data_models import TickData
 
 
@@ -302,3 +302,41 @@ class OrderCreateSerializer(serializers.Serializer):  # pylint: disable=abstract
             )
 
         return attrs
+
+
+class PositionSerializer(serializers.ModelSerializer):
+    """
+    Serializer for position details.
+
+    Requirements: 9.1, 9.2
+    """
+
+    account_id = serializers.IntegerField(source="account.id", read_only=True)
+    account_name = serializers.CharField(source="account.account_id", read_only=True)
+    strategy_id = serializers.IntegerField(source="strategy.id", read_only=True, allow_null=True)
+    strategy_type = serializers.CharField(
+        source="strategy.strategy_type", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = Position
+        fields = [
+            "id",
+            "account_id",
+            "account_name",
+            "strategy_id",
+            "strategy_type",
+            "position_id",
+            "instrument",
+            "direction",
+            "units",
+            "entry_price",
+            "current_price",
+            "unrealized_pnl",
+            "realized_pnl",
+            "layer_number",
+            "is_first_lot",
+            "opened_at",
+            "closed_at",
+        ]
+        read_only_fields = fields

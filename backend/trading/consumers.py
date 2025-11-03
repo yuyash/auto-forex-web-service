@@ -360,3 +360,158 @@ class MarketDataConsumer(AsyncWebsocketConsumer):
                 }
             )
         )
+
+
+class PositionUpdateConsumer(AsyncWebsocketConsumer):
+    """
+    WebSocket consumer for streaming position updates to frontend clients.
+
+    This consumer:
+    - Accepts WebSocket connections from authenticated users
+    - Subscribes to position updates for a specific OANDA account
+    - Broadcasts position P&L updates to connected clients
+    - Updates within 500ms of price changes
+    - Handles connection lifecycle (connect, disconnect, receive)
+
+    URL Pattern: ws://host/ws/positions/<account_id>/
+
+    Requirements: 9.4
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        """Initialize the consumer."""
+        super().__init__(*args, **kwargs)
+        self.account_id: Optional[str] = None
+        self.group_name: Optional[str] = None
+        self.user = None
+
+    async def connect(self) -> None:
+        """
+        Handle WebSocket connection.
+
+        This method:
+        1. Authenticates the user
+        2. Validates account ownership
+        3. Joins the account-specific channel group
+        4. Accepts the WebSocket connection
+        """
+        # Get user from scope (set by authentication middleware)
+        self.user = self.scope.get("user")
+
+        # Check if user is authenticated
+        if not self.user or not self.user.is_authenticated:
+            logger.warning("Unauthenticated WebSocket connection attempt for positions")
+            await self.close(code=4001)
+            return
+
+        # Get account ID from URL route
+        self.account_id = self.scope["url_route"]["kwargs"]["account_id"]
+
+        # Validate that the account belongs to the user
+        try:
+            # Use sync_to_async to query the database
+            from channels.db import (  # pylint: disable=import-outside-toplevel
+                database_sync_to_async,
+            )
+
+            @database_sync_to_async
+            def get_account() -> OandaAccount:
+                return OandaAccount.objects.get(account_id=self.account_id, user=self.user)
+
+            account = await get_account()
+
+            # Create group name for this account's positions
+            self.group_name = f"positions_{account.id}"
+
+            # Join the channel group
+            await self.channel_layer.group_add(self.group_name, self.channel_name)
+
+            # Accept the WebSocket connection
+            await self.accept()
+
+            logger.info(
+                "User %s connected to position updates for account %s",
+                self.user.username,
+                self.account_id,
+            )
+
+        except ObjectDoesNotExist:
+            logger.warning(
+                "User %s attempted to access account %s they don't own",
+                self.user.username,
+                self.account_id,
+            )
+            await self.close(code=4003)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error during WebSocket connection: %s", e)
+            await self.close(code=4000)
+
+    async def disconnect(self, code: int) -> None:
+        """
+        Handle WebSocket disconnection.
+
+        This method:
+        1. Leaves the channel group
+        2. Logs the disconnection
+
+        Args:
+            code: WebSocket close code
+        """
+        # Leave the channel group
+        if self.group_name:
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+        logger.info(
+            "User %s disconnected from position updates for account %s (code: %s)",
+            self.user.username if self.user else "Unknown",
+            self.account_id,
+            code,
+        )
+
+    async def receive(
+        self, text_data: Optional[str] = None, bytes_data: Optional[bytes] = None
+    ) -> None:
+        """
+        Handle messages received from the WebSocket client.
+
+        Args:
+            text_data: Text message from client
+            bytes_data: Binary message from client
+        """
+        if text_data:
+            try:
+                data = json.loads(text_data)
+                message_type = data.get("type")
+
+                if message_type == "ping":
+                    # Respond to ping with pong
+                    await self.send(text_data=json.dumps({"type": "pong"}))
+                else:
+                    logger.warning("Unknown message type: %s", message_type)
+
+            except json.JSONDecodeError:
+                logger.error("Invalid JSON received from client")
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error("Error processing client message: %s", e)
+
+    async def position_update(self, event: Dict[str, Any]) -> None:
+        """
+        Handle position update events from the channel layer.
+
+        This method is called when a position update is broadcast to the group.
+        It forwards the update to the WebSocket client.
+
+        Args:
+            event: Event data containing position update information
+        """
+        # Extract position data from event
+        position_data = event.get("data", {})
+
+        # Send position update to WebSocket client
+        await self.send(text_data=json.dumps(position_data))
+
+        logger.debug(
+            "Position update sent to user %s for position %s",
+            self.user.username if self.user else "Unknown",
+            position_data.get("position_id"),
+        )
