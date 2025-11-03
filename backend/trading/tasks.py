@@ -1088,3 +1088,52 @@ def run_backtest_task(  # type: ignore[no-untyped-def]
             "error": error_msg,
             "terminated": False,
         }
+
+
+@shared_task
+def run_host_access_monitoring() -> Dict[str, Any]:
+    """
+    Run host-level access monitoring checks.
+
+    This task performs periodic monitoring of:
+    - SSH connection attempts
+    - Docker exec commands
+    - Sensitive file access
+    - Port scanning detection
+
+    This task should be scheduled to run every 5 minutes via Celery Beat.
+
+    Returns:
+        Dictionary containing:
+            - success: Whether monitoring completed successfully
+            - error: Error message if monitoring failed
+
+    Requirements: 36.1, 36.2, 36.3, 36.4, 36.5
+    """
+    from trading.host_access_monitor import HostAccessMonitor
+
+    try:
+        logger.info("Starting host-level access monitoring")
+
+        monitor = HostAccessMonitor()
+        monitor.run_all_monitors()
+
+        logger.info("Host-level access monitoring completed successfully")
+
+        return {
+            "success": True,
+            "error": None,
+        }
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"Host access monitoring failed: {str(e)}"
+        logger.error(
+            "Error in host access monitoring: %s",
+            error_msg,
+            exc_info=True,
+        )
+
+        return {
+            "success": False,
+            "error": error_msg,
+        }

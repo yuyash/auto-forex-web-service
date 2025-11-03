@@ -44,6 +44,18 @@ app.conf.task_annotations = {
     },
 }
 
+# Configure Celery Beat schedule for periodic tasks
+app.conf.beat_schedule = {
+    "run-host-access-monitoring": {
+        "task": "trading.tasks.run_host_access_monitoring",
+        "schedule": 300.0,  # Run every 5 minutes (300 seconds)
+    },
+    "cleanup-old-tick-data": {
+        "task": "trading.tasks.cleanup_old_tick_data",
+        "schedule": 86400.0,  # Run daily (86400 seconds = 24 hours)
+    },
+}
+
 
 @app.task(bind=True, ignore_result=True)
 def debug_task(self) -> str:  # type: ignore[no-untyped-def]
