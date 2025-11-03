@@ -62,7 +62,7 @@ class TrendDetector:
         self,
         instrument: str,
         period: int,
-        current_time: datetime,  # pylint: disable=unused-argument
+        current_time: datetime,
     ) -> Decimal | None:
         """
         Calculate moving average for given period.
@@ -70,7 +70,7 @@ class TrendDetector:
         Args:
             instrument: Currency pair
             period: MA period in days
-            current_time: Current timestamp (reserved for future use)
+            current_time: Current timestamp
 
         Returns:
             Moving average value or None if insufficient data
@@ -79,14 +79,16 @@ class TrendDetector:
             return None
 
         history = self.price_history[instrument]
-        if len(history) < period:
+        if not history:
             return None
 
         # Get daily closing prices (last price of each day)
         daily_prices: dict[str, Decimal] = {}
         for ts, price in history:
-            date_key = ts.date().isoformat()
-            daily_prices[date_key] = price
+            # Only consider prices up to current_time
+            if ts <= current_time:
+                date_key = ts.date().isoformat()
+                daily_prices[date_key] = price
 
         # Get last N days
         sorted_dates = sorted(daily_prices.keys())
@@ -551,7 +553,9 @@ class SwingTradingStrategy(BaseStrategy):
         self._validate_decimal_param(config, "pullback_pips", 30)
 
         # Validate stop loss pips (minimum 50 for swing trading)
-        self._validate_decimal_param(config, "stop_loss_pips", 75, Decimal("50"))
+        stop_loss = self._validate_decimal_param(config, "stop_loss_pips", 75, Decimal("50"))
+        if stop_loss < Decimal("50"):
+            raise ValueError("stop_loss_pips must be at least 50 for swing trading")
 
         # Validate swing lookback days
         self._validate_int_param(config, "swing_lookback_days", 10)

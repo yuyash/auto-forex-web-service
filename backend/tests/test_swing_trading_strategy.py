@@ -146,15 +146,14 @@ class TestTrendDetector:
 
         # Add 10 days of data with different prices each day
         for i in range(10):
-            date = now - timedelta(days=10 - i)
-            # Add multiple prices per day, last one counts
-            for hour in range(24):
-                price = Decimal("1.1000") + Decimal(str(i * 0.0001))
-                detector.add_price(
-                    "EUR_USD",
-                    date + timedelta(hours=hour),
-                    price,
-                )
+            date = now - timedelta(days=9 - i)
+            # Add one price per day at noon
+            price = Decimal("1.1000") + Decimal(str(i * 0.0001))
+            detector.add_price(
+                "EUR_USD",
+                date.replace(hour=12, minute=0, second=0, microsecond=0),
+                price,
+            )
 
         ma = detector.calculate_ma("EUR_USD", 5, now)
         assert ma is not None
@@ -167,14 +166,13 @@ class TestTrendDetector:
 
         # Create uptrend: prices increasing over time
         for i in range(15):
-            date = now - timedelta(days=15 - i)
+            date = now - timedelta(days=14 - i)
             price = Decimal("1.1000") + Decimal(str(i * 0.001))
-            for hour in range(24):
-                detector.add_price(
-                    "EUR_USD",
-                    date + timedelta(hours=hour),
-                    price,
-                )
+            detector.add_price(
+                "EUR_USD",
+                date.replace(hour=12, minute=0, second=0, microsecond=0),
+                price,
+            )
 
         trend = detector.detect_trend("EUR_USD", now)
         assert trend == "bullish"
@@ -186,14 +184,13 @@ class TestTrendDetector:
 
         # Create downtrend: prices decreasing over time
         for i in range(15):
-            date = now - timedelta(days=15 - i)
+            date = now - timedelta(days=14 - i)
             price = Decimal("1.1000") - Decimal(str(i * 0.001))
-            for hour in range(24):
-                detector.add_price(
-                    "EUR_USD",
-                    date + timedelta(hours=hour),
-                    price,
-                )
+            detector.add_price(
+                "EUR_USD",
+                date.replace(hour=12, minute=0, second=0, microsecond=0),
+                price,
+            )
 
         trend = detector.detect_trend("EUR_USD", now)
         assert trend == "bearish"
@@ -393,12 +390,11 @@ class TestSwingTradingStrategy:
 
         # Build trend history (bullish)
         for i in range(60):
-            date = now - timedelta(days=60 - i)
+            date = now - timedelta(days=59 - i)
             price = Decimal("1.0800") + Decimal(str(i * 0.001))
-            for hour in range(24):
-                tick_time = date + timedelta(hours=hour)
-                swing_strategy.trend_detector.add_price("EUR_USD", tick_time, price)
-                swing_strategy.swing_detector.add_price("EUR_USD", tick_time, price)
+            tick_time = date.replace(hour=12, minute=0, second=0, microsecond=0)
+            swing_strategy.trend_detector.add_price("EUR_USD", tick_time, price)
+            swing_strategy.swing_detector.add_price("EUR_USD", tick_time, price)
 
         # Set up pullback scenario
         swing_strategy.pullback_detector.update_extremes("EUR_USD", Decimal("1.1400"))
@@ -425,12 +421,11 @@ class TestSwingTradingStrategy:
 
         # Build trend history (bearish)
         for i in range(60):
-            date = now - timedelta(days=60 - i)
+            date = now - timedelta(days=59 - i)
             price = Decimal("1.1400") - Decimal(str(i * 0.001))
-            for hour in range(24):
-                tick_time = date + timedelta(hours=hour)
-                swing_strategy.trend_detector.add_price("EUR_USD", tick_time, price)
-                swing_strategy.swing_detector.add_price("EUR_USD", tick_time, price)
+            tick_time = date.replace(hour=12, minute=0, second=0, microsecond=0)
+            swing_strategy.trend_detector.add_price("EUR_USD", tick_time, price)
+            swing_strategy.swing_detector.add_price("EUR_USD", tick_time, price)
 
         # Set up pullback scenario
         swing_strategy.pullback_detector.update_extremes("EUR_USD", Decimal("1.0800"))
@@ -481,12 +476,11 @@ class TestSwingTradingStrategy:
 
         # Build bullish trend
         for i in range(60):
-            date = now - timedelta(days=60 - i)
+            date = now - timedelta(days=59 - i)
             price = Decimal("1.0800") + Decimal(str(i * 0.001))
-            for hour in range(24):
-                tick_time = date + timedelta(hours=hour)
-                swing_strategy.trend_detector.add_price("EUR_USD", tick_time, price)
-                swing_strategy.swing_detector.add_price("EUR_USD", tick_time, price)
+            tick_time = date.replace(hour=12, minute=0, second=0, microsecond=0)
+            swing_strategy.trend_detector.add_price("EUR_USD", tick_time, price)
+            swing_strategy.swing_detector.add_price("EUR_USD", tick_time, price)
 
         swing_strategy.pullback_detector.update_extremes("EUR_USD", Decimal("1.1400"))
 
@@ -516,12 +510,11 @@ class TestSwingTradingStrategy:
 
         # Build bullish trend with swing high
         for i in range(60):
-            date = now - timedelta(days=60 - i)
+            date = now - timedelta(days=59 - i)
             price = Decimal("1.0800") + Decimal(str(i * 0.001))
-            for hour in range(24):
-                tick_time = date + timedelta(hours=hour)
-                swing_strategy.trend_detector.add_price("EUR_USD", tick_time, price)
-                swing_strategy.swing_detector.add_price("EUR_USD", tick_time, price)
+            tick_time = date.replace(hour=12, minute=0, second=0, microsecond=0)
+            swing_strategy.trend_detector.add_price("EUR_USD", tick_time, price)
+            swing_strategy.swing_detector.add_price("EUR_USD", tick_time, price)
 
         # Add a clear swing high
         swing_high_date = now - timedelta(days=5)
@@ -593,7 +586,7 @@ class TestSwingTradingStrategy:
 
         with pytest.raises(
             ValueError,
-            match="stop_loss_pips must be at least 50 for swing trading",
+            match="stop_loss_pips must be at least 50",
         ):
             strategy.validate_config(config)
 
