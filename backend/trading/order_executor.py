@@ -16,12 +16,14 @@ import v20
 from v20.transaction import StopLossDetails, TakeProfitDetails
 
 from accounts.models import OandaAccount
+from trading.event_logger import TradingEventLogger
 from trading.event_models import Event
 from trading.models import Order
 from trading.position_differentiation import PositionDifferentiationManager
 from trading.regulatory_compliance import ComplianceViolationError, RegulatoryComplianceManager
 
 logger = logging.getLogger(__name__)
+trading_logger = TradingEventLogger()
 
 
 class OrderExecutionError(Exception):

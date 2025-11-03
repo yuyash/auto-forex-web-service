@@ -19,6 +19,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from trading.event_logger import SecurityEventLogger
+
 from .jwt_utils import generate_jwt_token, get_user_from_token, refresh_jwt_token
 from .models import SystemSettings, UserSession
 from .permissions import IsAdminUser
@@ -34,6 +36,7 @@ from .serializers import (
 User = get_user_model()
 
 logger = logging.getLogger(__name__)
+security_logger = SecurityEventLogger()
 
 
 class UserRegistrationView(APIView):
@@ -78,6 +81,13 @@ class UserRegistrationView(APIView):
 
         if serializer.is_valid():
             user = serializer.save()
+
+            # Log account creation
+            security_logger.log_account_created(
+                username=user.username,
+                email=user.email,
+                ip_address=self.get_client_ip(request),
+            )
 
             # Placeholder for future email verification implementation
             # send_verification_email(user)
@@ -240,6 +250,14 @@ class UserLoginView(APIView):
                 },
             )
 
+            # Log security event
+            security_logger.log_login_failed(
+                username=email,
+                ip_address=ip_address,
+                reason="Invalid credentials",
+                user_agent=request.META.get("HTTP_USER_AGENT"),
+            )
+
             # Increment user-level failed attempts if user exists
             try:
                 user = User.objects.get(email__iexact=email)
@@ -258,6 +276,13 @@ class UserLoginView(APIView):
                             "failed_attempts": user.failed_login_attempts,
                         },
                     )
+
+                    # Log account locked event
+                    security_logger.log_account_locked(
+                        username=user.username,
+                        ip_address=ip_address,
+                        failed_attempts=user.failed_login_attempts,
+                    )
             except User.DoesNotExist:
                 # User doesn't exist, just log the attempt
                 pass
@@ -272,6 +297,13 @@ class UserLoginView(APIView):
                         "ip_address": ip_address,
                         "attempts": ip_attempts,
                     },
+                )
+
+                # Log IP blocked event
+                security_logger.log_ip_blocked(
+                    ip_address=ip_address,
+                    failed_attempts=ip_attempts,
+                    duration_seconds=RateLimiter.LOCKOUT_DURATION_MINUTES * 60,
                 )
 
             # Return generic error message
@@ -301,6 +333,13 @@ class UserLoginView(APIView):
                 "ip_address": ip_address,
                 "user_agent": request.META.get("HTTP_USER_AGENT", ""),
             },
+        )
+
+        # Log security event
+        security_logger.log_login_success(
+            user=user,
+            ip_address=ip_address,
+            user_agent=request.META.get("HTTP_USER_AGENT"),
         )
 
         return Response(
@@ -420,6 +459,12 @@ class UserLogoutView(APIView):
                 "user_agent": request.META.get("HTTP_USER_AGENT", ""),
                 "sessions_terminated": active_sessions.count(),
             },
+        )
+
+        # Log security event
+        security_logger.log_logout(
+            user=user,
+            ip_address=ip_address,
         )
 
         return Response(

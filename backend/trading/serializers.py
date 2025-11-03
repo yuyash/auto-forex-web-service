@@ -10,6 +10,7 @@ Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 12.1
 
 from rest_framework import serializers
 
+from .event_models import Event
 from .models import Order, Position, Strategy, StrategyState
 from .tick_data_models import TickData
 
@@ -338,5 +339,35 @@ class PositionSerializer(serializers.ModelSerializer):
             "is_first_lot",
             "opened_at",
             "closed_at",
+        ]
+        read_only_fields = fields
+
+
+class EventSerializer(serializers.ModelSerializer):
+    """
+    Serializer for event data.
+
+    Provides read-only access to event logs with all fields.
+
+    Requirements: 27.1, 27.2, 27.3, 27.4
+    """
+
+    username = serializers.CharField(source="user.username", read_only=True, allow_null=True)
+    account_id = serializers.CharField(source="account.account_id", read_only=True, allow_null=True)
+
+    class Meta:
+        model = Event
+        fields = [
+            "id",
+            "timestamp",
+            "category",
+            "event_type",
+            "severity",
+            "username",
+            "account_id",
+            "description",
+            "details",
+            "ip_address",
+            "user_agent",
         ]
         read_only_fields = fields

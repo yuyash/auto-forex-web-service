@@ -8,6 +8,7 @@ Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 12.1
 
 from django.urls import path
 
+from .event_views import EventDetailView, EventExportView, EventListView
 from .order_views import OrderDetailView, OrderListCreateView
 from .position_views import PositionCloseView, PositionDetailView, PositionListView
 from .strategy_views import (
@@ -23,6 +24,10 @@ from .views import TickDataListView
 app_name = "trading"
 
 urlpatterns = [
+    # Event endpoints
+    path("events/", EventListView.as_view(), name="event_list"),
+    path("events/export/", EventExportView.as_view(), name="event_export"),
+    path("events/<int:event_id>/", EventDetailView.as_view(), name="event_detail"),
     # Tick data endpoints
     path("tick-data/", TickDataListView.as_view(), name="tick_data_list"),
     # Order endpoints
