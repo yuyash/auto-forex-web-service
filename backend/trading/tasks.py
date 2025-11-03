@@ -942,8 +942,8 @@ def _execute_backtest(
         Result dictionary
     """
     try:
-        trade_log, equity_curve = engine.run(tick_data)
-        metrics = _calculate_performance_metrics(trade_log)
+        trade_log, equity_curve, performance_metrics = engine.run(tick_data)
+        metrics = performance_metrics  # Use metrics from engine
         resource_usage = _get_resource_usage(engine, memory_limit, cpu_limit)
 
         logger.info(
