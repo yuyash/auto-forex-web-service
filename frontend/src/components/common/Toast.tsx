@@ -1,5 +1,5 @@
-import React, { useState, useCallback, ReactNode } from 'react';
-import { Snackbar, Alert, AlertColor } from '@mui/material';
+import React, { useState, useCallback, type ReactNode } from 'react';
+import { Snackbar, Alert, type AlertColor } from '@mui/material';
 import { ToastContext } from './ToastContext';
 
 interface ToastMessage {

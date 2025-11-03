@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import { AlertColor } from '@mui/material';
+import type { AlertColor } from '@mui/material';
 
 export interface ToastContextType {
   showToast: (

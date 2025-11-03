@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect } from 'vitest';
-import DataTable, { Column } from '../components/common/DataTable';
+import DataTable, { type Column } from '../components/common/DataTable';
 
-interface TestData {
+interface TestData extends Record<string, unknown> {
   id: number;
   name: string;
   email: string;
