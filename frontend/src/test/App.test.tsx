@@ -8,14 +8,21 @@ describe('App', () => {
     // Since user is not authenticated, should redirect to login
     // Wait for i18n to load translations
     await waitFor(() => {
-      expect(screen.getByText('Sign In')).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: /sign in/i })
+      ).toBeInTheDocument();
     });
   });
 
-  it('renders login page for unauthenticated users', () => {
+  it('renders login page for unauthenticated users', async () => {
     render(<App />);
-    expect(
-      screen.getByText(/Login functionality will be implemented/i)
-    ).toBeInTheDocument();
+    // Wait for i18n to load translations
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /sign in/i })
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    });
   });
 });
