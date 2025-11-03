@@ -45,8 +45,8 @@ const OHLCChart = ({
     isConnected,
     error: wsError,
   } = useMarketData({
-    accountId,
-    instrument,
+    accountId: enableRealTimeUpdates ? accountId : undefined,
+    instrument: enableRealTimeUpdates ? instrument : undefined,
     throttleMs: 100,
     onError: (err) => {
       console.error('WebSocket error:', err);

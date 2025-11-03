@@ -2,8 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import type { TickData } from '../types/chart';
 
 interface UseMarketDataOptions {
-  accountId: string;
-  instrument: string;
+  accountId?: string;
+  instrument?: string;
   throttleMs?: number;
   onError?: (error: Error) => void;
   onConnect?: () => void;
@@ -182,6 +182,11 @@ const useMarketData = ({
 
   // Initialize WebSocket connection
   useEffect(() => {
+    // Only connect if accountId and instrument are provided
+    if (!accountId || !instrument) {
+      return;
+    }
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     connect();
 
@@ -196,7 +201,7 @@ const useMarketData = ({
         throttleTimerRef.current = null;
       }
     };
-  }, [connect]);
+  }, [connect, accountId, instrument]);
 
   return {
     tickData,
