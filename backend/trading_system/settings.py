@@ -172,6 +172,13 @@ CELERY_BEAT_SCHEDULE = {
             "expires": 3600.0,  # Task expires after 1 hour if not executed
         },
     },
+    "oanda-sync-task": {
+        "task": "trading.oanda_sync_task.oanda_sync_task",
+        "schedule": 300.0,  # Every 5 minutes (300 seconds)
+        "options": {
+            "expires": 240.0,  # Task expires after 4 minutes if not executed
+        },
+    },
 }
 
 

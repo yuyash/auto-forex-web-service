@@ -10,7 +10,7 @@ Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 12.1
 
 from rest_framework import serializers
 
-from .models import Strategy, StrategyState
+from .models import Order, Strategy, StrategyState
 from .tick_data_models import TickData
 
 
@@ -189,3 +189,116 @@ class StrategyStatusSerializer(serializers.Serializer):  # pylint: disable=abstr
     status = serializers.CharField(help_text="Strategy status (idle, trading, paused, error)")
     strategy = StrategySerializer(allow_null=True, help_text="Strategy details if active")
     strategy_state = StrategyStateSerializer(allow_null=True, help_text="Strategy state if active")
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    """
+    Serializer for order details.
+
+    Requirements: 8.1, 8.2
+    """
+
+    account_id = serializers.IntegerField(source="account.id", read_only=True)
+    account_name = serializers.CharField(source="account.account_id", read_only=True)
+    strategy_id = serializers.IntegerField(source="strategy.id", read_only=True, allow_null=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "account_id",
+            "account_name",
+            "strategy_id",
+            "order_id",
+            "instrument",
+            "order_type",
+            "direction",
+            "units",
+            "price",
+            "take_profit",
+            "stop_loss",
+            "status",
+            "filled_at",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class OrderCreateSerializer(serializers.Serializer):  # pylint: disable=abstract-method
+    """
+    Serializer for creating orders.
+
+    Requirements: 8.1, 8.2
+    """
+
+    instrument = serializers.CharField(
+        required=True,
+        max_length=10,
+        help_text="Currency pair (e.g., 'EUR_USD')",
+    )
+    order_type = serializers.ChoiceField(
+        required=True,
+        choices=["market", "limit", "stop", "oco"],
+        help_text="Type of order",
+    )
+    direction = serializers.ChoiceField(
+        required=True,
+        choices=["long", "short"],
+        help_text="Trade direction",
+    )
+    units = serializers.DecimalField(
+        required=True,
+        max_digits=15,
+        decimal_places=2,
+        min_value=0.01,
+        help_text="Number of units to trade",
+    )
+    price = serializers.DecimalField(
+        required=False,
+        allow_null=True,
+        max_digits=10,
+        decimal_places=5,
+        help_text="Order price (required for limit/stop orders)",
+    )
+    take_profit = serializers.DecimalField(
+        required=False,
+        allow_null=True,
+        max_digits=10,
+        decimal_places=5,
+        help_text="Take-profit price",
+    )
+    stop_loss = serializers.DecimalField(
+        required=False,
+        allow_null=True,
+        max_digits=10,
+        decimal_places=5,
+        help_text="Stop-loss price",
+    )
+    limit_price = serializers.DecimalField(
+        required=False,
+        allow_null=True,
+        max_digits=10,
+        decimal_places=5,
+        help_text="Limit price (for OCO orders)",
+    )
+    stop_price = serializers.DecimalField(
+        required=False,
+        allow_null=True,
+        max_digits=10,
+        decimal_places=5,
+        help_text="Stop price (for OCO orders)",
+    )
+
+    def validate(self, attrs: dict) -> dict:  # pylint: disable=arguments-renamed
+        """Validate order data based on order type."""
+        order_type = attrs.get("order_type")
+
+        if order_type in ["limit", "stop"] and not attrs.get("price"):
+            raise serializers.ValidationError(f"Price is required for {order_type} orders")
+
+        if order_type == "oco" and (not attrs.get("limit_price") or not attrs.get("stop_price")):
+            raise serializers.ValidationError(
+                "Both limit_price and stop_price are required for OCO orders"
+            )
+
+        return attrs

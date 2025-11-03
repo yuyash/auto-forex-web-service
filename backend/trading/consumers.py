@@ -333,3 +333,30 @@ class MarketDataConsumer(AsyncWebsocketConsumer):
                 }
             )
         )
+
+    async def pnl_update(self, event: Dict[str, Any]) -> None:
+        """
+        Handle P&L update events from the channel layer.
+
+        This method broadcasts position P&L updates to the client,
+        ensuring updates occur within 500ms of price changes.
+
+        Args:
+            event: Event data containing position P&L information
+
+        Requirements: 9.4
+        """
+        pnl_data = event.get("data")
+
+        if not pnl_data:
+            logger.warning("Received P&L update without data")
+            return
+
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "pnl_update",
+                    "data": pnl_data,
+                }
+            )
+        )

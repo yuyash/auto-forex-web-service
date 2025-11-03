@@ -262,6 +262,7 @@ class OandaAccountSerializer(serializers.ModelSerializer):
             "account_id",
             "api_token",
             "api_type",
+            "jurisdiction",
             "currency",
             "balance",
             "margin_used",
@@ -335,6 +336,27 @@ class OandaAccountSerializer(serializers.ModelSerializer):
         """
         if value not in ["practice", "live"]:
             raise serializers.ValidationError("API type must be either 'practice' or 'live'.")
+
+        return value
+
+    def validate_jurisdiction(self, value: str) -> str:
+        """
+        Validate jurisdiction is a valid choice.
+
+        Args:
+            value: Jurisdiction to validate
+
+        Returns:
+            Validated jurisdiction
+
+        Raises:
+            serializers.ValidationError: If jurisdiction is invalid
+        """
+        valid_jurisdictions = ["US", "JP", "EU", "UK", "AU", "OTHER"]
+        if value not in valid_jurisdictions:
+            raise serializers.ValidationError(
+                f"Jurisdiction must be one of: {', '.join(valid_jurisdictions)}"
+            )
 
         return value
 

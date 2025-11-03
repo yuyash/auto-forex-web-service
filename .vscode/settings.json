@@ -8,7 +8,8 @@
     "which *",
     "python *",
     "pre-commit *",
-    "sed *"
+    "sed *",
+    "mypy *"
   ],
   "editor.rulers": [
     100,

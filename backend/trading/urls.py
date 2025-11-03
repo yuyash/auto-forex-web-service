@@ -8,6 +8,7 @@ Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 12.1
 
 from django.urls import path
 
+from .order_views import OrderDetailView, OrderListCreateView
 from .strategy_views import (
     AccountStrategyConfigView,
     AccountStrategyStartView,
@@ -23,6 +24,9 @@ app_name = "trading"
 urlpatterns = [
     # Tick data endpoints
     path("tick-data/", TickDataListView.as_view(), name="tick_data_list"),
+    # Order endpoints
+    path("orders/", OrderListCreateView.as_view(), name="order_list_create"),
+    path("orders/<int:order_id>/", OrderDetailView.as_view(), name="order_detail"),
     # Strategy endpoints
     path("strategies/", StrategyListView.as_view(), name="strategy_list"),
     path(

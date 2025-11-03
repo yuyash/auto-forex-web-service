@@ -397,7 +397,7 @@ class OandaAccount(models.Model):
     """
     OANDA trading account with encrypted API token.
 
-    Requirements: 4.1, 4.2, 4.4, 4.5
+    Requirements: 4.1, 4.2, 4.4, 4.5, 8.1, 8.2
     """
 
     user = models.ForeignKey(
@@ -422,6 +422,19 @@ class OandaAccount(models.Model):
         ],
         default="practice",
         help_text="API endpoint type (practice or live)",
+    )
+    jurisdiction = models.CharField(
+        max_length=10,
+        choices=[
+            ("US", "United States"),
+            ("JP", "Japan"),
+            ("EU", "European Union"),
+            ("UK", "United Kingdom"),
+            ("AU", "Australia"),
+            ("OTHER", "Other/International"),
+        ],
+        default="OTHER",
+        help_text="Regulatory jurisdiction for this account",
     )
     currency = models.CharField(
         max_length=3,

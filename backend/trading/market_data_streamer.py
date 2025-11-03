@@ -334,6 +334,9 @@ class MarketDataStreamer:
                 ask_liquidity=ask_liquidity,
             )
 
+            # Update P&L for open positions with this instrument
+            self._update_positions_pnl(tick)
+
             # Broadcast tick data to WebSocket consumers
             self._broadcast_tick_to_websocket(tick)
 
@@ -352,6 +355,111 @@ class MarketDataStreamer:
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error processing price message: %s", e)
+
+    def _update_positions_pnl(self, tick: TickData) -> None:
+        """
+        Update unrealized P&L for open positions with this instrument.
+
+        This method:
+        - Fetches all open positions for this account and instrument
+        - Calculates unrealized P&L based on current market price
+        - Updates Position.unrealized_pnl and Position.current_price
+        - Broadcasts P&L updates via WebSocket
+
+        Args:
+            tick: Normalized tick data with current prices
+
+        Requirements: 9.1, 9.4
+        """
+        try:
+            from decimal import Decimal  # pylint: disable=import-outside-toplevel
+
+            from .models import Position  # pylint: disable=import-outside-toplevel
+
+            # Get all open positions for this account and instrument
+            open_positions = Position.objects.filter(
+                account=self.account, instrument=tick.instrument, closed_at__isnull=True
+            )
+
+            if not open_positions.exists():
+                return
+
+            # Determine the appropriate price for P&L calculation
+            # For long positions, use bid (exit price)
+            # For short positions, use ask (exit price)
+            positions_updated = []
+
+            for position in open_positions:
+                # Use bid for long positions (selling), ask for short positions (buying back)
+                current_price = Decimal(str(tick.bid if position.direction == "long" else tick.ask))
+
+                # Calculate unrealized P&L
+                old_pnl = position.unrealized_pnl
+                position.calculate_unrealized_pnl(current_price)
+
+                # Only update if P&L changed significantly (avoid unnecessary DB writes)
+                if abs(position.unrealized_pnl - old_pnl) >= Decimal("0.01"):
+                    position.save(update_fields=["current_price", "unrealized_pnl"])
+                    positions_updated.append(
+                        {
+                            "position_id": position.position_id,
+                            "instrument": position.instrument,
+                            "direction": position.direction,
+                            "units": str(position.units),
+                            "entry_price": str(position.entry_price),
+                            "current_price": str(position.current_price),
+                            "unrealized_pnl": str(position.unrealized_pnl),
+                        }
+                    )
+
+            # Broadcast P&L updates if any positions were updated
+            if positions_updated:
+                self._broadcast_pnl_updates(positions_updated)
+
+                logger.debug(
+                    "Updated P&L for %d positions on %s", len(positions_updated), tick.instrument
+                )
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error updating positions P&L: %s", e)
+
+    def _broadcast_pnl_updates(self, positions: List[Dict[str, Any]]) -> None:
+        """
+        Broadcast P&L updates to WebSocket consumers via Django Channels.
+
+        This method sends position P&L updates to the channel layer, which then
+        broadcasts them to all connected WebSocket clients for this account.
+
+        Args:
+            positions: List of position data dictionaries with updated P&L
+
+        Requirements: 9.4
+        """
+        try:
+            channel_layer = get_channel_layer()
+            if not channel_layer:
+                logger.warning("Channel layer not configured, skipping P&L broadcast")
+                return
+
+            # Create group name for this account
+            group_name = f"market_data_{self.account.id}"
+
+            # Send message to the group
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {
+                    "type": "pnl_update",
+                    "data": {
+                        "positions": positions,
+                        "account_id": self.account.account_id,
+                    },
+                },
+            )
+
+            logger.debug("Broadcasted P&L updates to WebSocket group: %s", group_name)
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error broadcasting P&L updates to WebSocket: %s", e)
 
     def _broadcast_tick_to_websocket(self, tick: TickData) -> None:
         """

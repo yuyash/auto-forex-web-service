@@ -24,6 +24,7 @@ from celery import shared_task
 
 from accounts.models import OandaAccount
 from trading.market_data_streamer import MarketDataStreamer, TickData
+from trading.oanda_sync_task import oanda_sync_task  # noqa: F401  # pylint: disable=unused-import
 from trading.tick_data_models import TickData as TickDataModel
 from trading_system.config_loader import get_config
 

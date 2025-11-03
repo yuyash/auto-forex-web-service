@@ -113,12 +113,13 @@ class OandaAccountAdmin(admin.ModelAdmin):
         "user",
         "account_id",
         "api_type",
+        "jurisdiction",
         "balance",
         "status",
         "is_active",
         "created_at",
     ]
-    list_filter = ["api_type", "status", "is_active", "created_at"]
+    list_filter = ["api_type", "jurisdiction", "status", "is_active", "created_at"]
     search_fields = ["user__email", "account_id"]
     readonly_fields = ["created_at", "updated_at"]
     ordering = ["-created_at"]
@@ -131,6 +132,7 @@ class OandaAccountAdmin(admin.ModelAdmin):
                     "user",
                     "account_id",
                     "api_type",
+                    "jurisdiction",
                     "currency",
                 )
             },
