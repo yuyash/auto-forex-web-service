@@ -12,6 +12,7 @@ from .backtest_views import BacktestListCreateView, BacktestResultsView, Backtes
 from .event_views import EventDetailView, EventExportView, EventListView
 from .order_views import OrderDetailView, OrderListCreateView
 from .position_views import PositionCloseView, PositionDetailView, PositionListView
+from .strategy_comparison_views import StrategyCompareResultsView, StrategyCompareView
 from .strategy_views import (
     AccountStrategyConfigView,
     AccountStrategyStartView,
@@ -81,5 +82,12 @@ urlpatterns = [
         "backtest/<int:backtest_id>/results/",
         BacktestResultsView.as_view(),
         name="backtest_results",
+    ),
+    # Strategy comparison endpoints
+    path("strategies/compare/", StrategyCompareView.as_view(), name="strategy_compare"),
+    path(
+        "strategies/compare/<int:comparison_id>/results/",
+        StrategyCompareResultsView.as_view(),
+        name="strategy_compare_results",
     ),
 ]

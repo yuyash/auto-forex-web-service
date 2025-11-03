@@ -545,3 +545,74 @@ class BacktestResult(models.Model):  # pylint: disable=too-many-instance-attribu
             self.sharpe_ratio = Decimal(str(annualized_return / annualized_std))
         else:
             self.sharpe_ratio = None
+
+
+class StrategyComparison(models.Model):
+    """
+    Model to store strategy comparison requests and results.
+
+    Requirements: 5.1, 5.3, 12.4
+    """
+
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("running", "Running"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="strategy_comparisons",
+    )
+    strategy_configs = models.JSONField(
+        help_text="List of strategy configurations to compare",
+    )
+    instruments = models.JSONField(
+        help_text="List of currency pairs",
+    )
+    start_date = models.DateTimeField(
+        help_text="Start date for comparison period",
+    )
+    end_date = models.DateTimeField(
+        help_text="End date for comparison period",
+    )
+    initial_balance = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=10000,
+    )
+    slippage_pips = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+    )
+    commission_per_trade = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+    status = models.CharField(
+        max_length=20,
+        default="pending",
+        choices=STATUS_CHOICES,
+    )
+    results = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Comparison results including metrics table and equity curves",
+    )
+    error_message = models.TextField(
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "strategy_comparisons"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Comparison {self.id} - {self.status}"
