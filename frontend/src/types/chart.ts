@@ -47,3 +47,29 @@ export interface ChartConfig {
   wickUpColor?: string;
   wickDownColor?: string;
 }
+
+export interface Position {
+  position_id: string;
+  instrument: string;
+  direction: 'long' | 'short';
+  units: number;
+  entry_price: number;
+  current_price: number;
+  unrealized_pnl: number;
+  opened_at: string;
+  take_profit?: number;
+  stop_loss?: number;
+}
+
+export interface Order {
+  order_id: string;
+  instrument: string;
+  order_type: 'market' | 'limit' | 'stop' | 'oco';
+  direction: 'long' | 'short';
+  units: number;
+  price?: number;
+  take_profit?: number;
+  stop_loss?: number;
+  status: string;
+  created_at: string;
+}

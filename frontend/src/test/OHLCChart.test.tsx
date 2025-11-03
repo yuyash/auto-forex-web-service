@@ -9,10 +9,19 @@ vi.mock('lightweight-charts', () => ({
     addCandlestickSeries: vi.fn(() => ({
       setData: vi.fn(),
       update: vi.fn(),
+      setMarkers: vi.fn(),
+    })),
+    addLineSeries: vi.fn(() => ({
+      setData: vi.fn(),
+      update: vi.fn(),
     })),
     applyOptions: vi.fn(),
     timeScale: vi.fn(() => ({
       fitContent: vi.fn(),
+      getVisibleRange: vi.fn(() => ({
+        from: 1609459200,
+        to: 1609632000,
+      })),
     })),
     remove: vi.fn(),
   })),

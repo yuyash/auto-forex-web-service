@@ -5,9 +5,11 @@ import type {
   ISeriesApi,
   CandlestickData,
   Time,
+  SeriesMarker,
+  LineData,
 } from 'lightweight-charts';
 import { Box, CircularProgress, Typography } from '@mui/material';
-import type { OHLCData, ChartConfig } from '../../types/chart';
+import type { OHLCData, ChartConfig, Position, Order } from '../../types/chart';
 import useMarketData from '../../hooks/useMarketData';
 
 interface OHLCChartProps {
@@ -17,6 +19,8 @@ interface OHLCChartProps {
   data?: OHLCData[];
   config?: ChartConfig;
   enableRealTimeUpdates?: boolean;
+  positions?: Position[];
+  orders?: Order[];
   onLoadHistoricalData?: (
     instrument: string,
     granularity: string
@@ -30,11 +34,15 @@ const OHLCChart = ({
   data = [],
   config = {},
   enableRealTimeUpdates = false,
+  positions = [],
+  orders = [],
   onLoadHistoricalData,
 }: OHLCChartProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const takeProfitSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const stopLossSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const currentCandleRef = useRef<CandlestickData<Time> | null>(null);
@@ -105,8 +113,32 @@ const OHLCChart = ({
       wickDownColor: defaultConfig.wickDownColor,
     });
 
+    // Add take-profit line series
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const takeProfitSeries = (chart as any).addLineSeries({
+      color: '#4caf50',
+      lineWidth: 2,
+      lineStyle: 2, // Dashed line
+      title: 'Take Profit',
+      priceLineVisible: false,
+      lastValueVisible: true,
+    });
+
+    // Add stop-loss line series
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stopLossSeries = (chart as any).addLineSeries({
+      color: '#f44336',
+      lineWidth: 2,
+      lineStyle: 2, // Dashed line
+      title: 'Stop Loss',
+      priceLineVisible: false,
+      lastValueVisible: true,
+    });
+
     chartRef.current = chart;
     candlestickSeriesRef.current = candlestickSeries;
+    takeProfitSeriesRef.current = takeProfitSeries;
+    stopLossSeriesRef.current = stopLossSeries;
 
     // Handle window resize
     const handleResize = () => {
@@ -234,6 +266,127 @@ const OHLCChart = ({
       setError(wsError.message);
     }
   }, [wsError]);
+
+  // Update position and order markers
+  useEffect(() => {
+    if (!candlestickSeriesRef.current) return;
+
+    const markers: SeriesMarker<Time>[] = [];
+
+    // Add position entry markers
+    positions.forEach((position) => {
+      if (position.instrument === instrument) {
+        const positionTime = Math.floor(
+          new Date(position.opened_at).getTime() / 1000
+        ) as Time;
+
+        markers.push({
+          time: positionTime,
+          position: position.direction === 'long' ? 'belowBar' : 'aboveBar',
+          color: position.direction === 'long' ? '#2196f3' : '#ff9800',
+          shape: position.direction === 'long' ? 'arrowUp' : 'arrowDown',
+          text: `${position.direction.toUpperCase()} @ ${position.entry_price.toFixed(5)}`,
+        });
+      }
+    });
+
+    // Add pending order markers
+    orders.forEach((order) => {
+      if (
+        order.instrument === instrument &&
+        order.status === 'pending' &&
+        order.price
+      ) {
+        const orderTime = Math.floor(
+          new Date(order.created_at).getTime() / 1000
+        ) as Time;
+
+        markers.push({
+          time: orderTime,
+          position: order.direction === 'long' ? 'belowBar' : 'aboveBar',
+          color: order.direction === 'long' ? '#64b5f6' : '#ffb74d',
+          shape: 'circle',
+          text: `${order.order_type.toUpperCase()} @ ${order.price.toFixed(5)}`,
+        });
+      }
+    });
+
+    // Set markers on the candlestick series
+    candlestickSeriesRef.current.setMarkers(markers);
+  }, [positions, orders, instrument]);
+
+  // Update take-profit and stop-loss lines
+  useEffect(() => {
+    if (!takeProfitSeriesRef.current || !stopLossSeriesRef.current) return;
+
+    // Collect all take-profit and stop-loss levels from positions and orders
+    const takeProfitLevels: number[] = [];
+    const stopLossLevels: number[] = [];
+
+    positions.forEach((position) => {
+      if (position.instrument === instrument) {
+        if (position.take_profit) {
+          takeProfitLevels.push(position.take_profit);
+        }
+        if (position.stop_loss) {
+          stopLossLevels.push(position.stop_loss);
+        }
+      }
+    });
+
+    orders.forEach((order) => {
+      if (order.instrument === instrument && order.status === 'pending') {
+        if (order.take_profit) {
+          takeProfitLevels.push(order.take_profit);
+        }
+        if (order.stop_loss) {
+          stopLossLevels.push(order.stop_loss);
+        }
+      }
+    });
+
+    // Get the current time range from the chart
+    const timeScale = chartRef.current?.timeScale();
+    const visibleRange = timeScale?.getVisibleRange();
+
+    if (visibleRange) {
+      // Create horizontal lines for take-profit levels
+      if (takeProfitLevels.length > 0) {
+        const takeProfitData: LineData<Time>[] = [];
+        takeProfitLevels.forEach((level) => {
+          takeProfitData.push({
+            time: visibleRange.from as Time,
+            value: level,
+          });
+          takeProfitData.push({
+            time: visibleRange.to as Time,
+            value: level,
+          });
+        });
+        takeProfitSeriesRef.current.setData(takeProfitData);
+      } else {
+        takeProfitSeriesRef.current.setData([]);
+      }
+
+      // Create horizontal lines for stop-loss levels
+      if (stopLossLevels.length > 0) {
+        const stopLossData: LineData<Time>[] = [];
+        stopLossLevels.forEach((level) => {
+          stopLossData.push({
+            time: visibleRange.from as Time,
+            value: level,
+          });
+          stopLossData.push({
+            time: visibleRange.to as Time,
+            value: level,
+          });
+        });
+        stopLossSeriesRef.current.setData(stopLossData);
+      } else {
+        stopLossSeriesRef.current.setData([]);
+      }
+    }
+  }, [positions, orders, instrument]);
 
   if (error) {
     return (
