@@ -77,6 +77,8 @@ backtesting:
   data_source: s3
   s3_bucket: forex-historical-data
   athena_database: forex_data
+  cpu_limit: 1 # CPU cores per backtest
+  memory_limit: 2147483648 # 2GB in bytes
 
 tick_storage:
   enabled: true

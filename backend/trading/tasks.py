@@ -9,6 +9,8 @@ This module contains Celery tasks for:
 Requirements: 7.1, 7.2, 12.1
 """
 
+# pylint: disable=too-many-lines
+
 import logging
 import threading
 import time
@@ -647,4 +649,442 @@ def cleanup_old_tick_data(retention_days: int | None = None) -> Dict[str, Any]:
             "retention_days": retention_days,
             "cutoff_date": None,
             "error": error_msg,
+        }
+
+
+def _load_historical_data(
+    config_dict: Dict[str, Any],
+    start_date: datetime,
+    end_date: datetime,
+) -> list:
+    """
+    Load and combine historical data for all instruments.
+
+    Args:
+        config_dict: Configuration dictionary containing instruments
+        start_date: Start date for data loading
+        end_date: End date for data loading
+
+    Returns:
+        List of tick data sorted by timestamp
+    """
+    from trading.historical_data_loader import HistoricalDataLoader
+
+    logger.info(
+        "Loading historical data for instruments: %s",
+        config_dict["instruments"],
+    )
+    data_loader = HistoricalDataLoader()
+
+    # Load data for all instruments and combine
+    tick_data = []
+    for instrument in config_dict["instruments"]:
+        instrument_data = data_loader.load_data(
+            instrument=instrument,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        tick_data.extend(instrument_data)
+
+    # Sort by timestamp
+    tick_data.sort(key=lambda t: t.timestamp)
+    logger.info("Loaded %d tick data points", len(tick_data))
+
+    return tick_data
+
+
+def _create_backtest_config(
+    config_dict: Dict[str, Any],
+    start_date: datetime,
+    end_date: datetime,
+    cpu_limit: int,
+    memory_limit: int,
+) -> Any:
+    """
+    Create backtest configuration from config dictionary.
+
+    Args:
+        config_dict: Configuration dictionary
+        start_date: Start date for backtest
+        end_date: End date for backtest
+        cpu_limit: CPU core limit
+        memory_limit: Memory limit in bytes
+
+    Returns:
+        BacktestConfig instance
+    """
+    from trading.backtest_engine import BacktestConfig
+
+    return BacktestConfig(
+        strategy_type=config_dict["strategy_type"],
+        strategy_config=config_dict["strategy_config"],
+        instruments=config_dict["instruments"],
+        start_date=start_date,
+        end_date=end_date,
+        initial_balance=Decimal(str(config_dict["initial_balance"])),
+        slippage_pips=Decimal(str(config_dict.get("slippage_pips", 0))),
+        commission_per_trade=Decimal(str(config_dict.get("commission_per_trade", 0))),
+        cpu_limit=cpu_limit,
+        memory_limit=memory_limit,
+    )
+
+
+def _calculate_performance_metrics(trade_log: list) -> Dict[str, Any]:
+    """
+    Calculate performance metrics from trade log.
+
+    Args:
+        trade_log: List of trade dictionaries
+
+    Returns:
+        Dictionary with performance metrics
+    """
+    total_trades = len(trade_log)
+    winning_trades = sum(1 for trade in trade_log if trade["pnl"] > 0)
+    losing_trades = sum(1 for trade in trade_log if trade["pnl"] < 0)
+    total_pnl = sum(trade["pnl"] for trade in trade_log)
+    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+
+    return {
+        "total_trades": total_trades,
+        "winning_trades": winning_trades,
+        "losing_trades": losing_trades,
+        "total_pnl": total_pnl,
+        "win_rate": win_rate,
+    }
+
+
+def _get_resource_usage(engine: Any, memory_limit: int, cpu_limit: int) -> Dict[str, Any]:
+    """
+    Get resource usage statistics from engine.
+
+    Args:
+        engine: BacktestEngine instance
+        memory_limit: Memory limit in bytes
+        cpu_limit: CPU core limit
+
+    Returns:
+        Dictionary with resource usage statistics
+    """
+    return {
+        "peak_memory_mb": (
+            engine.resource_monitor.get_peak_memory() / 1024 / 1024
+            if engine.resource_monitor
+            else 0
+        ),
+        "memory_limit_mb": memory_limit / 1024 / 1024,
+        "cpu_limit_cores": cpu_limit,
+    }
+
+
+def _update_backtest_success(
+    backtest: Any,
+    metrics: Dict[str, Any],
+    engine: Any,
+    equity_curve: list,
+    trade_log: list,
+) -> None:
+    """
+    Update backtest model with successful results.
+
+    Args:
+        backtest: Backtest model instance
+        metrics: Performance metrics dictionary
+        engine: BacktestEngine instance
+        equity_curve: Equity curve data
+        trade_log: Trade log data
+    """
+    backtest.status = "completed"
+    backtest.total_trades = metrics["total_trades"]
+    backtest.winning_trades = metrics["winning_trades"]
+    backtest.losing_trades = metrics["losing_trades"]
+    backtest.total_return = float(metrics["total_pnl"])
+    backtest.win_rate = metrics["win_rate"]
+    backtest.final_balance = float(engine.balance)
+    backtest.equity_curve = equity_curve
+    backtest.trade_log = trade_log
+    backtest.completed_at = timezone.now()
+    backtest.save()
+
+
+def _handle_resource_limit_error(
+    backtest: Any,
+    backtest_id: int,
+    error: RuntimeError,
+    engine: Any,
+    memory_limit: int,
+    cpu_limit: int,
+) -> Dict[str, Any]:
+    """
+    Handle resource limit exceeded error.
+
+    Args:
+        backtest: Backtest model instance
+        backtest_id: Backtest ID
+        error: RuntimeError that was raised
+        engine: BacktestEngine instance
+        memory_limit: Memory limit in bytes
+        cpu_limit: CPU core limit
+
+    Returns:
+        Error response dictionary
+    """
+    logger.error("Backtest %d terminated: %s", backtest_id, error)
+
+    resource_usage = _get_resource_usage(engine, memory_limit, cpu_limit)
+
+    backtest.status = "terminated"
+    backtest.error_message = str(error)
+    backtest.completed_at = timezone.now()
+    backtest.save()
+
+    return {
+        "success": False,
+        "backtest_id": backtest_id,
+        "error": str(error),
+        "resource_usage": resource_usage,
+        "terminated": True,
+    }
+
+
+def _initialize_backtest(backtest_id: int) -> tuple[Any, Dict[str, Any] | None]:
+    """
+    Initialize and validate backtest instance.
+
+    Args:
+        backtest_id: Backtest ID
+
+    Returns:
+        Tuple of (backtest_instance, error_response or None)
+    """
+    from trading.backtest_models import Backtest
+
+    try:
+        backtest = Backtest.objects.get(id=backtest_id)
+        backtest.status = "running"
+        backtest.save(update_fields=["status"])
+        return backtest, None
+    except Backtest.DoesNotExist:
+        error_msg = f"Backtest with id {backtest_id} does not exist"
+        logger.error(error_msg)
+        return None, {
+            "success": False,
+            "backtest_id": backtest_id,
+            "error": error_msg,
+        }
+
+
+def _get_resource_limits() -> tuple:
+    """
+    Get resource limits from configuration.
+
+    Returns:
+        Tuple of (cpu_limit, memory_limit)
+    """
+    cpu_limit = get_config("backtesting.cpu_limit", 1)
+    memory_limit = get_config("backtesting.memory_limit", 2147483648)  # 2GB
+
+    logger.info(
+        "Resource limits: CPU=%d cores, Memory=%dMB",
+        cpu_limit,
+        memory_limit / 1024 / 1024,
+    )
+
+    return cpu_limit, memory_limit
+
+
+def _prepare_backtest_data(
+    config_dict: Dict[str, Any],
+) -> tuple:
+    """
+    Prepare backtest configuration and data.
+
+    Args:
+        config_dict: Configuration dictionary
+
+    Returns:
+        Tuple of (backtest_config, tick_data, cpu_limit, memory_limit)
+    """
+    cpu_limit, memory_limit = _get_resource_limits()
+
+    start_date = datetime.fromisoformat(config_dict["start_date"])
+    end_date = datetime.fromisoformat(config_dict["end_date"])
+
+    backtest_config = _create_backtest_config(
+        config_dict, start_date, end_date, cpu_limit, memory_limit
+    )
+
+    tick_data = _load_historical_data(config_dict, start_date, end_date)
+
+    return backtest_config, tick_data, cpu_limit, memory_limit
+
+
+def _execute_backtest(
+    backtest: Any,
+    backtest_id: int,
+    engine: Any,
+    tick_data: list,
+    memory_limit: int,
+    cpu_limit: int,
+) -> Dict[str, Any]:
+    """
+    Execute backtest and return results.
+
+    Args:
+        backtest: Backtest model instance
+        backtest_id: Backtest ID
+        engine: BacktestEngine instance
+        tick_data: Historical tick data
+        memory_limit: Memory limit in bytes
+        cpu_limit: CPU core limit
+
+    Returns:
+        Result dictionary
+    """
+    try:
+        trade_log, equity_curve = engine.run(tick_data)
+        metrics = _calculate_performance_metrics(trade_log)
+        resource_usage = _get_resource_usage(engine, memory_limit, cpu_limit)
+
+        logger.info(
+            "Backtest %d completed: %d trades, final balance: %s, win rate: %.1f%%",
+            backtest_id,
+            metrics["total_trades"],
+            engine.balance,
+            metrics["win_rate"],
+        )
+
+        _update_backtest_success(backtest, metrics, engine, equity_curve, trade_log)
+
+        return {
+            "success": True,
+            "backtest_id": backtest_id,
+            "trade_count": metrics["total_trades"],
+            "final_balance": float(engine.balance),
+            "total_return": float(metrics["total_pnl"]),
+            "win_rate": metrics["win_rate"],
+            "resource_usage": resource_usage,
+            "error": None,
+            "terminated": False,
+        }
+
+    except RuntimeError as e:
+        if "memory limit exceeded" in str(e):
+            return _handle_resource_limit_error(
+                backtest, backtest_id, e, engine, memory_limit, cpu_limit
+            )
+        raise
+
+
+@shared_task(
+    bind=True,
+    time_limit=3600,  # 1 hour hard limit
+    soft_time_limit=3300,  # 55 minutes soft limit
+)
+def run_backtest_task(  # type: ignore[no-untyped-def]
+    self,  # pylint: disable=unused-argument
+    backtest_id: int,
+    config_dict: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Execute a backtest with resource limits.
+
+    This task runs a backtest with configured CPU and memory limits.
+    It monitors resource usage during execution and terminates the backtest
+    if limits are exceeded.
+
+    Resource limits are configured in system.yaml:
+    - cpu_limit: Number of CPU cores (default: 1)
+    - memory_limit: Memory limit in bytes (default: 2GB)
+
+    Args:
+        backtest_id: Primary key of the Backtest model instance
+        config_dict: Dictionary containing backtest configuration:
+            - strategy_type: Type of strategy to backtest
+            - strategy_config: Strategy configuration parameters
+            - instruments: List of currency pairs
+            - start_date: Start date (ISO format string)
+            - end_date: End date (ISO format string)
+            - initial_balance: Initial account balance
+            - slippage_pips: Slippage in pips (optional)
+            - commission_per_trade: Commission per trade (optional)
+
+    Returns:
+        Dictionary containing:
+            - success: Whether the backtest completed successfully
+            - backtest_id: Backtest ID
+            - trade_count: Number of trades executed
+            - final_balance: Final account balance
+            - resource_usage: Resource usage statistics
+            - error: Error message if backtest failed
+            - terminated: Whether backtest was terminated due to resource limits
+
+    Requirements: 12.2, 12.3
+    """
+    from trading.backtest_engine import BacktestEngine
+    from trading.backtest_models import Backtest
+
+    try:
+        # Initialize backtest
+        backtest, error_response = _initialize_backtest(backtest_id)
+        if error_response:
+            return error_response
+
+        logger.info(
+            "Starting backtest %d: %s from %s to %s",
+            backtest_id,
+            config_dict.get("strategy_type"),
+            config_dict.get("start_date"),
+            config_dict.get("end_date"),
+        )
+
+        # Prepare backtest configuration and data
+        backtest_config, tick_data, cpu_limit, memory_limit = _prepare_backtest_data(config_dict)
+
+        if not tick_data:
+            error_msg = "No historical data available for the specified period"
+            logger.error(error_msg)
+            backtest.status = "failed"
+            backtest.error_message = error_msg
+            backtest.save(update_fields=["status", "error_message"])
+            return {
+                "success": False,
+                "backtest_id": backtest_id,
+                "error": error_msg,
+            }
+
+        # Create and run backtest engine
+        return _execute_backtest(
+            backtest,
+            backtest_id,
+            BacktestEngine(backtest_config),
+            tick_data,
+            memory_limit,
+            cpu_limit,
+        )
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"Backtest failed: {str(e)}"
+        logger.error(
+            "Error running backtest %d: %s",
+            backtest_id,
+            error_msg,
+            exc_info=True,
+        )
+
+        # Update backtest status
+        try:
+            backtest = Backtest.objects.get(id=backtest_id)
+            backtest.status = "failed"
+            backtest.error_message = error_msg
+            backtest.completed_at = timezone.now()
+            backtest.save()
+        except Exception as save_error:  # pylint: disable=broad-exception-caught
+            logger.error("Failed to update backtest status: %s", save_error)
+
+        return {
+            "success": False,
+            "backtest_id": backtest_id,
+            "error": error_msg,
+            "terminated": False,
         }

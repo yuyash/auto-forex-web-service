@@ -33,6 +33,7 @@ class Backtest(models.Model):
         ("completed", "Completed"),
         ("failed", "Failed"),
         ("cancelled", "Cancelled"),
+        ("terminated", "Terminated"),  # Terminated due to resource limits
     ]
 
     user = models.ForeignKey(
@@ -110,6 +111,65 @@ class Backtest(models.Model):
     updated_at = models.DateTimeField(
         auto_now=True,
         help_text="Timestamp when backtest was last updated",
+    )
+    # Resource usage tracking
+    peak_memory_mb = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Peak memory usage in MB during backtest execution",
+    )
+    memory_limit_mb = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Memory limit in MB configured for backtest",
+    )
+    cpu_limit_cores = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="CPU cores limit configured for backtest",
+    )
+    total_trades = models.IntegerField(
+        default=0,
+        help_text="Total number of trades executed in backtest",
+    )
+    winning_trades = models.IntegerField(
+        default=0,
+        help_text="Number of winning trades in backtest",
+    )
+    losing_trades = models.IntegerField(
+        default=0,
+        help_text="Number of losing trades in backtest",
+    )
+    total_return = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        help_text="Total return from backtest",
+    )
+    win_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        help_text="Win rate as a percentage",
+    )
+    final_balance = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Final balance after backtest",
+    )
+    equity_curve = models.JSONField(
+        default=list,
+        help_text="Equity curve data",
+    )
+    trade_log = models.JSONField(
+        default=list,
+        help_text="Trade log data",
     )
 
     class Meta:
