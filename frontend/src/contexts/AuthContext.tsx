@@ -16,13 +16,21 @@ interface User {
   language: string;
 }
 
+export interface SystemSettings {
+  registration_enabled: boolean;
+  login_enabled: boolean;
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  systemSettings: SystemSettings | null;
+  systemSettingsLoading: boolean;
   login: (token: string, user: User) => void;
   logout: () => Promise<void>;
   refreshToken: () => Promise<boolean>;
+  refetchSystemSettings: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -49,6 +57,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const initialState = getInitialAuthState();
   const [user, setUser] = useState<User | null>(initialState.user);
   const [token, setToken] = useState<string | null>(initialState.token);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(
+    null
+  );
+  const [systemSettingsLoading, setSystemSettingsLoading] =
+    useState<boolean>(true);
+
+  const fetchSystemSettings = useCallback(async () => {
+    setSystemSettingsLoading(true);
+    try {
+      const response = await fetch('/api/system/settings/public');
+      if (response.ok) {
+        const data = await response.json();
+        setSystemSettings(data);
+      } else {
+        console.error('Failed to fetch system settings');
+      }
+    } catch (error) {
+      console.error('Error fetching system settings:', error);
+    } finally {
+      setSystemSettingsLoading(false);
+    }
+  }, []);
+
+  // Fetch system settings on mount
+  useEffect(() => {
+    fetchSystemSettings();
+  }, [fetchSystemSettings]);
 
   const login = useCallback((newToken: string, newUser: User) => {
     setToken(newToken);
@@ -140,9 +175,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     user,
     token,
     isAuthenticated: !!token && !!user,
+    systemSettings,
+    systemSettingsLoading,
     login,
     logout,
     refreshToken,
+    refetchSystemSettings: fetchSystemSettings,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

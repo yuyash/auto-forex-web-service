@@ -16,13 +16,43 @@ import AdminDashboardPage from './pages/AdminDashboardPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function AppRoutes() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, systemSettings, systemSettingsLoading } = useAuth();
 
   return (
     <Routes>
-      {/* Public routes */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+      {/* Public routes - conditionally rendered based on system settings */}
+      {!systemSettingsLoading && systemSettings?.login_enabled && (
+        <Route path="/login" element={<LoginPage />} />
+      )}
+      {!systemSettingsLoading && systemSettings?.registration_enabled && (
+        <Route path="/register" element={<RegisterPage />} />
+      )}
+
+      {/* Redirect to login if routes are disabled */}
+      {!systemSettingsLoading && !systemSettings?.login_enabled && (
+        <Route
+          path="/login"
+          element={
+            <Navigate
+              to="/"
+              replace
+              state={{ message: 'Login is currently disabled' }}
+            />
+          }
+        />
+      )}
+      {!systemSettingsLoading && !systemSettings?.registration_enabled && (
+        <Route
+          path="/register"
+          element={
+            <Navigate
+              to="/login"
+              replace
+              state={{ message: 'Registration is currently disabled' }}
+            />
+          }
+        />
+      )}
 
       {/* Protected routes with layout */}
       <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>

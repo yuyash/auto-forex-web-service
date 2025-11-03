@@ -25,7 +25,9 @@
     "noAccount": "Don't have an account?",
     "hasAccount": "Already have an account?",
     "signInHere": "Sign in here",
-    "signUpHere": "Sign up here"
+    "signUpHere": "Sign up here",
+    "registrationDisabled": "Registration is currently disabled",
+    "loginDisabled": "Login is currently disabled"
   },
   "actions": {
     "submit": "Submit",

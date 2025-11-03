@@ -13,6 +13,7 @@ import {
   LinearProgress,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../contexts/AuthContext';
 
 interface RegisterFormData {
   username: string;
@@ -46,6 +47,7 @@ interface PasswordStrength {
 const RegisterPage = () => {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
+  const { systemSettings, systemSettingsLoading } = useAuth();
 
   const [formData, setFormData] = useState<RegisterFormData>({
     username: '',
@@ -64,6 +66,12 @@ const RegisterPage = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string>('');
+
+  // Check if registration is disabled
+  const isRegistrationDisabled =
+    !systemSettingsLoading &&
+    systemSettings &&
+    !systemSettings.registration_enabled;
 
   const calculatePasswordStrength = (password: string): PasswordStrength => {
     if (!password) {
@@ -240,6 +248,18 @@ const RegisterPage = () => {
             {t('auth.register')}
           </Typography>
 
+          {systemSettingsLoading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
+
+          {isRegistrationDisabled && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {t('auth.registrationDisabled')}
+            </Alert>
+          )}
+
           {errors.general && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {errors.general}
@@ -350,7 +370,9 @@ const RegisterPage = () => {
               fullWidth
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
-              disabled={isLoading}
+              disabled={
+                isLoading || isRegistrationDisabled || systemSettingsLoading
+              }
             >
               {isLoading ? (
                 <CircularProgress size={24} color="inherit" />
@@ -359,14 +381,18 @@ const RegisterPage = () => {
               )}
             </Button>
 
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
-                {t('auth.hasAccount')}{' '}
-                <Link component={RouterLink} to="/login" underline="hover">
-                  {t('auth.signInHere')}
-                </Link>
-              </Typography>
-            </Box>
+            {!isRegistrationDisabled &&
+              systemSettings?.login_enabled &&
+              !systemSettingsLoading && (
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('auth.hasAccount')}{' '}
+                    <Link component={RouterLink} to="/login" underline="hover">
+                      {t('auth.signInHere')}
+                    </Link>
+                  </Typography>
+                </Box>
+              )}
           </Box>
         </Paper>
       </Box>

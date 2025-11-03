@@ -40,7 +40,7 @@ interface ErrorResponse {
 const LoginPage = () => {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, systemSettings, systemSettingsLoading } = useAuth();
 
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
@@ -54,6 +54,10 @@ const LoginPage = () => {
   }>({});
 
   const [isLoading, setIsLoading] = useState(false);
+
+  // Check if login is disabled
+  const isLoginDisabled =
+    !systemSettingsLoading && systemSettings && !systemSettings.login_enabled;
 
   const validateForm = (): boolean => {
     const newErrors: { email?: string; password?: string } = {};
@@ -159,6 +163,18 @@ const LoginPage = () => {
             {t('auth.login')}
           </Typography>
 
+          {systemSettingsLoading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
+
+          {isLoginDisabled && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {t('auth.loginDisabled')}
+            </Alert>
+          )}
+
           {errors.general && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {errors.general}
@@ -203,7 +219,7 @@ const LoginPage = () => {
               fullWidth
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
-              disabled={isLoading}
+              disabled={isLoading || isLoginDisabled || systemSettingsLoading}
             >
               {isLoading ? (
                 <CircularProgress size={24} color="inherit" />
@@ -212,14 +228,22 @@ const LoginPage = () => {
               )}
             </Button>
 
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
-                {t('auth.noAccount')}{' '}
-                <Link component={RouterLink} to="/register" underline="hover">
-                  {t('auth.signUpHere')}
-                </Link>
-              </Typography>
-            </Box>
+            {!isLoginDisabled &&
+              systemSettings?.registration_enabled &&
+              !systemSettingsLoading && (
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('auth.noAccount')}{' '}
+                    <Link
+                      component={RouterLink}
+                      to="/register"
+                      underline="hover"
+                    >
+                      {t('auth.signUpHere')}
+                    </Link>
+                  </Typography>
+                </Box>
+              )}
           </Box>
         </Paper>
       </Box>

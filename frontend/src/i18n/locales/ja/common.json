@@ -25,7 +25,9 @@
     "noAccount": "アカウントをお持ちでないですか？",
     "hasAccount": "既にアカウントをお持ちですか？",
     "signInHere": "こちらからサインイン",
-    "signUpHere": "こちらからサインアップ"
+    "signUpHere": "こちらからサインアップ",
+    "registrationDisabled": "登録は現在無効になっています",
+    "loginDisabled": "ログインは現在無効になっています"
   },
   "actions": {
     "submit": "送信",
