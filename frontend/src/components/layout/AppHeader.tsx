@@ -98,9 +98,7 @@ const AppHeader = () => {
     navigate('/login');
   };
 
-  const handleAccountChange = (
-    event: React.ChangeEvent<{ value: unknown }>
-  ) => {
+  const handleAccountChange = (event: { target: { value: string } }) => {
     setSelectedAccountId(String(event.target.value));
   };
 

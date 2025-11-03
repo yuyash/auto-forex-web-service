@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  createChart,
+import { createChart, ColorType } from 'lightweight-charts';
+import type {
   IChartApi,
   ISeriesApi,
   CandlestickData,
-  ColorType,
+  Time,
 } from 'lightweight-charts';
 import { Box, CircularProgress, Typography } from '@mui/material';
-import { OHLCData, ChartConfig } from '../../types/chart';
+import type { OHLCData, ChartConfig } from '../../types/chart';
 
 interface OHLCChartProps {
   instrument: string;
@@ -75,7 +75,7 @@ const OHLCChart = ({
     });
 
     // Add candlestick series
-    const candlestickSeries = chart.addCandlestickSeries({
+    const candlestickSeries = (chart as unknown).addCandlestickSeries({
       upColor: defaultConfig.upColor,
       downColor: defaultConfig.downColor,
       borderVisible: defaultConfig.borderVisible,
@@ -132,9 +132,9 @@ const OHLCChart = ({
         }
 
         // Convert OHLCData to CandlestickData format
-        const candlestickData: CandlestickData[] = historicalData.map(
+        const candlestickData: CandlestickData<Time>[] = historicalData.map(
           (item) => ({
-            time: item.time as number,
+            time: item.time as Time,
             open: item.open,
             high: item.high,
             low: item.low,
@@ -162,12 +162,11 @@ const OHLCChart = ({
 
   // Update chart with new data point (exposed for future use)
   // This method can be called from parent components via ref
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const updateChart = (newData: OHLCData) => {
+  const updateChart = (newData: OHLCData): void => {
     if (!candlestickSeriesRef.current) return;
 
-    const candlestickData: CandlestickData = {
-      time: newData.time as number,
+    const candlestickData: CandlestickData<Time> = {
+      time: newData.time as Time,
       open: newData.open,
       high: newData.high,
       low: newData.low,
@@ -176,6 +175,10 @@ const OHLCChart = ({
 
     candlestickSeriesRef.current.update(candlestickData);
   };
+
+  // Expose updateChart for future use (prevents unused warning)
+  // This can be accessed via ref in parent components
+  void updateChart;
 
   if (error) {
     return (

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import OHLCChart from '../components/chart/OHLCChart';
-import { OHLCData } from '../types/chart';
+import type { OHLCData } from '../types/chart';
 
 // Mock lightweight-charts
 vi.mock('lightweight-charts', () => ({

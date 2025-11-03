@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, Mock } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import type { Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from '../contexts/AuthContext';
