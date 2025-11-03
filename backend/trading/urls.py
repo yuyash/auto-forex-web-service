@@ -3,11 +3,12 @@ URL configuration for trading app.
 
 This module defines URL patterns for trading data and strategy endpoints.
 
-Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 12.1
+Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 12.1, 12.2, 12.4, 12.5
 """
 
 from django.urls import path
 
+from .backtest_views import BacktestListCreateView, BacktestResultsView, BacktestStatusView
 from .event_views import EventDetailView, EventExportView, EventListView
 from .order_views import OrderDetailView, OrderListCreateView
 from .position_views import PositionCloseView, PositionDetailView, PositionListView
@@ -67,5 +68,18 @@ urlpatterns = [
         "accounts/<int:account_id>/strategy/config/",
         AccountStrategyConfigView.as_view(),
         name="account_strategy_config",
+    ),
+    # Backtest endpoints
+    path("backtest/", BacktestListCreateView.as_view(), name="backtest_list_create"),
+    path("backtest/start/", BacktestListCreateView.as_view(), name="backtest_start"),
+    path(
+        "backtest/<int:backtest_id>/status/",
+        BacktestStatusView.as_view(),
+        name="backtest_status",
+    ),
+    path(
+        "backtest/<int:backtest_id>/results/",
+        BacktestResultsView.as_view(),
+        name="backtest_results",
     ),
 ]

@@ -8,8 +8,11 @@ This module contains serializers for:
 Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 12.1
 """
 
+from decimal import Decimal
+
 from rest_framework import serializers
 
+from .backtest_models import Backtest, BacktestResult
 from .event_models import Event
 from .models import Order, Position, Strategy, StrategyState
 from .tick_data_models import TickData
@@ -371,3 +374,250 @@ class EventSerializer(serializers.ModelSerializer):
             "user_agent",
         ]
         read_only_fields = fields
+
+
+class BacktestResultSerializer(serializers.ModelSerializer):
+    """
+    Serializer for backtest result details.
+
+    Requirements: 12.4
+    """
+
+    class Meta:
+        model = BacktestResult
+        fields = [
+            "id",
+            "final_balance",
+            "total_return",
+            "total_pnl",
+            "max_drawdown",
+            "max_drawdown_amount",
+            "sharpe_ratio",
+            "total_trades",
+            "winning_trades",
+            "losing_trades",
+            "win_rate",
+            "average_win",
+            "average_loss",
+            "largest_win",
+            "largest_loss",
+            "profit_factor",
+            "average_trade_duration",
+            "equity_curve",
+            "trade_log",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class BacktestSerializer(serializers.ModelSerializer):
+    """
+    Serializer for backtest details.
+
+    Requirements: 12.1, 12.4
+    """
+
+    result = BacktestResultSerializer(read_only=True, allow_null=True)
+    duration = serializers.CharField(read_only=True)
+    is_running = serializers.BooleanField(read_only=True)
+    is_completed = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Backtest
+        fields = [
+            "id",
+            "strategy_type",
+            "config",
+            "instruments",
+            "start_date",
+            "end_date",
+            "initial_balance",
+            "slippage_pips",
+            "commission_per_trade",
+            "status",
+            "progress",
+            "error_message",
+            "started_at",
+            "completed_at",
+            "created_at",
+            "updated_at",
+            "peak_memory_mb",
+            "memory_limit_mb",
+            "cpu_limit_cores",
+            "total_trades",
+            "winning_trades",
+            "losing_trades",
+            "total_return",
+            "win_rate",
+            "final_balance",
+            "equity_curve",
+            "trade_log",
+            "duration",
+            "is_running",
+            "is_completed",
+            "result",
+        ]
+        read_only_fields = [
+            "id",
+            "status",
+            "progress",
+            "error_message",
+            "started_at",
+            "completed_at",
+            "created_at",
+            "updated_at",
+            "peak_memory_mb",
+            "total_trades",
+            "winning_trades",
+            "losing_trades",
+            "total_return",
+            "win_rate",
+            "final_balance",
+            "equity_curve",
+            "trade_log",
+            "duration",
+            "is_running",
+            "is_completed",
+            "result",
+        ]
+
+
+class BacktestListSerializer(serializers.ModelSerializer):
+    """
+    Serializer for backtest list view (summary only).
+
+    Requirements: 12.1, 12.4
+    """
+
+    duration = serializers.CharField(read_only=True)
+    is_running = serializers.BooleanField(read_only=True)
+    is_completed = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Backtest
+        fields = [
+            "id",
+            "strategy_type",
+            "instruments",
+            "start_date",
+            "end_date",
+            "initial_balance",
+            "status",
+            "progress",
+            "total_trades",
+            "total_return",
+            "win_rate",
+            "final_balance",
+            "created_at",
+            "completed_at",
+            "duration",
+            "is_running",
+            "is_completed",
+        ]
+        read_only_fields = fields
+
+
+class BacktestCreateSerializer(serializers.Serializer):  # pylint: disable=abstract-method
+    """
+    Serializer for creating backtests.
+
+    Requirements: 12.1, 12.2
+    """
+
+    strategy_type = serializers.CharField(
+        required=True,
+        max_length=50,
+        help_text="Type of strategy to backtest (e.g., 'floor', 'trend_following')",
+    )
+    config = serializers.JSONField(
+        required=True,
+        help_text="Strategy configuration parameters",
+    )
+    instruments = serializers.ListField(
+        child=serializers.CharField(),
+        required=True,
+        help_text="List of currency pairs to backtest (e.g., ['EUR_USD', 'GBP_USD'])",
+    )
+    start_date = serializers.DateTimeField(
+        required=True,
+        help_text="Start date for backtest period (ISO format)",
+    )
+    end_date = serializers.DateTimeField(
+        required=True,
+        help_text="End date for backtest period (ISO format)",
+    )
+    initial_balance = serializers.DecimalField(
+        required=False,
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal("10000"),
+        help_text="Initial account balance for backtest (default: 10000)",
+    )
+    slippage_pips = serializers.DecimalField(
+        required=False,
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Slippage in pips to apply to each trade (default: 0)",
+    )
+    commission_per_trade = serializers.DecimalField(
+        required=False,
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Commission to apply per trade (default: 0)",
+    )
+    memory_limit_mb = serializers.DecimalField(
+        required=False,
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("2048"),
+        help_text="Memory limit in MB (default: 2048)",
+    )
+    cpu_limit_cores = serializers.IntegerField(
+        required=False,
+        default=1,
+        min_value=1,
+        max_value=4,
+        help_text="CPU cores limit (default: 1, max: 4)",
+    )
+
+    def validate_instruments(self, value: list[str]) -> list[str]:
+        """Validate instruments list is not empty."""
+        if not value:
+            raise serializers.ValidationError("Instruments list cannot be empty")
+        return value
+
+    def validate(self, attrs: dict) -> dict:  # pylint: disable=arguments-renamed
+        """Validate backtest configuration."""
+        start_date = attrs.get("start_date")
+        end_date = attrs.get("end_date")
+
+        if start_date and end_date and start_date >= end_date:
+            raise serializers.ValidationError("start_date must be before end_date")
+
+        return attrs
+
+
+class BacktestStatusSerializer(serializers.Serializer):  # pylint: disable=abstract-method
+    """
+    Serializer for backtest status.
+
+    Requirements: 12.2
+    """
+
+    id = serializers.IntegerField(help_text="Backtest ID")
+    status = serializers.CharField(help_text="Backtest status")
+    progress = serializers.IntegerField(help_text="Progress percentage (0-100)")
+    error_message = serializers.CharField(
+        allow_null=True, help_text="Error message if backtest failed"
+    )
+    started_at = serializers.DateTimeField(
+        allow_null=True, help_text="Timestamp when backtest started"
+    )
+    completed_at = serializers.DateTimeField(
+        allow_null=True, help_text="Timestamp when backtest completed"
+    )
+    duration = serializers.CharField(help_text="Backtest duration")
+    is_running = serializers.BooleanField(help_text="Whether backtest is currently running")
+    is_completed = serializers.BooleanField(help_text="Whether backtest has completed")
