@@ -75,7 +75,8 @@ const OHLCChart = ({
     });
 
     // Add candlestick series
-    const candlestickSeries = (chart as unknown).addCandlestickSeries({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const candlestickSeries = (chart as any).addCandlestickSeries({
       upColor: defaultConfig.upColor,
       downColor: defaultConfig.downColor,
       borderVisible: defaultConfig.borderVisible,
