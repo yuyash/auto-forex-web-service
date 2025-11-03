@@ -79,6 +79,7 @@ services:
 
       # Redis
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
 
       # Security
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Encryption key required}
@@ -130,6 +131,7 @@ services:
 
       # Redis
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
 
       # Celery
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
@@ -178,6 +180,7 @@ services:
 
       # Redis
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
 
       # Celery
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
