@@ -297,6 +297,7 @@ describe('RegisterPage', () => {
           username: 'testuser',
           email: 'test@example.com',
           password: 'Password123',
+          password_confirm: 'Password123',
         }),
       });
     });
