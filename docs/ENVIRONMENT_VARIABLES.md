@@ -91,6 +91,30 @@ These variables have sensible defaults but can be customized:
 - Should match `REDIS_URL` in most cases
 - If `REDIS_PASSWORD` is set, use format: `redis://:password@redis:6379/0`
 
+### Email Configuration
+
+| Variable              | Description                | Default                                       | Example                                       |
+| --------------------- | -------------------------- | --------------------------------------------- | --------------------------------------------- |
+| `EMAIL_BACKEND`       | Django email backend       | `django.core.mail.backends.smtp.EmailBackend` | `django.core.mail.backends.smtp.EmailBackend` |
+| `EMAIL_HOST`          | SMTP server hostname       | `smtp.gmail.com`                              | `smtp.gmail.com`                              |
+| `EMAIL_PORT`          | SMTP server port           | `587`                                         | `587` (TLS) or `465` (SSL)                    |
+| `EMAIL_USE_TLS`       | Use TLS for email          | `True`                                        | `True` or `False`                             |
+| `EMAIL_HOST_USER`     | SMTP username/email        | `` (empty)                                    | `your-email@gmail.com`                        |
+| `EMAIL_HOST_PASSWORD` | SMTP password/app password | `` (empty)                                    | `your-app-password`                           |
+| `DEFAULT_FROM_EMAIL`  | Default sender email       | `noreply@example.com`                         | `noreply@yourdomain.com`                      |
+| `FRONTEND_URL`        | Frontend application URL   | `http://localhost:3000`                       | `https://yourdomain.com`                      |
+
+**Notes:**
+
+- **AWS SES** (Recommended for production): See [AWS SES Setup Guide](../backend/accounts/AWS_SES_SETUP.md)
+  - SMTP endpoint: `email-smtp.{region}.amazonaws.com` (e.g., `email-smtp.us-east-1.amazonaws.com`)
+  - Port 587 with TLS or Port 465 with SSL
+  - Use SMTP credentials from SES console
+  - `DEFAULT_FROM_EMAIL` must be verified in SES
+- **Gmail**: Use an [App Password](https://support.google.com/accounts/answer/185833) instead of your regular password
+- **Development**: Use `django.core.mail.backends.console.EmailBackend` to print emails to console
+- `FRONTEND_URL` is used to build verification links in emails
+
 ### OANDA API Configuration
 
 | Variable             | Description                 | Default                            | Example                            |
@@ -167,6 +191,11 @@ REDIS_PASSWORD=
 # Security
 ENCRYPTION_KEY=your-dev-encryption-key-here
 
+# Email (Development - Console Backend)
+EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+DEFAULT_FROM_EMAIL=noreply@localhost
+FRONTEND_URL=http://localhost:3000
+
 # OANDA
 OANDA_PRACTICE_API=https://api-fxpractice.oanda.com
 OANDA_LIVE_API=https://api-fxtrade.oanda.com
@@ -192,6 +221,17 @@ REDIS_PASSWORD=secure_redis_password_here
 
 # Security
 ENCRYPTION_KEY=production-encryption-key-32-chars-minimum
+
+# Email (Production - AWS SES)
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=email-smtp.us-east-1.amazonaws.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+EMAIL_HOST_USER=AKIAIOSFODNN7EXAMPLE
+EMAIL_HOST_PASSWORD=your-ses-smtp-password
+DEFAULT_FROM_EMAIL=noreply@trading.example.com
+FRONTEND_URL=https://trading.example.com
 
 # OANDA
 OANDA_PRACTICE_API=https://api-fxpractice.oanda.com

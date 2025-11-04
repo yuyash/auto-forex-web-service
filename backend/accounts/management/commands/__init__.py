@@ -1,1 +1,1 @@
-"""Management commands for accounts app."""
+# Management commands

@@ -39,6 +39,10 @@ class SystemSettings(models.Model):
         default=True,
         help_text="Whether user login is enabled",
     )
+    email_whitelist_enabled = models.BooleanField(
+        default=False,
+        help_text="Whether email whitelist is enforced for registration and login",
+    )
     updated_at = models.DateTimeField(
         auto_now=True,
         help_text="Timestamp when settings were last updated",
@@ -60,7 +64,8 @@ class SystemSettings(models.Model):
     def __str__(self) -> str:
         return (
             f"System Settings (Registration: {self.registration_enabled}, "
-            f"Login: {self.login_enabled})"
+            f"Login: {self.login_enabled}, "
+            f"Email Whitelist: {self.email_whitelist_enabled})"
         )
 
     def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
@@ -85,9 +90,104 @@ class SystemSettings(models.Model):
             defaults={
                 "registration_enabled": True,
                 "login_enabled": True,
+                "email_whitelist_enabled": False,
             },
         )
         return obj
+
+
+class WhitelistedEmail(models.Model):
+    """
+    Email whitelist for registration and login control.
+
+    This model stores email addresses or domains that are allowed to register
+    and login to the system when email whitelist is enabled.
+
+    Supports both exact email matches (user@example.com) and domain wildcards
+    (*@example.com or @example.com).
+    """
+
+    email_pattern = models.CharField(
+        max_length=255,
+        unique=True,
+        db_index=True,
+        help_text="Email address or domain pattern (e.g., user@example.com or *@example.com)",
+    )
+    description = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Optional description for this whitelist entry",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this whitelist entry is active",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp when the entry was created",
+    )
+    created_by = models.ForeignKey(
+        "User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="whitelisted_emails_created",
+        help_text="Admin user who created this entry",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Timestamp when the entry was last updated",
+    )
+
+    class Meta:
+        db_table = "whitelisted_emails"
+        verbose_name = "Whitelisted Email"
+        verbose_name_plural = "Whitelisted Emails"
+        indexes = [
+            models.Index(fields=["email_pattern"]),
+            models.Index(fields=["is_active"]),
+        ]
+        ordering = ["email_pattern"]
+
+    def __str__(self) -> str:
+        return f"{self.email_pattern} ({'Active' if self.is_active else 'Inactive'})"
+
+    @classmethod
+    def is_email_whitelisted(cls, email: str) -> bool:
+        """
+        Check if an email address is whitelisted.
+
+        Supports exact matches and domain wildcards:
+        - Exact: user@example.com matches user@example.com
+        - Domain: *@example.com or @example.com matches any@example.com
+
+        Args:
+            email: Email address to check
+
+        Returns:
+            True if email is whitelisted, False otherwise
+        """
+        email_lower = email.lower().strip()
+
+        # Check for exact match
+        if cls.objects.filter(email_pattern__iexact=email_lower, is_active=True).exists():
+            return True
+
+        # Extract domain from email
+        if "@" not in email_lower:
+            return False
+
+        domain = email_lower.split("@")[1]
+
+        # Check for domain wildcards (*@domain.com or @domain.com)
+        domain_patterns = [f"*@{domain}", f"@{domain}"]
+        if cls.objects.filter(
+            email_pattern__in=domain_patterns,
+            is_active=True,
+        ).exists():
+            return True
+
+        return False
 
 
 class User(AbstractUser):
@@ -101,6 +201,21 @@ class User(AbstractUser):
         unique=True,
         db_index=True,
         help_text="User's email address (used for login)",
+    )
+    email_verified = models.BooleanField(
+        default=False,
+        help_text="Whether the user's email address has been verified",
+    )
+    email_verification_token = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Token for email verification",
+    )
+    email_verification_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when verification email was last sent",
     )
     timezone = models.CharField(
         max_length=50,
@@ -180,6 +295,56 @@ class User(AbstractUser):
         self.is_locked = False
         self.failed_login_attempts = 0
         self.save(update_fields=["is_locked", "failed_login_attempts"])
+
+    def generate_verification_token(self) -> str:
+        """
+        Generate a unique email verification token.
+
+        Returns:
+            Verification token string
+        """
+        import secrets
+
+        token = secrets.token_urlsafe(32)
+        self.email_verification_token = token
+        self.email_verification_sent_at = timezone.now()
+        self.save(update_fields=["email_verification_token", "email_verification_sent_at"])
+        return token
+
+    def verify_email(self, token: str) -> bool:
+        """
+        Verify email with the provided token.
+
+        Args:
+            token: Verification token to check
+
+        Returns:
+            True if verification successful, False otherwise
+        """
+        if not self.email_verification_token:
+            return False
+
+        if self.email_verification_token != token:
+            return False
+
+        # Check if token is expired (24 hours)
+        if self.email_verification_sent_at:
+            expiry_time = self.email_verification_sent_at + timedelta(hours=24)
+            if timezone.now() > expiry_time:
+                return False
+
+        # Mark email as verified
+        self.email_verified = True
+        self.email_verification_token = None
+        self.email_verification_sent_at = None
+        self.save(
+            update_fields=[
+                "email_verified",
+                "email_verification_token",
+                "email_verification_sent_at",
+            ]
+        )
+        return True
 
 
 class UserSettings(models.Model):

@@ -363,6 +363,23 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_DELTA = 86400  # 24 hours
 
 
+# Email Configuration
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",  # Console backend for development
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
+EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False") == "True"
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@example.com")
+
+# Frontend URL for email verification links
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+
 # OANDA API Configuration
 OANDA_PRACTICE_API = "https://api-fxpractice.oanda.com"
 OANDA_LIVE_API = "https://api-fxtrade.oanda.com"

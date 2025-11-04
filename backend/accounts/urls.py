@@ -8,21 +8,31 @@ from django.urls import path
 
 from .views import (
     AdminSystemSettingsView,
+    EmailVerificationView,
     OandaAccountDetailView,
     OandaAccountListCreateView,
     PositionDifferentiationView,
     PublicSystemSettingsView,
+    ResendVerificationEmailView,
     TokenRefreshView,
     UserLoginView,
     UserLogoutView,
     UserRegistrationView,
     UserSettingsView,
+    WhitelistedEmailDetailView,
+    WhitelistedEmailListCreateView,
 )
 
 app_name = "accounts"
 
 urlpatterns = [
     path("auth/register", UserRegistrationView.as_view(), name="register"),
+    path("auth/verify-email", EmailVerificationView.as_view(), name="verify_email"),
+    path(
+        "auth/resend-verification",
+        ResendVerificationEmailView.as_view(),
+        name="resend_verification",
+    ),
     path("auth/login", UserLoginView.as_view(), name="login"),
     path("auth/logout", UserLogoutView.as_view(), name="logout"),
     path("auth/refresh", TokenRefreshView.as_view(), name="token_refresh"),
@@ -35,6 +45,16 @@ urlpatterns = [
         "admin/system/settings",
         AdminSystemSettingsView.as_view(),
         name="admin_system_settings",
+    ),
+    path(
+        "admin/whitelist/emails",
+        WhitelistedEmailListCreateView.as_view(),
+        name="whitelist_emails_list",
+    ),
+    path(
+        "admin/whitelist/emails/<int:whitelist_id>",
+        WhitelistedEmailDetailView.as_view(),
+        name="whitelist_email_detail",
     ),
     path("accounts", OandaAccountListCreateView.as_view(), name="oanda_accounts_list"),
     path(

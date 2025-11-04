@@ -19,6 +19,41 @@ logger = logging.getLogger(__name__)
 
 
 @receiver(post_save, sender=User)
+def create_user_settings(
+    sender: type[User],  # pylint: disable=unused-argument
+    instance: User,
+    created: bool,
+    **kwargs: Any,
+) -> None:
+    """
+    Create UserSettings when a new User is created.
+
+    This handler is triggered when a User instance is saved.
+    It automatically creates a UserSettings instance with default values
+    for new users.
+
+    Args:
+        sender: The model class (User)
+        instance: The User instance that was saved
+        created: Whether this is a new instance
+        kwargs: Additional keyword arguments
+
+    Requirements: 29.1
+    """
+    if created:
+        # Create UserSettings with default values
+        UserSettings.objects.create(user=instance)
+        logger.info(
+            "Created default settings for new user %s",
+            instance.email,
+            extra={
+                "user_id": instance.id,
+                "email": instance.email,
+            },
+        )
+
+
+@receiver(post_save, sender=User)
 def update_strategies_on_user_change(
     sender: type[User],  # pylint: disable=unused-argument
     instance: User,

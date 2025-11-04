@@ -21,6 +21,7 @@ from rest_framework.views import APIView
 
 from trading.event_logger import SecurityEventLogger
 
+from .email_utils import send_verification_email, send_welcome_email
 from .jwt_utils import generate_jwt_token, get_user_from_token, refresh_jwt_token
 from .models import SystemSettings, UserSession
 from .permissions import IsAdminUser
@@ -47,13 +48,37 @@ class UserRegistrationView(APIView):
 
     POST /api/auth/register
     - Register a new user account
-    - Send verification email (placeholder)
+    - Send verification email
 
-    Requirements: 1.1, 1.2, 1.3, 1.5
+    Requirements: 1.1, 1.2, 1.3, 1.4, 1.5
     """
 
     permission_classes = [AllowAny]
     serializer_class = UserRegistrationSerializer
+
+    def build_verification_url(self, request: Request, token: str) -> str:
+        """
+        Build email verification URL.
+
+        Args:
+            request: HTTP request
+            token: Verification token
+
+        Returns:
+            Full verification URL
+        """
+        from django.conf import settings
+
+        # Use FRONTEND_URL from settings if available, otherwise build from request
+        if hasattr(settings, "FRONTEND_URL") and settings.FRONTEND_URL:
+            base_url = settings.FRONTEND_URL
+        else:
+            # Fallback to building from request
+            scheme = "https" if request.is_secure() else "http"
+            host = request.get_host()
+            base_url = f"{scheme}://{host}"
+
+        return f"{base_url}/verify-email?token={token}"
 
     def post(self, request: Request) -> Response:
         """
@@ -91,19 +116,36 @@ class UserRegistrationView(APIView):
                 ip_address=self.get_client_ip(request),
             )
 
-            # Placeholder for future email verification implementation
-            # send_verification_email(user)
+            # Generate verification token and send email
+            token = user.generate_verification_token()
+            verification_url = self.build_verification_url(request, token)
+
+            # Send verification email
+            email_sent = send_verification_email(user, verification_url)
+
+            if not email_sent:
+                logger.warning(
+                    "Failed to send verification email to %s",
+                    user.email,
+                    extra={
+                        "user_id": user.id,
+                        "email": user.email,
+                    },
+                )
 
             return Response(
                 {
                     "message": (
-                        "User registered successfully. " "Please check your email for verification."
+                        "User registered successfully. "
+                        "Please check your email for verification link."
                     ),
                     "user": {
                         "id": user.id,
                         "email": user.email,
                         "username": user.username,
+                        "email_verified": user.email_verified,
                     },
+                    "email_sent": email_sent,
                 },
                 status=status.HTTP_201_CREATED,
             )
@@ -126,6 +168,178 @@ class UserRegistrationView(APIView):
         else:
             ip = str(request.META.get("REMOTE_ADDR", ""))
         return ip
+
+
+class EmailVerificationView(APIView):
+    """
+    API endpoint for email verification.
+
+    POST /api/auth/verify-email
+    - Verify user email with token
+
+    Requirements: 1.4, 1.5
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request: Request) -> Response:
+        """
+        Verify user email with token.
+
+        Args:
+            request: HTTP request with token
+
+        Returns:
+            Response with success or error message
+        """
+        token = request.data.get("token")
+
+        if not token:
+            return Response(
+                {"error": "Verification token is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Find user with this token
+        try:
+            user = User.objects.get(email_verification_token=token)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Invalid or expired verification token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verify email
+        if user.verify_email(token):
+            # Send welcome email
+            send_welcome_email(user)
+
+            logger.info(
+                "Email verified for user %s",
+                user.email,
+                extra={
+                    "user_id": user.id,
+                    "email": user.email,
+                },
+            )
+
+            return Response(
+                {
+                    "message": "Email verified successfully. You can now log in.",
+                    "user": {
+                        "id": user.id,
+                        "email": user.email,
+                        "username": user.username,
+                        "email_verified": user.email_verified,
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {"error": "Invalid or expired verification token."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class ResendVerificationEmailView(APIView):
+    """
+    API endpoint for resending verification email.
+
+    POST /api/auth/resend-verification
+    - Resend verification email to user
+
+    Requirements: 1.4, 1.5
+    """
+
+    permission_classes = [AllowAny]
+
+    def build_verification_url(self, request: Request, token: str) -> str:
+        """
+        Build email verification URL.
+
+        Args:
+            request: HTTP request
+            token: Verification token
+
+        Returns:
+            Full verification URL
+        """
+        from django.conf import settings
+
+        # Use FRONTEND_URL from settings if available, otherwise build from request
+        if hasattr(settings, "FRONTEND_URL") and settings.FRONTEND_URL:
+            base_url = settings.FRONTEND_URL
+        else:
+            # Fallback to building from request
+            scheme = "https" if request.is_secure() else "http"
+            host = request.get_host()
+            base_url = f"{scheme}://{host}"
+
+        return f"{base_url}/verify-email?token={token}"
+
+    def post(self, request: Request) -> Response:
+        """
+        Resend verification email.
+
+        Args:
+            request: HTTP request with email
+
+        Returns:
+            Response with success or error message
+        """
+        email = request.data.get("email", "").lower()
+
+        if not email:
+            return Response(
+                {"error": "Email is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Find user
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            # Don't reveal if email exists or not
+            return Response(
+                {
+                    "message": (
+                        "If an account with this email exists and is not verified, "
+                        "a verification email will be sent."
+                    )
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # Check if already verified
+        if user.email_verified:
+            return Response(
+                {"error": "Email is already verified."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Generate new token and send email
+        token = user.generate_verification_token()
+        verification_url = self.build_verification_url(request, token)
+        email_sent = send_verification_email(user, verification_url)
+
+        if email_sent:
+            logger.info(
+                "Verification email resent to %s",
+                user.email,
+                extra={
+                    "user_id": user.id,
+                    "email": user.email,
+                },
+            )
+
+        return Response(
+            {
+                "message": "Verification email sent. Please check your inbox.",
+                "email_sent": email_sent,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class UserLoginView(APIView):
@@ -1230,3 +1444,250 @@ class UserSettingsView(APIView):
         )
 
         return Response(response_data, status=status.HTTP_200_OK)
+
+
+class WhitelistedEmailListCreateView(APIView):
+    """
+    API endpoint for listing and creating whitelisted emails.
+
+    GET /api/admin/whitelist/emails
+    - List all whitelisted emails (admin only)
+
+    POST /api/admin/whitelist/emails
+    - Create a new whitelisted email entry (admin only)
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request: Request) -> Response:
+        """
+        List all whitelisted emails.
+
+        Args:
+            request: HTTP request
+
+        Returns:
+            Response with list of whitelisted emails
+        """
+        from accounts.models import WhitelistedEmail  # pylint: disable=import-outside-toplevel
+        from accounts.serializers import (  # pylint: disable=import-outside-toplevel
+            WhitelistedEmailSerializer,
+        )
+
+        # Get query parameters for filtering
+        is_active = request.query_params.get("is_active")
+
+        queryset = WhitelistedEmail.objects.all().order_by("email_pattern")
+
+        # Filter by active status if provided
+        if is_active is not None:
+            is_active_bool = is_active.lower() in ["true", "1", "yes"]
+            queryset = queryset.filter(is_active=is_active_bool)
+
+        serializer = WhitelistedEmailSerializer(queryset, many=True)
+
+        if request.user.is_authenticated:
+            logger.info(
+                "Admin %s retrieved %s whitelisted emails",
+                request.user.email,
+                queryset.count(),
+                extra={
+                    "user_id": request.user.id,
+                    "email": request.user.email,
+                    "count": queryset.count(),
+                },
+            )
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request: Request) -> Response:
+        """
+        Create a new whitelisted email entry.
+
+        Args:
+            request: HTTP request with email_pattern, description, is_active
+
+        Returns:
+            Response with created entry or validation errors
+        """
+        from accounts.serializers import (  # pylint: disable=import-outside-toplevel
+            WhitelistedEmailSerializer,
+        )
+
+        serializer = WhitelistedEmailSerializer(data=request.data)
+
+        if serializer.is_valid():
+            # Save with created_by field
+            whitelist_entry = serializer.save(created_by=request.user)
+
+            if request.user.is_authenticated:
+                logger.info(
+                    "Admin %s created whitelisted email: %s",
+                    request.user.email,
+                    whitelist_entry.email_pattern,
+                    extra={
+                        "user_id": request.user.id,
+                        "email": request.user.email,
+                        "email_pattern": whitelist_entry.email_pattern,
+                    },
+                )
+
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class WhitelistedEmailDetailView(APIView):
+    """
+    API endpoint for retrieving, updating, and deleting a specific whitelisted email.
+
+    GET /api/admin/whitelist/emails/{id}
+    - Retrieve details of a specific whitelisted email (admin only)
+
+    PUT /api/admin/whitelist/emails/{id}
+    - Update a specific whitelisted email (admin only)
+
+    DELETE /api/admin/whitelist/emails/{id}
+    - Delete a specific whitelisted email (admin only)
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get_object(
+        self, whitelist_id: int
+    ) -> "WhitelistedEmail | None":  # type: ignore[name-defined]  # noqa: F821
+        """
+        Get whitelisted email by ID.
+
+        Args:
+            whitelist_id: Whitelisted email ID
+
+        Returns:
+            WhitelistedEmail instance or None if not found
+        """
+        from accounts.models import WhitelistedEmail  # pylint: disable=import-outside-toplevel
+
+        try:
+            return WhitelistedEmail.objects.get(id=whitelist_id)
+        except WhitelistedEmail.DoesNotExist:
+            return None
+
+    def get(self, request: Request, whitelist_id: int) -> Response:
+        """
+        Retrieve details of a specific whitelisted email.
+
+        Args:
+            request: HTTP request
+            whitelist_id: Whitelisted email ID
+
+        Returns:
+            Response with whitelisted email details or error
+        """
+        from accounts.serializers import (  # pylint: disable=import-outside-toplevel
+            WhitelistedEmailSerializer,
+        )
+
+        whitelist_entry = self.get_object(whitelist_id)
+        if whitelist_entry is None:
+            return Response(
+                {"error": "Whitelisted email not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = WhitelistedEmailSerializer(whitelist_entry)
+
+        if request.user.is_authenticated:
+            logger.info(
+                "Admin %s retrieved whitelisted email: %s",
+                request.user.email,
+                whitelist_entry.email_pattern,
+                extra={
+                    "user_id": request.user.id,
+                    "email": request.user.email,
+                    "email_pattern": whitelist_entry.email_pattern,
+                },
+            )
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request: Request, whitelist_id: int) -> Response:
+        """
+        Update a specific whitelisted email.
+
+        Args:
+            request: HTTP request with updated data
+            whitelist_id: Whitelisted email ID
+
+        Returns:
+            Response with updated entry or validation errors
+        """
+        from accounts.serializers import (  # pylint: disable=import-outside-toplevel
+            WhitelistedEmailSerializer,
+        )
+
+        whitelist_entry = self.get_object(whitelist_id)
+        if whitelist_entry is None:
+            return Response(
+                {"error": "Whitelisted email not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = WhitelistedEmailSerializer(whitelist_entry, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            updated_entry = serializer.save()
+
+            if request.user.is_authenticated:
+                logger.info(
+                    "Admin %s updated whitelisted email: %s",
+                    request.user.email,
+                    updated_entry.email_pattern,
+                    extra={
+                        "user_id": request.user.id,
+                        "email": request.user.email,
+                        "email_pattern": updated_entry.email_pattern,
+                        "updated_fields": list(request.data.keys()),
+                    },
+                )
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request: Request, whitelist_id: int) -> Response:
+        """
+        Delete a specific whitelisted email.
+
+        Args:
+            request: HTTP request
+            whitelist_id: Whitelisted email ID
+
+        Returns:
+            Response with success message or error
+        """
+        whitelist_entry = self.get_object(whitelist_id)
+        if whitelist_entry is None:
+            return Response(
+                {"error": "Whitelisted email not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        email_pattern = whitelist_entry.email_pattern
+        whitelist_entry.delete()
+
+        if request.user.is_authenticated:
+            logger.info(
+                "Admin %s deleted whitelisted email: %s",
+                request.user.email,
+                email_pattern,
+                extra={
+                    "user_id": request.user.id,
+                    "email": request.user.email,
+                    "email_pattern": email_pattern,
+                },
+            )
+
+        return Response(
+            {"message": "Whitelisted email deleted successfully."},
+            status=status.HTTP_200_OK,
+        )

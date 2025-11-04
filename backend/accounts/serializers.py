@@ -57,7 +57,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def validate_email(self, value: str) -> str:
         """
-        Validate email format and uniqueness.
+        Validate email format, uniqueness, and whitelist.
 
         Args:
             value: Email address to validate
@@ -68,6 +68,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         Raises:
             serializers.ValidationError: If email is invalid or already exists
         """
+        from accounts.models import (  # pylint: disable=import-outside-toplevel
+            SystemSettings,
+            WhitelistedEmail,
+        )
+
         # Validate email format
         email_regex = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         if not re.match(email_regex, value):
@@ -79,6 +84,16 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         # Check email uniqueness (case-insensitive)
         if User.objects.filter(email__iexact=normalized_email).exists():
             raise serializers.ValidationError("A user with this email address already exists.")
+
+        # Check email whitelist if enabled
+        system_settings = SystemSettings.get_settings()
+        if system_settings.email_whitelist_enabled and not WhitelistedEmail.is_email_whitelisted(
+            normalized_email
+        ):
+            raise serializers.ValidationError(
+                "This email address is not authorized to register. "
+                "Please contact the administrator."
+            )
 
         return normalized_email
 
@@ -177,7 +192,7 @@ class UserLoginSerializer(serializers.Serializer):  # pylint: disable=abstract-m
 
     def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Validate login credentials.
+        Validate login credentials and whitelist.
 
         Args:
             attrs: Dictionary of field values
@@ -188,11 +203,26 @@ class UserLoginSerializer(serializers.Serializer):  # pylint: disable=abstract-m
         Raises:
             serializers.ValidationError: If credentials are invalid
         """
+        from accounts.models import (  # pylint: disable=import-outside-toplevel
+            SystemSettings,
+            WhitelistedEmail,
+        )
+
         email = attrs.get("email", "").lower()
         password = attrs.get("password", "")
 
         if not email or not password:
             raise serializers.ValidationError("Email and password are required.")
+
+        # Check email whitelist if enabled (before authentication)
+        system_settings = SystemSettings.get_settings()
+        if system_settings.email_whitelist_enabled and not WhitelistedEmail.is_email_whitelisted(
+            email
+        ):
+            raise serializers.ValidationError(
+                "This email address is not authorized to login. "
+                "Please contact the administrator."
+            )
 
         # Authenticate user
         user = authenticate(username=email, password=password)
@@ -222,7 +252,12 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SystemSettingsType
-        fields = ["registration_enabled", "login_enabled", "updated_at"]
+        fields = [
+            "registration_enabled",
+            "login_enabled",
+            "email_whitelist_enabled",
+            "updated_at",
+        ]
         read_only_fields = ["updated_at"]
 
 
@@ -237,7 +272,7 @@ class PublicSystemSettingsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SystemSettingsType
-        fields = ["registration_enabled", "login_enabled"]
+        fields = ["registration_enabled", "login_enabled", "email_whitelist_enabled"]
 
 
 class UserSettingsSerializer(serializers.ModelSerializer):
@@ -694,3 +729,61 @@ class TimezoneAwareDateTimeField(serializers.DateTimeField):
 
         # Convert from user's timezone to UTC
         return convert_from_user_timezone(dt, user_timezone)
+
+
+class WhitelistedEmailSerializer(serializers.ModelSerializer):
+    """
+    Serializer for whitelisted email management.
+    """
+
+    class Meta:
+        from accounts.models import WhitelistedEmail  # pylint: disable=import-outside-toplevel
+
+        model = WhitelistedEmail
+        fields = [
+            "id",
+            "email_pattern",
+            "description",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_email_pattern(self, value: str) -> str:
+        """
+        Validate email pattern format.
+
+        Args:
+            value: Email pattern to validate
+
+        Returns:
+            Validated email pattern
+
+        Raises:
+            serializers.ValidationError: If pattern is invalid
+        """
+        value = value.lower().strip()
+
+        # Check if it's a domain wildcard pattern
+        if value.startswith("*@") or value.startswith("@"):
+            # Extract domain part
+            domain = value.lstrip("*@")
+            if not domain or "." not in domain:
+                raise serializers.ValidationError(
+                    "Invalid domain pattern. Use format: *@example.com or @example.com"
+                )
+            # Validate domain format
+            domain_regex = r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+            if not re.match(domain_regex, domain):
+                raise serializers.ValidationError("Invalid domain format.")
+        else:
+            # Validate as full email address
+            email_regex = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+            if not re.match(email_regex, value):
+                raise serializers.ValidationError(
+                    "Invalid email format. Use format: user@example.com, "
+                    "*@example.com, or @example.com"
+                )
+
+        return value
