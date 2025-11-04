@@ -2,7 +2,7 @@ import { Container, Typography, Box } from '@mui/material';
 
 const BacktestPage = () => {
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
       <Box>
         <Typography variant="h4" gutterBottom>
           Backtesting

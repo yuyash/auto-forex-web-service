@@ -352,7 +352,7 @@ const StrategyPage = () => {
   );
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
       <Typography variant="h4" gutterBottom>
         {t('title')}
       </Typography>

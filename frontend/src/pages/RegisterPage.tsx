@@ -235,7 +235,7 @@ const RegisterPage = () => {
 
   return (
     <Container
-      maxWidth="sm"
+      maxWidth={false}
       sx={{
         display: 'flex',
         justifyContent: 'center',
@@ -246,9 +246,11 @@ const RegisterPage = () => {
       <Box
         sx={{
           width: '100%',
+          maxWidth: '600px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          px: 2,
         }}
       >
         <Paper elevation={3} sx={{ p: 4, width: '100%' }}>
