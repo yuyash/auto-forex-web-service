@@ -42,6 +42,7 @@
     "search": "Search",
     "filter": "Filter",
     "export": "Export",
+    "exportCSV": "Export CSV",
     "refresh": "Refresh",
     "start": "Start",
     "stop": "Stop"

@@ -42,6 +42,7 @@
     "search": "検索",
     "filter": "フィルター",
     "export": "エクスポート",
+    "exportCSV": "CSVエクスポート",
     "refresh": "更新",
     "start": "開始",
     "stop": "停止"
