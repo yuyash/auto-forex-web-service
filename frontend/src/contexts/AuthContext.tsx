@@ -58,7 +58,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Fetch system settings on mount
   useEffect(() => {
     fetchSystemSettings();
-  }, [fetchSystemSettings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const login = useCallback((newToken: string, newUser: User) => {
     setToken(newToken);

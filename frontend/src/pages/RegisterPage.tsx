@@ -176,6 +176,7 @@ const RegisterPage = () => {
           username: formData.username,
           email: formData.email,
           password: formData.password,
+          password_confirm: formData.confirmPassword,
         }),
       });
 
