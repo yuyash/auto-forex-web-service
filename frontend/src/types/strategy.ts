@@ -69,4 +69,14 @@ export interface Account {
   margin_used: number;
   margin_available: number;
   is_active: boolean;
+  jurisdiction?: string;
+  enable_position_differentiation?: boolean;
+  position_diff_increment?: number;
+  position_diff_pattern?: 'increment' | 'decrement' | 'alternating';
+}
+
+export interface PositionDifferentiationSettings {
+  enable_position_differentiation: boolean;
+  position_diff_increment: number;
+  position_diff_pattern: 'increment' | 'decrement' | 'alternating';
 }

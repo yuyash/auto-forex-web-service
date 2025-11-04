@@ -114,6 +114,33 @@ class Strategy(models.Model):
         self.config = config
         self.save(update_fields=["config", "updated_at"])
 
+    def get_position_diff_enabled(self) -> bool:
+        """
+        Get position differentiation enabled setting from strategy config.
+
+        Returns:
+            True if position differentiation is enabled for this strategy
+        """
+        return bool(self.config.get("enable_position_differentiation", False))
+
+    def get_position_diff_increment(self) -> int:
+        """
+        Get position differentiation increment from strategy config.
+
+        Returns:
+            Increment amount (default: 1)
+        """
+        return int(self.config.get("position_diff_increment", 1))
+
+    def get_position_diff_pattern(self) -> str:
+        """
+        Get position differentiation pattern from strategy config.
+
+        Returns:
+            Pattern name (default: 'increment')
+        """
+        return str(self.config.get("position_diff_pattern", "increment"))
+
 
 class StrategyState(models.Model):
     """

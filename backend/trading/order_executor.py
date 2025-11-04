@@ -39,14 +39,16 @@ class OrderExecutor:
     Requirements: 8.1, 8.2, 8.4
     """
 
-    def __init__(self, account: OandaAccount):
+    def __init__(self, account: OandaAccount, strategy: Optional[Any] = None):
         """
         Initialize OrderExecutor.
 
         Args:
             account: OANDA account to execute orders for
+            strategy: Optional Strategy instance for strategy-level settings
         """
         self.account = account
+        self.strategy = strategy
         self.api = v20.Context(
             hostname=account.api_hostname,
             token=account.get_api_token(),
@@ -55,7 +57,7 @@ class OrderExecutor:
         self.max_retries = 3
         self.retry_delay = 0.5  # 500ms
         self.compliance_manager = RegulatoryComplianceManager(account)
-        self.position_diff_manager = PositionDifferentiationManager(account)
+        self.position_diff_manager = PositionDifferentiationManager(account, strategy)
 
     def _validate_compliance(self, order_request: Dict[str, Any]) -> None:
         """

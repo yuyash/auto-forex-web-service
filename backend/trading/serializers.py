@@ -118,11 +118,26 @@ class StrategySerializer(serializers.ModelSerializer):
     """
     Serializer for strategy details.
 
-    Requirements: 5.1, 5.2, 5.3
+    Requirements: 5.1, 5.2, 5.3, 8.1
     """
 
     account_id = serializers.IntegerField(source="account.id", read_only=True)
     state = StrategyStateSerializer(read_only=True)
+    enable_position_differentiation = serializers.BooleanField(
+        source="get_position_diff_enabled",
+        read_only=True,
+        help_text=("Whether position differentiation is enabled for this strategy"),
+    )
+    position_diff_increment = serializers.IntegerField(
+        source="get_position_diff_increment",
+        read_only=True,
+        help_text="Position differentiation increment amount",
+    )
+    position_diff_pattern = serializers.CharField(
+        source="get_position_diff_pattern",
+        read_only=True,
+        help_text="Position differentiation pattern",
+    )
 
     class Meta:
         model = Strategy
@@ -138,6 +153,9 @@ class StrategySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "state",
+            "enable_position_differentiation",
+            "position_diff_increment",
+            "position_diff_pattern",
         ]
         read_only_fields = [
             "id",
@@ -148,6 +166,9 @@ class StrategySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "state",
+            "enable_position_differentiation",
+            "position_diff_increment",
+            "position_diff_pattern",
         ]
 
 
@@ -155,7 +176,7 @@ class StrategyStartSerializer(serializers.Serializer):  # pylint: disable=abstra
     """
     Serializer for starting a strategy.
 
-    Requirements: 5.2, 5.3, 5.4
+    Requirements: 5.2, 5.3, 5.4, 8.1
     """
 
     strategy_type = serializers.CharField(
@@ -164,7 +185,9 @@ class StrategyStartSerializer(serializers.Serializer):  # pylint: disable=abstra
     )
     config = serializers.JSONField(
         required=True,
-        help_text="Strategy configuration parameters",
+        help_text=(
+            "Strategy configuration parameters " "(can include position differentiation settings)"
+        ),
     )
     instruments = serializers.ListField(
         child=serializers.CharField(),
@@ -176,6 +199,35 @@ class StrategyStartSerializer(serializers.Serializer):  # pylint: disable=abstra
         """Validate instruments list is not empty."""
         if not value:
             raise serializers.ValidationError("Instruments list cannot be empty")
+        return value
+
+    def validate_config(self, value: dict) -> dict:
+        """
+        Validate strategy configuration.
+
+        Includes position differentiation settings validation.
+        """
+        # Validate position differentiation settings if present
+        if "enable_position_differentiation" in value and not isinstance(
+            value["enable_position_differentiation"], bool
+        ):
+            raise serializers.ValidationError("enable_position_differentiation must be a boolean")
+
+        if "position_diff_increment" in value:
+            increment = value["position_diff_increment"]
+            if not isinstance(increment, int) or increment < 1 or increment > 100:
+                raise serializers.ValidationError(
+                    "position_diff_increment must be between 1 and 100"
+                )
+
+        if "position_diff_pattern" in value:
+            pattern = value["position_diff_pattern"]
+            valid_patterns = ["increment", "decrement", "alternating"]
+            if pattern not in valid_patterns:
+                raise serializers.ValidationError(
+                    f"position_diff_pattern must be one of: " f"{', '.join(valid_patterns)}"
+                )
+
         return value
 
 

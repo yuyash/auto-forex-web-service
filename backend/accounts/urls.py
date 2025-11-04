@@ -11,6 +11,7 @@ from .views import (
     EmailVerificationView,
     OandaAccountDetailView,
     OandaAccountListCreateView,
+    PositionDifferentiationSuggestionView,
     PositionDifferentiationView,
     PublicSystemSettingsView,
     ResendVerificationEmailView,
@@ -64,6 +65,11 @@ urlpatterns = [
         "accounts/<int:account_id>/position-diff",
         PositionDifferentiationView.as_view(),
         name="position_differentiation",
+    ),
+    path(
+        "accounts/<int:account_id>/position-diff/suggest",
+        PositionDifferentiationSuggestionView.as_view(),
+        name="position_differentiation_suggest",
     ),
     path("settings", UserSettingsView.as_view(), name="user_settings"),
 ]

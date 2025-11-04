@@ -35,6 +35,7 @@
     "save": "Save",
     "delete": "Delete",
     "edit": "Edit",
+    "add": "Add",
     "close": "Close",
     "confirm": "Confirm",
     "back": "Back",
@@ -66,6 +67,14 @@
     "success": "Operation successful",
     "confirmDelete": "Are you sure you want to delete this item?",
     "unsavedChanges": "You have unsaved changes. Are you sure you want to leave?"
+  },
+  "errors": {
+    "fetchFailed": "Failed to load data",
+    "deleteFailed": "Failed to delete",
+    "mustBePositive": "Must be a positive number"
+  },
+  "validation": {
+    "required": "This field is required"
   },
   "time": {
     "today": "Today",

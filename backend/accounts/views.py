@@ -1305,6 +1305,135 @@ class PositionDifferentiationView(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
 
+class PositionDifferentiationSuggestionView(APIView):
+    """
+    API endpoint for smart position differentiation suggestions.
+
+    GET /api/accounts/{id}/position-diff/suggest
+    - Get intelligent suggestions for enabling position differentiation
+    - Detects multiple positions in same instrument
+    - Calculates optimal increment to avoid collisions
+    - Provides statistics and warnings
+
+    Requirements: 8.1, 9.1
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_object(
+        self, request: Request, account_id: int
+    ) -> "OandaAccount | None":  # type: ignore[name-defined]  # noqa: F821
+        """
+        Get OANDA account by ID, ensuring it belongs to the authenticated user.
+
+        Args:
+            request: HTTP request
+            account_id: OANDA account ID
+
+        Returns:
+            OandaAccount instance or None if not found
+        """
+        from accounts.models import OandaAccount  # pylint: disable=import-outside-toplevel
+
+        if not request.user.is_authenticated:
+            return None
+
+        try:
+            account = OandaAccount.objects.get(id=account_id, user=request.user)
+            return account
+        except OandaAccount.DoesNotExist:
+            return None
+
+    def get(self, request: Request, account_id: int) -> Response:  # pylint: disable=too-many-locals
+        """
+        Get smart position differentiation suggestions.
+
+        Query parameters:
+        - instrument: Optional currency pair to check (e.g., 'EUR_USD')
+        - base_size: Optional base order size for calculations (default: 5000)
+
+        Args:
+            request: HTTP request
+            account_id: OANDA account ID
+
+        Returns:
+            Response with suggestions and statistics
+        """
+        if not request.user.is_authenticated:
+            return Response(
+                {"error": "Authentication required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        account = self.get_object(request, account_id)
+        if account is None:
+            return Response(
+                {"error": "Account not found or you don't have permission to access it."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        from decimal import Decimal  # pylint: disable=import-outside-toplevel
+
+        from trading.position_differentiation import (  # pylint: disable=import-outside-toplevel
+            PositionDifferentiationManager,
+        )
+
+        # Get query parameters
+        instrument = request.query_params.get("instrument")
+        base_size_param = request.query_params.get("base_size", "5000")
+
+        try:
+            base_size = Decimal(base_size_param)
+        except (ValueError, TypeError):
+            return Response(
+                {"error": "Invalid base_size parameter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Initialize manager
+        manager = PositionDifferentiationManager(account)
+
+        # Get overall statistics
+        stats = manager.get_statistics(instrument)
+
+        # Get suggestion if instrument specified
+        suggestion = None
+        if instrument:
+            suggestion = manager.get_differentiation_suggestion(instrument, base_size)
+
+            # Check for boundary warnings
+            boundary_warning = manager.check_boundary_reached(instrument, base_size)
+            if boundary_warning:
+                stats["boundary_warning"] = boundary_warning
+
+            # Get next order size preview
+            next_size, was_adjusted = manager.get_next_order_size(instrument, base_size)
+            stats["next_order_size"] = {
+                "size": float(next_size),
+                "was_adjusted": was_adjusted,
+                "base_size": float(base_size),
+            }
+
+        response_data = {
+            "statistics": stats,
+            "suggestion": suggestion,
+        }
+
+        logger.info(
+            "User %s retrieved position differentiation suggestions for account %s",
+            request.user.email,
+            account.account_id,
+            extra={
+                "user_id": request.user.id,
+                "email": request.user.email,
+                "account_id": account.account_id,
+                "instrument": instrument,
+            },
+        )
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
 class UserSettingsView(APIView):
     """
     API endpoint for managing user settings.

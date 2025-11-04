@@ -14,6 +14,8 @@ import positionsEN from './locales/en/positions.json';
 import positionsJA from './locales/ja/positions.json';
 import backtestEN from './locales/en/backtest.json';
 import backtestJA from './locales/ja/backtest.json';
+import settingsEN from './locales/en/settings.json';
+import settingsJA from './locales/ja/settings.json';
 
 // Initialize i18next
 i18n
@@ -28,6 +30,7 @@ i18n
         orders: ordersEN,
         positions: positionsEN,
         backtest: backtestEN,
+        settings: settingsEN,
       },
       ja: {
         common: commonJA,
@@ -37,6 +40,7 @@ i18n
         orders: ordersJA,
         positions: positionsJA,
         backtest: backtestJA,
+        settings: settingsJA,
       },
     },
     lng: 'en', // Default language
@@ -50,6 +54,7 @@ i18n
       'orders',
       'positions',
       'backtest',
+      'settings',
     ], // Available namespaces
     interpolation: {
       escapeValue: false, // React already escapes values
