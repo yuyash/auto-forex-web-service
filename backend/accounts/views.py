@@ -828,7 +828,7 @@ class AdminSystemSettingsView(APIView):
         system_settings = SystemSettings.get_settings()
         serializer = SystemSettingsSerializer(system_settings)
 
-        if request.user.is_authenticated:
+        if request.user.is_authenticated and hasattr(request.user, "email"):
             logger.info(
                 "Admin %s retrieved system settings",
                 request.user.email,
@@ -859,7 +859,7 @@ class AdminSystemSettingsView(APIView):
                 system_settings.updated_by = request.user
             serializer.save()
 
-            if request.user.is_authenticated:
+            if request.user.is_authenticated and hasattr(request.user, "email"):
                 logger.info(
                     "Admin %s updated system settings: %s",
                     request.user.email,
@@ -876,6 +876,158 @@ class AdminSystemSettingsView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class AdminTestEmailView(APIView):
+    """
+    API endpoint for testing email configuration.
+
+    POST /api/admin/test-email
+    - Send a test email to verify email settings
+    - Admin only
+
+    Requirements: Email configuration testing
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request: Request) -> Response:
+        """
+        Send a test email to verify email configuration.
+
+        Args:
+            request: HTTP request with test_email address
+
+        Returns:
+            Response with success or error message
+        """
+        from django.conf import settings
+
+        from .email_utils import _send_email
+
+        test_email = request.data.get("test_email")
+
+        if not test_email:
+            return Response(
+                {"error": "Test email address is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate email format
+        from django.core.exceptions import ValidationError
+        from django.core.validators import validate_email
+
+        try:
+            validate_email(test_email)
+        except ValidationError:
+            return Response(
+                {"error": "Invalid email address format."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Prepare test email content
+        subject = "Test Email - Auto Forex Trading System"
+        user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+        html_message = f"""
+        <html>
+            <body>
+                <h2>Email Configuration Test</h2>
+                <p>This is a test email from the Auto Forex Trading System.</p>
+                <p>If you received this email, your email configuration is working correctly.</p>
+                <hr>
+                <p><strong>Configuration Details:</strong></p>
+                <ul>
+                    <li>Backend: {getattr(settings, 'EMAIL_BACKEND_TYPE', 'smtp').upper()}</li>
+                    <li>Host: {settings.EMAIL_HOST}</li>
+                    <li>Port: {settings.EMAIL_PORT}</li>
+                    <li>Use TLS: {settings.EMAIL_USE_TLS}</li>
+                    <li>From Email: {settings.DEFAULT_FROM_EMAIL}</li>
+                </ul>
+                <p>Tested by: {request.user.username} ({user_email})</p>
+            </body>
+        </html>
+        """
+        plain_message = f"""
+        Email Configuration Test
+
+        This is a test email from the Auto Forex Trading System.
+        If you received this email, your email configuration is working correctly.
+
+        Configuration Details:
+        - Backend: {getattr(settings, 'EMAIL_BACKEND_TYPE', 'smtp').upper()}
+        - Host: {settings.EMAIL_HOST}
+        - Port: {settings.EMAIL_PORT}
+        - Use TLS: {settings.EMAIL_USE_TLS}
+        - From Email: {settings.DEFAULT_FROM_EMAIL}
+
+        Tested by: {request.user.username} ({user_email})
+        """
+
+        # Send test email
+        success = _send_email(
+            subject=subject,
+            html_message=html_message,
+            plain_message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[test_email],
+        )
+
+        if success:
+            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            logger.info(
+                "Test email sent successfully by admin %s to %s",
+                user_email,
+                test_email,
+                extra={
+                    "user_id": request.user.id,
+                    "admin_email": user_email,
+                    "test_email": test_email,
+                    "backend": getattr(settings, "EMAIL_BACKEND_TYPE", "smtp"),
+                },
+            )
+
+            return Response(
+                {
+                    "success": True,
+                    "message": f"Test email sent successfully to {test_email}",
+                    "configuration": {
+                        "backend": getattr(settings, "EMAIL_BACKEND_TYPE", "smtp").upper(),
+                        "host": settings.EMAIL_HOST,
+                        "port": settings.EMAIL_PORT,
+                        "use_tls": settings.EMAIL_USE_TLS,
+                        "from_email": settings.DEFAULT_FROM_EMAIL,
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+        logger.error(
+            "Failed to send test email by admin %s to %s",
+            user_email,
+            test_email,
+            extra={
+                "user_id": request.user.id,
+                "admin_email": user_email,
+                "test_email": test_email,
+                "backend": getattr(settings, "EMAIL_BACKEND_TYPE", "smtp"),
+            },
+        )
+
+        return Response(
+            {
+                "success": False,
+                "error": "Failed to send test email. Please check your email configuration.",
+                "configuration": {
+                    "backend": getattr(settings, "EMAIL_BACKEND_TYPE", "smtp").upper(),
+                    "host": settings.EMAIL_HOST,
+                    "port": settings.EMAIL_PORT,
+                    "use_tls": settings.EMAIL_USE_TLS,
+                    "from_email": settings.DEFAULT_FROM_EMAIL,
+                },
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
 class OandaAccountListCreateView(APIView):
     """
     API endpoint for listing and creating OANDA accounts.
@@ -884,7 +1036,7 @@ class OandaAccountListCreateView(APIView):
     - List all OANDA accounts for the authenticated user
 
     POST /api/accounts
-    - Create a new OANDA account for the authenticated user
+    - Create a new OANDA account
 
     Requirements: 4.1, 4.5
     """
@@ -902,15 +1054,17 @@ class OandaAccountListCreateView(APIView):
         Returns:
             Response with list of OANDA accounts
         """
-        from accounts.models import OandaAccount  # pylint: disable=import-outside-toplevel
-
         if not request.user.is_authenticated:
             return Response(
                 {"error": "Authentication required."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
+        from accounts.models import OandaAccount  # pylint: disable=import-outside-toplevel
+
+        # Get all accounts for the authenticated user
         accounts = OandaAccount.objects.filter(user=request.user).order_by("-created_at")
+
         serializer = self.serializer_class(accounts, many=True)
 
         logger.info(
@@ -920,7 +1074,7 @@ class OandaAccountListCreateView(APIView):
             extra={
                 "user_id": request.user.id,
                 "email": request.user.email,
-                "account_count": accounts.count(),
+                "count": accounts.count(),
             },
         )
 
@@ -928,13 +1082,13 @@ class OandaAccountListCreateView(APIView):
 
     def post(self, request: Request) -> Response:
         """
-        Create a new OANDA account for the authenticated user.
+        Create a new OANDA account.
 
         Args:
-            request: HTTP request with account_id, api_token, api_type, currency
+            request: HTTP request with account data
 
         Returns:
-            Response with created OANDA account or validation errors
+            Response with created account or validation errors
         """
         if not request.user.is_authenticated:
             return Response(
@@ -948,10 +1102,9 @@ class OandaAccountListCreateView(APIView):
             account = serializer.save()
 
             logger.info(
-                "User %s created OANDA account %s (%s)",
+                "User %s created OANDA account %s",
                 request.user.email,
                 account.account_id,
-                account.api_type,
                 extra={
                     "user_id": request.user.id,
                     "email": request.user.email,

@@ -13,6 +13,8 @@ import StrategyPage from './pages/StrategyPage';
 import BacktestPage from './pages/BacktestPage';
 import SettingsPage from './pages/SettingsPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
+import AdminSettingsPage from './pages/AdminSettingsPage';
+import EventViewerPage from './pages/EventViewerPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function AppRoutes() {
@@ -65,6 +67,8 @@ function AppRoutes() {
           <Route path="/backtest" element={<BacktestPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/admin" element={<AdminDashboardPage />} />
+          <Route path="/admin/settings" element={<AdminSettingsPage />} />
+          <Route path="/admin/events" element={<EventViewerPage />} />
         </Route>
       </Route>
 

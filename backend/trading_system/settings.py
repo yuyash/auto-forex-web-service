@@ -368,6 +368,7 @@ EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND",
     "django.core.mail.backends.console.EmailBackend",  # Console backend for development
 )
+EMAIL_BACKEND_TYPE = os.getenv("EMAIL_BACKEND_TYPE", "smtp")  # smtp or ses
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
@@ -375,6 +376,7 @@ EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False") == "True"
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@example.com")
+AWS_SES_REGION = os.getenv("AWS_SES_REGION", "us-east-1")
 
 # Frontend URL for email verification links
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")

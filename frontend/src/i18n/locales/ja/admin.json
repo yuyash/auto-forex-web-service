@@ -1,48 +1,66 @@
 {
-  "title": "管理者ダッシュボード",
-  "systemHealth": {
+  "dashboard": {
+    "title": "管理者ダッシュボード",
+    "subtitle": "システムヘルス、ユーザー、取引アクティビティを監視",
+    "noData": "ダッシュボードデータがありません"
+  },
+  "health": {
     "title": "システムヘルス",
-    "cpu": "CPU使用率",
-    "memory": "メモリ使用率",
+    "cpuUsage": "CPU使用率",
+    "memoryUsage": "メモリ使用率",
     "database": "データベース",
     "redis": "Redis",
-    "celery": "Celeryワーカー",
     "oandaApi": "OANDA API",
-    "healthy": "正常",
-    "warning": "警告",
-    "critical": "重大"
+    "activeStreams": "アクティブストリーム",
+    "celeryTasks": "Celeryタスク",
+    "v20Connections": "v20接続",
+    "activeTasks": "アクティブタスク",
+    "lastUpdate": "最終更新"
   },
   "users": {
     "title": "オンラインユーザー",
     "username": "ユーザー名",
+    "email": "メールアドレス",
     "loginTime": "ログイン時刻",
     "ipAddress": "IPアドレス",
     "lastActivity": "最終アクティビティ",
     "sessions": "セッション",
-    "kickoff": "強制ログアウト",
-    "confirmKickoff": "このユーザーを強制ログアウトしてもよろしいですか？"
+    "kickOff": "強制ログアウト",
+    "noUsers": "オンラインユーザーなし",
+    "confirmKickOffTitle": "強制ログアウトの確認",
+    "confirmKickOffMessage": "ユーザー{{username}}を強制ログアウトしてもよろしいですか？すべてのセッションが無効化され、アクティブな接続が閉じられます。",
+    "justNow": "たった今",
+    "minutesAgo": "{{count}}分前",
+    "hoursAgo": "{{count}}時間前",
+    "daysAgo": "{{count}}日前"
   },
   "strategies": {
     "title": "実行中の戦略",
-    "user": "ユーザー",
+    "username": "ユーザー",
     "account": "アカウント",
     "strategyName": "戦略",
     "startTime": "開始時刻",
     "positions": "ポジション",
     "unrealizedPnL": "未実現損益",
     "instruments": "通貨ペア",
-    "stop": "戦略を停止",
-    "confirmStop": "この戦略を停止してもよろしいですか？"
+    "stop": "停止",
+    "noStrategies": "実行中の戦略なし",
+    "confirmStopTitle": "戦略停止の確認",
+    "confirmStopMessage": "ユーザー{{username}}の戦略{{strategyName}}を停止してもよろしいですか？すべてのオープンポジションが閉じられます。",
+    "minutesRunning": "{{count}}分",
+    "hoursRunning": "{{count}}時間",
+    "daysRunning": "{{count}}日"
   },
   "events": {
-    "title": "システムイベント",
+    "title": "最近のイベント",
     "timestamp": "タイムスタンプ",
     "category": "カテゴリー",
-    "type": "タイプ",
+    "eventType": "イベントタイプ",
     "severity": "重要度",
     "description": "説明",
     "user": "ユーザー",
-    "details": "詳細",
+    "ipAddress": "IPアドレス",
+    "noEvents": "最近のイベントなし",
     "categories": {
       "trading": "取引",
       "system": "システム",
@@ -50,11 +68,16 @@
       "admin": "管理者"
     },
     "severities": {
+      "debug": "デバッグ",
       "info": "情報",
       "warning": "警告",
       "error": "エラー",
       "critical": "重大"
-    }
+    },
+    "secondsAgo": "{{count}}秒前",
+    "minutesAgo": "{{count}}分前",
+    "hoursAgo": "{{count}}時間前",
+    "daysAgo": "{{count}}日前"
   },
   "security": {
     "title": "セキュリティ監視",
@@ -76,7 +99,19 @@
     "title": "システム設定",
     "registrationEnabled": "登録有効",
     "loginEnabled": "ログイン有効",
+    "emailWhitelistEnabled": "メールホワイトリスト有効",
     "maintenanceMode": "メンテナンスモード",
-    "save": "設定を保存"
+    "save": "設定を保存",
+    "lastUpdated": "最終更新",
+    "updatedBy": "更新者",
+    "disableLoginWarningTitle": "警告: ログイン無効化",
+    "disableLoginWarningMessage": "ログインを無効にしてもよろしいですか？これにより、すべてのユーザー（あなた自身を含む）がシステムにログインできなくなります。既にログインしているユーザーは、セッションが期限切れになるまでアクティブのままです。",
+    "disableLoginWarningNote": "続行する前に、ログインを再度有効にする別の方法があることを確認してください。",
+    "disableLogin": "ログインを無効にする",
+    "updateSuccess": "システム設定が正常に更新されました",
+    "updateError": "システム設定の更新に失敗しました"
+  },
+  "common": {
+    "cancel": "キャンセル"
   }
 }

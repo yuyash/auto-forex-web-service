@@ -10,22 +10,16 @@ import {
   MenuItem,
   Select,
   FormControl,
-  Badge,
   Divider,
   ListItemIcon,
   ListItemText,
 } from '@mui/material';
-import {
-  AccountCircle,
-  Notifications,
-  Person,
-  Settings,
-  Logout,
-} from '@mui/icons-material';
+import { AccountCircle, Person, Settings, Logout } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import LanguageSelector from '../common/LanguageSelector';
+import NotificationCenter from '../admin/NotificationCenter';
 
 interface OandaAccount {
   id: number;
@@ -44,7 +38,6 @@ const AppHeader = () => {
   );
   const [accounts, setAccounts] = useState<OandaAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
-  const [notificationCount] = useState<number>(0);
 
   // Fetch OANDA accounts
   useEffect(() => {
@@ -100,11 +93,6 @@ const AppHeader = () => {
 
   const handleAccountChange = (event: { target: { value: string } }) => {
     setSelectedAccountId(String(event.target.value));
-  };
-
-  const handleNotificationClick = () => {
-    // TODO: Implement notification panel
-    console.log('Notifications clicked');
   };
 
   return (
@@ -195,17 +183,8 @@ const AppHeader = () => {
           {/* Language Selector */}
           <LanguageSelector />
 
-          {/* Notification Bell */}
-          <IconButton
-            size="large"
-            aria-label={`show ${notificationCount} new notifications`}
-            color="inherit"
-            onClick={handleNotificationClick}
-          >
-            <Badge badgeContent={notificationCount} color="error">
-              <Notifications />
-            </Badge>
-          </IconButton>
+          {/* Notification Center (Admin only) */}
+          <NotificationCenter />
 
           {/* User Menu */}
           <IconButton
