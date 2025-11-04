@@ -1,0 +1,51 @@
+{
+  "title": "Orders History",
+  "columns": {
+    "date": "Date",
+    "orderId": "Order ID",
+    "instrument": "Instrument",
+    "type": "Type",
+    "direction": "Direction",
+    "units": "Units",
+    "price": "Price",
+    "status": "Status"
+  },
+  "filters": {
+    "dateRange": "Date Range",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "instrument": "Instrument",
+    "status": "Status",
+    "searchOrderId": "Search by Order ID",
+    "allInstruments": "All Instruments",
+    "allStatuses": "All Statuses"
+  },
+  "orderTypes": {
+    "MARKET": "Market",
+    "LIMIT": "Limit",
+    "STOP": "Stop",
+    "OCO": "OCO"
+  },
+  "directions": {
+    "BUY": "Buy",
+    "SELL": "Sell"
+  },
+  "statuses": {
+    "PENDING": "Pending",
+    "FILLED": "Filled",
+    "CANCELLED": "Cancelled",
+    "REJECTED": "Rejected"
+  },
+  "actions": {
+    "exportCSV": "Export to CSV",
+    "clearFilters": "Clear Filters",
+    "applyFilters": "Apply Filters"
+  },
+  "messages": {
+    "noOrders": "No orders found",
+    "loadingOrders": "Loading orders...",
+    "errorLoadingOrders": "Failed to load orders",
+    "exportSuccess": "Orders exported successfully",
+    "exportError": "Failed to export orders"
+  }
+}

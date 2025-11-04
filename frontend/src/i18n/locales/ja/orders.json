@@ -1,0 +1,51 @@
+{
+  "title": "注文履歴",
+  "columns": {
+    "date": "日付",
+    "orderId": "注文ID",
+    "instrument": "通貨ペア",
+    "type": "種類",
+    "direction": "方向",
+    "units": "数量",
+    "price": "価格",
+    "status": "状態"
+  },
+  "filters": {
+    "dateRange": "期間",
+    "startDate": "開始日",
+    "endDate": "終了日",
+    "instrument": "通貨ペア",
+    "status": "状態",
+    "searchOrderId": "注文IDで検索",
+    "allInstruments": "すべての通貨ペア",
+    "allStatuses": "すべての状態"
+  },
+  "orderTypes": {
+    "MARKET": "成行",
+    "LIMIT": "指値",
+    "STOP": "逆指値",
+    "OCO": "OCO"
+  },
+  "directions": {
+    "BUY": "買い",
+    "SELL": "売り"
+  },
+  "statuses": {
+    "PENDING": "保留中",
+    "FILLED": "約定済み",
+    "CANCELLED": "キャンセル済み",
+    "REJECTED": "拒否済み"
+  },
+  "actions": {
+    "exportCSV": "CSVエクスポート",
+    "clearFilters": "フィルタをクリア",
+    "applyFilters": "フィルタを適用"
+  },
+  "messages": {
+    "noOrders": "注文が見つかりません",
+    "loadingOrders": "注文を読み込み中...",
+    "errorLoadingOrders": "注文の読み込みに失敗しました",
+    "exportSuccess": "注文のエクスポートに成功しました",
+    "exportError": "注文のエクスポートに失敗しました"
+  }
+}
