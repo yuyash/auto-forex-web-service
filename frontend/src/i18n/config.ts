@@ -10,6 +10,8 @@ import adminEN from './locales/en/admin.json';
 import adminJA from './locales/ja/admin.json';
 import ordersEN from './locales/en/orders.json';
 import ordersJA from './locales/ja/orders.json';
+import positionsEN from './locales/en/positions.json';
+import positionsJA from './locales/ja/positions.json';
 
 // Initialize i18next
 i18n
@@ -22,6 +24,7 @@ i18n
         strategy: strategyEN,
         admin: adminEN,
         orders: ordersEN,
+        positions: positionsEN,
       },
       ja: {
         common: commonJA,
@@ -29,12 +32,13 @@ i18n
         strategy: strategyJA,
         admin: adminJA,
         orders: ordersJA,
+        positions: positionsJA,
       },
     },
     lng: 'en', // Default language
     fallbackLng: 'en', // Fallback language if translation is missing
     defaultNS: 'common', // Default namespace
-    ns: ['common', 'dashboard', 'strategy', 'admin', 'orders'], // Available namespaces
+    ns: ['common', 'dashboard', 'strategy', 'admin', 'orders', 'positions'], // Available namespaces
     interpolation: {
       escapeValue: false, // React already escapes values
     },

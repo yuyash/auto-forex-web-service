@@ -59,13 +59,22 @@ const OrderHistoryPage = () => {
       }
 
       const data = await response.json();
-      setOrders(data.results || data);
+      const ordersData = data.results || data;
+      setOrders(Array.isArray(ordersData) ? ordersData : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
-  }, [token, filters, searchOrderId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    token,
+    filters.start_date,
+    filters.end_date,
+    filters.instrument,
+    filters.status,
+    searchOrderId,
+  ]);
 
   // Fetch orders on mount and when filters change
   useEffect(() => {
@@ -333,10 +342,16 @@ const OrderHistoryPage = () => {
                   variant="outlined"
                   onClick={handleClearFilters}
                   size="small"
+                  aria-label="Clear Filters"
                 >
                   {t('orders:actions.clearFilters')}
                 </Button>
-                <Button variant="contained" onClick={fetchOrders} size="small">
+                <Button
+                  variant="contained"
+                  onClick={fetchOrders}
+                  size="small"
+                  aria-label="Apply Filters"
+                >
                   {t('orders:actions.applyFilters')}
                 </Button>
               </Box>

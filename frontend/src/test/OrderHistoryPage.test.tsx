@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import OrderHistoryPage from '../pages/OrderHistoryPage';
@@ -67,6 +67,7 @@ const renderWithProviders = (component: React.ReactElement) => {
 describe('OrderHistoryPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     localStorage.clear();
     localStorage.setItem('token', 'test-token');
     localStorage.setItem(
@@ -82,6 +83,11 @@ describe('OrderHistoryPage', () => {
         login_enabled: true,
       }),
     });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
   });
 
   it('renders the page title', async () => {
@@ -123,15 +129,25 @@ describe('OrderHistoryPage', () => {
   });
 
   it('fetches and displays orders', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ registration_enabled: true, login_enabled: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: mockOrders }),
-      });
+    mockFetch.mockImplementation((url) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            registration_enabled: true,
+            login_enabled: true,
+          }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/orders')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockOrders }),
+        } as Response);
+      }
+      return Promise.reject(new Error(`Unknown URL: ${urlStr}`));
+    });
 
     renderWithProviders(<OrderHistoryPage />);
 
@@ -143,44 +159,68 @@ describe('OrderHistoryPage', () => {
   });
 
   it('displays order details correctly', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ registration_enabled: true, login_enabled: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: mockOrders }),
-      });
+    mockFetch.mockImplementation((url) => {
+      if (url.toString().includes('/api/system/settings/public')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            registration_enabled: true,
+            login_enabled: true,
+          }),
+        } as Response);
+      }
+      if (url.toString().includes('/api/orders')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockOrders }),
+        } as Response);
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
 
     renderWithProviders(<OrderHistoryPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('EUR_USD')).toBeInTheDocument();
-      expect(screen.getByText('GBP_USD')).toBeInTheDocument();
-      expect(screen.getByText('10000')).toBeInTheDocument();
-      expect(screen.getByText('5000')).toBeInTheDocument();
+      const table = screen.getByRole('table');
+      expect(table).toHaveTextContent('EUR_USD');
+      expect(table).toHaveTextContent('GBP_USD');
+      expect(table).toHaveTextContent('10000');
+      expect(table).toHaveTextContent('5000');
     });
   });
 
   it('filters orders by instrument', async () => {
     const user = userEvent.setup();
+    let callCount = 0;
 
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ registration_enabled: true, login_enabled: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: mockOrders }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          results: mockOrders.filter((o) => o.instrument === 'EUR_USD'),
-        }),
-      });
+    mockFetch.mockImplementation((url) => {
+      if (url.toString().includes('/api/system/settings/public')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            registration_enabled: true,
+            login_enabled: true,
+          }),
+        } as Response);
+      }
+      if (url.toString().includes('/api/orders')) {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ results: mockOrders }),
+          } as Response);
+        } else {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              results: mockOrders.filter((o) => o.instrument === 'EUR_USD'),
+            }),
+          } as Response);
+        }
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
 
     renderWithProviders(<OrderHistoryPage />);
 
@@ -192,8 +232,8 @@ describe('OrderHistoryPage', () => {
     const instrumentSelect = screen.getByLabelText(/Instrument/i);
     await user.click(instrumentSelect);
 
-    const eurUsdOption = await screen.findByText('EUR_USD');
-    await user.click(eurUsdOption);
+    const eurUsdOptions = await screen.findAllByText('EUR_USD');
+    await user.click(eurUsdOptions[eurUsdOptions.length - 1]); // Click the dropdown option
 
     // Click apply filters
     const applyButton = screen.getByRole('button', { name: /Apply Filters/i });
@@ -209,22 +249,36 @@ describe('OrderHistoryPage', () => {
 
   it('filters orders by status', async () => {
     const user = userEvent.setup();
+    let callCount = 0;
 
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ registration_enabled: true, login_enabled: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: mockOrders }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          results: mockOrders.filter((o) => o.status === 'FILLED'),
-        }),
-      });
+    mockFetch.mockImplementation((url) => {
+      if (url.toString().includes('/api/system/settings/public')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            registration_enabled: true,
+            login_enabled: true,
+          }),
+        } as Response);
+      }
+      if (url.toString().includes('/api/orders')) {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ results: mockOrders }),
+          } as Response);
+        } else {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              results: mockOrders.filter((o) => o.status === 'FILLED'),
+            }),
+          } as Response);
+        }
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
 
     renderWithProviders(<OrderHistoryPage />);
 
@@ -236,8 +290,8 @@ describe('OrderHistoryPage', () => {
     const statusSelect = screen.getByLabelText(/Status/i);
     await user.click(statusSelect);
 
-    const filledOption = await screen.findByText('Filled');
-    await user.click(filledOption);
+    const filledOptions = await screen.findAllByText('Filled');
+    await user.click(filledOptions[filledOptions.length - 1]); // Click the dropdown option
 
     // Click apply filters
     const applyButton = screen.getByRole('button', { name: /Apply Filters/i });
@@ -253,22 +307,37 @@ describe('OrderHistoryPage', () => {
 
   it('searches orders by order ID', async () => {
     const user = userEvent.setup();
+    let callCount = 0;
 
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ registration_enabled: true, login_enabled: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: mockOrders }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          results: mockOrders.filter((o) => o.order_id === 'ORD-001'),
-        }),
-      });
+    mockFetch.mockImplementation((url) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            registration_enabled: true,
+            login_enabled: true,
+          }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/orders')) {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ results: mockOrders }),
+          } as Response);
+        } else {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              results: mockOrders.filter((o) => o.order_id === 'ORD-001'),
+            }),
+          } as Response);
+        }
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
 
     renderWithProviders(<OrderHistoryPage />);
 
@@ -295,19 +364,24 @@ describe('OrderHistoryPage', () => {
   it('clears all filters', async () => {
     const user = userEvent.setup();
 
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ registration_enabled: true, login_enabled: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: mockOrders }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: mockOrders }),
-      });
+    mockFetch.mockImplementation((url) => {
+      if (url.toString().includes('/api/system/settings/public')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            registration_enabled: true,
+            login_enabled: true,
+          }),
+        } as Response);
+      }
+      if (url.toString().includes('/api/orders')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockOrders }),
+        } as Response);
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
 
     renderWithProviders(<OrderHistoryPage />);
 
@@ -331,31 +405,44 @@ describe('OrderHistoryPage', () => {
     const user = userEvent.setup();
 
     // Mock URL.createObjectURL
-    globalThis.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+    const mockCreateObjectURL = vi.fn(() => 'blob:mock-url');
+    const originalCreateObjectURL = globalThis.URL.createObjectURL;
+    globalThis.URL.createObjectURL = mockCreateObjectURL;
+
+    // Store original createElement
+    const originalCreateElement = document.createElement.bind(document);
 
     // Mock document.createElement to track link creation
-    const mockLink = {
-      setAttribute: vi.fn(),
-      click: vi.fn(),
-      style: { visibility: '' },
-    };
-    const originalCreateElement = document.createElement.bind(document);
-    vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
-      if (tagName === 'a') {
-        return mockLink as unknown as HTMLAnchorElement;
-      }
-      return originalCreateElement(tagName);
-    });
-
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ registration_enabled: true, login_enabled: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: mockOrders }),
+    const mockLink = originalCreateElement('a');
+    const clickSpy = vi.spyOn(mockLink, 'click');
+    const setAttributeSpy = vi.spyOn(mockLink, 'setAttribute');
+    const createElementSpy = vi
+      .spyOn(document, 'createElement')
+      .mockImplementation((tagName) => {
+        if (tagName === 'a') {
+          return mockLink;
+        }
+        return originalCreateElement(tagName);
       });
+
+    mockFetch.mockImplementation((url) => {
+      if (url.toString().includes('/api/system/settings/public')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            registration_enabled: true,
+            login_enabled: true,
+          }),
+        } as Response);
+      }
+      if (url.toString().includes('/api/orders')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockOrders }),
+        } as Response);
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
 
     renderWithProviders(<OrderHistoryPage />);
 
@@ -368,24 +455,39 @@ describe('OrderHistoryPage', () => {
     await user.click(exportButton);
 
     // Verify link was created and clicked
-    expect(mockLink.click).toHaveBeenCalled();
-    expect(mockLink.setAttribute).toHaveBeenCalledWith('href', 'blob:mock-url');
-    expect(mockLink.setAttribute).toHaveBeenCalledWith(
+    await waitFor(() => {
+      expect(clickSpy).toHaveBeenCalled();
+    });
+    expect(setAttributeSpy).toHaveBeenCalledWith('href', 'blob:mock-url');
+    expect(setAttributeSpy).toHaveBeenCalledWith(
       'download',
       expect.stringContaining('orders_')
     );
+
+    // Restore original methods
+    globalThis.URL.createObjectURL = originalCreateObjectURL;
+    createElementSpy.mockRestore();
   });
 
   it('displays error message when fetch fails', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ registration_enabled: true, login_enabled: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({}),
-      });
+    mockFetch.mockImplementation((url) => {
+      if (url.toString().includes('/api/system/settings/public')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            registration_enabled: true,
+            login_enabled: true,
+          }),
+        } as Response);
+      }
+      if (url.toString().includes('/api/orders')) {
+        return Promise.resolve({
+          ok: false,
+          json: async () => ({}),
+        } as Response);
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
 
     renderWithProviders(<OrderHistoryPage />);
 
