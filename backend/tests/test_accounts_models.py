@@ -145,7 +145,8 @@ class TestUserSettingsModel:
             email="test@example.com",
             password="pass123",
         )
-        settings = UserSettings.objects.create(user=user)
+        # UserSettings is auto-created by signal, so get it instead of creating
+        settings = UserSettings.objects.get(user=user)
 
         assert settings.user == user
         assert settings.default_lot_size == 1.0
@@ -164,14 +165,14 @@ class TestUserSettingsModel:
             email="test@example.com",
             password="pass123",
         )
-        settings = UserSettings.objects.create(
-            user=user,
-            default_lot_size=2.5,
-            default_scaling_mode="multiplicative",
-            default_retracement_pips=50,
-            default_take_profit_pips=40,
-            notification_enabled=False,
-        )
+        # UserSettings is auto-created by signal, so update it instead of creating
+        settings = UserSettings.objects.get(user=user)
+        settings.default_lot_size = 2.5
+        settings.default_scaling_mode = "multiplicative"
+        settings.default_retracement_pips = 50
+        settings.default_take_profit_pips = 40
+        settings.notification_enabled = False
+        settings.save()
 
         assert settings.default_lot_size == 2.5
         assert settings.default_scaling_mode == "multiplicative"
@@ -188,8 +189,10 @@ class TestUserSettingsModel:
             email="test@example.com",
             password="pass123",
         )
-        UserSettings.objects.create(user=user)
+        # UserSettings is auto-created by signal, verify it exists
+        assert UserSettings.objects.filter(user=user).count() == 1
 
+        # Try to create another one manually
         with pytest.raises(IntegrityError):
             UserSettings.objects.create(user=user)
 
@@ -205,10 +208,10 @@ class TestUserSettingsModel:
             "chart_type": "candlestick",
             "indicators": ["ATR", "MA"],
         }
-        settings = UserSettings.objects.create(
-            user=user,
-            settings_json=custom_settings,
-        )
+        # UserSettings is auto-created by signal, so update it instead of creating
+        settings = UserSettings.objects.get(user=user)
+        settings.settings_json = custom_settings
+        settings.save()
 
         assert settings.settings_json == custom_settings
         assert settings.settings_json["theme"] == "dark"

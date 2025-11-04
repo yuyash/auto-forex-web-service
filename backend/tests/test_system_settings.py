@@ -251,8 +251,11 @@ class TestPublicSystemSettingsEndpoint:
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        # Should only have the two boolean flags
-        assert len(response.data) == 2
+        # Should only have the three boolean flags
+        assert len(response.data) == 3
+        assert "registration_enabled" in response.data
+        assert "login_enabled" in response.data
+        assert "email_whitelist_enabled" in response.data
         assert "updated_by" not in response.data
         assert "updated_at" not in response.data
 

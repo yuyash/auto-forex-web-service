@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import type {
   IChartApi,
-  ISeriesApi,
   CandlestickData,
   Time,
   SeriesMarker,
@@ -40,9 +39,12 @@ const OHLCChart = ({
 }: OHLCChartProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const takeProfitSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
-  const stopLossSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const candlestickSeriesRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const takeProfitSeriesRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stopLossSeriesRef = useRef<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const currentCandleRef = useRef<CandlestickData<Time> | null>(null);
