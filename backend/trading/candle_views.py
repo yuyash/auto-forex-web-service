@@ -6,8 +6,10 @@ from OANDA for charting and analysis.
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 
 import v20
@@ -40,8 +42,9 @@ class CandleDataView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    # pylint: disable=too-many-locals,too-many-return-statements,too-many-branches
-    def get(self, request: Request) -> Response:
+    # pylint: disable=too-many-locals,too-many-return-statements
+    # pylint: disable=too-many-branches,too-many-statements
+    def get(self, request: Request) -> Response:  # noqa: C901
         """
         Fetch historical candle data from OANDA.
 
@@ -57,7 +60,18 @@ class CandleDataView(APIView):
         count = request.query_params.get("count", "100")
         from_time = request.query_params.get("from_time")
         to_time = request.query_params.get("to_time")
+        before = request.query_params.get("before")  # Unix timestamp
         account_id = request.query_params.get("account_id")
+
+        # Convert 'before' timestamp to RFC3339 format if provided
+        if before and not to_time:
+            try:
+                before_timestamp = int(before)
+                to_time = datetime.fromtimestamp(before_timestamp, tz=timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                )
+            except (ValueError, OSError):
+                pass  # Invalid timestamp, ignore
 
         # Validate required parameters
         if not instrument:
@@ -107,6 +121,17 @@ class CandleDataView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Check cache first to avoid hitting OANDA rate limits
+        cache_key = f"candles:{instrument}:{granularity}:{count}:{from_time}:{to_time}:{before}"
+        stale_cache_key = f"{cache_key}:stale"
+
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            logger.debug("Returning cached candle data for %s", instrument)
+            response = Response(cached_data, status=status.HTTP_200_OK)
+            response["X-Cache-Hit"] = "true"
+            return response
+
         # Fetch candles from OANDA
         try:
             # Initialize v20 API context
@@ -154,9 +179,21 @@ class CandleDataView(APIView):
                         continue
 
                     mid = candle.mid
+                    # Skip candles without mid price data
+                    if not mid or not all([mid.o, mid.h, mid.l, mid.c]):
+                        continue
+
+                    # Convert RFC3339 time to Unix timestamp for charting libraries
+                    try:
+                        time_obj = datetime.fromisoformat(candle.time.replace("Z", "+00:00"))
+                        timestamp = int(time_obj.timestamp())
+                    except (ValueError, AttributeError):
+                        # Skip candles with invalid time format
+                        continue
+
                     candles_data.append(
                         {
-                            "time": candle.time,
+                            "time": timestamp,
                             "open": float(mid.o),
                             "high": float(mid.h),
                             "low": float(mid.l),
@@ -172,17 +209,33 @@ class CandleDataView(APIView):
                 granularity,
             )
 
-            return Response(
-                {
-                    "instrument": instrument,
-                    "granularity": granularity,
-                    "candles": candles_data,
-                },
-                status=status.HTTP_200_OK,
-            )
+            response_data = {
+                "instrument": instrument,
+                "granularity": granularity,
+                "candles": candles_data,
+            }
+
+            # Cache for 10 minutes to reduce OANDA API calls
+            # Also keep a stale copy for 2 hours in case of rate limits
+            cache.set(cache_key, response_data, 600)
+            cache.set(stale_cache_key, response_data, 7200)
+
+            response = Response(response_data, status=status.HTTP_200_OK)
+            response["X-Cache-Hit"] = "false"
+            return response
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error fetching candles: %s", e, exc_info=True)
+
+            # If we hit rate limits, try to return stale cached data
+            stale_data = cache.get(stale_cache_key)
+            if stale_data and ("429" in str(e) or "rate limit" in str(e).lower()):
+                logger.warning("Returning stale cached data due to rate limit for %s", instrument)
+                response = Response(stale_data, status=status.HTTP_200_OK)
+                response["X-Cache-Hit"] = "stale"
+                response["X-Rate-Limited"] = "true"
+                return response
+
             return Response(
                 {"error": f"Failed to fetch candles: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

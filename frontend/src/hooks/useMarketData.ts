@@ -86,6 +86,11 @@ const useMarketData = ({
 
   const connect = useCallback(() => {
     try {
+      // Don't connect if accountId or instrument is not provided
+      if (!accountId || !instrument) {
+        return;
+      }
+
       // Close existing connection if any
       if (wsRef.current) {
         wsRef.current.close();
@@ -128,12 +133,6 @@ const useMarketData = ({
             if (ticks.length > 0) {
               updateTickData(ticks[ticks.length - 1]);
             }
-          } else if (
-            message.type === 'demo_warning' ||
-            message.type === 'demo_reminder'
-          ) {
-            // Demo mode warnings/reminders - log but don't treat as error
-            console.info('Demo mode:', message.data?.message);
           } else if (message.type === 'pong') {
             // Pong response to ping - ignore
           } else if (message.type === 'error') {

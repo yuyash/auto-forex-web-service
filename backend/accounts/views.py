@@ -382,6 +382,7 @@ class UserLoginView(APIView):
             ip = str(request.META.get("REMOTE_ADDR", ""))
         return ip
 
+    # pylint: disable=too-many-branches,too-many-statements
     def post(self, request: Request) -> Response:
         """
         Handle user login.
@@ -408,25 +409,36 @@ class UserLoginView(APIView):
 
         ip_address = self.get_client_ip(request)
 
-        # Check if IP is blocked
-        is_blocked, block_reason = RateLimiter.is_ip_blocked(ip_address)
-        if is_blocked:
-            logger.warning(
-                "Login attempt from blocked IP: %s",
-                ip_address,
-                extra={
-                    "ip_address": ip_address,
-                    "reason": block_reason,
-                },
-            )
-            return Response(
-                {"error": block_reason},
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
-            )
-
-        # Check if user exists and is locked before validating credentials
+        # Check if user is admin FIRST (before IP blocking check)
         email = request.data.get("email", "").lower()
+        is_admin_user = False
         if email:
+            try:
+                user_check = User.objects.get(email__iexact=email)
+                # Admin/staff users bypass rate limiting and account locking
+                is_admin_user = user_check.is_staff or user_check.is_superuser
+            except User.DoesNotExist:
+                pass
+
+        # Check if IP is blocked (skip for admin users)
+        if not is_admin_user:
+            is_blocked, block_reason = RateLimiter.is_ip_blocked(ip_address)
+            if is_blocked:
+                logger.warning(
+                    "Login attempt from blocked IP: %s",
+                    ip_address,
+                    extra={
+                        "ip_address": ip_address,
+                        "reason": block_reason,
+                    },
+                )
+                return Response(
+                    {"error": block_reason},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+
+        # Check if user account is locked (already have user_check from above)
+        if email and not is_admin_user:
             try:
                 user_check = User.objects.get(email__iexact=email)
                 if user_check.is_locked:
@@ -456,8 +468,22 @@ class UserLoginView(APIView):
         serializer = self.serializer_class(data=request.data)
 
         if not serializer.is_valid():
-            # Increment IP-based failed attempts
-            ip_attempts = RateLimiter.increment_failed_attempts(ip_address)
+            # Admin users bypass rate limiting but still log attempts
+            if not is_admin_user:
+                # Increment IP-based failed attempts
+                ip_attempts = RateLimiter.increment_failed_attempts(ip_address)
+            else:
+                ip_attempts = 0
+                logger.info(
+                    "Failed login attempt for admin user %s from %s (rate limiting bypassed)",
+                    email,
+                    ip_address,
+                    extra={
+                        "email": email,
+                        "ip_address": ip_address,
+                        "is_admin": True,
+                    },
+                )
 
             # Log failed login attempt
             logger.warning(
@@ -470,6 +496,7 @@ class UserLoginView(APIView):
                     "ip_address": ip_address,
                     "ip_attempts": ip_attempts,
                     "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+                    "is_admin": is_admin_user,
                 },
             )
 
@@ -481,46 +508,47 @@ class UserLoginView(APIView):
                 user_agent=request.META.get("HTTP_USER_AGENT"),
             )
 
-            # Increment user-level failed attempts if user exists
-            try:
-                user = User.objects.get(email__iexact=email)
-                user.increment_failed_login()
+            # Increment user-level failed attempts if user exists (skip for admin users)
+            if not is_admin_user:
+                try:
+                    user = User.objects.get(email__iexact=email)
+                    user.increment_failed_login()
 
-                # Check if account should be locked after increment
-                if user.failed_login_attempts >= RateLimiter.ACCOUNT_LOCK_THRESHOLD:
-                    user.lock_account()
+                    # Check if account should be locked after increment
+                    if user.failed_login_attempts >= RateLimiter.ACCOUNT_LOCK_THRESHOLD:
+                        user.lock_account()
+                        logger.error(
+                            "Account locked for user %s after %s failed attempts",
+                            user.email,
+                            user.failed_login_attempts,
+                            extra={
+                                "user_id": user.id,
+                                "email": user.email,
+                                "failed_attempts": user.failed_login_attempts,
+                            },
+                        )
+
+                        # Log account locked event
+                        security_logger.log_account_locked(
+                            username=user.username,
+                            ip_address=ip_address,
+                            failed_attempts=user.failed_login_attempts,
+                        )
+                except User.DoesNotExist:
+                    # User doesn't exist, just log the attempt
+                    pass
+
+                # Block IP if threshold reached (only for non-admin users)
+                if ip_attempts >= RateLimiter.MAX_ATTEMPTS:
+                    RateLimiter.block_ip_address(ip_address)
                     logger.error(
-                        "Account locked for user %s after %s failed attempts",
-                        user.email,
-                        user.failed_login_attempts,
+                        "IP address %s blocked due to excessive failed login attempts",
+                        ip_address,
                         extra={
-                            "user_id": user.id,
-                            "email": user.email,
-                            "failed_attempts": user.failed_login_attempts,
+                            "ip_address": ip_address,
+                            "attempts": ip_attempts,
                         },
                     )
-
-                    # Log account locked event
-                    security_logger.log_account_locked(
-                        username=user.username,
-                        ip_address=ip_address,
-                        failed_attempts=user.failed_login_attempts,
-                    )
-            except User.DoesNotExist:
-                # User doesn't exist, just log the attempt
-                pass
-
-            # Block IP if threshold reached
-            if ip_attempts >= RateLimiter.MAX_ATTEMPTS:
-                RateLimiter.block_ip_address(ip_address)
-                logger.error(
-                    "IP address %s blocked due to excessive failed login attempts",
-                    ip_address,
-                    extra={
-                        "ip_address": ip_address,
-                        "attempts": ip_attempts,
-                    },
-                )
 
                 # Log IP blocked event
                 security_logger.log_ip_blocked(

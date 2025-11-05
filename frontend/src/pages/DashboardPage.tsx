@@ -57,29 +57,52 @@ const DashboardPage = () => {
   const [refreshInterval, setRefreshInterval] = useState<number>(30); // seconds
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Chart data state for lazy loading
+  // Chart data state for lazy loading with caching
   const [chartData, setChartData] = useState<OHLCData[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const oldestTimestampRef = useRef<number | null>(null);
   const [hasOandaAccount, setHasOandaAccount] = useState<boolean>(true);
+  const [oandaAccountId, setOandaAccountId] = useState<string | undefined>(
+    undefined
+  );
 
-  // Load historical data for the chart
-  const loadHistoricalData = useCallback(
-    async (inst: string, gran: string, count = 100): Promise<OHLCData[]> => {
+  // Cache for storing all fetched candles
+  const candleCacheRef = useRef<Map<string, OHLCData[]>>(new Map());
+  const oldestCachedTimeRef = useRef<number | null>(null);
+  const newestCachedTimeRef = useRef<number | null>(null);
+
+  // Get cache key for instrument/granularity combination
+  const getCacheKey = useCallback((inst: string, gran: string) => {
+    return `${inst}_${gran}`;
+  }, []);
+
+  // Load a large batch of historical data (up to 5000 candles) and cache it
+  const loadAndCacheHistoricalData = useCallback(
+    async (
+      inst: string,
+      gran: string,
+      count = 5000,
+      before?: number
+    ): Promise<OHLCData[]> => {
       try {
-        const response = await fetch(
-          `/api/candles?instrument=${inst}&granularity=${gran}&count=${count}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        let url = `/api/candles?instrument=${inst}&granularity=${gran}&count=${count}`;
+        if (before) {
+          url += `&before=${before}`;
+        }
+
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
         if (!response.ok) {
-          const errorData = await response.json();
+          if (response.status === 429) {
+            console.warn('Rate limited, using cached data');
+            setHasOandaAccount(true);
+            return [];
+          }
 
-          // Check if the error is due to missing OANDA account
+          const errorData = await response.json();
           if (errorData.error_code === 'NO_OANDA_ACCOUNT') {
             setHasOandaAccount(false);
             return [];
@@ -91,9 +114,24 @@ const DashboardPage = () => {
         const data = await response.json();
         const candles = data.candles || [];
 
-        // Update oldest timestamp for lazy loading
         if (candles.length > 0) {
-          oldestTimestampRef.current = candles[0].time;
+          const cacheKey = getCacheKey(inst, gran);
+          const existingCache = candleCacheRef.current.get(cacheKey) || [];
+
+          // Merge new candles with existing cache, avoiding duplicates
+          const mergedCandles = [...candles, ...existingCache];
+          const uniqueCandles = Array.from(
+            new Map(mergedCandles.map((c) => [c.time, c])).values()
+          ).sort((a, b) => a.time - b.time);
+
+          candleCacheRef.current.set(cacheKey, uniqueCandles);
+
+          // Update time boundaries
+          oldestCachedTimeRef.current = uniqueCandles[0].time;
+          newestCachedTimeRef.current =
+            uniqueCandles[uniqueCandles.length - 1].time;
+
+          console.log(`Cached ${uniqueCandles.length} candles for ${cacheKey}`);
         }
 
         setHasOandaAccount(true);
@@ -103,44 +141,104 @@ const DashboardPage = () => {
         return [];
       }
     },
-    [token]
+    [token, getCacheKey]
   );
 
-  // Load older data (for scrolling back in time)
+  // Load initial visible data from cache or API
+  const loadHistoricalData = useCallback(
+    async (inst: string, gran: string, count = 100): Promise<OHLCData[]> => {
+      const cacheKey = getCacheKey(inst, gran);
+      const cachedData = candleCacheRef.current.get(cacheKey);
+
+      // If we have cached data, return the most recent 'count' candles
+      if (cachedData && cachedData.length > 0) {
+        console.log(`Using ${cachedData.length} cached candles`);
+        return cachedData.slice(-count);
+      }
+
+      // Otherwise, fetch a large batch and cache it
+      console.log('No cache found, fetching initial batch of 5000 candles');
+      const candles = await loadAndCacheHistoricalData(inst, gran, 5000);
+
+      // Return the most recent 'count' candles for display
+      return candles.slice(-count);
+    },
+    [getCacheKey, loadAndCacheHistoricalData]
+  );
+
+  // Load older data (for scrolling left/back in time)
   const loadOlderData = useCallback(
     async (inst: string, gran: string): Promise<OHLCData[]> => {
-      if (!oldestTimestampRef.current || isLoadingMore) {
+      if (isLoadingMore) {
+        console.log('Already loading, skipping...');
         return [];
       }
 
       setIsLoadingMore(true);
 
       try {
-        const response = await fetch(
-          `/api/candles?instrument=${inst}&granularity=${gran}&count=50&before=${oldestTimestampRef.current}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+        const cacheKey = getCacheKey(inst, gran);
+        const cachedData = candleCacheRef.current.get(cacheKey) || [];
+
+        // Use a ref to get the current chart data to avoid stale closure
+        const currentOldest = chartData.length > 0 ? chartData[0].time : null;
+
+        if (!currentOldest) {
+          console.log('No current data, cannot load older');
+          return [];
+        }
+
+        // Check if we have older data in cache
+        const olderCachedData = cachedData.filter(
+          (c) => c.time < currentOldest
         );
 
-        if (!response.ok) {
-          throw new Error('Failed to load older data');
+        if (olderCachedData.length > 0) {
+          // Return up to 200 older candles from cache
+          const candlesToAdd = olderCachedData.slice(-200);
+          console.log(
+            `Loading ${candlesToAdd.length} older candles from cache (oldest: ${candlesToAdd[0].time})`
+          );
+          setChartData((prev) => {
+            // Double-check to avoid duplicates
+            const newData = [...candlesToAdd, ...prev];
+            const uniqueData = Array.from(
+              new Map(newData.map((c) => [c.time, c])).values()
+            ).sort((a, b) => a.time - b.time);
+            return uniqueData;
+          });
+          return candlesToAdd;
         }
 
-        const data = await response.json();
-        const olderCandles = data.candles || [];
+        // If no older cached data, fetch more from API
+        if (oldestCachedTimeRef.current) {
+          console.log('Fetching older data from API (5000 candles)');
+          const olderCandles = await loadAndCacheHistoricalData(
+            inst,
+            gran,
+            5000,
+            oldestCachedTimeRef.current
+          );
 
-        if (olderCandles.length > 0) {
-          // Update oldest timestamp
-          oldestTimestampRef.current = olderCandles[0].time;
-
-          // Prepend older data to existing chart data
-          setChartData((prev) => [...olderCandles, ...prev]);
+          if (olderCandles.length > 0) {
+            // Add the newest 200 of the fetched candles to chart
+            const candlesToAdd = olderCandles.slice(-200);
+            console.log(
+              `Adding ${candlesToAdd.length} newly fetched older candles`
+            );
+            setChartData((prev) => {
+              const newData = [...candlesToAdd, ...prev];
+              const uniqueData = Array.from(
+                new Map(newData.map((c) => [c.time, c])).values()
+              ).sort((a, b) => a.time - b.time);
+              return uniqueData;
+            });
+            return candlesToAdd;
+          }
         }
 
-        return olderCandles;
+        console.log('No older data available');
+        return [];
       } catch (err) {
         console.error('Error loading older data:', err);
         return [];
@@ -148,18 +246,137 @@ const DashboardPage = () => {
         setIsLoadingMore(false);
       }
     },
-    [isLoadingMore, token]
+    [isLoadingMore, chartData, getCacheKey, loadAndCacheHistoricalData]
+  );
+
+  // Load newer data (for scrolling right/forward in time)
+  const loadNewerData = useCallback(
+    async (inst: string, gran: string): Promise<OHLCData[]> => {
+      if (isLoadingMore) {
+        console.log('Already loading, skipping...');
+        return [];
+      }
+
+      setIsLoadingMore(true);
+
+      try {
+        const cacheKey = getCacheKey(inst, gran);
+        const cachedData = candleCacheRef.current.get(cacheKey) || [];
+        const currentNewest =
+          chartData.length > 0 ? chartData[chartData.length - 1].time : null;
+
+        console.log('=== LOAD NEWER DATA ===');
+        console.log('Current chart data length:', chartData.length);
+        console.log('Current newest time:', currentNewest);
+        console.log('Cached data length:', cachedData.length);
+
+        if (!currentNewest) {
+          console.log('No current data, cannot load newer');
+          return [];
+        }
+
+        // Check if we have newer data in cache
+        const newerCachedData = cachedData.filter(
+          (c) => c.time > currentNewest
+        );
+        console.log('Newer cached data available:', newerCachedData.length);
+
+        if (newerCachedData.length > 0) {
+          // Return up to 200 newer candles from cache
+          const candlesToAdd = newerCachedData.slice(0, 200);
+          console.log(
+            `Loading ${candlesToAdd.length} newer candles from cache (newest: ${candlesToAdd[candlesToAdd.length - 1].time})`
+          );
+          setChartData((prev) => {
+            console.log('Before adding newer data, prev length:', prev.length);
+            // Double-check to avoid duplicates
+            const newData = [...prev, ...candlesToAdd];
+            const uniqueData = Array.from(
+              new Map(newData.map((c) => [c.time, c])).values()
+            ).sort((a, b) => a.time - b.time);
+            console.log(
+              'After adding newer data, new length:',
+              uniqueData.length
+            );
+            return uniqueData;
+          });
+          return candlesToAdd;
+        }
+
+        // If we're at the newest cached data, fetch latest from API
+        console.log('Fetching latest data from API (5000 candles)');
+        const latestCandles = await loadAndCacheHistoricalData(
+          inst,
+          gran,
+          5000
+        );
+
+        if (latestCandles.length > 0) {
+          // Find candles newer than current newest
+          const newCandles = latestCandles.filter(
+            (c) => c.time > currentNewest
+          );
+          console.log('New candles from API:', newCandles.length);
+
+          if (newCandles.length > 0) {
+            const candlesToAdd = newCandles.slice(0, 200);
+            console.log(
+              `Adding ${candlesToAdd.length} newly fetched newer candles`
+            );
+            setChartData((prev) => {
+              console.log('Before adding API data, prev length:', prev.length);
+              const newData = [...prev, ...candlesToAdd];
+              const uniqueData = Array.from(
+                new Map(newData.map((c) => [c.time, c])).values()
+              ).sort((a, b) => a.time - b.time);
+              console.log(
+                'After adding API data, new length:',
+                uniqueData.length
+              );
+              return uniqueData;
+            });
+            return candlesToAdd;
+          } else {
+            console.log(
+              'No newer data available (already at latest) - API returned same data'
+            );
+            // Return empty array to signal no new data was added
+            // This will prevent the chart from trying to restore a range beyond the data
+            return [];
+          }
+        }
+
+        console.log('No newer data available (already at latest)');
+        return [];
+      } catch (err) {
+        console.error('Error loading newer data:', err);
+        return [];
+      } finally {
+        setIsLoadingMore(false);
+      }
+    },
+    [isLoadingMore, chartData, getCacheKey, loadAndCacheHistoricalData]
   );
 
   // Initial chart data load
   useEffect(() => {
     const loadInitialChartData = async () => {
+      // Clear cache when instrument or granularity changes
+      const cacheKey = getCacheKey(instrument, granularity);
+      if (!candleCacheRef.current.has(cacheKey)) {
+        candleCacheRef.current.clear();
+        oldestCachedTimeRef.current = null;
+        newestCachedTimeRef.current = null;
+      }
+
+      // Add a small delay to prevent rapid-fire requests on mount
+      await new Promise((resolve) => setTimeout(resolve, 100));
       const data = await loadHistoricalData(instrument, granularity);
       setChartData(data);
     };
 
     loadInitialChartData();
-  }, [instrument, granularity, loadHistoricalData]);
+  }, [instrument, granularity, loadHistoricalData, getCacheKey]);
 
   // Fetch positions
   const fetchPositions = useCallback(async () => {
@@ -219,6 +436,32 @@ const DashboardPage = () => {
     }
   }, [token]);
 
+  // Fetch OANDA accounts
+  const fetchOandaAccounts = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await fetch('/api/accounts/', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (response.ok) {
+        const accounts = await response.json();
+        // Backend returns the accounts array directly, not wrapped in an object
+        if (Array.isArray(accounts) && accounts.length > 0) {
+          // Use the first account's account_id
+          setOandaAccountId(accounts[0].account_id);
+          setHasOandaAccount(true);
+        } else {
+          setHasOandaAccount(false);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching OANDA accounts:', err);
+      setHasOandaAccount(false);
+    }
+  }, [token]);
+
   // Initial data load
   useEffect(() => {
     const loadData = async () => {
@@ -227,6 +470,7 @@ const DashboardPage = () => {
 
       try {
         await Promise.all([
+          fetchOandaAccounts(),
           fetchPositions(),
           fetchOrders(),
           fetchStrategyEvents(),
@@ -241,7 +485,7 @@ const DashboardPage = () => {
     };
 
     loadData();
-  }, [fetchPositions, fetchOrders, fetchStrategyEvents]);
+  }, [fetchOandaAccounts, fetchPositions, fetchOrders, fetchStrategyEvents]);
 
   // Auto-refresh effect
   useEffect(() => {
@@ -364,7 +608,7 @@ const DashboardPage = () => {
           onIndicatorsChange={setIndicators}
         />
 
-        <Box sx={{ height: 500, position: 'relative' }}>
+        <Box sx={{ height: 500, position: 'relative', overflow: 'hidden' }}>
           {!hasOandaAccount ? (
             <Box
               sx={{
@@ -411,8 +655,10 @@ const DashboardPage = () => {
                 data={chartData}
                 positions={currentPositions}
                 orders={currentOrders}
-                enableRealTimeUpdates={true}
+                enableRealTimeUpdates={hasOandaAccount && !!oandaAccountId}
+                accountId={oandaAccountId}
                 onLoadOlderData={loadOlderData}
+                onLoadNewerData={loadNewerData}
               />
             </>
           )}
@@ -423,7 +669,8 @@ const DashboardPage = () => {
           color="text.secondary"
           sx={{ display: 'block', mt: 1 }}
         >
-          Tip: Scroll left on the chart to load older historical data
+          Tip: Scroll left/right on the chart to load more historical data. Data
+          is cached for faster navigation.
         </Typography>
       </Paper>
 

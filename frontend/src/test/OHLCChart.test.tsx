@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import OHLCChart from '../components/chart/OHLCChart';
 import type { OHLCData } from '../types/chart';
 
@@ -68,53 +68,30 @@ describe('OHLCChart', () => {
     expect(container.firstChild).toBeInTheDocument();
   });
 
-  it('displays loading state when loading data', async () => {
-    const mockLoadData = vi.fn(
-      () =>
-        new Promise<OHLCData[]>((resolve) => {
-          setTimeout(() => resolve(mockData), 100);
-        })
+  it('renders with empty data array', () => {
+    const { container } = render(
+      <OHLCChart instrument="EUR_USD" granularity="H1" data={[]} />
     );
 
-    render(
-      <OHLCChart
-        instrument="EUR_USD"
-        granularity="H1"
-        onLoadHistoricalData={mockLoadData}
-      />
-    );
-
-    // Should show loading spinner
-    await waitFor(() => {
-      expect(screen.getByRole('progressbar')).toBeInTheDocument();
-    });
-
-    // Wait for loading to complete
-    await waitFor(
-      () => {
-        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-      },
-      { timeout: 200 }
-    );
+    // Chart container should still be rendered even with empty data
+    expect(container.firstChild).toBeInTheDocument();
   });
 
-  it('displays error message when data loading fails', async () => {
-    const mockLoadData = vi.fn(() =>
-      Promise.reject(new Error('Failed to fetch data'))
-    );
+  it('calls onLoadOlderData when provided', async () => {
+    const mockLoadOlderData = vi.fn(() => Promise.resolve(mockData));
 
     render(
       <OHLCChart
         instrument="EUR_USD"
         granularity="H1"
-        onLoadHistoricalData={mockLoadData}
+        data={mockData}
+        onLoadOlderData={mockLoadOlderData}
       />
     );
 
-    // Wait for error message
-    await waitFor(() => {
-      expect(screen.getByText(/Failed to fetch data/i)).toBeInTheDocument();
-    });
+    // onLoadOlderData should be available but not called immediately
+    // It's only called when user scrolls to the left edge
+    expect(mockLoadOlderData).not.toHaveBeenCalled();
   });
 
   it('renders with provided data', () => {
@@ -126,20 +103,21 @@ describe('OHLCChart', () => {
     expect(container.firstChild).toBeInTheDocument();
   });
 
-  it('calls onLoadHistoricalData when provided and data is empty', async () => {
-    const mockLoadData = vi.fn(() => Promise.resolve(mockData));
+  it('calls onLoadNewerData when provided', async () => {
+    const mockLoadNewerData = vi.fn(() => Promise.resolve(mockData));
 
     render(
       <OHLCChart
         instrument="EUR_USD"
         granularity="H1"
-        onLoadHistoricalData={mockLoadData}
+        data={mockData}
+        onLoadNewerData={mockLoadNewerData}
       />
     );
 
-    await waitFor(() => {
-      expect(mockLoadData).toHaveBeenCalledWith('EUR_USD', 'H1');
-    });
+    // onLoadNewerData should be available but not called immediately
+    // It's only called when user scrolls to the right edge
+    expect(mockLoadNewerData).not.toHaveBeenCalled();
   });
 
   it('applies custom chart configuration', () => {

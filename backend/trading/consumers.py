@@ -28,13 +28,13 @@ class MarketDataConsumer(AsyncWebsocketConsumer):
 
     This consumer:
     - Accepts WebSocket connections from authenticated users
-    - Subscribes to market data updates for a specific OANDA account or "default" demo mode
+    - Subscribes to market data updates for a specific OANDA account.
     - Broadcasts tick updates to connected clients
     - Implements message batching for performance optimization
     - Handles connection lifecycle (connect, disconnect, receive)
 
     URL Pattern: ws://host/ws/market-data/<account_id>/<instrument>/
-    - account_id: OANDA account ID or "default" for demo mode
+    - account_id: OANDA account ID
     - instrument: Currency pair (e.g., "USD_JPY", "EUR_USD")
 
     Requirements: 7.3
@@ -61,7 +61,7 @@ class MarketDataConsumer(AsyncWebsocketConsumer):
 
         This method:
         1. Authenticates the user
-        2. Validates account ownership (or allows "default" for demo mode)
+        2. Validates account ownership
         3. Joins the account-specific channel group
         4. Accepts the WebSocket connection
         5. Starts the message batching task
@@ -79,57 +79,13 @@ class MarketDataConsumer(AsyncWebsocketConsumer):
         self.account_id = self.scope["url_route"]["kwargs"]["account_id"]
         self.instrument = self.scope["url_route"]["kwargs"].get("instrument", "USD_JPY")
 
-        # Handle "default" account case (no OANDA account configured)
+        # Reject "default" account - require actual OANDA account
         if self.account_id == "default":
-            # Create a demo/default group name
-            self.group_name = f"market_data_default_{self.user.id}_{self.instrument}"
-
-            # Join the channel group
-            await self.channel_layer.group_add(self.group_name, self.channel_name)
-
-            # Accept the WebSocket connection
-            await self.accept()
-
-            # Send warning message about demo mode
-            await self.send(
-                text_data=json.dumps(
-                    {
-                        "type": "demo_warning",
-                        "data": {
-                            "message": "OANDA account is required. "
-                            "Please register an OANDA account to view real market data.",
-                            "severity": "warning",
-                            "is_demo": True,
-                            "instrument": self.instrument,
-                        },
-                    }
-                )
-            )
-
-            # Start the batching task
-            if self.is_batching:
-                self.batch_task = asyncio.create_task(self._batch_sender())
-
-            # Start demo market data stream
-            try:
-                from .demo_market_data import (  # pylint: disable=import-outside-toplevel
-                    start_demo_stream,
-                )
-
-                start_demo_stream(self.user.id, self.instrument)
-                logger.info(
-                    "Started demo market data stream for user %s, instrument %s",
-                    self.user.username,
-                    self.instrument,
-                )
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                logger.error("Failed to start demo stream: %s", e)
-
-            logger.info(
-                "User %s connected to default market data stream for instrument %s",
+            logger.warning(
+                "User %s attempted to connect without OANDA account",
                 self.user.username,
-                self.instrument,
             )
+            await self.close(code=4003, reason="OANDA account required")
             return
 
         # Validate that the account belongs to the user
@@ -183,9 +139,8 @@ class MarketDataConsumer(AsyncWebsocketConsumer):
         This method:
         1. Cancels the batching task
         2. Flushes any remaining messages
-        3. Stops demo stream if applicable
-        4. Leaves the channel group
-        5. Logs the disconnection
+        3. Leaves the channel group
+        4. Logs the disconnection
 
         Args:
             code: WebSocket close code
@@ -199,22 +154,6 @@ class MarketDataConsumer(AsyncWebsocketConsumer):
         # Flush any remaining messages
         if self.message_buffer:
             await self._flush_batch()
-
-        # Stop demo stream if this is a default account
-        if self.account_id == "default" and self.user:
-            try:
-                from .demo_market_data import (  # pylint: disable=import-outside-toplevel
-                    stop_demo_stream,
-                )
-
-                stop_demo_stream(self.user.id, self.instrument)
-                logger.info(
-                    "Stopped demo market data stream for user %s, instrument %s",
-                    self.user.username,
-                    self.instrument,
-                )
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                logger.error("Failed to stop demo stream: %s", e)
 
         # Leave the channel group
         if self.group_name:
@@ -435,31 +374,6 @@ class MarketDataConsumer(AsyncWebsocketConsumer):
                 {
                     "type": "pnl_update",
                     "data": pnl_data,
-                }
-            )
-        )
-
-    async def demo_reminder(self, event: Dict[str, Any]) -> None:
-        """
-        Handle demo reminder events from the channel layer.
-
-        This method broadcasts periodic reminders that the user is viewing
-        demo data and should register an OANDA account for real data.
-
-        Args:
-            event: Event data containing reminder information
-        """
-        reminder_data = event.get("data")
-
-        if not reminder_data:
-            logger.warning("Received demo reminder without data")
-            return
-
-        await self.send(
-            text_data=json.dumps(
-                {
-                    "type": "demo_reminder",
-                    "data": reminder_data,
                 }
             )
         )
