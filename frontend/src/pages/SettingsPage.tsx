@@ -1,11 +1,8 @@
 import { useState } from 'react';
 import { Container, Typography, Box, Tabs, Tab, Paper } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import {
-  AccountManagement,
-  PreferencesForm,
-  StrategyDefaults,
-} from '../components/settings';
+import { Breadcrumbs } from '../components/common';
+import { AccountManagement, StrategyDefaults } from '../components/settings';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -39,6 +36,7 @@ const SettingsPage = () => {
 
   return (
     <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+      <Breadcrumbs />
       <Box>
         <Typography variant="h4" gutterBottom>
           {t('settings:title', 'Settings')}
@@ -57,19 +55,14 @@ const SettingsPage = () => {
               aria-controls="settings-tabpanel-0"
             />
             <Tab
-              label={t('settings:tabs.preferences', 'Preferences')}
+              label={t('settings:tabs.strategyDefaults', 'Strategy Defaults')}
               id="settings-tab-1"
               aria-controls="settings-tabpanel-1"
             />
             <Tab
-              label={t('settings:tabs.strategyDefaults', 'Strategy Defaults')}
+              label={t('settings:tabs.security', 'Security')}
               id="settings-tab-2"
               aria-controls="settings-tabpanel-2"
-            />
-            <Tab
-              label={t('settings:tabs.security', 'Security')}
-              id="settings-tab-3"
-              aria-controls="settings-tabpanel-3"
             />
           </Tabs>
         </Box>
@@ -81,22 +74,15 @@ const SettingsPage = () => {
           </Paper>
         </TabPanel>
 
-        {/* Preferences Tab */}
-        <TabPanel value={tabValue} index={1}>
-          <Paper sx={{ p: 3 }}>
-            <PreferencesForm />
-          </Paper>
-        </TabPanel>
-
         {/* Strategy Defaults Tab */}
-        <TabPanel value={tabValue} index={2}>
+        <TabPanel value={tabValue} index={1}>
           <Paper sx={{ p: 3 }}>
             <StrategyDefaults />
           </Paper>
         </TabPanel>
 
         {/* Security Tab */}
-        <TabPanel value={tabValue} index={3}>
+        <TabPanel value={tabValue} index={2}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
               {t('settings:security.title', 'Security Settings')}

@@ -20,6 +20,7 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { Breadcrumbs } from '../components/common';
 import DataTable from '../components/common/DataTable';
 import type { Column } from '../components/common/DataTable';
 import type { Position, PositionFilters } from '../types/position';
@@ -401,6 +402,7 @@ const PositionsPage = () => {
 
   return (
     <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+      <Breadcrumbs />
       <Box>
         <Typography variant="h4" gutterBottom>
           {t('positions:title')}

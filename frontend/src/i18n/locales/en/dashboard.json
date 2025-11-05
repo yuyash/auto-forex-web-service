@@ -9,7 +9,8 @@
     "chartType": "Chart Type",
     "candlestick": "Candlestick",
     "line": "Line",
-    "bar": "Bar"
+    "bar": "Bar",
+    "noOandaAccount": "Register an OANDA account to display forex data"
   },
   "positions": {
     "title": "Open Positions",

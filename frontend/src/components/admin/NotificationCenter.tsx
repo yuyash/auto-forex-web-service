@@ -66,7 +66,7 @@ const NotificationCenter: React.FC = () => {
     if (!token || !user?.is_staff) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/admin/notifications/`;
+    const wsUrl = `${protocol}//${window.location.host}/ws/admin/notifications/?token=${token}`;
 
     const websocket = new WebSocket(wsUrl);
 

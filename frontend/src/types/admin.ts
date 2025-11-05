@@ -1,14 +1,15 @@
 // Admin dashboard types
 
 export interface SystemHealth {
-  cpu_usage: number;
-  memory_usage: number;
-  database_status: 'connected' | 'disconnected';
-  redis_status: 'connected' | 'disconnected';
-  oanda_api_status: 'connected' | 'disconnected';
-  active_streams: number;
-  celery_tasks: number;
-  timestamp: string;
+  cpu_usage?: number;
+  memory_usage?: number;
+  disk_usage?: number;
+  database_status?: 'connected' | 'disconnected';
+  redis_status?: 'connected' | 'disconnected';
+  oanda_api_status?: 'connected' | 'disconnected';
+  active_streams?: number;
+  celery_tasks?: number;
+  timestamp?: string;
 }
 
 export interface UserSession {
@@ -46,10 +47,10 @@ export interface AdminEvent {
 }
 
 export interface AdminDashboardData {
-  health: SystemHealth;
-  online_users: UserSession[];
-  running_strategies: RunningStrategy[];
-  recent_events: AdminEvent[];
+  health?: SystemHealth;
+  online_users?: UserSession[];
+  running_strategies?: RunningStrategy[];
+  recent_events?: AdminEvent[];
 }
 
 export interface AdminNotification {
@@ -67,4 +68,19 @@ export interface SystemSettings {
   email_whitelist_enabled: boolean;
   last_updated: string;
   updated_by: string;
+}
+
+export interface User {
+  id: number;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  is_active: boolean;
+  is_staff: boolean;
+  is_superuser: boolean;
+  is_locked: boolean;
+  failed_login_attempts: number;
+  date_joined: string;
+  last_login: string | null;
 }

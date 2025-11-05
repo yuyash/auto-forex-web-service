@@ -21,6 +21,7 @@ import type { SelectChangeEvent } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { OHLCChart } from '../components/chart';
+import { Breadcrumbs } from '../components/common';
 import ChartControls from '../components/chart/ChartControls';
 import type { Granularity, OHLCData, Position, Order } from '../types/chart';
 import type { ChartType, Indicator } from '../components/chart/ChartControls';
@@ -39,7 +40,7 @@ const DashboardPage = () => {
   const { token } = useAuth();
 
   // Chart state
-  const [instrument, setInstrument] = useState<string>('EUR_USD');
+  const [instrument, setInstrument] = useState<string>('USD_JPY');
   const [granularity, setGranularity] = useState<Granularity>('H1');
   const [chartType, setChartType] = useState<ChartType>('Candlestick');
   const [indicators, setIndicators] = useState<Indicator[]>([]);
@@ -60,6 +61,7 @@ const DashboardPage = () => {
   const [chartData, setChartData] = useState<OHLCData[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const oldestTimestampRef = useRef<number | null>(null);
+  const [hasOandaAccount, setHasOandaAccount] = useState<boolean>(true);
 
   // Load historical data for the chart
   const loadHistoricalData = useCallback(
@@ -75,6 +77,14 @@ const DashboardPage = () => {
         );
 
         if (!response.ok) {
+          const errorData = await response.json();
+
+          // Check if the error is due to missing OANDA account
+          if (errorData.error_code === 'NO_OANDA_ACCOUNT') {
+            setHasOandaAccount(false);
+            return [];
+          }
+
           throw new Error('Failed to load historical data');
         }
 
@@ -86,6 +96,7 @@ const DashboardPage = () => {
           oldestTimestampRef.current = candles[0].time;
         }
 
+        setHasOandaAccount(true);
         return candles;
       } catch (err) {
         console.error('Error loading historical data:', err);
@@ -198,6 +209,10 @@ const DashboardPage = () => {
       if (response.ok) {
         const data = await response.json();
         setStrategyEvents(data.events || []);
+      } else if (response.status === 403) {
+        // User doesn't have permission to view events (not an admin)
+        // This is expected for non-admin users, so just set empty array
+        setStrategyEvents([]);
       }
     } catch (err) {
       console.error('Error fetching strategy events:', err);
@@ -277,6 +292,7 @@ const DashboardPage = () => {
 
   return (
     <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+      <Breadcrumbs />
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" gutterBottom>
           {t('title')}
@@ -349,35 +365,57 @@ const DashboardPage = () => {
         />
 
         <Box sx={{ height: 500, position: 'relative' }}>
-          {isLoadingMore && (
+          {!hasOandaAccount ? (
             <Box
               sx={{
-                position: 'absolute',
-                top: 8,
-                left: 8,
-                zIndex: 10,
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                borderRadius: 1,
-                px: 2,
-                py: 1,
                 display: 'flex',
+                justifyContent: 'center',
                 alignItems: 'center',
-                gap: 1,
+                height: '100%',
+                border: '1px solid #e1e1e1',
+                borderRadius: 1,
+                backgroundColor: '#f5f5f5',
               }}
             >
-              <CircularProgress size={16} />
-              <Typography variant="caption">Loading older data...</Typography>
+              <Typography variant="body1" color="text.secondary">
+                {t('chart.noOandaAccount')}
+              </Typography>
             </Box>
+          ) : (
+            <>
+              {isLoadingMore && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    left: 8,
+                    zIndex: 10,
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    borderRadius: 1,
+                    px: 2,
+                    py: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                  }}
+                >
+                  <CircularProgress size={16} />
+                  <Typography variant="caption">
+                    Loading older data...
+                  </Typography>
+                </Box>
+              )}
+              <OHLCChart
+                instrument={instrument}
+                granularity={granularity}
+                data={chartData}
+                positions={currentPositions}
+                orders={currentOrders}
+                enableRealTimeUpdates={true}
+                onLoadOlderData={loadOlderData}
+              />
+            </>
           )}
-          <OHLCChart
-            instrument={instrument}
-            granularity={granularity}
-            data={chartData}
-            positions={currentPositions}
-            orders={currentOrders}
-            enableRealTimeUpdates={true}
-            onLoadOlderData={loadOlderData}
-          />
         </Box>
 
         <Typography

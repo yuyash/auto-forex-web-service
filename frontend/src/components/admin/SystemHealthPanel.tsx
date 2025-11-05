@@ -19,11 +19,25 @@ import { useTranslation } from 'react-i18next';
 import type { SystemHealth } from '../../types/admin';
 
 interface SystemHealthPanelProps {
-  health: SystemHealth;
+  health?: SystemHealth;
 }
 
 const SystemHealthPanel: React.FC<SystemHealthPanelProps> = ({ health }) => {
   const { t } = useTranslation('admin');
+
+  // Guard against undefined health object
+  if (!health) {
+    return (
+      <Paper elevation={2} sx={{ p: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          {t('health.title')}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Loading system health data...
+        </Typography>
+      </Paper>
+    );
+  }
 
   const getStatusIcon = (status: string) => {
     return status === 'connected' ? (
@@ -76,12 +90,12 @@ const SystemHealthPanel: React.FC<SystemHealthPanelProps> = ({ health }) => {
               </Typography>
             </Box>
             <Typography variant="h5" sx={{ mb: 1 }}>
-              {health.cpu_usage.toFixed(1)}%
+              {health.cpu_usage?.toFixed(1) ?? 0}%
             </Typography>
             <LinearProgress
               variant="determinate"
-              value={health.cpu_usage}
-              color={getUsageColor(health.cpu_usage)}
+              value={health.cpu_usage ?? 0}
+              color={getUsageColor(health.cpu_usage ?? 0)}
               sx={{ height: 8, borderRadius: 1 }}
             />
           </Box>
@@ -104,12 +118,12 @@ const SystemHealthPanel: React.FC<SystemHealthPanelProps> = ({ health }) => {
               </Typography>
             </Box>
             <Typography variant="h5" sx={{ mb: 1 }}>
-              {health.memory_usage.toFixed(1)}%
+              {health.memory_usage?.toFixed(1) ?? 0}%
             </Typography>
             <LinearProgress
               variant="determinate"
-              value={health.memory_usage}
-              color={getUsageColor(health.memory_usage)}
+              value={health.memory_usage ?? 0}
+              color={getUsageColor(health.memory_usage ?? 0)}
               sx={{ height: 8, borderRadius: 1 }}
             />
           </Box>
@@ -131,7 +145,7 @@ const SystemHealthPanel: React.FC<SystemHealthPanelProps> = ({ health }) => {
                 {t('health.activeStreams')}
               </Typography>
             </Box>
-            <Typography variant="h5">{health.active_streams}</Typography>
+            <Typography variant="h5">{health.active_streams ?? 0}</Typography>
             <Typography variant="caption" color="text.secondary">
               {t('health.v20Connections')}
             </Typography>
@@ -154,7 +168,7 @@ const SystemHealthPanel: React.FC<SystemHealthPanelProps> = ({ health }) => {
                 {t('health.celeryTasks')}
               </Typography>
             </Box>
-            <Typography variant="h5">{health.celery_tasks}</Typography>
+            <Typography variant="h5">{health.celery_tasks ?? 0}</Typography>
             <Typography variant="caption" color="text.secondary">
               {t('health.activeTasks')}
             </Typography>
@@ -174,21 +188,21 @@ const SystemHealthPanel: React.FC<SystemHealthPanelProps> = ({ health }) => {
             }}
           >
             <Chip
-              icon={getStatusIcon(health.database_status)}
+              icon={getStatusIcon(health.database_status ?? 'disconnected')}
               label={t('health.database')}
-              color={getStatusColor(health.database_status)}
+              color={getStatusColor(health.database_status ?? 'disconnected')}
               variant="outlined"
             />
             <Chip
-              icon={getStatusIcon(health.redis_status)}
+              icon={getStatusIcon(health.redis_status ?? 'disconnected')}
               label={t('health.redis')}
-              color={getStatusColor(health.redis_status)}
+              color={getStatusColor(health.redis_status ?? 'disconnected')}
               variant="outlined"
             />
             <Chip
-              icon={getStatusIcon(health.oanda_api_status)}
+              icon={getStatusIcon(health.oanda_api_status ?? 'disconnected')}
               label={t('health.oandaApi')}
-              color={getStatusColor(health.oanda_api_status)}
+              color={getStatusColor(health.oanda_api_status ?? 'disconnected')}
               variant="outlined"
             />
           </Box>
@@ -198,7 +212,9 @@ const SystemHealthPanel: React.FC<SystemHealthPanelProps> = ({ health }) => {
       <Box sx={{ mt: 2, textAlign: 'right' }}>
         <Typography variant="caption" color="text.secondary">
           {t('health.lastUpdate')}:{' '}
-          {new Date(health.timestamp).toLocaleString()}
+          {health.timestamp
+            ? new Date(health.timestamp).toLocaleString()
+            : 'N/A'}
         </Typography>
       </Box>
     </Paper>

@@ -85,6 +85,21 @@ class SecurityMonitoringMiddleware:
         # Process the request
         response = self.get_response(request)
 
+        # Track session for authenticated users
+        if (
+            hasattr(request, "user")
+            and request.user.is_authenticated
+            and not isinstance(request.user, AnonymousUser)
+            and response.status_code == 200
+        ):
+            # Update or create session for authenticated requests
+            user_agent = request.META.get("HTTP_USER_AGENT", "")
+            self._create_or_update_user_session(
+                request.user,
+                ip_address,
+                user_agent,
+            )
+
         # Log authentication events based on path and response status
         self._log_authentication_event(request, response, ip_address)
 
@@ -195,7 +210,7 @@ class SecurityMonitoringMiddleware:
                 )
 
                 # Create or update user session
-                self._create_user_session(
+                self._create_or_update_user_session(
                     request.user,
                     ip_address,
                     user_agent,
@@ -278,17 +293,17 @@ class SecurityMonitoringMiddleware:
         user_agent: str,
     ) -> None:
         """
-        Create or update user session record.
+        Create user session record.
 
         Args:
             user: User instance
             ip_address: Client IP address
             user_agent: User agent string
         """
-        # Generate a session key (simplified - in production use Django session)
+        # Generate a session key
         session_key = f"{user.id}_{ip_address}_{timezone.now().timestamp()}"
 
-        # Create session record
+        # Create new session record
         UserSession.objects.create(
             user=user,
             session_key=session_key,
@@ -306,6 +321,37 @@ class SecurityMonitoringMiddleware:
                 "ip_address": ip_address,
             },
         )
+
+    def _create_or_update_user_session(
+        self,
+        user: "UserType",
+        ip_address: str,
+        user_agent: str,
+    ) -> None:
+        """
+        Create or update user session record.
+
+        Args:
+            user: User instance
+            ip_address: Client IP address
+            user_agent: User agent string
+        """
+        # Try to find an existing active session for this user and IP
+        existing_session = UserSession.objects.filter(
+            user=user, ip_address=ip_address, is_active=True
+        ).first()
+
+        if existing_session:
+            # Update last_activity timestamp (auto_now field will update)
+            existing_session.save()
+            logger.debug(
+                "Updated session for user %s from %s",
+                user.email,
+                ip_address,
+            )
+        else:
+            # Create new session using the _create_user_session method
+            self._create_user_session(user, ip_address, user_agent)
 
 
 class HTTPAccessLoggingMiddleware:

@@ -91,14 +91,20 @@ class CandleDataView(APIView):
 
             if account is None:
                 return Response(
-                    {"error": ("No OANDA account found. " "Please configure an account first.")},
-                    status=status.HTTP_404_NOT_FOUND,
+                    {
+                        "error": "No OANDA account found. Please configure an account first.",
+                        "error_code": "NO_OANDA_ACCOUNT",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
         except ObjectDoesNotExist:
             return Response(
-                {"error": "OANDA account not found"},
-                status=status.HTTP_404_NOT_FOUND,
+                {
+                    "error": "OANDA account not found",
+                    "error_code": "NO_OANDA_ACCOUNT",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Fetch candles from OANDA

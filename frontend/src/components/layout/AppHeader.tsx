@@ -91,7 +91,7 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
 
   const handleProfileClick = () => {
     handleUserMenuClose();
-    navigate('/settings');
+    navigate('/profile');
   };
 
   const handleSettingsClick = () => {

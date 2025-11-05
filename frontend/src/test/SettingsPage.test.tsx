@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import { BrowserRouter } from 'react-router-dom';
 import SettingsPage from '../pages/SettingsPage';
 import { AuthProvider } from '../contexts/AuthContext';
@@ -81,10 +82,9 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Settings')).toBeInTheDocument();
   });
 
-  it('renders all four tabs', () => {
+  it('renders all three tabs', () => {
     renderSettingsPage();
     expect(screen.getByText('Accounts')).toBeInTheDocument();
-    expect(screen.getByText('Preferences')).toBeInTheDocument();
     expect(screen.getByText('Strategy Defaults')).toBeInTheDocument();
     expect(screen.getByText('Security')).toBeInTheDocument();
   });
@@ -96,18 +96,18 @@ describe('SettingsPage', () => {
     });
   });
 
-  it('switches to preferences tab when clicked', async () => {
+  it('switches to strategy defaults tab when first clicked', async () => {
     renderSettingsPage();
-    const preferencesTab = screen.getByText('Preferences');
-    fireEvent.click(preferencesTab);
+    const strategyDefaultsTab = screen.getByRole('tab', {
+      name: /strategy defaults/i,
+    });
+    fireEvent.click(strategyDefaultsTab);
 
     await waitFor(() => {
-      expect(screen.getByText('User Preferences')).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: /strategy defaults/i })
+      ).toBeInTheDocument();
     });
-
-    // Check that the preferences form is rendered with timezone selector
-    expect(screen.getByLabelText(/Timezone/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Language/i)).toBeInTheDocument();
   });
 
   it('switches to strategy defaults tab when clicked', async () => {
@@ -148,13 +148,17 @@ describe('SettingsPage', () => {
       expect(screen.getByText('OANDA Accounts')).toBeInTheDocument();
     });
 
-    // Switch to Preferences
-    const preferencesTab = screen.getByText('Preferences');
-    fireEvent.click(preferencesTab);
+    // Switch to Strategy Defaults
+    const strategyDefaultsTab = screen.getByRole('tab', {
+      name: /strategy defaults/i,
+    });
+    fireEvent.click(strategyDefaultsTab);
 
-    // Wait for preferences content to be visible
+    // Wait for strategy defaults content to be visible
     await waitFor(() => {
-      expect(screen.getByText('User Preferences')).toBeVisible();
+      expect(
+        screen.getByRole('heading', { name: /strategy defaults/i })
+      ).toBeVisible();
     });
 
     // Accounts panel should have hidden attribute
@@ -170,9 +174,11 @@ describe('SettingsPage', () => {
     expect(accountsTab).toHaveAttribute('id', 'settings-tab-0');
     expect(accountsTab).toHaveAttribute('aria-controls', 'settings-tabpanel-0');
 
-    const preferencesTab = screen.getByRole('tab', { name: /preferences/i });
-    expect(preferencesTab).toHaveAttribute('id', 'settings-tab-1');
-    expect(preferencesTab).toHaveAttribute(
+    const strategyDefaultsTab = screen.getByRole('tab', {
+      name: /strategy defaults/i,
+    });
+    expect(strategyDefaultsTab).toHaveAttribute('id', 'settings-tab-1');
+    expect(strategyDefaultsTab).toHaveAttribute(
       'aria-controls',
       'settings-tabpanel-1'
     );
@@ -194,16 +200,20 @@ describe('SettingsPage', () => {
       expect(screen.getByText('Security Settings')).toBeVisible();
     });
 
-    // Switch to Preferences tab
-    const preferencesTab = screen.getByText('Preferences');
-    fireEvent.click(preferencesTab);
+    // Switch to Strategy Defaults tab
+    const strategyDefaultsTab = screen.getByRole('tab', {
+      name: /strategy defaults/i,
+    });
+    fireEvent.click(strategyDefaultsTab);
 
     await waitFor(() => {
-      expect(screen.getByText('User Preferences')).toBeVisible();
+      expect(
+        screen.getByRole('heading', { name: /strategy defaults/i })
+      ).toBeVisible();
     });
 
     // Security panel should have hidden attribute
-    const securityPanel = document.getElementById('settings-tabpanel-3');
+    const securityPanel = document.getElementById('settings-tabpanel-2');
     expect(securityPanel).toHaveAttribute('hidden');
   });
 });

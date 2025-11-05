@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   createChart,
   ColorType,
@@ -62,6 +62,12 @@ const OHLCChart = ({
   const isLoadingOlderDataRef = useRef(false);
   const hasSubscribedToScrollRef = useRef(false);
 
+  // Stable error handler to prevent WebSocket reconnection loops
+  const handleWebSocketError = useCallback((err: Error) => {
+    console.error('WebSocket error:', err);
+    setError(err.message);
+  }, []);
+
   // Connect to WebSocket for real-time updates (only if enabled)
   const {
     tickData,
@@ -71,10 +77,7 @@ const OHLCChart = ({
     accountId: enableRealTimeUpdates ? accountId : undefined,
     instrument: enableRealTimeUpdates ? instrument : undefined,
     throttleMs: 100,
-    onError: (err) => {
-      console.error('WebSocket error:', err);
-      setError(err.message);
-    },
+    onError: handleWebSocketError,
   });
 
   // Default chart configuration

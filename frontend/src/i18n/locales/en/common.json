@@ -88,5 +88,18 @@
     "english": "English",
     "japanese": "Japanese",
     "selectLanguage": "Select Language"
+  },
+  "breadcrumbs": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "orders": "Orders",
+    "positions": "Positions",
+    "strategy": "Strategy",
+    "backtest": "Backtest",
+    "settings": "Settings",
+    "admin": "Admin",
+    "adminSettings": "Settings",
+    "events": "Events",
+    "users": "User Management"
   }
 }

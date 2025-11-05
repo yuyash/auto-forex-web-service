@@ -9,7 +9,8 @@
     "chartType": "チャートタイプ",
     "candlestick": "ローソク足",
     "line": "ライン",
-    "bar": "バー"
+    "bar": "バー",
+    "noOandaAccount": "外国為替データを表示するにはOANDAアカウントを登録してください"
   },
   "positions": {
     "title": "オープンポジション",

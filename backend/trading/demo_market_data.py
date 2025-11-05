@@ -15,7 +15,6 @@ import random  # nosec B404 - Used only for demo data generation, not security
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
-from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
 logger = logging.getLogger(__name__)
@@ -106,7 +105,7 @@ class DemoMarketDataGenerator:
             "ask_liquidity": ask_liquidity,
         }
 
-    def _broadcast_tick(self, tick_data: Dict) -> None:
+    async def _broadcast_tick(self, tick_data: Dict) -> None:
         """
         Broadcast tick data to WebSocket consumers.
 
@@ -123,7 +122,7 @@ class DemoMarketDataGenerator:
             group_name = f"market_data_default_{self.user_id}_{self.instrument}"
 
             # Send message to the group
-            async_to_sync(channel_layer.group_send)(
+            await channel_layer.group_send(
                 group_name,
                 {
                     "type": "market_data_update",
@@ -140,7 +139,7 @@ class DemoMarketDataGenerator:
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error broadcasting demo tick: %s", e)
 
-    def _broadcast_demo_reminder(self) -> None:
+    async def _broadcast_demo_reminder(self) -> None:
         """
         Broadcast a reminder that this is demo data.
         """
@@ -153,7 +152,7 @@ class DemoMarketDataGenerator:
             group_name = f"market_data_default_{self.user_id}_{self.instrument}"
 
             # Send reminder message
-            async_to_sync(channel_layer.group_send)(
+            await channel_layer.group_send(
                 group_name,
                 {
                     "type": "demo_reminder",
@@ -188,13 +187,13 @@ class DemoMarketDataGenerator:
             while self.is_running:
                 # Generate and broadcast tick
                 tick_data = self._generate_tick()
-                self._broadcast_tick(tick_data)
+                await self._broadcast_tick(tick_data)
 
                 tick_count += 1
 
                 # Send periodic reminder every 60 ticks (about 1 minute)
                 if tick_count % 60 == 0:
-                    self._broadcast_demo_reminder()
+                    await self._broadcast_demo_reminder()
 
                 # Wait before next tick
                 await asyncio.sleep(interval)

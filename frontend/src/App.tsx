@@ -18,9 +18,11 @@ import PositionsPage from './pages/PositionsPage';
 import StrategyPage from './pages/StrategyPage';
 import BacktestPage from './pages/BacktestPage';
 import SettingsPage from './pages/SettingsPage';
+import ProfilePage from './pages/ProfilePage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import AdminSettingsPage from './pages/AdminSettingsPage';
 import EventViewerPage from './pages/EventViewerPage';
+import UserManagementPage from './pages/UserManagementPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function AppRoutes() {
@@ -105,10 +107,12 @@ function AppRoutes() {
           <Route path="/positions" element={<PositionsPage />} />
           <Route path="/strategy" element={<StrategyPage />} />
           <Route path="/backtest" element={<BacktestPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/admin" element={<AdminDashboardPage />} />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />
           <Route path="/admin/events" element={<EventViewerPage />} />
+          <Route path="/admin/users" element={<UserManagementPage />} />
         </Route>
       </Route>
 

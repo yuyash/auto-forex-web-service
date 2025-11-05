@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { Breadcrumbs } from '../components/common';
 import BacktestConfigPanel from '../components/backtest/BacktestConfigPanel';
 import BacktestProgressBar from '../components/backtest/BacktestProgressBar';
 import BacktestResultsPanel from '../components/backtest/BacktestResultsPanel';
@@ -303,6 +304,7 @@ const BacktestPage = () => {
 
   return (
     <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+      <Breadcrumbs />
       <Box>
         <Typography variant="h4" gutterBottom>
           {t('backtest:title', 'Backtesting')}

@@ -12,6 +12,7 @@ Requirements: 19.1, 19.2, 19.3, 19.4
 """
 
 import logging
+import os
 import time
 from typing import Any, Dict
 
@@ -39,13 +40,13 @@ class SystemHealthMonitor:
         """Initialize the system health monitor."""
         self.redis_client = None
         try:
-            # Parse Redis URL from settings
-            redis_url = getattr(settings, "CELERY_BROKER_URL", "redis://localhost:6379/0")
-            self.redis_client = redis.from_url(
-                redis_url,
-                socket_connect_timeout=2,
-                socket_timeout=2,
-            )
+            redis_url = os.getenv("REDIS_URL")
+            if redis_url:
+                self.redis_client = redis.from_url(
+                    redis_url,
+                    socket_connect_timeout=2,
+                    socket_timeout=2,
+                )
         except Exception as e:
             logger.error(f"Failed to initialize Redis client: {e}")
 

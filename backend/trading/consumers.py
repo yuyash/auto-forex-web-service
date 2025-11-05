@@ -5,6 +5,8 @@ This module implements Django Channels consumers for broadcasting
 real-time market data updates to connected frontend clients.
 """
 
+# pylint: disable=too-many-lines
+
 import asyncio
 import contextlib
 import json
@@ -94,7 +96,7 @@ class MarketDataConsumer(AsyncWebsocketConsumer):
                     {
                         "type": "demo_warning",
                         "data": {
-                            "message": "You are viewing simulated demo data. "
+                            "message": "OANDA account is required. "
                             "Please register an OANDA account to view real market data.",
                             "severity": "warning",
                             "is_demo": True,
@@ -735,38 +737,139 @@ class AdminDashboardConsumer(AsyncWebsocketConsumer):
 
     async def _send_metrics_periodically(self) -> None:
         """
-        Background task that periodically sends system metrics.
+        Background task that periodically sends system metrics and dashboard data.
 
         This task runs continuously while the WebSocket is connected,
-        sending metrics every 5 seconds.
+        sending full dashboard updates every 5 seconds.
         """
         while True:
-            await self._send_system_metrics()
-            await asyncio.sleep(5)  # Send metrics every 5 seconds
+            await self._send_dashboard_data()
+            await asyncio.sleep(5)  # Send dashboard data every 5 seconds
 
-    async def _send_system_metrics(self) -> None:
+    async def _send_dashboard_data(self) -> None:
         """
-        Collect and send system metrics to the client.
+        Collect and send complete dashboard data to the client.
         """
         try:
             import psutil  # pylint: disable=import-outside-toplevel
+            from channels.db import (  # pylint: disable=import-outside-toplevel
+                database_sync_to_async,
+            )
 
-            # Collect system metrics
-            metrics = {
-                "type": "metrics",
-                "data": {
-                    "cpu_usage": psutil.cpu_percent(interval=1),
-                    "memory_usage": psutil.virtual_memory().percent,
+            from accounts.models import UserSession  # pylint: disable=import-outside-toplevel
+            from trading.models import Strategy  # pylint: disable=import-outside-toplevel
+            from trading.system_health_monitor import (  # pylint: disable=import-outside-toplevel
+                SystemHealthMonitor,
+            )
+
+            @database_sync_to_async
+            def get_dashboard_data() -> Dict[str, Any]:
+                # Get system health
+                monitor = SystemHealthMonitor()
+                health_data = monitor.get_health_summary()
+
+                # Transform health data
+                health = {
+                    "cpu_usage": health_data.get("cpu", {}).get("cpu_percent", 0),
+                    "memory_usage": health_data.get("memory", {}).get("percent", 0),
                     "disk_usage": psutil.disk_usage("/").percent,
-                    "timestamp": asyncio.get_event_loop().time(),
-                },
-            }
+                    "database_status": (
+                        "connected"
+                        if health_data.get("database", {}).get("connected")
+                        else "disconnected"
+                    ),
+                    "redis_status": (
+                        "connected"
+                        if health_data.get("redis", {}).get("connected")
+                        else "disconnected"
+                    ),
+                    "oanda_api_status": (
+                        "connected"
+                        if health_data.get("oanda_api", {}).get("status") == "healthy"
+                        else "disconnected"
+                    ),
+                    "active_streams": health_data.get("active_streams", 0),
+                    "celery_tasks": health_data.get("celery_tasks", {}).get("total", 0),
+                    "timestamp": health_data.get("timestamp"),
+                }
 
-            # Send metrics to client
-            await self.send(text_data=json.dumps(metrics))
+                # Get online users with session details
+                active_sessions = (
+                    UserSession.objects.filter(is_active=True)
+                    .select_related("user")
+                    .order_by("-last_activity")
+                )
+
+                online_users = [
+                    {
+                        "user_id": session.user.id,
+                        "username": session.user.username,
+                        "email": session.user.email,
+                        "session_id": session.id,
+                        "session_key": session.session_key,
+                        "ip_address": session.ip_address,
+                        "user_agent": session.user_agent,
+                        "login_time": session.login_time.isoformat(),
+                        "last_activity": session.last_activity.isoformat(),
+                        "is_staff": session.user.is_staff,
+                    }
+                    for session in active_sessions
+                ]
+
+                # Get running strategies
+                active_strategies = (
+                    Strategy.objects.filter(is_active=True)
+                    .select_related("account__user")
+                    .prefetch_related("account__positions")
+                )
+
+                running_strategies = []
+                for strategy in active_strategies:
+                    positions = strategy.account.positions.filter(
+                        opened_at__isnull=False, closed_at__isnull=True
+                    )
+                    position_count = positions.count()
+                    total_pnl = sum(pos.unrealized_pnl for pos in positions)
+
+                    running_strategies.append(
+                        {
+                            "strategy_id": strategy.id,
+                            "strategy_type": strategy.strategy_type,
+                            "user_id": strategy.account.user.id,
+                            "username": strategy.account.user.username,
+                            "email": strategy.account.user.email,
+                            "account_id": strategy.account.id,
+                            "oanda_account_id": strategy.account.account_id,
+                            "instruments": strategy.instruments,
+                            "started_at": (
+                                strategy.started_at.isoformat() if strategy.started_at else None
+                            ),
+                            "position_count": position_count,
+                            "total_unrealized_pnl": float(total_pnl),
+                        }
+                    )
+
+                return {
+                    "health": health,
+                    "online_users": online_users,
+                    "running_strategies": running_strategies,
+                }
+
+            # Get dashboard data
+            dashboard_data = await get_dashboard_data()
+
+            # Send complete dashboard update
+            await self.send(
+                text_data=json.dumps(
+                    {
+                        "type": "dashboard_update",
+                        "data": dashboard_data,
+                    }
+                )
+            )
 
         except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.error("Error collecting system metrics: %s", e)
+            logger.error("Error collecting dashboard data: %s", e)
 
     async def dashboard_update(self, event: Dict[str, Any]) -> None:
         """

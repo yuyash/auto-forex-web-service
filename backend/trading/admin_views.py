@@ -17,6 +17,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
+import psutil
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -367,7 +368,8 @@ def stop_strategy(request: Request, strategy_id: int) -> Response:
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, IsAdminUser])
-def get_admin_dashboard(request: Request) -> Response:  # pylint: disable=unused-argument
+def get_admin_dashboard(request: Request) -> Response:
+    # pylint: disable=unused-argument,too-many-locals
     """
     Get comprehensive admin dashboard data.
 
@@ -390,11 +392,82 @@ def get_admin_dashboard(request: Request) -> Response:  # pylint: disable=unused
         monitor = SystemHealthMonitor()
         health_data = monitor.get_health_summary()
 
-        # Get online users count
-        online_users_count = UserSession.objects.filter(is_active=True).count()
+        # Transform health data to match frontend expectations
+        health = {
+            "cpu_usage": health_data.get("cpu", {}).get("cpu_percent", 0),
+            "memory_usage": health_data.get("memory", {}).get("percent", 0),
+            "disk_usage": psutil.disk_usage("/").percent,
+            "database_status": (
+                "connected" if health_data.get("database", {}).get("connected") else "disconnected"
+            ),
+            "redis_status": (
+                "connected" if health_data.get("redis", {}).get("connected") else "disconnected"
+            ),
+            "oanda_api_status": (
+                "connected"
+                if health_data.get("oanda_api", {}).get("status") == "healthy"
+                else "disconnected"
+            ),
+            "active_streams": health_data.get("active_streams", 0),
+            "celery_tasks": health_data.get("celery_tasks", {}).get("total", 0),
+            "timestamp": health_data.get("timestamp"),
+        }
 
-        # Get running strategies count
-        running_strategies_count = Strategy.objects.filter(is_active=True).count()
+        # Get online users with session details
+        active_sessions = (
+            UserSession.objects.filter(is_active=True)
+            .select_related("user")
+            .order_by("-last_activity")
+        )
+
+        online_users = [
+            {
+                "user_id": session.user.id,
+                "username": session.user.username,
+                "email": session.user.email,
+                "session_id": session.id,
+                "session_key": session.session_key,
+                "ip_address": session.ip_address,
+                "user_agent": session.user_agent,
+                "login_time": session.login_time.isoformat(),
+                "last_activity": session.last_activity.isoformat(),
+                "is_staff": session.user.is_staff,
+            }
+            for session in active_sessions
+        ]
+
+        # Get running strategies with details
+        active_strategies = (
+            Strategy.objects.filter(is_active=True)
+            .select_related("account__user")
+            .prefetch_related("account__positions")
+        )
+
+        running_strategies = []
+        for strategy in active_strategies:
+            positions = strategy.account.positions.filter(
+                opened_at__isnull=False, closed_at__isnull=True
+            )
+            position_count = positions.count()
+            total_pnl = sum(pos.unrealized_pnl for pos in positions)
+
+            running_strategies.append(
+                {
+                    "strategy_id": strategy.id,
+                    "strategy_type": strategy.strategy_type,
+                    "user_id": strategy.account.user.id,
+                    "username": strategy.account.user.username,
+                    "email": strategy.account.user.email,
+                    "account_id": strategy.account.id,
+                    "oanda_account_id": strategy.account.account_id,
+                    "instruments": strategy.instruments,
+                    "started_at": (
+                        strategy.started_at.isoformat() if strategy.started_at else None
+                    ),
+                    "position_count": position_count,
+                    "total_unrealized_pnl": float(total_pnl),
+                }
+            )
 
         # Get recent events (last 10)
         recent_events = Event.objects.order_by("-timestamp")[:10]
@@ -418,9 +491,9 @@ def get_admin_dashboard(request: Request) -> Response:  # pylint: disable=unused
 
         dashboard_data = {
             "timestamp": timezone.now().isoformat(),
-            "system_health": health_data,
-            "online_users_count": online_users_count,
-            "running_strategies_count": running_strategies_count,
+            "health": health,
+            "online_users": online_users,
+            "running_strategies": running_strategies,
             "critical_alerts_count": critical_alerts,
             "recent_events": events_data,
         }
@@ -732,6 +805,127 @@ def _close_strategy_positions(strategy: Strategy) -> int:
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error("Failed to close positions for strategy %s: %s", strategy.id, e, exc_info=True)
         return 0
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsAdminUser])
+def get_notifications(request: Request) -> Response:  # pylint: disable=unused-argument
+    """
+    Get unread admin notifications.
+
+    This endpoint returns the most recent unread notifications for admin users.
+
+    Args:
+        request: HTTP request object
+
+    Returns:
+        Response with list of notifications
+    """
+    try:
+        from trading.admin_notification_service import AdminNotificationService
+
+        service = AdminNotificationService()
+        notifications = service.get_unread_notifications(limit=50)
+
+        notifications_data = [
+            {
+                "id": notification.id,
+                "title": notification.title,
+                "message": notification.message,
+                "severity": notification.severity,
+                "timestamp": notification.timestamp.isoformat(),
+                "read": notification.is_read,
+                "notification_type": notification.notification_type,
+            }
+            for notification in notifications
+        ]
+
+        return Response(notifications_data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error("Failed to get notifications: %s", e, exc_info=True)
+        return Response(
+            {"error": "Failed to retrieve notifications"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsAdminUser])
+def mark_notification_read(request: Request, notification_id: int) -> Response:
+    """
+    Mark a specific notification as read.
+
+    Args:
+        request: HTTP request object
+        notification_id: ID of the notification to mark as read
+
+    Returns:
+        Response indicating success or failure
+    """
+    try:
+        from trading.event_models import Notification
+
+        notification = Notification.objects.get(id=notification_id)
+        notification.is_read = True
+        notification.save(update_fields=["is_read"])
+
+        logger.info(
+            "Admin %s marked notification %d as read",
+            request.user.email if hasattr(request.user, "email") else "unknown",
+            notification_id,
+        )
+
+        return Response({"message": "Notification marked as read"}, status=status.HTTP_200_OK)
+
+    except Notification.DoesNotExist:
+        return Response(
+            {"error": "Notification not found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except Exception as e:
+        logger.error("Failed to mark notification as read: %s", e, exc_info=True)
+        return Response(
+            {"error": "Failed to mark notification as read"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsAdminUser])
+def mark_all_notifications_read(request: Request) -> Response:
+    """
+    Mark all notifications as read.
+
+    Args:
+        request: HTTP request object
+
+    Returns:
+        Response indicating success or failure
+    """
+    try:
+        from trading.admin_notification_service import AdminNotificationService
+
+        service = AdminNotificationService()
+        count = service.mark_all_as_read()
+
+        logger.info(
+            "Admin %s marked %d notifications as read",
+            request.user.email if hasattr(request.user, "email") else "unknown",
+            count,
+        )
+
+        return Response(
+            {"message": f"{count} notifications marked as read", "count": count},
+            status=status.HTTP_200_OK,
+        )
+
+    except Exception as e:
+        logger.error("Failed to mark all notifications as read: %s", e, exc_info=True)
+        return Response(
+            {"error": "Failed to mark all notifications as read"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 def _close_user_streams(user: User) -> int:

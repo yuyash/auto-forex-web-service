@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Container, Typography, Box, Grid } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Breadcrumbs } from '../components/common';
 import SystemSettingsPanel from '../components/admin/SystemSettingsPanel';
 import EmailTestPanel from '../components/admin/EmailTestPanel';
 
@@ -21,6 +22,7 @@ const AdminSettingsPage: React.FC = () => {
 
   return (
     <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+      <Breadcrumbs />
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" gutterBottom>
           Admin Settings

@@ -11,6 +11,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { Breadcrumbs } from '../common';
 import type { AdminDashboardData } from '../../types/admin';
 import SystemHealthPanel from './SystemHealthPanel';
 import UserSessionList from './UserSessionList';
@@ -66,7 +67,7 @@ const AdminDashboard: React.FC = () => {
     if (!token || !user?.is_staff) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/admin/dashboard/`;
+    const wsUrl = `${protocol}//${window.location.host}/ws/admin/dashboard/?token=${token}`;
 
     const websocket = new WebSocket(wsUrl);
 
@@ -81,6 +82,21 @@ const AdminDashboard: React.FC = () => {
         // Update dashboard data based on message type
         if (data.type === 'dashboard_update') {
           setDashboardData(data.data);
+        } else if (data.type === 'metrics') {
+          // Handle system metrics updates from backend
+          setDashboardData((prev) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              health: {
+                ...prev.health,
+                cpu_usage: data.data.cpu_usage,
+                memory_usage: data.data.memory_usage,
+                disk_usage: data.data.disk_usage,
+                timestamp: data.data.timestamp,
+              },
+            };
+          });
         } else if (data.type === 'health_update') {
           setDashboardData((prev) =>
             prev ? { ...prev, health: data.data } : null
@@ -98,9 +114,16 @@ const AdminDashboard: React.FC = () => {
             if (!prev) return null;
             return {
               ...prev,
-              recent_events: [data.data, ...prev.recent_events].slice(0, 50),
+              recent_events: [data.data, ...(prev.recent_events ?? [])].slice(
+                0,
+                50
+              ),
             };
           });
+        } else if (data.type === 'pong') {
+          // Ignore pong responses
+        } else {
+          console.warn('Unknown WebSocket message type:', data.type);
         }
       } catch (err) {
         console.error('Failed to parse WebSocket message:', err);
@@ -214,6 +237,7 @@ const AdminDashboard: React.FC = () => {
 
   return (
     <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+      <Breadcrumbs />
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" gutterBottom>
           {t('dashboard.title')}
@@ -232,21 +256,21 @@ const AdminDashboard: React.FC = () => {
         {/* User Sessions and Running Strategies */}
         <Grid size={{ xs: 12, lg: 6 }}>
           <UserSessionList
-            sessions={dashboardData.online_users}
+            sessions={dashboardData.online_users ?? []}
             onKickOff={handleKickOffUser}
           />
         </Grid>
 
         <Grid size={{ xs: 12, lg: 6 }}>
           <RunningStrategyList
-            strategies={dashboardData.running_strategies}
+            strategies={dashboardData.running_strategies ?? []}
             onStop={handleStopStrategy}
           />
         </Grid>
 
         {/* Recent Events */}
         <Grid size={{ xs: 12 }}>
-          <RecentEventsPanel events={dashboardData.recent_events} />
+          <RecentEventsPanel events={dashboardData.recent_events ?? []} />
         </Grid>
 
         {/* Admin Actions */}
@@ -254,6 +278,9 @@ const AdminDashboard: React.FC = () => {
           <Box
             sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 2 }}
           >
+            <Button variant="outlined" onClick={() => navigate('/admin/users')}>
+              User Management
+            </Button>
             <Button
               variant="outlined"
               onClick={() => navigate('/admin/settings')}

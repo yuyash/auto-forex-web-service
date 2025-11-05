@@ -91,9 +91,16 @@ const useMarketData = ({
         wsRef.current.close();
       }
 
+      // Get JWT token from localStorage
+      const token = localStorage.getItem('token');
+
       // Determine protocol (ws or wss based on current page protocol)
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws/market-data/${accountId}/${instrument}/`;
+
+      // Add token to WebSocket URL as query parameter
+      const wsUrl = token
+        ? `${protocol}//${window.location.host}/ws/market-data/${accountId}/${instrument}/?token=${token}`
+        : `${protocol}//${window.location.host}/ws/market-data/${accountId}/${instrument}/`;
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -109,8 +116,46 @@ const useMarketData = ({
 
       ws.onmessage = (event) => {
         try {
-          const data = JSON.parse(event.data) as TickData;
-          updateTickData(data);
+          const message = JSON.parse(event.data);
+
+          // Handle different message types from the backend
+          if (message.type === 'tick' && message.data) {
+            // Single tick update
+            updateTickData(message.data as TickData);
+          } else if (message.type === 'tick_batch' && message.data) {
+            // Batch of ticks - use the last one
+            const ticks = message.data as TickData[];
+            if (ticks.length > 0) {
+              updateTickData(ticks[ticks.length - 1]);
+            }
+          } else if (
+            message.type === 'demo_warning' ||
+            message.type === 'demo_reminder'
+          ) {
+            // Demo mode warnings/reminders - log but don't treat as error
+            console.info('Demo mode:', message.data?.message);
+          } else if (message.type === 'pong') {
+            // Pong response to ping - ignore
+          } else if (message.type === 'error') {
+            // Error message from backend
+            const errorMsg =
+              message.data?.message || 'Unknown error from server';
+            const wsError = new Error(errorMsg);
+            setError(wsError);
+            if (onError) {
+              onError(wsError);
+            }
+          } else {
+            // Try to parse as direct TickData for backward compatibility
+            if (
+              message.instrument &&
+              message.time &&
+              message.bid &&
+              message.ask
+            ) {
+              updateTickData(message as TickData);
+            }
+          }
         } catch (err) {
           const parseError = new Error(
             `Failed to parse WebSocket message: ${err instanceof Error ? err.message : 'Unknown error'}`

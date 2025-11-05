@@ -88,5 +88,18 @@
     "english": "英語",
     "japanese": "日本語",
     "selectLanguage": "言語を選択"
+  },
+  "breadcrumbs": {
+    "home": "ホーム",
+    "dashboard": "ダッシュボード",
+    "orders": "注文",
+    "positions": "ポジション",
+    "strategy": "戦略",
+    "backtest": "バックテスト",
+    "settings": "設定",
+    "admin": "管理者",
+    "adminSettings": "設定",
+    "events": "イベント",
+    "users": "ユーザー管理"
   }
 }

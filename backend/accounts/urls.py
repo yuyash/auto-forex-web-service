@@ -63,19 +63,19 @@ urlpatterns = [
         WhitelistedEmailDetailView.as_view(),
         name="whitelist_email_detail",
     ),
-    path("accounts", OandaAccountListCreateView.as_view(), name="oanda_accounts_list"),
+    path("accounts/", OandaAccountListCreateView.as_view(), name="oanda_accounts_list"),
     path(
-        "accounts/<int:account_id>", OandaAccountDetailView.as_view(), name="oanda_account_detail"
+        "accounts/<int:account_id>/", OandaAccountDetailView.as_view(), name="oanda_account_detail"
     ),
     path(
-        "accounts/<int:account_id>/position-diff",
+        "accounts/<int:account_id>/position-diff/",
         PositionDifferentiationView.as_view(),
         name="position_differentiation",
     ),
     path(
-        "accounts/<int:account_id>/position-diff/suggest",
+        "accounts/<int:account_id>/position-diff/suggest/",
         PositionDifferentiationSuggestionView.as_view(),
         name="position_differentiation_suggest",
     ),
-    path("settings", UserSettingsView.as_view(), name="user_settings"),
+    path("settings/", UserSettingsView.as_view(), name="user_settings"),
 ]

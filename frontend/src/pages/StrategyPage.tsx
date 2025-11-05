@@ -22,6 +22,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { Breadcrumbs } from '../components/common';
 import type {
   Strategy,
   StrategyConfig,
@@ -353,6 +354,7 @@ const StrategyPage = () => {
 
   return (
     <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+      <Breadcrumbs />
       <Typography variant="h4" gutterBottom>
         {t('title')}
       </Typography>

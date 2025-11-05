@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
-import { Container } from '@mui/material';
+import { Container, Typography, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Breadcrumbs } from '../components/common';
-import EventViewer from '../components/admin/EventViewer';
+import UserManagement from '../components/admin/UserManagement';
 
-const EventViewerPage: React.FC = () => {
+const UserManagementPage: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
@@ -23,9 +23,18 @@ const EventViewerPage: React.FC = () => {
   return (
     <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
       <Breadcrumbs />
-      <EventViewer />
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" gutterBottom>
+          User Management
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Manage system users, create new accounts, and control access
+        </Typography>
+      </Box>
+
+      <UserManagement />
     </Container>
   );
 };
 
-export default EventViewerPage;
+export default UserManagementPage;
