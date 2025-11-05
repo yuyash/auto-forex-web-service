@@ -517,6 +517,178 @@ class PositionUpdateConsumer(AsyncWebsocketConsumer):
         )
 
 
+class AdminDashboardConsumer(AsyncWebsocketConsumer):
+    """
+    WebSocket consumer for streaming admin dashboard metrics to admin users.
+
+    This consumer:
+    - Accepts WebSocket connections from authenticated admin users only
+    - Subscribes to system metrics updates
+    - Broadcasts CPU, memory, and system stats to connected admin clients
+    - Handles connection lifecycle (connect, disconnect, receive)
+
+    URL Pattern: ws://host/ws/admin/dashboard/
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        """Initialize the consumer."""
+        super().__init__(*args, **kwargs)
+        self.user = None
+        self.group_name = "admin_dashboard"
+        self.metrics_task: Optional[asyncio.Task] = None
+
+    async def connect(self) -> None:
+        """
+        Handle WebSocket connection.
+
+        This method:
+        1. Authenticates the user
+        2. Validates admin privileges
+        3. Joins the admin dashboard channel group
+        4. Accepts the WebSocket connection
+        5. Starts sending periodic metrics
+        """
+        # Get user from scope (set by authentication middleware)
+        self.user = self.scope.get("user")
+
+        # Check if user is authenticated and is admin
+        if not self.user or not self.user.is_authenticated:
+            logger.warning("Unauthenticated WebSocket connection attempt for admin dashboard")
+            await self.close(code=4001)
+            return
+
+        if not self.user.is_staff:
+            logger.warning(
+                "Non-admin user %s attempted to connect to admin dashboard",
+                self.user.username,
+            )
+            await self.close(code=4003)
+            return
+
+        # Join the admin dashboard channel group
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+
+        # Accept the WebSocket connection
+        await self.accept()
+
+        # Start sending periodic metrics
+        self.metrics_task = asyncio.create_task(self._send_metrics_periodically())
+
+        logger.info(
+            "Admin user %s connected to admin dashboard stream",
+            self.user.username,
+        )
+
+    async def disconnect(self, code: int) -> None:
+        """
+        Handle WebSocket disconnection.
+
+        This method:
+        1. Cancels the metrics task
+        2. Leaves the channel group
+        3. Logs the disconnection
+
+        Args:
+            code: WebSocket close code
+        """
+        # Cancel the metrics task
+        if self.metrics_task and not self.metrics_task.done():
+            self.metrics_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self.metrics_task
+
+        # Leave the channel group
+        await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+        logger.info(
+            "Admin user %s disconnected from admin dashboard (code: %s)",
+            self.user.username if self.user else "Unknown",
+            code,
+        )
+
+    async def receive(
+        self, text_data: Optional[str] = None, bytes_data: Optional[bytes] = None
+    ) -> None:
+        """
+        Handle messages received from the WebSocket client.
+
+        Args:
+            text_data: Text message from client
+            bytes_data: Binary message from client
+        """
+        if text_data:
+            try:
+                data = json.loads(text_data)
+                message_type = data.get("type")
+
+                if message_type == "ping":
+                    # Respond to ping with pong
+                    await self.send(text_data=json.dumps({"type": "pong"}))
+                else:
+                    logger.warning("Unknown message type: %s", message_type)
+
+            except json.JSONDecodeError:
+                logger.error("Invalid JSON received from client")
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error("Error processing client message: %s", e)
+
+    async def _send_metrics_periodically(self) -> None:
+        """
+        Background task that periodically sends system metrics.
+
+        This task runs continuously while the WebSocket is connected,
+        sending metrics every 5 seconds.
+        """
+        while True:
+            await self._send_system_metrics()
+            await asyncio.sleep(5)  # Send metrics every 5 seconds
+
+    async def _send_system_metrics(self) -> None:
+        """
+        Collect and send system metrics to the client.
+        """
+        try:
+            import psutil  # pylint: disable=import-outside-toplevel
+
+            # Collect system metrics
+            metrics = {
+                "type": "metrics",
+                "data": {
+                    "cpu_usage": psutil.cpu_percent(interval=1),
+                    "memory_usage": psutil.virtual_memory().percent,
+                    "disk_usage": psutil.disk_usage("/").percent,
+                    "timestamp": asyncio.get_event_loop().time(),
+                },
+            }
+
+            # Send metrics to client
+            await self.send(text_data=json.dumps(metrics))
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error collecting system metrics: %s", e)
+
+    async def dashboard_update(self, event: Dict[str, Any]) -> None:
+        """
+        Handle dashboard update events from the channel layer.
+
+        This method is called when a dashboard update is broadcast to the group.
+        It forwards the update to the WebSocket client.
+
+        Args:
+            event: Event data containing dashboard information
+        """
+        # Extract dashboard data from event
+        dashboard_data = event.get("data", {})
+
+        # Send dashboard update to WebSocket client
+        await self.send(text_data=json.dumps(dashboard_data))
+
+        logger.debug(
+            "Dashboard update sent to user %s",
+            self.user.username if self.user else "Unknown",
+        )
+
+
 class AdminNotificationConsumer(AsyncWebsocketConsumer):
     """
     WebSocket consumer for streaming admin notifications to admin users.
