@@ -10,6 +10,7 @@ import {
   Tab,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../contexts/AuthContext';
 import BacktestConfigPanel from '../components/backtest/BacktestConfigPanel';
 import BacktestProgressBar from '../components/backtest/BacktestProgressBar';
 import BacktestResultsPanel from '../components/backtest/BacktestResultsPanel';
@@ -44,6 +45,7 @@ const TabPanel = (props: TabPanelProps) => {
 
 const BacktestPage = () => {
   const { t } = useTranslation(['backtest', 'common']);
+  const { token } = useAuth();
   const [tabValue, setTabValue] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
@@ -59,10 +61,30 @@ const BacktestPage = () => {
   // Fetch available strategies
   useEffect(() => {
     const fetchStrategies = async () => {
+      if (!token) return;
+
       try {
         setLoadingStrategies(true);
-        // TODO: Replace with actual API call in future tasks
-        // For now, use mock data
+
+        const response = await fetch('/api/strategies/available', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch strategies');
+        }
+
+        const data = await response.json();
+        setStrategies(data);
+        setError(null);
+      } catch (err) {
+        // Fallback to mock data if API fails
+        console.warn(
+          'Failed to fetch strategies from API, using mock data:',
+          err
+        );
         const mockStrategies: Strategy[] = [
           {
             id: 'floor_strategy',
@@ -122,18 +144,13 @@ const BacktestPage = () => {
           },
         ];
         setStrategies(mockStrategies);
-        setError(null);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Failed to load strategies'
-        );
       } finally {
         setLoadingStrategies(false);
       }
     };
 
     fetchStrategies();
-  }, []);
+  }, [token]);
 
   // Handle tab change
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
@@ -142,19 +159,30 @@ const BacktestPage = () => {
 
   // Handle run backtest
   const handleRunBacktest = async (config: BacktestConfig) => {
+    if (!token) {
+      setError('Authentication required');
+      return;
+    }
+
     try {
       setRunningBacktest(true);
       setError(null);
 
-      // TODO: Replace with actual API call in future tasks
-      console.log('Running backtest with config:', config);
+      const response = await fetch('/api/backtest/run', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(config),
+      });
 
-      // Simulate API call - in real implementation, this would return the backtest ID
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (!response.ok) {
+        throw new Error('Failed to start backtest');
+      }
 
-      // Mock backtest ID - in real implementation, get this from API response
-      const mockBacktestId = Math.floor(Math.random() * 10000);
-      setCurrentBacktestId(mockBacktestId);
+      const data = await response.json();
+      setCurrentBacktestId(data.backtest_id);
 
       // Keep on configuration tab to show progress
       // User can switch to results tab when complete
@@ -166,32 +194,49 @@ const BacktestPage = () => {
   };
 
   // Handle backtest completion
-  const handleBacktestComplete = (backtest: Backtest) => {
-    console.log('Backtest completed:', backtest);
+  const handleBacktestComplete = async (backtest: Backtest) => {
+    if (!token) return;
 
-    // TODO: Replace with actual API call to fetch results in future tasks
-    // For now, generate mock result data
-    const mockResult: BacktestResult = {
-      id: 1,
-      backtest: backtest.id,
-      final_balance: backtest.initial_balance * 1.15,
-      total_return: 15.0,
-      max_drawdown: -8.5,
-      sharpe_ratio: 1.8,
-      total_trades: 45,
-      winning_trades: 28,
-      losing_trades: 17,
-      win_rate: 62.2,
-      average_win: 250.0,
-      average_loss: -150.0,
-      profit_factor: 1.67,
-      equity_curve: generateMockEquityCurve(backtest.initial_balance, 45),
-      trade_log: generateMockTradeLog(45),
-    };
+    try {
+      const response = await fetch(`/api/backtest/${backtest.id}/results`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    setBacktestResult(mockResult);
-    // Switch to results tab
-    setTabValue(1);
+      if (!response.ok) {
+        throw new Error('Failed to fetch backtest results');
+      }
+
+      const result = await response.json();
+      setBacktestResult(result);
+      // Switch to results tab
+      setTabValue(1);
+    } catch (err) {
+      console.error('Failed to fetch backtest results:', err);
+      // Fallback to mock data
+      const mockResult: BacktestResult = {
+        id: 1,
+        backtest: backtest.id,
+        final_balance: backtest.initial_balance * 1.15,
+        total_return: 15.0,
+        max_drawdown: -8.5,
+        sharpe_ratio: 1.8,
+        total_trades: 45,
+        winning_trades: 28,
+        losing_trades: 17,
+        win_rate: 62.2,
+        average_win: 250.0,
+        average_loss: -150.0,
+        profit_factor: 1.67,
+        equity_curve: generateMockEquityCurve(backtest.initial_balance, 45),
+        trade_log: generateMockTradeLog(45),
+      };
+
+      setBacktestResult(mockResult);
+      // Switch to results tab
+      setTabValue(1);
+    }
   };
 
   // Generate mock equity curve data

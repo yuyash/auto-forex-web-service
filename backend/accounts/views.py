@@ -10,6 +10,7 @@ This module contains views for:
 # pylint: disable=too-many-lines
 
 import logging
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 
@@ -23,7 +24,7 @@ from trading.event_logger import SecurityEventLogger
 
 from .email_utils import send_verification_email, send_welcome_email
 from .jwt_utils import generate_jwt_token, get_user_from_token, refresh_jwt_token
-from .models import SystemSettings, UserSession
+from .models import OandaAccount, SystemSettings, UserSession
 from .permissions import IsAdminUser
 from .rate_limiter import RateLimiter
 from .serializers import (
@@ -36,7 +37,13 @@ from .serializers import (
     UserSettingsSerializer,
 )
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from accounts.models import User as UserType
+    from accounts.models import WhitelistedEmail
+
+    User = UserType
+else:
+    User = get_user_model()
 
 logger = logging.getLogger(__name__)
 security_logger = SecurityEventLogger()
@@ -605,6 +612,66 @@ class UserLogoutView(APIView):
             ip = str(request.META.get("REMOTE_ADDR", ""))
         return ip
 
+    def _close_user_streams(self, user: User) -> int:
+        """
+        Close all active v20 streams for a user.
+
+        This method closes all market data streams associated with the user's
+        OANDA accounts by removing their cache entries, which signals the
+        streaming tasks to stop.
+
+        Args:
+            user: User whose streams should be closed
+
+        Returns:
+            Number of streams closed
+        """
+        from django.core.cache import cache
+
+        streams_closed = 0
+
+        try:
+            # Get all OANDA accounts for this user
+            user_accounts = OandaAccount.objects.filter(user=user)
+
+            # Close stream for each account
+            for account in user_accounts:
+                cache_key = f"market_data_stream:{account.id}"
+
+                # Check if stream is active
+                if cache.get(cache_key):
+                    # Delete cache entry to signal stream should stop
+                    cache.delete(cache_key)
+                    streams_closed += 1
+
+                    logger.info(
+                        "Closed market data stream for account %s (user: %s)",
+                        account.account_id,
+                        user.email,
+                        extra={
+                            "user_id": user.id,
+                            "account_id": account.id,
+                            "oanda_account_id": account.account_id,
+                        },
+                    )
+
+            if streams_closed > 0:
+                logger.info(
+                    "Successfully closed %d stream(s) for user %s",
+                    streams_closed,
+                    user.email,
+                    extra={
+                        "user_id": user.id,
+                        "streams_closed": streams_closed,
+                    },
+                )
+
+            return streams_closed
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Failed to close streams for user %s: %s", user.email, e, exc_info=True)
+            return streams_closed
+
     def post(self, request: Request) -> Response:
         """
         Handle user logout.
@@ -640,20 +707,21 @@ class UserLogoutView(APIView):
 
         ip_address = self.get_client_ip(request)
 
-        # NOTE: Close active v20 streams for user
-        # This will be implemented when the market data streaming module is created
-        # For now, we'll log that this should happen
+        # Close active v20 streams for user
+        streams_closed = self._close_user_streams(user)
         logger.info(
-            "User logout - v20 streams should be closed for user %s",
+            "User logout - closed %d v20 streams for user %s",
+            streams_closed,
             user.email,
             extra={
                 "user_id": user.id,
                 "email": user.email,
                 "ip_address": ip_address,
+                "streams_closed": streams_closed,
             },
         )
 
-        # NOTE: Invalidate JWT token
+        # Invalidate JWT token
         # JWT tokens are stateless, so we can't truly invalidate them server-side
         # without maintaining a blacklist. For now, we rely on client-side token removal.
         # A token blacklist can be implemented using Redis in the future.
@@ -1137,9 +1205,7 @@ class OandaAccountDetailView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = OandaAccountSerializer
 
-    def get_object(
-        self, request: Request, account_id: int
-    ) -> "OandaAccount | None":  # type: ignore[name-defined]  # noqa: F821
+    def get_object(self, request: Request, account_id: int) -> "OandaAccount | None":  # noqa: F821
         """
         Get OANDA account by ID, ensuring it belongs to the authenticated user.
 
@@ -1306,9 +1372,7 @@ class PositionDifferentiationView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def get_object(
-        self, request: Request, account_id: int
-    ) -> "OandaAccount | None":  # type: ignore[name-defined]  # noqa: F821
+    def get_object(self, request: Request, account_id: int) -> "OandaAccount | None":  # noqa: F821
         """
         Get OANDA account by ID, ensuring it belongs to the authenticated user.
 
@@ -1473,9 +1537,7 @@ class PositionDifferentiationSuggestionView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def get_object(
-        self, request: Request, account_id: int
-    ) -> "OandaAccount | None":  # type: ignore[name-defined]  # noqa: F821
+    def get_object(self, request: Request, account_id: int) -> "OandaAccount | None":  # noqa: F821
         """
         Get OANDA account by ID, ensuring it belongs to the authenticated user.
 
@@ -1835,9 +1897,7 @@ class WhitelistedEmailDetailView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdminUser]
 
-    def get_object(
-        self, whitelist_id: int
-    ) -> "WhitelistedEmail | None":  # type: ignore[name-defined]  # noqa: F821
+    def get_object(self, whitelist_id: int) -> "WhitelistedEmail | None":  # noqa: F821
         """
         Get whitelisted email by ID.
 

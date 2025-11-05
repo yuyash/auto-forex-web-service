@@ -320,8 +320,8 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
             It will:
             1. Store tick to database (if enabled)
             2. Log the tick data
-            3. Broadcast to strategy executor (TODO: implement in task 6.5)
-            4. Broadcast to frontend via Django Channels (TODO: implement in task 5.4)
+            3. Broadcast to strategy executor
+            4. Broadcast to frontend via Django Channels
 
             Args:
                 tick: Normalized tick data
@@ -346,18 +346,11 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
                 tick.mid,
             )
 
-            # TODO: Task 6.5 - Broadcast to strategy executor  # pylint: disable=fixme
-            # strategy_executor.process_tick(tick)
+            # Broadcast to strategy executor
+            _broadcast_to_strategy_executors(oanda_account, tick)
 
-            # TODO: Task 5.4 - Broadcast to frontend via Django Channels  # pylint: disable=fixme
-            # channel_layer = get_channel_layer()
-            # async_to_sync(channel_layer.group_send)(
-            #     f"market_data_{account_id}",
-            #     {
-            #         "type": "market_data_update",
-            #         "data": tick.to_dict(),
-            #     }
-            # )
+            # Broadcast to frontend via Django Channels
+            _broadcast_to_frontend(account_id, tick)
 
         streamer.register_tick_callback(on_tick)
 
@@ -1137,3 +1130,130 @@ def run_host_access_monitoring() -> Dict[str, Any]:
             "success": False,
             "error": error_msg,
         }
+
+
+def _broadcast_to_strategy_executors(account: OandaAccount, tick: TickData) -> None:
+    """
+    Broadcast tick data to all active strategy executors for the account.
+
+    This function finds all active strategies for the account and processes
+    the tick through each strategy's executor.
+
+    Args:
+        account: OandaAccount instance
+        tick: TickData to broadcast
+
+    Requirements: 6.5
+    """
+    from trading.models import Strategy
+    from trading.strategy_executor import StrategyExecutor
+
+    try:
+        # Get all active strategies for this account
+        active_strategies = Strategy.objects.filter(account=account, is_active=True)
+
+        if not active_strategies.exists():
+            logger.debug(
+                "No active strategies for account %s, skipping tick broadcast", account.account_id
+            )
+            return
+
+        # Convert TickData to TickDataModel for strategy executor
+        tick_model = TickDataModel(
+            account=account,
+            instrument=tick.instrument,
+            timestamp=_parse_tick_timestamp(tick.time),
+            bid=Decimal(str(tick.bid)),
+            ask=Decimal(str(tick.ask)),
+            mid=Decimal(str(tick.mid)),
+            spread=Decimal(str(tick.spread)),
+        )
+
+        # Process tick through each active strategy
+        for strategy in active_strategies:
+            try:
+                # Check if this instrument is in the strategy's instruments list
+                if tick.instrument not in strategy.instruments:
+                    continue
+
+                executor = StrategyExecutor(strategy)
+                orders = executor.process_tick(tick_model)
+
+                if orders:
+                    logger.info(
+                        "Strategy %s generated %d orders for %s",
+                        strategy.id,
+                        len(orders),
+                        tick.instrument,
+                    )
+
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error(
+                    "Error processing tick for strategy %s: %s", strategy.id, e, exc_info=True
+                )
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Error broadcasting tick to strategy executors: %s", e, exc_info=True)
+
+
+def _broadcast_to_frontend(account_id: int, tick: TickData) -> None:
+    """
+    Broadcast tick data to frontend clients via Django Channels.
+
+    This function sends tick updates to all WebSocket clients subscribed
+    to the account's market data channel.
+
+    Args:
+        account_id: OANDA account ID (primary key)
+        tick: TickData to broadcast
+
+    Requirements: 5.4
+    """
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    try:
+        channel_layer = get_channel_layer()
+
+        if channel_layer is None:
+            logger.warning("Channel layer not configured, skipping frontend broadcast")
+            return
+
+        # Send tick data to the account's channel group
+        group_name = f"market_data_{account_id}"
+
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                "type": "market_data_update",
+                "data": tick.to_dict(),
+            },
+        )
+
+        logger.debug("Broadcasted tick for %s to frontend group %s", tick.instrument, group_name)
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Error broadcasting tick to frontend: %s", e, exc_info=True)
+
+
+def _parse_tick_timestamp(time_str: str) -> datetime:
+    """
+    Parse OANDA timestamp string to datetime object.
+
+    Args:
+        time_str: ISO 8601 timestamp string from OANDA
+
+    Returns:
+        Timezone-aware datetime object
+    """
+    try:
+        # Parse the timestamp
+        dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+        # Ensure it's timezone-aware
+        if dt.tzinfo is None:
+            dt = timezone.make_aware(dt)
+        return dt
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Error parsing timestamp '%s': %s", time_str, e)
+        # Fallback to current time
+        return timezone.now()

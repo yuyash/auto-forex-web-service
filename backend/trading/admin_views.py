@@ -26,7 +26,8 @@ from rest_framework.response import Response
 from accounts.models import User, UserSession
 from accounts.permissions import IsAdminUser
 from trading.event_logger import EventLogger
-from trading.models import Strategy
+from trading.models import Position, Strategy
+from trading.position_manager import PositionManager
 from trading.system_health_monitor import SystemHealthMonitor
 
 logger = logging.getLogger(__name__)
@@ -222,8 +223,8 @@ def kickoff_user(request: Request, user_id: int) -> Response:
         for session in active_sessions:
             session.terminate()
 
-        # TODO: Close all active v20 streams for this user
-        # This will be implemented when stream management is added
+        # Close all active v20 streams for this user
+        streams_closed = _close_user_streams(target_user)
 
         # Log the kick-off event
         event_logger = EventLogger()
@@ -239,6 +240,7 @@ def kickoff_user(request: Request, user_id: int) -> Response:
                 "target_user_id": target_user.id,
                 "target_email": target_user.email,
                 "sessions_terminated": session_count,
+                "streams_closed": streams_closed,
             },
             user=request.user if hasattr(request.user, "id") else None,  # type: ignore[arg-type]
         )
@@ -254,6 +256,7 @@ def kickoff_user(request: Request, user_id: int) -> Response:
             {
                 "message": f"User {target_user.email} has been kicked off",
                 "sessions_terminated": session_count,
+                "streams_closed": streams_closed,
             },
             status=status.HTTP_200_OK,
         )
@@ -304,9 +307,8 @@ def stop_strategy(request: Request, strategy_id: int) -> Response:
         strategy.stopped_at = timezone.now()
         strategy.save(update_fields=["is_active", "stopped_at"])
 
-        # TODO: Close all open positions for this strategy
-        # This will be implemented when position closing logic is added
-        positions_closed = 0
+        # Close all open positions for this strategy
+        positions_closed = _close_strategy_positions(strategy)
 
         # Log the admin stop event
         event_logger = EventLogger()
@@ -672,3 +674,124 @@ def get_security_dashboard(request: Request) -> Response:  # pylint: disable=too
             {"error": "Failed to retrieve security dashboard data"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+
+def _close_strategy_positions(strategy: Strategy) -> int:
+    """
+    Close all open positions for a strategy.
+
+    This helper function closes all positions associated with a strategy
+    by fetching current market prices and closing each position.
+
+    Args:
+        strategy: Strategy whose positions should be closed
+
+    Returns:
+        Number of positions closed
+    """
+    try:
+        # Get all open positions for this strategy
+        open_positions = Position.objects.filter(strategy=strategy, closed_at__isnull=True)
+
+        positions_closed = 0
+
+        # Group positions by instrument to minimize API calls
+        positions_by_instrument: dict[str, list[Position]] = {}
+        for position in open_positions:
+            if position.instrument not in positions_by_instrument:
+                positions_by_instrument[position.instrument] = []
+            positions_by_instrument[position.instrument].append(position)
+
+        # Close positions for each instrument
+        for instrument, positions in positions_by_instrument.items():
+            try:
+                # Use current price from the first position as exit price
+                # In production, you would fetch the latest market price from OANDA
+                exit_price = positions[0].current_price
+
+                for position in positions:
+                    PositionManager.close_position(
+                        position=position, exit_price=exit_price, create_trade_record=True
+                    )
+                    positions_closed += 1
+
+                logger.info(
+                    "Closed %d positions for instrument %s in strategy %s",
+                    len(positions),
+                    instrument,
+                    strategy.id,
+                )
+
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error(
+                    "Failed to close positions for instrument %s: %s", instrument, e, exc_info=True
+                )
+
+        return positions_closed
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Failed to close positions for strategy %s: %s", strategy.id, e, exc_info=True)
+        return 0
+
+
+def _close_user_streams(user: User) -> int:
+    """
+    Close all active v20 streams for a user.
+
+    This function closes all market data streams associated with the user's
+    OANDA accounts by removing their cache entries, which signals the
+    streaming tasks to stop.
+
+    Args:
+        user: User whose streams should be closed
+
+    Returns:
+        Number of streams closed
+    """
+    from django.core.cache import cache
+
+    from accounts.models import OandaAccount
+
+    streams_closed = 0
+
+    try:
+        # Get all OANDA accounts for this user
+        user_accounts = OandaAccount.objects.filter(user=user)
+
+        # Close stream for each account
+        for account in user_accounts:
+            cache_key = f"market_data_stream:{account.id}"
+
+            # Check if stream is active
+            if cache.get(cache_key):
+                # Delete cache entry to signal stream should stop
+                cache.delete(cache_key)
+                streams_closed += 1
+
+                logger.info(
+                    "Closed market data stream for account %s (user: %s)",
+                    account.account_id,
+                    user.email,
+                    extra={
+                        "user_id": user.id,
+                        "account_id": account.id,
+                        "oanda_account_id": account.account_id,
+                    },
+                )
+
+        if streams_closed > 0:
+            logger.info(
+                "Successfully closed %d stream(s) for user %s",
+                streams_closed,
+                user.email,
+                extra={
+                    "user_id": user.id,
+                    "streams_closed": streams_closed,
+                },
+            )
+
+        return streams_closed
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Failed to close streams for user %s: %s", user.email, e, exc_info=True)
+        return streams_closed

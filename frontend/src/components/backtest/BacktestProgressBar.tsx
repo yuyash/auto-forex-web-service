@@ -8,6 +8,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../../contexts/AuthContext';
 import type { Backtest } from '../../types/backtest';
 
 interface BacktestProgressBarProps {
@@ -22,6 +23,7 @@ const BacktestProgressBar = ({
   onError,
 }: BacktestProgressBarProps) => {
   const { t } = useTranslation(['backtest', 'common']);
+  const { token } = useAuth();
   const [backtest, setBacktest] = useState<Backtest | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,46 +34,32 @@ const BacktestProgressBar = ({
 
   // Fetch backtest status
   const fetchBacktestStatus = useCallback(async () => {
-    if (!backtestId) return;
+    if (!backtestId || !token) return;
 
     try {
       setLoading(true);
       setError(null);
 
-      // TODO: Replace with actual API call
-      // const response = await fetch(`/api/backtest/${backtestId}/status`, {
-      //   headers: {
-      //     'Authorization': `Bearer ${token}`,
-      //   },
-      // });
-      // if (!response.ok) throw new Error('Failed to fetch backtest status');
-      // const data = await response.json();
+      const response = await fetch(`/api/backtest/${backtestId}/status`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-      // Mock data for now
-      const mockBacktest: Backtest = {
-        id: backtestId,
-        user: 1,
-        strategy_type: 'floor_strategy',
-        config: {},
-        instruments: ['EUR_USD'],
-        start_date: '2024-01-01',
-        end_date: '2024-12-31',
-        initial_balance: 10000,
-        status: 'running',
-        progress: Math.min(100, (backtest?.progress || 0) + Math.random() * 10),
-        created_at: new Date().toISOString(),
-        completed_at: null,
-      };
+      if (!response.ok) {
+        throw new Error('Failed to fetch backtest status');
+      }
 
-      setBacktest(mockBacktest);
+      const data = await response.json();
+      setBacktest(data);
 
       // Calculate estimated time remaining
-      if (mockBacktest.status === 'running' && mockBacktest.progress > 0) {
+      if (data.status === 'running' && data.progress > 0) {
         if (!startTime) {
           setStartTime(Date.now());
         } else {
           const elapsed = Date.now() - startTime;
-          const progressPercent = mockBacktest.progress / 100;
+          const progressPercent = data.progress / 100;
           const totalEstimated = elapsed / progressPercent;
           const remaining = totalEstimated - elapsed;
 
@@ -86,12 +74,12 @@ const BacktestProgressBar = ({
       }
 
       // Handle completion
-      if (mockBacktest.status === 'completed' && onComplete) {
-        onComplete(mockBacktest);
+      if (data.status === 'completed' && onComplete) {
+        onComplete(data);
       }
 
       // Handle failure
-      if (mockBacktest.status === 'failed') {
+      if (data.status === 'failed') {
         const errorMsg = t(
           'backtest:progress.failed',
           'Backtest failed to complete'
@@ -111,7 +99,15 @@ const BacktestProgressBar = ({
     } finally {
       setLoading(false);
     }
-  }, [backtestId, backtest?.progress, startTime, onComplete, onError, t]);
+  }, [
+    backtestId,
+    token,
+    backtest?.progress,
+    startTime,
+    onComplete,
+    onError,
+    t,
+  ]);
 
   // Poll for status updates
   useEffect(() => {
