@@ -15,7 +15,7 @@ from trading.consumers import (
 
 # WebSocket URL patterns
 websocket_urlpatterns = [
-    path("ws/market-data/<str:account_id>/", MarketDataConsumer.as_asgi()),
+    path("ws/market-data/<str:account_id>/<str:instrument>/", MarketDataConsumer.as_asgi()),
     path("ws/positions/<str:account_id>/", PositionUpdateConsumer.as_asgi()),
     path("ws/admin/notifications/", AdminNotificationConsumer.as_asgi()),
     path("ws/admin/dashboard/", AdminDashboardConsumer.as_asgi()),
