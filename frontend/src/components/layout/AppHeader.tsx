@@ -59,7 +59,7 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
       if (!token) return;
 
       try {
-        const response = await fetch('/api/accounts', {
+        const response = await fetch('/api/accounts/', {
           headers: {
             Authorization: `Bearer ${token}`,
           },

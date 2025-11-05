@@ -69,7 +69,7 @@ const AccountManagement = () => {
   const fetchAccounts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/accounts', {
+      const response = await fetch('/api/accounts/', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -165,8 +165,8 @@ const AccountManagement = () => {
 
     try {
       const url = editingAccount
-        ? `/api/accounts/${editingAccount.id}`
-        : '/api/accounts';
+        ? `/api/accounts/${editingAccount.id}/`
+        : '/api/accounts/';
       const method = editingAccount ? 'PUT' : 'POST';
 
       // Only include api_token if it's provided
@@ -221,7 +221,7 @@ const AccountManagement = () => {
     if (!accountToDelete) return;
 
     try {
-      const response = await fetch(`/api/accounts/${accountToDelete.id}`, {
+      const response = await fetch(`/api/accounts/${accountToDelete.id}/`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,

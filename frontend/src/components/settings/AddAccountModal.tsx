@@ -109,7 +109,7 @@ const AddAccountModal = ({
     setError(null);
 
     try {
-      const response = await fetch('/api/accounts', {
+      const response = await fetch('/api/accounts/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

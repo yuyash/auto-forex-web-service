@@ -41,7 +41,7 @@ describe('SettingsPage', () => {
           }),
         });
       }
-      if (url === '/api/accounts') {
+      if (url === '/api/accounts/') {
         return Promise.resolve({
           ok: true,
           json: async () => [],

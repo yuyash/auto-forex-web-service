@@ -63,7 +63,7 @@ const PositionDifferentiationDialog = ({
     try {
       setLoading(true);
       const response = await fetch(
-        `/api/accounts/${account.id}/position-diff`,
+        `/api/accounts/${account.id}/position-diff/`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -100,7 +100,7 @@ const PositionDifferentiationDialog = ({
     try {
       setSubmitting(true);
       const response = await fetch(
-        `/api/accounts/${account.id}/position-diff`,
+        `/api/accounts/${account.id}/position-diff/`,
         {
           method: 'PUT',
           headers: {

@@ -87,7 +87,7 @@ describe('PositionDifferentiationDialog', () => {
     renderComponent();
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        '/api/accounts/1/position-diff',
+        '/api/accounts/1/position-diff/',
         expect.objectContaining({
           headers: expect.objectContaining({
             Authorization: expect.stringContaining('Bearer'),
@@ -294,7 +294,7 @@ describe('PositionDifferentiationDialog', () => {
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        '/api/accounts/1/position-diff',
+        '/api/accounts/1/position-diff/',
         expect.objectContaining({
           method: 'PUT',
           headers: expect.objectContaining({

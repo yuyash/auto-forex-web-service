@@ -69,7 +69,7 @@ const AppFooter = () => {
       }
 
       try {
-        const response = await fetch('/api/accounts', {
+        const response = await fetch('/api/accounts/', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -101,7 +101,7 @@ const AppFooter = () => {
       }
 
       try {
-        const response = await fetch('/api/accounts', {
+        const response = await fetch('/api/accounts/', {
           headers: {
             Authorization: `Bearer ${token}`,
           },

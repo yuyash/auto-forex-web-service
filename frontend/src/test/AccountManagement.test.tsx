@@ -199,7 +199,7 @@ describe('AccountManagement', () => {
 
     // Check that the POST request was made with correct data
     const postCalls = mockFetch.mock.calls.filter(
-      (call) => call[0] === '/api/accounts' && call[1]?.method === 'POST'
+      (call) => call[0] === '/api/accounts/' && call[1]?.method === 'POST'
     );
     expect(postCalls.length).toBeGreaterThan(0);
 
@@ -309,7 +309,7 @@ describe('AccountManagement', () => {
     await waitFor(() => {
       expect(mockShowSuccess).toHaveBeenCalled();
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/accounts/1',
+        '/api/accounts/1/',
         expect.objectContaining({
           method: 'DELETE',
           headers: expect.objectContaining({
