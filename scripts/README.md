@@ -38,38 +38,6 @@ This script:
 - Initializes system settings
 - Shows service status
 
-### User Management
-
-#### `manage-registration.sh`
-
-Enable or disable user registration.
-
-```bash
-# Enable registration
-./scripts/manage-registration.sh enable
-
-# Disable registration
-./scripts/manage-registration.sh disable
-
-# Check status
-./scripts/manage-registration.sh status
-```
-
-#### `manage-login.sh`
-
-Enable or disable user login.
-
-```bash
-# Enable login
-./scripts/manage-login.sh enable
-
-# Disable login
-./scripts/manage-login.sh disable
-
-# Check status
-./scripts/manage-login.sh status
-```
-
 ### Database Management
 
 #### `backup.sh`
@@ -97,66 +65,6 @@ Restore database from a backup.
 
 # Restore specific backup
 ./scripts/restore.sh ./backups/backup_20250103_120000.sql.gz
-```
-
-### Monitoring
-
-#### `health-check.sh`
-
-Comprehensive health check for all services.
-
-```bash
-./scripts/health-check.sh
-```
-
-Checks:
-
-- Service status (postgres, redis, backend, celery, frontend, nginx)
-- PostgreSQL connectivity
-- Redis connectivity
-- Backend API health endpoint
-- Disk space usage
-- Docker volumes
-- Resource usage (CPU, memory, network)
-
-#### `logs.sh`
-
-View logs from services.
-
-```bash
-# View all logs (last 100 lines)
-./scripts/logs.sh all
-
-# Follow backend logs
-./scripts/logs.sh backend -f
-
-# View last 50 lines of celery logs
-./scripts/logs.sh celery --tail 50
-
-# Available services: all, backend, celery, beat, frontend, nginx, postgres, redis
-```
-
-### Django Management
-
-#### `manage.sh`
-
-Wrapper for Django management commands.
-
-```bash
-# Run migrations
-./scripts/manage.sh migrate
-
-# Create superuser
-./scripts/manage.sh createsuperuser
-
-# Open Django shell
-./scripts/manage.sh shell
-
-# Collect static files
-./scripts/manage.sh collectstatic
-
-# Any Django management command
-./scripts/manage.sh [command] [args...]
 ```
 
 ## Environment Variables
@@ -198,34 +106,6 @@ Quick service management commands.
 ./scripts/service.sh clean
 ```
 
-## GitHub Actions Integration
-
-The deployment workflow automatically copies the scripts directory to the production server:
-
-```yaml
-- name: Deploy to production server
-  run: |
-    # Copy scripts directory
-    scp -P ${SSH_PORT} -r scripts ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/
-
-    # Make scripts executable
-    ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} << EOF
-      cd ${DEPLOY_PATH}
-      chmod +x scripts/*.sh
-
-      # Run deployment
-      ./scripts/deploy.sh
-    EOF
-```
-
-## Making Scripts Executable
-
-After copying scripts to the server, make them executable:
-
-```bash
-chmod +x scripts/*.sh
-```
-
 ## Production Best Practices
 
 1. **Regular Backups**: Schedule `backup.sh` to run daily via cron
@@ -264,27 +144,3 @@ docker compose ps
 # Restart services
 docker compose restart
 ```
-
-### Database connection issues
-
-```bash
-# Check PostgreSQL
-docker compose exec postgres pg_isready -U postgres
-
-# Check database logs
-./scripts/logs.sh postgres
-```
-
-### Permission issues
-
-```bash
-# Make scripts executable
-chmod +x scripts/*.sh
-
-# Check file ownership
-ls -la scripts/
-```
-
-## Support
-
-For issues or questions, refer to the main project documentation or contact the development team.

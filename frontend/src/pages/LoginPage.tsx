@@ -168,6 +168,16 @@ const LoginPage = () => {
           px: 2,
         }}
       >
+        <Box
+          component="img"
+          src="/logo.svg"
+          alt="Logo"
+          sx={{
+            width: 120,
+            height: 120,
+            mb: 3,
+          }}
+        />
         <Paper elevation={3} sx={{ p: 4, width: '100%' }}>
           <Typography component="h1" variant="h5" align="center" gutterBottom>
             {t('auth.login')}
