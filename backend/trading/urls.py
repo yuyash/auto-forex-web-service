@@ -10,6 +10,7 @@ from django.urls import path
 
 from .backtest_views import BacktestListCreateView, BacktestResultsView, BacktestStatusView
 from .event_views import EventDetailView, EventExportView, EventListView
+from .health_views import health_check, simple_health_check
 from .order_views import OrderDetailView, OrderListCreateView
 from .position_views import PositionCloseView, PositionDetailView, PositionListView
 from .strategy_comparison_views import StrategyCompareResultsView, StrategyCompareView
@@ -26,6 +27,9 @@ from .views import TickDataListView
 app_name = "trading"
 
 urlpatterns = [
+    # Health check endpoints (public, no authentication required)
+    path("health/", health_check, name="health_check"),
+    path("health/simple/", simple_health_check, name="simple_health_check"),
     # Event endpoints
     path("events/", EventListView.as_view(), name="event_list"),
     path("events/export/", EventExportView.as_view(), name="event_export"),

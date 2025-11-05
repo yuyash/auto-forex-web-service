@@ -66,6 +66,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     environment:
       # Database
       DB_NAME: ${DB_NAME:-forex_trading}
@@ -121,6 +126,11 @@ services:
       - backend
       - redis
       - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A trading_system inspect ping -d celery@$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     environment:
       # Database
       DB_NAME: ${DB_NAME:-forex_trading}
@@ -213,6 +223,11 @@ services:
     container_name: forex_frontend
     depends_on:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/health.html || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
     networks:
       - forex_network
@@ -226,6 +241,11 @@ services:
     depends_on:
       - backend
       - frontend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     ports:
       - "80:80"
     volumes:
