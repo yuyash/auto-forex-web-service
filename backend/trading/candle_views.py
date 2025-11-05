@@ -148,19 +148,20 @@ class CandleDataView(APIView):
             candles_data: List[Dict[str, Any]] = []
             if response.body and "candles" in response.body:
                 for candle in response.body["candles"]:
-                    if not candle.get("complete"):
+                    # v20 library returns Candlestick objects, not dicts
+                    if not candle.complete:
                         # Skip incomplete candles
                         continue
 
-                    mid = candle.get("mid", {})
+                    mid = candle.mid
                     candles_data.append(
                         {
-                            "time": candle.get("time"),
-                            "open": float(mid.get("o", 0)),
-                            "high": float(mid.get("h", 0)),
-                            "low": float(mid.get("l", 0)),
-                            "close": float(mid.get("c", 0)),
-                            "volume": int(candle.get("volume", 0)),
+                            "time": candle.time,
+                            "open": float(mid.o),
+                            "high": float(mid.h),
+                            "low": float(mid.l),
+                            "close": float(mid.c),
+                            "volume": int(candle.volume),
                         }
                     )
 

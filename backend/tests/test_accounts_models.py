@@ -661,7 +661,7 @@ class TestOandaAccountModel:
         assert live_account.api_type == "live"
 
     def test_oanda_account_api_hostname_property(self) -> None:
-        """Test api_hostname property returns correct URL."""
+        """Test api_hostname property returns hostname without protocol (for v20 library)."""
         user = User.objects.create_user(
             username="testuser",
             email="test@example.com",
@@ -680,7 +680,11 @@ class TestOandaAccountModel:
         )
         practice_account.set_api_token("token")
         practice_account.save()
-        assert practice_account.api_hostname == settings.OANDA_PRACTICE_API
+        # Should return hostname without protocol (v20 library requirement)
+        expected_practice = settings.OANDA_PRACTICE_API.replace("https://", "").replace(
+            "http://", ""
+        )
+        assert practice_account.api_hostname == expected_practice
 
         # Live account
         live_account = OandaAccount.objects.create(
@@ -690,7 +694,9 @@ class TestOandaAccountModel:
         )
         live_account.set_api_token("token")
         live_account.save()
-        assert live_account.api_hostname == settings.OANDA_LIVE_API
+        # Should return hostname without protocol (v20 library requirement)
+        expected_live = settings.OANDA_LIVE_API.replace("https://", "").replace("http://", "")
+        assert live_account.api_hostname == expected_live
 
     def test_oanda_account_update_balance(self) -> None:
         """Test updating account balance and margin."""

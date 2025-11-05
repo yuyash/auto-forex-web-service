@@ -727,11 +727,15 @@ class OandaAccount(models.Model):
         Get the OANDA API hostname based on api_type.
 
         Returns:
-            OANDA API hostname URL
+            OANDA API hostname (without protocol, as required by v20 library)
         """
         if self.api_type == "live":
-            return settings.OANDA_LIVE_API
-        return settings.OANDA_PRACTICE_API
+            hostname = settings.OANDA_LIVE_API
+        else:
+            hostname = settings.OANDA_PRACTICE_API
+
+        # Strip protocol if present (v20 library expects hostname only)
+        return hostname.replace("https://", "").replace("http://", "")
 
     def update_balance(
         self,

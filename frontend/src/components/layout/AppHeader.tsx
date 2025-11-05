@@ -33,7 +33,7 @@ interface OandaAccount {
   id: number;
   account_id: string;
   api_type: string;
-  balance: number;
+  balance: string;
   currency: string;
 }
 
@@ -172,7 +172,7 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
               {accounts.map((account) => (
                 <MenuItem key={account.id} value={account.id.toString()}>
                   {account.account_id} ({account.api_type}) - {account.currency}{' '}
-                  {account.balance.toFixed(2)}
+                  {Number(account.balance).toFixed(2)}
                 </MenuItem>
               ))}
             </Select>
