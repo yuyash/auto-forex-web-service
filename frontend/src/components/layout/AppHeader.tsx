@@ -13,8 +13,16 @@ import {
   Divider,
   ListItemIcon,
   ListItemText,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
-import { AccountCircle, Person, Settings, Logout } from '@mui/icons-material';
+import {
+  AccountCircle,
+  Person,
+  Settings,
+  Logout,
+  Menu as MenuIcon,
+} from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
@@ -29,10 +37,16 @@ interface OandaAccount {
   currency: string;
 }
 
-const AppHeader = () => {
+interface AppHeaderProps {
+  onMenuClick?: () => void;
+}
+
+const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
   const { t } = useTranslation('common');
   const { logout, user, token } = useAuth();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [userMenuAnchorEl, setUserMenuAnchorEl] = useState<null | HTMLElement>(
     null
   );
@@ -98,6 +112,19 @@ const AppHeader = () => {
   return (
     <AppBar position="static">
       <Toolbar>
+        {/* Menu toggle button (desktop only) */}
+        {!isMobile && (
+          <IconButton
+            color="inherit"
+            aria-label="open drawer"
+            onClick={onMenuClick}
+            edge="start"
+            sx={{ mr: 2 }}
+          >
+            <MenuIcon />
+          </IconButton>
+        )}
+
         {/* Logo */}
         <Typography
           variant="h6"

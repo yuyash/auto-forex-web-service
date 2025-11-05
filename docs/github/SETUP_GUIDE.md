@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD Setup Guide
 
-This guide will walk you through setting up the automated CI/CD pipeline for the Auto Forex Trading System.
+This guide will walk you through setting up the automated CI/CD pipeline for the Auto Forex Trader.
 
 ## Prerequisites
 

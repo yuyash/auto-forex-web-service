@@ -1,6 +1,6 @@
 # Environment Variables Reference
 
-This document describes all environment variables used in the Auto Forex Trading System.
+This document describes all environment variables used in the Auto Forex Trader.
 
 ## Overview
 

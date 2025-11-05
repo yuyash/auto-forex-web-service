@@ -1,6 +1,6 @@
-# Auto Forex Trading System - Backend
+# Auto Forex Trader - Backend
 
-Django 5.2 backend for the Auto Forex Trading System.
+Django 5.2 backend for the Auto Forex Trader.
 
 ## Technology Stack
 

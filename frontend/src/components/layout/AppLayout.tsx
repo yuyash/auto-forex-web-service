@@ -1,14 +1,18 @@
+import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Box, useTheme, useMediaQuery } from '@mui/material';
 import AppHeader from './AppHeader';
 import AppFooter from './AppFooter';
-import ResponsiveNavigation from './ResponsiveNavigation';
-
-const DRAWER_WIDTH = 240;
+import ResponsiveNavigation, { DRAWER_WIDTH } from './ResponsiveNavigation';
 
 const AppLayout = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // < 600px
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const handleDrawerToggle = () => {
+    setDrawerOpen(!drawerOpen);
+  };
 
   return (
     <Box
@@ -18,7 +22,7 @@ const AppLayout = () => {
         minHeight: '100vh',
       }}
     >
-      <AppHeader />
+      <AppHeader onMenuClick={handleDrawerToggle} />
       <Box
         sx={{
           display: 'flex',
@@ -26,7 +30,12 @@ const AppLayout = () => {
         }}
       >
         {/* Desktop sidebar navigation */}
-        {!isMobile && <ResponsiveNavigation />}
+        {!isMobile && (
+          <ResponsiveNavigation
+            open={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+          />
+        )}
 
         {/* Main content area */}
         <Box
@@ -35,8 +44,12 @@ const AppLayout = () => {
             flexGrow: 1,
             display: 'flex',
             flexDirection: 'column',
-            marginLeft: isMobile ? 0 : `${DRAWER_WIDTH}px`,
+            marginLeft: !isMobile && drawerOpen ? `${DRAWER_WIDTH}px` : 0,
             marginBottom: isMobile ? '56px' : 0, // Space for mobile bottom nav
+            transition: theme.transitions.create(['margin'], {
+              easing: theme.transitions.easing.sharp,
+              duration: theme.transitions.duration.leavingScreen,
+            }),
           }}
         >
           <Outlet />

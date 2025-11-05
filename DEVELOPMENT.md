@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide covers local development setup for the Auto Forex Trading System without SSL/HTTPS.
+This guide covers local development setup for the Auto Forex Trader without SSL/HTTPS.
 
 ## Table of Contents
 

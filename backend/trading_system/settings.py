@@ -1,7 +1,7 @@
 """
 Django settings for trading_system project.
 
-Auto Forex Trading System Backend Configuration
+Auto Forex Trader Backend Configuration
 """
 
 import os

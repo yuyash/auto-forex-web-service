@@ -2,7 +2,7 @@
 Configuration loader for system settings.
 
 This module provides functionality to load and validate YAML configuration files
-for the Auto Forex Trading System.
+for the Auto Forex Trader.
 """
 
 from pathlib import Path

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the rate limiting implementation in the Auto Forex Trading System. Rate limiting protects the application from abuse, DDoS attacks, and excessive API usage.
+This document describes the rate limiting implementation in the Auto Forex Trader. Rate limiting protects the application from abuse, DDoS attacks, and excessive API usage.
 
 ## Implementation
 

@@ -23,7 +23,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
-const DRAWER_WIDTH = 240;
+export const DRAWER_WIDTH = 240;
 
 interface NavigationItem {
   path: string;
@@ -71,7 +71,15 @@ const navigationItems: NavigationItem[] = [
   },
 ];
 
-const ResponsiveNavigation = () => {
+interface ResponsiveNavigationProps {
+  open?: boolean;
+  onClose?: () => void;
+}
+
+const ResponsiveNavigation = ({
+  open = false,
+  onClose,
+}: ResponsiveNavigationProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -94,7 +102,9 @@ const ResponsiveNavigation = () => {
   if (!isMobile) {
     return (
       <Drawer
-        variant="permanent"
+        variant="persistent"
+        open={open}
+        onClose={onClose}
         sx={{
           width: DRAWER_WIDTH,
           flexShrink: 0,

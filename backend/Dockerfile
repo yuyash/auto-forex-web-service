@@ -1,4 +1,4 @@
-# Backend Dockerfile for Auto Forex Trading System
+# Backend Dockerfile for Auto Forex Trader
 # Python 3.13 with Django 5.2
 
 FROM python:3.13-slim

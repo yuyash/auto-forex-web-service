@@ -21,7 +21,7 @@ describe('AppLayout', () => {
     // Wait for i18n to load translations
     await waitFor(() => {
       // Check header
-      expect(screen.getByText('Auto Forex Trading System')).toBeInTheDocument();
+      expect(screen.getByText('Auto Forex Trader')).toBeInTheDocument();
     });
 
     // Check navigation links (they appear in both header and sidebar on desktop)
@@ -38,9 +38,7 @@ describe('AppLayout', () => {
     // Check footer
     const currentYear = new Date().getFullYear();
     expect(
-      screen.getByText(
-        new RegExp(`© ${currentYear} Auto Forex Trading System`, 'i')
-      )
+      screen.getByText(new RegExp(`© ${currentYear} Auto Forex Trader`, 'i'))
     ).toBeInTheDocument();
   });
 });

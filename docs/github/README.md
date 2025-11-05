@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD Setup
 
-This directory contains the GitHub Actions workflows for automated building and deployment of the Auto Forex Trading System.
+This directory contains the GitHub Actions workflows for automated building and deployment of the Auto Forex Trader.
 
 ## Workflow Overview
 

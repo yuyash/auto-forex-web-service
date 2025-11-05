@@ -232,7 +232,7 @@ const AppFooter = () => {
           color="text.secondary"
           sx={{ ml: 'auto' }}
         >
-          © {new Date().getFullYear()} Auto Forex Trading System
+          © {new Date().getFullYear()} Auto Forex Trader
         </Typography>
       </Stack>
     </Box>

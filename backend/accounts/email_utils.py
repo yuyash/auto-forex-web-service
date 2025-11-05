@@ -287,7 +287,7 @@ def send_verification_email(user: "User", verification_url: str) -> bool:
     Returns:
         True if email sent successfully, False otherwise
     """
-    subject = "Verify your email address - Auto Forex Trading System"
+    subject = "Verify your email address - Auto Forex Trader"
 
     # HTML email content
     html_message = render_to_string(
@@ -295,7 +295,7 @@ def send_verification_email(user: "User", verification_url: str) -> bool:
         {
             "user": user,
             "verification_url": verification_url,
-            "site_name": "Auto Forex Trading System",
+            "site_name": "Auto Forex Trader",
         },
     )
 
@@ -344,7 +344,7 @@ def send_password_reset_email(user: "User", reset_url: str) -> bool:
     Returns:
         True if email sent successfully, False otherwise
     """
-    subject = "Reset your password - Auto Forex Trading System"
+    subject = "Reset your password - Auto Forex Trader"
 
     # HTML email content
     html_message = render_to_string(
@@ -352,7 +352,7 @@ def send_password_reset_email(user: "User", reset_url: str) -> bool:
         {
             "user": user,
             "reset_url": reset_url,
-            "site_name": "Auto Forex Trading System",
+            "site_name": "Auto Forex Trader",
         },
     )
 
@@ -400,14 +400,14 @@ def send_welcome_email(user: "User") -> bool:
     Returns:
         True if email sent successfully, False otherwise
     """
-    subject = "Welcome to Auto Forex Trading System!"
+    subject = "Welcome to Auto Forex Trader!"
 
     # HTML email content
     html_message = render_to_string(
         "accounts/emails/welcome_email.html",
         {
             "user": user,
-            "site_name": "Auto Forex Trading System",
+            "site_name": "Auto Forex Trader",
             "login_url": f"{settings.FRONTEND_URL}/login",
         },
     )

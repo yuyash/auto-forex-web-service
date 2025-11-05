@@ -453,4 +453,4 @@ User Request
 └─────────────────────────────────────────────────────────────┘
 ```
 
-This architecture provides a robust, scalable, and secure foundation for the Auto Forex Trading System.
+This architecture provides a robust, scalable, and secure foundation for the Auto Forex Trader.

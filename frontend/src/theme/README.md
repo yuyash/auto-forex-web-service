@@ -1,6 +1,6 @@
 # Theme Configuration
 
-This directory contains the Material-UI theme configuration for the Auto Forex Trading System.
+This directory contains the Material-UI theme configuration for the Auto Forex Trader.
 
 ## Breakpoints
 

@@ -2,7 +2,7 @@ import { createTheme } from '@mui/material/styles';
 import type { ThemeOptions } from '@mui/material/styles';
 
 /**
- * Custom Material-UI theme configuration for the Auto Forex Trading System
+ * Custom Material-UI theme configuration for the Auto Forex Trader
  * Implements responsive breakpoints and custom styling
  */
 

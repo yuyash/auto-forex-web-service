@@ -924,13 +924,13 @@ class AdminTestEmailView(APIView):
             )
 
         # Prepare test email content
-        subject = "Test Email - Auto Forex Trading System"
+        subject = "Test Email - Auto Forex Trader"
         user_email = request.user.email if hasattr(request.user, "email") else "N/A"
         html_message = f"""
         <html>
             <body>
                 <h2>Email Configuration Test</h2>
-                <p>This is a test email from the Auto Forex Trading System.</p>
+                <p>This is a test email from the Auto Forex Trader.</p>
                 <p>If you received this email, your email configuration is working correctly.</p>
                 <hr>
                 <p><strong>Configuration Details:</strong></p>
@@ -948,7 +948,7 @@ class AdminTestEmailView(APIView):
         plain_message = f"""
         Email Configuration Test
 
-        This is a test email from the Auto Forex Trading System.
+        This is a test email from the Auto Forex Trader.
         If you received this email, your email configuration is working correctly.
 
         Configuration Details:

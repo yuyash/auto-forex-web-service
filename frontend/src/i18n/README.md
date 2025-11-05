@@ -1,6 +1,6 @@
 # Internationalization (i18n) Setup
 
-This directory contains the internationalization configuration and translation files for the Auto Forex Trading System frontend.
+This directory contains the internationalization configuration and translation files for the Auto Forex Trader frontend.
 
 ## Structure
 

@@ -1,6 +1,6 @@
 # Frontend Setup Summary
 
-This document summarizes the frontend project setup completed for the Auto Forex Trading System.
+This document summarizes the frontend project setup completed for the Auto Forex Trader.
 
 ## Project Structure
 

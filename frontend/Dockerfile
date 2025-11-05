@@ -1,4 +1,4 @@
-# Frontend Dockerfile for Auto Forex Trading System
+# Frontend Dockerfile for Auto Forex Trader
 # Multi-stage build: Node for building, Nginx for serving
 
 # Stage 1: Build the React application

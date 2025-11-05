@@ -1,4 +1,4 @@
-# Auto Forex Trading System
+# Auto Forex Trader
 
 A full-stack web application for managing algorithmic forex trading operations across multiple OANDA accounts with real-time market data streaming, strategy execution, position tracking, and comprehensive risk management.
 

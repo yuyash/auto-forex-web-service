@@ -1,6 +1,6 @@
 # Docker Setup Guide
 
-This guide explains how to deploy the Auto Forex Trading System using Docker Compose.
+This guide explains how to deploy the Auto Forex Trader using Docker Compose.
 
 ## Prerequisites
 

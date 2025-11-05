@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Deployment script for Auto Forex Trading System
+# Deployment script for Auto Forex Trader
 # This script can be used for manual deployments or as a reference for CI/CD
 
 set -e  # Exit on error
