@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { createChart, ColorType } from 'lightweight-charts';
-import type {
-  IChartApi,
-  CandlestickData,
-  Time,
-  SeriesMarker,
-  LineData,
+import {
+  createChart,
+  ColorType,
+  CandlestickSeries,
+  LineSeries,
+  type IChartApi,
+  type CandlestickData,
+  type Time,
+  type SeriesMarker,
+  type LineData,
 } from 'lightweight-charts';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import type { OHLCData, ChartConfig, Position, Order } from '../../types/chart';
@@ -44,12 +47,15 @@ const OHLCChart = ({
 }: OHLCChartProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const candlestickSeriesRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const takeProfitSeriesRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const stopLossSeriesRef = useRef<any>(null);
+  const candlestickSeriesRef = useRef<ReturnType<
+    IChartApi['addSeries']
+  > | null>(null);
+  const takeProfitSeriesRef = useRef<ReturnType<IChartApi['addSeries']> | null>(
+    null
+  );
+  const stopLossSeriesRef = useRef<ReturnType<IChartApi['addSeries']> | null>(
+    null
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const currentCandleRef = useRef<CandlestickData<Time> | null>(null);
@@ -113,8 +119,7 @@ const OHLCChart = ({
     });
 
     // Add candlestick series
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const candlestickSeries = (chart as any).addCandlestickSeries({
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor: defaultConfig.upColor,
       downColor: defaultConfig.downColor,
       borderVisible: defaultConfig.borderVisible,
@@ -123,8 +128,7 @@ const OHLCChart = ({
     });
 
     // Add take-profit line series
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const takeProfitSeries = (chart as any).addLineSeries({
+    const takeProfitSeries = chart.addSeries(LineSeries, {
       color: '#4caf50',
       lineWidth: 2,
       lineStyle: 2, // Dashed line
@@ -134,8 +138,7 @@ const OHLCChart = ({
     });
 
     // Add stop-loss line series
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stopLossSeries = (chart as any).addLineSeries({
+    const stopLossSeries = chart.addSeries(LineSeries, {
       color: '#f44336',
       lineWidth: 2,
       lineStyle: 2, // Dashed line
@@ -221,6 +224,9 @@ const OHLCChart = ({
     defaultConfig.borderVisible,
     defaultConfig.wickUpColor,
     defaultConfig.wickDownColor,
+    instrument,
+    granularity,
+    onLoadOlderData,
   ]);
 
   // Load historical data
@@ -366,7 +372,12 @@ const OHLCChart = ({
     });
 
     // Set markers on the candlestick series
-    candlestickSeriesRef.current.setMarkers(markers);
+    if (
+      candlestickSeriesRef.current &&
+      'setMarkers' in candlestickSeriesRef.current
+    ) {
+      candlestickSeriesRef.current.setMarkers(markers);
+    }
   }, [positions, orders, instrument]);
 
   // Update take-profit and stop-loss lines

@@ -6,10 +6,17 @@ import type { OHLCData } from '../types/chart';
 // Mock lightweight-charts
 vi.mock('lightweight-charts', () => ({
   createChart: vi.fn(() => ({
+    addSeries: vi.fn(() => ({
+      setData: vi.fn(),
+      update: vi.fn(),
+      setMarkers: vi.fn(),
+      data: vi.fn(() => []),
+    })),
     addCandlestickSeries: vi.fn(() => ({
       setData: vi.fn(),
       update: vi.fn(),
       setMarkers: vi.fn(),
+      data: vi.fn(() => []),
     })),
     addLineSeries: vi.fn(() => ({
       setData: vi.fn(),
@@ -22,12 +29,19 @@ vi.mock('lightweight-charts', () => ({
         from: 1609459200,
         to: 1609632000,
       })),
+      subscribeVisibleLogicalRangeChange: vi.fn(),
+      getVisibleLogicalRange: vi.fn(() => ({
+        from: 50,
+        to: 100,
+      })),
     })),
     remove: vi.fn(),
   })),
   ColorType: {
     Solid: 0,
   },
+  CandlestickSeries: 'CandlestickSeries',
+  LineSeries: 'LineSeries',
 }));
 
 describe('OHLCChart', () => {

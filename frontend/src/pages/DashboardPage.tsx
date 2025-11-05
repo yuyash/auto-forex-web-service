@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../contexts/AuthContext';
 import { OHLCChart } from '../components/chart';
 import ChartControls from '../components/chart/ChartControls';
 import type { Granularity, OHLCData, Position, Order } from '../types/chart';
@@ -35,6 +36,7 @@ interface StrategyEvent {
 
 const DashboardPage = () => {
   const { t } = useTranslation('dashboard');
+  const { token } = useAuth();
 
   // Chart state
   const [instrument, setInstrument] = useState<string>('EUR_USD');
@@ -64,7 +66,12 @@ const DashboardPage = () => {
     async (inst: string, gran: string, count = 100): Promise<OHLCData[]> => {
       try {
         const response = await fetch(
-          `/api/candles?instrument=${inst}&granularity=${gran}&count=${count}`
+          `/api/candles?instrument=${inst}&granularity=${gran}&count=${count}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
 
         if (!response.ok) {
@@ -85,7 +92,7 @@ const DashboardPage = () => {
         return [];
       }
     },
-    []
+    [token]
   );
 
   // Load older data (for scrolling back in time)
@@ -99,7 +106,12 @@ const DashboardPage = () => {
 
       try {
         const response = await fetch(
-          `/api/candles?instrument=${inst}&granularity=${gran}&count=50&before=${oldestTimestampRef.current}`
+          `/api/candles?instrument=${inst}&granularity=${gran}&count=50&before=${oldestTimestampRef.current}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
 
         if (!response.ok) {
@@ -125,7 +137,7 @@ const DashboardPage = () => {
         setIsLoadingMore(false);
       }
     },
-    [isLoadingMore]
+    [isLoadingMore, token]
   );
 
   // Initial chart data load
@@ -140,8 +152,13 @@ const DashboardPage = () => {
 
   // Fetch positions
   const fetchPositions = useCallback(async () => {
+    if (!token) return;
     try {
-      const response = await fetch('/api/positions');
+      const response = await fetch('/api/positions', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       if (response.ok) {
         const data = await response.json();
         setPositions(data.positions || []);
@@ -149,12 +166,17 @@ const DashboardPage = () => {
     } catch (err) {
       console.error('Error fetching positions:', err);
     }
-  }, []);
+  }, [token]);
 
   // Fetch orders
   const fetchOrders = useCallback(async () => {
+    if (!token) return;
     try {
-      const response = await fetch('/api/orders');
+      const response = await fetch('/api/orders', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       if (response.ok) {
         const data = await response.json();
         setOrders(data.orders || []);
@@ -162,12 +184,17 @@ const DashboardPage = () => {
     } catch (err) {
       console.error('Error fetching orders:', err);
     }
-  }, []);
+  }, [token]);
 
   // Fetch strategy events
   const fetchStrategyEvents = useCallback(async () => {
+    if (!token) return;
     try {
-      const response = await fetch('/api/strategy/events?limit=10');
+      const response = await fetch('/api/events?limit=10', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       if (response.ok) {
         const data = await response.json();
         setStrategyEvents(data.events || []);
@@ -175,7 +202,7 @@ const DashboardPage = () => {
     } catch (err) {
       console.error('Error fetching strategy events:', err);
     }
-  }, []);
+  }, [token]);
 
   // Initial data load
   useEffect(() => {

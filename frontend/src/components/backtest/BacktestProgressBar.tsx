@@ -99,15 +99,7 @@ const BacktestProgressBar = ({
     } finally {
       setLoading(false);
     }
-  }, [
-    backtestId,
-    token,
-    backtest?.progress,
-    startTime,
-    onComplete,
-    onError,
-    t,
-  ]);
+  }, [backtestId, token, startTime, onComplete, onError, t]);
 
   // Poll for status updates
   useEffect(() => {

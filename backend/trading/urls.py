@@ -9,6 +9,7 @@ Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 12.1, 12.2, 12.4, 12.5
 from django.urls import path
 
 from .backtest_views import BacktestListCreateView, BacktestResultsView, BacktestStatusView
+from .candle_views import CandleDataView
 from .event_views import EventDetailView, EventExportView, EventListView
 from .health_views import health_check, simple_health_check
 from .order_views import OrderDetailView, OrderListCreateView
@@ -30,6 +31,8 @@ urlpatterns = [
     # Health check endpoints (public, no authentication required)
     path("health/", health_check, name="health_check"),
     path("health/simple/", simple_health_check, name="simple_health_check"),
+    # Candle data endpoints
+    path("candles/", CandleDataView.as_view(), name="candle_data"),
     # Event endpoints
     path("events/", EventListView.as_view(), name="event_list"),
     path("events/export/", EventExportView.as_view(), name="event_export"),

@@ -66,7 +66,6 @@ const OrderHistoryPage = () => {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     token,
     filters.start_date,
