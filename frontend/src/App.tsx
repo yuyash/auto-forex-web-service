@@ -57,10 +57,21 @@ function AppRoutes() {
         />
       )}
 
+      {/* Root path - redirect to dashboard or login */}
+      <Route
+        path="/"
+        element={
+          isAuthenticated ? (
+            <Navigate to="/dashboard" replace />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+
       {/* Protected routes with layout */}
       <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
         <Route element={<AppLayout />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/positions" element={<PositionsPage />} />
