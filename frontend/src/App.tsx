@@ -1,5 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { CssBaseline, ThemeProvider } from '@mui/material';
+import {
+  CssBaseline,
+  ThemeProvider,
+  Box,
+  CircularProgress,
+} from '@mui/material';
 import theme from './theme/theme';
 import AppLayout from './components/layout/AppLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -21,18 +26,41 @@ import NotFoundPage from './pages/NotFoundPage';
 function AppRoutes() {
   const { isAuthenticated, systemSettings, systemSettingsLoading } = useAuth();
 
+  // Show loading state while fetching system settings
+  if (systemSettingsLoading) {
+    return (
+      <Routes>
+        <Route
+          path="*"
+          element={
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                minHeight: '100vh',
+              }}
+            >
+              <CircularProgress />
+            </Box>
+          }
+        />
+      </Routes>
+    );
+  }
+
   return (
     <Routes>
       {/* Public routes - conditionally rendered based on system settings */}
-      {!systemSettingsLoading && systemSettings?.login_enabled && (
+      {systemSettings?.login_enabled && (
         <Route path="/login" element={<LoginPage />} />
       )}
-      {!systemSettingsLoading && systemSettings?.registration_enabled && (
+      {systemSettings?.registration_enabled && (
         <Route path="/register" element={<RegisterPage />} />
       )}
 
       {/* Redirect to login if routes are disabled */}
-      {!systemSettingsLoading && !systemSettings?.login_enabled && (
+      {!systemSettings?.login_enabled && (
         <Route
           path="/login"
           element={
@@ -44,7 +72,7 @@ function AppRoutes() {
           }
         />
       )}
-      {!systemSettingsLoading && !systemSettings?.registration_enabled && (
+      {!systemSettings?.registration_enabled && (
         <Route
           path="/register"
           element={

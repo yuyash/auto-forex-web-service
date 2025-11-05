@@ -24,6 +24,10 @@ interface OHLCChartProps {
     instrument: string,
     granularity: string
   ) => Promise<OHLCData[]>;
+  onLoadOlderData?: (
+    instrument: string,
+    granularity: string
+  ) => Promise<OHLCData[]>;
 }
 
 const OHLCChart = ({
@@ -36,6 +40,7 @@ const OHLCChart = ({
   positions = [],
   orders = [],
   onLoadHistoricalData,
+  onLoadOlderData,
 }: OHLCChartProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -48,6 +53,8 @@ const OHLCChart = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const currentCandleRef = useRef<CandlestickData<Time> | null>(null);
+  const isLoadingOlderDataRef = useRef(false);
+  const hasSubscribedToScrollRef = useRef(false);
 
   // Connect to WebSocket for real-time updates (only if enabled)
   const {
@@ -153,6 +160,50 @@ const OHLCChart = ({
 
     window.addEventListener('resize', handleResize);
 
+    // Subscribe to visible logical range changes for lazy loading
+    if (onLoadOlderData && !hasSubscribedToScrollRef.current) {
+      hasSubscribedToScrollRef.current = true;
+
+      chart.timeScale().subscribeVisibleLogicalRangeChange(async () => {
+        const logicalRange = chart.timeScale().getVisibleLogicalRange();
+
+        if (!logicalRange || isLoadingOlderDataRef.current) {
+          return;
+        }
+
+        // Check if user scrolled to the left edge (beginning of data)
+        // Load more data when within 10 bars of the start
+        if (logicalRange.from < 10) {
+          isLoadingOlderDataRef.current = true;
+
+          try {
+            const olderData = await onLoadOlderData(instrument, granularity);
+
+            if (olderData && olderData.length > 0) {
+              // Prepend older data to existing data
+              const existingData = candlestickSeries.data();
+              const combinedData = [
+                ...olderData.map((item) => ({
+                  time: item.time as Time,
+                  open: item.open,
+                  high: item.high,
+                  low: item.low,
+                  close: item.close,
+                })),
+                ...(existingData as CandlestickData<Time>[]),
+              ];
+
+              candlestickSeries.setData(combinedData);
+            }
+          } catch (err) {
+            console.error('Error loading older data:', err);
+          } finally {
+            isLoadingOlderDataRef.current = false;
+          }
+        }
+      });
+    }
+
     // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -160,6 +211,7 @@ const OHLCChart = ({
         chartRef.current.remove();
         chartRef.current = null;
       }
+      hasSubscribedToScrollRef.current = false;
     };
   }, [
     defaultConfig.width,
