@@ -466,7 +466,7 @@ class MarketDataStreamer:
         Broadcast tick data to WebSocket consumers via Django Channels.
 
         This method sends the tick data to the channel layer, which then
-        broadcasts it to all connected WebSocket clients for this account.
+        broadcasts it to all connected WebSocket clients for this account and instrument.
 
         Args:
             tick: Normalized tick data to broadcast
@@ -477,8 +477,8 @@ class MarketDataStreamer:
                 logger.warning("Channel layer not configured, skipping WebSocket broadcast")
                 return
 
-            # Create group name for this account
-            group_name = f"market_data_{self.account.id}"
+            # Create group name for this account and instrument
+            group_name = f"market_data_{self.account.id}_{tick.instrument}"
 
             # Send message to the group
             async_to_sync(channel_layer.group_send)(

@@ -46,7 +46,7 @@ def application():
     return URLRouter(
         [
             path(
-                "ws/market-data/<str:account_id>/",
+                "ws/market-data/<str:account_id>/<str:instrument>/",
                 MarketDataConsumer.as_asgi(),
             ),
         ]
@@ -62,7 +62,7 @@ class TestMarketDataConsumer:
         """Test WebSocket connection with authenticated user."""
         # Create communicator
         communicator = WebsocketCommunicator(
-            application, f"/ws/market-data/{oanda_account.account_id}/"
+            application, f"/ws/market-data/{oanda_account.account_id}/EUR_USD/"
         )
         communicator.scope["user"] = user
 
@@ -77,7 +77,7 @@ class TestMarketDataConsumer:
         """Test WebSocket connection rejection for unauthenticated user."""
         # Create communicator without user
         communicator = WebsocketCommunicator(
-            application, f"/ws/market-data/{oanda_account.account_id}/"
+            application, f"/ws/market-data/{oanda_account.account_id}/EUR_USD/"
         )
         communicator.scope["user"] = None
 
@@ -95,7 +95,7 @@ class TestMarketDataConsumer:
 
         # Try to connect with wrong user
         communicator = WebsocketCommunicator(
-            application, f"/ws/market-data/{oanda_account.account_id}/"
+            application, f"/ws/market-data/{oanda_account.account_id}/EUR_USD/"
         )
         communicator.scope["user"] = other_user
 
@@ -108,7 +108,7 @@ class TestMarketDataConsumer:
         """Test receiving tick updates via WebSocket."""
         # Create communicator
         communicator = WebsocketCommunicator(
-            application, f"/ws/market-data/{oanda_account.account_id}/"
+            application, f"/ws/market-data/{oanda_account.account_id}/EUR_USD/"
         )
         communicator.scope["user"] = user
 
@@ -118,7 +118,7 @@ class TestMarketDataConsumer:
 
         # Get channel layer and send a tick update
         channel_layer = get_channel_layer()
-        group_name = f"market_data_{oanda_account.id}"
+        group_name = f"market_data_{oanda_account.id}_EUR_USD"
 
         tick_data = {
             "instrument": "EUR_USD",
@@ -156,7 +156,7 @@ class TestMarketDataConsumer:
         """Test ping-pong message handling."""
         # Create communicator
         communicator = WebsocketCommunicator(
-            application, f"/ws/market-data/{oanda_account.account_id}/"
+            application, f"/ws/market-data/{oanda_account.account_id}/EUR_USD/"
         )
         communicator.scope["user"] = user
 
@@ -178,7 +178,7 @@ class TestMarketDataConsumer:
         """Test configuring message batching."""
         # Create communicator
         communicator = WebsocketCommunicator(
-            application, f"/ws/market-data/{oanda_account.account_id}/"
+            application, f"/ws/market-data/{oanda_account.account_id}/EUR_USD/"
         )
         communicator.scope["user"] = user
 
@@ -210,7 +210,7 @@ class TestMarketDataConsumer:
         """Test receiving connection status updates."""
         # Create communicator
         communicator = WebsocketCommunicator(
-            application, f"/ws/market-data/{oanda_account.account_id}/"
+            application, f"/ws/market-data/{oanda_account.account_id}/EUR_USD/"
         )
         communicator.scope["user"] = user
 
@@ -220,7 +220,7 @@ class TestMarketDataConsumer:
 
         # Get channel layer and send a connection status update
         channel_layer = get_channel_layer()
-        group_name = f"market_data_{oanda_account.id}"
+        group_name = f"market_data_{oanda_account.id}_EUR_USD"
 
         status_data = {
             "status": "connected",
@@ -251,7 +251,7 @@ class TestMarketDataConsumer:
         """Test receiving error notifications."""
         # Create communicator
         communicator = WebsocketCommunicator(
-            application, f"/ws/market-data/{oanda_account.account_id}/"
+            application, f"/ws/market-data/{oanda_account.account_id}/EUR_USD/"
         )
         communicator.scope["user"] = user
 
@@ -261,7 +261,7 @@ class TestMarketDataConsumer:
 
         # Get channel layer and send an error notification
         channel_layer = get_channel_layer()
-        group_name = f"market_data_{oanda_account.id}"
+        group_name = f"market_data_{oanda_account.id}_EUR_USD"
 
         error_data = {
             "error": "Connection failed",
@@ -290,7 +290,7 @@ class TestMarketDataConsumer:
         """Test message batching functionality."""
         # Create communicator
         communicator = WebsocketCommunicator(
-            application, f"/ws/market-data/{oanda_account.account_id}/"
+            application, f"/ws/market-data/{oanda_account.account_id}/EUR_USD/"
         )
         communicator.scope["user"] = user
 
@@ -300,7 +300,7 @@ class TestMarketDataConsumer:
 
         # Get channel layer
         channel_layer = get_channel_layer()
-        group_name = f"market_data_{oanda_account.id}"
+        group_name = f"market_data_{oanda_account.id}_EUR_USD"
 
         # Send multiple tick updates quickly
         for i in range(5):
