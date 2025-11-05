@@ -374,9 +374,14 @@ const OHLCChart = ({
     // Set markers on the candlestick series
     if (
       candlestickSeriesRef.current &&
-      'setMarkers' in candlestickSeriesRef.current
+      'setMarkers' in candlestickSeriesRef.current &&
+      typeof candlestickSeriesRef.current.setMarkers === 'function'
     ) {
-      candlestickSeriesRef.current.setMarkers(markers);
+      (
+        candlestickSeriesRef.current.setMarkers as (
+          markers: SeriesMarker<Time>[]
+        ) => void
+      )(markers);
     }
   }, [positions, orders, instrument]);
 
