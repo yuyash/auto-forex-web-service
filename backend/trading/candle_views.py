@@ -130,6 +130,8 @@ class CandleDataView(APIView):
             logger.debug("Returning cached candle data for %s", instrument)
             response = Response(cached_data, status=status.HTTP_200_OK)
             response["X-Cache-Hit"] = "true"
+            response["X-Cache-Status"] = "fresh"
+            response["X-Rate-Limited"] = "false"
             return response
 
         # Fetch candles from OANDA
@@ -217,11 +219,13 @@ class CandleDataView(APIView):
 
             # Cache for 10 minutes to reduce OANDA API calls
             # Also keep a stale copy for 2 hours in case of rate limits
-            cache.set(cache_key, response_data, 600)
-            cache.set(stale_cache_key, response_data, 7200)
+            cache.set(cache_key, response_data, 600)  # 10 minutes fresh
+            cache.set(stale_cache_key, response_data, 7200)  # 2 hours stale
 
             response = Response(response_data, status=status.HTTP_200_OK)
             response["X-Cache-Hit"] = "false"
+            response["X-Cache-Status"] = "miss"
+            response["X-Rate-Limited"] = "false"
             return response
 
         except Exception as e:  # pylint: disable=broad-exception-caught
@@ -232,7 +236,8 @@ class CandleDataView(APIView):
             if stale_data and ("429" in str(e) or "rate limit" in str(e).lower()):
                 logger.warning("Returning stale cached data due to rate limit for %s", instrument)
                 response = Response(stale_data, status=status.HTTP_200_OK)
-                response["X-Cache-Hit"] = "stale"
+                response["X-Cache-Hit"] = "true"
+                response["X-Cache-Status"] = "stale"
                 response["X-Rate-Limited"] = "true"
                 return response
 
