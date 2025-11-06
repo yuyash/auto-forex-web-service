@@ -3,17 +3,15 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ChartControls from '../components/chart/ChartControls';
 import type { Granularity } from '../types/chart';
-import type { ChartType, Indicator } from '../components/chart/ChartControls';
+import type { Indicator } from '../components/chart/ChartControls';
 
 describe('ChartControls', () => {
   const defaultProps = {
     instrument: 'EUR_USD',
     granularity: 'H1' as Granularity,
-    chartType: 'Candlestick' as ChartType,
     indicators: [] as Indicator[],
     onInstrumentChange: vi.fn(),
     onGranularityChange: vi.fn(),
-    onChartTypeChange: vi.fn(),
     onIndicatorsChange: vi.fn(),
   };
 
@@ -22,7 +20,6 @@ describe('ChartControls', () => {
 
     expect(screen.getByLabelText(/currency pair/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/timeframe/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/chart type/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/indicators/i)).toBeInTheDocument();
   });
 
@@ -38,13 +35,6 @@ describe('ChartControls', () => {
 
     const granularitySelect = screen.getByLabelText(/timeframe/i);
     expect(granularitySelect).toHaveTextContent('1 Hour');
-  });
-
-  it('displays current chart type value', () => {
-    render(<ChartControls {...defaultProps} />);
-
-    const chartTypeSelect = screen.getByLabelText(/chart type/i);
-    expect(chartTypeSelect).toHaveTextContent('Candlestick');
   });
 
   it('calls onInstrumentChange when currency pair is changed', async () => {
@@ -85,23 +75,6 @@ describe('ChartControls', () => {
     await user.click(m5Option);
 
     expect(onGranularityChange).toHaveBeenCalledWith('M5');
-  });
-
-  it('calls onChartTypeChange when chart type is changed', async () => {
-    const user = userEvent.setup();
-    const onChartTypeChange = vi.fn();
-
-    render(
-      <ChartControls {...defaultProps} onChartTypeChange={onChartTypeChange} />
-    );
-
-    const chartTypeSelect = screen.getByLabelText(/chart type/i);
-    await user.click(chartTypeSelect);
-
-    const lineOption = screen.getByRole('option', { name: /Line/i });
-    await user.click(lineOption);
-
-    expect(onChartTypeChange).toHaveBeenCalledWith('Line');
   });
 
   it('calls onIndicatorsChange when indicators are selected', async () => {
@@ -150,20 +123,6 @@ describe('ChartControls', () => {
     expect(
       screen.getByRole('option', { name: /^Monthly$/i })
     ).toBeInTheDocument();
-  });
-
-  it('displays all chart types', async () => {
-    const user = userEvent.setup();
-    render(<ChartControls {...defaultProps} />);
-
-    const chartTypeSelect = screen.getByLabelText(/chart type/i);
-    await user.click(chartTypeSelect);
-
-    expect(
-      screen.getByRole('option', { name: /Candlestick/i })
-    ).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Line/i })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Bar/i })).toBeInTheDocument();
   });
 
   it('displays all indicators', async () => {

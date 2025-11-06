@@ -28,8 +28,6 @@ import { Breadcrumbs } from '../components/common';
 import ChartControls from '../components/chart/ChartControls';
 import type { Granularity, OHLCData, Position, Order } from '../types/chart';
 import type { Indicator } from '../components/chart/ChartControls';
-import { CacheManager } from '../utils/CacheManager';
-import type { IChartApi } from 'lightweight-charts';
 
 interface StrategyEvent {
   id: string;
@@ -61,55 +59,24 @@ const DashboardPage = () => {
   const [refreshInterval, setRefreshInterval] = useState<number>(30); // seconds
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Manual refresh state
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Chart data state for lazy loading with caching
-  const [chartData, setChartData] = useState<OHLCData[]>([]);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  // OANDA account state
   const [hasOandaAccount, setHasOandaAccount] = useState<boolean>(true);
   const [oandaAccountId, setOandaAccountId] = useState<string | undefined>(
     undefined
   );
 
-  // Error handling state
-  const [chartError, setChartError] = useState<string | null>(null);
-  const [isRateLimited, setIsRateLimited] = useState(false);
-  const [rateLimitRetryTime, setRateLimitRetryTime] = useState<number | null>(
-    null
-  );
+  // Chart refresh key for forcing remount
+  const [chartKey, setChartKey] = useState<number>(0);
 
-  // Cache manager for storing all fetched candles
-  const cacheManagerRef = useRef<CacheManager>(new CacheManager());
-
-  // Rate limit countdown timer effect
-  useEffect(() => {
-    if (!isRateLimited || !rateLimitRetryTime) {
-      return;
-    }
-
-    const countdownInterval = setInterval(() => {
-      if (rateLimitRetryTime <= Date.now()) {
-        setIsRateLimited(false);
-        setRateLimitRetryTime(null);
-        clearInterval(countdownInterval);
-      } else {
-        // Force re-render to update countdown display
-        setRateLimitRetryTime((prev) => prev);
-      }
-    }, 1000);
-
-    return () => {
-      clearInterval(countdownInterval);
-    };
-  }, [isRateLimited, rateLimitRetryTime]);
-
-  // Load a large batch of historical data (up to 5000 candles) and cache it
-  const loadAndCacheHistoricalData = useCallback(
+  /**
+   * Simple fetchCandles function that makes API calls
+   * Returns OHLCData[] or empty array on error
+   */
+  const fetchCandles = useCallback(
     async (
       inst: string,
       gran: string,
-      count = 5000,
+      count: number,
       before?: number
     ): Promise<OHLCData[]> => {
       try {
@@ -118,6 +85,8 @@ const DashboardPage = () => {
           url += `&before=${before}`;
         }
 
+        console.log('📡 Fetching candles:', { inst, gran, count, before });
+
         const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -125,17 +94,11 @@ const DashboardPage = () => {
         });
 
         // Check for rate limiting
-        const isRateLimitedResponse =
+        if (
           response.status === 429 ||
-          response.headers.get('X-Rate-Limited') === 'true';
-
-        if (isRateLimitedResponse) {
-          console.warn('Rate limited by API, using cached data');
-          setIsRateLimited(true);
-          setRateLimitRetryTime(Date.now() + 60000); // 60 seconds from now
-          setChartError(null); // Clear any previous errors
-
-          // Return empty array to use cached data
+          response.headers.get('X-Rate-Limited') === 'true'
+        ) {
+          console.warn('⚠️ Rate limited by API');
           return [];
         }
 
@@ -143,284 +106,26 @@ const DashboardPage = () => {
           const errorData = await response.json();
           if (errorData.error_code === 'NO_OANDA_ACCOUNT') {
             setHasOandaAccount(false);
-            setChartError(null); // Clear error as this is expected state
             return [];
           }
 
-          // Log error and display message without clearing chart data
-          const errorMessage = `Failed to load data: ${response.status} ${response.statusText}`;
-          console.error(errorMessage, errorData);
-          setChartError(errorMessage);
+          console.error('❌ API error:', response.status, errorData);
           return [];
         }
 
         const data = await response.json();
         const candles = data.candles || [];
 
-        if (candles.length > 0) {
-          // Use CacheManager to merge new data with existing cache
-          cacheManagerRef.current.merge(inst, gran, candles);
-
-          const timeRange = cacheManagerRef.current.getTimeRange(inst, gran);
-          if (timeRange) {
-            console.log(
-              `Cached data for ${inst}_${gran}: ${timeRange.oldest} to ${timeRange.newest}`
-            );
-          }
-        }
-
-        // Clear errors on successful fetch
-        setChartError(null);
-        setIsRateLimited(false);
-        setRateLimitRetryTime(null);
+        console.log('✅ Fetched', candles.length, 'candles');
         setHasOandaAccount(true);
         return candles;
       } catch (err) {
-        // Log error to console for debugging
-        console.error('Error loading historical data:', err);
-
-        // Display error message without clearing chart data
-        const errorMessage =
-          err instanceof Error ? err.message : 'Failed to load historical data';
-        setChartError(errorMessage);
-
+        console.error('❌ Error fetching candles:', err);
         return [];
       }
     },
     [token]
   );
-
-  // Load initial visible data from cache or API
-  const loadHistoricalData = useCallback(
-    async (inst: string, gran: string, count = 1000): Promise<OHLCData[]> => {
-      // Check cache first using CacheManager
-      const cachedData = cacheManagerRef.current.get(inst, gran);
-
-      // If we have cached data, return the most recent 'count' candles
-      if (cachedData && cachedData.length > 0) {
-        console.log(`Using ${cachedData.length} cached candles`);
-        return cachedData.slice(-count);
-      }
-
-      // Otherwise, fetch a large batch and cache it
-      console.log('No cache found, fetching initial batch of 5000 candles');
-      const candles = await loadAndCacheHistoricalData(inst, gran, 5000);
-
-      // Return the most recent 'count' candles for display
-      return candles.slice(-count);
-    },
-    [loadAndCacheHistoricalData]
-  );
-
-  // Load older data (for scrolling left/back in time)
-  const loadOlderData = useCallback(
-    async (inst: string, gran: string): Promise<OHLCData[]> => {
-      if (isLoadingMore) {
-        console.log('Already loading, skipping...');
-        return [];
-      }
-
-      setIsLoadingMore(true);
-
-      try {
-        const cachedData = cacheManagerRef.current.get(inst, gran) || [];
-
-        // Use a ref to get the current chart data to avoid stale closure
-        const currentOldest = chartData.length > 0 ? chartData[0].time : null;
-
-        if (!currentOldest) {
-          console.log('No current data, cannot load older');
-          return [];
-        }
-
-        // Check if we have older data in cache
-        const olderCachedData = cachedData.filter(
-          (c) => c.time < currentOldest
-        );
-
-        if (olderCachedData.length > 0) {
-          // Return up to 200 older candles from cache
-          const candlesToAdd = olderCachedData.slice(-200);
-          console.log(
-            `Loading ${candlesToAdd.length} older candles from cache (oldest: ${candlesToAdd[0].time})`
-          );
-          setChartData((prev) => {
-            // Double-check to avoid duplicates
-            const newData = [...candlesToAdd, ...prev];
-            const uniqueData = Array.from(
-              new Map(newData.map((c) => [c.time, c])).values()
-            ).sort((a, b) => a.time - b.time);
-            return uniqueData;
-          });
-          return candlesToAdd;
-        }
-
-        // If no older cached data, fetch more from API
-        const timeRange = cacheManagerRef.current.getTimeRange(inst, gran);
-        if (timeRange) {
-          console.log('Fetching older data from API (5000 candles)');
-          const olderCandles = await loadAndCacheHistoricalData(
-            inst,
-            gran,
-            5000,
-            timeRange.oldest
-          );
-
-          if (olderCandles.length > 0) {
-            // Add the newest 200 of the fetched candles to chart
-            const candlesToAdd = olderCandles.slice(-200);
-            console.log(
-              `Adding ${candlesToAdd.length} newly fetched older candles`
-            );
-            setChartData((prev) => {
-              const newData = [...candlesToAdd, ...prev];
-              const uniqueData = Array.from(
-                new Map(newData.map((c) => [c.time, c])).values()
-              ).sort((a, b) => a.time - b.time);
-              return uniqueData;
-            });
-            return candlesToAdd;
-          }
-        }
-
-        console.log('No older data available');
-        return [];
-      } catch (err) {
-        console.error('Error loading older data:', err);
-        return [];
-      } finally {
-        setIsLoadingMore(false);
-      }
-    },
-    [isLoadingMore, chartData, loadAndCacheHistoricalData]
-  );
-
-  // Load newer data (for scrolling right/forward in time)
-  const loadNewerData = useCallback(
-    async (inst: string, gran: string): Promise<OHLCData[]> => {
-      if (isLoadingMore) {
-        console.log('Already loading, skipping...');
-        return [];
-      }
-
-      setIsLoadingMore(true);
-
-      try {
-        const cachedData = cacheManagerRef.current.get(inst, gran) || [];
-        const currentNewest =
-          chartData.length > 0 ? chartData[chartData.length - 1].time : null;
-
-        console.log('=== LOAD NEWER DATA ===');
-        console.log('Current chart data length:', chartData.length);
-        console.log('Current newest time:', currentNewest);
-        console.log('Cached data length:', cachedData.length);
-
-        if (!currentNewest) {
-          console.log('No current data, cannot load newer');
-          return [];
-        }
-
-        // Check if we have newer data in cache
-        const newerCachedData = cachedData.filter(
-          (c) => c.time > currentNewest
-        );
-        console.log('Newer cached data available:', newerCachedData.length);
-
-        if (newerCachedData.length > 0) {
-          // Return up to 200 newer candles from cache
-          const candlesToAdd = newerCachedData.slice(0, 200);
-          console.log(
-            `Loading ${candlesToAdd.length} newer candles from cache (newest: ${candlesToAdd[candlesToAdd.length - 1].time})`
-          );
-          setChartData((prev) => {
-            console.log('Before adding newer data, prev length:', prev.length);
-            // Double-check to avoid duplicates
-            const newData = [...prev, ...candlesToAdd];
-            const uniqueData = Array.from(
-              new Map(newData.map((c) => [c.time, c])).values()
-            ).sort((a, b) => a.time - b.time);
-            console.log(
-              'After adding newer data, new length:',
-              uniqueData.length
-            );
-            return uniqueData;
-          });
-          return candlesToAdd;
-        }
-
-        // If we're at the newest cached data, fetch latest from API
-        console.log('Fetching latest data from API (5000 candles)');
-        const latestCandles = await loadAndCacheHistoricalData(
-          inst,
-          gran,
-          5000
-        );
-
-        if (latestCandles.length > 0) {
-          // Find candles newer than current newest
-          const newCandles = latestCandles.filter(
-            (c) => c.time > currentNewest
-          );
-          console.log('New candles from API:', newCandles.length);
-
-          if (newCandles.length > 0) {
-            const candlesToAdd = newCandles.slice(0, 200);
-            console.log(
-              `Adding ${candlesToAdd.length} newly fetched newer candles`
-            );
-            setChartData((prev) => {
-              console.log('Before adding API data, prev length:', prev.length);
-              const newData = [...prev, ...candlesToAdd];
-              const uniqueData = Array.from(
-                new Map(newData.map((c) => [c.time, c])).values()
-              ).sort((a, b) => a.time - b.time);
-              console.log(
-                'After adding API data, new length:',
-                uniqueData.length
-              );
-              return uniqueData;
-            });
-            return candlesToAdd;
-          } else {
-            console.log(
-              'No newer data available (already at latest) - API returned same data'
-            );
-            // Return empty array to signal no new data was added
-            // This will prevent the chart from trying to restore a range beyond the data
-            return [];
-          }
-        }
-
-        console.log('No newer data available (already at latest)');
-        return [];
-      } catch (err) {
-        console.error('Error loading newer data:', err);
-        return [];
-      } finally {
-        setIsLoadingMore(false);
-      }
-    },
-    [isLoadingMore, chartData, loadAndCacheHistoricalData]
-  );
-
-  // Initial chart data load
-  useEffect(() => {
-    const loadInitialChartData = async () => {
-      // Clear cache when instrument or granularity changes
-      const cachedData = cacheManagerRef.current.get(instrument, granularity);
-      if (!cachedData) {
-        // Clear entire cache when switching to a new instrument/granularity combination
-        cacheManagerRef.current.clear();
-      }
-
-      // Add a small delay to prevent rapid-fire requests on mount
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      const data = await loadHistoricalData(instrument, granularity);
-      setChartData(data);
-    };
-
-    loadInitialChartData();
-  }, [instrument, granularity, loadHistoricalData]);
 
   // Fetch positions
   const fetchPositions = useCallback(async () => {
@@ -531,12 +236,6 @@ const DashboardPage = () => {
     loadData();
   }, [fetchOandaAccounts, fetchPositions, fetchOrders, fetchStrategyEvents]);
 
-  // Ref to track if user is viewing latest candles
-  const isViewingLatestRef = useRef(true);
-
-  // Ref to store the chart API for checking scroll position
-  const chartApiRef = useRef<IChartApi | null>(null);
-
   // Auto-refresh effect for positions, orders, and events
   useEffect(() => {
     // Clear existing timer
@@ -568,113 +267,6 @@ const DashboardPage = () => {
     fetchStrategyEvents,
   ]);
 
-  // Auto-refresh effect for chart data
-  const chartRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(
-    null
-  );
-
-  useEffect(() => {
-    // Clear existing chart refresh timer
-    if (chartRefreshTimerRef.current) {
-      clearInterval(chartRefreshTimerRef.current);
-      chartRefreshTimerRef.current = null;
-    }
-
-    // Set up chart data auto-refresh if enabled
-    if (autoRefreshEnabled && refreshInterval > 0 && hasOandaAccount) {
-      chartRefreshTimerRef.current = setInterval(async () => {
-        console.log('Auto-refresh: Fetching latest chart data');
-
-        try {
-          // Fetch latest data only for current instrument/granularity
-          const latestCandles = await loadAndCacheHistoricalData(
-            instrument,
-            granularity,
-            5000
-          );
-
-          if (latestCandles.length > 0) {
-            console.log(
-              `Auto-refresh: Fetched ${latestCandles.length} candles`
-            );
-
-            // Get the current newest time in chart data
-            const currentNewest =
-              chartData.length > 0 ? chartData[chartData.length - 1].time : 0;
-
-            // Find only new candles that don't exist in current chart data
-            const newCandles = latestCandles.filter(
-              (c) => c.time > currentNewest
-            );
-
-            if (newCandles.length > 0) {
-              console.log(
-                `Auto-refresh: Adding ${newCandles.length} new candles`
-              );
-
-              // Check if user is viewing the latest candles
-              // User is viewing latest if they're within 50 bars of the end
-              const isViewingLatest = isViewingLatestRef.current;
-
-              // Merge new candles into chart data
-              setChartData((prev) => {
-                const merged = [...prev, ...newCandles];
-                // Remove duplicates and sort
-                const uniqueData = Array.from(
-                  new Map(merged.map((c) => [c.time, c])).values()
-                ).sort((a, b) => a.time - b.time);
-                return uniqueData;
-              });
-
-              // Auto-scroll to end if viewing latest candles
-              if (isViewingLatest) {
-                console.log(
-                  'Auto-refresh: User is viewing latest, will auto-scroll'
-                );
-                // Trigger scroll to end after data is updated
-                setTimeout(() => {
-                  if (chartApiRef.current) {
-                    try {
-                      chartApiRef.current.timeScale().scrollToRealTime();
-                    } catch (err) {
-                      console.error('Error scrolling to real time:', err);
-                    }
-                  }
-                }, 100);
-              } else {
-                console.log(
-                  'Auto-refresh: User is viewing historical data, preserving scroll position'
-                );
-              }
-            } else {
-              console.log(
-                'Auto-refresh: No new candles to add (already up to date)'
-              );
-            }
-          }
-        } catch (err) {
-          console.error('Auto-refresh error:', err);
-          // Error is already handled by loadAndCacheHistoricalData
-        }
-      }, refreshInterval * 1000);
-    }
-
-    return () => {
-      if (chartRefreshTimerRef.current) {
-        clearInterval(chartRefreshTimerRef.current);
-        chartRefreshTimerRef.current = null;
-      }
-    };
-  }, [
-    autoRefreshEnabled,
-    refreshInterval,
-    hasOandaAccount,
-    instrument,
-    granularity,
-    chartData,
-    loadAndCacheHistoricalData,
-  ]);
-
   // Handle refresh interval change
   const handleRefreshIntervalChange = (event: SelectChangeEvent<number>) => {
     setRefreshInterval(Number(event.target.value));
@@ -687,71 +279,10 @@ const DashboardPage = () => {
     setAutoRefreshEnabled(event.target.checked);
   };
 
-  // Handle manual refresh
-  const handleManualRefresh = useCallback(async () => {
-    if (isRefreshing) {
-      console.log('Refresh already in progress, skipping...');
-      return;
-    }
-
-    setIsRefreshing(true);
-    console.log('Manual refresh triggered');
-
-    try {
-      // Fetch latest 5000 candles
-      const latestCandles = await loadAndCacheHistoricalData(
-        instrument,
-        granularity,
-        5000
-      );
-
-      if (latestCandles.length > 0) {
-        console.log(`Fetched ${latestCandles.length} candles during refresh`);
-
-        // Get the current newest time in chart data
-        const currentNewest =
-          chartData.length > 0 ? chartData[chartData.length - 1].time : 0;
-
-        // Find only new candles that don't exist in current chart data
-        const newCandles = latestCandles.filter((c) => c.time > currentNewest);
-
-        if (newCandles.length > 0) {
-          console.log(`Adding ${newCandles.length} new candles to chart`);
-          // Merge new candles into chart data
-          setChartData((prev) => {
-            const merged = [...prev, ...newCandles];
-            // Remove duplicates and sort
-            const uniqueData = Array.from(
-              new Map(merged.map((c) => [c.time, c])).values()
-            ).sort((a, b) => a.time - b.time);
-            return uniqueData;
-          });
-        } else {
-          console.log('No new candles to add (already up to date)');
-        }
-      }
-    } catch (err) {
-      console.error('Error during manual refresh:', err);
-      // Error is already handled by loadAndCacheHistoricalData
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [
-    isRefreshing,
-    instrument,
-    granularity,
-    chartData,
-    loadAndCacheHistoricalData,
-  ]);
-
-  // Callback to track when user is viewing latest candles
-  const handleViewingLatestChange = useCallback((isViewingLatest: boolean) => {
-    isViewingLatestRef.current = isViewingLatest;
-  }, []);
-
-  // Callback when chart is ready
-  const handleChartReady = useCallback((chartApi: IChartApi) => {
-    chartApiRef.current = chartApi;
+  // Handle manual refresh - force chart remount
+  const handleManualRefresh = useCallback(() => {
+    console.log('🔄 Manual refresh: Remounting chart');
+    setChartKey((prev) => prev + 1);
   }, []);
 
   // Filter positions and orders for current instrument
@@ -773,35 +304,6 @@ const DashboardPage = () => {
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
-        </Alert>
-      )}
-
-      {/* Rate Limit Warning Banner */}
-      {isRateLimited && rateLimitRetryTime && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-            Rate Limited - Using Cached Data
-          </Typography>
-          <Typography variant="body2">
-            API rate limit reached. Displaying cached data. You can retry in{' '}
-            {Math.ceil((rateLimitRetryTime - Date.now()) / 1000)} seconds.
-          </Typography>
-        </Alert>
-      )}
-
-      {/* Chart Error Message */}
-      {chartError && !isRateLimited && (
-        <Alert
-          severity="error"
-          sx={{ mb: 3 }}
-          onClose={() => setChartError(null)}
-        >
-          <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-            Chart Data Error
-          </Typography>
-          <Typography variant="body2">
-            {chartError}. Displaying cached data if available.
-          </Typography>
         </Alert>
       )}
 
@@ -864,12 +366,12 @@ const DashboardPage = () => {
           <Tooltip title="Refresh chart data">
             <IconButton
               onClick={handleManualRefresh}
-              disabled={isRefreshing || !hasOandaAccount}
+              disabled={!hasOandaAccount}
               color="primary"
               size="small"
               sx={{ ml: 'auto' }}
             >
-              {isRefreshing ? <CircularProgress size={20} /> : <RefreshIcon />}
+              <RefreshIcon />
             </IconButton>
           </Tooltip>
         </Box>
@@ -893,17 +395,14 @@ const DashboardPage = () => {
             </Box>
           ) : (
             <OHLCChart
+              key={chartKey}
               instrument={instrument}
               granularity={granularity}
-              data={chartData}
+              fetchCandles={fetchCandles}
               positions={currentPositions}
               orders={currentOrders}
               enableRealTimeUpdates={hasOandaAccount && !!oandaAccountId}
               accountId={oandaAccountId}
-              onLoadOlderData={loadOlderData}
-              onLoadNewerData={loadNewerData}
-              onViewingLatestChange={handleViewingLatestChange}
-              onChartReady={handleChartReady}
             />
           )}
         </Box>
