@@ -18,12 +18,11 @@ from django.http import HttpResponse
 
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
-from accounts.permissions import IsAdminUser
 from trading.event_models import Event
 from trading.serializers import EventSerializer
 
@@ -42,6 +41,48 @@ class EventPagination(PageNumberPagination):
     max_page_size = 100
 
 
+ALLOWED_NON_ADMIN_CATEGORIES = {"trading"}
+
+
+def filter_events_for_user(request: Request, queryset):
+    """Apply visibility rules based on the requesting user's privileges."""
+
+    if request.user.is_staff:
+        return queryset
+
+    return (
+        queryset.filter(category__in=ALLOWED_NON_ADMIN_CATEGORIES)
+        .filter(
+            Q(user=request.user)
+            | Q(account__user=request.user)
+        )
+        .distinct()
+    )
+
+
+def ensure_event_access(request: Request, event: Event) -> None:
+    """Raise PermissionDenied if the user should not see the event."""
+
+    if request.user.is_staff:
+        return
+
+    if event.category not in ALLOWED_NON_ADMIN_CATEGORIES:
+        raise PermissionDenied(
+            "You do not have permission to view this event.")
+
+    event_user_id = getattr(event.user, "pk", None)
+    account_user_id = getattr(event.account, "user_id", None)
+
+    has_direct_access = bool(
+        (event_user_id and event_user_id == request.user.id)
+        or (account_user_id and account_user_id == request.user.id)
+    )
+
+    if not has_direct_access:
+        raise PermissionDenied(
+            "You do not have permission to view this event.")
+
+
 class EventListView(APIView):
     """
     API endpoint for querying events.
@@ -55,7 +96,7 @@ class EventListView(APIView):
     Requirements: 27.1, 27.2, 27.3, 27.4
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated]
     pagination_class = EventPagination
 
     def get(self, request: Request) -> Response:
@@ -75,7 +116,7 @@ class EventListView(APIView):
         Returns:
             Paginated list of events
         """
-        queryset = Event.objects.all()
+        queryset = filter_events_for_user(request, Event.objects.all())
 
         # Filter by category
         category = request.query_params.get("category")
@@ -91,7 +132,8 @@ class EventListView(APIView):
         start_date = request.query_params.get("start_date")
         if start_date:
             try:
-                start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+                start_dt = datetime.fromisoformat(
+                    start_date.replace("Z", "+00:00"))
                 queryset = queryset.filter(timestamp__gte=start_dt)
             except ValueError:
                 return Response(
@@ -102,7 +144,8 @@ class EventListView(APIView):
         end_date = request.query_params.get("end_date")
         if end_date:
             try:
-                end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+                end_dt = datetime.fromisoformat(
+                    end_date.replace("Z", "+00:00"))
                 queryset = queryset.filter(timestamp__lte=end_dt)
             except ValueError:
                 return Response(
@@ -147,7 +190,7 @@ class EventDetailView(APIView):
     Requirements: 27.1
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request: Request, event_id: int) -> Response:  # pylint: disable=unused-argument
         """
@@ -161,12 +204,14 @@ class EventDetailView(APIView):
             Event details
         """
         try:
-            event = Event.objects.get(id=event_id)
+            event = Event.objects.select_related("account").get(id=event_id)
         except Event.DoesNotExist:
             return Response(
                 {"error": "Event not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        ensure_event_access(request, event)
 
         serializer = EventSerializer(event)
         return Response(serializer.data)
@@ -183,7 +228,7 @@ class EventExportView(APIView):
     Requirements: 27.1, 27.2, 27.3
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> HttpResponse:
         """
@@ -195,7 +240,7 @@ class EventExportView(APIView):
         Returns:
             CSV file download
         """
-        queryset = Event.objects.all()
+        queryset = filter_events_for_user(request, Event.objects.all())
 
         # Apply same filters as EventListView
         category = request.query_params.get("category")
@@ -209,7 +254,8 @@ class EventExportView(APIView):
         start_date = request.query_params.get("start_date")
         if start_date:
             try:
-                start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+                start_dt = datetime.fromisoformat(
+                    start_date.replace("Z", "+00:00"))
                 queryset = queryset.filter(timestamp__gte=start_dt)
             except ValueError:
                 pass
@@ -217,7 +263,8 @@ class EventExportView(APIView):
         end_date = request.query_params.get("end_date")
         if end_date:
             try:
-                end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+                end_dt = datetime.fromisoformat(
+                    end_date.replace("Z", "+00:00"))
                 queryset = queryset.filter(timestamp__lte=end_dt)
             except ValueError:
                 pass
