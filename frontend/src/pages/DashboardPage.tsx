@@ -16,7 +16,10 @@ import {
   MenuItem,
   Switch,
   FormControlLabel,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import type { SelectChangeEvent } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,8 +27,9 @@ import { OHLCChart } from '../components/chart';
 import { Breadcrumbs } from '../components/common';
 import ChartControls from '../components/chart/ChartControls';
 import type { Granularity, OHLCData, Position, Order } from '../types/chart';
-import type { ChartType, Indicator } from '../components/chart/ChartControls';
+import type { Indicator } from '../components/chart/ChartControls';
 import { CacheManager } from '../utils/CacheManager';
+import type { IChartApi } from 'lightweight-charts';
 
 interface StrategyEvent {
   id: string;
@@ -43,7 +47,6 @@ const DashboardPage = () => {
   // Chart state
   const [instrument, setInstrument] = useState<string>('USD_JPY');
   const [granularity, setGranularity] = useState<Granularity>('H1');
-  const [chartType, setChartType] = useState<ChartType>('Candlestick');
   const [indicators, setIndicators] = useState<Indicator[]>([]);
 
   // Data state
@@ -57,6 +60,9 @@ const DashboardPage = () => {
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState<number>(30); // seconds
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Manual refresh state
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Chart data state for lazy loading with caching
   const [chartData, setChartData] = useState<OHLCData[]>([]);
@@ -186,7 +192,7 @@ const DashboardPage = () => {
 
   // Load initial visible data from cache or API
   const loadHistoricalData = useCallback(
-    async (inst: string, gran: string, count = 100): Promise<OHLCData[]> => {
+    async (inst: string, gran: string, count = 1000): Promise<OHLCData[]> => {
       // Check cache first using CacheManager
       const cachedData = cacheManagerRef.current.get(inst, gran);
 
@@ -525,7 +531,13 @@ const DashboardPage = () => {
     loadData();
   }, [fetchOandaAccounts, fetchPositions, fetchOrders, fetchStrategyEvents]);
 
-  // Auto-refresh effect
+  // Ref to track if user is viewing latest candles
+  const isViewingLatestRef = useRef(true);
+
+  // Ref to store the chart API for checking scroll position
+  const chartApiRef = useRef<IChartApi | null>(null);
+
+  // Auto-refresh effect for positions, orders, and events
   useEffect(() => {
     // Clear existing timer
     if (refreshTimerRef.current) {
@@ -556,6 +568,113 @@ const DashboardPage = () => {
     fetchStrategyEvents,
   ]);
 
+  // Auto-refresh effect for chart data
+  const chartRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  );
+
+  useEffect(() => {
+    // Clear existing chart refresh timer
+    if (chartRefreshTimerRef.current) {
+      clearInterval(chartRefreshTimerRef.current);
+      chartRefreshTimerRef.current = null;
+    }
+
+    // Set up chart data auto-refresh if enabled
+    if (autoRefreshEnabled && refreshInterval > 0 && hasOandaAccount) {
+      chartRefreshTimerRef.current = setInterval(async () => {
+        console.log('Auto-refresh: Fetching latest chart data');
+
+        try {
+          // Fetch latest data only for current instrument/granularity
+          const latestCandles = await loadAndCacheHistoricalData(
+            instrument,
+            granularity,
+            5000
+          );
+
+          if (latestCandles.length > 0) {
+            console.log(
+              `Auto-refresh: Fetched ${latestCandles.length} candles`
+            );
+
+            // Get the current newest time in chart data
+            const currentNewest =
+              chartData.length > 0 ? chartData[chartData.length - 1].time : 0;
+
+            // Find only new candles that don't exist in current chart data
+            const newCandles = latestCandles.filter(
+              (c) => c.time > currentNewest
+            );
+
+            if (newCandles.length > 0) {
+              console.log(
+                `Auto-refresh: Adding ${newCandles.length} new candles`
+              );
+
+              // Check if user is viewing the latest candles
+              // User is viewing latest if they're within 50 bars of the end
+              const isViewingLatest = isViewingLatestRef.current;
+
+              // Merge new candles into chart data
+              setChartData((prev) => {
+                const merged = [...prev, ...newCandles];
+                // Remove duplicates and sort
+                const uniqueData = Array.from(
+                  new Map(merged.map((c) => [c.time, c])).values()
+                ).sort((a, b) => a.time - b.time);
+                return uniqueData;
+              });
+
+              // Auto-scroll to end if viewing latest candles
+              if (isViewingLatest) {
+                console.log(
+                  'Auto-refresh: User is viewing latest, will auto-scroll'
+                );
+                // Trigger scroll to end after data is updated
+                setTimeout(() => {
+                  if (chartApiRef.current) {
+                    try {
+                      chartApiRef.current.timeScale().scrollToRealTime();
+                    } catch (err) {
+                      console.error('Error scrolling to real time:', err);
+                    }
+                  }
+                }, 100);
+              } else {
+                console.log(
+                  'Auto-refresh: User is viewing historical data, preserving scroll position'
+                );
+              }
+            } else {
+              console.log(
+                'Auto-refresh: No new candles to add (already up to date)'
+              );
+            }
+          }
+        } catch (err) {
+          console.error('Auto-refresh error:', err);
+          // Error is already handled by loadAndCacheHistoricalData
+        }
+      }, refreshInterval * 1000);
+    }
+
+    return () => {
+      if (chartRefreshTimerRef.current) {
+        clearInterval(chartRefreshTimerRef.current);
+        chartRefreshTimerRef.current = null;
+      }
+    };
+  }, [
+    autoRefreshEnabled,
+    refreshInterval,
+    hasOandaAccount,
+    instrument,
+    granularity,
+    chartData,
+    loadAndCacheHistoricalData,
+  ]);
+
   // Handle refresh interval change
   const handleRefreshIntervalChange = (event: SelectChangeEvent<number>) => {
     setRefreshInterval(Number(event.target.value));
@@ -567,6 +686,73 @@ const DashboardPage = () => {
   ) => {
     setAutoRefreshEnabled(event.target.checked);
   };
+
+  // Handle manual refresh
+  const handleManualRefresh = useCallback(async () => {
+    if (isRefreshing) {
+      console.log('Refresh already in progress, skipping...');
+      return;
+    }
+
+    setIsRefreshing(true);
+    console.log('Manual refresh triggered');
+
+    try {
+      // Fetch latest 5000 candles
+      const latestCandles = await loadAndCacheHistoricalData(
+        instrument,
+        granularity,
+        5000
+      );
+
+      if (latestCandles.length > 0) {
+        console.log(`Fetched ${latestCandles.length} candles during refresh`);
+
+        // Get the current newest time in chart data
+        const currentNewest =
+          chartData.length > 0 ? chartData[chartData.length - 1].time : 0;
+
+        // Find only new candles that don't exist in current chart data
+        const newCandles = latestCandles.filter((c) => c.time > currentNewest);
+
+        if (newCandles.length > 0) {
+          console.log(`Adding ${newCandles.length} new candles to chart`);
+          // Merge new candles into chart data
+          setChartData((prev) => {
+            const merged = [...prev, ...newCandles];
+            // Remove duplicates and sort
+            const uniqueData = Array.from(
+              new Map(merged.map((c) => [c.time, c])).values()
+            ).sort((a, b) => a.time - b.time);
+            return uniqueData;
+          });
+        } else {
+          console.log('No new candles to add (already up to date)');
+        }
+      }
+    } catch (err) {
+      console.error('Error during manual refresh:', err);
+      // Error is already handled by loadAndCacheHistoricalData
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [
+    isRefreshing,
+    instrument,
+    granularity,
+    chartData,
+    loadAndCacheHistoricalData,
+  ]);
+
+  // Callback to track when user is viewing latest candles
+  const handleViewingLatestChange = useCallback((isViewingLatest: boolean) => {
+    isViewingLatestRef.current = isViewingLatest;
+  }, []);
+
+  // Callback when chart is ready
+  const handleChartReady = useCallback((chartApi: IChartApi) => {
+    chartApiRef.current = chartApi;
+  }, []);
 
   // Filter positions and orders for current instrument
   const currentPositions = positions.filter((p) => p.instrument === instrument);
@@ -664,16 +850,29 @@ const DashboardPage = () => {
           </Box>
         </Box>
 
-        <ChartControls
-          instrument={instrument}
-          granularity={granularity}
-          chartType={chartType}
-          indicators={indicators}
-          onInstrumentChange={setInstrument}
-          onGranularityChange={setGranularity}
-          onChartTypeChange={setChartType}
-          onIndicatorsChange={setIndicators}
-        />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <ChartControls
+            instrument={instrument}
+            granularity={granularity}
+            indicators={indicators}
+            onInstrumentChange={setInstrument}
+            onGranularityChange={setGranularity}
+            onIndicatorsChange={setIndicators}
+          />
+
+          {/* Manual Refresh Button */}
+          <Tooltip title="Refresh chart data">
+            <IconButton
+              onClick={handleManualRefresh}
+              disabled={isRefreshing || !hasOandaAccount}
+              color="primary"
+              size="small"
+              sx={{ ml: 'auto' }}
+            >
+              {isRefreshing ? <CircularProgress size={20} /> : <RefreshIcon />}
+            </IconButton>
+          </Tooltip>
+        </Box>
 
         <Box sx={{ height: 500, position: 'relative', overflow: 'hidden' }}>
           {!hasOandaAccount ? (
@@ -703,6 +902,8 @@ const DashboardPage = () => {
               accountId={oandaAccountId}
               onLoadOlderData={loadOlderData}
               onLoadNewerData={loadNewerData}
+              onViewingLatestChange={handleViewingLatestChange}
+              onChartReady={handleChartReady}
             />
           )}
         </Box>

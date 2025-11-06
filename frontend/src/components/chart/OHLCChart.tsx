@@ -18,23 +18,18 @@ interface OHLCChartProps {
   instrument: string;
   granularity: string;
   accountId?: string;
-  data?: OHLCData[];
+  fetchCandles: (
+    instrument: string,
+    granularity: string,
+    count: number,
+    before?: number
+  ) => Promise<OHLCData[]>;
   config?: ChartConfig;
   enableRealTimeUpdates?: boolean;
   positions?: Position[];
   orders?: Order[];
-  onLoadHistoricalData?: (
-    instrument: string,
-    granularity: string
-  ) => Promise<OHLCData[]>;
-  onLoadOlderData?: (
-    instrument: string,
-    granularity: string
-  ) => Promise<OHLCData[]>;
-  onLoadNewerData?: (
-    instrument: string,
-    granularity: string
-  ) => Promise<OHLCData[]>;
+  onViewingLatestChange?: (isViewingLatest: boolean) => void;
+  onChartReady?: (chartApi: IChartApi) => void;
 }
 
 /**
@@ -64,14 +59,15 @@ const OHLCChart = ({
   instrument,
   granularity,
   accountId = 'default',
-  data = [],
+  fetchCandles,
   config = {},
   enableRealTimeUpdates = false,
   positions = [],
   orders = [],
-  onLoadOlderData,
-  onLoadNewerData,
+  onViewingLatestChange,
+  onChartReady,
 }: OHLCChartProps) => {
+  // Chart refs
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ReturnType<
@@ -86,75 +82,155 @@ const OHLCChart = ({
   const priceIndicatorSeriesRef = useRef<ReturnType<
     IChartApi['addSeries']
   > | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [scrollToEnd, setScrollToEnd] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const currentCandleRef = useRef<CandlestickData<Time> | null>(null);
+
+  // Internal data state - single source of truth
+  const [allData, setAllData] = useState<OHLCData[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingDirection, setLoadingDirection] = useState<
     'older' | 'newer' | null
   >(null);
-  const currentCandleRef = useRef<CandlestickData<Time> | null>(null);
-  const isLoadingOlderDataRef = useRef(false);
-  const hasSubscribedToScrollRef = useRef(false);
-  const preservedLogicalRangeRef = useRef<{ from: number; to: number } | null>(
-    null
-  );
-  const loadingDirectionRef = useRef<'older' | 'newer' | null>(null);
-  const dataLengthRef = useRef(0);
-  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   /**
-   * Check if we should load older data based on scroll position
-   * Returns true when within 10 bars of the left edge
+   * Load initial data when component mounts or instrument/granularity changes
    */
-  const shouldLoadOlder = useCallback(
-    (logicalRange: { from: number; to: number }): boolean => {
-      return logicalRange.from < 10;
-    },
-    []
-  );
+  const loadInitialData = useCallback(async () => {
+    console.log('🔄 Loading initial data for', instrument, granularity);
+    setIsLoading(true);
+    setLoadingDirection(null);
+    setError(null);
+
+    try {
+      const data = await fetchCandles(instrument, granularity, 5000);
+      setAllData(data);
+      console.log('✅ Loaded', data.length, 'candles');
+      console.log(
+        '📊 Data range:',
+        data[0]?.time,
+        'to',
+        data[data.length - 1]?.time
+      );
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to load initial data';
+      console.error('❌ Error loading initial data:', err);
+      setError(errorMessage);
+      setAllData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [instrument, granularity, fetchCandles]);
 
   /**
-   * Check if we should load newer data based on scroll position and time
-   * Returns true when within 10 bars of the right edge AND not beyond current time
+   * Load initial data on mount and when instrument/granularity changes
    */
-  const shouldLoadNewer = useCallback(
-    (
-      logicalRange: { from: number; to: number },
-      totalBars: number,
-      newestTimestamp: number
-    ): boolean => {
-      // Check if within 10 bars of right edge
-      const nearRightEdge = logicalRange.to > totalBars - 10;
+  useEffect(() => {
+    console.log(
+      '🔄 Instrument or granularity changed, clearing data and loading fresh'
+    );
+    setAllData([]);
+    loadInitialData();
+  }, [instrument, granularity, loadInitialData]);
 
-      if (!nearRightEdge) {
-        return false;
+  /**
+   * Load older historical data (prepend to beginning)
+   */
+  const loadOlderData = useCallback(async () => {
+    if (isLoading || allData.length === 0) {
+      console.log(
+        '⏸️ Skipping loadOlderData: isLoading=',
+        isLoading,
+        'allData.length=',
+        allData.length
+      );
+      return;
+    }
+
+    const oldestTime = allData[0].time;
+    console.log('🔄 Loading older data, current oldest:', oldestTime);
+
+    setIsLoading(true);
+    setLoadingDirection('older');
+
+    try {
+      const olderData = await fetchCandles(
+        instrument,
+        granularity,
+        5000,
+        oldestTime
+      );
+
+      if (olderData.length > 0) {
+        setAllData((prevData) => [...olderData, ...prevData]);
+        console.log('➕ Prepended', olderData.length, 'older candles');
+      } else {
+        console.log('ℹ️ No older data available');
       }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to load older data';
+      console.error('❌ Error loading older data:', err);
+      setError(errorMessage);
+      // Don't clear allData on error
+    } finally {
+      setIsLoading(false);
+      setLoadingDirection(null);
+    }
+  }, [isLoading, allData, instrument, granularity, fetchCandles]);
 
-      // Calculate current time in seconds
-      const currentTime = Math.floor(Date.now() / 1000);
+  /**
+   * Load newer data (append to end)
+   */
+  const loadNewerData = useCallback(async () => {
+    if (isLoading || allData.length === 0) {
+      console.log(
+        '⏸️ Skipping loadNewerData: isLoading=',
+        isLoading,
+        'allData.length=',
+        allData.length
+      );
+      return;
+    }
 
-      // Calculate granularity duration to determine if we're at current time
-      const granularityDuration = getGranularityDuration(granularity);
+    const newestTime = allData[allData.length - 1].time;
+    const currentTime = Math.floor(Date.now() / 1000);
+    const granularityDuration = getGranularityDuration(granularity);
 
-      // Check if the newest data is within one candle period of current time
-      // If so, we're at the latest data and shouldn't fetch more
-      const timeDifference = currentTime - newestTimestamp;
-      const isAtCurrentTime = timeDifference <= granularityDuration;
+    // Check if already at current time
+    if (currentTime - newestTime <= granularityDuration) {
+      console.log('ℹ️ Already at current time, no newer data to load');
+      return;
+    }
 
-      console.log('shouldLoadNewer check:', {
-        nearRightEdge,
-        currentTime,
-        newestTimestamp,
-        timeDifference,
-        granularityDuration,
-        isAtCurrentTime,
-      });
+    console.log('🔄 Loading newer data, current newest:', newestTime);
 
-      // Only load newer data if we're near the edge AND not at current time
-      return nearRightEdge && !isAtCurrentTime;
-    },
-    [granularity]
-  );
+    setIsLoading(true);
+    setLoadingDirection('newer');
+
+    try {
+      const newerData = await fetchCandles(instrument, granularity, 5000);
+
+      // Filter out duplicates
+      const newCandles = newerData.filter((c) => c.time > newestTime);
+
+      if (newCandles.length > 0) {
+        setAllData((prevData) => [...prevData, ...newCandles]);
+        console.log('➕ Appended', newCandles.length, 'newer candles');
+      } else {
+        console.log('ℹ️ No new candles to append (already at latest)');
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to load newer data';
+      console.error('❌ Error loading newer data:', err);
+      setError(errorMessage);
+      // Don't clear allData on error
+    } finally {
+      setIsLoading(false);
+      setLoadingDirection(null);
+    }
+  }, [isLoading, allData, instrument, granularity, fetchCandles]);
 
   // Stable error handler to prevent
   //  reconnection loops
@@ -263,6 +339,11 @@ const OHLCChart = ({
     stopLossSeriesRef.current = stopLossSeries;
     priceIndicatorSeriesRef.current = priceIndicatorSeries;
 
+    // Notify parent that chart is ready
+    if (onChartReady) {
+      onChartReady(chart);
+    }
+
     // Handle window resize
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
@@ -274,188 +355,46 @@ const OHLCChart = ({
 
     window.addEventListener('resize', handleResize);
 
-    // Subscribe to visible logical range changes for lazy loading
-    let scrollLoadingEnabled = false;
-    let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
+    // Subscribe to visible logical range changes for scroll-based loading
+    const handleVisibleRangeChange = () => {
+      if (!chartRef.current || isLoading) {
+        return;
+      }
 
-    if (
-      (onLoadOlderData || onLoadNewerData) &&
-      !hasSubscribedToScrollRef.current
-    ) {
-      hasSubscribedToScrollRef.current = true;
+      const logicalRange = chartRef.current
+        .timeScale()
+        .getVisibleLogicalRange();
+      if (!logicalRange || allData.length === 0) {
+        return;
+      }
 
-      // Add a small delay before enabling scroll-based loading
-      // This prevents immediate triggering when chart first loads
-      scrollTimeout = setTimeout(() => {
-        scrollLoadingEnabled = true;
-      }, 1000);
+      const totalBars = allData.length;
 
-      chart.timeScale().subscribeVisibleLogicalRangeChange(async () => {
-        if (
-          !scrollLoadingEnabled ||
-          !chartRef.current ||
-          !candlestickSeriesRef.current
-        ) {
-          return;
-        }
+      // Check if user is viewing the latest candles (within 50 bars of the end)
+      const isViewingLatest = logicalRange.to > totalBars - 50;
+      if (onViewingLatestChange) {
+        onViewingLatestChange(isViewingLatest);
+      }
 
-        // Use chartRef.current instead of the local chart variable
-        const currentChart = chartRef.current;
-        if (!currentChart) return;
+      // Load older data when within 10 bars of left edge
+      if (logicalRange.from < 10) {
+        console.log('📍 Near left edge, loading older data');
+        loadOlderData();
+      }
+      // Load newer data when within 10 bars of right edge
+      else if (logicalRange.to > totalBars - 10) {
+        console.log('📍 Near right edge, loading newer data');
+        loadNewerData();
+      }
+    };
 
-        const logicalRange = currentChart.timeScale().getVisibleLogicalRange();
-
-        if (!logicalRange || isLoadingOlderDataRef.current) {
-          return;
-        }
-
-        const series = candlestickSeriesRef.current;
-        if (!series) return;
-
-        // Get total number of bars in the dataset from ref (to avoid stale closure)
-        const totalBars = dataLengthRef.current;
-
-        // Get the newest timestamp from current data for time-based checks
-        const newestTimestamp =
-          data.length > 0 ? data[data.length - 1].time : 0;
-
-        // Check if user scrolled to the left edge (beginning of data)
-        // Load more data when within 10 bars of the start
-        if (onLoadOlderData && shouldLoadOlder(logicalRange)) {
-          console.log(
-            'Loading older data, logicalRange.from:',
-            logicalRange.from
-          );
-          isLoadingOlderDataRef.current = true;
-          loadingDirectionRef.current = 'older';
-
-          // Set loading state for UI indicator
-          setIsLoading(true);
-          setLoadingDirection('older');
-
-          // Preserve the logical range (bar indices) to maintain scroll position
-          // We'll adjust this after new data is loaded
-          preservedLogicalRangeRef.current = {
-            from: logicalRange.from,
-            to: logicalRange.to,
-          };
-          console.log(
-            'Preserved logical range for OLDER data:',
-            preservedLogicalRangeRef.current
-          );
-
-          try {
-            // Call the parent's loadOlderData function
-            // The parent will update the data prop, which will trigger a re-render
-            await onLoadOlderData(instrument, granularity);
-            console.log('Older data loaded by parent');
-          } catch (err) {
-            console.error('Error loading older data:', err);
-            // Clear preserved range on error
-            preservedLogicalRangeRef.current = null;
-            loadingDirectionRef.current = null;
-          } finally {
-            isLoadingOlderDataRef.current = false;
-
-            // Clear loading indicator after 200ms
-            if (loadingTimeoutRef.current) {
-              clearTimeout(loadingTimeoutRef.current);
-            }
-            loadingTimeoutRef.current = setTimeout(() => {
-              setIsLoading(false);
-              setLoadingDirection(null);
-            }, 200);
-          }
-        }
-        // Check if user scrolled to the right edge (end of data)
-        // Load more data when within 10 bars of the end AND not beyond current time
-        else if (
-          onLoadNewerData &&
-          shouldLoadNewer(logicalRange, totalBars, newestTimestamp)
-        ) {
-          console.log(
-            'Loading newer data, logicalRange.to:',
-            logicalRange.to,
-            'totalBars:',
-            totalBars,
-            'newestTimestamp:',
-            newestTimestamp
-          );
-          isLoadingOlderDataRef.current = true;
-          loadingDirectionRef.current = 'newer';
-
-          // Set loading state for UI indicator
-          setIsLoading(true);
-          setLoadingDirection('newer');
-
-          // Preserve the logical range for newer data too
-          // When newer data is appended, we don't need to shift the range
-          // but we need to preserve it to prevent the chart from resetting
-          preservedLogicalRangeRef.current = {
-            from: logicalRange.from,
-            to: logicalRange.to,
-          };
-          console.log(
-            'Preserved logical range for NEWER data:',
-            preservedLogicalRangeRef.current
-          );
-
-          try {
-            // Call the parent's loadNewerData function
-            // The parent will update the data prop, which will trigger a re-render
-            const addedData = await onLoadNewerData(instrument, granularity);
-
-            // If no data was added (we're at the latest), trigger scroll to end
-            if (!addedData || addedData.length === 0) {
-              console.log('No newer data was added - triggering scroll to end');
-              preservedLogicalRangeRef.current = null;
-              loadingDirectionRef.current = null;
-              // Trigger the scroll effect
-              setScrollToEnd(true);
-            } else {
-              console.log(
-                'Newer data loaded by parent:',
-                addedData.length,
-                'candles'
-              );
-            }
-          } catch (err) {
-            console.error('Error loading newer data:', err);
-            // Clear preserved range on error too
-            preservedLogicalRangeRef.current = null;
-            loadingDirectionRef.current = null;
-          } finally {
-            isLoadingOlderDataRef.current = false;
-
-            // Clear loading indicator after 200ms
-            if (loadingTimeoutRef.current) {
-              clearTimeout(loadingTimeoutRef.current);
-            }
-            loadingTimeoutRef.current = setTimeout(() => {
-              setIsLoading(false);
-              setLoadingDirection(null);
-            }, 200);
-          }
-        }
-      });
-    }
+    chart
+      .timeScale()
+      .subscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
 
     // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
-
-      // Clear the scroll loading timeout
-      if (scrollTimeout) {
-        clearTimeout(scrollTimeout);
-      }
-
-      // Clear the loading indicator timeout
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-      }
-
-      // Disable scroll loading
-      scrollLoadingEnabled = false;
 
       if (chartRef.current) {
         chartRef.current.remove();
@@ -466,7 +405,6 @@ const OHLCChart = ({
       stopLossSeriesRef.current = null;
       priceIndicatorSeriesRef.current = null;
       currentCandleRef.current = null;
-      hasSubscribedToScrollRef.current = false;
     };
   }, [
     defaultConfig.width,
@@ -476,64 +414,34 @@ const OHLCChart = ({
     defaultConfig.borderVisible,
     defaultConfig.wickUpColor,
     defaultConfig.wickDownColor,
-    instrument,
-    granularity,
-    onLoadOlderData,
-    onLoadNewerData,
-    shouldLoadOlder,
-    shouldLoadNewer,
-    data,
+    onChartReady,
+    onViewingLatestChange,
+    isLoading,
+    allData,
+    loadOlderData,
+    loadNewerData,
   ]);
 
-  // Track previous data length to detect if we're loading older data
-  const prevDataLengthRef = useRef(0);
-
-  // Handle scrolling to end when no newer data is available
+  /**
+   * Update chart rendering when allData changes
+   */
   useEffect(() => {
-    if (scrollToEnd && chartRef.current && data.length > 0) {
-      console.log('📊 Scrolling to end because no newer data available');
-      try {
-        const barsToShow = Math.min(100, data.length);
-        const newRange = {
-          from: Math.max(0, data.length - barsToShow),
-          to: data.length - 1,
-        };
-        console.log('📊 Showing last', barsToShow, 'bars:', newRange);
-        chartRef.current.timeScale().setVisibleLogicalRange(newRange);
-      } catch (err) {
-        console.warn('📊 Could not scroll to end:', err);
-      }
-      setScrollToEnd(false);
-    }
-  }, [scrollToEnd, data.length]);
+    if (!candlestickSeriesRef.current || !chartRef.current) return;
 
-  // Update chart when data prop changes (from parent component)
-  useEffect(() => {
-    if (!candlestickSeriesRef.current) return;
-
-    if (data.length === 0) {
-      console.warn('⚠️ Data prop is EMPTY! This will clear the chart.');
+    if (allData.length === 0) {
+      console.log('📊 No data to render yet');
       return;
     }
 
-    const dataLengthDiff = data.length - prevDataLengthRef.current;
+    console.log('📊 Rendering', allData.length, 'candles');
     console.log(
-      '📊 Data prop changed, length:',
-      data.length,
-      'previous:',
-      prevDataLengthRef.current,
-      'diff:',
-      dataLengthDiff
-    );
-    console.log(
-      '📊 Data time range:',
-      data[0]?.time,
+      '📊 Data range:',
+      allData[0]?.time,
       'to',
-      data[data.length - 1]?.time
+      allData[allData.length - 1]?.time
     );
-    console.log('📊 Loading direction:', loadingDirectionRef.current);
 
-    const candlestickData: CandlestickData<Time>[] = data.map((item) => ({
+    const candlestickData: CandlestickData<Time>[] = allData.map((item) => ({
       time: item.time as Time,
       open: item.open,
       high: item.high,
@@ -542,73 +450,12 @@ const OHLCChart = ({
     }));
 
     candlestickSeriesRef.current.setData(candlestickData);
-    console.log('📊 setData called with', candlestickData.length, 'candles');
 
-    // Update the data length ref for the scroll handler
-    dataLengthRef.current = data.length;
-
-    // Only call fitContent on initial load
-    if (prevDataLengthRef.current === 0) {
-      console.log('📊 Initial load - calling fitContent');
-      chartRef.current?.timeScale().fitContent();
-    } else if (
-      preservedLogicalRangeRef.current &&
-      chartRef.current &&
-      loadingDirectionRef.current
-    ) {
-      const direction = loadingDirectionRef.current;
-      const preserved = preservedLogicalRangeRef.current;
-
-      console.log(
-        '📊 Will restore range, direction:',
-        direction,
-        'preserved:',
-        preserved
-      );
-
-      // Use setTimeout to ensure setData has completed before setting range
-      setTimeout(() => {
-        if (!chartRef.current) return;
-
-        try {
-          if (direction === 'older') {
-            // When older data is loaded, the new bars are prepended to the beginning
-            // We need to shift the logical range by the number of new bars added
-            const newLogicalRange = {
-              from: preserved.from + dataLengthDiff,
-              to: preserved.to + dataLengthDiff,
-            };
-            console.log(
-              '📊 Restoring logical range with offset (OLDER data):',
-              newLogicalRange,
-              'offset:',
-              dataLengthDiff
-            );
-            chartRef.current
-              .timeScale()
-              .setVisibleLogicalRange(newLogicalRange);
-          } else if (direction === 'newer') {
-            // When newer data is appended, keep the same logical range
-            // This maintains the user's view position
-            console.log(
-              '📊 Restoring logical range (NEWER data - no offset):',
-              preserved
-            );
-            chartRef.current.timeScale().setVisibleLogicalRange(preserved);
-          }
-        } catch (err) {
-          console.warn('📊 Could not set visible range:', err);
-        }
-
-        preservedLogicalRangeRef.current = null;
-        loadingDirectionRef.current = null;
-      }, 0);
-    } else {
-      console.log('📊 No range restoration needed');
+    // Fit content on initial load
+    if (allData.length > 0 && candlestickData.length > 0) {
+      chartRef.current.timeScale().fitContent();
     }
-
-    prevDataLengthRef.current = data.length;
-  }, [data]);
+  }, [allData]);
 
   // Update chart with real-time tick data
   useEffect(() => {

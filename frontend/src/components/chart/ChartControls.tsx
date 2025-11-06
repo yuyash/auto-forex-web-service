@@ -2,17 +2,14 @@ import { Box, FormControl, InputLabel, MenuItem, Select } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import type { Granularity } from '../../types/chart';
 
-export type ChartType = 'Candlestick' | 'Line' | 'Bar';
 export type Indicator = 'ATR' | 'MA' | 'RSI';
 
 interface ChartControlsProps {
   instrument: string;
   granularity: Granularity;
-  chartType: ChartType;
   indicators: Indicator[];
   onInstrumentChange: (instrument: string) => void;
   onGranularityChange: (granularity: Granularity) => void;
-  onChartTypeChange: (chartType: ChartType) => void;
   onIndicatorsChange: (indicators: Indicator[]) => void;
 }
 
@@ -60,18 +57,14 @@ const GRANULARITIES: { value: Granularity; label: string }[] = [
   { value: 'M', label: 'Monthly' },
 ];
 
-const CHART_TYPES: ChartType[] = ['Candlestick', 'Line', 'Bar'];
-
 const INDICATORS: Indicator[] = ['ATR', 'MA', 'RSI'];
 
 const ChartControls = ({
   instrument,
   granularity,
-  chartType,
   indicators,
   onInstrumentChange,
   onGranularityChange,
-  onChartTypeChange,
   onIndicatorsChange,
 }: ChartControlsProps) => {
   const handleInstrumentChange = (event: SelectChangeEvent<string>) => {
@@ -80,10 +73,6 @@ const ChartControls = ({
 
   const handleGranularityChange = (event: SelectChangeEvent<string>) => {
     onGranularityChange(event.target.value as Granularity);
-  };
-
-  const handleChartTypeChange = (event: SelectChangeEvent<string>) => {
-    onChartTypeChange(event.target.value as ChartType);
   };
 
   const handleIndicatorsChange = (event: SelectChangeEvent<string[]>) => {
@@ -136,24 +125,6 @@ const ChartControls = ({
           {GRANULARITIES.map((gran) => (
             <MenuItem key={gran.value} value={gran.value}>
               {gran.label}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-
-      {/* Chart Type Selector */}
-      <FormControl sx={{ minWidth: 150 }} size="small">
-        <InputLabel id="chart-type-label">Chart Type</InputLabel>
-        <Select
-          labelId="chart-type-label"
-          id="chart-type-select"
-          value={chartType}
-          label="Chart Type"
-          onChange={handleChartTypeChange}
-        >
-          {CHART_TYPES.map((type) => (
-            <MenuItem key={type} value={type}>
-              {type}
             </MenuItem>
           ))}
         </Select>
