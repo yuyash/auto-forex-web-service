@@ -22,7 +22,8 @@ interface OHLCChartProps {
     instrument: string,
     granularity: string,
     count: number,
-    before?: number
+    before?: number,
+    after?: number
   ) => Promise<OHLCData[]>;
   config?: ChartConfig;
   enableRealTimeUpdates?: boolean;
@@ -84,6 +85,11 @@ const OHLCChart = ({
   > | null>(null);
   const currentCandleRef = useRef<CandlestickData<Time> | null>(null);
 
+  // Debounce timer ref for scroll handling
+  const scrollDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+
   // Internal data state - single source of truth
   const [allData, setAllData] = useState<OHLCData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -103,6 +109,7 @@ const OHLCChart = ({
 
     try {
       const data = await fetchCandles(instrument, granularity, 5000);
+      // Only update data after successful fetch to prevent flash
       setAllData(data);
       console.log('✅ Loaded', data.length, 'candles');
       console.log(
@@ -116,6 +123,7 @@ const OHLCChart = ({
         err instanceof Error ? err.message : 'Failed to load initial data';
       console.error('❌ Error loading initial data:', err);
       setError(errorMessage);
+      // Only clear data on error
       setAllData([]);
     } finally {
       setIsLoading(false);
@@ -126,12 +134,10 @@ const OHLCChart = ({
    * Load initial data on mount and when instrument/granularity changes
    */
   useEffect(() => {
-    console.log(
-      '🔄 Instrument or granularity changed, clearing data and loading fresh'
-    );
-    setAllData([]);
+    console.log('🔄 Instrument or granularity changed, loading fresh data');
     loadInitialData();
-  }, [instrument, granularity, loadInitialData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instrument, granularity]);
 
   /**
    * Load older historical data (prepend to beginning)
@@ -161,9 +167,50 @@ const OHLCChart = ({
         oldestTime
       );
 
+      console.log('📥 Received', olderData.length, 'older candles from API');
       if (olderData.length > 0) {
-        setAllData((prevData) => [...olderData, ...prevData]);
-        console.log('➕ Prepended', olderData.length, 'older candles');
+        console.log(
+          '📊 Older data range:',
+          olderData[0]?.time,
+          'to',
+          olderData[olderData.length - 1]?.time
+        );
+      }
+
+      if (olderData.length > 0) {
+        // Check if API returned actually older data or just the latest data
+        const hasActuallyOlderData = olderData.some((c) => c.time < oldestTime);
+
+        if (!hasActuallyOlderData) {
+          console.warn(
+            '⚠️ API returned no data older than',
+            oldestTime,
+            '- may have reached the beginning or API issue'
+          );
+          return;
+        }
+
+        // Filter out any candles that overlap with existing data (including boundary)
+        const filteredOlderData = olderData.filter((c) => c.time < oldestTime);
+
+        console.log(
+          '🔍 After filtering:',
+          filteredOlderData.length,
+          'candles (removed',
+          olderData.length - filteredOlderData.length,
+          'duplicates)'
+        );
+
+        if (filteredOlderData.length > 0) {
+          // Sort older data before prepending to ensure order
+          filteredOlderData.sort((a, b) => a.time - b.time);
+          setAllData((prevData) => [...filteredOlderData, ...prevData]);
+          console.log(
+            '➕ Prepended',
+            filteredOlderData.length,
+            'older candles'
+          );
+        }
       } else {
         console.log('ℹ️ No older data available');
       }
@@ -209,12 +256,31 @@ const OHLCChart = ({
     setLoadingDirection('newer');
 
     try {
-      const newerData = await fetchCandles(instrument, granularity, 5000);
+      // Use 'after' parameter to fetch candles starting after newestTime
+      const newerData = await fetchCandles(
+        instrument,
+        granularity,
+        5000,
+        undefined, // no 'before'
+        newestTime // 'after' parameter
+      );
 
-      // Filter out duplicates
+      console.log('📥 Received', newerData.length, 'newer candles from API');
+      if (newerData.length > 0) {
+        console.log(
+          '📊 Newer data range:',
+          newerData[0]?.time,
+          'to',
+          newerData[newerData.length - 1]?.time
+        );
+      }
+
+      // Filter out any candles that overlap with existing data
       const newCandles = newerData.filter((c) => c.time > newestTime);
 
       if (newCandles.length > 0) {
+        // Sort new candles before appending to ensure order
+        newCandles.sort((a, b) => a.time - b.time);
         setAllData((prevData) => [...prevData, ...newCandles]);
         console.log('➕ Appended', newCandles.length, 'newer candles');
       } else {
@@ -263,8 +329,22 @@ const OHLCChart = ({
     ...config,
   };
 
-  // Initialize chart
+  // Store callbacks in refs to avoid recreating chart on every data change
+  const loadOlderDataRef = useRef(loadOlderData);
+  const loadNewerDataRef = useRef(loadNewerData);
+  const allDataRef = useRef(allData);
+  const isLoadingRef = useRef(isLoading);
+
   useEffect(() => {
+    loadOlderDataRef.current = loadOlderData;
+    loadNewerDataRef.current = loadNewerData;
+    allDataRef.current = allData;
+    isLoadingRef.current = isLoading;
+  });
+
+  // Initialize chart - only once on mount
+  useEffect(() => {
+    console.log('🎨 Initializing chart (should only happen once)');
     if (!chartContainerRef.current) return;
 
     // Create chart instance
@@ -357,18 +437,18 @@ const OHLCChart = ({
 
     // Subscribe to visible logical range changes for scroll-based loading
     const handleVisibleRangeChange = () => {
-      if (!chartRef.current || isLoading) {
+      if (!chartRef.current || isLoadingRef.current) {
         return;
       }
 
       const logicalRange = chartRef.current
         .timeScale()
         .getVisibleLogicalRange();
-      if (!logicalRange || allData.length === 0) {
+      if (!logicalRange || allDataRef.current.length === 0) {
         return;
       }
 
-      const totalBars = allData.length;
+      const totalBars = allDataRef.current.length;
 
       // Check if user is viewing the latest candles (within 50 bars of the end)
       const isViewingLatest = logicalRange.to > totalBars - 50;
@@ -376,16 +456,24 @@ const OHLCChart = ({
         onViewingLatestChange(isViewingLatest);
       }
 
-      // Load older data when within 10 bars of left edge
-      if (logicalRange.from < 10) {
-        console.log('📍 Near left edge, loading older data');
-        loadOlderData();
+      // Clear existing debounce timer
+      if (scrollDebounceTimerRef.current) {
+        clearTimeout(scrollDebounceTimerRef.current);
       }
-      // Load newer data when within 10 bars of right edge
-      else if (logicalRange.to > totalBars - 10) {
-        console.log('📍 Near right edge, loading newer data');
-        loadNewerData();
-      }
+
+      // Debounce data loading - wait 300ms after user stops scrolling
+      scrollDebounceTimerRef.current = setTimeout(() => {
+        // Load older data when within 10 bars of left edge
+        if (logicalRange.from < 10) {
+          console.log('📍 Near left edge, loading older data');
+          loadOlderDataRef.current();
+        }
+        // Load newer data when within 10 bars of right edge
+        else if (logicalRange.to > totalBars - 10) {
+          console.log('📍 Near right edge, loading newer data');
+          loadNewerDataRef.current();
+        }
+      }, 300);
     };
 
     chart
@@ -394,6 +482,13 @@ const OHLCChart = ({
 
     // Cleanup
     return () => {
+      console.log('🧹 Cleaning up chart');
+
+      // Clear debounce timer
+      if (scrollDebounceTimerRef.current) {
+        clearTimeout(scrollDebounceTimerRef.current);
+      }
+
       window.removeEventListener('resize', handleResize);
 
       if (chartRef.current) {
@@ -406,30 +501,27 @@ const OHLCChart = ({
       priceIndicatorSeriesRef.current = null;
       currentCandleRef.current = null;
     };
-  }, [
-    defaultConfig.width,
-    defaultConfig.height,
-    defaultConfig.upColor,
-    defaultConfig.downColor,
-    defaultConfig.borderVisible,
-    defaultConfig.wickUpColor,
-    defaultConfig.wickDownColor,
-    onChartReady,
-    onViewingLatestChange,
-    isLoading,
-    allData,
-    loadOlderData,
-    loadNewerData,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Update chart rendering when allData changes
    */
   useEffect(() => {
-    if (!candlestickSeriesRef.current || !chartRef.current) return;
+    console.log('🔄 Render effect triggered', {
+      hasChart: !!chartRef.current,
+      hasSeries: !!candlestickSeriesRef.current,
+      dataLength: allData.length,
+    });
+
+    if (!candlestickSeriesRef.current || !chartRef.current) {
+      console.log('⚠️ Chart or series not ready yet');
+      return;
+    }
 
     if (allData.length === 0) {
-      console.log('📊 No data to render yet');
+      console.log('📊 No data to render yet - clearing chart');
+      candlestickSeriesRef.current.setData([]);
       return;
     }
 
@@ -441,15 +533,59 @@ const OHLCChart = ({
       allData[allData.length - 1]?.time
     );
 
-    const candlestickData: CandlestickData<Time>[] = allData.map((item) => ({
-      time: item.time as Time,
-      open: item.open,
-      high: item.high,
-      low: item.low,
-      close: item.close,
-    }));
+    // Filter out invalid data and map to candlestick format
+    const candlestickData: CandlestickData<Time>[] = allData
+      .filter((item) => {
+        // Validate that all required fields are present and valid
+        const isValid =
+          item.time != null &&
+          item.open != null &&
+          item.high != null &&
+          item.low != null &&
+          item.close != null &&
+          !isNaN(item.open) &&
+          !isNaN(item.high) &&
+          !isNaN(item.low) &&
+          !isNaN(item.close);
 
-    candlestickSeriesRef.current.setData(candlestickData);
+        if (!isValid) {
+          console.warn('⚠️ Filtering out invalid candle:', item);
+        }
+
+        return isValid;
+      })
+      .map((item) => ({
+        time: item.time as Time,
+        open: item.open,
+        high: item.high,
+        low: item.low,
+        close: item.close,
+      }));
+
+    // Sort data by time in ascending order to ensure lightweight-charts requirement
+    candlestickData.sort((a, b) => (a.time as number) - (b.time as number));
+
+    // Remove duplicates - keep the last occurrence of each timestamp
+    const deduplicatedData: CandlestickData<Time>[] = [];
+    const seenTimes = new Set<number>();
+
+    for (let i = candlestickData.length - 1; i >= 0; i--) {
+      const time = candlestickData[i].time as number;
+      if (!seenTimes.has(time)) {
+        seenTimes.add(time);
+        deduplicatedData.unshift(candlestickData[i]);
+      }
+    }
+
+    if (deduplicatedData.length !== candlestickData.length) {
+      console.warn(
+        `⚠️ Removed ${candlestickData.length - deduplicatedData.length} duplicate timestamps`
+      );
+    }
+
+    console.log('📊 Setting data on series...');
+    candlestickSeriesRef.current.setData(deduplicatedData);
+    console.log('✅ Data set successfully');
 
     // Fit content on initial load
     if (allData.length > 0 && candlestickData.length > 0) {
@@ -785,10 +921,14 @@ const OHLCChart = ({
   }
 
   return (
-    <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+    <Box
+      sx={{ position: 'relative', width: '100%', height: '100%' }}
+      data-testid="ohlc-chart-container"
+    >
       {/* Loading indicator */}
       {isLoading && (
         <Box
+          data-testid="chart-loading-indicator"
           sx={{
             position: 'absolute',
             top: 8,
@@ -805,7 +945,11 @@ const OHLCChart = ({
           }}
         >
           <CircularProgress size={16} />
-          <Typography variant="caption" sx={{ fontWeight: 500 }}>
+          <Typography
+            variant="caption"
+            sx={{ fontWeight: 500 }}
+            data-testid="loading-direction-text"
+          >
             Loading {loadingDirection === 'older' ? 'older' : 'newer'} data...
           </Typography>
         </Box>
@@ -813,6 +957,7 @@ const OHLCChart = ({
 
       <Box
         ref={chartContainerRef}
+        data-testid="chart-canvas"
         sx={{
           width: '100%',
           height: '100%',

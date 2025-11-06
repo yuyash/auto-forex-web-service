@@ -13,16 +13,17 @@ import csv
 from datetime import datetime
 
 from django.contrib.auth import get_user_model
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from django.http import HttpResponse
 
 from rest_framework import status
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
 from trading.event_models import Event
 from trading.serializers import EventSerializer
 
@@ -44,7 +45,7 @@ class EventPagination(PageNumberPagination):
 ALLOWED_NON_ADMIN_CATEGORIES = {"trading"}
 
 
-def filter_events_for_user(request: Request, queryset):
+def filter_events_for_user(request: Request, queryset: QuerySet[Event]) -> QuerySet[Event]:
     """Apply visibility rules based on the requesting user's privileges."""
 
     if request.user.is_staff:
@@ -52,10 +53,7 @@ def filter_events_for_user(request: Request, queryset):
 
     return (
         queryset.filter(category__in=ALLOWED_NON_ADMIN_CATEGORIES)
-        .filter(
-            Q(user=request.user)
-            | Q(account__user=request.user)
-        )
+        .filter(Q(user=request.user) | Q(account__user=request.user))
         .distinct()
     )
 
@@ -67,8 +65,7 @@ def ensure_event_access(request: Request, event: Event) -> None:
         return
 
     if event.category not in ALLOWED_NON_ADMIN_CATEGORIES:
-        raise PermissionDenied(
-            "You do not have permission to view this event.")
+        raise PermissionDenied("You do not have permission to view this event.")
 
     event_user_id = getattr(event.user, "pk", None)
     account_user_id = getattr(event.account, "user_id", None)
@@ -79,8 +76,7 @@ def ensure_event_access(request: Request, event: Event) -> None:
     )
 
     if not has_direct_access:
-        raise PermissionDenied(
-            "You do not have permission to view this event.")
+        raise PermissionDenied("You do not have permission to view this event.")
 
 
 class EventListView(APIView):
@@ -132,8 +128,7 @@ class EventListView(APIView):
         start_date = request.query_params.get("start_date")
         if start_date:
             try:
-                start_dt = datetime.fromisoformat(
-                    start_date.replace("Z", "+00:00"))
+                start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
                 queryset = queryset.filter(timestamp__gte=start_dt)
             except ValueError:
                 return Response(
@@ -144,8 +139,7 @@ class EventListView(APIView):
         end_date = request.query_params.get("end_date")
         if end_date:
             try:
-                end_dt = datetime.fromisoformat(
-                    end_date.replace("Z", "+00:00"))
+                end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
                 queryset = queryset.filter(timestamp__lte=end_dt)
             except ValueError:
                 return Response(
@@ -254,8 +248,7 @@ class EventExportView(APIView):
         start_date = request.query_params.get("start_date")
         if start_date:
             try:
-                start_dt = datetime.fromisoformat(
-                    start_date.replace("Z", "+00:00"))
+                start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
                 queryset = queryset.filter(timestamp__gte=start_dt)
             except ValueError:
                 pass
@@ -263,8 +256,7 @@ class EventExportView(APIView):
         end_date = request.query_params.get("end_date")
         if end_date:
             try:
-                end_dt = datetime.fromisoformat(
-                    end_date.replace("Z", "+00:00"))
+                end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
                 queryset = queryset.filter(timestamp__lte=end_dt)
             except ValueError:
                 pass

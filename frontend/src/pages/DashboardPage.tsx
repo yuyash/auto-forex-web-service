@@ -65,27 +65,41 @@ const DashboardPage = () => {
     undefined
   );
 
-  // Chart refresh key for forcing remount
-  const [chartKey, setChartKey] = useState<number>(0);
+  // Chart API reference for programmatic control
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chartApiRef = useRef<any>(null);
 
   /**
    * Simple fetchCandles function that makes API calls
    * Returns OHLCData[] or empty array on error
+   *
+   * @param before - Unix timestamp to fetch older data (candles ending before this time)
+   * @param after - Unix timestamp to fetch newer data (candles starting after this time)
    */
   const fetchCandles = useCallback(
     async (
       inst: string,
       gran: string,
       count: number,
-      before?: number
+      before?: number,
+      after?: number
     ): Promise<OHLCData[]> => {
       try {
         let url = `/api/candles?instrument=${inst}&granularity=${gran}&count=${count}`;
         if (before) {
           url += `&before=${before}`;
         }
+        if (after) {
+          url += `&after=${after}`;
+        }
 
-        console.log('📡 Fetching candles:', { inst, gran, count, before });
+        console.log('📡 Fetching candles:', {
+          inst,
+          gran,
+          count,
+          before,
+          after,
+        });
 
         const response = await fetch(url, {
           headers: {
@@ -279,11 +293,14 @@ const DashboardPage = () => {
     setAutoRefreshEnabled(event.target.checked);
   };
 
-  // Handle manual refresh - force chart remount
+  // Handle manual refresh - reload data without remounting
   const handleManualRefresh = useCallback(() => {
-    console.log('🔄 Manual refresh: Remounting chart');
-    setChartKey((prev) => prev + 1);
-  }, []);
+    console.log('🔄 Manual refresh: Reloading chart data');
+    // Force re-fetch by changing instrument temporarily
+    const currentInstrument = instrument;
+    setInstrument('');
+    setTimeout(() => setInstrument(currentInstrument), 0);
+  }, [instrument]);
 
   // Filter positions and orders for current instrument
   const currentPositions = positions.filter((p) => p.instrument === instrument);
@@ -395,7 +412,6 @@ const DashboardPage = () => {
             </Box>
           ) : (
             <OHLCChart
-              key={chartKey}
               instrument={instrument}
               granularity={granularity}
               fetchCandles={fetchCandles}
@@ -403,6 +419,9 @@ const DashboardPage = () => {
               orders={currentOrders}
               enableRealTimeUpdates={hasOandaAccount && !!oandaAccountId}
               accountId={oandaAccountId}
+              onChartReady={(chartApi) => {
+                chartApiRef.current = chartApi;
+              }}
             />
           )}
         </Box>

@@ -2,15 +2,18 @@
   "kiroAgent.enableTabAutocomplete": true,
   "kiroAgent.modelSelection": "claude-sonnet-4.5",
   "kiroAgent.trustedCommands": [
-    "npm *",
+    "wc *",
     "ls *",
-    "npx *",
     "which *",
-    "python *",
-    "pre-commit *",
     "sed *",
+    "npm *",
+    "npx *",
+    "python *",
+    "python3 *",
+    "pre-commit *",
     "mypy *",
-    "wc -l *"
+    "flake8 *",
+    "pylint *"
   ],
   "editor.rulers": [100, 120],
   "editor.tabSize": 4,

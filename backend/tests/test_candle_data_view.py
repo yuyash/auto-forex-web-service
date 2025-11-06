@@ -56,7 +56,7 @@ class CandleDataViewTestCase(TestCase):
 
     @patch("trading.candle_views.v20.Context")
     def test_cache_miss_headers(self, mock_context):
-        """Test that cache miss returns correct headers."""
+        """Test that cache disabled returns correct headers."""
         # Mock OANDA API response with proper object structure
         mock_candle = MagicMock()
         mock_candle.complete = True
@@ -79,15 +79,15 @@ class CandleDataViewTestCase(TestCase):
             {"instrument": "EUR_USD", "granularity": "H1", "count": "100"},
         )
 
-        # Verify response
+        # Verify response - caching is disabled
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["X-Cache-Hit"], "false")
-        self.assertEqual(response["X-Cache-Status"], "miss")
+        self.assertEqual(response["X-Cache-Status"], "disabled")
         self.assertEqual(response["X-Rate-Limited"], "false")
 
     @patch("trading.candle_views.v20.Context")
     def test_cache_hit_headers(self, mock_context):
-        """Test that cache hit returns correct headers."""
+        """Test that caching is disabled - both requests fetch fresh data."""
         # Mock OANDA API response with proper object structure
         mock_candle = MagicMock()
         mock_candle.complete = True
@@ -104,22 +104,23 @@ class CandleDataViewTestCase(TestCase):
         }
         mock_context.return_value.instrument.candles.return_value = mock_response
 
-        # First request - cache miss
+        # First request - no cache
         response1 = self.client.get(
             "/api/candles/",
             {"instrument": "EUR_USD", "granularity": "H1", "count": "100"},
         )
         self.assertEqual(response1.status_code, 200)
         self.assertEqual(response1["X-Cache-Hit"], "false")
+        self.assertEqual(response1["X-Cache-Status"], "disabled")
 
-        # Second request - cache hit
+        # Second request - still no cache (caching disabled)
         response2 = self.client.get(
             "/api/candles/",
             {"instrument": "EUR_USD", "granularity": "H1", "count": "100"},
         )
         self.assertEqual(response2.status_code, 200)
-        self.assertEqual(response2["X-Cache-Hit"], "true")
-        self.assertEqual(response2["X-Cache-Status"], "fresh")
+        self.assertEqual(response2["X-Cache-Hit"], "false")
+        self.assertEqual(response2["X-Cache-Status"], "disabled")
         self.assertEqual(response2["X-Rate-Limited"], "false")
 
     @patch("trading.candle_views.v20.Context")
@@ -155,50 +156,20 @@ class CandleDataViewTestCase(TestCase):
 
     @patch("trading.candle_views.v20.Context")
     def test_rate_limit_stale_cache_headers(self, mock_context):
-        """Test that rate limit returns stale cache with correct headers."""
-        # First, populate the cache with a successful request
-        mock_candle = MagicMock()
-        mock_candle.complete = True
-        mock_candle.time = "2024-01-01T00:00:00.000000Z"
-        mock_candle.volume = 100
-        mock_candle.mid = MagicMock(o="1.1000", h="1.1010", l="1.0990", c="1.1005")
-
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.body = {
-            "instrument": "EUR_USD",
-            "granularity": "H1",
-            "candles": [mock_candle],
-        }
-        mock_context.return_value.instrument.candles.return_value = mock_response
-
-        # First request - populate cache
-        response1 = self.client.get(
-            "/api/candles/",
-            {"instrument": "EUR_USD", "granularity": "H1", "count": "100"},
-        )
-        self.assertEqual(response1.status_code, 200)
-
-        # Clear the fresh cache to simulate expiration
-        cache_key = "candles:EUR_USD:H1:100:None:None:None"
-        cache.delete(cache_key)
-
+        """Test that rate limit returns 429 error (no cache fallback)."""
         # Mock rate limit error
         mock_context.return_value.instrument.candles.side_effect = Exception("429 rate limit")
 
-        # Second request - should return stale cache
-        response2 = self.client.get(
+        # Request should return 429 error (no stale cache fallback since caching is disabled)
+        response = self.client.get(
             "/api/candles/",
             {"instrument": "EUR_USD", "granularity": "H1", "count": "100"},
         )
-        self.assertEqual(response2.status_code, 200)
-        self.assertEqual(response2["X-Cache-Hit"], "true")
-        self.assertEqual(response2["X-Cache-Status"], "stale")
-        self.assertEqual(response2["X-Rate-Limited"], "true")
+        self.assertEqual(response.status_code, 429)
 
     @patch("trading.candle_views.v20.Context")
     def test_cache_ttl_configuration(self, mock_context):
-        """Test that cache TTL is configured correctly (10min fresh, 2hr stale)."""
+        """Test that caching is disabled - no cache keys are created."""
         # Mock OANDA API response with proper object structure
         mock_candle = MagicMock()
         mock_candle.complete = True
@@ -215,23 +186,22 @@ class CandleDataViewTestCase(TestCase):
         }
         mock_context.return_value.instrument.candles.return_value = mock_response
 
-        # Make request to populate cache
+        # Make request
         response = self.client.get(
             "/api/candles/",
             {"instrument": "EUR_USD", "granularity": "H1", "count": "100"},
         )
         self.assertEqual(response.status_code, 200)
 
-        # Verify both fresh and stale cache keys exist
+        # Verify cache is disabled - no cache keys should exist
         cache_key = "candles:EUR_USD:H1:100:None:None:None"
         stale_cache_key = f"{cache_key}:stale"
 
         fresh_data = cache.get(cache_key)
         stale_data = cache.get(stale_cache_key)
 
-        self.assertIsNotNone(fresh_data, "Fresh cache should be populated")
-        self.assertIsNotNone(stale_data, "Stale cache should be populated")
-        self.assertEqual(fresh_data, stale_data, "Fresh and stale cache should have same data")
+        self.assertIsNone(fresh_data, "Cache should be disabled - no fresh cache")
+        self.assertIsNone(stale_data, "Cache should be disabled - no stale cache")
 
     def test_missing_instrument_parameter(self):
         """Test that missing instrument parameter returns 400 error."""
