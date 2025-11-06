@@ -66,8 +66,37 @@ const DashboardPage = () => {
     undefined
   );
 
+  // Error handling state
+  const [chartError, setChartError] = useState<string | null>(null);
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const [rateLimitRetryTime, setRateLimitRetryTime] = useState<number | null>(
+    null
+  );
+
   // Cache manager for storing all fetched candles
   const cacheManagerRef = useRef<CacheManager>(new CacheManager());
+
+  // Rate limit countdown timer effect
+  useEffect(() => {
+    if (!isRateLimited || !rateLimitRetryTime) {
+      return;
+    }
+
+    const countdownInterval = setInterval(() => {
+      if (rateLimitRetryTime <= Date.now()) {
+        setIsRateLimited(false);
+        setRateLimitRetryTime(null);
+        clearInterval(countdownInterval);
+      } else {
+        // Force re-render to update countdown display
+        setRateLimitRetryTime((prev) => prev);
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(countdownInterval);
+    };
+  }, [isRateLimited, rateLimitRetryTime]);
 
   // Load a large batch of historical data (up to 5000 candles) and cache it
   const loadAndCacheHistoricalData = useCallback(
@@ -89,20 +118,34 @@ const DashboardPage = () => {
           },
         });
 
-        if (!response.ok) {
-          if (response.status === 429) {
-            console.warn('Rate limited, using cached data');
-            setHasOandaAccount(true);
-            return [];
-          }
+        // Check for rate limiting
+        const isRateLimitedResponse =
+          response.status === 429 ||
+          response.headers.get('X-Rate-Limited') === 'true';
 
+        if (isRateLimitedResponse) {
+          console.warn('Rate limited by API, using cached data');
+          setIsRateLimited(true);
+          setRateLimitRetryTime(Date.now() + 60000); // 60 seconds from now
+          setChartError(null); // Clear any previous errors
+
+          // Return empty array to use cached data
+          return [];
+        }
+
+        if (!response.ok) {
           const errorData = await response.json();
           if (errorData.error_code === 'NO_OANDA_ACCOUNT') {
             setHasOandaAccount(false);
+            setChartError(null); // Clear error as this is expected state
             return [];
           }
 
-          throw new Error('Failed to load historical data');
+          // Log error and display message without clearing chart data
+          const errorMessage = `Failed to load data: ${response.status} ${response.statusText}`;
+          console.error(errorMessage, errorData);
+          setChartError(errorMessage);
+          return [];
         }
 
         const data = await response.json();
@@ -120,10 +163,21 @@ const DashboardPage = () => {
           }
         }
 
+        // Clear errors on successful fetch
+        setChartError(null);
+        setIsRateLimited(false);
+        setRateLimitRetryTime(null);
         setHasOandaAccount(true);
         return candles;
       } catch (err) {
+        // Log error to console for debugging
         console.error('Error loading historical data:', err);
+
+        // Display error message without clearing chart data
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to load historical data';
+        setChartError(errorMessage);
+
         return [];
       }
     },
@@ -533,6 +587,35 @@ const DashboardPage = () => {
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
+        </Alert>
+      )}
+
+      {/* Rate Limit Warning Banner */}
+      {isRateLimited && rateLimitRetryTime && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+            Rate Limited - Using Cached Data
+          </Typography>
+          <Typography variant="body2">
+            API rate limit reached. Displaying cached data. You can retry in{' '}
+            {Math.ceil((rateLimitRetryTime - Date.now()) / 1000)} seconds.
+          </Typography>
+        </Alert>
+      )}
+
+      {/* Chart Error Message */}
+      {chartError && !isRateLimited && (
+        <Alert
+          severity="error"
+          sx={{ mb: 3 }}
+          onClose={() => setChartError(null)}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+            Chart Data Error
+          </Typography>
+          <Typography variant="body2">
+            {chartError}. Displaying cached data if available.
+          </Typography>
         </Alert>
       )}
 
