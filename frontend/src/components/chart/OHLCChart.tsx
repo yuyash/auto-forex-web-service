@@ -10,7 +10,7 @@ import {
   type SeriesMarker,
   type LineData,
 } from 'lightweight-charts';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, CircularProgress } from '@mui/material';
 import type { OHLCData, ChartConfig, Position, Order } from '../../types/chart';
 import useMarketData from '../../hooks/useMarketData';
 
@@ -37,6 +37,29 @@ interface OHLCChartProps {
   ) => Promise<OHLCData[]>;
 }
 
+/**
+ * Calculate the duration of a single candle in seconds based on granularity
+ */
+const getGranularityDuration = (granularity: string): number => {
+  const unit = granularity.charAt(0);
+  const value = parseInt(granularity.substring(1)) || 1;
+
+  switch (unit) {
+    case 'S':
+      return value; // Seconds
+    case 'M':
+      return value * 60; // Minutes
+    case 'H':
+      return value * 3600; // Hours
+    case 'D':
+      return 86400; // Day
+    case 'W':
+      return 604800; // Week
+    default:
+      return 3600; // Default to 1 hour
+  }
+};
+
 const OHLCChart = ({
   instrument,
   granularity,
@@ -62,6 +85,10 @@ const OHLCChart = ({
   );
   const [error, setError] = useState<string | null>(null);
   const [scrollToEnd, setScrollToEnd] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingDirection, setLoadingDirection] = useState<
+    'older' | 'newer' | null
+  >(null);
   const currentCandleRef = useRef<CandlestickData<Time> | null>(null);
   const isLoadingOlderDataRef = useRef(false);
   const hasSubscribedToScrollRef = useRef(false);
@@ -70,6 +97,61 @@ const OHLCChart = ({
   );
   const loadingDirectionRef = useRef<'older' | 'newer' | null>(null);
   const dataLengthRef = useRef(0);
+  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * Check if we should load older data based on scroll position
+   * Returns true when within 10 bars of the left edge
+   */
+  const shouldLoadOlder = useCallback(
+    (logicalRange: { from: number; to: number }): boolean => {
+      return logicalRange.from < 10;
+    },
+    []
+  );
+
+  /**
+   * Check if we should load newer data based on scroll position and time
+   * Returns true when within 10 bars of the right edge AND not beyond current time
+   */
+  const shouldLoadNewer = useCallback(
+    (
+      logicalRange: { from: number; to: number },
+      totalBars: number,
+      newestTimestamp: number
+    ): boolean => {
+      // Check if within 10 bars of right edge
+      const nearRightEdge = logicalRange.to > totalBars - 10;
+
+      if (!nearRightEdge) {
+        return false;
+      }
+
+      // Calculate current time in seconds
+      const currentTime = Math.floor(Date.now() / 1000);
+
+      // Calculate granularity duration to determine if we're at current time
+      const granularityDuration = getGranularityDuration(granularity);
+
+      // Check if the newest data is within one candle period of current time
+      // If so, we're at the latest data and shouldn't fetch more
+      const timeDifference = currentTime - newestTimestamp;
+      const isAtCurrentTime = timeDifference <= granularityDuration;
+
+      console.log('shouldLoadNewer check:', {
+        nearRightEdge,
+        currentTime,
+        newestTimestamp,
+        timeDifference,
+        granularityDuration,
+        isAtCurrentTime,
+      });
+
+      // Only load newer data if we're near the edge AND not at current time
+      return nearRightEdge && !isAtCurrentTime;
+    },
+    [granularity]
+  );
 
   // Stable error handler to prevent
   //  reconnection loops
@@ -217,15 +299,23 @@ const OHLCChart = ({
         // Get total number of bars in the dataset from ref (to avoid stale closure)
         const totalBars = dataLengthRef.current;
 
+        // Get the newest timestamp from current data for time-based checks
+        const newestTimestamp =
+          data.length > 0 ? data[data.length - 1].time : 0;
+
         // Check if user scrolled to the left edge (beginning of data)
         // Load more data when within 10 bars of the start
-        if (onLoadOlderData && logicalRange.from < 10) {
+        if (onLoadOlderData && shouldLoadOlder(logicalRange)) {
           console.log(
             'Loading older data, logicalRange.from:',
             logicalRange.from
           );
           isLoadingOlderDataRef.current = true;
           loadingDirectionRef.current = 'older';
+
+          // Set loading state for UI indicator
+          setIsLoading(true);
+          setLoadingDirection('older');
 
           // Preserve the logical range (bar indices) to maintain scroll position
           // We'll adjust this after new data is loaded
@@ -250,19 +340,37 @@ const OHLCChart = ({
             loadingDirectionRef.current = null;
           } finally {
             isLoadingOlderDataRef.current = false;
+
+            // Clear loading indicator after 200ms
+            if (loadingTimeoutRef.current) {
+              clearTimeout(loadingTimeoutRef.current);
+            }
+            loadingTimeoutRef.current = setTimeout(() => {
+              setIsLoading(false);
+              setLoadingDirection(null);
+            }, 200);
           }
         }
         // Check if user scrolled to the right edge (end of data)
-        // Load more data when within 10 bars of the end
-        else if (onLoadNewerData && logicalRange.to > totalBars - 10) {
+        // Load more data when within 10 bars of the end AND not beyond current time
+        else if (
+          onLoadNewerData &&
+          shouldLoadNewer(logicalRange, totalBars, newestTimestamp)
+        ) {
           console.log(
             'Loading newer data, logicalRange.to:',
             logicalRange.to,
             'totalBars:',
-            totalBars
+            totalBars,
+            'newestTimestamp:',
+            newestTimestamp
           );
           isLoadingOlderDataRef.current = true;
           loadingDirectionRef.current = 'newer';
+
+          // Set loading state for UI indicator
+          setIsLoading(true);
+          setLoadingDirection('newer');
 
           // Preserve the logical range for newer data too
           // When newer data is appended, we don't need to shift the range
@@ -302,6 +410,15 @@ const OHLCChart = ({
             loadingDirectionRef.current = null;
           } finally {
             isLoadingOlderDataRef.current = false;
+
+            // Clear loading indicator after 200ms
+            if (loadingTimeoutRef.current) {
+              clearTimeout(loadingTimeoutRef.current);
+            }
+            loadingTimeoutRef.current = setTimeout(() => {
+              setIsLoading(false);
+              setLoadingDirection(null);
+            }, 200);
           }
         }
       });
@@ -314,6 +431,11 @@ const OHLCChart = ({
       // Clear the scroll loading timeout
       if (scrollTimeout) {
         clearTimeout(scrollTimeout);
+      }
+
+      // Clear the loading indicator timeout
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
       }
 
       // Disable scroll loading
@@ -341,6 +463,9 @@ const OHLCChart = ({
     granularity,
     onLoadOlderData,
     onLoadNewerData,
+    shouldLoadOlder,
+    shouldLoadNewer,
+    data,
   ]);
 
   // Track previous data length to detect if we're loading older data
@@ -676,6 +801,31 @@ const OHLCChart = ({
 
   return (
     <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+      {/* Loading indicator */}
+      {isLoading && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            zIndex: 1000,
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            borderRadius: 1,
+            px: 2,
+            py: 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          }}
+        >
+          <CircularProgress size={16} />
+          <Typography variant="caption" sx={{ fontWeight: 500 }}>
+            Loading {loadingDirection === 'older' ? 'older' : 'newer'} data...
+          </Typography>
+        </Box>
+      )}
+
       <Box
         ref={chartContainerRef}
         sx={{

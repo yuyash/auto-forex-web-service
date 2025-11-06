@@ -610,41 +610,17 @@ const DashboardPage = () => {
               </Typography>
             </Box>
           ) : (
-            <>
-              {isLoadingMore && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 8,
-                    left: 8,
-                    zIndex: 10,
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    borderRadius: 1,
-                    px: 2,
-                    py: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                  }}
-                >
-                  <CircularProgress size={16} />
-                  <Typography variant="caption">
-                    Loading older data...
-                  </Typography>
-                </Box>
-              )}
-              <OHLCChart
-                instrument={instrument}
-                granularity={granularity}
-                data={chartData}
-                positions={currentPositions}
-                orders={currentOrders}
-                enableRealTimeUpdates={hasOandaAccount && !!oandaAccountId}
-                accountId={oandaAccountId}
-                onLoadOlderData={loadOlderData}
-                onLoadNewerData={loadNewerData}
-              />
-            </>
+            <OHLCChart
+              instrument={instrument}
+              granularity={granularity}
+              data={chartData}
+              positions={currentPositions}
+              orders={currentOrders}
+              enableRealTimeUpdates={hasOandaAccount && !!oandaAccountId}
+              accountId={oandaAccountId}
+              onLoadOlderData={loadOlderData}
+              onLoadNewerData={loadNewerData}
+            />
           )}
         </Box>
 
