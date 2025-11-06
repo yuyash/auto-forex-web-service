@@ -25,6 +25,7 @@ import { Breadcrumbs } from '../components/common';
 import ChartControls from '../components/chart/ChartControls';
 import type { Granularity, OHLCData, Position, Order } from '../types/chart';
 import type { ChartType, Indicator } from '../components/chart/ChartControls';
+import { CacheManager } from '../utils/CacheManager';
 
 interface StrategyEvent {
   id: string;
@@ -65,15 +66,8 @@ const DashboardPage = () => {
     undefined
   );
 
-  // Cache for storing all fetched candles
-  const candleCacheRef = useRef<Map<string, OHLCData[]>>(new Map());
-  const oldestCachedTimeRef = useRef<number | null>(null);
-  const newestCachedTimeRef = useRef<number | null>(null);
-
-  // Get cache key for instrument/granularity combination
-  const getCacheKey = useCallback((inst: string, gran: string) => {
-    return `${inst}_${gran}`;
-  }, []);
+  // Cache manager for storing all fetched candles
+  const cacheManagerRef = useRef<CacheManager>(new CacheManager());
 
   // Load a large batch of historical data (up to 5000 candles) and cache it
   const loadAndCacheHistoricalData = useCallback(
@@ -115,23 +109,15 @@ const DashboardPage = () => {
         const candles = data.candles || [];
 
         if (candles.length > 0) {
-          const cacheKey = getCacheKey(inst, gran);
-          const existingCache = candleCacheRef.current.get(cacheKey) || [];
+          // Use CacheManager to merge new data with existing cache
+          cacheManagerRef.current.merge(inst, gran, candles);
 
-          // Merge new candles with existing cache, avoiding duplicates
-          const mergedCandles = [...candles, ...existingCache];
-          const uniqueCandles = Array.from(
-            new Map(mergedCandles.map((c) => [c.time, c])).values()
-          ).sort((a, b) => a.time - b.time);
-
-          candleCacheRef.current.set(cacheKey, uniqueCandles);
-
-          // Update time boundaries
-          oldestCachedTimeRef.current = uniqueCandles[0].time;
-          newestCachedTimeRef.current =
-            uniqueCandles[uniqueCandles.length - 1].time;
-
-          console.log(`Cached ${uniqueCandles.length} candles for ${cacheKey}`);
+          const timeRange = cacheManagerRef.current.getTimeRange(inst, gran);
+          if (timeRange) {
+            console.log(
+              `Cached data for ${inst}_${gran}: ${timeRange.oldest} to ${timeRange.newest}`
+            );
+          }
         }
 
         setHasOandaAccount(true);
@@ -141,14 +127,14 @@ const DashboardPage = () => {
         return [];
       }
     },
-    [token, getCacheKey]
+    [token]
   );
 
   // Load initial visible data from cache or API
   const loadHistoricalData = useCallback(
     async (inst: string, gran: string, count = 100): Promise<OHLCData[]> => {
-      const cacheKey = getCacheKey(inst, gran);
-      const cachedData = candleCacheRef.current.get(cacheKey);
+      // Check cache first using CacheManager
+      const cachedData = cacheManagerRef.current.get(inst, gran);
 
       // If we have cached data, return the most recent 'count' candles
       if (cachedData && cachedData.length > 0) {
@@ -163,7 +149,7 @@ const DashboardPage = () => {
       // Return the most recent 'count' candles for display
       return candles.slice(-count);
     },
-    [getCacheKey, loadAndCacheHistoricalData]
+    [loadAndCacheHistoricalData]
   );
 
   // Load older data (for scrolling left/back in time)
@@ -177,8 +163,7 @@ const DashboardPage = () => {
       setIsLoadingMore(true);
 
       try {
-        const cacheKey = getCacheKey(inst, gran);
-        const cachedData = candleCacheRef.current.get(cacheKey) || [];
+        const cachedData = cacheManagerRef.current.get(inst, gran) || [];
 
         // Use a ref to get the current chart data to avoid stale closure
         const currentOldest = chartData.length > 0 ? chartData[0].time : null;
@@ -211,13 +196,14 @@ const DashboardPage = () => {
         }
 
         // If no older cached data, fetch more from API
-        if (oldestCachedTimeRef.current) {
+        const timeRange = cacheManagerRef.current.getTimeRange(inst, gran);
+        if (timeRange) {
           console.log('Fetching older data from API (5000 candles)');
           const olderCandles = await loadAndCacheHistoricalData(
             inst,
             gran,
             5000,
-            oldestCachedTimeRef.current
+            timeRange.oldest
           );
 
           if (olderCandles.length > 0) {
@@ -246,7 +232,7 @@ const DashboardPage = () => {
         setIsLoadingMore(false);
       }
     },
-    [isLoadingMore, chartData, getCacheKey, loadAndCacheHistoricalData]
+    [isLoadingMore, chartData, loadAndCacheHistoricalData]
   );
 
   // Load newer data (for scrolling right/forward in time)
@@ -260,8 +246,7 @@ const DashboardPage = () => {
       setIsLoadingMore(true);
 
       try {
-        const cacheKey = getCacheKey(inst, gran);
-        const cachedData = candleCacheRef.current.get(cacheKey) || [];
+        const cachedData = cacheManagerRef.current.get(inst, gran) || [];
         const currentNewest =
           chartData.length > 0 ? chartData[chartData.length - 1].time : null;
 
@@ -355,18 +340,17 @@ const DashboardPage = () => {
         setIsLoadingMore(false);
       }
     },
-    [isLoadingMore, chartData, getCacheKey, loadAndCacheHistoricalData]
+    [isLoadingMore, chartData, loadAndCacheHistoricalData]
   );
 
   // Initial chart data load
   useEffect(() => {
     const loadInitialChartData = async () => {
       // Clear cache when instrument or granularity changes
-      const cacheKey = getCacheKey(instrument, granularity);
-      if (!candleCacheRef.current.has(cacheKey)) {
-        candleCacheRef.current.clear();
-        oldestCachedTimeRef.current = null;
-        newestCachedTimeRef.current = null;
+      const cachedData = cacheManagerRef.current.get(instrument, granularity);
+      if (!cachedData) {
+        // Clear entire cache when switching to a new instrument/granularity combination
+        cacheManagerRef.current.clear();
       }
 
       // Add a small delay to prevent rapid-fire requests on mount
@@ -376,7 +360,7 @@ const DashboardPage = () => {
     };
 
     loadInitialChartData();
-  }, [instrument, granularity, loadHistoricalData, getCacheKey]);
+  }, [instrument, granularity, loadHistoricalData]);
 
   // Fetch positions
   const fetchPositions = useCallback(async () => {
