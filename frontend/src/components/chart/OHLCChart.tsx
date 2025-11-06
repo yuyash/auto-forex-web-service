@@ -83,6 +83,9 @@ const OHLCChart = ({
   const stopLossSeriesRef = useRef<ReturnType<IChartApi['addSeries']> | null>(
     null
   );
+  const priceIndicatorSeriesRef = useRef<ReturnType<
+    IChartApi['addSeries']
+  > | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scrollToEnd, setScrollToEnd] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -242,10 +245,23 @@ const OHLCChart = ({
       lastValueVisible: true,
     });
 
+    // Add real-time price indicator line series
+    const priceIndicatorSeries = chart.addSeries(LineSeries, {
+      color: '#2196F3', // Bright blue
+      lineWidth: 2,
+      lineStyle: 2, // Dashed line
+      title: 'Live Price',
+      priceLineVisible: true,
+      lastValueVisible: true,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+    });
+
     chartRef.current = chart;
     candlestickSeriesRef.current = candlestickSeries;
     takeProfitSeriesRef.current = takeProfitSeries;
     stopLossSeriesRef.current = stopLossSeries;
+    priceIndicatorSeriesRef.current = priceIndicatorSeries;
 
     // Handle window resize
     const handleResize = () => {
@@ -448,6 +464,7 @@ const OHLCChart = ({
       candlestickSeriesRef.current = null;
       takeProfitSeriesRef.current = null;
       stopLossSeriesRef.current = null;
+      priceIndicatorSeriesRef.current = null;
       currentCandleRef.current = null;
       hasSubscribedToScrollRef.current = false;
     };
@@ -643,6 +660,127 @@ const OHLCChart = ({
       console.error('Error updating chart with tick data:', err);
     }
   }, [tickData, enableRealTimeUpdates, isConnected]);
+
+  // Store the latest price for the indicator
+  const latestPriceRef = useRef<number | null>(null);
+
+  // Update price indicator with real-time tick data
+  // The indicator spans the entire visible time range to remain visible during scrolling
+  useEffect(() => {
+    if (
+      !enableRealTimeUpdates ||
+      !tickData ||
+      !priceIndicatorSeriesRef.current ||
+      !chartRef.current ||
+      !isConnected
+    ) {
+      return;
+    }
+
+    try {
+      // Convert tick timestamp to Unix timestamp
+      const tickTime = Math.floor(new Date(tickData.time).getTime() / 1000);
+
+      // Use mid price for the indicator
+      const price = tickData.mid;
+
+      // Store the latest price for use when scrolling
+      latestPriceRef.current = price;
+
+      // Get the visible time range from the chart
+      const timeScale = chartRef.current.timeScale();
+      const visibleRange = timeScale.getVisibleRange();
+
+      if (visibleRange) {
+        // Create a horizontal line spanning the entire visible range
+        // This ensures the indicator remains visible when scrolled away from latest candles
+        const priceIndicatorData: LineData<Time>[] = [
+          {
+            time: visibleRange.from as Time,
+            value: price,
+          },
+          {
+            time: visibleRange.to as Time,
+            value: price,
+          },
+        ];
+
+        priceIndicatorSeriesRef.current.setData(priceIndicatorData);
+      } else {
+        // Fallback: if no visible range, just show at current time
+        const priceIndicatorData: LineData<Time>[] = [
+          {
+            time: tickTime as Time,
+            value: price,
+          },
+        ];
+
+        priceIndicatorSeriesRef.current.setData(priceIndicatorData);
+      }
+    } catch (err) {
+      console.error('Error updating price indicator with tick data:', err);
+    }
+  }, [tickData, enableRealTimeUpdates, isConnected]);
+
+  // Update price indicator when visible range changes (during scrolling)
+  // This keeps the indicator visible even when viewing historical data
+  useEffect(() => {
+    if (
+      !enableRealTimeUpdates ||
+      !priceIndicatorSeriesRef.current ||
+      !chartRef.current ||
+      !isConnected ||
+      latestPriceRef.current === null
+    ) {
+      return;
+    }
+
+    const chart = chartRef.current;
+    const priceIndicatorSeries = priceIndicatorSeriesRef.current;
+
+    // Handler for updating the price indicator when scrolling
+    const handleVisibleRangeChange = () => {
+      if (!priceIndicatorSeries || latestPriceRef.current === null) {
+        return;
+      }
+
+      try {
+        const timeScale = chart.timeScale();
+        const visibleRange = timeScale.getVisibleRange();
+
+        if (visibleRange) {
+          // Update the price indicator to span the new visible range
+          // This maintains visibility regardless of scroll position
+          const priceIndicatorData: LineData<Time>[] = [
+            {
+              time: visibleRange.from as Time,
+              value: latestPriceRef.current,
+            },
+            {
+              time: visibleRange.to as Time,
+              value: latestPriceRef.current,
+            },
+          ];
+
+          priceIndicatorSeries.setData(priceIndicatorData);
+        }
+      } catch (err) {
+        console.error('Error updating price indicator during scroll:', err);
+      }
+    };
+
+    // Subscribe to visible range changes to update the indicator span
+    chart
+      .timeScale()
+      .subscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
+
+    // Cleanup subscription
+    return () => {
+      chart
+        .timeScale()
+        .unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
+    };
+  }, [enableRealTimeUpdates, isConnected]);
 
   // Update error state from WebSocket
   useEffect(() => {

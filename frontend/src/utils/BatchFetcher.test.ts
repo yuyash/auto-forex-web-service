@@ -157,6 +157,9 @@ describe('BatchFetcher', () => {
 
       const fetchPromise = batchFetcher.fetchInitialBatch('EUR_USD', 'M5');
 
+      // Catch the promise to prevent unhandled rejection
+      fetchPromise.catch(() => {});
+
       // Advance timers for all retries
       await vi.advanceTimersByTimeAsync(1000); // First retry
       await vi.advanceTimersByTimeAsync(2000); // Second retry
@@ -211,6 +214,9 @@ describe('BatchFetcher', () => {
       } as Response);
 
       const fetchPromise = batchFetcher.fetchOlderBatch('EUR_USD', 'M5', 5000);
+
+      // Catch the promise to prevent unhandled rejection
+      fetchPromise.catch(() => {});
 
       // Advance timers for all retries
       await vi.advanceTimersByTimeAsync(1000); // First retry
@@ -302,6 +308,9 @@ describe('BatchFetcher', () => {
       } as Response);
 
       const fetchPromise = batchFetcher.fetchInitialBatch('EUR_USD', 'M5');
+
+      // Catch the promise to prevent unhandled rejection
+      fetchPromise.catch(() => {});
 
       // Advance timers for all retries
       await vi.advanceTimersByTimeAsync(1000); // First retry
@@ -397,6 +406,9 @@ describe('BatchFetcher', () => {
       );
 
       const fetchPromise = batchFetcher.fetchInitialBatch('EUR_USD', 'M5');
+
+      // Catch the promise to prevent unhandled rejection
+      fetchPromise.catch(() => {});
 
       // Advance timers for all retries
       await vi.advanceTimersByTimeAsync(1000); // First retry
