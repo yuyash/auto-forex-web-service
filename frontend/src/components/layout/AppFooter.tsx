@@ -213,7 +213,7 @@ const AppFooter = () => {
         {/* System Time */}
         <Chip
           icon={<ScheduleIcon />}
-          label={`${currentTime} ${user?.timezone || 'UTC'}`}
+          label={`${currentTime}`}
           size="small"
           variant="outlined"
         />
