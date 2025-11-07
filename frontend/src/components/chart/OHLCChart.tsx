@@ -97,6 +97,7 @@ const OHLCChart = ({
     'older' | 'newer' | null
   >(null);
   const [error, setError] = useState<string | null>(null);
+  const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
 
   /**
    * Load initial data when component mounts or instrument/granularity changes
@@ -106,6 +107,7 @@ const OHLCChart = ({
     setIsLoading(true);
     setLoadingDirection(null);
     setError(null);
+    setIsInitialLoad(true);
 
     try {
       const data = await fetchCandles(instrument, granularity, 5000);
@@ -583,15 +585,31 @@ const OHLCChart = ({
       );
     }
 
+    // Save the current visible TIME RANGE (not logical range) before updating data
+    const timeScale = chartRef.current.timeScale();
+    const visibleTimeRange = timeScale.getVisibleRange();
+
     console.log('📊 Setting data on series...');
     candlestickSeriesRef.current.setData(deduplicatedData);
     console.log('✅ Data set successfully');
 
-    // Fit content on initial load
-    if (allData.length > 0 && candlestickData.length > 0) {
+    // Only fit content on initial load, otherwise preserve viewport
+    if (isInitialLoad && allData.length > 0 && candlestickData.length > 0) {
+      console.log('📐 Initial load - fitting content');
       chartRef.current.timeScale().fitContent();
+      setIsInitialLoad(false);
+    } else if (
+      visibleTimeRange &&
+      !isInitialLoad &&
+      'setVisibleRange' in timeScale &&
+      typeof timeScale.setVisibleRange === 'function'
+    ) {
+      // Restore the viewport TIME RANGE after data update
+      // This maintains the same absolute time window regardless of data changes
+      console.log('📍 Restoring viewport time range:', visibleTimeRange);
+      timeScale.setVisibleRange(visibleTimeRange);
     }
-  }, [allData]);
+  }, [allData, isInitialLoad]);
 
   // Update chart with real-time tick data
   useEffect(() => {
