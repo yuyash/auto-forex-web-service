@@ -4,7 +4,6 @@ import {
   Circle as CircleIcon,
   TrendingUp as TrendingUpIcon,
   Schedule as ScheduleIcon,
-  Store as StoreIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
@@ -24,7 +23,6 @@ const AppFooter = () => {
     isActive: false,
   });
   const [currentTime, setCurrentTime] = useState<string>('');
-  const [marketStatus, setMarketStatus] = useState<'open' | 'closed'>('closed');
 
   // Update current time in user's timezone
   useEffect(() => {
@@ -135,31 +133,6 @@ const AppFooter = () => {
     return () => clearInterval(interval);
   }, [token]);
 
-  // Determine market status (simplified - forex market is open 24/5)
-  useEffect(() => {
-    const checkMarketStatus = () => {
-      const now = new Date();
-      const day = now.getUTCDay(); // 0 = Sunday, 6 = Saturday
-      const hour = now.getUTCHours();
-
-      // Forex market is closed on weekends
-      // Closes Friday 22:00 UTC, opens Sunday 22:00 UTC
-      if (day === 6 || (day === 5 && hour >= 22)) {
-        setMarketStatus('closed');
-      } else if (day === 0 && hour < 22) {
-        setMarketStatus('closed');
-      } else {
-        setMarketStatus('open');
-      }
-    };
-
-    checkMarketStatus();
-    // Check market status every minute
-    const interval = setInterval(checkMarketStatus, 60000);
-
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <Box
       component="footer"
@@ -216,14 +189,6 @@ const AppFooter = () => {
           label={`${currentTime}`}
           size="small"
           variant="outlined"
-        />
-
-        {/* Market Status */}
-        <Chip
-          icon={<StoreIcon />}
-          label={marketStatus === 'open' ? 'Open' : 'Closed'}
-          color={marketStatus === 'open' ? 'success' : 'default'}
-          size="small"
         />
       </Stack>
     </Box>
