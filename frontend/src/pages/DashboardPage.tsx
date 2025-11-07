@@ -64,6 +64,9 @@ const DashboardPage = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chartApiRef = useRef<any>(null);
 
+  // Chart refresh trigger - increment to force chart to fetch new data
+  const [chartRefreshTrigger, setChartRefreshTrigger] = useState<number>(0);
+
   /**
    * Simple fetchCandles function that makes API calls
    * Returns OHLCData[] or empty array on error
@@ -245,7 +248,7 @@ const DashboardPage = () => {
     loadData();
   }, [fetchOandaAccounts, fetchPositions, fetchOrders, fetchStrategyEvents]);
 
-  // Auto-refresh effect for positions, orders, and events
+  // Auto-refresh effect for positions, orders, events, and chart data
   useEffect(() => {
     // Clear existing timer
     if (refreshTimerRef.current) {
@@ -256,9 +259,12 @@ const DashboardPage = () => {
     // Set up new timer if auto-refresh is enabled
     if (autoRefreshEnabled && refreshInterval > 0) {
       refreshTimerRef.current = setInterval(() => {
+        console.log('🔄 Auto-refresh triggered');
         fetchPositions();
         fetchOrders();
         fetchStrategyEvents();
+        // Trigger chart to fetch new data
+        setChartRefreshTrigger((prev) => prev + 1);
       }, refreshInterval * 1000);
     }
 
@@ -291,11 +297,12 @@ const DashboardPage = () => {
   // Handle manual refresh - reload data without remounting
   const handleManualRefresh = useCallback(() => {
     console.log('🔄 Manual refresh: Reloading chart data');
-    // Force re-fetch by changing instrument temporarily
-    const currentInstrument = instrument;
-    setInstrument('');
-    setTimeout(() => setInstrument(currentInstrument), 0);
-  }, [instrument]);
+    fetchPositions();
+    fetchOrders();
+    fetchStrategyEvents();
+    // Trigger chart to fetch new data
+    setChartRefreshTrigger((prev) => prev + 1);
+  }, [fetchPositions, fetchOrders, fetchStrategyEvents]);
 
   // Filter positions and orders for current instrument
   const currentPositions = positions.filter((p) => p.instrument === instrument);
@@ -444,6 +451,7 @@ const DashboardPage = () => {
               strategyEvents={currentStrategyEvents}
               enableRealTimeUpdates={hasOandaAccount && !!oandaAccountId}
               accountId={oandaAccountId}
+              refreshTrigger={chartRefreshTrigger}
               onChartReady={(chartApi) => {
                 chartApiRef.current = chartApi;
               }}

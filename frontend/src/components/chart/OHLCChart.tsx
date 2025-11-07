@@ -39,6 +39,7 @@ interface OHLCChartProps {
   strategyEvents?: StrategyEvent[];
   onViewingLatestChange?: (isViewingLatest: boolean) => void;
   onChartReady?: (chartApi: IChartApi) => void;
+  refreshTrigger?: number;
 }
 
 /**
@@ -76,6 +77,7 @@ const OHLCChart = ({
   strategyEvents = [],
   onViewingLatestChange,
   onChartReady,
+  refreshTrigger = 0,
 }: OHLCChartProps) => {
   // Chart refs
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -318,6 +320,18 @@ const OHLCChart = ({
       setLoadingDirection(null);
     }
   }, [isLoading, allData, instrument, granularity, fetchCandles]);
+
+  /**
+   * Effect to handle auto-refresh trigger from parent component
+   * Fetches newer data when refreshTrigger changes
+   */
+  useEffect(() => {
+    if (refreshTrigger > 0 && allData.length > 0) {
+      console.log('🔄 Refresh trigger activated, fetching newer data');
+      loadNewerData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTrigger]);
 
   // Stable error handler to prevent
   //  reconnection loops
