@@ -267,7 +267,7 @@ class FloorStrategy(BaseStrategy):
             # Reconstruct layers from state
             for layer_num_str, layer_state in layer_states.items():
                 layer_num = int(layer_num_str)
-                layer_config = self.get_config_value("layer_configs", [{}])[layer_num - 1]
+                layer_config = self._get_layer_config(layer_num)
                 layer = self.layer_manager.create_layer(layer_num, layer_config)
                 if layer:
                     layer.retracement_count = layer_state.get("retracement_count", 0)
@@ -686,12 +686,8 @@ class FloorStrategy(BaseStrategy):
             if layer.should_create_new_layer():
                 next_layer_num = layer.layer_number + 1
                 if next_layer_num <= self.layer_manager.max_layers:
-                    # Get layer-specific config if available
-                    layer_configs = self.get_config_value("layer_configs", [])
-                    if next_layer_num - 1 < len(layer_configs):
-                        layer_config = layer_configs[next_layer_num - 1]
-                    else:
-                        layer_config = self.config
+                    # Get layer-specific config from individual parameters
+                    layer_config = self._get_layer_config(next_layer_num)
 
                     new_layer = self.layer_manager.create_layer(next_layer_num, layer_config)
                     if new_layer:
@@ -704,6 +700,82 @@ class FloorStrategy(BaseStrategy):
                                 "retracement_count": layer.retracement_count,
                             },
                         )
+
+    def _get_layer_config(self, layer_num: int) -> dict[str, Any]:
+        """
+        Get configuration for a specific layer using progression modes.
+
+        Args:
+            layer_num: Layer number (1-3)
+
+        Returns:
+            Layer configuration dictionary
+        """
+        # Calculate retracement trigger based on progression mode
+        base_trigger = self.get_config_value("retracement_trigger_base", 10)
+        trigger_progression = self.get_config_value("retracement_trigger_progression", "additive")
+        trigger_increment = self.get_config_value("retracement_trigger_increment", 5)
+
+        retracement_trigger = self._calculate_progression_value(
+            base_value=base_trigger,
+            layer_num=layer_num,
+            progression_mode=trigger_progression,
+            increment=trigger_increment,
+        )
+
+        # Calculate lot size based on progression mode
+        lot_progression = self.get_config_value("lot_size_progression", "additive")
+        lot_increment = self.get_config_value("lot_size_increment", 0.5)
+
+        lot_size = self._calculate_progression_value(
+            base_value=float(self.base_lot_size),
+            layer_num=layer_num,
+            progression_mode=lot_progression,
+            increment=lot_increment,
+        )
+
+        return {
+            "retracement_count_trigger": int(retracement_trigger),
+            "base_lot_size": float(lot_size),
+        }
+
+    def _calculate_progression_value(
+        self,
+        base_value: float,
+        layer_num: int,
+        progression_mode: str,
+        increment: float,
+    ) -> float:
+        """
+        Calculate value for a layer based on progression mode.
+
+        Args:
+            base_value: Base value for layer 1
+            layer_num: Layer number (1-3)
+            progression_mode: Progression mode (equal, additive, exponential, inverse)
+            increment: Increment value for additive/exponential modes
+
+        Returns:
+            Calculated value for the layer
+        """
+        if progression_mode == "equal":
+            # All layers use the same value
+            return base_value
+
+        if progression_mode == "additive":
+            # Each layer adds the increment: base, base+inc, base+2*inc
+            return base_value + (increment * (layer_num - 1))
+
+        if progression_mode == "exponential":
+            # Each layer multiplies by increment: base, base*inc, base*inc^2
+            return base_value * (increment ** (layer_num - 1))
+
+        if progression_mode == "inverse":
+            # Each layer divides: base, base/2, base/3
+            return base_value / layer_num
+
+        # Default to equal if unknown mode
+        return base_value
 
     def on_position_update(self, position: Position) -> None:
         """
@@ -776,6 +848,22 @@ class FloorStrategy(BaseStrategy):
         if not isinstance(max_layers, int) or max_layers < 1 or max_layers > 3:
             raise ValueError("max_layers must be an integer between 1 and 3")
 
+        # Validate progression modes
+        valid_progressions = ["equal", "additive", "exponential", "inverse"]
+        retracement_progression = config.get("retracement_trigger_progression", "additive")
+        if retracement_progression not in valid_progressions:
+            raise ValueError(
+                f"Invalid retracement_trigger_progression: {retracement_progression}. "
+                f"Must be one of {valid_progressions}"
+            )
+
+        lot_progression = config.get("lot_size_progression", "additive")
+        if lot_progression not in valid_progressions:
+            raise ValueError(
+                f"Invalid lot_size_progression: {lot_progression}. "
+                f"Must be one of {valid_progressions}"
+            )
+
         return True
 
 
@@ -841,28 +929,46 @@ FLOOR_STRATEGY_CONFIG_SCHEMA = {
             "default": 5.0,
             "minimum": 1.0,
         },
-        "layer_configs": {
-            "type": "array",
-            "title": "Layer Configurations",
-            "description": ("Configuration for each layer " "(optional, defaults to base config)"),
-            "items": {
-                "type": "object",
-                "properties": {
-                    "retracement_count_trigger": {
-                        "type": "integer",
-                        "description": ("Number of retracements before creating next layer"),
-                        "default": 10,
-                        "minimum": 1,
-                    },
-                    "base_lot_size": {
-                        "type": "number",
-                        "description": "Base lot size for this layer",
-                        "default": 1.0,
-                        "minimum": 0.01,
-                    },
-                },
-            },
-            "maxItems": 3,
+        "retracement_trigger_base": {
+            "type": "integer",
+            "title": "Base Retracement Trigger",
+            "description": "Base number of retracements for layer 1",
+            "default": 10,
+            "minimum": 1,
+        },
+        "retracement_trigger_progression": {
+            "type": "string",
+            "title": "Retracement Trigger Progression",
+            "description": "How retracement triggers progress across layers",
+            "enum": ["equal", "additive", "exponential", "inverse"],
+            "default": "additive",
+        },
+        "retracement_trigger_increment": {
+            "type": "number",
+            "title": "Retracement Trigger Increment",
+            "description": (
+                "Value to add (additive) or multiply by (exponential). "
+                "Not used for equal/inverse"
+            ),
+            "default": 5,
+            "minimum": 0,
+        },
+        "lot_size_progression": {
+            "type": "string",
+            "title": "Lot Size Progression",
+            "description": "How lot sizes progress across layers",
+            "enum": ["equal", "additive", "exponential", "inverse"],
+            "default": "additive",
+        },
+        "lot_size_increment": {
+            "type": "number",
+            "title": "Lot Size Increment",
+            "description": (
+                "Value to add (additive) or multiply by (exponential). "
+                "Not used for equal/inverse"
+            ),
+            "default": 0.5,
+            "minimum": 0,
         },
     },
     "required": [
@@ -874,4 +980,6 @@ FLOOR_STRATEGY_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("floor", FLOOR_STRATEGY_CONFIG_SCHEMA)(FloorStrategy)
+register_strategy("floor", FLOOR_STRATEGY_CONFIG_SCHEMA, display_name="Floor Strategy")(
+    FloorStrategy
+)

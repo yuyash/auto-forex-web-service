@@ -44,6 +44,7 @@ class StrategyRegistry:
         name: str,
         strategy_class: Type[BaseStrategy],
         config_schema: dict[str, Any] | None = None,
+        display_name: str | None = None,
     ) -> None:
         """
         Register a strategy class with the registry.
@@ -52,6 +53,7 @@ class StrategyRegistry:
             name: Unique identifier for the strategy (e.g., 'floor', 'trend_following')
             strategy_class: The strategy class that inherits from BaseStrategy
             config_schema: Optional JSON schema describing the strategy's configuration
+            display_name: Optional human-readable display name (e.g., 'Floor Strategy')
 
         Raises:
             ValueError: If strategy name is already registered
@@ -71,6 +73,13 @@ class StrategyRegistry:
 
         if config_schema is None:
             config_schema = self._generate_default_schema(strategy_class)
+
+        # Add display_name to schema if provided
+        if display_name:
+            config_schema["display_name"] = display_name
+        elif "display_name" not in config_schema:
+            # Auto-generate display name from identifier
+            config_schema["display_name"] = self._generate_display_name(name)
 
         self._config_schemas[name] = config_schema
 
@@ -214,6 +223,21 @@ class StrategyRegistry:
             "required": [],
         }
 
+    @staticmethod
+    def _generate_display_name(identifier: str) -> str:
+        """
+        Generate a human-readable display name from strategy identifier.
+
+        Args:
+            identifier: Strategy identifier (e.g., 'floor', 'trend_following')
+
+        Returns:
+            Display name (e.g., 'Floor Strategy', 'Trend Following Strategy')
+        """
+        words = identifier.replace("_", " ").split()
+        capitalized = " ".join(word.capitalize() for word in words)
+        return f"{capitalized} Strategy"
+
     def __repr__(self) -> str:
         """Developer-friendly representation of the registry."""
         return (
@@ -227,7 +251,7 @@ registry = StrategyRegistry()
 
 
 def register_strategy(
-    name: str, config_schema: dict[str, Any] | None = None
+    name: str, config_schema: dict[str, Any] | None = None, display_name: str | None = None
 ) -> Any:  # Returns decorator function
     """
     Decorator for registering a strategy class.
@@ -237,12 +261,13 @@ def register_strategy(
     Args:
         name: Unique identifier for the strategy
         config_schema: Optional JSON schema for the strategy configuration
+        display_name: Optional human-readable display name
 
     Returns:
         Decorator function
 
     Example:
-        @register_strategy('floor', config_schema={...})
+        @register_strategy('floor', config_schema={...}, display_name='Floor Strategy')
         class FloorStrategy(BaseStrategy):
             pass
 
@@ -259,7 +284,7 @@ def register_strategy(
         Returns:
             The unmodified strategy class
         """
-        registry.register(name, strategy_class, config_schema)
+        registry.register(name, strategy_class, config_schema, display_name)
         return strategy_class
 
     return decorator

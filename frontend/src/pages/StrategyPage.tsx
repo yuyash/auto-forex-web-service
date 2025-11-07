@@ -506,7 +506,7 @@ const StrategyPage = () => {
                   )}
                   {strategies.map((strategy) => (
                     <MenuItem key={strategy.id} value={strategy.id}>
-                      {strategy.name}
+                      {strategy.config_schema?.display_name || strategy.name}
                     </MenuItem>
                   ))}
                 </Select>

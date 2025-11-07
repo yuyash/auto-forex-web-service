@@ -109,7 +109,8 @@ const StrategySelector = ({
                         mb={1}
                       >
                         <Typography variant="h6" component="div">
-                          {strategy.name}
+                          {strategy.config_schema?.display_name ||
+                            strategy.name}
                         </Typography>
                         {isSelected && (
                           <Chip label="Selected" color="primary" size="small" />
@@ -149,7 +150,8 @@ const StrategySelector = ({
         {selectedStrategyData && (
           <Alert severity="info" sx={{ mt: 3 }}>
             <Typography variant="subtitle2" gutterBottom>
-              {selectedStrategyData.name}
+              {selectedStrategyData.config_schema?.display_name ||
+                selectedStrategyData.name}
             </Typography>
             <Typography variant="body2">
               {selectedStrategyData.description}
@@ -174,7 +176,9 @@ const StrategySelector = ({
           {strategies.map((strategy) => (
             <MenuItem key={strategy.id} value={strategy.id}>
               <Box>
-                <Typography variant="body1">{strategy.name}</Typography>
+                <Typography variant="body1">
+                  {strategy.config_schema?.display_name || strategy.name}
+                </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {strategy.class_name}
                 </Typography>
@@ -187,7 +191,8 @@ const StrategySelector = ({
       {selectedStrategyData && (
         <Alert severity="info" sx={{ mt: 2 }}>
           <Typography variant="subtitle2" gutterBottom>
-            {selectedStrategyData.name}
+            {selectedStrategyData.config_schema?.display_name ||
+              selectedStrategyData.name}
           </Typography>
           <Typography variant="body2">
             {selectedStrategyData.description}

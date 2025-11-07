@@ -172,6 +172,9 @@ const StrategyConfigForm = ({
 
     // Enum field (dropdown)
     if (fieldSchema.enum) {
+      const isProgressionField =
+        fieldName.includes('progression') || fieldName.includes('mode');
+
       return (
         <FormControl
           fullWidth
@@ -189,7 +192,16 @@ const StrategyConfigForm = ({
           >
             {fieldSchema.enum.map((option: string) => (
               <MenuItem key={option} value={option}>
-                {formatEnumValue(option)}
+                <Box>
+                  <Typography variant="body2">
+                    {formatEnumValue(option)}
+                  </Typography>
+                  {isProgressionField && (
+                    <Typography variant="caption" color="text.secondary">
+                      {getProgressionDescription(option)}
+                    </Typography>
+                  )}
+                </Box>
               </MenuItem>
             ))}
           </Select>
@@ -319,6 +331,18 @@ const StrategyConfigForm = ({
       .split('_')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  };
+
+  // Get description for progression modes
+  const getProgressionDescription = (mode: string): string => {
+    const descriptions: Record<string, string> = {
+      equal: 'All layers use the same value',
+      additive: 'Each layer adds the increment (e.g., 10, 15, 20)',
+      exponential:
+        'Each layer multiplies by increment (e.g., 10, 20, 40 with 2x)',
+      inverse: 'Each layer divides (e.g., 10, 5, 3.33)',
+    };
+    return descriptions[mode] || '';
   };
 
   // Check if there are any validation errors

@@ -1,18 +1,4 @@
 // Backtest types
-export interface Backtest {
-  id: number;
-  user: number;
-  strategy_type: string;
-  config: Record<string, unknown>;
-  instruments: string[];
-  start_date: string;
-  end_date: string;
-  initial_balance: number;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  progress: number;
-  created_at: string;
-  completed_at: string | null;
-}
 
 export interface BacktestResult {
   id: number;
@@ -45,8 +31,25 @@ export interface BacktestConfig {
   strategy_type: string;
   config: Record<string, unknown>;
   instruments: string[];
+  data_source: string;
   start_date: string;
   end_date: string;
   initial_balance: number;
   commission: number;
+}
+
+export interface Backtest {
+  id: number;
+  user: number;
+  strategy_type: string;
+  config: Record<string, unknown>;
+  instruments: string[];
+  data_source: string;
+  start_date: string;
+  end_date: string;
+  initial_balance: number;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;
+  created_at: string;
+  completed_at: string | null;
 }

@@ -36,6 +36,11 @@ class Backtest(models.Model):
         ("terminated", "Terminated"),  # Terminated due to resource limits
     ]
 
+    DATA_SOURCE_CHOICES = [
+        ("postgresql", "PostgreSQL"),
+        ("s3", "AWS S3 + Athena"),
+    ]
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -53,6 +58,12 @@ class Backtest(models.Model):
     instruments = models.JSONField(
         default=list,
         help_text="List of currency pairs to backtest (e.g., ['EUR_USD', 'GBP_USD'])",
+    )
+    data_source = models.CharField(
+        max_length=20,
+        default="postgresql",
+        choices=DATA_SOURCE_CHOICES,
+        help_text="Data source for historical tick data",
     )
     start_date = models.DateTimeField(
         help_text="Start date for backtest period",

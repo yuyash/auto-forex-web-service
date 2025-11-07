@@ -111,6 +111,11 @@ const ResponsiveNavigation = () => {
             label={item.label}
             value={item.path}
             icon={item.icon}
+            sx={{
+              '& .MuiBottomNavigationAction-label': {
+                fontSize: '0.65rem',
+              },
+            }}
           />
         ))}
       </BottomNavigation>

@@ -88,13 +88,14 @@ const BacktestPage = () => {
         );
         const mockStrategies: Strategy[] = [
           {
-            id: 'floor_strategy',
+            id: 'floor',
             name: 'Floor Strategy',
             class_name: 'FloorStrategy',
             description:
               'Multi-layer scaling strategy with dynamic position management',
             config_schema: {
               type: 'object',
+              display_name: 'Floor Strategy',
               properties: {
                 base_lot_size: {
                   type: 'number',
