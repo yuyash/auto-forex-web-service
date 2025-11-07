@@ -33,8 +33,7 @@ class StrategyComparisonConfig:
         start_date: Start date for comparison period
         end_date: End date for comparison period
         initial_balance: Initial account balance
-        slippage_pips: Slippage in pips
-        commission_per_trade: Commission per trade
+        commission_per_trade: Commission per trade (bid/ask spread already in tick data)
         max_workers: Maximum number of parallel workers (default: 10)
     """
 
@@ -43,7 +42,6 @@ class StrategyComparisonConfig:
     start_date: datetime
     end_date: datetime
     initial_balance: Decimal
-    slippage_pips: Decimal = Decimal("0")
     commission_per_trade: Decimal = Decimal("0")
     max_workers: int = 10
 
@@ -89,7 +87,6 @@ def _run_single_strategy(
             start_date=datetime.fromisoformat(backtest_config_dict["start_date"]),
             end_date=datetime.fromisoformat(backtest_config_dict["end_date"]),
             initial_balance=Decimal(str(backtest_config_dict["initial_balance"])),
-            slippage_pips=Decimal(str(backtest_config_dict["slippage_pips"])),
             commission_per_trade=Decimal(str(backtest_config_dict["commission_per_trade"])),
             cpu_limit=backtest_config_dict.get("cpu_limit", 1),
             memory_limit=backtest_config_dict.get("memory_limit", 2147483648),
@@ -185,7 +182,6 @@ class ParallelStrategyExecutor:
             "start_date": self.config.start_date.isoformat(),
             "end_date": self.config.end_date.isoformat(),
             "initial_balance": float(self.config.initial_balance),
-            "slippage_pips": float(self.config.slippage_pips),
             "commission_per_trade": float(self.config.commission_per_trade),
             "cpu_limit": 1,
             "memory_limit": 2147483648,

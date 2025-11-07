@@ -87,7 +87,6 @@ class TestParallelStrategyExecution(TestCase):
             start_date=self.start_date,
             end_date=self.end_date,
             initial_balance=Decimal("10000"),
-            slippage_pips=Decimal("0.5"),
             commission_per_trade=Decimal("2.0"),
             max_workers=2,
         )
@@ -450,7 +449,6 @@ class TestStrategyComparisonAPI(TestCase):
             "start_date": "2024-01-01T00:00:00Z",
             "end_date": "2024-01-31T23:59:59Z",
             "initial_balance": 10000,
-            "slippage_pips": 0.5,
             "commission_per_trade": 2.0,
         }
 

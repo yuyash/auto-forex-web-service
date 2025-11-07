@@ -51,7 +51,6 @@ def backtest(user):
         start_date=timezone.now() - timedelta(days=7),
         end_date=timezone.now() - timedelta(days=1),
         initial_balance=Decimal("10000.00"),
-        slippage_pips=Decimal("0.5"),
         commission_per_trade=Decimal("5.00"),
         status="pending",
     )
@@ -74,7 +73,6 @@ def backtest_config_dict():
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "initial_balance": 10000.00,
-        "slippage_pips": 0.5,
         "commission_per_trade": 5.00,
     }
 
@@ -403,7 +401,6 @@ class TestRunBacktestTask:
             assert call_args.strategy_type == "floor"
             assert call_args.instruments == ["EUR_USD"]
             assert call_args.initial_balance == Decimal("10000.00")
-            assert call_args.slippage_pips == Decimal("0.5")
             assert call_args.commission_per_trade == Decimal("5.00")
 
     def test_task_loads_historical_data_for_all_instruments(
@@ -418,7 +415,6 @@ class TestRunBacktestTask:
             "start_date": (timezone.now() - timedelta(days=7)).isoformat(),
             "end_date": (timezone.now() - timedelta(days=1)).isoformat(),
             "initial_balance": 10000.00,
-            "slippage_pips": 0.5,
             "commission_per_trade": 5.00,
         }
 

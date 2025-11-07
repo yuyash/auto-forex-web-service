@@ -67,7 +67,7 @@ const BacktestPage = () => {
       try {
         setLoadingStrategies(true);
 
-        const response = await fetch('/api/strategies/available', {
+        const response = await fetch('/api/strategies/', {
           headers: {
             Authorization: `Bearer ${token}`,
           },

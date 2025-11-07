@@ -484,7 +484,6 @@ class BacktestSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "initial_balance",
-            "slippage_pips",
             "commission_per_trade",
             "status",
             "progress",
@@ -605,19 +604,12 @@ class BacktestCreateSerializer(serializers.Serializer):  # pylint: disable=abstr
         default=Decimal("10000"),
         help_text="Initial account balance for backtest (default: 10000)",
     )
-    slippage_pips = serializers.DecimalField(
-        required=False,
-        max_digits=5,
-        decimal_places=2,
-        default=Decimal("0"),
-        help_text="Slippage in pips to apply to each trade (default: 0)",
-    )
     commission_per_trade = serializers.DecimalField(
         required=False,
         max_digits=10,
         decimal_places=2,
         default=Decimal("0"),
-        help_text="Commission to apply per trade (default: 0)",
+        help_text="Commission to apply per trade (default: 0, bid/ask spread already in tick data)",
     )
     memory_limit_mb = serializers.DecimalField(
         required=False,

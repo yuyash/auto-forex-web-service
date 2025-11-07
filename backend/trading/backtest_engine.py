@@ -39,8 +39,7 @@ class BacktestConfig:
         start_date: Start date for backtest period
         end_date: End date for backtest period
         initial_balance: Initial account balance
-        slippage_pips: Slippage in pips to apply to each trade
-        commission_per_trade: Commission to apply per trade
+        commission_per_trade: Commission to apply per trade (bid/ask spread already in tick data)
         cpu_limit: CPU cores limit (default: 1)
         memory_limit: Memory limit in bytes (default: 2GB)
     """
@@ -51,7 +50,6 @@ class BacktestConfig:
     start_date: datetime
     end_date: datetime
     initial_balance: Decimal
-    slippage_pips: Decimal = Decimal("0")
     commission_per_trade: Decimal = Decimal("0")
     cpu_limit: int = 1
     memory_limit: int = 2147483648  # 2GB in bytes
@@ -176,8 +174,8 @@ class BacktestEngine:
     Backtesting engine for strategy performance evaluation.
 
     This class simulates strategy execution on historical data with:
-    - Tick-by-tick execution
-    - Slippage and commission simulation
+    - Tick-by-tick execution using bid/ask prices
+    - Commission simulation (spread already in tick data)
     - Position tracking and P&L calculation
     - Resource monitoring and limits
 
@@ -397,17 +395,17 @@ class BacktestEngine:
 
     def _execute_order(self, order: dict[str, Any], tick: TickDataPoint) -> None:
         """
-        Execute order with slippage and commission.
+        Execute order with commission (bid/ask spread already in tick data).
 
         Args:
             order: Order dictionary
             tick: Current tick data
         """
-        # Apply slippage
+        # Use bid/ask prices directly (spread already included)
         if order["direction"] == "long":
-            execution_price = tick.ask + (self.config.slippage_pips * Decimal("0.0001"))
+            execution_price = tick.ask
         else:
-            execution_price = tick.bid - (self.config.slippage_pips * Decimal("0.0001"))
+            execution_price = tick.bid
 
         # Create position
         position = BacktestPosition(

@@ -66,17 +66,11 @@ class Backtest(models.Model):
         default=10000,
         help_text="Initial account balance for backtest",
     )
-    slippage_pips = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        default=0,
-        help_text="Slippage in pips to apply to each trade",
-    )
     commission_per_trade = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=0,
-        help_text="Commission to apply per trade",
+        help_text="Commission to apply per trade (bid/ask spread already in tick data)",
     )
     status = models.CharField(
         max_length=20,
@@ -582,11 +576,6 @@ class StrategyComparison(models.Model):
         max_digits=15,
         decimal_places=2,
         default=10000,
-    )
-    slippage_pips = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        default=0,
     )
     commission_per_trade = models.DecimalField(
         max_digits=10,

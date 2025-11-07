@@ -29,6 +29,7 @@ interface BacktestConfigPanelProps {
 
 // Common forex currency pairs
 const AVAILABLE_INSTRUMENTS = [
+  'JPY_USD',
   'EUR_USD',
   'GBP_USD',
   'USD_JPY',
@@ -55,11 +56,11 @@ const BacktestConfigPanel = ({
   const { t } = useTranslation(['backtest', 'common']);
 
   // Strategy selection
-  const [selectedStrategy, setSelectedStrategy] = useState<string>('');
+  const [selectedStrategy, setSelectedStrategy] = useState<string>('floor');
   const [strategyConfig, setStrategyConfig] = useState<StrategyConfig>({});
 
   // Backtest parameters
-  const [instruments, setInstruments] = useState<string[]>(['EUR_USD']);
+  const [instruments, setInstruments] = useState<string[]>(['JPY_USD']);
   const [startDate, setStartDate] = useState<Date | null>(() => {
     const date = new Date();
     date.setDate(date.getDate() - 30); // 30 days ago
@@ -67,7 +68,6 @@ const BacktestConfigPanel = ({
   });
   const [endDate, setEndDate] = useState<Date | null>(() => new Date());
   const [initialBalance, setInitialBalance] = useState<number>(10000);
-  const [slippage, setSlippage] = useState<number>(0.5);
   const [commission, setCommission] = useState<number>(0.0);
 
   // Validation
@@ -147,12 +147,6 @@ const BacktestConfigPanel = ({
       );
     }
 
-    if (slippage < 0) {
-      errors.push(
-        t('backtest:validation.slippageInvalid', 'Slippage cannot be negative')
-      );
-    }
-
     if (commission < 0) {
       errors.push(
         t(
@@ -185,7 +179,6 @@ const BacktestConfigPanel = ({
       start_date: startDate.toISOString().split('T')[0],
       end_date: endDate.toISOString().split('T')[0],
       initial_balance: initialBalance,
-      slippage,
       commission,
     };
 
@@ -340,21 +333,6 @@ const BacktestConfigPanel = ({
           required
         />
 
-        {/* Slippage */}
-        <TextField
-          fullWidth
-          label={t('backtest:config.slippage', 'Slippage (pips)')}
-          type="number"
-          value={slippage}
-          onChange={(e) => setSlippage(parseFloat(e.target.value))}
-          disabled={disabled || loading}
-          helperText={t(
-            'backtest:config.slippageHelp',
-            'Expected slippage per trade in pips'
-          )}
-          inputProps={{ min: 0, step: 0.1 }}
-        />
-
         {/* Commission */}
         <TextField
           fullWidth
@@ -365,7 +343,7 @@ const BacktestConfigPanel = ({
           disabled={disabled || loading}
           helperText={t(
             'backtest:config.commissionHelp',
-            'Commission charged per trade'
+            'Commission charged per trade (bid/ask spread already included in tick data)'
           )}
           inputProps={{ min: 0, step: 0.01 }}
         />

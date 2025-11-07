@@ -715,7 +715,6 @@ def _create_backtest_config(
         start_date=start_date,
         end_date=end_date,
         initial_balance=Decimal(str(config_dict["initial_balance"])),
-        slippage_pips=Decimal(str(config_dict.get("slippage_pips", 0))),
         commission_per_trade=Decimal(str(config_dict.get("commission_per_trade", 0))),
         cpu_limit=cpu_limit,
         memory_limit=memory_limit,
@@ -999,8 +998,8 @@ def run_backtest_task(  # type: ignore[no-untyped-def]
             - start_date: Start date (ISO format string)
             - end_date: End date (ISO format string)
             - initial_balance: Initial account balance
-            - slippage_pips: Slippage in pips (optional)
-            - commission_per_trade: Commission per trade (optional)
+            - commission_per_trade: Commission per trade (optional,
+              bid/ask spread already in tick data)
 
     Returns:
         Dictionary containing:

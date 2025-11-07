@@ -37,12 +37,12 @@ const StrategyPage = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<number | ''>('');
   const [strategies, setStrategies] = useState<Strategy[]>([]);
-  const [selectedStrategy, setSelectedStrategy] = useState<string>('');
+  const [selectedStrategy, setSelectedStrategy] = useState<string>('floor');
   const [strategyConfig, setStrategyConfig] = useState<StrategyConfig>({});
   const [strategyStatus, setStrategyStatus] = useState<StrategyStatus | null>(
     null
   );
-  const [instruments, setInstruments] = useState<string>('EUR_USD');
+  const [instruments, setInstruments] = useState<string>('JPY_USD');
 
   // Loading and error states
   const [loading, setLoading] = useState(false);
@@ -128,7 +128,7 @@ const StrategyPage = () => {
         if (data.is_active && data.strategy_type) {
           setSelectedStrategy(data.strategy_type);
           setStrategyConfig(data.config || {});
-          setInstruments(data.instruments?.join(',') || 'EUR_USD');
+          setInstruments(data.instruments?.join(',') || 'JPY_USD');
         }
       }
     } catch (err) {
@@ -501,12 +501,23 @@ const StrategyPage = () => {
                   onChange={handleStrategyChange}
                   disabled={strategiesLoading}
                 >
+                  {strategies.length === 0 && !strategiesLoading && (
+                    <MenuItem disabled>No strategies available</MenuItem>
+                  )}
                   {strategies.map((strategy) => (
                     <MenuItem key={strategy.id} value={strategy.id}>
                       {strategy.name}
                     </MenuItem>
                   ))}
                 </Select>
+                {strategiesLoading && (
+                  <FormHelperText>Loading strategies...</FormHelperText>
+                )}
+                {!strategiesLoading && strategies.length === 0 && (
+                  <FormHelperText error>
+                    No strategies found. Please check backend configuration.
+                  </FormHelperText>
+                )}
               </FormControl>
 
               {selectedStrategyData && (

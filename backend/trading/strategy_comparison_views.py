@@ -61,7 +61,6 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
             "start_date": "2024-01-01T00:00:00Z",
             "end_date": "2024-12-31T23:59:59Z",
             "initial_balance": 10000,
-            "slippage_pips": 0.5,
             "commission_per_trade": 2.0
         }
 
@@ -153,7 +152,6 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
             "start_date": start_date,
             "end_date": end_date,
             "initial_balance": request_data.get("initial_balance", 10000),
-            "slippage_pips": request_data.get("slippage_pips", 0),
             "commission_per_trade": request_data.get("commission_per_trade", 0),
         }
 
@@ -185,7 +183,6 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
         start_date = validated_data["start_date"]
         end_date = validated_data["end_date"]
         initial_balance = validated_data["initial_balance"]
-        slippage_pips = validated_data["slippage_pips"]
         commission_per_trade = validated_data["commission_per_trade"]
 
         # Create comparison record
@@ -196,7 +193,6 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
             start_date=start_date,
             end_date=end_date,
             initial_balance=Decimal(str(initial_balance)),
-            slippage_pips=Decimal(str(slippage_pips)),
             commission_per_trade=Decimal(str(commission_per_trade)),
             status="pending",
         )
@@ -226,7 +222,6 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
                 start_date=start_date,
                 end_date=end_date,
                 initial_balance=Decimal(str(initial_balance)),
-                slippage_pips=Decimal(str(slippage_pips)),
                 commission_per_trade=Decimal(str(commission_per_trade)),
                 max_workers=min(len(strategy_configs), 10),
             )

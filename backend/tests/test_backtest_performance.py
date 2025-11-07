@@ -31,7 +31,6 @@ def backtest_config():
         start_date=datetime(2024, 1, 1),
         end_date=datetime(2024, 1, 31),
         initial_balance=Decimal("10000.00"),
-        slippage_pips=Decimal("0"),
         commission_per_trade=Decimal("0"),
     )
 

@@ -44,7 +44,6 @@ def backtest(user):
         start_date=timezone.now() - timedelta(days=30),
         end_date=timezone.now(),
         initial_balance=Decimal("10000.00"),
-        slippage_pips=Decimal("0.5"),
         commission_per_trade=Decimal("5.00"),
     )
 
@@ -90,7 +89,6 @@ class TestBacktestModel:
         assert backtest.config == {}
         assert backtest.instruments == []
         assert backtest.initial_balance == Decimal("10000.00")
-        assert backtest.slippage_pips == Decimal("0")
         assert backtest.commission_per_trade == Decimal("0")
         assert backtest.status == "pending"
         assert backtest.progress == 0

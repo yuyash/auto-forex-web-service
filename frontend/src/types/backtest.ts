@@ -48,6 +48,5 @@ export interface BacktestConfig {
   start_date: string;
   end_date: string;
   initial_balance: number;
-  slippage: number;
   commission: number;
 }

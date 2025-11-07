@@ -159,7 +159,6 @@ class BacktestListCreateView(APIView):
             start_date=serializer.validated_data["start_date"],
             end_date=serializer.validated_data["end_date"],
             initial_balance=serializer.validated_data.get("initial_balance", 10000),
-            slippage_pips=serializer.validated_data.get("slippage_pips", 0),
             commission_per_trade=serializer.validated_data.get("commission_per_trade", 0),
             memory_limit_mb=serializer.validated_data.get("memory_limit_mb", 2048),
             cpu_limit_cores=serializer.validated_data.get("cpu_limit_cores", 1),
@@ -174,7 +173,6 @@ class BacktestListCreateView(APIView):
             "start_date": backtest.start_date.isoformat(),
             "end_date": backtest.end_date.isoformat(),
             "initial_balance": float(backtest.initial_balance),
-            "slippage_pips": float(backtest.slippage_pips),
             "commission_per_trade": float(backtest.commission_per_trade),
         }
 
