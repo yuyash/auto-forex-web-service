@@ -1,0 +1,33 @@
+# Automatically label PRs based on changed files
+
+backend:
+  - backend/**/*
+
+frontend:
+  - frontend/**/*
+
+documentation:
+  - docs/**/*
+  - "**/*.md"
+
+ci:
+  - .github/workflows/**/*
+  - .github/**/*
+
+docker:
+  - docker/**/*
+  - Dockerfile
+  - docker-compose*.yml
+
+dependencies:
+  - "**/requirements.txt"
+  - "**/package.json"
+  - "**/package-lock.json"
+
+configuration:
+  - "**/*.yml"
+  - "**/*.yaml"
+  - "**/*.json"
+  - "**/*.toml"
+  - "**/*.ini"
+  - "**/*.env*"

@@ -2,6 +2,7 @@
   "kiroAgent.enableTabAutocomplete": true,
   "kiroAgent.modelSelection": "claude-sonnet-4.5",
   "kiroAgent.trustedCommands": [
+    "mkdir *",
     "wc *",
     "ls *",
     "which *",
