@@ -71,14 +71,14 @@ const ChartControls = ({
     <Box
       sx={{
         display: 'flex',
+        flexDirection: { xs: 'column', sm: 'row' },
         gap: 2,
         mb: 2,
-        flexWrap: 'wrap',
-        alignItems: 'center',
+        alignItems: { xs: 'stretch', sm: 'center' },
       }}
     >
       {/* Currency Pair Selector */}
-      <FormControl sx={{ minWidth: 150 }} size="small">
+      <FormControl sx={{ minWidth: { xs: '100%', sm: 150 } }} size="small">
         <InputLabel id="instrument-label">Currency Pair</InputLabel>
         <Select
           labelId="instrument-label"
@@ -96,7 +96,7 @@ const ChartControls = ({
       </FormControl>
 
       {/* Granularity Selector */}
-      <FormControl sx={{ minWidth: 150 }} size="small">
+      <FormControl sx={{ minWidth: { xs: '100%', sm: 150 } }} size="small">
         <InputLabel id="granularity-label">Timeframe</InputLabel>
         <Select
           labelId="granularity-label"

@@ -323,19 +323,29 @@ const DashboardPage = () => {
       )}
 
       {/* Chart Section */}
-      <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+      <Paper elevation={2} sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
         <Box
           sx={{
             display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
             justifyContent: 'space-between',
-            alignItems: 'center',
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            gap: 2,
             mb: 2,
           }}
         >
           <Typography variant="h6">Market Chart</Typography>
 
           {/* Auto-refresh controls */}
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: 2,
+              alignItems: { xs: 'stretch', sm: 'center' },
+              width: { xs: '100%', sm: 'auto' },
+            }}
+          >
             <FormControlLabel
               control={
                 <Switch
@@ -347,7 +357,10 @@ const DashboardPage = () => {
               label="Auto-refresh"
             />
 
-            <FormControl size="small" sx={{ minWidth: 120 }}>
+            <FormControl
+              size="small"
+              sx={{ minWidth: { xs: '100%', sm: 120 } }}
+            >
               <InputLabel id="refresh-interval-label">Interval</InputLabel>
               <Select
                 labelId="refresh-interval-label"
@@ -367,13 +380,22 @@ const DashboardPage = () => {
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <ChartControls
-            instrument={instrument}
-            granularity={granularity}
-            onInstrumentChange={setInstrument}
-            onGranularityChange={setGranularity}
-          />
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: 2,
+          }}
+        >
+          <Box sx={{ flex: 1 }}>
+            <ChartControls
+              instrument={instrument}
+              granularity={granularity}
+              onInstrumentChange={setInstrument}
+              onGranularityChange={setGranularity}
+            />
+          </Box>
 
           {/* Manual Refresh Button */}
           <Tooltip title="Refresh chart data">
@@ -382,14 +404,20 @@ const DashboardPage = () => {
               disabled={!hasOandaAccount}
               color="primary"
               size="small"
-              sx={{ ml: 'auto' }}
+              sx={{ alignSelf: { xs: 'flex-end', sm: 'center' } }}
             >
               <RefreshIcon />
             </IconButton>
           </Tooltip>
         </Box>
 
-        <Box sx={{ height: 500, position: 'relative', overflow: 'hidden' }}>
+        <Box
+          sx={{
+            height: { xs: 300, sm: 400, md: 500 },
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
           {!hasOandaAccount ? (
             <Box
               sx={{

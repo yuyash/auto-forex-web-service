@@ -236,6 +236,17 @@ const AppHeader = () => {
               vertical: 'top',
               horizontal: 'right',
             }}
+            slotProps={{
+              paper: {
+                sx: {
+                  mt: 1,
+                  ...(isMobile && {
+                    right: 8,
+                    left: 'auto !important',
+                  }),
+                },
+              },
+            }}
           >
             <MenuItem disabled>
               <Typography variant="body2" color="text.secondary">
