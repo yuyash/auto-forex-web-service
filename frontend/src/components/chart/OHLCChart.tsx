@@ -445,16 +445,41 @@ const OHLCChart = ({
       onChartReady(chart);
     }
 
-    // Handle window resize
-    const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        });
+    // Handle window resize with debouncing
+    let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const handleWindowResize = () => {
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
       }
+
+      resizeTimeout = setTimeout(() => {
+        if (chartContainerRef.current && chartRef.current) {
+          const width = chartContainerRef.current.clientWidth;
+          const height = chartContainerRef.current.clientHeight;
+
+          if (width > 0 && height > 0) {
+            console.log(
+              '📐 Window resized, updating chart to:',
+              width,
+              'x',
+              height
+            );
+
+            // Apply new dimensions
+            chartRef.current.applyOptions({
+              width: Math.floor(width),
+              height: Math.floor(height),
+            });
+
+            // Force time scale to fit content after resize
+            chartRef.current.timeScale().fitContent();
+          }
+        }
+      }, 100);
     };
 
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleWindowResize);
 
     // Subscribe to visible logical range changes for scroll-based loading
     const handleVisibleRangeChange = () => {
@@ -505,12 +530,15 @@ const OHLCChart = ({
     return () => {
       console.log('🧹 Cleaning up chart');
 
-      // Clear debounce timer
+      // Clear debounce timers
       if (scrollDebounceTimerRef.current) {
         clearTimeout(scrollDebounceTimerRef.current);
       }
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+      }
 
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', handleWindowResize);
 
       if (chartRef.current) {
         chartRef.current.remove();
@@ -1141,6 +1169,18 @@ const OHLCChart = ({
           height: '100%',
           border: '1px solid #e1e1e1',
           borderRadius: 1,
+          '& .tv-lightweight-charts': {
+            width: '100% !important',
+            height: '100% !important',
+          },
+          '& .tv-lightweight-charts table': {
+            width: '100% !important',
+            height: '100% !important',
+          },
+          '& .tv-lightweight-charts canvas': {
+            width: '100% !important',
+            height: '100% !important',
+          },
         }}
       />
     </Box>
