@@ -73,3 +73,14 @@ export interface Order {
   status: string;
   created_at: string;
 }
+
+export interface StrategyEvent {
+  id: string;
+  strategy_name: string;
+  event_type: 'SIGNAL' | 'ORDER' | 'POSITION' | 'ERROR';
+  message: string;
+  timestamp: string; // ISO format
+  instrument?: string;
+  price?: number;
+  direction?: 'long' | 'short';
+}

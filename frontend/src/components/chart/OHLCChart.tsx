@@ -9,9 +9,16 @@ import {
   type Time,
   type SeriesMarker,
   type LineData,
+  type MouseEventParams,
 } from 'lightweight-charts';
 import { Box, Typography, CircularProgress } from '@mui/material';
-import type { OHLCData, ChartConfig, Position, Order } from '../../types/chart';
+import type {
+  OHLCData,
+  ChartConfig,
+  Position,
+  Order,
+  StrategyEvent,
+} from '../../types/chart';
 import useMarketData from '../../hooks/useMarketData';
 
 interface OHLCChartProps {
@@ -29,6 +36,7 @@ interface OHLCChartProps {
   enableRealTimeUpdates?: boolean;
   positions?: Position[];
   orders?: Order[];
+  strategyEvents?: StrategyEvent[];
   onViewingLatestChange?: (isViewingLatest: boolean) => void;
   onChartReady?: (chartApi: IChartApi) => void;
 }
@@ -65,6 +73,7 @@ const OHLCChart = ({
   enableRealTimeUpdates = false,
   positions = [],
   orders = [],
+  strategyEvents = [],
   onViewingLatestChange,
   onChartReady,
 }: OHLCChartProps) => {
@@ -98,6 +107,16 @@ const OHLCChart = ({
   >(null);
   const [error, setError] = useState<string | null>(null);
   const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
+
+  // Tooltip state for strategy events
+  const [tooltipVisible, setTooltipVisible] = useState<boolean>(false);
+  const [tooltipContent, setTooltipContent] = useState<StrategyEvent | null>(
+    null
+  );
+  const [tooltipPosition, setTooltipPosition] = useState<{
+    x: number;
+    y: number;
+  }>({ x: 0, y: 0 });
 
   /**
    * Load initial data when component mounts or instrument/granularity changes
@@ -507,6 +526,54 @@ const OHLCChart = ({
   }, []);
 
   /**
+   * Add crosshair move handler for strategy event tooltips
+   */
+  useEffect(() => {
+    if (!chartRef.current) return;
+
+    const chart = chartRef.current;
+
+    const handleCrosshairMove = (param: MouseEventParams<Time>) => {
+      if (!param.time || !param.point) {
+        setTooltipVisible(false);
+        return;
+      }
+
+      // Convert the time to Unix timestamp
+      const hoveredTime = param.time as number;
+
+      // Find strategy events at this timestamp (within 1 second tolerance)
+      const eventsAtTime = strategyEvents.filter((event) => {
+        const eventTime = Math.floor(
+          new Date(event.timestamp).getTime() / 1000
+        );
+        return Math.abs(eventTime - hoveredTime) <= 1;
+      });
+
+      if (eventsAtTime.length > 0) {
+        // Show tooltip for the first event at this time
+        const event = eventsAtTime[0];
+
+        // Position tooltip near the cursor
+        setTooltipPosition({
+          x: param.point.x + 10,
+          y: param.point.y - 10,
+        });
+        setTooltipContent(event);
+        setTooltipVisible(true);
+      } else {
+        setTooltipVisible(false);
+      }
+    };
+
+    chart.subscribeCrosshairMove(handleCrosshairMove);
+
+    return () => {
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
+    };
+  }, [strategyEvents]);
+
+  /**
    * Update chart rendering when allData changes
    */
   useEffect(() => {
@@ -790,7 +857,7 @@ const OHLCChart = ({
     }
   }, [wsError]);
 
-  // Update position and order markers
+  // Update position, order, and strategy event markers
   useEffect(() => {
     if (!candlestickSeriesRef.current) return;
 
@@ -834,6 +901,54 @@ const OHLCChart = ({
       }
     });
 
+    // Add strategy event markers
+    strategyEvents.forEach((event) => {
+      // Convert ISO timestamp to Unix timestamp
+      const eventTime = Math.floor(
+        new Date(event.timestamp).getTime() / 1000
+      ) as Time;
+
+      // Determine marker style based on event type
+      let markerColor: string;
+      let markerShape: 'circle' | 'square' | 'arrowUp' | 'arrowDown';
+      let markerPosition: 'aboveBar' | 'belowBar';
+
+      switch (event.event_type) {
+        case 'SIGNAL':
+          markerColor = '#2196F3'; // Blue
+          markerShape = 'circle';
+          markerPosition = 'aboveBar';
+          break;
+        case 'ORDER':
+          markerColor = event.direction === 'long' ? '#4CAF50' : '#F44336'; // Green for long, Red for short
+          markerShape = event.direction === 'long' ? 'arrowUp' : 'arrowDown';
+          markerPosition = event.direction === 'long' ? 'belowBar' : 'aboveBar';
+          break;
+        case 'POSITION':
+          markerColor = '#FF9800'; // Orange
+          markerShape = 'square';
+          markerPosition = 'aboveBar';
+          break;
+        case 'ERROR':
+          markerColor = '#F44336'; // Red
+          markerShape = 'circle';
+          markerPosition = 'belowBar';
+          break;
+        default:
+          markerColor = '#9E9E9E'; // Gray
+          markerShape = 'circle';
+          markerPosition = 'aboveBar';
+      }
+
+      markers.push({
+        time: eventTime,
+        position: markerPosition,
+        color: markerColor,
+        shape: markerShape,
+        text: `${event.strategy_name}: ${event.event_type}`,
+      });
+    });
+
     // Set markers on the candlestick series
     if (
       candlestickSeriesRef.current &&
@@ -846,7 +961,7 @@ const OHLCChart = ({
         ) => void
       )(markers);
     }
-  }, [positions, orders, instrument]);
+  }, [positions, orders, strategyEvents, instrument]);
 
   // Update take-profit and stop-loss lines
   useEffect(() => {
@@ -970,6 +1085,51 @@ const OHLCChart = ({
           >
             Loading {loadingDirection === 'older' ? 'older' : 'newer'} data...
           </Typography>
+        </Box>
+      )}
+
+      {/* Strategy Event Tooltip */}
+      {tooltipVisible && tooltipContent && (
+        <Box
+          data-testid="strategy-event-tooltip"
+          sx={{
+            position: 'absolute',
+            left: tooltipPosition.x,
+            top: tooltipPosition.y,
+            zIndex: 1001,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            color: 'white',
+            borderRadius: 1,
+            px: 2,
+            py: 1.5,
+            minWidth: 200,
+            maxWidth: 300,
+            pointerEvents: 'none',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          }}
+        >
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+            {tooltipContent.strategy_name}
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+            Type: {tooltipContent.event_type}
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+            {tooltipContent.message}
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'block', opacity: 0.7 }}>
+            {new Date(tooltipContent.timestamp).toLocaleString()}
+          </Typography>
+          {tooltipContent.price && (
+            <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+              Price: {tooltipContent.price.toFixed(5)}
+            </Typography>
+          )}
+          {tooltipContent.direction && (
+            <Typography variant="caption" sx={{ display: 'block' }}>
+              Direction: {tooltipContent.direction.toUpperCase()}
+            </Typography>
+          )}
         </Box>
       )}
 

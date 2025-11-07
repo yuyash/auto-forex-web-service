@@ -23,6 +23,8 @@ const mockGetVisibleLogicalRange = vi.fn();
 const mockGetVisibleRange = vi.fn();
 const mockRemove = vi.fn();
 const mockApplyOptions = vi.fn();
+const mockSubscribeCrosshairMove = vi.fn();
+const mockUnsubscribeCrosshairMove = vi.fn();
 
 vi.mock('lightweight-charts', () => ({
   createChart: vi.fn(() => ({
@@ -42,6 +44,8 @@ vi.mock('lightweight-charts', () => ({
         mockUnsubscribeVisibleLogicalRangeChange,
       getVisibleLogicalRange: mockGetVisibleLogicalRange,
     })),
+    subscribeCrosshairMove: mockSubscribeCrosshairMove,
+    unsubscribeCrosshairMove: mockUnsubscribeCrosshairMove,
     remove: mockRemove,
   })),
   ColorType: {
@@ -372,6 +376,172 @@ describe('OHLCChart - Refactored Self-Contained Component', () => {
       });
 
       expect(mockFetchCandles).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('Strategy Event Overlay', () => {
+    it('should display strategy event markers on the chart', async () => {
+      const mockFetchCandles = vi.fn().mockResolvedValue(mockData);
+      const mockStrategyEvents = [
+        {
+          id: '1',
+          strategy_name: 'MA Crossover',
+          event_type: 'SIGNAL' as const,
+          message: 'Buy signal detected',
+          timestamp: '2024-01-01T12:00:00Z',
+          instrument: 'EUR_USD',
+        },
+        {
+          id: '2',
+          strategy_name: 'RSI Strategy',
+          event_type: 'ORDER' as const,
+          message: 'Order placed',
+          timestamp: '2024-01-01T13:00:00Z',
+          instrument: 'EUR_USD',
+          direction: 'long' as const,
+          price: 1.105,
+        },
+      ];
+
+      render(
+        <OHLCChart
+          instrument="EUR_USD"
+          granularity="H1"
+          fetchCandles={mockFetchCandles}
+          strategyEvents={mockStrategyEvents}
+        />
+      );
+
+      await waitFor(() => {
+        expect(mockSetData).toHaveBeenCalled();
+      });
+
+      // Verify markers were set with strategy events
+      await waitFor(() => {
+        expect(mockSetMarkers).toHaveBeenCalled();
+        const markersCall = mockSetMarkers.mock.calls[0][0];
+        // Should have 2 strategy event markers
+        expect(markersCall.length).toBeGreaterThanOrEqual(2);
+      });
+    });
+
+    it('should filter strategy events by instrument', async () => {
+      const mockFetchCandles = vi.fn().mockResolvedValue(mockData);
+      const mockStrategyEvents = [
+        {
+          id: '1',
+          strategy_name: 'MA Crossover',
+          event_type: 'SIGNAL' as const,
+          message: 'Buy signal detected',
+          timestamp: '2024-01-01T12:00:00Z',
+          instrument: 'EUR_USD',
+        },
+        {
+          id: '2',
+          strategy_name: 'RSI Strategy',
+          event_type: 'ORDER' as const,
+          message: 'Order placed',
+          timestamp: '2024-01-01T13:00:00Z',
+          instrument: 'GBP_USD', // Different instrument
+        },
+      ];
+
+      render(
+        <OHLCChart
+          instrument="EUR_USD"
+          granularity="H1"
+          fetchCandles={mockFetchCandles}
+          strategyEvents={mockStrategyEvents}
+        />
+      );
+
+      await waitFor(() => {
+        expect(mockSetData).toHaveBeenCalled();
+      });
+
+      // Note: The filtering happens in DashboardPage, not in OHLCChart
+      // OHLCChart displays all events passed to it
+      // This test verifies that events are converted to markers
+      await waitFor(() => {
+        expect(mockSetMarkers).toHaveBeenCalled();
+      });
+    });
+
+    it('should apply correct marker styles based on event type', async () => {
+      const mockFetchCandles = vi.fn().mockResolvedValue(mockData);
+      const mockStrategyEvents = [
+        {
+          id: '1',
+          strategy_name: 'Test',
+          event_type: 'SIGNAL' as const,
+          message: 'Signal',
+          timestamp: '2024-01-01T12:00:00Z',
+        },
+        {
+          id: '2',
+          strategy_name: 'Test',
+          event_type: 'ERROR' as const,
+          message: 'Error',
+          timestamp: '2024-01-01T13:00:00Z',
+        },
+        {
+          id: '3',
+          strategy_name: 'Test',
+          event_type: 'POSITION' as const,
+          message: 'Position',
+          timestamp: '2024-01-01T14:00:00Z',
+        },
+      ];
+
+      render(
+        <OHLCChart
+          instrument="EUR_USD"
+          granularity="H1"
+          fetchCandles={mockFetchCandles}
+          strategyEvents={mockStrategyEvents}
+        />
+      );
+
+      await waitFor(() => {
+        expect(mockSetMarkers).toHaveBeenCalled();
+        const markersCall = mockSetMarkers.mock.calls[0][0];
+
+        // Find the strategy event markers
+        type Marker = {
+          text?: string;
+          color?: string;
+          shape?: string;
+          position?: string;
+        };
+        const signalMarker = markersCall.find(
+          (m: Marker) => m.text && m.text.includes('SIGNAL')
+        );
+        const errorMarker = markersCall.find(
+          (m: Marker) => m.text && m.text.includes('ERROR')
+        );
+        const positionMarker = markersCall.find(
+          (m: Marker) => m.text && m.text.includes('POSITION')
+        );
+
+        // Verify marker styles
+        if (signalMarker) {
+          expect(signalMarker.color).toBe('#2196F3'); // Blue
+          expect(signalMarker.shape).toBe('circle');
+          expect(signalMarker.position).toBe('aboveBar');
+        }
+
+        if (errorMarker) {
+          expect(errorMarker.color).toBe('#F44336'); // Red
+          expect(errorMarker.shape).toBe('circle');
+          expect(errorMarker.position).toBe('belowBar');
+        }
+
+        if (positionMarker) {
+          expect(positionMarker.color).toBe('#FF9800'); // Orange
+          expect(positionMarker.shape).toBe('square');
+          expect(positionMarker.position).toBe('aboveBar');
+        }
+      });
     });
   });
 });

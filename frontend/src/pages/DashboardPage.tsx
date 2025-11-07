@@ -26,17 +26,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { OHLCChart } from '../components/chart';
 import { Breadcrumbs } from '../components/common';
 import ChartControls from '../components/chart/ChartControls';
-import type { Granularity, OHLCData, Position, Order } from '../types/chart';
+import type {
+  Granularity,
+  OHLCData,
+  Position,
+  Order,
+  StrategyEvent,
+} from '../types/chart';
 import type { Indicator } from '../components/chart/ChartControls';
-
-interface StrategyEvent {
-  id: string;
-  strategy_name: string;
-  event_type: string;
-  message: string;
-  timestamp: string;
-  instrument?: string;
-}
 
 const DashboardPage = () => {
   const { t } = useTranslation('dashboard');
@@ -305,6 +302,9 @@ const DashboardPage = () => {
   // Filter positions and orders for current instrument
   const currentPositions = positions.filter((p) => p.instrument === instrument);
   const currentOrders = orders.filter((o) => o.instrument === instrument);
+  const currentStrategyEvents = strategyEvents.filter(
+    (e) => !e.instrument || e.instrument === instrument
+  );
 
   return (
     <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
@@ -417,6 +417,7 @@ const DashboardPage = () => {
               fetchCandles={fetchCandles}
               positions={currentPositions}
               orders={currentOrders}
+              strategyEvents={currentStrategyEvents}
               enableRealTimeUpdates={hasOandaAccount && !!oandaAccountId}
               accountId={oandaAccountId}
               onChartReady={(chartApi) => {
