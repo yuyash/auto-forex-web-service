@@ -3,16 +3,13 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ChartControls from '../components/chart/ChartControls';
 import type { Granularity } from '../types/chart';
-import type { Indicator } from '../components/chart/ChartControls';
 
 describe('ChartControls', () => {
   const defaultProps = {
     instrument: 'EUR_USD',
     granularity: 'H1' as Granularity,
-    indicators: [] as Indicator[],
     onInstrumentChange: vi.fn(),
     onGranularityChange: vi.fn(),
-    onIndicatorsChange: vi.fn(),
   };
 
   it('renders all control selectors', () => {
@@ -20,7 +17,6 @@ describe('ChartControls', () => {
 
     expect(screen.getByLabelText(/currency pair/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/timeframe/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/indicators/i)).toBeInTheDocument();
   });
 
   it('displays current instrument value', () => {
@@ -77,26 +73,6 @@ describe('ChartControls', () => {
     expect(onGranularityChange).toHaveBeenCalledWith('M5');
   });
 
-  it('calls onIndicatorsChange when indicators are selected', async () => {
-    const user = userEvent.setup();
-    const onIndicatorsChange = vi.fn();
-
-    render(
-      <ChartControls
-        {...defaultProps}
-        onIndicatorsChange={onIndicatorsChange}
-      />
-    );
-
-    const indicatorsSelect = screen.getByLabelText(/indicators/i);
-    await user.click(indicatorsSelect);
-
-    const atrOption = screen.getByRole('option', { name: /ATR/i });
-    await user.click(atrOption);
-
-    expect(onIndicatorsChange).toHaveBeenCalled();
-  });
-
   it('displays all OANDA granularities', async () => {
     const user = userEvent.setup();
     render(<ChartControls {...defaultProps} />);
@@ -123,24 +99,5 @@ describe('ChartControls', () => {
     expect(
       screen.getByRole('option', { name: /^Monthly$/i })
     ).toBeInTheDocument();
-  });
-
-  it('displays all indicators', async () => {
-    const user = userEvent.setup();
-    render(<ChartControls {...defaultProps} />);
-
-    const indicatorsSelect = screen.getByLabelText(/indicators/i);
-    await user.click(indicatorsSelect);
-
-    expect(screen.getByRole('option', { name: /ATR/i })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /MA/i })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /RSI/i })).toBeInTheDocument();
-  });
-
-  it('displays selected indicators', () => {
-    render(<ChartControls {...defaultProps} indicators={['ATR', 'RSI']} />);
-
-    const indicatorsSelect = screen.getByLabelText(/indicators/i);
-    expect(indicatorsSelect).toHaveTextContent('ATR, RSI');
   });
 });

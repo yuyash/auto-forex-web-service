@@ -33,7 +33,6 @@ import type {
   Order,
   StrategyEvent,
 } from '../types/chart';
-import type { Indicator } from '../components/chart/ChartControls';
 
 const DashboardPage = () => {
   const { t } = useTranslation('dashboard');
@@ -42,7 +41,6 @@ const DashboardPage = () => {
   // Chart state
   const [instrument, setInstrument] = useState<string>('USD_JPY');
   const [granularity, setGranularity] = useState<Granularity>('H1');
-  const [indicators, setIndicators] = useState<Indicator[]>([]);
 
   // Data state
   const [positions, setPositions] = useState<Position[]>([]);
@@ -373,10 +371,8 @@ const DashboardPage = () => {
           <ChartControls
             instrument={instrument}
             granularity={granularity}
-            indicators={indicators}
             onInstrumentChange={setInstrument}
             onGranularityChange={setGranularity}
-            onIndicatorsChange={setIndicators}
           />
 
           {/* Manual Refresh Button */}

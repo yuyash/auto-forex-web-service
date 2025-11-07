@@ -10,7 +10,7 @@
     "strategy": "Strategy",
     "backtest": "Backtest",
     "settings": "Settings",
-    "admin": "Admin",
+    "admin": "Admin Dashboard",
     "logout": "Logout"
   },
   "auth": {
@@ -97,7 +97,7 @@
     "strategy": "Strategy",
     "backtest": "Backtest",
     "settings": "Settings",
-    "admin": "Admin",
+    "admin": "Admin Dashboard",
     "adminSettings": "Settings",
     "events": "Events",
     "users": "User Management"

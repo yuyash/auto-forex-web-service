@@ -1,16 +1,9 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
-  Drawer,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
   BottomNavigation,
   BottomNavigationAction,
   useTheme,
-  useMediaQuery,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -22,8 +15,6 @@ import {
   AdminPanelSettings as AdminIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
-
-export const DRAWER_WIDTH = 240;
 
 interface NavigationItem {
   path: string;
@@ -71,24 +62,19 @@ const navigationItems: NavigationItem[] = [
   },
 ];
 
-interface ResponsiveNavigationProps {
-  open?: boolean;
-  onClose?: () => void;
-}
-
-const ResponsiveNavigation = ({
-  open = false,
-  onClose,
-}: ResponsiveNavigationProps) => {
+const ResponsiveNavigation = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // < 600px
   const { user } = useAuth();
 
-  // Filter navigation items based on user role
+  // Filter navigation items based on user role and exclude Settings/Admin from mobile
   const filteredItems = navigationItems.filter(
-    (item) => !item.adminOnly || user?.is_staff
+    (item) =>
+      // Exclude Settings and Admin from mobile bottom navigation
+      item.path !== '/settings' &&
+      item.path !== '/admin' &&
+      (!item.adminOnly || user?.is_staff)
   );
 
   // Get current active path
@@ -98,63 +84,7 @@ const ResponsiveNavigation = ({
     navigate(path);
   };
 
-  // Desktop sidebar navigation
-  if (!isMobile) {
-    return (
-      <Drawer
-        variant="persistent"
-        open={open}
-        onClose={onClose}
-        sx={{
-          width: DRAWER_WIDTH,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': {
-            width: DRAWER_WIDTH,
-            boxSizing: 'border-box',
-            top: '64px', // Height of AppHeader
-            height: 'calc(100% - 64px)',
-          },
-        }}
-      >
-        <List>
-          {filteredItems.map((item) => (
-            <ListItem key={item.path} disablePadding>
-              <ListItemButton
-                selected={currentPath === item.path}
-                onClick={() => handleNavigation(item.path)}
-                sx={{
-                  '&.Mui-selected': {
-                    backgroundColor: theme.palette.primary.main,
-                    color: theme.palette.primary.contrastText,
-                    '&:hover': {
-                      backgroundColor: theme.palette.primary.dark,
-                    },
-                    '& .MuiListItemIcon-root': {
-                      color: theme.palette.primary.contrastText,
-                    },
-                  },
-                }}
-              >
-                <ListItemIcon
-                  sx={{
-                    color:
-                      currentPath === item.path
-                        ? theme.palette.primary.contrastText
-                        : 'inherit',
-                  }}
-                >
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText primary={item.label} />
-              </ListItemButton>
-            </ListItem>
-          ))}
-        </List>
-      </Drawer>
-    );
-  }
-
-  // Mobile bottom navigation
+  // Mobile bottom navigation only
   return (
     <Box
       sx={{

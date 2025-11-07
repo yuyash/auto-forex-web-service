@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Container,
   Typography,
   Box,
   Paper,
@@ -234,170 +233,186 @@ const OrderHistoryPage = () => {
   ];
 
   return (
-    <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+    <Box
+      sx={{
+        width: '100%',
+        maxWidth: '100vw',
+        px: { xs: 2, sm: 3 },
+        py: { xs: 2, sm: 4 },
+        boxSizing: 'border-box',
+      }}
+    >
       <Breadcrumbs />
-      <Box>
-        <Typography variant="h4" gutterBottom>
-          {t('orders:title')}
-        </Typography>
+      <Typography variant="h4" gutterBottom>
+        {t('orders:title')}
+      </Typography>
 
-        {/* Filters Section */}
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <FilterListIcon sx={{ mr: 1 }} />
-            <Typography variant="h6">{t('common:actions.filter')}</Typography>
-          </Box>
-
-          <Grid container spacing={2}>
-            {/* Date Range */}
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <TextField
-                fullWidth
-                label={t('orders:filters.startDate')}
-                type="date"
-                value={filters.start_date || ''}
-                onChange={(e) =>
-                  handleFilterChange('start_date', e.target.value)
-                }
-                InputLabelProps={{ shrink: true }}
-                size="small"
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <TextField
-                fullWidth
-                label={t('orders:filters.endDate')}
-                type="date"
-                value={filters.end_date || ''}
-                onChange={(e) => handleFilterChange('end_date', e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                size="small"
-              />
-            </Grid>
-
-            {/* Instrument Filter */}
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <TextField
-                fullWidth
-                select
-                label={t('orders:filters.instrument')}
-                value={filters.instrument || ''}
-                onChange={(e) =>
-                  handleFilterChange('instrument', e.target.value)
-                }
-                size="small"
-              >
-                <MenuItem value="">
-                  {t('orders:filters.allInstruments')}
-                </MenuItem>
-                {instruments.map((instrument) => (
-                  <MenuItem key={instrument} value={instrument}>
-                    {instrument}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-
-            {/* Status Filter */}
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <TextField
-                fullWidth
-                select
-                label={t('orders:filters.status')}
-                value={filters.status || ''}
-                onChange={(e) => handleFilterChange('status', e.target.value)}
-                size="small"
-              >
-                <MenuItem value="">{t('orders:filters.allStatuses')}</MenuItem>
-                <MenuItem value="PENDING">
-                  {t('orders:statuses.PENDING')}
-                </MenuItem>
-                <MenuItem value="FILLED">
-                  {t('orders:statuses.FILLED')}
-                </MenuItem>
-                <MenuItem value="CANCELLED">
-                  {t('orders:statuses.CANCELLED')}
-                </MenuItem>
-                <MenuItem value="REJECTED">
-                  {t('orders:statuses.REJECTED')}
-                </MenuItem>
-              </TextField>
-            </Grid>
-
-            {/* Order ID Search */}
-            <Grid size={{ xs: 12, sm: 6, md: 6 }}>
-              <TextField
-                fullWidth
-                label={t('orders:filters.searchOrderId')}
-                value={searchOrderId}
-                onChange={(e) => setSearchOrderId(e.target.value)}
-                size="small"
-                placeholder="e.g., 12345"
-              />
-            </Grid>
-
-            {/* Action Buttons */}
-            <Grid size={{ xs: 12, sm: 6, md: 6 }}>
-              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                <Button
-                  variant="outlined"
-                  onClick={handleClearFilters}
-                  size="small"
-                  aria-label="Clear Filters"
-                >
-                  {t('orders:actions.clearFilters')}
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={fetchOrders}
-                  size="small"
-                  aria-label="Apply Filters"
-                >
-                  {t('orders:actions.applyFilters')}
-                </Button>
-              </Box>
-            </Grid>
-          </Grid>
-        </Paper>
-
-        {/* Export Button */}
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            variant="contained"
-            startIcon={<DownloadIcon />}
-            onClick={handleExportCSV}
-            disabled={orders.length === 0}
-          >
-            {t('orders:actions.exportCSV')}
-          </Button>
+      {/* Filters Section */}
+      <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, width: '100%' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <FilterListIcon sx={{ mr: 1 }} />
+          <Typography variant="h6">{t('common:actions.filter')}</Typography>
         </Box>
 
-        {/* Error Alert */}
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {t('orders:messages.errorLoadingOrders')}: {error}
-          </Alert>
-        )}
+        <Grid container spacing={2}>
+          {/* Date Range */}
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              fullWidth
+              label={t('orders:filters.startDate')}
+              type="date"
+              value={filters.start_date || ''}
+              onChange={(e) => handleFilterChange('start_date', e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              size="small"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              fullWidth
+              label={t('orders:filters.endDate')}
+              type="date"
+              value={filters.end_date || ''}
+              onChange={(e) => handleFilterChange('end_date', e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              size="small"
+            />
+          </Grid>
 
-        {/* Loading State */}
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
+          {/* Instrument Filter */}
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              fullWidth
+              select
+              label={t('orders:filters.instrument')}
+              value={filters.instrument || ''}
+              onChange={(e) => handleFilterChange('instrument', e.target.value)}
+              size="small"
+            >
+              <MenuItem value="">{t('orders:filters.allInstruments')}</MenuItem>
+              {instruments.map((instrument) => (
+                <MenuItem key={instrument} value={instrument}>
+                  {instrument}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
 
-        {/* Orders Table */}
-        {!loading && (
-          <DataTable<Order>
-            columns={columns}
-            data={orders}
-            emptyMessage={t('orders:messages.noOrders')}
-            defaultRowsPerPage={25}
-            rowsPerPageOptions={[10, 25, 50, 100]}
-          />
-        )}
+          {/* Status Filter */}
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              fullWidth
+              select
+              label={t('orders:filters.status')}
+              value={filters.status || ''}
+              onChange={(e) => handleFilterChange('status', e.target.value)}
+              size="small"
+            >
+              <MenuItem value="">{t('orders:filters.allStatuses')}</MenuItem>
+              <MenuItem value="PENDING">
+                {t('orders:statuses.PENDING')}
+              </MenuItem>
+              <MenuItem value="FILLED">{t('orders:statuses.FILLED')}</MenuItem>
+              <MenuItem value="CANCELLED">
+                {t('orders:statuses.CANCELLED')}
+              </MenuItem>
+              <MenuItem value="REJECTED">
+                {t('orders:statuses.REJECTED')}
+              </MenuItem>
+            </TextField>
+          </Grid>
+
+          {/* Order ID Search */}
+          <Grid size={{ xs: 12, sm: 6, md: 6 }}>
+            <TextField
+              fullWidth
+              label={t('orders:filters.searchOrderId')}
+              value={searchOrderId}
+              onChange={(e) => setSearchOrderId(e.target.value)}
+              size="small"
+              placeholder="e.g., 12345"
+            />
+          </Grid>
+
+          {/* Action Buttons */}
+          <Grid size={{ xs: 12, sm: 6, md: 6 }}>
+            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+              <Button
+                variant="outlined"
+                onClick={handleClearFilters}
+                size="small"
+                aria-label="Clear Filters"
+              >
+                {t('orders:actions.clearFilters')}
+              </Button>
+              <Button
+                variant="contained"
+                onClick={fetchOrders}
+                size="small"
+                aria-label="Apply Filters"
+              >
+                {t('orders:actions.applyFilters')}
+              </Button>
+            </Box>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* Export Button */}
+      <Box
+        sx={{
+          mb: 2,
+          display: 'flex',
+          justifyContent: 'flex-end',
+          width: '100%',
+        }}
+      >
+        <Button
+          variant="contained"
+          startIcon={<DownloadIcon />}
+          onClick={handleExportCSV}
+          disabled={orders.length === 0}
+        >
+          {t('orders:actions.exportCSV')}
+        </Button>
       </Box>
-    </Container>
+
+      {/* Error Alert */}
+      {error && (
+        <Alert
+          severity="error"
+          sx={{ mb: 2, width: '100%' }}
+          onClose={() => setError(null)}
+        >
+          {t('orders:messages.errorLoadingOrders')}: {error}
+        </Alert>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            my: 4,
+            width: '100%',
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      )}
+
+      {/* Orders Table */}
+      {!loading && (
+        <DataTable<Order>
+          columns={columns}
+          data={orders}
+          emptyMessage={t('orders:messages.noOrders')}
+          defaultRowsPerPage={25}
+          rowsPerPageOptions={[10, 25, 50, 100]}
+        />
+      )}
+    </Box>
   );
 };
 

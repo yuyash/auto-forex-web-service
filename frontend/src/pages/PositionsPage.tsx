@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Container,
   Typography,
   Box,
   Paper,
@@ -401,189 +400,211 @@ const PositionsPage = () => {
   ];
 
   return (
-    <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+    <Box
+      sx={{
+        width: '100%',
+        maxWidth: '100vw',
+        px: { xs: 2, sm: 3 },
+        py: { xs: 2, sm: 4 },
+        boxSizing: 'border-box',
+      }}
+    >
       <Breadcrumbs />
-      <Box>
-        <Typography variant="h4" gutterBottom>
-          {t('positions:title')}
-        </Typography>
+      <Typography variant="h4" gutterBottom>
+        {t('positions:title')}
+      </Typography>
 
-        {/* Filters Section */}
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <FilterListIcon sx={{ mr: 1 }} />
-            <Typography variant="h6">{t('common:actions.filter')}</Typography>
-          </Box>
+      {/* Filters Section */}
+      <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, width: '100%' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <FilterListIcon sx={{ mr: 1 }} />
+          <Typography variant="h6">{t('common:actions.filter')}</Typography>
+        </Box>
 
-          <Grid container spacing={2}>
-            {/* Date Range */}
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <TextField
-                fullWidth
-                label={t('positions:filters.startDate')}
-                type="date"
-                value={filters.start_date || ''}
-                onChange={(e) =>
-                  handleFilterChange('start_date', e.target.value)
-                }
-                InputLabelProps={{ shrink: true }}
-                size="small"
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <TextField
-                fullWidth
-                label={t('positions:filters.endDate')}
-                type="date"
-                value={filters.end_date || ''}
-                onChange={(e) => handleFilterChange('end_date', e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                size="small"
-              />
-            </Grid>
-
-            {/* Instrument Filter */}
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <TextField
-                fullWidth
-                select
-                label={t('positions:filters.instrument')}
-                value={filters.instrument || ''}
-                onChange={(e) =>
-                  handleFilterChange('instrument', e.target.value)
-                }
-                size="small"
-              >
-                <MenuItem value="">
-                  {t('positions:filters.allInstruments')}
-                </MenuItem>
-                {instruments.map((instrument) => (
-                  <MenuItem key={instrument} value={instrument}>
-                    {instrument}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-
-            {/* Layer Filter */}
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <TextField
-                fullWidth
-                select
-                label={t('positions:filters.layer')}
-                value={filters.layer || ''}
-                onChange={(e) => handleFilterChange('layer', e.target.value)}
-                size="small"
-              >
-                <MenuItem value="">{t('positions:filters.allLayers')}</MenuItem>
-                {layers.map((layer) => (
-                  <MenuItem key={layer} value={layer.toString()}>
-                    {layer}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-
-            {/* Action Buttons */}
-            <Grid size={{ xs: 12 }}>
-              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                <Button
-                  variant="outlined"
-                  onClick={handleClearFilters}
-                  size="small"
-                  aria-label="Clear Filters"
-                >
-                  {t('positions:actions.clearFilters')}
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={async () => {
-                    setLoading(true);
-                    setError(null);
-                    await fetchPositions('OPEN');
-                    await fetchPositions('CLOSED');
-                    setLoading(false);
-                  }}
-                  size="small"
-                  aria-label="Apply Filters"
-                >
-                  {t('positions:actions.applyFilters')}
-                </Button>
-              </Box>
-            </Grid>
+        <Grid container spacing={2}>
+          {/* Date Range */}
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              fullWidth
+              label={t('positions:filters.startDate')}
+              type="date"
+              value={filters.start_date || ''}
+              onChange={(e) => handleFilterChange('start_date', e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              size="small"
+            />
           </Grid>
-        </Paper>
-
-        {/* Tabs for Active/Closed Positions */}
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-          <Tabs value={tabValue} onChange={handleTabChange}>
-            <Tab label={t('positions:activePositions')} />
-            <Tab label={t('positions:closedPositions')} />
-          </Tabs>
-        </Box>
-
-        {/* Export Button */}
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            variant="contained"
-            startIcon={<DownloadIcon />}
-            onClick={() =>
-              handleExportCSV(
-                tabValue === 0 ? activePositions : closedPositions,
-                tabValue === 0 ? 'active_positions' : 'closed_positions'
-              )
-            }
-            disabled={
-              tabValue === 0
-                ? activePositions.length === 0
-                : closedPositions.length === 0
-            }
-          >
-            {t('positions:actions.exportCSV')}
-          </Button>
-        </Box>
-
-        {/* Error Alert */}
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {t('positions:messages.errorLoadingPositions')}: {error}
-          </Alert>
-        )}
-
-        {/* Loading State */}
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
-
-        {/* Active Positions Tab */}
-        <TabPanel value={tabValue} index={0}>
-          {!loading && (
-            <DataTable<Position>
-              columns={activeColumns}
-              data={activePositions}
-              emptyMessage={t('positions:messages.noActivePositions')}
-              defaultRowsPerPage={25}
-              rowsPerPageOptions={[10, 25, 50, 100]}
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              fullWidth
+              label={t('positions:filters.endDate')}
+              type="date"
+              value={filters.end_date || ''}
+              onChange={(e) => handleFilterChange('end_date', e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              size="small"
             />
-          )}
-        </TabPanel>
+          </Grid>
 
-        {/* Closed Positions Tab */}
-        <TabPanel value={tabValue} index={1}>
-          {!loading && (
-            <DataTable<Position>
-              columns={closedColumns}
-              data={closedPositions}
-              emptyMessage={t('positions:messages.noClosedPositions')}
-              defaultRowsPerPage={25}
-              rowsPerPageOptions={[10, 25, 50, 100]}
-            />
-          )}
-        </TabPanel>
+          {/* Instrument Filter */}
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              fullWidth
+              select
+              label={t('positions:filters.instrument')}
+              value={filters.instrument || ''}
+              onChange={(e) => handleFilterChange('instrument', e.target.value)}
+              size="small"
+            >
+              <MenuItem value="">
+                {t('positions:filters.allInstruments')}
+              </MenuItem>
+              {instruments.map((instrument) => (
+                <MenuItem key={instrument} value={instrument}>
+                  {instrument}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+
+          {/* Layer Filter */}
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              fullWidth
+              select
+              label={t('positions:filters.layer')}
+              value={filters.layer || ''}
+              onChange={(e) => handleFilterChange('layer', e.target.value)}
+              size="small"
+            >
+              <MenuItem value="">{t('positions:filters.allLayers')}</MenuItem>
+              {layers.map((layer) => (
+                <MenuItem key={layer} value={layer.toString()}>
+                  {layer}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+
+          {/* Action Buttons */}
+          <Grid size={{ xs: 12 }}>
+            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+              <Button
+                variant="outlined"
+                onClick={handleClearFilters}
+                size="small"
+                aria-label="Clear Filters"
+              >
+                {t('positions:actions.clearFilters')}
+              </Button>
+              <Button
+                variant="contained"
+                onClick={async () => {
+                  setLoading(true);
+                  setError(null);
+                  await fetchPositions('OPEN');
+                  await fetchPositions('CLOSED');
+                  setLoading(false);
+                }}
+                size="small"
+                aria-label="Apply Filters"
+              >
+                {t('positions:actions.applyFilters')}
+              </Button>
+            </Box>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* Tabs for Active/Closed Positions */}
+      <Box
+        sx={{ borderBottom: 1, borderColor: 'divider', mb: 2, width: '100%' }}
+      >
+        <Tabs value={tabValue} onChange={handleTabChange}>
+          <Tab label={t('positions:activePositions')} />
+          <Tab label={t('positions:closedPositions')} />
+        </Tabs>
       </Box>
-    </Container>
+
+      {/* Export Button */}
+      <Box
+        sx={{
+          mb: 2,
+          display: 'flex',
+          justifyContent: 'flex-end',
+          width: '100%',
+        }}
+      >
+        <Button
+          variant="contained"
+          startIcon={<DownloadIcon />}
+          onClick={() =>
+            handleExportCSV(
+              tabValue === 0 ? activePositions : closedPositions,
+              tabValue === 0 ? 'active_positions' : 'closed_positions'
+            )
+          }
+          disabled={
+            tabValue === 0
+              ? activePositions.length === 0
+              : closedPositions.length === 0
+          }
+        >
+          {t('positions:actions.exportCSV')}
+        </Button>
+      </Box>
+
+      {/* Error Alert */}
+      {error && (
+        <Alert
+          severity="error"
+          sx={{ mb: 2, width: '100%' }}
+          onClose={() => setError(null)}
+        >
+          {t('positions:messages.errorLoadingPositions')}: {error}
+        </Alert>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            my: 4,
+            width: '100%',
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      )}
+
+      {/* Active Positions Tab */}
+      <TabPanel value={tabValue} index={0}>
+        {!loading && (
+          <DataTable<Position>
+            columns={activeColumns}
+            data={activePositions}
+            emptyMessage={t('positions:messages.noActivePositions')}
+            defaultRowsPerPage={25}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+          />
+        )}
+      </TabPanel>
+
+      {/* Closed Positions Tab */}
+      <TabPanel value={tabValue} index={1}>
+        {!loading && (
+          <DataTable<Position>
+            columns={closedColumns}
+            data={closedPositions}
+            emptyMessage={t('positions:messages.noClosedPositions')}
+            defaultRowsPerPage={25}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+          />
+        )}
+      </TabPanel>
+    </Box>
   );
 };
 

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Container,
   Typography,
   Box,
   Paper,
@@ -353,14 +352,26 @@ const StrategyPage = () => {
   );
 
   return (
-    <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+    <Box
+      sx={{
+        width: '100%',
+        maxWidth: '100vw',
+        px: { xs: 2, sm: 3 },
+        py: { xs: 2, sm: 4 },
+        boxSizing: 'border-box',
+      }}
+    >
       <Breadcrumbs />
       <Typography variant="h4" gutterBottom>
         {t('title')}
       </Typography>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+        <Alert
+          severity="error"
+          sx={{ mb: 2, width: '100%' }}
+          onClose={() => setError(null)}
+        >
           {error}
         </Alert>
       )}
@@ -368,16 +379,16 @@ const StrategyPage = () => {
       {successMessage && (
         <Alert
           severity="success"
-          sx={{ mb: 2 }}
+          sx={{ mb: 2, width: '100%' }}
           onClose={() => setSuccessMessage(null)}
         >
           {successMessage}
         </Alert>
       )}
 
-      <Stack spacing={3}>
+      <Stack spacing={3} sx={{ width: '100%' }}>
         {/* Account Selection */}
-        <Paper sx={{ p: 3 }}>
+        <Paper sx={{ p: { xs: 2, sm: 3 }, width: '100%' }}>
           <Typography variant="h6" gutterBottom>
             Account Selection
           </Typography>
@@ -476,7 +487,7 @@ const StrategyPage = () => {
 
         {/* Strategy Configuration */}
         {selectedAccount && !strategyStatus?.is_active && (
-          <Paper sx={{ p: 3 }}>
+          <Paper sx={{ p: { xs: 2, sm: 3 }, width: '100%' }}>
             <Typography variant="h6" gutterBottom>
               {t('configuration')}
             </Typography>
@@ -556,7 +567,7 @@ const StrategyPage = () => {
 
         {/* Stop Strategy Button */}
         {selectedAccount && strategyStatus?.is_active && (
-          <Paper sx={{ p: 3 }}>
+          <Paper sx={{ p: { xs: 2, sm: 3 }, width: '100%' }}>
             <Typography variant="h6" gutterBottom>
               Strategy Control
             </Typography>
@@ -572,7 +583,7 @@ const StrategyPage = () => {
           </Paper>
         )}
       </Stack>
-    </Container>
+    </Box>
   );
 };
 

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Container,
   Typography,
   Box,
   Alert,
@@ -204,7 +203,15 @@ const AdminDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: '100vw',
+          px: { xs: 2, sm: 3 },
+          py: { xs: 2, sm: 4 },
+          boxSizing: 'border-box',
+        }}
+      >
         <Box
           display="flex"
           justifyContent="center"
@@ -213,32 +220,58 @@ const AdminDashboard: React.FC = () => {
         >
           <CircularProgress />
         </Box>
-      </Container>
+      </Box>
     );
   }
 
   if (error) {
     return (
-      <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: '100vw',
+          px: { xs: 2, sm: 3 },
+          py: { xs: 2, sm: 4 },
+          boxSizing: 'border-box',
+        }}
+      >
+        <Alert severity="error" sx={{ mb: 2, width: '100%' }}>
           {error}
         </Alert>
-      </Container>
+      </Box>
     );
   }
 
   if (!dashboardData) {
     return (
-      <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
-        <Alert severity="info">{t('dashboard.noData')}</Alert>
-      </Container>
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: '100vw',
+          px: { xs: 2, sm: 3 },
+          py: { xs: 2, sm: 4 },
+          boxSizing: 'border-box',
+        }}
+      >
+        <Alert severity="info" sx={{ width: '100%' }}>
+          {t('dashboard.noData')}
+        </Alert>
+      </Box>
     );
   }
 
   return (
-    <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+    <Box
+      sx={{
+        width: '100%',
+        maxWidth: '100vw',
+        px: { xs: 2, sm: 3 },
+        py: { xs: 2, sm: 4 },
+        boxSizing: 'border-box',
+      }}
+    >
       <Breadcrumbs />
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: 4, width: '100%' }}>
         <Typography variant="h4" gutterBottom>
           {t('dashboard.title')}
         </Typography>
@@ -276,7 +309,13 @@ const AdminDashboard: React.FC = () => {
         {/* Admin Actions */}
         <Grid size={{ xs: 12 }}>
           <Box
-            sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 2 }}
+            sx={{
+              display: 'flex',
+              gap: 2,
+              justifyContent: 'center',
+              mt: 2,
+              flexWrap: 'wrap',
+            }}
           >
             <Button variant="outlined" onClick={() => navigate('/admin/users')}>
               User Management
@@ -296,7 +335,7 @@ const AdminDashboard: React.FC = () => {
           </Box>
         </Grid>
       </Grid>
-    </Container>
+    </Box>
   );
 };
 

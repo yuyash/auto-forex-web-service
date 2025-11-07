@@ -55,27 +55,27 @@ describe('Breadcrumbs', () => {
   it('renders breadcrumbs for admin dashboard', () => {
     renderBreadcrumbs('/admin');
     expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Admin')).toBeInTheDocument();
+    expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
   });
 
   it('renders breadcrumbs for admin settings', () => {
     renderBreadcrumbs('/admin/settings');
     expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Admin')).toBeInTheDocument();
+    expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
   });
 
   it('renders breadcrumbs for admin events', () => {
     renderBreadcrumbs('/admin/events');
     expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Admin')).toBeInTheDocument();
+    expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
     expect(screen.getByText('Events')).toBeInTheDocument();
   });
 
   it('renders breadcrumbs for admin users', () => {
     renderBreadcrumbs('/admin/users');
     expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Admin')).toBeInTheDocument();
+    expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
     expect(screen.getByText('User Management')).toBeInTheDocument();
   });
 

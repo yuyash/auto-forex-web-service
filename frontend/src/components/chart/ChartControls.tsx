@@ -2,15 +2,11 @@ import { Box, FormControl, InputLabel, MenuItem, Select } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import type { Granularity } from '../../types/chart';
 
-export type Indicator = 'ATR' | 'MA' | 'RSI';
-
 interface ChartControlsProps {
   instrument: string;
   granularity: Granularity;
-  indicators: Indicator[];
   onInstrumentChange: (instrument: string) => void;
   onGranularityChange: (granularity: Granularity) => void;
-  onIndicatorsChange: (indicators: Indicator[]) => void;
 }
 
 // Common currency pairs for forex trading
@@ -57,15 +53,11 @@ const GRANULARITIES: { value: Granularity; label: string }[] = [
   { value: 'M', label: 'Monthly' },
 ];
 
-const INDICATORS: Indicator[] = ['ATR', 'MA', 'RSI'];
-
 const ChartControls = ({
   instrument,
   granularity,
-  indicators,
   onInstrumentChange,
   onGranularityChange,
-  onIndicatorsChange,
 }: ChartControlsProps) => {
   const handleInstrumentChange = (event: SelectChangeEvent<string>) => {
     onInstrumentChange(event.target.value);
@@ -73,15 +65,6 @@ const ChartControls = ({
 
   const handleGranularityChange = (event: SelectChangeEvent<string>) => {
     onGranularityChange(event.target.value as Granularity);
-  };
-
-  const handleIndicatorsChange = (event: SelectChangeEvent<string[]>) => {
-    const value = event.target.value;
-    onIndicatorsChange(
-      typeof value === 'string'
-        ? (value.split(',') as Indicator[])
-        : (value as Indicator[])
-    );
   };
 
   return (
@@ -125,26 +108,6 @@ const ChartControls = ({
           {GRANULARITIES.map((gran) => (
             <MenuItem key={gran.value} value={gran.value}>
               {gran.label}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-
-      {/* Indicator Selector */}
-      <FormControl sx={{ minWidth: 150 }} size="small">
-        <InputLabel id="indicators-label">Indicators</InputLabel>
-        <Select
-          labelId="indicators-label"
-          id="indicators-select"
-          multiple
-          value={indicators}
-          label="Indicators"
-          onChange={handleIndicatorsChange}
-          renderValue={(selected) => selected.join(', ')}
-        >
-          {INDICATORS.map((indicator) => (
-            <MenuItem key={indicator} value={indicator}>
-              {indicator}
             </MenuItem>
           ))}
         </Select>

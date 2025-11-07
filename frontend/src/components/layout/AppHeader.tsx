@@ -13,15 +13,15 @@ import {
   Divider,
   ListItemIcon,
   ListItemText,
-  useMediaQuery,
   useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   AccountCircle,
   Person,
   Settings,
   Logout,
-  Menu as MenuIcon,
+  AdminPanelSettings,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -37,11 +37,7 @@ interface OandaAccount {
   currency: string;
 }
 
-interface AppHeaderProps {
-  onMenuClick?: () => void;
-}
-
-const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
+const AppHeader = () => {
   const { t } = useTranslation('common');
   const { logout, user, token } = useAuth();
   const navigate = useNavigate();
@@ -99,6 +95,11 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
     navigate('/settings');
   };
 
+  const handleAdminClick = () => {
+    handleUserMenuClose();
+    navigate('/admin');
+  };
+
   const handleLogout = async () => {
     handleUserMenuClose();
     await logout();
@@ -112,32 +113,26 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
   return (
     <AppBar position="static">
       <Toolbar>
-        {/* Menu toggle button (desktop only) */}
-        {!isMobile && (
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            onClick={onMenuClick}
-            edge="start"
-            sx={{ mr: 2 }}
-          >
-            <MenuIcon />
-          </IconButton>
-        )}
-
         {/* Logo */}
-        <Typography
-          variant="h6"
+        <Box
           component={RouterLink}
           to="/"
           sx={{
-            textDecoration: 'none',
-            color: 'inherit',
+            display: 'flex',
+            alignItems: 'center',
             mr: 3,
+            textDecoration: 'none',
           }}
         >
-          {t('app.name')}
-        </Typography>
+          <img
+            src="/logo.svg"
+            alt="Logo"
+            style={{
+              height: '40px',
+              width: 'auto',
+            }}
+          />
+        </Box>
 
         {/* Account Selector */}
         {accounts.length > 0 && (
@@ -179,31 +174,31 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
           </FormControl>
         )}
 
-        {/* Navigation Buttons */}
-        <Box
-          sx={{ display: 'flex', gap: 1, alignItems: 'center', flexGrow: 1 }}
-        >
-          <Button color="inherit" component={RouterLink} to="/dashboard">
-            {t('navigation.dashboard')}
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/orders">
-            {t('navigation.orders')}
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/positions">
-            {t('navigation.positions')}
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/strategy">
-            {t('navigation.strategy')}
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/settings">
-            {t('navigation.settings')}
-          </Button>
-          {user?.is_staff && (
-            <Button color="inherit" component={RouterLink} to="/admin">
-              {t('navigation.admin')}
+        {/* Navigation Buttons - Hidden on mobile */}
+        {!isMobile && (
+          <Box
+            sx={{ display: 'flex', gap: 1, alignItems: 'center', flexGrow: 1 }}
+          >
+            <Button color="inherit" component={RouterLink} to="/dashboard">
+              {t('navigation.dashboard')}
             </Button>
-          )}
-        </Box>
+            <Button color="inherit" component={RouterLink} to="/orders">
+              {t('navigation.orders')}
+            </Button>
+            <Button color="inherit" component={RouterLink} to="/positions">
+              {t('navigation.positions')}
+            </Button>
+            <Button color="inherit" component={RouterLink} to="/strategy">
+              {t('navigation.strategy')}
+            </Button>
+            <Button color="inherit" component={RouterLink} to="/settings">
+              {t('navigation.settings')}
+            </Button>
+          </Box>
+        )}
+
+        {/* Spacer for mobile to push right side icons to the right */}
+        {isMobile && <Box sx={{ flexGrow: 1 }} />}
 
         {/* Right side icons */}
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
@@ -257,6 +252,17 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
               </ListItemIcon>
               <ListItemText>{t('navigation.settings')}</ListItemText>
             </MenuItem>
+            {user?.is_staff && (
+              <>
+                <Divider />
+                <MenuItem onClick={handleAdminClick}>
+                  <ListItemIcon>
+                    <AdminPanelSettings fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>{t('navigation.admin')}</ListItemText>
+                </MenuItem>
+              </>
+            )}
             <Divider />
             <MenuItem onClick={handleLogout}>
               <ListItemIcon>

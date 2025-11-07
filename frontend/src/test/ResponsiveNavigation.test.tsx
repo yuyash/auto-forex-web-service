@@ -32,13 +32,12 @@ describe('ResponsiveNavigation', () => {
       </BrowserRouter>
     );
 
-    // Check that navigation items are present
+    // Check that navigation items are present (Settings and Admin removed from bottom nav)
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('Orders')).toBeInTheDocument();
     expect(screen.getByText('Positions')).toBeInTheDocument();
     expect(screen.getByText('Strategy')).toBeInTheDocument();
     expect(screen.getByText('Backtest')).toBeInTheDocument();
-    expect(screen.getByText('Settings')).toBeInTheDocument();
   });
 
   it('renders mobile bottom navigation on small screens', async () => {
@@ -55,13 +54,16 @@ describe('ResponsiveNavigation', () => {
       </BrowserRouter>
     );
 
-    // Check that navigation items are present
+    // Check that navigation items are present (Settings and Admin removed from bottom nav)
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('Orders')).toBeInTheDocument();
     expect(screen.getByText('Positions')).toBeInTheDocument();
     expect(screen.getByText('Strategy')).toBeInTheDocument();
     expect(screen.getByText('Backtest')).toBeInTheDocument();
-    expect(screen.getByText('Settings')).toBeInTheDocument();
+
+    // Settings and Admin should not be in bottom navigation
+    expect(screen.queryByText('Settings')).not.toBeInTheDocument();
+    expect(screen.queryByText('Admin')).not.toBeInTheDocument();
   });
 
   it('does not show admin link for non-admin users', async () => {

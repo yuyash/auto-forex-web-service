@@ -18,27 +18,23 @@ describe('AppLayout', () => {
       </BrowserRouter>
     );
 
-    // Wait for i18n to load translations
+    // Wait for component to render
     await waitFor(() => {
-      // Check header
-      expect(screen.getByText('Auto Forex Trader')).toBeInTheDocument();
+      // Check header logo
+      expect(screen.getByAltText('Logo')).toBeInTheDocument();
     });
 
-    // Check navigation links (they appear in both header and sidebar on desktop)
-    expect(screen.getAllByText('Dashboard').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Orders').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Positions').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Strategy').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Backtest').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Settings').length).toBeGreaterThan(0);
+    // Check navigation links in header
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    expect(screen.getByText('Orders')).toBeInTheDocument();
+    expect(screen.getByText('Positions')).toBeInTheDocument();
+    expect(screen.getByText('Strategy')).toBeInTheDocument();
+    expect(screen.getByText('Settings')).toBeInTheDocument();
 
     // Check content
     expect(screen.getByText('Test Content')).toBeInTheDocument();
 
-    // Check footer
-    const currentYear = new Date().getFullYear();
-    expect(
-      screen.getByText(new RegExp(`© ${currentYear} Auto Forex Trader`, 'i'))
-    ).toBeInTheDocument();
+    // Check footer status chips exist
+    expect(screen.getByText(/connected|disconnected/i)).toBeInTheDocument();
   });
 });

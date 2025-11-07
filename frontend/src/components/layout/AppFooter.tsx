@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Chip, Stack } from '@mui/material';
+import { Box, Chip, Stack } from '@mui/material';
 import {
   Circle as CircleIcon,
   TrendingUp as TrendingUpIcon,
@@ -221,19 +221,10 @@ const AppFooter = () => {
         {/* Market Status */}
         <Chip
           icon={<StoreIcon />}
-          label={marketStatus === 'open' ? 'Market Open' : 'Market Closed'}
+          label={marketStatus === 'open' ? 'Open' : 'Closed'}
           color={marketStatus === 'open' ? 'success' : 'default'}
           size="small"
         />
-
-        {/* Copyright */}
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ ml: 'auto' }}
-        >
-          © {new Date().getFullYear()} Auto Forex Trader
-        </Typography>
       </Stack>
     </Box>
   );
