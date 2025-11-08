@@ -32,20 +32,21 @@ export function useFormValidation<T extends Record<string, unknown>>({
     (field: keyof T, value: unknown) => {
       try {
         // Validate single field
-        const fieldSchema = (schema as z.ZodObject<z.ZodRawShape>).shape?.[
-          field as string
-        ];
-        if (fieldSchema) {
-          fieldSchema.parse(value);
-          setValidationState((prev) => ({
-            ...prev,
-            errors: { ...prev.errors, [field]: undefined },
-          }));
-          return true;
+        if ('shape' in schema) {
+          const objectSchema = schema as z.ZodObject<z.ZodRawShape>;
+          const fieldSchema = objectSchema.shape[field as string];
+          if (fieldSchema) {
+            fieldSchema.parse(value);
+            setValidationState((prev) => ({
+              ...prev,
+              errors: { ...prev.errors, [field]: undefined },
+            }));
+            return true;
+          }
         }
       } catch (error) {
         if (error instanceof z.ZodError) {
-          const fieldError = error.errors?.[0]?.message;
+          const fieldError = error.issues[0]?.message;
           setValidationState((prev) => ({
             ...prev,
             errors: { ...prev.errors, [field]: fieldError },
@@ -72,7 +73,7 @@ export function useFormValidation<T extends Record<string, unknown>>({
       } catch (error) {
         if (error instanceof z.ZodError) {
           const errors: Partial<Record<keyof T, string>> = {};
-          error.errors?.forEach((err: z.ZodIssue) => {
+          error.issues.forEach((err: z.ZodIssue) => {
             const field = err.path[0] as keyof T;
             if (field) {
               errors[field] = err.message;
