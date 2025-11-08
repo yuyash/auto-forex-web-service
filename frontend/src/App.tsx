@@ -26,6 +26,8 @@ import UserManagementPage from './pages/UserManagementPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ConfigurationsPage from './pages/ConfigurationsPage';
 import ConfigurationFormPage from './pages/ConfigurationFormPage';
+import BacktestTasksPage from './pages/BacktestTasksPage';
+import BacktestTaskFormPage from './pages/BacktestTaskFormPage';
 
 function AppRoutes() {
   const { isAuthenticated, systemSettings, systemSettingsLoading } = useAuth();
@@ -119,6 +121,15 @@ function AppRoutes() {
           <Route
             path="/configurations/:id/edit"
             element={<ConfigurationFormPage />}
+          />
+          <Route path="/backtest-tasks" element={<BacktestTasksPage />} />
+          <Route
+            path="/backtest-tasks/new"
+            element={<BacktestTaskFormPage />}
+          />
+          <Route
+            path="/backtest-tasks/:id/edit"
+            element={<BacktestTaskFormPage />}
           />
           <Route path="/admin" element={<AdminDashboardPage />} />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />

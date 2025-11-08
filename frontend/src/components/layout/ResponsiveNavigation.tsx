@@ -14,6 +14,7 @@ import {
   Settings as SettingsIcon,
   AdminPanelSettings as AdminIcon,
   Tune as ConfigIcon,
+  Assignment as TaskIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -54,6 +55,11 @@ const navigationItems: NavigationItem[] = [
     path: '/configurations',
     label: 'Configs',
     icon: <ConfigIcon />,
+  },
+  {
+    path: '/backtest-tasks',
+    label: 'Tasks',
+    icon: <TaskIcon />,
   },
   {
     path: '/settings',
