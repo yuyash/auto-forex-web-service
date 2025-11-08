@@ -26,6 +26,7 @@ import type { TaskExecution } from '../../../types/execution';
 
 interface TaskExecutionsTabProps {
   taskId: number;
+  taskType?: TaskType;
 }
 
 interface ExecutionItemProps {
@@ -295,12 +296,15 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
   );
 }
 
-export function TaskExecutionsTab({ taskId }: TaskExecutionsTabProps) {
+export function TaskExecutionsTab({
+  taskId,
+  taskType = TaskType.BACKTEST,
+}: TaskExecutionsTabProps) {
   const {
     data: executionsData,
     isLoading,
     error,
-  } = useTaskExecutions(taskId, TaskType.BACKTEST);
+  } = useTaskExecutions(taskId, taskType);
 
   if (isLoading) {
     return (
