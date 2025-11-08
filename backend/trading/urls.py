@@ -37,6 +37,17 @@ from .strategy_views import (
     StrategyConfigView,
     StrategyListView,
 )
+from .trading_task_views import (  # noqa: E501
+    TradingTaskCopyView,
+    TradingTaskDetailView,
+    TradingTaskExecutionsView,
+    TradingTaskListCreateView,
+    TradingTaskPauseView,
+    TradingTaskRerunView,
+    TradingTaskResumeView,
+    TradingTaskStartView,
+    TradingTaskStopView,
+)
 from .views import TickDataListView
 
 app_name = "trading"
@@ -155,6 +166,52 @@ urlpatterns = [
         "backtest-tasks/<int:task_id>/executions/",
         BacktestTaskExecutionsView.as_view(),
         name="backtest_task_executions",
+    ),
+    # TradingTask endpoints (new task-based API)
+    path(
+        "trading-tasks/",
+        TradingTaskListCreateView.as_view(),
+        name="trading_task_list_create",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/",
+        TradingTaskDetailView.as_view(),
+        name="trading_task_detail",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/copy/",
+        TradingTaskCopyView.as_view(),
+        name="trading_task_copy",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/start/",
+        TradingTaskStartView.as_view(),
+        name="trading_task_start",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/stop/",
+        TradingTaskStopView.as_view(),
+        name="trading_task_stop",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/pause/",
+        TradingTaskPauseView.as_view(),
+        name="trading_task_pause",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/resume/",
+        TradingTaskResumeView.as_view(),
+        name="trading_task_resume",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/rerun/",
+        TradingTaskRerunView.as_view(),
+        name="trading_task_rerun",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/executions/",
+        TradingTaskExecutionsView.as_view(),
+        name="trading_task_executions",
     ),
     # Strategy comparison endpoints
     path("strategies/compare/", StrategyCompareView.as_view(), name="strategy_compare"),

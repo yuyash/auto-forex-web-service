@@ -29,6 +29,7 @@ from .enums import TaskStatus
 from .event_models import Event, Notification  # noqa: F401
 from .execution_models import ExecutionMetrics, TaskExecution  # noqa: F401
 from .tick_data_models import TickData  # noqa: F401
+from .trading_task_models import TradingTask  # noqa: F401
 
 User = get_user_model()
 
@@ -184,6 +185,7 @@ class StrategyConfig(models.Model):
         # Check BacktestTask references
         # Import here to avoid circular dependency
         from .backtest_models import Backtest as BacktestModel
+        from .trading_task_models import TradingTask as TradingTaskModel
 
         active_backtests = BacktestModel.objects.filter(
             config=self, status__in=[TaskStatus.CREATED, TaskStatus.RUNNING]
@@ -192,8 +194,14 @@ class StrategyConfig(models.Model):
         if active_backtests:
             return True
 
-        # Check TradingTask references (will be implemented in future tasks)
-        # For now, return False as TradingTask model doesn't exist yet
+        # Check TradingTask references
+        active_trading_tasks = TradingTaskModel.objects.filter(
+            config=self, status__in=[TaskStatus.CREATED, TaskStatus.RUNNING, TaskStatus.PAUSED]
+        ).exists()
+
+        if active_trading_tasks:
+            return True
+
         return False
 
     def get_referencing_tasks(self) -> dict[str, list[Any]]:
@@ -205,11 +213,10 @@ class StrategyConfig(models.Model):
         """
         # Import here to avoid circular dependency
         from .backtest_models import Backtest as BacktestModel
+        from .trading_task_models import TradingTask as TradingTaskModel
 
         backtest_tasks = list(BacktestModel.objects.filter(config=self).order_by("-created_at"))
-
-        # TradingTask will be implemented in future tasks
-        trading_tasks: list[Any] = []
+        trading_tasks = list(TradingTaskModel.objects.filter(config=self).order_by("-created_at"))
 
         return {
             "backtest_tasks": backtest_tasks,
