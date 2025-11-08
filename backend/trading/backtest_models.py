@@ -14,6 +14,8 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from django.utils import timezone
 
+from .enums import DataSource, TaskStatus
+
 User = get_user_model()
 
 
@@ -26,20 +28,6 @@ class Backtest(models.Model):
 
     Requirements: 12.1, 12.4
     """
-
-    STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("running", "Running"),
-        ("completed", "Completed"),
-        ("failed", "Failed"),
-        ("cancelled", "Cancelled"),
-        ("terminated", "Terminated"),  # Terminated due to resource limits
-    ]
-
-    DATA_SOURCE_CHOICES = [
-        ("postgresql", "PostgreSQL"),
-        ("s3", "AWS S3 + Athena"),
-    ]
 
     user = models.ForeignKey(
         User,
@@ -61,8 +49,8 @@ class Backtest(models.Model):
     )
     data_source = models.CharField(
         max_length=20,
-        default="postgresql",
-        choices=DATA_SOURCE_CHOICES,
+        default=DataSource.POSTGRESQL,
+        choices=DataSource.choices,
         help_text="Data source for historical tick data",
     )
     start_date = models.DateTimeField(
@@ -85,8 +73,8 @@ class Backtest(models.Model):
     )
     status = models.CharField(
         max_length=20,
-        default="pending",
-        choices=STATUS_CHOICES,
+        default=TaskStatus.CREATED,
+        choices=TaskStatus.choices,
         db_index=True,
         help_text="Current backtest execution status",
     )
@@ -194,7 +182,7 @@ class Backtest(models.Model):
 
     def start(self) -> None:
         """Mark backtest as running."""
-        self.status = "running"
+        self.status = TaskStatus.RUNNING
         self.started_at = timezone.now()
         self.progress = 0
         self.save(update_fields=["status", "started_at", "progress", "updated_at"])
@@ -211,7 +199,7 @@ class Backtest(models.Model):
 
     def complete(self) -> None:
         """Mark backtest as completed."""
-        self.status = "completed"
+        self.status = TaskStatus.COMPLETED
         self.completed_at = timezone.now()
         self.progress = 100
         self.save(
@@ -230,7 +218,7 @@ class Backtest(models.Model):
         Args:
             error_message: Error message describing the failure
         """
-        self.status = "failed"
+        self.status = TaskStatus.FAILED
         self.error_message = error_message
         self.completed_at = timezone.now()
         self.save(
@@ -244,7 +232,7 @@ class Backtest(models.Model):
 
     def cancel(self) -> None:
         """Mark backtest as cancelled."""
-        self.status = "cancelled"
+        self.status = TaskStatus.STOPPED
         self.completed_at = timezone.now()
         self.save(update_fields=["status", "completed_at", "updated_at"])
 
@@ -271,12 +259,12 @@ class Backtest(models.Model):
     @property
     def is_running(self) -> bool:
         """Check if backtest is currently running."""
-        return self.status == "running"
+        return self.status == TaskStatus.RUNNING
 
     @property
     def is_completed(self) -> bool:
         """Check if backtest has completed successfully."""
-        return self.status == "completed"
+        return self.status == TaskStatus.COMPLETED
 
 
 class BacktestResult(models.Model):  # pylint: disable=too-many-instance-attributes
@@ -559,13 +547,6 @@ class StrategyComparison(models.Model):
     Requirements: 5.1, 5.3, 12.4
     """
 
-    STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("running", "Running"),
-        ("completed", "Completed"),
-        ("failed", "Failed"),
-    ]
-
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -595,8 +576,8 @@ class StrategyComparison(models.Model):
     )
     status = models.CharField(
         max_length=20,
-        default="pending",
-        choices=STATUS_CHOICES,
+        default=TaskStatus.CREATED,
+        choices=TaskStatus.choices,
     )
     results = models.JSONField(
         null=True,

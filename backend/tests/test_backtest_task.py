@@ -337,9 +337,9 @@ class TestRunBacktestTask:
             assert "memory limit exceeded" in result["error"]
             assert result["terminated"] is True
 
-            # Verify backtest status was updated to terminated
+            # Verify backtest status was updated to failed
             backtest.refresh_from_db()
-            assert backtest.status == "terminated"
+            assert backtest.status == "failed"
             assert "memory limit exceeded" in backtest.error_message
 
     def test_task_loads_resource_limits_from_config(

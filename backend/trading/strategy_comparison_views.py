@@ -194,7 +194,6 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
             end_date=end_date,
             initial_balance=Decimal(str(initial_balance)),
             commission_per_trade=Decimal(str(commission_per_trade)),
-            status="pending",
         )
 
         # Execute comparison asynchronously (in this implementation, synchronously for simplicity)

@@ -162,7 +162,6 @@ class BacktestListCreateView(APIView):
             commission_per_trade=serializer.validated_data.get("commission_per_trade", 0),
             memory_limit_mb=serializer.validated_data.get("memory_limit_mb", 2048),
             cpu_limit_cores=serializer.validated_data.get("cpu_limit_cores", 1),
-            status="pending",
         )
 
         # Prepare config dictionary for Celery task

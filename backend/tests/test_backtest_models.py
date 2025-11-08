@@ -15,6 +15,7 @@ from django.utils import timezone
 import pytest
 
 from trading.backtest_models import Backtest, BacktestResult
+from trading.enums import TaskStatus
 
 User = get_user_model()
 
@@ -74,7 +75,7 @@ class TestBacktestModel:
         assert backtest.start_date == start_date
         assert backtest.end_date == end_date
         assert backtest.initial_balance == Decimal("10000.00")
-        assert backtest.status == "pending"
+        assert backtest.status == TaskStatus.CREATED
         assert backtest.progress == 0
 
     def test_backtest_default_values(self, user):
@@ -90,23 +91,23 @@ class TestBacktestModel:
         assert backtest.instruments == []
         assert backtest.initial_balance == Decimal("10000.00")
         assert backtest.commission_per_trade == Decimal("0")
-        assert backtest.status == "pending"
+        assert backtest.status == TaskStatus.CREATED
         assert backtest.progress == 0
         assert backtest.error_message is None
 
     def test_backtest_str_representation(self, backtest):
         """Test backtest string representation."""
-        expected = f"floor backtest by {backtest.user.email} - pending"
+        expected = f"floor backtest by {backtest.user.email} - created"
         assert str(backtest) == expected
 
     def test_backtest_start(self, backtest):
         """Test starting a backtest."""
-        assert backtest.status == "pending"
+        assert backtest.status == TaskStatus.CREATED
         assert backtest.started_at is None
 
         backtest.start()
 
-        assert backtest.status == "running"
+        assert backtest.status == TaskStatus.RUNNING
         assert backtest.started_at is not None
         assert backtest.progress == 0
 
@@ -131,12 +132,12 @@ class TestBacktestModel:
     def test_backtest_complete(self, backtest):
         """Test completing a backtest."""
         backtest.start()
-        assert backtest.status == "running"
+        assert backtest.status == TaskStatus.RUNNING
         assert backtest.completed_at is None
 
         backtest.complete()
 
-        assert backtest.status == "completed"
+        assert backtest.status == TaskStatus.COMPLETED
         assert backtest.completed_at is not None
         assert backtest.progress == 100
 
@@ -147,7 +148,7 @@ class TestBacktestModel:
 
         backtest.fail(error_msg)
 
-        assert backtest.status == "failed"
+        assert backtest.status == TaskStatus.FAILED
         assert backtest.error_message == error_msg
         assert backtest.completed_at is not None
 
@@ -157,19 +158,19 @@ class TestBacktestModel:
 
         backtest.cancel()
 
-        assert backtest.status == "cancelled"
+        assert backtest.status == TaskStatus.STOPPED
         assert backtest.completed_at is not None
 
     def test_backtest_status_transitions(self, backtest):
         """Test backtest status transitions."""
-        # pending -> running
-        assert backtest.status == "pending"
+        # created -> running
+        assert backtest.status == TaskStatus.CREATED
         backtest.start()
-        assert backtest.status == "running"
+        assert backtest.status == TaskStatus.RUNNING
 
         # running -> completed
         backtest.complete()
-        assert backtest.status == "completed"
+        assert backtest.status == TaskStatus.COMPLETED
 
         # Test another backtest: running -> failed
         backtest2 = Backtest.objects.create(
@@ -180,9 +181,9 @@ class TestBacktestModel:
         )
         backtest2.start()
         backtest2.fail("Test error")
-        assert backtest2.status == "failed"
+        assert backtest2.status == TaskStatus.FAILED
 
-        # Test another backtest: running -> cancelled
+        # Test another backtest: running -> stopped
         backtest3 = Backtest.objects.create(
             user=backtest.user,
             strategy_type="floor",
@@ -191,7 +192,7 @@ class TestBacktestModel:
         )
         backtest3.start()
         backtest3.cancel()
-        assert backtest3.status == "cancelled"
+        assert backtest3.status == TaskStatus.STOPPED
 
     def test_backtest_duration_property(self, backtest):
         """Test backtest duration calculation."""

@@ -25,6 +25,7 @@ from django.utils import timezone
 from celery import shared_task
 
 from accounts.models import OandaAccount
+from trading.enums import TaskStatus
 from trading.market_data_streamer import MarketDataStreamer, TickData
 from trading.oanda_sync_task import oanda_sync_task  # noqa: F401  # pylint: disable=unused-import
 from trading.tick_data_models import TickData as TickDataModel
@@ -825,7 +826,7 @@ def _handle_resource_limit_error(
 
     resource_usage = _get_resource_usage(engine, memory_limit, cpu_limit)
 
-    backtest.status = "terminated"
+    backtest.status = TaskStatus.FAILED
     backtest.error_message = str(error)
     backtest.completed_at = timezone.now()
     backtest.save()

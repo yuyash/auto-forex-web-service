@@ -22,6 +22,7 @@ from accounts.models import OandaAccount
 # Import backtest models to make them discoverable by Django
 # pylint: disable=unused-import
 from .backtest_models import Backtest, BacktestResult  # noqa: F401
+from .enums import TaskStatus
 from .event_models import Event, Notification  # noqa: F401
 from .tick_data_models import TickData  # noqa: F401
 
@@ -45,9 +46,16 @@ class Strategy(models.Model):
         max_length=50,
         help_text="Type of strategy (e.g., 'floor', 'trend_following')",
     )
+    status = models.CharField(
+        max_length=20,
+        default=TaskStatus.CREATED,
+        choices=TaskStatus.choices,
+        db_index=True,
+        help_text="Current strategy status",
+    )
     is_active = models.BooleanField(
         default=False,
-        help_text="Whether the strategy is currently active",
+        help_text="Whether the strategy is currently active (deprecated, use status field)",
     )
     config = models.JSONField(
         default=dict,
@@ -82,6 +90,7 @@ class Strategy(models.Model):
         verbose_name_plural = "Strategies"
         indexes = [
             models.Index(fields=["account", "is_active"]),
+            models.Index(fields=["account", "status"]),
             models.Index(fields=["strategy_type"]),
             models.Index(fields=["created_at"]),
         ]
@@ -93,16 +102,18 @@ class Strategy(models.Model):
 
     def start(self) -> None:
         """Start the strategy."""
+        self.status = TaskStatus.RUNNING
         self.is_active = True
         self.started_at = timezone.now()
         self.stopped_at = None
-        self.save(update_fields=["is_active", "started_at", "stopped_at", "updated_at"])
+        self.save(update_fields=["status", "is_active", "started_at", "stopped_at", "updated_at"])
 
     def stop(self) -> None:
         """Stop the strategy."""
+        self.status = TaskStatus.STOPPED
         self.is_active = False
         self.stopped_at = timezone.now()
-        self.save(update_fields=["is_active", "stopped_at", "updated_at"])
+        self.save(update_fields=["status", "is_active", "stopped_at", "updated_at"])
 
     def update_config(self, config: dict) -> None:
         """
