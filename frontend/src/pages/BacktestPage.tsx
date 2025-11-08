@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
+
 import {
   Container,
   Typography,
   Box,
   Paper,
-  Grid,
   Alert,
   Tabs,
   Tab,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { Breadcrumbs } from '../components/common';

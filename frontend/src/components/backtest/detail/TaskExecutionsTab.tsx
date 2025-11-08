@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 import {
   Box,
   Paper,
@@ -7,10 +8,10 @@ import {
   List,
   ListItemButton,
   Collapse,
-  Grid,
   Divider,
   CircularProgress,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
@@ -109,14 +110,14 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
 
           {/* Execution Details */}
           <Grid container spacing={2} sx={{ mb: 2 }}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Typography variant="body2" color="text.secondary">
                 Execution ID
               </Typography>
               <Typography variant="body1">{execution.id}</Typography>
             </Grid>
 
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Typography variant="body2" color="text.secondary">
                 Status
               </Typography>
@@ -126,7 +127,7 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
               </Typography>
             </Grid>
 
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Typography variant="body2" color="text.secondary">
                 Started At
               </Typography>
@@ -136,7 +137,7 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
             </Grid>
 
             {execution.completed_at && (
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Typography variant="body2" color="text.secondary">
                   Completed At
                 </Typography>
@@ -147,7 +148,7 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
             )}
 
             {execution.duration && (
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Typography variant="body2" color="text.secondary">
                   Duration
                 </Typography>
@@ -167,7 +168,7 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
               </Typography>
 
               <Grid container spacing={2}>
-                <Grid item xs={6} sm={4} md={3}>
+                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
                   <Typography variant="body2" color="text.secondary">
                     Total Return
                   </Typography>
@@ -184,7 +185,7 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
                   </Typography>
                 </Grid>
 
-                <Grid item xs={6} sm={4} md={3}>
+                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
                   <Typography variant="body2" color="text.secondary">
                     Total P&L
                   </Typography>
@@ -201,7 +202,7 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
                   </Typography>
                 </Grid>
 
-                <Grid item xs={6} sm={4} md={3}>
+                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
                   <Typography variant="body2" color="text.secondary">
                     Total Trades
                   </Typography>
@@ -210,7 +211,7 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
                   </Typography>
                 </Grid>
 
-                <Grid item xs={6} sm={4} md={3}>
+                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
                   <Typography variant="body2" color="text.secondary">
                     Win Rate
                   </Typography>
@@ -219,7 +220,7 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
                   </Typography>
                 </Grid>
 
-                <Grid item xs={6} sm={4} md={3}>
+                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
                   <Typography variant="body2" color="text.secondary">
                     Max Drawdown
                   </Typography>
@@ -229,7 +230,7 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
                 </Grid>
 
                 {execution.metrics.sharpe_ratio && (
-                  <Grid item xs={6} sm={4} md={3}>
+                  <Grid size={{ xs: 6, sm: 4, md: 3 }}>
                     <Typography variant="body2" color="text.secondary">
                       Sharpe Ratio
                     </Typography>
@@ -240,7 +241,7 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
                 )}
 
                 {execution.metrics.profit_factor && (
-                  <Grid item xs={6} sm={4} md={3}>
+                  <Grid size={{ xs: 6, sm: 4, md: 3 }}>
                     <Typography variant="body2" color="text.secondary">
                       Profit Factor
                     </Typography>

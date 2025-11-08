@@ -17,20 +17,21 @@ import {
 import { useBacktestTasks } from '../../hooks/useBacktestTasks';
 import { useTradingTasks } from '../../hooks/useTradingTasks';
 import { StatusBadge } from '../tasks/display/StatusBadge';
+import { TaskStatus } from '../../types/common';
 
 const ActiveTasksWidget = () => {
   const navigate = useNavigate();
 
   // Fetch running backtest tasks
   const { data: backtestData, isLoading: backtestLoading } = useBacktestTasks({
-    status: 'running',
+    status: TaskStatus.RUNNING,
     page: 1,
     page_size: 3,
   });
 
   // Fetch running trading tasks
   const { data: tradingData, isLoading: tradingLoading } = useTradingTasks({
-    status: 'running',
+    status: TaskStatus.RUNNING,
     page: 1,
     page_size: 3,
   });
@@ -100,7 +101,7 @@ const ActiveTasksWidget = () => {
                   <StatusBadge status={task.status} />
                 </Box>
                 <Typography variant="caption" color="text.secondary">
-                  Trading Task • {task.config.name}
+                  Trading Task • {task.config_name || task.name}
                 </Typography>
               </CardContent>
             </Card>
@@ -135,7 +136,7 @@ const ActiveTasksWidget = () => {
                   <StatusBadge status={task.status} />
                 </Box>
                 <Typography variant="caption" color="text.secondary">
-                  Backtest Task • {task.config.name}
+                  Backtest Task • {task.config_name || task.name}
                 </Typography>
               </CardContent>
             </Card>

@@ -7,6 +7,8 @@ interface ValidatedTextFieldProps
   touched?: boolean;
   onBlurValidation?: (value: string) => void;
   onChangeValidation?: (value: string) => void;
+
+  helperText?: string;
 }
 
 /**

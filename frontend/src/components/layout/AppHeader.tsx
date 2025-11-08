@@ -27,8 +27,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import LanguageSelector from '../common/LanguageSelector';
 import NotificationCenter from '../admin/NotificationCenter';
-import Typography from '@mui/system/typography';
-import Typography from '@mui/system/typography';
+import Typography from '@mui/material/Typography';
 
 interface OandaAccount {
   id: number;

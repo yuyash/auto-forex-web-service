@@ -1,6 +1,6 @@
 // Virtualized table component for efficient rendering of large datasets
 import React from 'react';
-import { FixedSizeList, ListChildComponentProps } from 'react-window';
+import { List, type RowComponentProps } from 'react-window';
 import {
   Box,
   Table,
@@ -42,7 +42,7 @@ export function VirtualizedTable<T>({
   onRowClick,
 }: VirtualizedTableProps<T>) {
   const Row = React.useCallback(
-    ({ index, style }: ListChildComponentProps) => {
+    ({ index, style }: RowComponentProps) => {
       const item = data[index];
       return (
         <TableRow
@@ -127,15 +127,14 @@ export function VirtualizedTable<T>({
         </TableHead>
       </Table>
       <TableBody component="div">
-        <FixedSizeList
-          height={height - 56} // Subtract header height
-          itemCount={data.length}
-          itemSize={rowHeight}
-          width="100%"
+        <List
+          defaultHeight={height - 56} // Subtract header height
+          rowCount={data.length}
+          rowHeight={rowHeight}
           overscanCount={overscanCount}
-        >
-          {Row}
-        </FixedSizeList>
+          rowComponent={Row}
+          rowProps={{}}
+        />
       </TableBody>
     </TableContainer>
   );

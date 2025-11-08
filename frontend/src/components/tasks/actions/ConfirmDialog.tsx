@@ -8,7 +8,7 @@ import {
   Box,
   CircularProgress,
 } from '@mui/material';
-import { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 
 interface ConfirmDialogProps {
   open: boolean;

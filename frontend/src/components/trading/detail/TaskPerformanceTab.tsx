@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
+
 import {
   Box,
-  Grid,
   Paper,
   Typography,
   Alert,
@@ -12,6 +12,7 @@ import {
   CircularProgress,
   type SelectChangeEvent,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { MetricCard } from '../../tasks/display/MetricCard';
 import { EquityCurveChart } from '../../tasks/charts/EquityCurveChart';
 import type { TradingTask } from '../../../types/tradingTask';
@@ -162,7 +163,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
 
       {/* Key Metrics Grid */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard
             title="Total Return"
             value={`${parseFloat(metrics.total_return).toFixed(2)}%`}
@@ -171,7 +172,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard
             title="Win Rate"
             value={`${parseFloat(metrics.win_rate).toFixed(2)}%`}
@@ -180,7 +181,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard
             title="Total Trades"
             value={metrics.total_trades.toString()}
@@ -189,7 +190,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard
             title="Max Drawdown"
             value={`${parseFloat(metrics.max_drawdown).toFixed(2)}%`}
@@ -260,7 +261,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
 
         <Grid container spacing={3}>
           {metrics.sharpe_ratio && (
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Sharpe Ratio
@@ -273,7 +274,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           )}
 
           {metrics.profit_factor && (
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Profit Factor
@@ -285,7 +286,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
             </Grid>
           )}
 
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
             <Box>
               <Typography variant="body2" color="text.secondary">
                 Total P&L
@@ -304,7 +305,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           </Grid>
 
           {metrics.average_win && (
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Average Win
@@ -317,7 +318,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           )}
 
           {metrics.average_loss && (
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Average Loss
@@ -329,7 +330,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
             </Grid>
           )}
 
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
             <Box>
               <Typography variant="body2" color="text.secondary">
                 Winning Trades
@@ -340,7 +341,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
             </Box>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
             <Box>
               <Typography variant="body2" color="text.secondary">
                 Losing Trades
@@ -351,7 +352,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
             </Box>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
             <Box>
               <Typography variant="body2" color="text.secondary">
                 Win/Loss Ratio

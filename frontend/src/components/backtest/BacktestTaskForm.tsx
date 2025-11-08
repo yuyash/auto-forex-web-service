@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 import {
   Box,
   Stepper,
@@ -8,9 +9,9 @@ import {
   Typography,
   Paper,
   TextField,
-  Grid,
   Alert,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -20,13 +21,16 @@ import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
 import { DataSourceSelector } from '../tasks/forms/DataSourceSelector';
 import { backtestTaskSchema } from '../tasks/forms/validationSchemas';
-import { BacktestTaskCreateData } from '../../types/backtestTask';
+import { type BacktestTaskCreateData } from '../../types/backtestTask';
 import { DataSource } from '../../types/common';
 import {
   useCreateBacktestTask,
   useUpdateBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
-import { useConfiguration } from '../../hooks/useConfigurations';
+import {
+  useConfiguration,
+  useConfigurations,
+} from '../../hooks/useConfigurations';
 
 const steps = ['Configuration', 'Parameters', 'Review'];
 
@@ -66,9 +70,12 @@ export default function BacktestTaskForm({
   });
 
   const selectedConfigId = watch('config_id');
-  const { data: selectedConfig } = useConfiguration(selectedConfigId, {
-    enabled: selectedConfigId > 0,
-  });
+
+  // Fetch all configurations
+  const { data: configurationsData } = useConfigurations({ page_size: 100 });
+  const configurations = configurationsData?.results || [];
+
+  const { data: selectedConfig } = useConfiguration(selectedConfigId || 0);
 
   const handleNext = async () => {
     // Validate current step before proceeding
@@ -126,15 +133,16 @@ export default function BacktestTaskForm({
             </Typography>
 
             <Grid container spacing={3}>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Controller
                   name="config_id"
                   control={control}
                   render={({ field }) => (
                     <ConfigurationSelector
+                      configurations={configurations}
                       value={field.value}
                       onChange={field.onChange}
-                      error={!!errors.config_id}
+                      error={errors.config_id?.message}
                       helperText={errors.config_id?.message}
                     />
                   )}
@@ -142,7 +150,7 @@ export default function BacktestTaskForm({
               </Grid>
 
               {selectedConfig && (
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <Alert severity="info">
                     <Typography variant="subtitle2" gutterBottom>
                       Configuration Preview
@@ -158,7 +166,7 @@ export default function BacktestTaskForm({
                 </Grid>
               )}
 
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Controller
                   name="name"
                   control={control}
@@ -175,7 +183,7 @@ export default function BacktestTaskForm({
                 />
               </Grid>
 
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Controller
                   name="description"
                   control={control}
@@ -208,7 +216,7 @@ export default function BacktestTaskForm({
             </Typography>
 
             <Grid container spacing={3}>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Controller
                   name="data_source"
                   control={control}
@@ -216,14 +224,14 @@ export default function BacktestTaskForm({
                     <DataSourceSelector
                       value={field.value}
                       onChange={field.onChange}
-                      error={!!errors.data_source}
+                      error={errors.data_source?.message}
                       helperText={errors.data_source?.message}
                     />
                   )}
                 />
               </Grid>
 
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Controller
                   name="start_time"
                   control={control}
@@ -237,10 +245,7 @@ export default function BacktestTaskForm({
                           endDate={endField.value}
                           onStartDateChange={startField.onChange}
                           onEndDateChange={endField.onChange}
-                          startError={!!errors.start_time}
-                          endError={!!errors.end_time}
-                          startHelperText={errors.start_time?.message}
-                          endHelperText={errors.end_time?.message}
+                          required
                         />
                       )}
                     />
@@ -248,7 +253,7 @@ export default function BacktestTaskForm({
                 />
               </Grid>
 
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Controller
                   name="instruments"
                   control={control}
@@ -256,14 +261,14 @@ export default function BacktestTaskForm({
                     <InstrumentSelector
                       value={field.value}
                       onChange={field.onChange}
-                      error={!!errors.instruments}
+                      error={errors.instruments?.message}
                       helperText={errors.instruments?.message as string}
                     />
                   )}
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Controller
                   name="initial_balance"
                   control={control}
@@ -272,14 +277,14 @@ export default function BacktestTaskForm({
                       value={field.value}
                       onChange={field.onChange}
                       label="Initial Balance"
-                      error={!!errors.initial_balance}
+                      error={errors.initial_balance?.message}
                       helperText={errors.initial_balance?.message}
                     />
                   )}
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Controller
                   name="commission_per_trade"
                   control={control}
@@ -301,18 +306,18 @@ export default function BacktestTaskForm({
         );
 
       case 2: {
-        // Get form data for review step
-        const formValues = {
-          config_id: watch('config_id'),
-          name: watch('name'),
-          description: watch('description'),
-          data_source: watch('data_source'),
-          start_time: watch('start_time'),
-          end_time: watch('end_time'),
-          initial_balance: watch('initial_balance'),
-          commission_per_trade: watch('commission_per_trade'),
-          instruments: watch('instruments'),
-        };
+        // Get form data for review step - extract values outside of render
+        // eslint-disable-next-line react-hooks/incompatible-library
+        const configId = watch('config_id');
+        const name = watch('name');
+        const description = watch('description');
+        const dataSource = watch('data_source');
+        const startTime = watch('start_time');
+        const endTime = watch('end_time');
+        const initialBalance = watch('initial_balance');
+        const commissionPerTrade = watch('commission_per_trade');
+        const instruments = watch('instruments');
+
         return (
           <Box>
             <Typography variant="h6" gutterBottom>
@@ -324,78 +329,76 @@ export default function BacktestTaskForm({
 
             <Paper sx={{ p: 3 }}>
               <Grid container spacing={2}>
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Task Name
                   </Typography>
-                  <Typography variant="body1">{formValues.name}</Typography>
+                  <Typography variant="body1">{name}</Typography>
                 </Grid>
 
-                {formValues.description && (
-                  <Grid item xs={12}>
+                {description && (
+                  <Grid size={{ xs: 12 }}>
                     <Typography variant="subtitle2" color="text.secondary">
                       Description
                     </Typography>
-                    <Typography variant="body1">
-                      {formValues.description}
-                    </Typography>
+                    <Typography variant="body1">{description}</Typography>
                   </Grid>
                 )}
 
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Configuration
                   </Typography>
                   <Typography variant="body1">
-                    {selectedConfig?.name || `ID: ${formValues.config_id}`}
+                    {selectedConfig?.name || `ID: ${configId}`}
                   </Typography>
                 </Grid>
 
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Data Source
                   </Typography>
                   <Typography variant="body1">
-                    {formValues.data_source === DataSource.POSTGRESQL
+                    {dataSource === DataSource.POSTGRESQL
                       ? 'PostgreSQL'
                       : 'AWS Athena'}
                   </Typography>
                 </Grid>
 
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Date Range
                   </Typography>
                   <Typography variant="body1">
-                    {new Date(formValues.start_time).toLocaleDateString()} -{' '}
-                    {new Date(formValues.end_time).toLocaleDateString()}
+                    {new Date(startTime).toLocaleDateString()} -{' '}
+                    {new Date(endTime).toLocaleDateString()}
                   </Typography>
                 </Grid>
 
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Instruments
                   </Typography>
                   <Typography variant="body1">
-                    {formValues.instruments.join(', ')}
+                    {instruments.join(', ')}
                   </Typography>
                 </Grid>
 
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Initial Balance
                   </Typography>
                   <Typography variant="body1">
-                    ${Number(formValues.initial_balance).toLocaleString()}
+                    ${Number(initialBalance).toLocaleString()}
                   </Typography>
                 </Grid>
 
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Commission Per Trade
                   </Typography>
                   <Typography variant="body1">
-                    ${Number(formValues.commission_per_trade).toFixed(2)}
+                    ${Number(commissionPerTrade).toFixed(2)}
                   </Typography>
                 </Grid>
               </Grid>

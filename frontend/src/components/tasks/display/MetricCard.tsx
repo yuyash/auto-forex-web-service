@@ -107,7 +107,7 @@ export const MetricCard: React.FC<MetricCardProps> = React.memo(
             {icon && (
               <Box
                 sx={{
-                  ...getColorStyles(),
+                  ...getColorStyles,
                   borderRadius: 1,
                   p: 0.5,
                   display: 'flex',

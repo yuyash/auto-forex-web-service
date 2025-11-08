@@ -2,12 +2,12 @@ import {
   Box,
   Paper,
   Typography,
-  Grid,
   Chip,
   Divider,
   Button,
   Alert,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import {
   Edit as EditIcon,
   OpenInNew as OpenInNewIcon,
@@ -71,7 +71,7 @@ export function TradingTaskConfigTab({ task }: TradingTaskConfigTabProps) {
         {config ? (
           <>
             <Grid container spacing={2} sx={{ mb: 2 }}>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Typography variant="body2" color="text.secondary">
                   Configuration Name
                 </Typography>
@@ -80,7 +80,7 @@ export function TradingTaskConfigTab({ task }: TradingTaskConfigTabProps) {
                 </Typography>
               </Grid>
 
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Typography variant="body2" color="text.secondary">
                   Strategy Type
                 </Typography>
@@ -93,7 +93,7 @@ export function TradingTaskConfigTab({ task }: TradingTaskConfigTabProps) {
               </Grid>
 
               {config.description && (
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <Typography variant="body2" color="text.secondary">
                     Description
                   </Typography>
@@ -137,7 +137,7 @@ export function TradingTaskConfigTab({ task }: TradingTaskConfigTabProps) {
         </Typography>
 
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Task Name
             </Typography>
@@ -146,7 +146,7 @@ export function TradingTaskConfigTab({ task }: TradingTaskConfigTabProps) {
             </Typography>
           </Grid>
 
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Trading Account
             </Typography>
@@ -156,7 +156,7 @@ export function TradingTaskConfigTab({ task }: TradingTaskConfigTabProps) {
           </Grid>
 
           {task.description && (
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Typography variant="body2" color="text.secondary">
                 Description
               </Typography>
@@ -164,7 +164,7 @@ export function TradingTaskConfigTab({ task }: TradingTaskConfigTabProps) {
             </Grid>
           )}
 
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Created At
             </Typography>
@@ -173,7 +173,7 @@ export function TradingTaskConfigTab({ task }: TradingTaskConfigTabProps) {
             </Typography>
           </Grid>
 
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Last Updated
             </Typography>

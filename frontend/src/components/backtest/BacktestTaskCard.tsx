@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 import {
   Card,
   CardContent,
@@ -6,9 +7,9 @@ import {
   Typography,
   Chip,
   IconButton,
-  Grid,
   Tooltip,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import {
   PlayArrow as PlayIcon,
   Stop as StopIcon,
@@ -205,7 +206,7 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
           currentTask.latest_execution && (
             <Grid container spacing={2} sx={{ mt: 1 }}>
               {currentTask.latest_execution.total_return && (
-                <Grid item xs={6} sm={3}>
+                <Grid size={{ xs: 6, sm: 3 }}>
                   <MetricCard
                     title="Total Return"
                     value={`${currentTask.latest_execution.total_return}%`}
@@ -218,7 +219,7 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
                 </Grid>
               )}
               {currentTask.latest_execution.win_rate && (
-                <Grid item xs={6} sm={3}>
+                <Grid size={{ xs: 6, sm: 3 }}>
                   <MetricCard
                     title="Win Rate"
                     value={`${currentTask.latest_execution.win_rate}%`}
@@ -226,7 +227,7 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
                 </Grid>
               )}
               {currentTask.latest_execution.total_trades !== undefined && (
-                <Grid item xs={6} sm={3}>
+                <Grid size={{ xs: 6, sm: 3 }}>
                   <MetricCard
                     title="Total Trades"
                     value={currentTask.latest_execution.total_trades.toString()}

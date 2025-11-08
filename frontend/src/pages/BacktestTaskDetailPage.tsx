@@ -19,7 +19,13 @@ import {
   MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import { useBacktestTask } from '../hooks/useBacktestTasks';
-import { useBacktestTaskMutations } from '../hooks/useBacktestTaskMutations';
+import {
+  useStartBacktestTask,
+  useStopBacktestTask,
+  useCopyBacktestTask,
+  useDeleteBacktestTask,
+  useRerunBacktestTask,
+} from '../hooks/useBacktestTaskMutations';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
 import { TaskOverviewTab } from '../components/backtest/detail/TaskOverviewTab';
@@ -70,8 +76,12 @@ export default function BacktestTaskDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const { data: task, isLoading, error } = useBacktestTask(taskId);
-  const { startTask, stopTask, rerunTask, copyTask, deleteTask } =
-    useBacktestTaskMutations();
+
+  const startTask = useStartBacktestTask();
+  const stopTask = useStopBacktestTask();
+  const rerunTask = useRerunBacktestTask();
+  const copyTask = useCopyBacktestTask();
+  const deleteTask = useDeleteBacktestTask();
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -114,15 +124,16 @@ export default function BacktestTaskDetailPage() {
     handleMenuClose();
   };
 
-  const handleCopyConfirm = (newName: string) => {
-    copyTask.mutate(
-      { taskId, newName },
-      {
-        onSuccess: (newTask) => {
-          navigate(`/backtest-tasks/${newTask.id}`);
-        },
-      }
-    );
+  const handleCopyConfirm = async (newName: string) => {
+    try {
+      const newTask = await copyTask.mutate({
+        id: taskId,
+        data: { new_name: newName },
+      });
+      navigate(`/backtest-tasks/${newTask.id}`);
+    } catch {
+      // Error handled by mutation hook
+    }
   };
 
   const handleDelete = () => {
@@ -130,12 +141,13 @@ export default function BacktestTaskDetailPage() {
     handleMenuClose();
   };
 
-  const handleDeleteConfirm = () => {
-    deleteTask.mutate(taskId, {
-      onSuccess: () => {
-        navigate('/backtest-tasks');
-      },
-    });
+  const handleDeleteConfirm = async () => {
+    try {
+      await deleteTask.mutate(taskId);
+      navigate('/backtest-tasks');
+    } catch {
+      // Error handled by mutation hook
+    }
   };
 
   if (isLoading) {
@@ -273,18 +285,18 @@ export default function BacktestTaskDetailPage() {
       <CopyTaskDialog
         open={copyDialogOpen}
         taskName={task.name}
-        onClose={() => setCopyDialogOpen(false)}
+        onCancel={() => setCopyDialogOpen(false)}
         onConfirm={handleCopyConfirm}
-        isLoading={copyTask.isPending}
+        isLoading={copyTask.isLoading}
       />
 
       <DeleteTaskDialog
         open={deleteDialogOpen}
         taskName={task.name}
-        taskType="backtest"
-        onClose={() => setDeleteDialogOpen(false)}
+        taskStatus={task.status}
+        onCancel={() => setDeleteDialogOpen(false)}
         onConfirm={handleDeleteConfirm}
-        isLoading={deleteTask.isPending}
+        isLoading={deleteTask.isLoading}
       />
     </Container>
   );

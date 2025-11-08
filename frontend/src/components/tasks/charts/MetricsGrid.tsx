@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box } from '@mui/material';
+
 import { MetricCard } from '../display/MetricCard';
 import {
   TrendingUp,

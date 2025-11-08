@@ -22,8 +22,8 @@ export const backtestTaskSchema = z
       .max(255, 'Name must be less than 255 characters'),
     description: z.string().optional(),
     data_source: z.nativeEnum(DataSource),
-    start_time: z.date({ message: 'Start date is required' }),
-    end_time: z.date({ message: 'End date is required' }),
+    start_time: z.string().min(1, 'Start date is required'),
+    end_time: z.string().min(1, 'End date is required'),
     initial_balance: z
       .number()
       .positive('Initial balance must be greater than zero')

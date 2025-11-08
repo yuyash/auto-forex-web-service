@@ -1,14 +1,13 @@
-import React from 'react';
 import {
   Box,
   Paper,
   Typography,
   Alert,
-  Grid,
   Divider,
   Button,
   CircularProgress,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { Download as DownloadIcon } from '@mui/icons-material';
 import { MetricsGrid } from '../../tasks/charts/MetricsGrid';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
@@ -208,7 +207,7 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
           </Typography>
 
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Total P&L
@@ -222,7 +221,7 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
               </Box>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Average P&L per Trade
@@ -236,7 +235,7 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
               </Box>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Average Win
@@ -247,7 +246,7 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
               </Box>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Average Loss
@@ -258,7 +257,7 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
               </Box>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Largest Win
@@ -269,7 +268,7 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
               </Box>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Largest Loss

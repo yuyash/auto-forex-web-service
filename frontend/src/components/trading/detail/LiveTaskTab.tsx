@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react';
+
 import {
   Box,
-  Grid,
   Paper,
   Typography,
   Button,
   CircularProgress,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { MetricCard } from '../../tasks/display/MetricCard';
 import { OpenPositionsTable } from './OpenPositionsTable';
 import { RecentTradesLog } from './RecentTradesLog';
-import { TradingTask } from '../../../types/tradingTask';
+import { type TradingTask } from '../../../types/tradingTask';
 import { TaskStatus } from '../../../types/common';
 
 interface LiveTaskTabProps {
@@ -67,9 +68,9 @@ export function LiveTaskTab({ task }: LiveTaskTabProps) {
 
   // Mock data - in real implementation, this would come from API
   const liveMetrics = {
-    currentPnL: task.latest_execution?.metrics?.total_pnl || '0.00',
+    currentPnL: '0.00', // Would come from task.latest_execution
     openPositions: 2, // Mock value
-    totalTrades: task.latest_execution?.metrics?.total_trades || 0,
+    totalTrades: 0, // Would come from task.latest_execution
     uptime: calculateUptime(),
   };
 
@@ -115,7 +116,7 @@ export function LiveTaskTab({ task }: LiveTaskTabProps) {
 
       {/* Live Metrics Dashboard */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard
             title="Current P&L"
             value={`$${parseFloat(liveMetrics.currentPnL).toFixed(2)}`}
@@ -125,21 +126,21 @@ export function LiveTaskTab({ task }: LiveTaskTabProps) {
             }
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard
             title="Open Positions"
             value={liveMetrics.openPositions.toString()}
             color="info"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard
             title="Total Trades"
             value={liveMetrics.totalTrades.toString()}
             color="primary"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard
             title="Uptime"
             value={liveMetrics.uptime}

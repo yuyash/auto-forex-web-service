@@ -27,7 +27,7 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    expect(screen.getByText('Application Error')).toBeInTheDocument();
     expect(screen.getByText('Test error')).toBeInTheDocument();
 
     console.error = originalError;

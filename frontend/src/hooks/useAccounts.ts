@@ -1,6 +1,6 @@
 // React Query hooks for accounts
 import { useQuery } from '@tanstack/react-query';
-import { accountsApi, AccountListParams } from '../services/api/accounts';
+import { accountsApi, type AccountListParams } from '../services/api/accounts';
 
 // Query keys
 export const accountKeys = {

@@ -23,12 +23,12 @@ export const accountsApi = {
         params,
       }
     );
-    return response.data;
+    return response;
   },
 
   // Get a single account by ID
   get: async (id: number): Promise<Account> => {
     const response = await apiClient.get<Account>(`/api/accounts/${id}/`);
-    return response.data;
+    return response;
   },
 };

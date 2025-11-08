@@ -15,13 +15,14 @@ import {
 } from '@mui/icons-material';
 import { useBacktestTasks } from '../../hooks/useBacktestTasks';
 import { StatusBadge } from '../tasks/display/StatusBadge';
+import { TaskStatus } from '../../types/common';
 
 const RecentBacktestsWidget = () => {
   const navigate = useNavigate();
 
   // Fetch recent completed backtest tasks
   const { data, isLoading } = useBacktestTasks({
-    status: 'completed',
+    status: TaskStatus.COMPLETED,
     ordering: '-updated_at',
     page: 1,
     page_size: 5,
@@ -94,7 +95,7 @@ const RecentBacktestsWidget = () => {
                   }}
                 >
                   <Typography variant="caption" color="text.secondary">
-                    {task.config.name}
+                    {task.config_name || task.name}
                   </Typography>
                   <Typography
                     variant="caption"

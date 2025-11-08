@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 import {
   FormControl,
   InputLabel,
@@ -10,10 +11,10 @@ import {
   Card,
   CardContent,
   CardActionArea,
-  Grid,
   Chip,
   type SelectChangeEvent,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { useTranslation } from 'react-i18next';
 import type { Strategy } from '../../types/strategy';
 
@@ -81,7 +82,7 @@ const StrategySelector = ({
             const isHovered = strategy.id === hoveredCard;
 
             return (
-              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={strategy.id}>
+              <Grid key={strategy.id} size={{ xs: 12, sm: 6, md: 4 }}>
                 <Card
                   sx={{
                     height: '100%',

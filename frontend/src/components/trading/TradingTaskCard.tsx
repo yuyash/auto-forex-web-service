@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+
 import {
   Card,
   CardContent,
@@ -6,10 +7,10 @@ import {
   Typography,
   Chip,
   IconButton,
-  Grid,
   Tooltip,
   Alert,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import {
   PlayArrow as PlayIcon,
   Stop as StopIcon,
@@ -302,21 +303,21 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
         {(currentTask.status === TaskStatus.RUNNING ||
           currentTask.status === TaskStatus.PAUSED) && (
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={6} sm={4}>
+            <Grid size={{ xs: 6, sm: 4 }}>
               <MetricCard
                 title="Live P&L"
                 value={`$${mockPnL.toFixed(2)}`}
                 color={mockPnL >= 0 ? 'success' : 'error'}
               />
             </Grid>
-            <Grid item xs={6} sm={4}>
+            <Grid size={{ xs: 6, sm: 4 }}>
               <MetricCard
                 title="Open Positions"
                 value={mockOpenPositions.toString()}
               />
             </Grid>
             {currentTask.latest_execution?.total_trades !== undefined && (
-              <Grid item xs={6} sm={4}>
+              <Grid size={{ xs: 6, sm: 4 }}>
                 <MetricCard
                   title="Total Trades"
                   value={currentTask.latest_execution.total_trades.toString()}
@@ -332,7 +333,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
           currentTask.latest_execution && (
             <Grid container spacing={2} sx={{ mt: 1 }}>
               {currentTask.latest_execution.total_return && (
-                <Grid item xs={6} sm={3}>
+                <Grid size={{ xs: 6, sm: 3 }}>
                   <MetricCard
                     title="Total Return"
                     value={`${currentTask.latest_execution.total_return}%`}
@@ -345,7 +346,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
                 </Grid>
               )}
               {currentTask.latest_execution.win_rate && (
-                <Grid item xs={6} sm={3}>
+                <Grid size={{ xs: 6, sm: 3 }}>
                   <MetricCard
                     title="Win Rate"
                     value={`${currentTask.latest_execution.win_rate}%`}
@@ -353,7 +354,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
                 </Grid>
               )}
               {currentTask.latest_execution.total_trades !== undefined && (
-                <Grid item xs={6} sm={3}>
+                <Grid size={{ xs: 6, sm: 3 }}>
                   <MetricCard
                     title="Total Trades"
                     value={currentTask.latest_execution.total_trades.toString()}

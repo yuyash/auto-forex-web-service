@@ -1,7 +1,7 @@
 import { useState } from 'react';
+
 import {
   Box,
-  Grid,
   Paper,
   Typography,
   Alert,
@@ -12,6 +12,7 @@ import {
   CircularProgress,
   type SelectChangeEvent,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { MetricCard } from '../../tasks/display/MetricCard';
 import { EquityCurveChart } from '../../tasks/charts/EquityCurveChart';
 import type { BacktestTask } from '../../../types/backtestTask';
@@ -145,7 +146,7 @@ export function TaskOverviewTab({ task }: TaskOverviewTabProps) {
     <Box sx={{ px: 3 }}>
       {/* Key Metrics Grid */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard
             title="Total Return"
             value={`${parseFloat(metrics.total_return).toFixed(2)}%`}
@@ -154,7 +155,7 @@ export function TaskOverviewTab({ task }: TaskOverviewTabProps) {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard
             title="Win Rate"
             value={`${parseFloat(metrics.win_rate).toFixed(2)}%`}
@@ -163,7 +164,7 @@ export function TaskOverviewTab({ task }: TaskOverviewTabProps) {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard
             title="Total Trades"
             value={metrics.total_trades.toString()}
@@ -172,7 +173,7 @@ export function TaskOverviewTab({ task }: TaskOverviewTabProps) {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard
             title="Max Drawdown"
             value={`${parseFloat(metrics.max_drawdown).toFixed(2)}%`}
@@ -224,7 +225,7 @@ export function TaskOverviewTab({ task }: TaskOverviewTabProps) {
 
           <Grid container spacing={3}>
             {metrics.sharpe_ratio && (
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
                     Sharpe Ratio
@@ -237,7 +238,7 @@ export function TaskOverviewTab({ task }: TaskOverviewTabProps) {
             )}
 
             {metrics.profit_factor && (
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
                     Profit Factor
@@ -250,7 +251,7 @@ export function TaskOverviewTab({ task }: TaskOverviewTabProps) {
             )}
 
             {metrics.average_win && (
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
                     Average Win
@@ -263,7 +264,7 @@ export function TaskOverviewTab({ task }: TaskOverviewTabProps) {
             )}
 
             {metrics.average_loss && (
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
                     Average Loss
@@ -275,7 +276,7 @@ export function TaskOverviewTab({ task }: TaskOverviewTabProps) {
               </Grid>
             )}
 
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Winning Trades
@@ -286,7 +287,7 @@ export function TaskOverviewTab({ task }: TaskOverviewTabProps) {
               </Box>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Losing Trades

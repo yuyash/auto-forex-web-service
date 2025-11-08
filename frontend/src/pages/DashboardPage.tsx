@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+
 import {
   Container,
   Typography,
@@ -18,8 +19,8 @@ import {
   FormControlLabel,
   IconButton,
   Tooltip,
-  Grid,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import type { SelectChangeEvent } from '@mui/material';
 import { useTranslation } from 'react-i18next';
@@ -335,13 +336,13 @@ const DashboardPage = () => {
 
       {/* Task Widgets */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <ActiveTasksWidget />
         </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <RecentBacktestsWidget />
         </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <QuickActionsWidget />
         </Grid>
       </Grid>

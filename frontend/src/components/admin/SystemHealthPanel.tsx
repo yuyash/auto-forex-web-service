@@ -1,12 +1,7 @@
 import React from 'react';
-import {
-  Paper,
-  Typography,
-  Box,
-  Grid,
-  Chip,
-  LinearProgress,
-} from '@mui/material';
+
+import { Paper, Typography, Box, Chip, LinearProgress } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import {
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,

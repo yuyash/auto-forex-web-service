@@ -5,10 +5,10 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
 interface DateRangePickerProps {
-  startDate: Date | null;
-  endDate: Date | null;
-  onStartDateChange: (date: Date | null) => void;
-  onEndDateChange: (date: Date | null) => void;
+  startDate: Date | string | null;
+  endDate: Date | string | null;
+  onStartDateChange: (date: Date | string | null) => void;
+  onEndDateChange: (date: Date | string | null) => void;
   startLabel?: string;
   endLabel?: string;
   required?: boolean;
@@ -33,32 +33,49 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   minDate,
   maxDate,
 }) => {
+  // Convert string to Date if needed
+  const toDate = (value: Date | string | null): Date | null => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    return new Date(value);
+  };
+
+  const startDateValue = toDate(startDate);
+  const endDateValue = toDate(endDate);
+
+  const handleStartChange = (date: Date | null) => {
+    onStartDateChange(date ? date.toISOString() : null);
+  };
+
+  const handleEndChange = (date: Date | null) => {
+    onEndDateChange(date ? date.toISOString() : null);
+  };
   // Validation
   const startError = React.useMemo(() => {
-    if (!startDate && required) {
+    if (!startDateValue && required) {
       return 'Start date is required';
     }
-    if (startDate && endDate && startDate >= endDate) {
+    if (startDateValue && endDateValue && startDateValue >= endDateValue) {
       return 'Start date must be before end date';
     }
-    if (startDate && maxDate && startDate > maxDate) {
+    if (startDateValue && maxDate && startDateValue > maxDate) {
       return `Start date must be before ${maxDate.toLocaleDateString()}`;
     }
     return null;
-  }, [startDate, endDate, required, maxDate]);
+  }, [startDateValue, endDateValue, required, maxDate]);
 
   const endError = React.useMemo(() => {
-    if (!endDate && required) {
+    if (!endDateValue && required) {
       return 'End date is required';
     }
-    if (startDate && endDate && endDate <= startDate) {
+    if (startDateValue && endDateValue && endDateValue <= startDateValue) {
       return 'End date must be after start date';
     }
-    if (endDate && minDate && endDate < minDate) {
+    if (endDateValue && minDate && endDateValue < minDate) {
       return `End date must be after ${minDate.toLocaleDateString()}`;
     }
     return null;
-  }, [startDate, endDate, required, minDate]);
+  }, [startDateValue, endDateValue, required, minDate]);
 
   const hasError = !!error || !!startError || !!endError;
   const displayError = error || startError || endError;
@@ -70,11 +87,11 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           <Box sx={{ flex: 1, minWidth: 250 }}>
             <DateTimePicker
               label={startLabel}
-              value={startDate}
-              onChange={onStartDateChange}
+              value={startDateValue}
+              onChange={handleStartChange}
               disabled={disabled}
               minDate={minDate}
-              maxDate={endDate || maxDate}
+              maxDate={endDateValue || maxDate}
               slotProps={{
                 textField: {
                   required,
@@ -87,10 +104,10 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           <Box sx={{ flex: 1, minWidth: 250 }}>
             <DateTimePicker
               label={endLabel}
-              value={endDate}
-              onChange={onEndDateChange}
+              value={endDateValue}
+              onChange={handleEndChange}
               disabled={disabled}
-              minDate={startDate || minDate}
+              minDate={startDateValue || minDate}
               maxDate={maxDate}
               slotProps={{
                 textField: {
@@ -110,9 +127,9 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         {!hasError && helperText && (
           <FormHelperText sx={{ mt: -1 }}>{helperText}</FormHelperText>
         )}
-        {!hasError && !helperText && startDate && endDate && (
+        {!hasError && !helperText && startDateValue && endDateValue && (
           <FormHelperText sx={{ mt: -1 }}>
-            Duration: {calculateDuration(startDate, endDate)}
+            Duration: {calculateDuration(startDateValue, endDateValue)}
           </FormHelperText>
         )}
       </Box>

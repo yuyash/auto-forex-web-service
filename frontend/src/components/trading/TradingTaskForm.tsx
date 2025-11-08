@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 import {
   Box,
   Stepper,
@@ -8,7 +9,6 @@ import {
   Typography,
   Paper,
   TextField,
-  Grid,
   Alert,
   FormControl,
   InputLabel,
@@ -19,18 +19,22 @@ import {
   FormControlLabel,
   Chip,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { Warning as WarningIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
-import { TradingTaskCreateData } from '../../types/tradingTask';
+import { type TradingTaskCreateData } from '../../types/tradingTask';
 import {
   useCreateTradingTask,
   useUpdateTradingTask,
 } from '../../hooks/useTradingTaskMutations';
-import { useConfiguration } from '../../hooks/useConfigurations';
+import {
+  useConfiguration,
+  useConfigurations,
+} from '../../hooks/useConfigurations';
 import { useAccounts, useAccount } from '../../hooks/useAccounts';
 import { useTradingTasks } from '../../hooks/useTradingTasks';
 import { TaskStatus } from '../../types/common';
@@ -90,10 +94,12 @@ export default function TradingTaskForm({
     enabled: selectedAccountId > 0,
   });
 
+  // Fetch all configurations
+  const { data: configurationsData } = useConfigurations({ page_size: 100 });
+  const configurations = configurationsData?.results || [];
+
   // Fetch selected configuration
-  const { data: selectedConfig } = useConfiguration(selectedConfigId, {
-    enabled: selectedConfigId > 0,
-  });
+  const { data: selectedConfig } = useConfiguration(selectedConfigId || 0);
 
   // Check if account already has an active task
   const { data: existingTasks } = useTradingTasks({
@@ -164,7 +170,7 @@ export default function TradingTaskForm({
             </Typography>
 
             <Grid container spacing={3}>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Controller
                   name="account_id"
                   control={control}
@@ -197,7 +203,7 @@ export default function TradingTaskForm({
               </Grid>
 
               {selectedAccount && (
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <Alert severity="info">
                     <Typography variant="subtitle2" gutterBottom>
                       Account Details
@@ -229,7 +235,7 @@ export default function TradingTaskForm({
               )}
 
               {hasActiveTask && (
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <Alert severity="warning" icon={<WarningIcon />}>
                     <Typography variant="subtitle2" gutterBottom>
                       Active Task Detected
@@ -260,15 +266,16 @@ export default function TradingTaskForm({
             </Typography>
 
             <Grid container spacing={3}>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Controller
                   name="config_id"
                   control={control}
                   render={({ field }) => (
                     <ConfigurationSelector
+                      configurations={configurations}
                       value={field.value}
                       onChange={field.onChange}
-                      error={!!errors.config_id}
+                      error={errors.config_id?.message}
                       helperText={errors.config_id?.message}
                     />
                   )}
@@ -276,7 +283,7 @@ export default function TradingTaskForm({
               </Grid>
 
               {selectedConfig && (
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <Alert severity="info">
                     <Typography variant="subtitle2" gutterBottom>
                       Configuration Preview
@@ -292,7 +299,7 @@ export default function TradingTaskForm({
                 </Grid>
               )}
 
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Controller
                   name="name"
                   control={control}
@@ -309,7 +316,7 @@ export default function TradingTaskForm({
                 />
               </Grid>
 
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Controller
                   name="description"
                   control={control}
@@ -341,7 +348,7 @@ export default function TradingTaskForm({
             </Typography>
 
             <Grid container spacing={3}>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="subtitle1" gutterBottom>
                     Task Summary
@@ -388,7 +395,7 @@ export default function TradingTaskForm({
                 </Paper>
               </Grid>
 
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Alert severity="error" icon={<WarningIcon />}>
                   <Typography variant="subtitle2" gutterBottom>
                     <strong>RISK WARNING</strong>
@@ -414,7 +421,7 @@ export default function TradingTaskForm({
                 </Alert>
               </Grid>
 
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Controller
                   name="risk_acknowledged"
                   control={control}

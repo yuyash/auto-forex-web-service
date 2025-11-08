@@ -4,11 +4,11 @@ import {
   Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
   ReferenceLine,
+  CartesianGrid,
 } from 'recharts';
 import {
   Box,
@@ -17,6 +17,7 @@ import {
   IconButton,
   Tooltip as MuiTooltip,
 } from '@mui/material';
+
 import DownloadIcon from '@mui/icons-material/Download';
 import { format } from 'date-fns';
 

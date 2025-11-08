@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
-import { Container, Typography, Box, Grid } from '@mui/material';
+
+import { Container, Typography, Box } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Breadcrumbs } from '../components/common';

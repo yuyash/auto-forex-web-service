@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
+
 import {
   Typography,
   Box,
   Alert,
   CircularProgress,
-  Grid,
   Button,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';

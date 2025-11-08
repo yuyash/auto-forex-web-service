@@ -2,12 +2,12 @@ import {
   Box,
   Paper,
   Typography,
-  Grid,
   Chip,
   Divider,
   Button,
   Alert,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import {
   Edit as EditIcon,
   OpenInNew as OpenInNewIcon,
@@ -74,7 +74,7 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
         </Box>
 
         <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Configuration Name
             </Typography>
@@ -83,7 +83,7 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
             </Typography>
           </Grid>
 
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Strategy Type
             </Typography>
@@ -93,7 +93,7 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
           </Grid>
 
           {config?.description && (
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Typography variant="body2" color="text.secondary">
                 Description
               </Typography>
@@ -138,7 +138,7 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
           <>
             <Divider sx={{ my: 3 }} />
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Typography variant="body2" color="text.secondary">
                   Configuration Created
                 </Typography>
@@ -147,7 +147,7 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
                 </Typography>
               </Grid>
 
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Typography variant="body2" color="text.secondary">
                   Last Updated
                 </Typography>
@@ -167,7 +167,7 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
         </Typography>
 
         <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Task Name
             </Typography>
@@ -176,7 +176,7 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
             </Typography>
           </Grid>
 
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Data Source
             </Typography>
@@ -189,7 +189,7 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
           </Grid>
 
           {task.description && (
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Typography variant="body2" color="text.secondary">
                 Task Description
               </Typography>
@@ -197,7 +197,7 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
             </Grid>
           )}
 
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Backtest Period Start
             </Typography>
@@ -206,14 +206,14 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
             </Typography>
           </Grid>
 
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Backtest Period End
             </Typography>
             <Typography variant="body1">{formatDate(task.end_time)}</Typography>
           </Grid>
 
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Initial Balance
             </Typography>
@@ -222,7 +222,7 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
             </Typography>
           </Grid>
 
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Commission per Trade
             </Typography>
@@ -231,7 +231,7 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
             </Typography>
           </Grid>
 
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               Instruments
             </Typography>
@@ -251,7 +251,7 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
         <Divider sx={{ my: 3 }} />
 
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Task Created
             </Typography>
@@ -260,7 +260,7 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
             </Typography>
           </Grid>
 
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="body2" color="text.secondary">
               Last Updated
             </Typography>

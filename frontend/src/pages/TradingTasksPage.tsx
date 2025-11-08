@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 import {
   Box,
   Container,
@@ -13,11 +14,11 @@ import {
   FormControl,
   InputLabel,
   Paper,
-  Grid,
   Pagination,
   Alert,
   AlertTitle,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import {
   Add as AddIcon,
   Search as SearchIcon,
@@ -108,15 +109,15 @@ export default function TradingTasksPage() {
     setPage(1); // Reset to first page when searching
   };
 
-  const handleSortChange = (event: React.ChangeEvent<{ value: unknown }>) => {
-    setSortBy(event.target.value as string);
+  const handleSortChange = (event: { target: { value: string } }) => {
+    setSortBy(event.target.value);
     setPage(1);
   };
 
-  const handleConfigFilterChange = (
-    event: React.ChangeEvent<{ value: unknown }>
-  ) => {
-    setConfigFilter(event.target.value as number | '');
+  const handleConfigFilterChange = (event: {
+    target: { value: number | '' };
+  }) => {
+    setConfigFilter(event.target.value);
     setPage(1);
   };
 
@@ -186,7 +187,7 @@ export default function TradingTasksPage() {
         {/* Filters */}
         <Paper sx={{ p: 2, mb: 3 }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <TextField
                 fullWidth
                 placeholder="Search tasks..."
@@ -201,7 +202,7 @@ export default function TradingTasksPage() {
                 }}
               />
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <FormControl fullWidth>
                 <InputLabel>Configuration</InputLabel>
                 <Select
@@ -218,7 +219,7 @@ export default function TradingTasksPage() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <FormControl fullWidth>
                 <InputLabel>Sort By</InputLabel>
                 <Select
@@ -269,7 +270,7 @@ export default function TradingTasksPage() {
             <>
               <Grid container spacing={3}>
                 {data.results.map((task) => (
-                  <Grid item xs={12} key={task.id}>
+                  <Grid size={{ xs: 12 }} key={task.id}>
                     <TradingTaskCard task={task} />
                   </Grid>
                 ))}
@@ -310,7 +311,7 @@ export default function TradingTasksPage() {
             <>
               <Grid container spacing={3}>
                 {data.results.map((task) => (
-                  <Grid item xs={12} key={task.id}>
+                  <Grid size={{ xs: 12 }} key={task.id}>
                     <TradingTaskCard task={task} />
                   </Grid>
                 ))}
@@ -351,7 +352,7 @@ export default function TradingTasksPage() {
             <>
               <Grid container spacing={3}>
                 {data.results.map((task) => (
-                  <Grid item xs={12} key={task.id}>
+                  <Grid size={{ xs: 12 }} key={task.id}>
                     <TradingTaskCard task={task} />
                   </Grid>
                 ))}
@@ -392,7 +393,7 @@ export default function TradingTasksPage() {
             <>
               <Grid container spacing={3}>
                 {data.results.map((task) => (
-                  <Grid item xs={12} key={task.id}>
+                  <Grid size={{ xs: 12 }} key={task.id}>
                     <TradingTaskCard task={task} />
                   </Grid>
                 ))}

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
+
 import {
   Box,
   Card,
   CardContent,
   Typography,
-  Grid,
   Paper,
   Alert,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { useTranslation } from 'react-i18next';
 import { createChart, type IChartApi, type Time } from 'lightweight-charts';
 import type { BacktestResult } from '../../types/backtest';
