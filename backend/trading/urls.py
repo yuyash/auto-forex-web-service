@@ -8,6 +8,15 @@ Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 12.1, 12.2, 12.4, 12.5
 
 from django.urls import path
 
+from .backtest_task_views import (  # noqa: E501
+    BacktestTaskCopyView,
+    BacktestTaskDetailView,
+    BacktestTaskExecutionsView,
+    BacktestTaskListCreateView,
+    BacktestTaskRerunView,
+    BacktestTaskStartView,
+    BacktestTaskStopView,
+)
 from .backtest_views import BacktestListCreateView, BacktestResultsView, BacktestStatusView
 from .candle_views import CandleDataView
 from .event_views import EventDetailView, EventExportView, EventListView
@@ -98,7 +107,7 @@ urlpatterns = [
         AccountStrategyConfigView.as_view(),
         name="account_strategy_config",
     ),
-    # Backtest endpoints
+    # Backtest endpoints (legacy)
     path("backtest/", BacktestListCreateView.as_view(), name="backtest_list_create"),
     path("backtest/start/", BacktestListCreateView.as_view(), name="backtest_start"),
     path(
@@ -110,6 +119,42 @@ urlpatterns = [
         "backtest/<int:backtest_id>/results/",
         BacktestResultsView.as_view(),
         name="backtest_results",
+    ),
+    # BacktestTask endpoints (new task-based API)
+    path(
+        "backtest-tasks/",
+        BacktestTaskListCreateView.as_view(),
+        name="backtest_task_list_create",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/",
+        BacktestTaskDetailView.as_view(),
+        name="backtest_task_detail",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/copy/",
+        BacktestTaskCopyView.as_view(),
+        name="backtest_task_copy",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/start/",
+        BacktestTaskStartView.as_view(),
+        name="backtest_task_start",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/stop/",
+        BacktestTaskStopView.as_view(),
+        name="backtest_task_stop",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/rerun/",
+        BacktestTaskRerunView.as_view(),
+        name="backtest_task_rerun",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/executions/",
+        BacktestTaskExecutionsView.as_view(),
+        name="backtest_task_executions",
     ),
     # Strategy comparison endpoints
     path("strategies/compare/", StrategyCompareView.as_view(), name="strategy_compare"),
