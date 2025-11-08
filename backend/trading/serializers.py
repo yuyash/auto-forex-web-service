@@ -14,6 +14,7 @@ from rest_framework import serializers
 
 from .backtest_models import Backtest, BacktestResult
 from .event_models import Event
+from .execution_models import ExecutionMetrics, TaskExecution
 from .models import Order, Position, Strategy, StrategyConfig, StrategyState
 from .tick_data_models import TickData
 
@@ -808,3 +809,117 @@ class BacktestStatusSerializer(serializers.Serializer):  # pylint: disable=abstr
     duration = serializers.CharField(help_text="Backtest duration")
     is_running = serializers.BooleanField(help_text="Whether backtest is currently running")
     is_completed = serializers.BooleanField(help_text="Whether backtest has completed")
+
+
+class ExecutionMetricsSerializer(serializers.ModelSerializer):
+    """
+    Serializer for execution metrics.
+
+    Provides read-only access to performance metrics for completed executions.
+
+    Requirements: 7.1, 7.6, 8.7
+    """
+
+    trade_summary = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ExecutionMetrics
+        fields = [
+            "id",
+            "execution_id",
+            "total_return",
+            "total_pnl",
+            "total_trades",
+            "winning_trades",
+            "losing_trades",
+            "win_rate",
+            "max_drawdown",
+            "sharpe_ratio",
+            "profit_factor",
+            "average_win",
+            "average_loss",
+            "equity_curve",
+            "trade_log",
+            "trade_summary",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_trade_summary(self, obj: ExecutionMetrics) -> dict:
+        """Get trade summary statistics."""
+        return obj.get_trade_summary()
+
+
+class TaskExecutionSerializer(serializers.ModelSerializer):
+    """
+    Serializer for task execution.
+
+    Provides access to execution tracking information including status,
+    timing, and error details.
+
+    Requirements: 7.1, 7.6, 8.7
+    """
+
+    duration = serializers.SerializerMethodField()
+    metrics = ExecutionMetricsSerializer(read_only=True, allow_null=True)
+
+    class Meta:
+        model = TaskExecution
+        fields = [
+            "id",
+            "task_type",
+            "task_id",
+            "execution_number",
+            "status",
+            "started_at",
+            "completed_at",
+            "error_message",
+            "error_traceback",
+            "duration",
+            "metrics",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_duration(self, obj: TaskExecution) -> str | None:
+        """Get formatted execution duration."""
+        return obj.get_duration()
+
+
+class TaskExecutionDetailSerializer(serializers.ModelSerializer):
+    """
+    Serializer for detailed task execution view with nested metrics.
+
+    Requirements: 7.1, 7.6, 8.7
+    """
+
+    duration = serializers.SerializerMethodField()
+    metrics = ExecutionMetricsSerializer(read_only=True, allow_null=True)
+    has_metrics = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TaskExecution
+        fields = [
+            "id",
+            "task_type",
+            "task_id",
+            "execution_number",
+            "status",
+            "started_at",
+            "completed_at",
+            "error_message",
+            "error_traceback",
+            "duration",
+            "has_metrics",
+            "metrics",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_duration(self, obj: TaskExecution) -> str | None:
+        """Get formatted execution duration."""
+        return obj.get_duration()
+
+    def get_has_metrics(self, obj: TaskExecution) -> bool:
+        """Check if execution has associated metrics."""
+        return obj.get_metrics() is not None

@@ -26,6 +26,7 @@ from accounts.models import OandaAccount
 from .backtest_models import Backtest, BacktestResult  # noqa: F401
 from .enums import TaskStatus
 from .event_models import Event, Notification  # noqa: F401
+from .execution_models import ExecutionMetrics, TaskExecution  # noqa: F401
 from .tick_data_models import TickData  # noqa: F401
 
 User = get_user_model()
