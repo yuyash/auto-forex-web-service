@@ -1257,3 +1257,288 @@ def _parse_tick_timestamp(time_str: str) -> datetime:
         logger.error("Error parsing timestamp '%s': %s", time_str, e)
         # Fallback to current time
         return timezone.now()
+
+
+@shared_task(
+    bind=True,
+    time_limit=3600,  # 1 hour hard limit
+    soft_time_limit=3300,  # 55 minutes soft limit
+)
+def run_backtest_task_v2(  # type: ignore[no-untyped-def]
+    self,  # pylint: disable=unused-argument
+    task_id: int,
+) -> Dict[str, Any]:
+    """
+    Execute a BacktestTask with resource limits.
+
+    This is the new version that works with the BacktestTask model from
+    the task-based strategy configuration feature.
+
+    This task:
+    1. Creates a TaskExecution record at start
+    2. Updates execution status during processing
+    3. Creates ExecutionMetrics on completion
+    4. Handles rerun logic
+
+    Args:
+        task_id: Primary key of the BacktestTask model instance
+
+    Returns:
+        Dictionary containing:
+            - success: Whether the backtest completed successfully
+            - task_id: BacktestTask ID
+            - execution_id: TaskExecution ID
+            - metrics: Performance metrics (if successful)
+            - error: Error message (if backtest failed)
+
+    Requirements: 4.1, 4.5, 4.6, 7.1, 7.3
+    """
+    from trading.services.task_executor import execute_backtest_task
+
+    logger.info("Starting BacktestTask execution for task_id=%d", task_id)
+
+    try:
+        result = execute_backtest_task(task_id)
+
+        if result["success"]:
+            logger.info(
+                "BacktestTask %d execution completed successfully: execution_id=%d",
+                task_id,
+                result["execution_id"],
+            )
+        else:
+            logger.error(
+                "BacktestTask %d execution failed: %s",
+                task_id,
+                result.get("error"),
+            )
+
+        return result
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"BacktestTask execution failed: {str(e)}"
+        logger.error(
+            "Error in run_backtest_task_v2 for task_id=%d: %s",
+            task_id,
+            error_msg,
+            exc_info=True,
+        )
+
+        return {
+            "success": False,
+            "task_id": task_id,
+            "execution_id": None,
+            "error": error_msg,
+        }
+
+
+@shared_task
+def run_trading_task_v2(task_id: int) -> Dict[str, Any]:
+    """
+    Execute a TradingTask.
+
+    This is the new version that works with the TradingTask model from
+    the task-based strategy configuration feature.
+
+    This task:
+    1. Creates a TaskExecution record at start
+    2. Integrates with existing strategy executor
+    3. Updates execution status during processing
+    4. Creates ExecutionMetrics periodically
+    5. Handles pause/resume logic
+
+    Args:
+        task_id: Primary key of the TradingTask model instance
+
+    Returns:
+        Dictionary containing:
+            - success: Whether the task started successfully
+            - task_id: TradingTask ID
+            - execution_id: TaskExecution ID
+            - account_id: OANDA account ID
+            - instruments: List of instruments to trade
+            - error: Error message (if failed)
+
+    Requirements: 4.2, 4.3, 4.4, 4.5, 7.2, 7.3
+    """
+    from trading.services.task_executor import execute_trading_task
+
+    logger.info("Starting TradingTask execution for task_id=%d", task_id)
+
+    try:
+        result = execute_trading_task(task_id)
+
+        if result["success"]:
+            logger.info(
+                "TradingTask %d execution started successfully: execution_id=%d, account=%s",
+                task_id,
+                result["execution_id"],
+                result.get("account_id"),
+            )
+
+            # Start market data streaming for the account
+            account_id = result.get("account_id")
+            instruments = result.get("instruments", [])
+
+            if account_id and instruments:
+                # Trigger market data streaming
+                start_market_data_stream.delay(account_id, instruments)
+                logger.info(
+                    "Started market data streaming for account %s with instruments: %s",
+                    account_id,
+                    ", ".join(instruments),
+                )
+        else:
+            logger.error(
+                "TradingTask %d execution failed: %s",
+                task_id,
+                result.get("error"),
+            )
+
+        return result
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"TradingTask execution failed: {str(e)}"
+        logger.error(
+            "Error in run_trading_task_v2 for task_id=%d: %s",
+            task_id,
+            error_msg,
+            exc_info=True,
+        )
+
+        return {
+            "success": False,
+            "task_id": task_id,
+            "execution_id": None,
+            "error": error_msg,
+        }
+
+
+@shared_task
+def stop_trading_task_v2(task_id: int) -> Dict[str, Any]:
+    """
+    Stop a running TradingTask.
+
+    Args:
+        task_id: Primary key of the TradingTask model instance
+
+    Returns:
+        Dictionary containing success status and error message if any
+
+    Requirements: 4.3, 7.2, 7.3
+    """
+    from trading.services.task_executor import stop_trading_task_execution
+    from trading.trading_task_models import TradingTask
+
+    logger.info("Stopping TradingTask for task_id=%d", task_id)
+
+    try:
+        # Get the task to find the account
+        task = TradingTask.objects.select_related("account").get(id=task_id)
+
+        # Stop the task execution
+        result = stop_trading_task_execution(task_id)
+
+        if result["success"]:
+            # Stop market data streaming for the account
+            stop_market_data_stream.delay(task.account.id)
+            logger.info(
+                "Stopped market data streaming for account %s",
+                task.account.account_id,
+            )
+
+        return result
+
+    except TradingTask.DoesNotExist:
+        error_msg = f"TradingTask with id {task_id} does not exist"
+        logger.error(error_msg)
+        return {
+            "success": False,
+            "task_id": task_id,
+            "error": error_msg,
+        }
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"Failed to stop TradingTask: {str(e)}"
+        logger.error(
+            "Error in stop_trading_task_v2 for task_id=%d: %s",
+            task_id,
+            error_msg,
+            exc_info=True,
+        )
+        return {
+            "success": False,
+            "task_id": task_id,
+            "error": error_msg,
+        }
+
+
+@shared_task
+def pause_trading_task_v2(task_id: int) -> Dict[str, Any]:
+    """
+    Pause a running TradingTask.
+
+    Args:
+        task_id: Primary key of the TradingTask model instance
+
+    Returns:
+        Dictionary containing success status and error message if any
+
+    Requirements: 4.4, 7.3
+    """
+    from trading.services.task_executor import pause_trading_task_execution
+
+    logger.info("Pausing TradingTask for task_id=%d", task_id)
+
+    try:
+        result = pause_trading_task_execution(task_id)
+        return result
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"Failed to pause TradingTask: {str(e)}"
+        logger.error(
+            "Error in pause_trading_task_v2 for task_id=%d: %s",
+            task_id,
+            error_msg,
+            exc_info=True,
+        )
+        return {
+            "success": False,
+            "task_id": task_id,
+            "error": error_msg,
+        }
+
+
+@shared_task
+def resume_trading_task_v2(task_id: int) -> Dict[str, Any]:
+    """
+    Resume a paused TradingTask.
+
+    Args:
+        task_id: Primary key of the TradingTask model instance
+
+    Returns:
+        Dictionary containing success status and error message if any
+
+    Requirements: 4.4, 7.3
+    """
+    from trading.services.task_executor import resume_trading_task_execution
+
+    logger.info("Resuming TradingTask for task_id=%d", task_id)
+
+    try:
+        result = resume_trading_task_execution(task_id)
+        return result
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"Failed to resume TradingTask: {str(e)}"
+        logger.error(
+            "Error in resume_trading_task_v2 for task_id=%d: %s",
+            task_id,
+            error_msg,
+            exc_info=True,
+        )
+        return {
+            "success": False,
+            "task_id": task_id,
+            "error": error_msg,
+        }
