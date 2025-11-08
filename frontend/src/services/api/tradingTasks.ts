@@ -1,0 +1,125 @@
+// Trading Task API service
+
+import { apiClient } from './client';
+import {
+  TradingTask,
+  TradingTaskCreateData,
+  TradingTaskUpdateData,
+  TradingTaskListParams,
+  TradingTaskCopyData,
+  TaskExecution,
+  PaginatedResponse,
+} from '../../types';
+
+export const tradingTasksApi = {
+  /**
+   * List all trading tasks for the current user
+   */
+  list: (
+    params?: TradingTaskListParams
+  ): Promise<PaginatedResponse<TradingTask>> => {
+    return apiClient.get<PaginatedResponse<TradingTask>>(
+      '/trading-tasks/',
+      params
+    );
+  },
+
+  /**
+   * Get a single trading task by ID
+   */
+  get: (id: number): Promise<TradingTask> => {
+    return apiClient.get<TradingTask>(`/trading-tasks/${id}/`);
+  },
+
+  /**
+   * Create a new trading task
+   */
+  create: (data: TradingTaskCreateData): Promise<TradingTask> => {
+    return apiClient.post<TradingTask>('/trading-tasks/', data);
+  },
+
+  /**
+   * Update an existing trading task
+   */
+  update: (id: number, data: TradingTaskUpdateData): Promise<TradingTask> => {
+    return apiClient.put<TradingTask>(`/trading-tasks/${id}/`, data);
+  },
+
+  /**
+   * Delete a trading task
+   */
+  delete: (id: number): Promise<void> => {
+    return apiClient.delete<void>(`/trading-tasks/${id}/`);
+  },
+
+  /**
+   * Copy a trading task with a new name
+   */
+  copy: (id: number, data: TradingTaskCopyData): Promise<TradingTask> => {
+    return apiClient.post<TradingTask>(`/trading-tasks/${id}/copy/`, data);
+  },
+
+  /**
+   * Start a trading task execution
+   */
+  start: (id: number): Promise<{ execution_id: number; message: string }> => {
+    return apiClient.post<{ execution_id: number; message: string }>(
+      `/trading-tasks/${id}/start/`
+    );
+  },
+
+  /**
+   * Stop a running trading task
+   */
+  stop: (id: number): Promise<{ message: string }> => {
+    return apiClient.post<{ message: string }>(`/trading-tasks/${id}/stop/`);
+  },
+
+  /**
+   * Pause a running trading task
+   */
+  pause: (id: number): Promise<{ message: string }> => {
+    return apiClient.post<{ message: string }>(`/trading-tasks/${id}/pause/`);
+  },
+
+  /**
+   * Resume a paused trading task
+   */
+  resume: (id: number): Promise<{ message: string }> => {
+    return apiClient.post<{ message: string }>(`/trading-tasks/${id}/resume/`);
+  },
+
+  /**
+   * Rerun a trading task from the beginning
+   */
+  rerun: (id: number): Promise<{ execution_id: number; message: string }> => {
+    return apiClient.post<{ execution_id: number; message: string }>(
+      `/trading-tasks/${id}/rerun/`
+    );
+  },
+
+  /**
+   * Get execution history for a trading task
+   */
+  getExecutions: (
+    id: number,
+    params?: { page?: number; page_size?: number }
+  ): Promise<PaginatedResponse<TaskExecution>> => {
+    return apiClient.get<PaginatedResponse<TaskExecution>>(
+      `/trading-tasks/${id}/executions/`,
+      params
+    );
+  },
+
+  /**
+   * Get a specific execution by ID
+   */
+  getExecution: (
+    taskId: number,
+    executionId: number
+  ): Promise<TaskExecution> => {
+    return apiClient.get<TaskExecution>(
+      `/trading-tasks/${taskId}/executions/${executionId}/`
+    );
+  },
+};
