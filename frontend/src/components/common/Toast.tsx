@@ -11,21 +11,31 @@ interface ToastMessage {
 
 interface ToastProviderProps {
   children: ReactNode;
+  maxToasts?: number;
+  defaultDuration?: number;
 }
 
-export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
+export const ToastProvider: React.FC<ToastProviderProps> = ({
+  children,
+  maxToasts = 3,
+  defaultDuration = 6000,
+}) => {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const showToast = useCallback(
     (
       message: string,
       severity: AlertColor = 'info',
-      duration: number = 6000
+      duration: number = defaultDuration
     ) => {
       const id = `toast-${Date.now()}-${Math.random()}`;
-      setToasts((prev) => [...prev, { id, message, severity, duration }]);
+      setToasts((prev) => {
+        const newToasts = [...prev, { id, message, severity, duration }];
+        // Limit the number of toasts displayed
+        return newToasts.slice(-maxToasts);
+      });
     },
-    []
+    [maxToasts, defaultDuration]
   );
 
   const showSuccess = useCallback(
@@ -36,14 +46,16 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
   );
 
   const showError = useCallback(
-    (message: string, duration?: number) => {
+    (message: string, duration: number = 8000) => {
+      // Errors stay longer by default
       showToast(message, 'error', duration);
     },
     [showToast]
   );
 
   const showWarning = useCallback(
-    (message: string, duration?: number) => {
+    (message: string, duration: number = 7000) => {
+      // Warnings stay slightly longer
       showToast(message, 'warning', duration);
     },
     [showToast]
@@ -72,13 +84,21 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
           autoHideDuration={toast.duration}
           onClose={() => handleClose(toast.id)}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-          sx={{ bottom: { xs: 16 + index * 70, sm: 24 + index * 70 } }}
+          sx={{
+            bottom: { xs: 16 + index * 70, sm: 24 + index * 70 },
+            zIndex: (theme) => theme.zIndex.snackbar + index,
+          }}
         >
           <Alert
             onClose={() => handleClose(toast.id)}
             severity={toast.severity}
             variant="filled"
-            sx={{ width: '100%' }}
+            elevation={6}
+            sx={{
+              width: '100%',
+              minWidth: 300,
+              maxWidth: 500,
+            }}
           >
             {toast.message}
           </Alert>
