@@ -29,6 +29,8 @@ import ConfigurationFormPage from './pages/ConfigurationFormPage';
 import BacktestTasksPage from './pages/BacktestTasksPage';
 import BacktestTaskFormPage from './pages/BacktestTaskFormPage';
 import BacktestTaskDetailPage from './pages/BacktestTaskDetailPage';
+import TradingTasksPage from './pages/TradingTasksPage';
+import TradingTaskFormPage from './pages/TradingTaskFormPage';
 
 function AppRoutes() {
   const { isAuthenticated, systemSettings, systemSettingsLoading } = useAuth();
@@ -135,6 +137,12 @@ function AppRoutes() {
           <Route
             path="/backtest-tasks/:id/edit"
             element={<BacktestTaskFormPage />}
+          />
+          <Route path="/trading-tasks" element={<TradingTasksPage />} />
+          <Route path="/trading-tasks/new" element={<TradingTaskFormPage />} />
+          <Route
+            path="/trading-tasks/:id/edit"
+            element={<TradingTaskFormPage />}
           />
           <Route path="/admin" element={<AdminDashboardPage />} />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />
