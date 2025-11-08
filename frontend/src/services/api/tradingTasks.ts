@@ -1,7 +1,7 @@
 // Trading Task API service
 
 import { apiClient } from './client';
-import {
+import type {
   TradingTask,
   TradingTaskCreateData,
   TradingTaskUpdateData,
@@ -20,7 +20,7 @@ export const tradingTasksApi = {
   ): Promise<PaginatedResponse<TradingTask>> => {
     return apiClient.get<PaginatedResponse<TradingTask>>(
       '/trading-tasks/',
-      params
+      params as Record<string, unknown>
     );
   },
 

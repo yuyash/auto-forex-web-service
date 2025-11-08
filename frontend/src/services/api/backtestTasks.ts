@@ -1,7 +1,7 @@
 // Backtest Task API service
 
 import { apiClient } from './client';
-import {
+import type {
   BacktestTask,
   BacktestTaskCreateData,
   BacktestTaskUpdateData,
@@ -20,7 +20,7 @@ export const backtestTasksApi = {
   ): Promise<PaginatedResponse<BacktestTask>> => {
     return apiClient.get<PaginatedResponse<BacktestTask>>(
       '/backtest-tasks/',
-      params
+      params as Record<string, unknown>
     );
   },
 

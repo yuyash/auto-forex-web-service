@@ -1,6 +1,6 @@
 // API Client utility with authentication and error handling
 
-import { ApiError } from '../../types/common';
+import type { ApiError } from '../../types/common';
 
 export class ApiClient {
   private baseURL: string;

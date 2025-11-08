@@ -1,6 +1,6 @@
 // Trading Task types
 import { TaskStatus } from './common';
-import { ExecutionSummary } from './execution';
+import type { ExecutionSummary } from './execution';
 
 export interface TradingTask {
   id: number;

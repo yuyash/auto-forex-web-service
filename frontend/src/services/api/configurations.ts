@@ -1,7 +1,7 @@
 // Strategy Configuration API service
 
 import { apiClient } from './client';
-import {
+import type {
   StrategyConfig,
   StrategyConfigCreateData,
   StrategyConfigUpdateData,
@@ -19,7 +19,7 @@ export const configurationsApi = {
   ): Promise<PaginatedResponse<StrategyConfig>> => {
     return apiClient.get<PaginatedResponse<StrategyConfig>>(
       '/strategy-configs/',
-      params
+      params as Record<string, unknown>
     );
   },
 
