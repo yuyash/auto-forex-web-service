@@ -16,152 +16,155 @@ interface MetricCardProps {
   onClick?: () => void;
 }
 
-export const MetricCard: React.FC<MetricCardProps> = ({
-  title,
-  value,
-  subtitle,
-  icon,
-  trend,
-  trendValue,
-  isLoading = false,
-  color = 'default',
-  onClick,
-}) => {
-  const getTrendColor = () => {
-    if (trend === 'up') return 'success.main';
-    if (trend === 'down') return 'error.main';
-    return 'text.secondary';
-  };
+export const MetricCard: React.FC<MetricCardProps> = React.memo(
+  ({
+    title,
+    value,
+    subtitle,
+    icon,
+    trend,
+    trendValue,
+    isLoading = false,
+    color = 'default',
+    onClick,
+  }) => {
+    const getTrendColor = React.useMemo(() => {
+      if (trend === 'up') return 'success.main';
+      if (trend === 'down') return 'error.main';
+      return 'text.secondary';
+    }, [trend]);
 
-  const getTrendIcon = () => {
-    if (trend === 'up') return <TrendingUpIcon fontSize="small" />;
-    if (trend === 'down') return <TrendingDownIcon fontSize="small" />;
-    return null;
-  };
+    const getTrendIcon = React.useMemo(() => {
+      if (trend === 'up') return <TrendingUpIcon fontSize="small" />;
+      if (trend === 'down') return <TrendingDownIcon fontSize="small" />;
+      return null;
+    }, [trend]);
 
-  const getColorStyles = () => {
-    const colorMap = {
-      primary: { bgcolor: 'primary.light', color: 'primary.main' },
-      success: { bgcolor: 'success.light', color: 'success.main' },
-      error: { bgcolor: 'error.light', color: 'error.main' },
-      warning: { bgcolor: 'warning.light', color: 'warning.main' },
-      info: { bgcolor: 'info.light', color: 'info.main' },
-      default: { bgcolor: 'action.hover', color: 'text.primary' },
-    };
-    return colorMap[color];
-  };
+    const getColorStyles = React.useMemo(() => {
+      const colorMap = {
+        primary: { bgcolor: 'primary.light', color: 'primary.main' },
+        success: { bgcolor: 'success.light', color: 'success.main' },
+        error: { bgcolor: 'error.light', color: 'error.main' },
+        warning: { bgcolor: 'warning.light', color: 'warning.main' },
+        info: { bgcolor: 'info.light', color: 'info.main' },
+        default: { bgcolor: 'action.hover', color: 'text.primary' },
+      };
+      return colorMap[color];
+    }, [color]);
 
-  return (
-    <Card
-      role="article"
-      aria-label={getMetricAriaLabel(title, value)}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={
-        onClick
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onClick();
+    const handleKeyDown = React.useCallback(
+      (e: React.KeyboardEvent) => {
+        if (onClick && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onClick();
+        }
+      },
+      [onClick]
+    );
+
+    return (
+      <Card
+        role="article"
+        aria-label={getMetricAriaLabel(title, value)}
+        tabIndex={onClick ? 0 : undefined}
+        onKeyDown={onClick ? handleKeyDown : undefined}
+        sx={{
+          height: '100%',
+          cursor: onClick ? 'pointer' : 'default',
+          transition: 'all 0.2s',
+          '&:hover': onClick
+            ? {
+                transform: 'translateY(-4px)',
+                boxShadow: 3,
               }
-            }
-          : undefined
-      }
-      sx={{
-        height: '100%',
-        cursor: onClick ? 'pointer' : 'default',
-        transition: 'all 0.2s',
-        '&:hover': onClick
-          ? {
-              transform: 'translateY(-4px)',
-              boxShadow: 3,
-            }
-          : {},
-        '&:focus-visible': onClick
-          ? {
-              outline: '2px solid',
-              outlineColor: 'primary.main',
-              outlineOffset: '2px',
-            }
-          : {},
-      }}
-      onClick={onClick}
-    >
-      <CardContent>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            mb: 2,
-          }}
-        >
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ fontWeight: 500 }}
+            : {},
+          '&:focus-visible': onClick
+            ? {
+                outline: '2px solid',
+                outlineColor: 'primary.main',
+                outlineOffset: '2px',
+              }
+            : {},
+        }}
+        onClick={onClick}
+      >
+        <CardContent>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              mb: 2,
+            }}
           >
-            {title}
-          </Typography>
-          {icon && (
-            <Box
-              sx={{
-                ...getColorStyles(),
-                borderRadius: 1,
-                p: 0.5,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {icon}
-            </Box>
-          )}
-        </Box>
-
-        {isLoading ? (
-          <>
-            <Skeleton variant="text" width="60%" height={40} />
-            {subtitle && <Skeleton variant="text" width="40%" />}
-          </>
-        ) : (
-          <>
             <Typography
-              variant="h4"
-              component="div"
-              sx={{ fontWeight: 600, mb: 0.5 }}
+              variant="body2"
+              color="text.secondary"
+              sx={{ fontWeight: 500 }}
             >
-              {value}
+              {title}
             </Typography>
-
-            {(subtitle || trendValue) && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                {subtitle && (
-                  <Typography variant="body2" color="text.secondary">
-                    {subtitle}
-                  </Typography>
-                )}
-                {trendValue && (
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      color: getTrendColor(),
-                    }}
-                  >
-                    {getTrendIcon()}
-                    <Typography
-                      variant="body2"
-                      sx={{ ml: 0.5, fontWeight: 500 }}
-                    >
-                      {trendValue}
-                    </Typography>
-                  </Box>
-                )}
+            {icon && (
+              <Box
+                sx={{
+                  ...getColorStyles(),
+                  borderRadius: 1,
+                  p: 0.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {icon}
               </Box>
             )}
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
+          </Box>
+
+          {isLoading ? (
+            <>
+              <Skeleton variant="text" width="60%" height={40} />
+              {subtitle && <Skeleton variant="text" width="40%" />}
+            </>
+          ) : (
+            <>
+              <Typography
+                variant="h4"
+                component="div"
+                sx={{ fontWeight: 600, mb: 0.5 }}
+              >
+                {value}
+              </Typography>
+
+              {(subtitle || trendValue) && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {subtitle && (
+                    <Typography variant="body2" color="text.secondary">
+                      {subtitle}
+                    </Typography>
+                  )}
+                  {trendValue && (
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        color: getTrendColor,
+                      }}
+                    >
+                      {getTrendIcon}
+                      <Typography
+                        variant="body2"
+                        sx={{ ml: 0.5, fontWeight: 500 }}
+                      >
+                        {trendValue}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+);

@@ -16,3 +16,6 @@ export { default as LanguageSelector } from './LanguageSelector';
 export { default as Breadcrumbs } from './Breadcrumbs';
 export { default as SkipLinks } from './SkipLinks';
 export { default as GlobalKeyboardShortcuts } from './GlobalKeyboardShortcuts';
+export { VirtualizedList } from './VirtualizedList';
+export { VirtualizedTable } from './VirtualizedTable';
+export type { VirtualizedTableColumn } from './VirtualizedTable';

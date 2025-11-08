@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import {
   CssBaseline,
@@ -14,28 +15,53 @@ import { AccessibilityProvider } from './contexts/AccessibilityContext';
 import { useAccessibility } from './hooks/useAccessibility';
 import { ToastProvider } from './components/common';
 import ErrorBoundary from './components/common/ErrorBoundary';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import DashboardPage from './pages/DashboardPage';
-import OrdersPage from './pages/OrdersPage';
-import PositionsPage from './pages/PositionsPage';
-import StrategyPage from './pages/StrategyPage';
-import BacktestPage from './pages/BacktestPage';
-import SettingsPage from './pages/SettingsPage';
-import ProfilePage from './pages/ProfilePage';
-import AdminDashboardPage from './pages/AdminDashboardPage';
-import AdminSettingsPage from './pages/AdminSettingsPage';
-import EventViewerPage from './pages/EventViewerPage';
-import UserManagementPage from './pages/UserManagementPage';
-import NotFoundPage from './pages/NotFoundPage';
-import ConfigurationsPage from './pages/ConfigurationsPage';
-import ConfigurationFormPage from './pages/ConfigurationFormPage';
-import BacktestTasksPage from './pages/BacktestTasksPage';
-import BacktestTaskFormPage from './pages/BacktestTaskFormPage';
-import BacktestTaskDetailPage from './pages/BacktestTaskDetailPage';
-import TradingTasksPage from './pages/TradingTasksPage';
-import TradingTaskFormPage from './pages/TradingTaskFormPage';
-import TradingTaskDetailPage from './pages/TradingTaskDetailPage';
+import { QueryProvider } from './providers/QueryProvider';
+
+// Lazy load page components for code splitting
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const OrdersPage = lazy(() => import('./pages/OrdersPage'));
+const PositionsPage = lazy(() => import('./pages/PositionsPage'));
+const StrategyPage = lazy(() => import('./pages/StrategyPage'));
+const BacktestPage = lazy(() => import('./pages/BacktestPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
+const AdminSettingsPage = lazy(() => import('./pages/AdminSettingsPage'));
+const EventViewerPage = lazy(() => import('./pages/EventViewerPage'));
+const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const ConfigurationsPage = lazy(() => import('./pages/ConfigurationsPage'));
+const ConfigurationFormPage = lazy(
+  () => import('./pages/ConfigurationFormPage')
+);
+const BacktestTasksPage = lazy(() => import('./pages/BacktestTasksPage'));
+const BacktestTaskFormPage = lazy(() => import('./pages/BacktestTaskFormPage'));
+const BacktestTaskDetailPage = lazy(
+  () => import('./pages/BacktestTaskDetailPage')
+);
+const TradingTasksPage = lazy(() => import('./pages/TradingTasksPage'));
+const TradingTaskFormPage = lazy(() => import('./pages/TradingTaskFormPage'));
+const TradingTaskDetailPage = lazy(
+  () => import('./pages/TradingTaskDetailPage')
+);
+
+// Loading fallback component
+function PageLoadingFallback() {
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh',
+      }}
+    >
+      <CircularProgress aria-label="Loading page" />
+    </Box>
+  );
+}
 
 function AppRoutes() {
   const { isAuthenticated, systemSettings, systemSettingsLoading } = useAuth();
@@ -64,105 +90,110 @@ function AppRoutes() {
   }
 
   return (
-    <Routes>
-      {/* Public routes - conditionally rendered based on system settings */}
-      {systemSettings?.login_enabled && (
-        <Route path="/login" element={<LoginPage />} />
-      )}
-      {systemSettings?.registration_enabled && (
-        <Route path="/register" element={<RegisterPage />} />
-      )}
+    <Suspense fallback={<PageLoadingFallback />}>
+      <Routes>
+        {/* Public routes - conditionally rendered based on system settings */}
+        {systemSettings?.login_enabled && (
+          <Route path="/login" element={<LoginPage />} />
+        )}
+        {systemSettings?.registration_enabled && (
+          <Route path="/register" element={<RegisterPage />} />
+        )}
 
-      {/* Redirect to login if routes are disabled */}
-      {!systemSettings?.login_enabled && (
+        {/* Redirect to login if routes are disabled */}
+        {!systemSettings?.login_enabled && (
+          <Route
+            path="/login"
+            element={
+              <Navigate
+                to="/"
+                replace
+                state={{ message: 'Login is currently disabled' }}
+              />
+            }
+          />
+        )}
+        {!systemSettings?.registration_enabled && (
+          <Route
+            path="/register"
+            element={
+              <Navigate
+                to="/login"
+                replace
+                state={{ message: 'Registration is currently disabled' }}
+              />
+            }
+          />
+        )}
+
+        {/* Root path - redirect to dashboard or login */}
         <Route
-          path="/login"
+          path="/"
           element={
-            <Navigate
-              to="/"
-              replace
-              state={{ message: 'Login is currently disabled' }}
-            />
+            isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
           }
         />
-      )}
-      {!systemSettings?.registration_enabled && (
-        <Route
-          path="/register"
-          element={
-            <Navigate
-              to="/login"
-              replace
-              state={{ message: 'Registration is currently disabled' }}
+
+        {/* Protected routes with layout */}
+        <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
+          <Route element={<AppLayout />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/positions" element={<PositionsPage />} />
+            <Route path="/strategy" element={<StrategyPage />} />
+            <Route path="/backtest" element={<BacktestPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/configurations" element={<ConfigurationsPage />} />
+            <Route
+              path="/configurations/new"
+              element={<ConfigurationFormPage />}
             />
-          }
-        />
-      )}
-
-      {/* Root path - redirect to dashboard or login */}
-      <Route
-        path="/"
-        element={
-          isAuthenticated ? (
-            <Navigate to="/dashboard" replace />
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
-
-      {/* Protected routes with layout */}
-      <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
-        <Route element={<AppLayout />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/orders" element={<OrdersPage />} />
-          <Route path="/positions" element={<PositionsPage />} />
-          <Route path="/strategy" element={<StrategyPage />} />
-          <Route path="/backtest" element={<BacktestPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/configurations" element={<ConfigurationsPage />} />
-          <Route
-            path="/configurations/new"
-            element={<ConfigurationFormPage />}
-          />
-          <Route
-            path="/configurations/:id/edit"
-            element={<ConfigurationFormPage />}
-          />
-          <Route path="/backtest-tasks" element={<BacktestTasksPage />} />
-          <Route
-            path="/backtest-tasks/new"
-            element={<BacktestTaskFormPage />}
-          />
-          <Route
-            path="/backtest-tasks/:id"
-            element={<BacktestTaskDetailPage />}
-          />
-          <Route
-            path="/backtest-tasks/:id/edit"
-            element={<BacktestTaskFormPage />}
-          />
-          <Route path="/trading-tasks" element={<TradingTasksPage />} />
-          <Route path="/trading-tasks/new" element={<TradingTaskFormPage />} />
-          <Route
-            path="/trading-tasks/:id"
-            element={<TradingTaskDetailPage />}
-          />
-          <Route
-            path="/trading-tasks/:id/edit"
-            element={<TradingTaskFormPage />}
-          />
-          <Route path="/admin" element={<AdminDashboardPage />} />
-          <Route path="/admin/settings" element={<AdminSettingsPage />} />
-          <Route path="/admin/events" element={<EventViewerPage />} />
-          <Route path="/admin/users" element={<UserManagementPage />} />
+            <Route
+              path="/configurations/:id/edit"
+              element={<ConfigurationFormPage />}
+            />
+            <Route path="/backtest-tasks" element={<BacktestTasksPage />} />
+            <Route
+              path="/backtest-tasks/new"
+              element={<BacktestTaskFormPage />}
+            />
+            <Route
+              path="/backtest-tasks/:id"
+              element={<BacktestTaskDetailPage />}
+            />
+            <Route
+              path="/backtest-tasks/:id/edit"
+              element={<BacktestTaskFormPage />}
+            />
+            <Route path="/trading-tasks" element={<TradingTasksPage />} />
+            <Route
+              path="/trading-tasks/new"
+              element={<TradingTaskFormPage />}
+            />
+            <Route
+              path="/trading-tasks/:id"
+              element={<TradingTaskDetailPage />}
+            />
+            <Route
+              path="/trading-tasks/:id/edit"
+              element={<TradingTaskFormPage />}
+            />
+            <Route path="/admin" element={<AdminDashboardPage />} />
+            <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            <Route path="/admin/events" element={<EventViewerPage />} />
+            <Route path="/admin/users" element={<UserManagementPage />} />
+          </Route>
         </Route>
-      </Route>
 
-      {/* 404 route */}
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+        {/* 404 route */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </Suspense>
   );
 }
 
@@ -173,13 +204,15 @@ function ThemedApp() {
   return (
     <ThemeProvider theme={activeTheme}>
       <CssBaseline />
-      <ToastProvider>
-        <AuthProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-        </AuthProvider>
-      </ToastProvider>
+      <QueryProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </AuthProvider>
+        </ToastProvider>
+      </QueryProvider>
     </ThemeProvider>
   );
 }
