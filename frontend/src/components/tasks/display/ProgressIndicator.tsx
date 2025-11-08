@@ -6,6 +6,7 @@ import {
   CircularProgress,
   Tooltip,
 } from '@mui/material';
+import { getProgressAriaLabel } from '../../../utils/ariaUtils';
 
 interface ProgressIndicatorProps {
   value: number; // 0-100
@@ -16,6 +17,7 @@ interface ProgressIndicatorProps {
   color?: 'primary' | 'secondary' | 'success' | 'error' | 'warning' | 'info';
   animated?: boolean;
   estimatedTimeRemaining?: string;
+  status?: string;
 }
 
 export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
@@ -27,6 +29,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
   color = 'primary',
   animated = true,
   estimatedTimeRemaining,
+  status = 'running',
 }) => {
   // Clamp value between 0 and 100
   const clampedValue = Math.min(Math.max(value, 0), 100);
@@ -52,7 +55,14 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
             : `${clampedValue.toFixed(1)}%`
         }
       >
-        <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+        <Box
+          sx={{ position: 'relative', display: 'inline-flex' }}
+          role="progressbar"
+          aria-valuenow={clampedValue}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={getProgressAriaLabel(clampedValue, status)}
+        >
           <CircularProgress
             variant="determinate"
             value={clampedValue}
@@ -93,11 +103,22 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
   }
 
   return (
-    <Box sx={{ width: '100%' }}>
+    <Box
+      sx={{ width: '100%' }}
+      role="progressbar"
+      aria-valuenow={clampedValue}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={getProgressAriaLabel(clampedValue, status)}
+    >
       {(label || showPercentage) && (
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
           {label && (
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              id="progress-label"
+            >
               {label}
             </Typography>
           )}
@@ -106,6 +127,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
               variant="body2"
               color="text.secondary"
               sx={{ fontWeight: 600 }}
+              aria-hidden="true"
             >
               {`${Math.round(clampedValue)}%`}
             </Typography>

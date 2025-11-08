@@ -92,11 +92,12 @@ const navigationItems: NavigationItem[] = [
 ];
 
 interface SidebarProps {
+  id?: string;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
 
-const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => {
+const Sidebar = ({ id, mobileOpen = false, onMobileClose }: SidebarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -170,6 +171,7 @@ const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => {
       {/* Mobile drawer */}
       {isMobile && (
         <Drawer
+          id={id}
           variant="temporary"
           open={mobileOpen}
           onClose={onMobileClose}
@@ -191,6 +193,7 @@ const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => {
       {/* Desktop drawer */}
       {!isMobile && (
         <Drawer
+          id={id}
           variant="permanent"
           sx={{
             display: { xs: 'none', md: 'block' },

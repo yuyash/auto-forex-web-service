@@ -5,6 +5,8 @@ import AppHeader from './AppHeader';
 import AppFooter from './AppFooter';
 import ResponsiveNavigation from './ResponsiveNavigation';
 import Sidebar from './Sidebar';
+import SkipLinks from '../common/SkipLinks';
+import GlobalKeyboardShortcuts from '../common/GlobalKeyboardShortcuts';
 import { DRAWER_WIDTH } from './constants';
 
 const AppLayout = () => {
@@ -18,60 +20,74 @@ const AppLayout = () => {
   };
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-      }}
-    >
-      <AppHeader onMenuClick={handleDrawerToggle} />
+    <>
+      {/* Skip links for keyboard navigation */}
+      <SkipLinks />
+
+      {/* Global keyboard shortcuts */}
+      <GlobalKeyboardShortcuts />
+
       <Box
         sx={{
           display: 'flex',
-          flexGrow: 1,
+          flexDirection: 'column',
+          minHeight: '100vh',
         }}
       >
-        {/* Sidebar navigation */}
-        <Sidebar
-          mobileOpen={mobileDrawerOpen}
-          onMobileClose={handleDrawerToggle}
-        />
-
-        {/* Main content area */}
+        <AppHeader onMenuClick={handleDrawerToggle} />
         <Box
-          component="main"
           sx={{
-            flexGrow: 1,
             display: 'flex',
-            flexDirection: 'column',
-            marginBottom: isMobile ? '112px' : 0, // Space for footer + bottom nav on mobile
-            width: isTabletOrDesktop
-              ? `calc(100% - ${DRAWER_WIDTH}px)`
-              : '100%',
+            flexGrow: 1,
           }}
         >
-          <Outlet />
+          {/* Sidebar navigation */}
+          <Sidebar
+            id="navigation"
+            mobileOpen={mobileDrawerOpen}
+            onMobileClose={handleDrawerToggle}
+          />
+
+          {/* Main content area */}
+          <Box
+            component="main"
+            id="main-content"
+            tabIndex={-1}
+            sx={{
+              flexGrow: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              marginBottom: isMobile ? '112px' : 0, // Space for footer + bottom nav on mobile
+              width: isTabletOrDesktop
+                ? `calc(100% - ${DRAWER_WIDTH}px)`
+                : '100%',
+              '&:focus': {
+                outline: 'none',
+              },
+            }}
+          >
+            <Outlet />
+          </Box>
         </Box>
-      </Box>
 
-      {/* Footer - positioned above bottom nav on mobile */}
-      <Box
-        sx={{
-          position: isMobile ? 'fixed' : 'relative',
-          bottom: isMobile ? '56px' : 'auto',
-          left: 0,
-          right: 0,
-          zIndex: isMobile ? 1000 : 'auto',
-          marginLeft: isTabletOrDesktop ? `${DRAWER_WIDTH}px` : 0,
-        }}
-      >
-        <AppFooter />
-      </Box>
+        {/* Footer - positioned above bottom nav on mobile */}
+        <Box
+          sx={{
+            position: isMobile ? 'fixed' : 'relative',
+            bottom: isMobile ? '56px' : 'auto',
+            left: 0,
+            right: 0,
+            zIndex: isMobile ? 1000 : 'auto',
+            marginLeft: isTabletOrDesktop ? `${DRAWER_WIDTH}px` : 0,
+          }}
+        >
+          <AppFooter />
+        </Box>
 
-      {/* Mobile bottom navigation */}
-      {isMobile && <ResponsiveNavigation />}
-    </Box>
+        {/* Mobile bottom navigation */}
+        {isMobile && <ResponsiveNavigation />}
+      </Box>
+    </>
   );
 };
 

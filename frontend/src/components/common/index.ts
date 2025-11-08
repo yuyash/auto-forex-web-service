@@ -14,3 +14,5 @@ export { default as DataTable } from './DataTable';
 export type { Column } from './DataTable';
 export { default as LanguageSelector } from './LanguageSelector';
 export { default as Breadcrumbs } from './Breadcrumbs';
+export { default as SkipLinks } from './SkipLinks';
+export { default as GlobalKeyboardShortcuts } from './GlobalKeyboardShortcuts';

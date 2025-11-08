@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent, Typography, Box, Skeleton } from '@mui/material';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import { getMetricAriaLabel } from '../../../utils/ariaUtils';
 
 interface MetricCardProps {
   title: string;
@@ -52,6 +53,19 @@ export const MetricCard: React.FC<MetricCardProps> = ({
 
   return (
     <Card
+      role="article"
+      aria-label={getMetricAriaLabel(title, value)}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       sx={{
         height: '100%',
         cursor: onClick ? 'pointer' : 'default',
@@ -60,6 +74,13 @@ export const MetricCard: React.FC<MetricCardProps> = ({
           ? {
               transform: 'translateY(-4px)',
               boxShadow: 3,
+            }
+          : {},
+        '&:focus-visible': onClick
+          ? {
+              outline: '2px solid',
+              outlineColor: 'primary.main',
+              outlineOffset: '2px',
             }
           : {},
       }}

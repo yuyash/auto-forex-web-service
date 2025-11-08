@@ -146,6 +146,11 @@ const components = {
       root: {
         borderRadius: 4,
         textTransform: 'none' as const,
+        '&:focus-visible': {
+          outline: '2px solid',
+          outlineColor: palette.primary.main,
+          outlineOffset: '2px',
+        },
       },
     },
   },
@@ -168,6 +173,53 @@ const components = {
     styleOverrides: {
       root: {
         boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+      },
+    },
+  },
+  MuiListItemButton: {
+    styleOverrides: {
+      root: {
+        '&:focus-visible': {
+          outline: '2px solid',
+          outlineColor: palette.primary.main,
+          outlineOffset: '-2px',
+        },
+      },
+    },
+  },
+  MuiIconButton: {
+    styleOverrides: {
+      root: {
+        '&:focus-visible': {
+          outline: '2px solid',
+          outlineColor: palette.primary.main,
+          outlineOffset: '2px',
+        },
+      },
+    },
+  },
+  MuiTextField: {
+    styleOverrides: {
+      root: {
+        '& .MuiOutlinedInput-root': {
+          '&:focus-within': {
+            outline: '2px solid',
+            outlineColor: palette.primary.main,
+            outlineOffset: '2px',
+          },
+        },
+      },
+    },
+  },
+  MuiLink: {
+    styleOverrides: {
+      root: {
+        '&:focus-visible': {
+          outline: '2px solid',
+          outlineColor: palette.primary.main,
+          outlineOffset: '2px',
+          borderRadius: '2px',
+        },
       },
     },
   },

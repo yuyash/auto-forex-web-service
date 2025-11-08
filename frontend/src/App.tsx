@@ -6,9 +6,12 @@ import {
   CircularProgress,
 } from '@mui/material';
 import theme from './theme/theme';
+import highContrastTheme from './theme/highContrastTheme';
 import AppLayout from './components/layout/AppLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AccessibilityProvider } from './contexts/AccessibilityContext';
+import { useAccessibility } from './hooks/useAccessibility';
 import { ToastProvider } from './components/common';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import LoginPage from './pages/LoginPage';
@@ -163,19 +166,30 @@ function AppRoutes() {
   );
 }
 
+function ThemedApp() {
+  const { highContrastMode } = useAccessibility();
+  const activeTheme = highContrastMode ? highContrastTheme : theme;
+
+  return (
+    <ThemeProvider theme={activeTheme}>
+      <CssBaseline />
+      <ToastProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </AuthProvider>
+      </ToastProvider>
+    </ThemeProvider>
+  );
+}
+
 function App() {
   return (
     <ErrorBoundary level="app">
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <ToastProvider>
-          <AuthProvider>
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
-          </AuthProvider>
-        </ToastProvider>
-      </ThemeProvider>
+      <AccessibilityProvider>
+        <ThemedApp />
+      </AccessibilityProvider>
     </ErrorBoundary>
   );
 }

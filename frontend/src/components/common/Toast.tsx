@@ -1,6 +1,7 @@
 import React, { useState, useCallback, type ReactNode } from 'react';
 import { Snackbar, Alert, type AlertColor } from '@mui/material';
 import { ToastContext } from './ToastContext';
+import { getAriaLive } from '../../utils/ariaUtils';
 
 interface ToastMessage {
   id: string;
@@ -92,6 +93,8 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
           <Alert
             onClose={() => handleClose(toast.id)}
             severity={toast.severity}
+            role="alert"
+            aria-live={getAriaLive(toast.severity)}
             variant="filled"
             elevation={6}
             sx={{

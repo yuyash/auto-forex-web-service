@@ -10,6 +10,7 @@ import {
   FiberManualRecord,
 } from '@mui/icons-material';
 import { TaskStatus } from '../../../types/common';
+import { getStatusAriaLabel } from '../../../utils/ariaUtils';
 
 interface StatusBadgeProps {
   status: TaskStatus;
@@ -74,6 +75,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
       size={size}
       variant={variant}
       icon={showIcon ? <Icon /> : undefined}
+      role="status"
+      aria-label={getStatusAriaLabel(status)}
       sx={{
         fontWeight: 500,
         ...(status === TaskStatus.RUNNING && {
