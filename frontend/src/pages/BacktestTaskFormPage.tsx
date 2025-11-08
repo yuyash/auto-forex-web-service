@@ -2,7 +2,7 @@ import { Container, Box, Typography, Paper } from '@mui/material';
 import { useParams } from 'react-router-dom';
 import BacktestTaskForm from '../components/backtest/BacktestTaskForm';
 import { useBacktestTask } from '../hooks/useBacktestTasks';
-import { LoadingSpinner } from '../components/common';
+import { LoadingSpinner, Breadcrumbs } from '../components/common';
 
 export default function BacktestTaskFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +30,8 @@ export default function BacktestTaskFormPage() {
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
+        <Breadcrumbs />
+
         <Typography variant="h4" component="h1" gutterBottom>
           {taskId ? 'Edit Backtest Task' : 'Create Backtest Task'}
         </Typography>

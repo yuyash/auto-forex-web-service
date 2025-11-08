@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react';
 import {
   AppBar,
   Toolbar,
-  Typography,
-  Button,
   Box,
   IconButton,
   Menu,
@@ -22,12 +20,15 @@ import {
   Settings,
   Logout,
   AdminPanelSettings,
+  Menu as MenuIcon,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import LanguageSelector from '../common/LanguageSelector';
 import NotificationCenter from '../admin/NotificationCenter';
+import Typography from '@mui/system/typography';
+import Typography from '@mui/system/typography';
 
 interface OandaAccount {
   id: number;
@@ -37,7 +38,11 @@ interface OandaAccount {
   currency: string;
 }
 
-const AppHeader = () => {
+interface AppHeaderProps {
+  onMenuClick?: () => void;
+}
+
+const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
   const { t } = useTranslation('common');
   const { logout, user, token } = useAuth();
   const navigate = useNavigate();
@@ -110,9 +115,27 @@ const AppHeader = () => {
     setSelectedAccountId(String(event.target.value));
   };
 
+  const isTabletOrBelow = useMediaQuery(theme.breakpoints.down('md'));
+
   return (
-    <AppBar position="static">
+    <AppBar
+      position="fixed"
+      sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}
+    >
       <Toolbar>
+        {/* Menu button for mobile/tablet */}
+        {isTabletOrBelow && (
+          <IconButton
+            color="inherit"
+            aria-label="open drawer"
+            edge="start"
+            onClick={onMenuClick}
+            sx={{ mr: 2 }}
+          >
+            <MenuIcon />
+          </IconButton>
+        )}
+
         {/* Logo */}
         <Box
           component={RouterLink}
@@ -174,43 +197,8 @@ const AppHeader = () => {
           </FormControl>
         )}
 
-        {/* Navigation Buttons - Hidden on mobile */}
-        {!isMobile && (
-          <Box
-            sx={{ display: 'flex', gap: 1, alignItems: 'center', flexGrow: 1 }}
-          >
-            <Button color="inherit" component={RouterLink} to="/dashboard">
-              {t('navigation.dashboard')}
-            </Button>
-            <Button color="inherit" component={RouterLink} to="/orders">
-              {t('navigation.orders')}
-            </Button>
-            <Button color="inherit" component={RouterLink} to="/positions">
-              {t('navigation.positions')}
-            </Button>
-            <Button color="inherit" component={RouterLink} to="/strategy">
-              {t('navigation.strategy')}
-            </Button>
-            <Button color="inherit" component={RouterLink} to="/backtest">
-              {t('navigation.backtest')}
-            </Button>
-            <Button color="inherit" component={RouterLink} to="/configurations">
-              Configurations
-            </Button>
-            <Button color="inherit" component={RouterLink} to="/backtest-tasks">
-              Backtest Tasks
-            </Button>
-            <Button color="inherit" component={RouterLink} to="/trading-tasks">
-              Trading Tasks
-            </Button>
-            <Button color="inherit" component={RouterLink} to="/settings">
-              {t('navigation.settings')}
-            </Button>
-          </Box>
-        )}
-
-        {/* Spacer for mobile to push right side icons to the right */}
-        {isMobile && <Box sx={{ flexGrow: 1 }} />}
+        {/* Spacer to push right side icons to the right */}
+        <Box sx={{ flexGrow: 1 }} />
 
         {/* Right side icons */}
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>

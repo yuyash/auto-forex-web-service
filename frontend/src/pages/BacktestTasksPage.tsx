@@ -21,7 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import { useBacktestTasks } from '../hooks/useBacktestTasks';
 import { TaskStatus } from '../types/common';
 import BacktestTaskCard from '../components/backtest/BacktestTaskCard';
-import { LoadingSpinner } from '../components/common';
+import { LoadingSpinner, Breadcrumbs } from '../components/common';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -114,6 +114,8 @@ export default function BacktestTasksPage() {
   return (
     <Container maxWidth="xl">
       <Box sx={{ py: 4 }}>
+        <Breadcrumbs />
+
         {/* Header */}
         <Box
           sx={{

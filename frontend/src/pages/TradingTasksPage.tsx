@@ -28,6 +28,7 @@ import { useTradingTasks } from '../hooks/useTradingTasks';
 import { useConfigurations } from '../hooks/useConfigurations';
 import { TaskStatus } from '../types/common';
 import TradingTaskCard from '../components/trading/TradingTaskCard';
+import { Breadcrumbs } from '../components/common';
 import { LoadingSpinner } from '../components/common';
 
 interface TabPanelProps {
@@ -136,6 +137,8 @@ export default function TradingTasksPage() {
   return (
     <Container maxWidth="xl">
       <Box sx={{ py: 4 }}>
+        <Breadcrumbs />
+
         {/* Header */}
         <Box
           sx={{

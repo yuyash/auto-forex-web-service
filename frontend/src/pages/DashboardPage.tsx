@@ -18,6 +18,7 @@ import {
   FormControlLabel,
   IconButton,
   Tooltip,
+  Grid,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import type { SelectChangeEvent } from '@mui/material';
@@ -26,6 +27,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { OHLCChart } from '../components/chart';
 import { Breadcrumbs } from '../components/common';
 import ChartControls from '../components/chart/ChartControls';
+import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
+import RecentBacktestsWidget from '../components/dashboard/RecentBacktestsWidget';
+import QuickActionsWidget from '../components/dashboard/QuickActionsWidget';
 import type {
   Granularity,
   OHLCData,
@@ -328,6 +332,19 @@ const DashboardPage = () => {
           {error}
         </Alert>
       )}
+
+      {/* Task Widgets */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={4}>
+          <ActiveTasksWidget />
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <RecentBacktestsWidget />
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <QuickActionsWidget />
+        </Grid>
+      </Grid>
 
       {/* Chart Section */}
       <Paper elevation={2} sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>

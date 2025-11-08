@@ -2,7 +2,7 @@ import { Container, Box, Typography } from '@mui/material';
 import { useParams } from 'react-router-dom';
 import TradingTaskForm from '../components/trading/TradingTaskForm';
 import { useTradingTask } from '../hooks/useTradingTasks';
-import { LoadingSpinner } from '../components/common';
+import { LoadingSpinner, Breadcrumbs } from '../components/common';
 
 export default function TradingTaskFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +32,8 @@ export default function TradingTaskFormPage() {
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
+        <Breadcrumbs />
+
         <Typography variant="h4" component="h1" gutterBottom>
           {isEditMode ? 'Edit Trading Task' : 'Create Trading Task'}
         </Typography>

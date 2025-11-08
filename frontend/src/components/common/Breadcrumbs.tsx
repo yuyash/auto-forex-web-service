@@ -55,11 +55,78 @@ const Breadcrumbs = () => {
       { label: t('breadcrumbs.admin'), path: '/admin' },
       { label: t('breadcrumbs.users') },
     ],
+    // Configuration routes
+    '/configurations': [
+      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      { label: 'Configurations' },
+    ],
+    '/configurations/new': [
+      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      { label: 'Configurations', path: '/configurations' },
+      { label: 'New Configuration' },
+    ],
+    // Backtest Task routes
+    '/backtest-tasks': [
+      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      { label: 'Backtest Tasks' },
+    ],
+    '/backtest-tasks/new': [
+      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      { label: 'Backtest Tasks', path: '/backtest-tasks' },
+      { label: 'New Task' },
+    ],
+    // Trading Task routes
+    '/trading-tasks': [
+      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      { label: 'Trading Tasks' },
+    ],
+    '/trading-tasks/new': [
+      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      { label: 'Trading Tasks', path: '/trading-tasks' },
+      { label: 'New Task' },
+    ],
   };
 
-  const breadcrumbs = routeConfig[location.pathname] || [
-    { label: t('breadcrumbs.home'), path: '/dashboard' },
-  ];
+  // Handle dynamic routes (e.g., /backtest-tasks/:id, /configurations/:id/edit)
+  let breadcrumbs = routeConfig[location.pathname];
+
+  if (!breadcrumbs) {
+    // Check for dynamic routes
+    if (location.pathname.match(/^\/configurations\/\d+\/edit$/)) {
+      breadcrumbs = [
+        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: 'Configurations', path: '/configurations' },
+        { label: 'Edit Configuration' },
+      ];
+    } else if (location.pathname.match(/^\/backtest-tasks\/\d+$/)) {
+      breadcrumbs = [
+        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: 'Backtest Tasks', path: '/backtest-tasks' },
+        { label: 'Task Details' },
+      ];
+    } else if (location.pathname.match(/^\/backtest-tasks\/\d+\/edit$/)) {
+      breadcrumbs = [
+        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: 'Backtest Tasks', path: '/backtest-tasks' },
+        { label: 'Edit Task' },
+      ];
+    } else if (location.pathname.match(/^\/trading-tasks\/\d+$/)) {
+      breadcrumbs = [
+        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: 'Trading Tasks', path: '/trading-tasks' },
+        { label: 'Task Details' },
+      ];
+    } else if (location.pathname.match(/^\/trading-tasks\/\d+\/edit$/)) {
+      breadcrumbs = [
+        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: 'Trading Tasks', path: '/trading-tasks' },
+        { label: 'Edit Task' },
+      ];
+    } else {
+      // Default fallback
+      breadcrumbs = [{ label: t('breadcrumbs.home'), path: '/dashboard' }];
+    }
+  }
 
   return (
     <MuiBreadcrumbs
