@@ -82,10 +82,9 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Settings')).toBeInTheDocument();
   });
 
-  it('renders all three tabs', () => {
+  it('renders all two tabs', () => {
     renderSettingsPage();
     expect(screen.getByText('Accounts')).toBeInTheDocument();
-    expect(screen.getByText('Strategy Defaults')).toBeInTheDocument();
     expect(screen.getByText('Security')).toBeInTheDocument();
   });
 
@@ -96,39 +95,42 @@ describe('SettingsPage', () => {
     });
   });
 
-  it('switches to strategy defaults tab when first clicked', async () => {
+  it('switches to security tab when first clicked', async () => {
     renderSettingsPage();
-    const strategyDefaultsTab = screen.getByRole('tab', {
-      name: /strategy defaults/i,
+    const securityTab = screen.getByRole('tab', {
+      name: /security/i,
     });
-    fireEvent.click(strategyDefaultsTab);
+    fireEvent.click(securityTab);
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: /strategy defaults/i })
+        screen.getByRole('heading', { name: /security settings/i })
       ).toBeInTheDocument();
     });
   });
 
-  it('switches to strategy defaults tab when clicked', async () => {
+  it('switches to security tab when clicked', async () => {
     renderSettingsPage();
-    const strategyDefaultsTab = screen.getByRole('tab', {
-      name: /strategy defaults/i,
+    const securityTab = screen.getByRole('tab', {
+      name: /security/i,
     });
-    fireEvent.click(strategyDefaultsTab);
+    fireEvent.click(securityTab);
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: /strategy defaults/i })
+        screen.getByRole('heading', { name: /security settings/i })
       ).toBeInTheDocument();
     });
 
-    // Check that the strategy defaults form is rendered
-    expect(screen.getByLabelText(/Default Lot Size/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Default Scaling Mode/i)).toBeInTheDocument();
+    // Check that the security placeholder text is rendered
+    expect(
+      screen.getByText(
+        /security settings \(password change, 2fa\) will be implemented in a future task/i
+      )
+    ).toBeInTheDocument();
   });
 
-  it('switches to security tab when clicked', () => {
+  it('displays security tab content when clicked', () => {
     renderSettingsPage();
     const securityTab = screen.getByText('Security');
     fireEvent.click(securityTab);
@@ -148,16 +150,16 @@ describe('SettingsPage', () => {
       expect(screen.getByText('OANDA Accounts')).toBeInTheDocument();
     });
 
-    // Switch to Strategy Defaults
-    const strategyDefaultsTab = screen.getByRole('tab', {
-      name: /strategy defaults/i,
+    // Switch to Security
+    const securityTab = screen.getByRole('tab', {
+      name: /security/i,
     });
-    fireEvent.click(strategyDefaultsTab);
+    fireEvent.click(securityTab);
 
-    // Wait for strategy defaults content to be visible
+    // Wait for security content to be visible
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: /strategy defaults/i })
+        screen.getByRole('heading', { name: /security settings/i })
       ).toBeVisible();
     });
 
@@ -174,14 +176,11 @@ describe('SettingsPage', () => {
     expect(accountsTab).toHaveAttribute('id', 'settings-tab-0');
     expect(accountsTab).toHaveAttribute('aria-controls', 'settings-tabpanel-0');
 
-    const strategyDefaultsTab = screen.getByRole('tab', {
-      name: /strategy defaults/i,
+    const securityTab = screen.getByRole('tab', {
+      name: /security/i,
     });
-    expect(strategyDefaultsTab).toHaveAttribute('id', 'settings-tab-1');
-    expect(strategyDefaultsTab).toHaveAttribute(
-      'aria-controls',
-      'settings-tabpanel-1'
-    );
+    expect(securityTab).toHaveAttribute('id', 'settings-tab-1');
+    expect(securityTab).toHaveAttribute('aria-controls', 'settings-tabpanel-1');
 
     // Check tabpanels have proper ARIA attributes
     const accountsPanel = screen.getByRole('tabpanel', { hidden: false });
@@ -200,20 +199,18 @@ describe('SettingsPage', () => {
       expect(screen.getByText('Security Settings')).toBeVisible();
     });
 
-    // Switch to Strategy Defaults tab
-    const strategyDefaultsTab = screen.getByRole('tab', {
-      name: /strategy defaults/i,
+    // Switch back to Accounts tab
+    const accountsTab = screen.getByRole('tab', {
+      name: /accounts/i,
     });
-    fireEvent.click(strategyDefaultsTab);
+    fireEvent.click(accountsTab);
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: /strategy defaults/i })
-      ).toBeVisible();
+      expect(screen.getByText('OANDA Accounts')).toBeVisible();
     });
 
     // Security panel should have hidden attribute
-    const securityPanel = document.getElementById('settings-tabpanel-2');
+    const securityPanel = document.getElementById('settings-tabpanel-1');
     expect(securityPanel).toHaveAttribute('hidden');
   });
 });

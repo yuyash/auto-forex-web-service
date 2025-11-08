@@ -12,12 +12,15 @@ import { DRAWER_WIDTH } from './constants';
 const AppLayout = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // < 600px
-  const isTabletOrDesktop = useMediaQuery(theme.breakpoints.up('md')); // >= 900px
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md')); // 600px - 900px
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   const handleDrawerToggle = () => {
     setMobileDrawerOpen(!mobileDrawerOpen);
   };
+
+  // Show sidebar only on tablet (not on mobile or desktop)
+  const showSidebar = isTablet;
 
   return (
     <>
@@ -41,12 +44,14 @@ const AppLayout = () => {
             flexGrow: 1,
           }}
         >
-          {/* Sidebar navigation */}
-          <Sidebar
-            id="navigation"
-            mobileOpen={mobileDrawerOpen}
-            onMobileClose={handleDrawerToggle}
-          />
+          {/* Sidebar navigation - only shown on tablet */}
+          {showSidebar && (
+            <Sidebar
+              id="navigation"
+              mobileOpen={mobileDrawerOpen}
+              onMobileClose={handleDrawerToggle}
+            />
+          )}
 
           {/* Main content area */}
           <Box
@@ -57,10 +62,9 @@ const AppLayout = () => {
               flexGrow: 1,
               display: 'flex',
               flexDirection: 'column',
+              marginTop: '64px', // Space for AppBar
               marginBottom: isMobile ? '112px' : 0, // Space for footer + bottom nav on mobile
-              width: isTabletOrDesktop
-                ? `calc(100% - ${DRAWER_WIDTH}px)`
-                : '100%',
+              width: showSidebar ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%',
               '&:focus': {
                 outline: 'none',
               },
@@ -70,7 +74,7 @@ const AppLayout = () => {
           </Box>
         </Box>
 
-        {/* Footer - positioned above bottom nav on mobile */}
+        {/* Footer */}
         <Box
           sx={{
             position: isMobile ? 'fixed' : 'relative',
@@ -78,7 +82,7 @@ const AppLayout = () => {
             left: 0,
             right: 0,
             zIndex: isMobile ? 1000 : 'auto',
-            marginLeft: isTabletOrDesktop ? `${DRAWER_WIDTH}px` : 0,
+            marginLeft: showSidebar ? `${DRAWER_WIDTH}px` : 0,
           }}
         >
           <AppFooter />

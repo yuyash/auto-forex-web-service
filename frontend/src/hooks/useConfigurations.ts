@@ -1,5 +1,5 @@
 // Configuration hooks for data fetching and mutations
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { configurationsApi } from '../services/api';
 import type {
   StrategyConfig,
@@ -7,6 +7,22 @@ import type {
   PaginatedResponse,
   ConfigurationTask,
 } from '../types';
+
+// Simple in-memory cache with timestamps
+const cache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_DURATION = 30000; // 30 seconds
+
+function getCachedData<T>(key: string): T | null {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.data as T;
+  }
+  return null;
+}
+
+function setCachedData(key: string, data: unknown): void {
+  cache.set(key, { data, timestamp: Date.now() });
+}
 
 interface UseConfigurationsResult {
   data: PaginatedResponse<StrategyConfig> | null;
@@ -16,7 +32,7 @@ interface UseConfigurationsResult {
 }
 
 /**
- * Hook to fetch list of strategy configurations
+ * Hook to fetch list of strategy configurations with caching
  */
 export function useConfigurations(
   params?: StrategyConfigListParams
@@ -26,22 +42,53 @@ export function useConfigurations(
   );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Stabilize params to prevent unnecessary re-fetches
+  const paramsKey = JSON.stringify(params || {});
 
   const fetchData = useCallback(async () => {
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const cacheKey = paramsKey;
+    const cachedData =
+      getCachedData<PaginatedResponse<StrategyConfig>>(cacheKey);
+
+    if (cachedData) {
+      setData(cachedData);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
+      abortControllerRef.current = new AbortController();
+
       const result = await configurationsApi.list(params);
       setData(result);
+      setCachedData(cacheKey, result);
     } catch (err) {
-      setError(err as Error);
+      if ((err as Error).name !== 'AbortError') {
+        setError(err as Error);
+      }
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
-  }, [params]);
+  }, [paramsKey, params]);
 
   useEffect(() => {
     fetchData();
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [fetchData]);
 
   return {

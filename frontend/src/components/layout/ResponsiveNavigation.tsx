@@ -9,12 +9,10 @@ import {
   Dashboard as DashboardIcon,
   Receipt as OrdersIcon,
   AccountBalance as PositionsIcon,
-  TrendingUp as StrategyIcon,
-  Assessment as BacktestIcon,
   Settings as SettingsIcon,
   AdminPanelSettings as AdminIcon,
-  Tune as ConfigIcon,
   Assignment as TaskIcon,
+  PlayCircleOutline as TradingTaskIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -42,24 +40,14 @@ const navigationItems: NavigationItem[] = [
     icon: <PositionsIcon />,
   },
   {
-    path: '/strategy',
-    label: 'Strategy',
-    icon: <StrategyIcon />,
-  },
-  {
-    path: '/backtest',
-    label: 'Backtest',
-    icon: <BacktestIcon />,
-  },
-  {
-    path: '/configurations',
-    label: 'Configs',
-    icon: <ConfigIcon />,
-  },
-  {
     path: '/backtest-tasks',
-    label: 'Tasks',
+    label: 'Backtest',
     icon: <TaskIcon />,
+  },
+  {
+    path: '/trading-tasks',
+    label: 'Trading',
+    icon: <TradingTaskIcon />,
   },
   {
     path: '/settings',
@@ -126,6 +114,9 @@ const ResponsiveNavigation = () => {
             sx={{
               '& .MuiBottomNavigationAction-label': {
                 fontSize: '0.65rem',
+                '&.Mui-selected': {
+                  fontSize: '0.7rem',
+                },
               },
             }}
           />

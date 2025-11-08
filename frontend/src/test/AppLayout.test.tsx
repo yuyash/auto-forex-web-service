@@ -24,17 +24,14 @@ describe('AppLayout', () => {
       expect(screen.getByAltText('Logo')).toBeInTheDocument();
     });
 
-    // Check navigation links in header
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Orders')).toBeInTheDocument();
-    expect(screen.getByText('Positions')).toBeInTheDocument();
-    expect(screen.getByText('Strategy')).toBeInTheDocument();
-    expect(screen.getByText('Settings')).toBeInTheDocument();
-
     // Check content
     expect(screen.getByText('Test Content')).toBeInTheDocument();
 
     // Check footer status chips exist
     expect(screen.getByText(/connected|disconnected/i)).toBeInTheDocument();
+
+    // Check that skip links are present for accessibility
+    expect(screen.getByText('Skip to main content')).toBeInTheDocument();
+    expect(screen.getByText('Skip to navigation')).toBeInTheDocument();
   });
 });

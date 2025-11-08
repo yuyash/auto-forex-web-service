@@ -7,6 +7,7 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
+import { useOandaAccounts } from '../../hooks/useOandaAccounts';
 
 interface StrategyStatus {
   isActive: boolean;
@@ -15,13 +16,7 @@ interface StrategyStatus {
 
 const AppFooter = () => {
   const { t } = useTranslation('common');
-  const { user, token } = useAuth();
-  const [connectionStatus, setConnectionStatus] = useState<
-    'connected' | 'disconnected'
-  >('disconnected');
-  const [strategyStatus, setStrategyStatus] = useState<StrategyStatus>({
-    isActive: false,
-  });
+  const { user } = useAuth();
   const [currentTime, setCurrentTime] = useState<string>('');
 
   // Update current time in user's timezone
@@ -58,80 +53,33 @@ const AppFooter = () => {
     return () => clearInterval(interval);
   }, [user?.timezone]);
 
-  // Check OANDA API connection status
-  useEffect(() => {
-    const checkConnectionStatus = async () => {
-      if (!token) {
-        setConnectionStatus('disconnected');
-        return;
-      }
+  // Use shared hook with caching to prevent duplicate requests
+  const { accounts, hasAccounts, error } = useOandaAccounts();
 
-      try {
-        const response = await fetch('/api/accounts/', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+  // Derive connection status from accounts (no useEffect needed)
+  const derivedConnectionStatus: 'connected' | 'disconnected' = error
+    ? 'disconnected'
+    : hasAccounts
+      ? 'connected'
+      : 'disconnected';
 
-        if (response.ok) {
-          setConnectionStatus('connected');
-        } else {
-          setConnectionStatus('disconnected');
-        }
-      } catch {
-        setConnectionStatus('disconnected');
-      }
-    };
+  // Derive strategy status from accounts (no useEffect needed)
+  const derivedStrategyStatus: StrategyStatus = (() => {
+    if (!hasAccounts) {
+      return { isActive: false };
+    }
 
-    checkConnectionStatus();
-    // Check connection status every 30 seconds
-    const interval = setInterval(checkConnectionStatus, 30000);
+    const activeStrategy = accounts.find((account) => account.active_strategy);
 
-    return () => clearInterval(interval);
-  }, [token]);
+    if (activeStrategy) {
+      return {
+        isActive: true,
+        strategyName: activeStrategy.active_strategy,
+      };
+    }
 
-  // Check active strategy status
-  useEffect(() => {
-    const checkStrategyStatus = async () => {
-      if (!token) {
-        setStrategyStatus({ isActive: false });
-        return;
-      }
-
-      try {
-        const response = await fetch('/api/accounts/', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (response.ok) {
-          const accounts = await response.json();
-          // Check if any account has an active strategy
-          const activeStrategy = accounts.find(
-            (account: { active_strategy?: string }) => account.active_strategy
-          );
-
-          if (activeStrategy) {
-            setStrategyStatus({
-              isActive: true,
-              strategyName: activeStrategy.active_strategy,
-            });
-          } else {
-            setStrategyStatus({ isActive: false });
-          }
-        }
-      } catch {
-        setStrategyStatus({ isActive: false });
-      }
-    };
-
-    checkStrategyStatus();
-    // Check strategy status every 10 seconds
-    const interval = setInterval(checkStrategyStatus, 10000);
-
-    return () => clearInterval(interval);
-  }, [token]);
+    return { isActive: false };
+  })();
 
   return (
     <Box
@@ -158,11 +106,11 @@ const AppFooter = () => {
         <Chip
           icon={<CircleIcon />}
           label={
-            connectionStatus === 'connected'
+            derivedConnectionStatus === 'connected'
               ? t('status.connected')
               : t('status.disconnected')
           }
-          color={connectionStatus === 'connected' ? 'success' : 'error'}
+          color={derivedConnectionStatus === 'connected' ? 'success' : 'error'}
           size="small"
           sx={{
             '& .MuiChip-icon': {
@@ -175,11 +123,11 @@ const AppFooter = () => {
         <Chip
           icon={<TrendingUpIcon />}
           label={
-            strategyStatus.isActive
-              ? `${t('status.active')}: ${strategyStatus.strategyName || 'Strategy'}`
+            derivedStrategyStatus.isActive
+              ? `${t('status.active')}: ${derivedStrategyStatus.strategyName || 'Strategy'}`
               : t('status.inactive')
           }
-          color={strategyStatus.isActive ? 'primary' : 'default'}
+          color={derivedStrategyStatus.isActive ? 'primary' : 'default'}
           size="small"
         />
 

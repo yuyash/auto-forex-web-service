@@ -34,16 +34,16 @@ describe('Breadcrumbs', () => {
     expect(screen.getByText('Positions')).toBeInTheDocument();
   });
 
-  it('renders breadcrumbs for strategy page', () => {
-    renderBreadcrumbs('/strategy');
+  it('renders breadcrumbs for configurations page', () => {
+    renderBreadcrumbs('/configurations');
     expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Strategy')).toBeInTheDocument();
+    expect(screen.getByText('Configurations')).toBeInTheDocument();
   });
 
-  it('renders breadcrumbs for backtest page', () => {
-    renderBreadcrumbs('/backtest');
+  it('renders breadcrumbs for backtest tasks page', () => {
+    renderBreadcrumbs('/backtest-tasks');
     expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Backtest')).toBeInTheDocument();
+    expect(screen.getByText('Backtest Tasks')).toBeInTheDocument();
   });
 
   it('renders breadcrumbs for settings page', () => {

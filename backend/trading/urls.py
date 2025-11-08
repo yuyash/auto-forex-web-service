@@ -17,7 +17,6 @@ from .backtest_task_views import (  # noqa: E501
     BacktestTaskStartView,
     BacktestTaskStopView,
 )
-from .backtest_views import BacktestListCreateView, BacktestResultsView, BacktestStatusView
 from .candle_views import CandleDataView
 from .event_views import EventDetailView, EventExportView, EventListView
 from .health_views import health_check, simple_health_check
@@ -28,14 +27,6 @@ from .strategy_config_views import (
     StrategyConfigDetailView,
     StrategyConfigListCreateView,
     StrategyConfigTasksView,
-)
-from .strategy_views import (
-    AccountStrategyConfigView,
-    AccountStrategyStartView,
-    AccountStrategyStatusView,
-    AccountStrategyStopView,
-    StrategyConfigView,
-    StrategyListView,
 )
 from .trading_task_views import (  # noqa: E501
     TradingTaskCopyView,
@@ -91,47 +82,7 @@ urlpatterns = [
         PositionCloseView.as_view(),
         name="position_close",
     ),
-    # Strategy endpoints
-    path("strategies/", StrategyListView.as_view(), name="strategy_list"),
-    path(
-        "strategies/<str:strategy_id>/config/",
-        StrategyConfigView.as_view(),
-        name="strategy_config",
-    ),
-    path(
-        "accounts/<int:account_id>/strategy/start/",
-        AccountStrategyStartView.as_view(),
-        name="account_strategy_start",
-    ),
-    path(
-        "accounts/<int:account_id>/strategy/stop/",
-        AccountStrategyStopView.as_view(),
-        name="account_strategy_stop",
-    ),
-    path(
-        "accounts/<int:account_id>/strategy/status/",
-        AccountStrategyStatusView.as_view(),
-        name="account_strategy_status",
-    ),
-    path(
-        "accounts/<int:account_id>/strategy/config/",
-        AccountStrategyConfigView.as_view(),
-        name="account_strategy_config",
-    ),
-    # Backtest endpoints (legacy)
-    path("backtest/", BacktestListCreateView.as_view(), name="backtest_list_create"),
-    path("backtest/start/", BacktestListCreateView.as_view(), name="backtest_start"),
-    path(
-        "backtest/<int:backtest_id>/status/",
-        BacktestStatusView.as_view(),
-        name="backtest_status",
-    ),
-    path(
-        "backtest/<int:backtest_id>/results/",
-        BacktestResultsView.as_view(),
-        name="backtest_results",
-    ),
-    # BacktestTask endpoints (new task-based API)
+    # BacktestTask endpoints (task-based API)
     path(
         "backtest-tasks/",
         BacktestTaskListCreateView.as_view(),

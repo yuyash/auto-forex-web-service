@@ -18,29 +18,7 @@ vi.mock('@mui/material', async () => {
 describe('ResponsiveNavigation', () => {
   const theme = createTheme();
 
-  it('renders desktop sidebar navigation on large screens', async () => {
-    const { useMediaQuery } = await import('@mui/material');
-    (useMediaQuery as Mock).mockReturnValue(false); // Desktop view
-
-    render(
-      <BrowserRouter>
-        <ThemeProvider theme={theme}>
-          <AuthProvider>
-            <ResponsiveNavigation />
-          </AuthProvider>
-        </ThemeProvider>
-      </BrowserRouter>
-    );
-
-    // Check that navigation items are present (Settings and Admin removed from bottom nav)
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Orders')).toBeInTheDocument();
-    expect(screen.getByText('Positions')).toBeInTheDocument();
-    expect(screen.getByText('Strategy')).toBeInTheDocument();
-    expect(screen.getByText('Backtest')).toBeInTheDocument();
-  });
-
-  it('renders mobile bottom navigation on small screens', async () => {
+  it('renders mobile bottom navigation', async () => {
     const { useMediaQuery } = await import('@mui/material');
     (useMediaQuery as Mock).mockReturnValue(true); // Mobile view
 
@@ -58,8 +36,30 @@ describe('ResponsiveNavigation', () => {
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('Orders')).toBeInTheDocument();
     expect(screen.getByText('Positions')).toBeInTheDocument();
-    expect(screen.getByText('Strategy')).toBeInTheDocument();
     expect(screen.getByText('Backtest')).toBeInTheDocument();
+    expect(screen.getByText('Trading')).toBeInTheDocument();
+  });
+
+  it('excludes settings and admin from mobile bottom navigation', async () => {
+    const { useMediaQuery } = await import('@mui/material');
+    (useMediaQuery as Mock).mockReturnValue(true); // Mobile view
+
+    render(
+      <BrowserRouter>
+        <ThemeProvider theme={theme}>
+          <AuthProvider>
+            <ResponsiveNavigation />
+          </AuthProvider>
+        </ThemeProvider>
+      </BrowserRouter>
+    );
+
+    // Check that main navigation items are present
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    expect(screen.getByText('Orders')).toBeInTheDocument();
+    expect(screen.getByText('Positions')).toBeInTheDocument();
+    expect(screen.getByText('Backtest')).toBeInTheDocument();
+    expect(screen.getByText('Trading')).toBeInTheDocument();
 
     // Settings and Admin should not be in bottom navigation
     expect(screen.queryByText('Settings')).not.toBeInTheDocument();

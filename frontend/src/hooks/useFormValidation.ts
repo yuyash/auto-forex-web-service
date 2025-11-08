@@ -32,10 +32,9 @@ export function useFormValidation<T extends Record<string, unknown>>({
     (field: keyof T, value: unknown) => {
       try {
         // Validate single field
-        if ('shape' in schema) {
-          const objectSchema = schema as z.ZodObject<z.ZodRawShape>;
-          const fieldSchema = objectSchema.shape[field as string];
-          if (fieldSchema) {
+        if (schema instanceof z.ZodObject) {
+          const fieldSchema = schema.shape[field as string];
+          if (fieldSchema && typeof fieldSchema.parse === 'function') {
             fieldSchema.parse(value);
             setValidationState((prev) => ({
               ...prev,

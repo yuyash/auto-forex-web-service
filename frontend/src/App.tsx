@@ -23,8 +23,6 @@ const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const OrdersPage = lazy(() => import('./pages/OrdersPage'));
 const PositionsPage = lazy(() => import('./pages/PositionsPage'));
-const StrategyPage = lazy(() => import('./pages/StrategyPage'));
-const BacktestPage = lazy(() => import('./pages/BacktestPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
@@ -144,8 +142,6 @@ function AppRoutes() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/positions" element={<PositionsPage />} />
-            <Route path="/strategy" element={<StrategyPage />} />
-            <Route path="/backtest" element={<BacktestPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/configurations" element={<ConfigurationsPage />} />

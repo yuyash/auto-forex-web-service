@@ -147,18 +147,28 @@ export default function TradingTasksPage() {
             justifyContent: 'space-between',
             alignItems: 'center',
             mb: 3,
+            flexWrap: 'wrap',
+            gap: 2,
           }}
         >
           <Typography variant="h4" component="h1">
             Trading Tasks
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleCreateTask}
-          >
-            New Task
-          </Button>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              onClick={() => navigate('/configurations')}
+            >
+              Manage Configurations
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleCreateTask}
+            >
+              New Task
+            </Button>
+          </Box>
         </Box>
 
         {/* Warning about one-task-per-account rule */}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -13,6 +13,7 @@ import {
   ListItemText,
   useTheme,
   useMediaQuery,
+  Button,
 } from '@mui/material';
 import {
   AccountCircle,
@@ -21,21 +22,18 @@ import {
   Logout,
   AdminPanelSettings,
   Menu as MenuIcon,
+  Receipt as OrdersIcon,
+  AccountBalance as PositionsIcon,
+  Assignment as BacktestTaskIcon,
+  PlayCircleOutline as TradingTaskIcon,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
+import { useOandaAccounts } from '../../hooks/useOandaAccounts';
 import LanguageSelector from '../common/LanguageSelector';
 import NotificationCenter from '../admin/NotificationCenter';
 import Typography from '@mui/material/Typography';
-
-interface OandaAccount {
-  id: number;
-  account_id: string;
-  api_type: string;
-  balance: string;
-  currency: string;
-}
 
 interface AppHeaderProps {
   onMenuClick?: () => void;
@@ -43,43 +41,27 @@ interface AppHeaderProps {
 
 const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
   const { t } = useTranslation('common');
-  const { logout, user, token } = useAuth();
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [userMenuAnchorEl, setUserMenuAnchorEl] = useState<null | HTMLElement>(
     null
   );
-  const [accounts, setAccounts] = useState<OandaAccount[]>([]);
+
+  // Use shared hook with caching to prevent duplicate requests
+  const { accounts } = useOandaAccounts();
+
+  // Derive default account ID from accounts
+  const defaultAccountId = useMemo(
+    () => (accounts.length > 0 ? accounts[0].id.toString() : ''),
+    [accounts]
+  );
+
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
 
-  // Fetch OANDA accounts
-  useEffect(() => {
-    const fetchAccounts = async () => {
-      if (!token) return;
-
-      try {
-        const response = await fetch('/api/accounts/', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setAccounts(data);
-          // Set first account as default if available
-          if (data.length > 0 && !selectedAccountId) {
-            setSelectedAccountId(data[0].id.toString());
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch accounts:', error);
-      }
-    };
-
-    fetchAccounts();
-  }, [token, selectedAccountId]);
+  // Use the derived default if no selection has been made
+  const effectiveAccountId = selectedAccountId || defaultAccountId;
 
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setUserMenuAnchorEl(event.currentTarget);
@@ -114,7 +96,8 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
     setSelectedAccountId(String(event.target.value));
   };
 
-  const isTabletOrBelow = useMediaQuery(theme.breakpoints.down('md'));
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md')); // 600px - 900px
+  const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
   return (
     <AppBar
@@ -122,8 +105,8 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
       sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}
     >
       <Toolbar>
-        {/* Menu button for mobile/tablet */}
-        {isTabletOrBelow && (
+        {/* Menu button for tablet only (not mobile) */}
+        {isTablet && (
           <IconButton
             color="inherit"
             aria-label="open drawer"
@@ -156,6 +139,48 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
           />
         </Box>
 
+        {/* Desktop Navigation Buttons */}
+        {isDesktop && (
+          <Box sx={{ display: 'flex', gap: 1, mr: 2 }}>
+            <Button
+              color="inherit"
+              startIcon={<OrdersIcon />}
+              component={RouterLink}
+              to="/orders"
+              sx={{ textTransform: 'none' }}
+            >
+              Orders
+            </Button>
+            <Button
+              color="inherit"
+              startIcon={<PositionsIcon />}
+              component={RouterLink}
+              to="/positions"
+              sx={{ textTransform: 'none' }}
+            >
+              Positions
+            </Button>
+            <Button
+              color="inherit"
+              startIcon={<BacktestTaskIcon />}
+              component={RouterLink}
+              to="/backtest-tasks"
+              sx={{ textTransform: 'none' }}
+            >
+              Backtest
+            </Button>
+            <Button
+              color="inherit"
+              startIcon={<TradingTaskIcon />}
+              component={RouterLink}
+              to="/trading-tasks"
+              sx={{ textTransform: 'none' }}
+            >
+              Trading
+            </Button>
+          </Box>
+        )}
+
         {/* Account Selector */}
         {accounts.length > 0 && (
           <FormControl
@@ -181,15 +206,15 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
             }}
           >
             <Select
-              value={selectedAccountId}
+              value={effectiveAccountId}
               onChange={handleAccountChange}
               displayEmpty
               inputProps={{ 'aria-label': 'Select OANDA Account' }}
             >
               {accounts.map((account) => (
                 <MenuItem key={account.id} value={account.id.toString()}>
-                  {account.account_id} ({account.api_type}) - {account.currency}{' '}
-                  {Number(account.balance).toFixed(2)}
+                  {account.account_id}
+                  {account.is_practice ? ' (Practice)' : ' (Live)'}
                 </MenuItem>
               ))}
             </Select>

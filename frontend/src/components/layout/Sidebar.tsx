@@ -16,8 +16,6 @@ import {
   Dashboard as DashboardIcon,
   Receipt as OrdersIcon,
   AccountBalance as PositionsIcon,
-  TrendingUp as StrategyIcon,
-  Assessment as BacktestIcon,
   Settings as SettingsIcon,
   AdminPanelSettings as AdminIcon,
   Tune as ConfigIcon,
@@ -50,11 +48,6 @@ const navigationItems: NavigationItem[] = [
     path: '/positions',
     label: 'Positions',
     icon: <PositionsIcon />,
-  },
-  {
-    path: '/strategy',
-    label: 'Strategy',
-    icon: <StrategyIcon />,
     dividerAfter: true,
   },
   {
@@ -71,11 +64,6 @@ const navigationItems: NavigationItem[] = [
     path: '/trading-tasks',
     label: 'Trading Tasks',
     icon: <TradingTaskIcon />,
-  },
-  {
-    path: '/backtest',
-    label: 'Backtest (Legacy)',
-    icon: <BacktestIcon />,
     dividerAfter: true,
   },
   {

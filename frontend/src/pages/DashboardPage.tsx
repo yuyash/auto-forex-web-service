@@ -25,6 +25,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import type { SelectChangeEvent } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { useOandaAccounts } from '../hooks/useOandaAccounts';
 import { OHLCChart } from '../components/chart';
 import { Breadcrumbs } from '../components/common';
 import ChartControls from '../components/chart/ChartControls';
@@ -54,16 +55,15 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-refresh settings
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
-  const [refreshInterval, setRefreshInterval] = useState<number>(30); // seconds
+  // Auto-refresh settings - start disabled to prevent resource exhaustion
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+  const [refreshInterval, setRefreshInterval] = useState<number>(60); // seconds
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // OANDA account state
-  const [hasOandaAccount, setHasOandaAccount] = useState<boolean>(true);
-  const [oandaAccountId, setOandaAccountId] = useState<string | undefined>(
-    undefined
-  );
+  // OANDA account state - using shared hook with caching
+  const { accounts: oandaAccounts, hasAccounts: hasOandaAccount } =
+    useOandaAccounts();
+  const oandaAccountId = oandaAccounts[0]?.account_id;
 
   // Chart API reference for programmatic control
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -121,11 +121,6 @@ const DashboardPage = () => {
 
         if (!response.ok) {
           const errorData = await response.json();
-          if (errorData.error_code === 'NO_OANDA_ACCOUNT') {
-            setHasOandaAccount(false);
-            return [];
-          }
-
           console.error('❌ API error:', response.status, errorData);
           return [];
         }
@@ -134,7 +129,6 @@ const DashboardPage = () => {
         const candles = data.candles || [];
 
         console.log('✅ Fetched', candles.length, 'candles');
-        setHasOandaAccount(true);
         return candles;
       } catch (err) {
         console.error('❌ Error fetching candles:', err);
@@ -202,32 +196,6 @@ const DashboardPage = () => {
     }
   }, [token]);
 
-  // Fetch OANDA accounts
-  const fetchOandaAccounts = useCallback(async () => {
-    if (!token) return;
-    try {
-      const response = await fetch('/api/accounts/', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (response.ok) {
-        const accounts = await response.json();
-        // Backend returns the accounts array directly, not wrapped in an object
-        if (Array.isArray(accounts) && accounts.length > 0) {
-          // Use the first account's account_id
-          setOandaAccountId(accounts[0].account_id);
-          setHasOandaAccount(true);
-        } else {
-          setHasOandaAccount(false);
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching OANDA accounts:', err);
-      setHasOandaAccount(false);
-    }
-  }, [token]);
-
   // Initial data load
   useEffect(() => {
     const loadData = async () => {
@@ -236,7 +204,6 @@ const DashboardPage = () => {
 
       try {
         await Promise.all([
-          fetchOandaAccounts(),
           fetchPositions(),
           fetchOrders(),
           fetchStrategyEvents(),
@@ -251,7 +218,7 @@ const DashboardPage = () => {
     };
 
     loadData();
-  }, [fetchOandaAccounts, fetchPositions, fetchOrders, fetchStrategyEvents]);
+  }, [fetchPositions, fetchOrders, fetchStrategyEvents]);
 
   // Auto-refresh effect for positions, orders, events, and chart data
   useEffect(() => {
@@ -263,13 +230,18 @@ const DashboardPage = () => {
 
     // Set up new timer if auto-refresh is enabled
     if (autoRefreshEnabled && refreshInterval > 0) {
-      refreshTimerRef.current = setInterval(() => {
+      refreshTimerRef.current = setInterval(async () => {
         console.log('🔄 Auto-refresh triggered');
-        fetchPositions();
-        fetchOrders();
-        fetchStrategyEvents();
-        // Trigger chart to fetch new data
-        setChartRefreshTrigger((prev) => prev + 1);
+        // Fetch sequentially to avoid overwhelming the browser
+        try {
+          await fetchPositions();
+          await fetchOrders();
+          await fetchStrategyEvents();
+          // Trigger chart to fetch new data
+          setChartRefreshTrigger((prev) => prev + 1);
+        } catch (err) {
+          console.error('Auto-refresh error:', err);
+        }
       }, refreshInterval * 1000);
     }
 

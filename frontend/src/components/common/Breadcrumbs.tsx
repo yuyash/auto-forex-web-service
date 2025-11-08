@@ -24,14 +24,6 @@ const Breadcrumbs = () => {
       { label: t('breadcrumbs.home'), path: '/dashboard' },
       { label: t('breadcrumbs.positions') },
     ],
-    '/strategy': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
-      { label: t('breadcrumbs.strategy') },
-    ],
-    '/backtest': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
-      { label: t('breadcrumbs.backtest') },
-    ],
     '/settings': [
       { label: t('breadcrumbs.home'), path: '/dashboard' },
       { label: t('breadcrumbs.settings') },
