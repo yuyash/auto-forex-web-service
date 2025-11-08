@@ -194,6 +194,9 @@ const AppHeader = () => {
             <Button color="inherit" component={RouterLink} to="/backtest">
               {t('navigation.backtest')}
             </Button>
+            <Button color="inherit" component={RouterLink} to="/configurations">
+              Configurations
+            </Button>
             <Button color="inherit" component={RouterLink} to="/settings">
               {t('navigation.settings')}
             </Button>

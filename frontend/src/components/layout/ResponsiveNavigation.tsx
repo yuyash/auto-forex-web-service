@@ -13,6 +13,7 @@ import {
   Assessment as BacktestIcon,
   Settings as SettingsIcon,
   AdminPanelSettings as AdminIcon,
+  Tune as ConfigIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -48,6 +49,11 @@ const navigationItems: NavigationItem[] = [
     path: '/backtest',
     label: 'Backtest',
     icon: <BacktestIcon />,
+  },
+  {
+    path: '/configurations',
+    label: 'Configs',
+    icon: <ConfigIcon />,
   },
   {
     path: '/settings',

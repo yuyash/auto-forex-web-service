@@ -148,3 +148,26 @@ export function useDeleteConfiguration(options?: {
     reset,
   };
 }
+
+/**
+ * Combined hook for all configuration mutations
+ */
+export function useConfigurationMutations() {
+  const createMutation = useCreateConfiguration();
+  const updateMutation = useUpdateConfiguration();
+  const deleteMutation = useDeleteConfiguration();
+
+  return {
+    createConfiguration: createMutation.mutate,
+    isCreating: createMutation.isLoading,
+    createError: createMutation.error,
+
+    updateConfiguration: updateMutation.mutate,
+    isUpdating: updateMutation.isLoading,
+    updateError: updateMutation.error,
+
+    deleteConfiguration: deleteMutation.mutate,
+    isDeleting: deleteMutation.isLoading,
+    deleteError: deleteMutation.error,
+  };
+}

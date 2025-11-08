@@ -24,6 +24,8 @@ import AdminSettingsPage from './pages/AdminSettingsPage';
 import EventViewerPage from './pages/EventViewerPage';
 import UserManagementPage from './pages/UserManagementPage';
 import NotFoundPage from './pages/NotFoundPage';
+import ConfigurationsPage from './pages/ConfigurationsPage';
+import ConfigurationFormPage from './pages/ConfigurationFormPage';
 
 function AppRoutes() {
   const { isAuthenticated, systemSettings, systemSettingsLoading } = useAuth();
@@ -109,6 +111,15 @@ function AppRoutes() {
           <Route path="/backtest" element={<BacktestPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/configurations" element={<ConfigurationsPage />} />
+          <Route
+            path="/configurations/new"
+            element={<ConfigurationFormPage />}
+          />
+          <Route
+            path="/configurations/:id/edit"
+            element={<ConfigurationFormPage />}
+          />
           <Route path="/admin" element={<AdminDashboardPage />} />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />
           <Route path="/admin/events" element={<EventViewerPage />} />
