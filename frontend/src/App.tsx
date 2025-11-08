@@ -26,7 +26,10 @@ const PositionsPage = lazy(() => import('./pages/PositionsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
-const AdminSettingsPage = lazy(() => import('./pages/AdminSettingsPage'));
+const AdminSystemSettingsPage = lazy(
+  () => import('./pages/AdminSystemSettingsPage')
+);
+const AdminWhitelistPage = lazy(() => import('./pages/AdminWhitelistPage'));
 const EventViewerPage = lazy(() => import('./pages/EventViewerPage'));
 const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
@@ -180,7 +183,11 @@ function AppRoutes() {
               element={<TradingTaskFormPage />}
             />
             <Route path="/admin" element={<AdminDashboardPage />} />
-            <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            <Route
+              path="/admin/settings"
+              element={<AdminSystemSettingsPage />}
+            />
+            <Route path="/admin/whitelist" element={<AdminWhitelistPage />} />
             <Route path="/admin/events" element={<EventViewerPage />} />
             <Route path="/admin/users" element={<UserManagementPage />} />
           </Route>

@@ -256,9 +256,48 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             "registration_enabled",
             "login_enabled",
             "email_whitelist_enabled",
+            # Debug Settings
+            "debug_mode",
+            # Email Settings
+            "email_backend_type",
+            "email_host",
+            "email_port",
+            "email_use_tls",
+            "email_use_ssl",
+            "email_host_user",
+            "email_host_password",
+            "default_from_email",
+            # AWS Settings
+            "aws_credential_method",
+            "aws_profile_name",
+            "aws_role_arn",
+            "aws_credentials_file_path",
+            "aws_access_key_id",
+            "aws_secret_access_key",
+            "aws_ses_region",
+            "aws_region",
+            "aws_s3_bucket",
+            # Logging Settings
+            "django_log_level",
+            # Application Settings
+            "tick_data_retention_days",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]
+        extra_kwargs = {
+            "email_host_password": {"write_only": True},
+            "aws_secret_access_key": {"write_only": True},
+        }
+
+    def to_representation(self, instance: Any) -> Dict[str, Any]:
+        """Mask sensitive fields in response."""
+        data = super().to_representation(instance)
+        # Mask passwords if they exist
+        if instance.email_host_password:
+            data["email_host_password"] = "********"  # nosec B105
+        if instance.aws_secret_access_key:
+            data["aws_secret_access_key"] = "********"  # nosec B105
+        return data
 
 
 class PublicSystemSettingsSerializer(serializers.ModelSerializer):

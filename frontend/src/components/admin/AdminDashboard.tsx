@@ -329,6 +329,12 @@ const AdminDashboard: React.FC = () => {
             </Button>
             <Button
               variant="outlined"
+              onClick={() => navigate('/admin/whitelist')}
+            >
+              Email Whitelist
+            </Button>
+            <Button
+              variant="outlined"
               onClick={() => navigate('/admin/events')}
             >
               {t('events.viewAll', 'View All Events')}

@@ -43,6 +43,133 @@ class SystemSettings(models.Model):
         default=False,
         help_text="Whether email whitelist is enforced for registration and login",
     )
+
+    # Debug Settings
+    debug_mode = models.BooleanField(
+        default=False,
+        help_text="Enable debug mode (should be False in production)",
+    )
+
+    # Email Settings - SMTP
+    email_backend_type = models.CharField(
+        max_length=10,
+        choices=[("smtp", "SMTP"), ("ses", "AWS SES")],
+        default="smtp",
+        help_text="Type of email backend to use",
+    )
+    email_host = models.CharField(
+        max_length=255,
+        default="smtp.gmail.com",
+        help_text="SMTP server hostname",
+    )
+    email_port = models.IntegerField(
+        default=587,
+        help_text="SMTP server port",
+    )
+    email_use_tls = models.BooleanField(
+        default=True,
+        help_text="Enable TLS for email connection",
+    )
+    email_use_ssl = models.BooleanField(
+        default=False,
+        help_text="Enable SSL for email connection",
+    )
+    email_host_user = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="SMTP authentication username",
+    )
+    email_host_password = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="SMTP authentication password",
+    )
+    default_from_email = models.EmailField(
+        default="noreply@example.com",
+        help_text="Default sender email address",
+    )
+
+    # AWS Settings
+    aws_credential_method = models.CharField(
+        max_length=20,
+        choices=[
+            ("profile", "AWS Profile"),
+            ("profile_role", "AWS Profile + Assume Role"),
+            ("credentials_file", "Credentials File"),
+            ("access_keys", "Access Key ID + Secret"),
+        ],
+        default="profile",
+        help_text="Method for AWS authentication",
+    )
+    aws_profile_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="default",
+        help_text="AWS profile name (for profile and profile_role methods)",
+    )
+    aws_role_arn = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="AWS role ARN to assume (for profile_role method)",
+    )
+    aws_credentials_file_path = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Path to AWS credentials file (for credentials_file method)",
+    )
+    aws_access_key_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="AWS access key ID (for access_keys method)",
+    )
+    aws_secret_access_key = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="AWS secret access key (for access_keys method)",
+    )
+    aws_ses_region = models.CharField(
+        max_length=50,
+        default="us-east-1",
+        help_text="AWS SES region (if using SES for email)",
+    )
+    aws_region = models.CharField(
+        max_length=50,
+        default="us-east-1",
+        help_text="Default AWS region",
+    )
+    aws_s3_bucket = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="S3 bucket name for file storage",
+    )
+
+    # Logging Settings
+    django_log_level = models.CharField(
+        max_length=20,
+        choices=[
+            ("DEBUG", "Debug"),
+            ("INFO", "Info"),
+            ("WARNING", "Warning"),
+            ("ERROR", "Error"),
+            ("CRITICAL", "Critical"),
+        ],
+        default="INFO",
+        help_text="Logging level for Django",
+    )
+
+    # Application Settings
+    tick_data_retention_days = models.IntegerField(
+        default=90,
+        help_text="Number of days to retain tick data before cleanup",
+    )
+
     updated_at = models.DateTimeField(
         auto_now=True,
         help_text="Timestamp when settings were last updated",
@@ -72,9 +199,58 @@ class SystemSettings(models.Model):
         """
         Override save to enforce singleton pattern.
         Only one SystemSettings instance should exist.
+
+        Also triggers container restart if debug_mode or django_log_level changes.
         """
+        import logging
+        import os
+        import subprocess  # nosec B404 - subprocess used for controlled container restart only
+
+        logger = logging.getLogger(__name__)
+
+        # Check if this is an update (not initial creation)
+        restart_required = False
+        if self.pk:
+            try:
+                old_instance = SystemSettings.objects.get(pk=1)
+                # Check if debug_mode or django_log_level changed
+                if (
+                    old_instance.debug_mode != self.debug_mode
+                    or old_instance.django_log_level != self.django_log_level
+                ):
+                    restart_required = True
+                    logger.info(
+                        "Settings change detected - Debug: %s->%s, Log Level: %s->%s",
+                        old_instance.debug_mode,
+                        self.debug_mode,
+                        old_instance.django_log_level,
+                        self.django_log_level,
+                    )
+            except SystemSettings.DoesNotExist:
+                pass
+
         self.pk = 1
         super().save(*args, **kwargs)
+
+        # Trigger restart if needed
+        if restart_required:
+            logger.warning("Debug mode or log level changed. Container restart recommended.")
+            # Try to restart container automatically
+            script_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "scripts", "restart_container.sh"
+            )
+            if os.path.exists(script_path):
+                try:
+                    # pylint: disable=consider-using-with
+                    # Script path is controlled and validated, not user input
+                    process = subprocess.Popen(  # nosec B603
+                        [script_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                    )
+                    # Don't wait for process to complete (background execution)
+                    process.poll()
+                    logger.info("Container restart initiated")
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    logger.error("Failed to initiate container restart: %s", e)
 
     @classmethod
     def get_settings(cls) -> "SystemSettings":

@@ -62,7 +62,7 @@ describe('Breadcrumbs', () => {
     renderBreadcrumbs('/admin/settings');
     expect(screen.getByText('Home')).toBeInTheDocument();
     expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Settings')).toBeInTheDocument();
+    expect(screen.getByText('System Settings')).toBeInTheDocument();
   });
 
   it('renders breadcrumbs for admin events', () => {
@@ -77,6 +77,13 @@ describe('Breadcrumbs', () => {
     expect(screen.getByText('Home')).toBeInTheDocument();
     expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
     expect(screen.getByText('User Management')).toBeInTheDocument();
+  });
+
+  it('renders breadcrumbs for admin whitelist', () => {
+    renderBreadcrumbs('/admin/whitelist');
+    expect(screen.getByText('Home')).toBeInTheDocument();
+    expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
+    expect(screen.getByText('Email Whitelist')).toBeInTheDocument();
   });
 
   it('renders home icon for first breadcrumb', () => {
