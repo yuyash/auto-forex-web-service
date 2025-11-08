@@ -28,6 +28,7 @@ import ConfigurationsPage from './pages/ConfigurationsPage';
 import ConfigurationFormPage from './pages/ConfigurationFormPage';
 import BacktestTasksPage from './pages/BacktestTasksPage';
 import BacktestTaskFormPage from './pages/BacktestTaskFormPage';
+import BacktestTaskDetailPage from './pages/BacktestTaskDetailPage';
 
 function AppRoutes() {
   const { isAuthenticated, systemSettings, systemSettingsLoading } = useAuth();
@@ -126,6 +127,10 @@ function AppRoutes() {
           <Route
             path="/backtest-tasks/new"
             element={<BacktestTaskFormPage />}
+          />
+          <Route
+            path="/backtest-tasks/:id"
+            element={<BacktestTaskDetailPage />}
           />
           <Route
             path="/backtest-tasks/:id/edit"
