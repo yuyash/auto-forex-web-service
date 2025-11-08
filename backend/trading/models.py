@@ -2,16 +2,18 @@
 Trading models for strategy management and trading operations.
 
 This module contains models for:
+- StrategyConfig: Reusable strategy configuration
 - Strategy: Trading strategy configuration
 - StrategyState: Runtime state for active strategies
 - Order: Trading orders
 - Position: Open trading positions
 - Trade: Completed trade records
 
-Requirements: 5.1, 5.2, 8.1, 8.2, 9.1, 9.2, 18.1
+Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 5.1, 5.2, 8.1, 8.2, 9.1, 9.2, 18.1
 """
 
 from decimal import Decimal
+from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.db import models
@@ -27,6 +29,190 @@ from .event_models import Event, Notification  # noqa: F401
 from .tick_data_models import TickData  # noqa: F401
 
 User = get_user_model()
+
+
+class StrategyConfig(models.Model):
+    """
+    Reusable strategy configuration.
+
+    A configuration defines strategy parameters that can be shared across
+    multiple backtest and trading tasks.
+
+    Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="strategy_configs",
+        help_text="User who created this configuration",
+    )
+    name = models.CharField(
+        max_length=255,
+        help_text="Human-readable name for this configuration",
+    )
+    strategy_type = models.CharField(
+        max_length=50,
+        help_text="Type of strategy (e.g., 'floor', 'ma_crossover', 'rsi')",
+    )
+    parameters = models.JSONField(
+        default=dict,
+        help_text="Strategy-specific configuration parameters",
+    )
+    description = models.TextField(
+        blank=True,
+        default="",
+        help_text="Optional description of this configuration",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp when the configuration was created",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Timestamp when the configuration was last updated",
+    )
+
+    class Meta:
+        db_table = "strategy_configs"
+        verbose_name = "Strategy Configuration"
+        verbose_name_plural = "Strategy Configurations"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "name"],
+                name="unique_user_config_name",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["user", "strategy_type"]),
+            models.Index(fields=["created_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.strategy_type})"
+
+    def validate_parameters(self) -> tuple[bool, str | None]:
+        """
+        Validate parameters against strategy type schema.
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        from .strategy_registry import registry
+
+        try:
+            # Check if strategy type exists
+            if not registry.is_registered(self.strategy_type):
+                available = ", ".join(registry.list_strategies())
+                return (
+                    False,
+                    f"Strategy type '{self.strategy_type}' is not registered. "
+                    f"Available strategies: {available}",
+                )
+
+            # Get schema for validation
+            schema = registry.get_config_schema(self.strategy_type)
+
+            # Basic validation: check required fields
+            required_fields = schema.get("required", [])
+            properties = schema.get("properties", {})
+
+            # Ensure parameters is a dict before checking membership
+            if not isinstance(self.parameters, dict):
+                return False, "Parameters must be a dictionary"
+
+            for field in required_fields:
+                if field not in self.parameters:  # pylint: disable=unsupported-membership-test
+                    return False, f"Required parameter '{field}' is missing"
+
+            # Type validation for provided parameters
+            # pylint: disable=unsupported-membership-test
+            for param_name, param_value in self.parameters.items():
+                if param_name in properties:
+                    prop_schema = properties[param_name]
+                    expected_type = prop_schema.get("type")
+
+                    if expected_type and not self._validate_type(param_value, expected_type):
+                        return (
+                            False,
+                            f"Parameter '{param_name}' has invalid type. "
+                            f"Expected {expected_type}, got {type(param_value).__name__}",
+                        )
+
+            return True, None
+
+        except Exception as e:
+            return False, f"Validation error: {str(e)}"
+
+    @staticmethod
+    def _validate_type(value: Any, expected_type: str) -> bool:
+        """
+        Validate value type against expected JSON schema type.
+
+        Args:
+            value: Value to validate
+            expected_type: Expected type from JSON schema
+
+        Returns:
+            True if type matches, False otherwise
+        """
+        type_mapping: dict[str, type | tuple[type, ...]] = {
+            "string": str,
+            "number": (int, float, Decimal),
+            "integer": int,
+            "boolean": bool,
+            "object": dict,
+            "array": list,
+        }
+
+        expected_python_type = type_mapping.get(expected_type)
+        if expected_python_type is None:
+            return True  # Unknown type, skip validation
+
+        return isinstance(value, expected_python_type)
+
+    def is_in_use(self) -> bool:
+        """
+        Check if configuration is referenced by active tasks.
+
+        Returns:
+            True if any active task references this configuration
+        """
+        # Check BacktestTask references
+        # Import here to avoid circular dependency
+        from .backtest_models import Backtest as BacktestModel
+
+        active_backtests = BacktestModel.objects.filter(
+            config=self, status__in=[TaskStatus.CREATED, TaskStatus.RUNNING]
+        ).exists()
+
+        if active_backtests:
+            return True
+
+        # Check TradingTask references (will be implemented in future tasks)
+        # For now, return False as TradingTask model doesn't exist yet
+        return False
+
+    def get_referencing_tasks(self) -> dict[str, list[Any]]:
+        """
+        Get all tasks that reference this configuration.
+
+        Returns:
+            Dictionary with 'backtest_tasks' and 'trading_tasks' lists
+        """
+        # Import here to avoid circular dependency
+        from .backtest_models import Backtest as BacktestModel
+
+        backtest_tasks = list(BacktestModel.objects.filter(config=self).order_by("-created_at"))
+
+        # TradingTask will be implemented in future tasks
+        trading_tasks: list[Any] = []
+
+        return {
+            "backtest_tasks": backtest_tasks,
+            "trading_tasks": trading_tasks,
+        }
 
 
 class Strategy(models.Model):

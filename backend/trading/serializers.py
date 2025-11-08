@@ -14,7 +14,7 @@ from rest_framework import serializers
 
 from .backtest_models import Backtest, BacktestResult
 from .event_models import Event
-from .models import Order, Position, Strategy, StrategyState
+from .models import Order, Position, Strategy, StrategyConfig, StrategyState
 from .tick_data_models import TickData
 
 
@@ -67,6 +67,149 @@ class TickDataCSVSerializer(serializers.ModelSerializer):
             "spread",
         ]
         read_only_fields = fields
+
+
+class StrategyConfigDetailSerializer(serializers.ModelSerializer):
+    """
+    Serializer for strategy configuration full details.
+
+    Requirements: 1.1, 1.2, 8.1, 8.7
+    """
+
+    user_id = serializers.IntegerField(source="user.id", read_only=True)
+    is_in_use = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = StrategyConfig
+        fields = [
+            "id",
+            "user_id",
+            "name",
+            "strategy_type",
+            "parameters",
+            "description",
+            "is_in_use",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "user_id", "is_in_use", "created_at", "updated_at"]
+
+    def to_representation(self, instance: StrategyConfig) -> dict:
+        """Add is_in_use to representation."""
+        data = super().to_representation(instance)
+        data["is_in_use"] = instance.is_in_use()
+        return data
+
+
+class StrategyConfigListSerializer(serializers.ModelSerializer):
+    """
+    Serializer for strategy configuration list view (summary only).
+
+    Requirements: 1.1, 1.2, 8.1
+    """
+
+    user_id = serializers.IntegerField(source="user.id", read_only=True)
+    is_in_use = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = StrategyConfig
+        fields = [
+            "id",
+            "user_id",
+            "name",
+            "strategy_type",
+            "description",
+            "is_in_use",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+    def to_representation(self, instance: StrategyConfig) -> dict:
+        """Add is_in_use to representation."""
+        data = super().to_representation(instance)
+        data["is_in_use"] = instance.is_in_use()
+        return data
+
+
+class StrategyConfigCreateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for creating and updating strategy configurations.
+
+    Includes validation against strategy registry.
+
+    Requirements: 1.1, 1.2, 8.7
+    """
+
+    class Meta:
+        model = StrategyConfig
+        fields = [
+            "name",
+            "strategy_type",
+            "parameters",
+            "description",
+        ]
+
+    def validate_strategy_type(self, value: str) -> str:
+        """Validate strategy type exists in registry."""
+        from .strategy_registry import registry
+
+        if not registry.is_registered(value):
+            available = ", ".join(registry.list_strategies())
+            raise serializers.ValidationError(
+                f"Strategy type '{value}' is not registered. " f"Available strategies: {available}"
+            )
+        return value
+
+    def validate_parameters(self, value: dict) -> dict:
+        """Validate parameters is a dictionary."""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Parameters must be a JSON object")
+        return value
+
+    def validate(self, attrs: dict) -> dict:
+        """Validate parameters against strategy schema."""
+        strategy_type = attrs.get("strategy_type")
+        parameters = attrs.get("parameters", {})
+
+        if strategy_type:
+            # Create temporary config for validation
+            temp_config = StrategyConfig(
+                strategy_type=strategy_type,
+                parameters=parameters,
+            )
+
+            is_valid, error_message = temp_config.validate_parameters()
+            if not is_valid:
+                raise serializers.ValidationError({"parameters": error_message})
+
+        return attrs
+
+    def create(self, validated_data: dict) -> StrategyConfig:
+        """Create strategy configuration with user from context."""
+        user = self.context["request"].user
+        validated_data["user"] = user
+        return StrategyConfig.objects.create(**validated_data)
+
+    def update(self, instance: StrategyConfig, validated_data: dict) -> StrategyConfig:
+        """Update strategy configuration."""
+        # Don't allow updating strategy_type if config is in use
+        if (
+            "strategy_type" in validated_data
+            and instance.is_in_use()
+            and validated_data["strategy_type"] != instance.strategy_type
+        ):
+            raise serializers.ValidationError(
+                {
+                    "strategy_type": "Cannot change strategy type for configuration "
+                    "that is in use by active tasks"
+                }
+            )
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
 
 
 class StrategyListSerializer(serializers.Serializer):  # pylint: disable=abstract-method

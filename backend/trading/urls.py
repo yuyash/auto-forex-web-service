@@ -15,6 +15,11 @@ from .health_views import health_check, simple_health_check
 from .order_views import OrderDetailView, OrderListCreateView
 from .position_views import PositionCloseView, PositionDetailView, PositionListView
 from .strategy_comparison_views import StrategyCompareResultsView, StrategyCompareView
+from .strategy_config_views import (
+    StrategyConfigDetailView,
+    StrategyConfigListCreateView,
+    StrategyConfigTasksView,
+)
 from .strategy_views import (
     AccountStrategyConfigView,
     AccountStrategyStartView,
@@ -33,6 +38,22 @@ urlpatterns = [
     path("health/simple/", simple_health_check, name="simple_health_check"),
     # Candle data endpoints
     path("candles/", CandleDataView.as_view(), name="candle_data"),
+    # Strategy configuration endpoints
+    path(
+        "strategy-configs/",
+        StrategyConfigListCreateView.as_view(),
+        name="strategy_config_list_create",
+    ),
+    path(
+        "strategy-configs/<int:config_id>/",
+        StrategyConfigDetailView.as_view(),
+        name="strategy_config_detail",
+    ),
+    path(
+        "strategy-configs/<int:config_id>/tasks/",
+        StrategyConfigTasksView.as_view(),
+        name="strategy_config_tasks",
+    ),
     # Event endpoints
     path("events/", EventListView.as_view(), name="event_list"),
     path("events/export/", EventExportView.as_view(), name="event_export"),
