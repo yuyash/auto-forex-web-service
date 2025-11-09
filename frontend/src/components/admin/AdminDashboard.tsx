@@ -81,7 +81,23 @@ const AdminDashboard: React.FC = () => {
 
         // Update dashboard data based on message type
         if (data.type === 'dashboard_update') {
-          setDashboardData(data.data);
+          setDashboardData((prev) => {
+            const incoming = data.data as AdminDashboardData;
+
+            if (!prev) {
+              return incoming;
+            }
+
+            return {
+              ...prev,
+              ...incoming,
+              recent_events: incoming.recent_events ?? prev.recent_events ?? [],
+              online_users: incoming.online_users ?? prev.online_users,
+              running_strategies:
+                incoming.running_strategies ?? prev.running_strategies,
+              health: incoming.health ?? prev.health,
+            };
+          });
         } else if (data.type === 'metrics') {
           // Handle system metrics updates from backend
           setDashboardData((prev) => {
