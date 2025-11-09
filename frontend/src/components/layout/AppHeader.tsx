@@ -107,6 +107,11 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
     return `${account.account_id}${isPractice ? ' (Practice)' : ' (Live)'}`;
   };
 
+  const formatCompactAccountLabel = (account: OandaAccount) => {
+    const isPractice = account.api_type === 'practice' || account.is_practice;
+    return `${account.account_id}${isPractice ? ' (P)' : ''}`;
+  };
+
   return (
     <AppBar
       position="fixed"
@@ -194,8 +199,9 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
           <FormControl
             size="small"
             sx={{
-              minWidth: { xs: 140, sm: 200 },
-              mr: { xs: 1, sm: 2 },
+              minWidth: { xs: 110, sm: 200 },
+              maxWidth: { xs: 150, sm: 240 },
+              mr: { xs: 0.75, sm: 2 },
               flexShrink: 0,
               '& .MuiOutlinedInput-root': {
                 color: 'inherit',
@@ -212,6 +218,16 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
               '& .MuiSelect-icon': {
                 color: 'inherit',
               },
+              '& .MuiOutlinedInput-input': {
+                display: 'flex',
+                alignItems: 'center',
+                minHeight: 0,
+                py: 0.5,
+                fontSize: { xs: '0.8rem', sm: '0.875rem' },
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              },
             }}
           >
             <Select
@@ -219,10 +235,48 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
               onChange={handleAccountChange}
               displayEmpty
               inputProps={{ 'aria-label': 'Select OANDA Account' }}
+              renderValue={(selected) => {
+                const selectedValue = String(selected ?? '');
+                const account = accounts.find(
+                  (item) => item.id.toString() === selectedValue
+                );
+
+                if (!account) {
+                  return (
+                    <Typography
+                      component="span"
+                      noWrap
+                      sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
+                    >
+                      {t('header.selectAccount', 'Select account')}
+                    </Typography>
+                  );
+                }
+
+                const label = isMobile
+                  ? formatCompactAccountLabel(account)
+                  : formatAccountLabel(account);
+
+                return (
+                  <Typography
+                    component="span"
+                    noWrap
+                    sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
+                  >
+                    {label}
+                  </Typography>
+                );
+              }}
             >
               {accounts.map((account) => (
                 <MenuItem key={account.id} value={account.id.toString()}>
-                  {formatAccountLabel(account)}
+                  <Typography
+                    component="span"
+                    noWrap
+                    sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
+                  >
+                    {formatAccountLabel(account)}
+                  </Typography>
                 </MenuItem>
               ))}
             </Select>
