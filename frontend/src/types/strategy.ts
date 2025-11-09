@@ -8,6 +8,8 @@ export interface Strategy {
 
 export interface ConfigSchema {
   type: string;
+  title?: string;
+  description?: string;
   display_name?: string;
   properties: Record<string, ConfigProperty>;
   required?: string[];
@@ -15,6 +17,7 @@ export interface ConfigSchema {
 
 export interface ConfigProperty {
   type: string;
+  title?: string;
   description?: string;
   default?: unknown;
   minimum?: number;

@@ -169,6 +169,7 @@ const StrategyConfigForm = ({
     const value = config[fieldName] ?? fieldSchema.default ?? '';
     const error = validationErrors[fieldName];
     const isRequired = configSchema.required?.includes(fieldName);
+    const label = fieldSchema.title ?? formatFieldLabel(fieldName);
 
     // Enum field (dropdown)
     if (fieldSchema.enum) {
@@ -182,12 +183,10 @@ const StrategyConfigForm = ({
           error={!!error}
           disabled={disabled}
         >
-          <InputLabel required={isRequired}>
-            {formatFieldLabel(fieldName)}
-          </InputLabel>
+          <InputLabel required={isRequired}>{label}</InputLabel>
           <Select
             value={String(value)}
-            label={formatFieldLabel(fieldName)}
+            label={label}
             onChange={(e) => handleFieldChange(fieldName, e.target.value)}
           >
             {fieldSchema.enum.map((option: string) => (
@@ -227,7 +226,7 @@ const StrategyConfigForm = ({
           label={
             <Box>
               <Typography variant="body1">
-                {formatFieldLabel(fieldName)}
+                {label}
                 {isRequired && (
                   <Typography component="span" color="error">
                     {' '}
@@ -252,7 +251,7 @@ const StrategyConfigForm = ({
         <TextField
           key={fieldName}
           fullWidth
-          label={formatFieldLabel(fieldName)}
+          label={label}
           type="number"
           value={value}
           onChange={(e) => {
@@ -282,7 +281,7 @@ const StrategyConfigForm = ({
         <TextField
           key={fieldName}
           fullWidth
-          label={formatFieldLabel(fieldName)}
+          label={label}
           value={arrayValue}
           onChange={(e) => {
             const items = e.target.value
@@ -306,7 +305,7 @@ const StrategyConfigForm = ({
       <TextField
         key={fieldName}
         fullWidth
-        label={formatFieldLabel(fieldName)}
+        label={label}
         value={value}
         onChange={(e) => handleFieldChange(fieldName, e.target.value)}
         helperText={error || fieldSchema.description}

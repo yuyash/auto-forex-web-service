@@ -22,7 +22,7 @@ import {
 import Grid from '@mui/material/Grid';
 import { Warning as WarningIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
@@ -71,7 +71,6 @@ export default function TradingTaskForm({
   const {
     control,
     handleSubmit,
-    watch,
     formState: { errors },
     trigger,
   } = useForm<TradingTaskFormData>({
@@ -85,8 +84,26 @@ export default function TradingTaskForm({
     },
   });
 
-  const selectedAccountId = watch('account_id');
-  const selectedConfigId = watch('config_id');
+  const selectedAccountId = useWatch<TradingTaskFormData, 'account_id'>({
+    control,
+    name: 'account_id',
+    defaultValue: 0,
+  });
+  const selectedConfigId = useWatch<TradingTaskFormData, 'config_id'>({
+    control,
+    name: 'config_id',
+    defaultValue: 0,
+  });
+  const watchedName = useWatch<TradingTaskFormData, 'name'>({
+    control,
+    name: 'name',
+    defaultValue: '',
+  });
+  const watchedDescription = useWatch<TradingTaskFormData, 'description'>({
+    control,
+    name: 'description',
+    defaultValue: '',
+  });
 
   // Fetch accounts
   const { data: accountsData } = useAccounts({ page_size: 100 });
@@ -365,17 +382,17 @@ export default function TradingTaskForm({
                       Task Name
                     </Typography>
                     <Typography variant="body1" gutterBottom>
-                      {watch('name')}
+                      {watchedName}
                     </Typography>
                   </Box>
 
-                  {watch('description') && (
+                  {watchedDescription && (
                     <Box sx={{ mt: 2 }}>
                       <Typography variant="body2" color="text.secondary">
                         Description
                       </Typography>
                       <Typography variant="body1" gutterBottom>
-                        {watch('description')}
+                        {watchedDescription}
                       </Typography>
                     </Box>
                   )}
