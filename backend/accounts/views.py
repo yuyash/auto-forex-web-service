@@ -22,7 +22,7 @@ from rest_framework.views import APIView
 
 from trading.event_logger import SecurityEventLogger
 
-from .email_utils import send_verification_email, send_welcome_email
+from .email_utils import get_aws_session, send_verification_email, send_welcome_email
 from .jwt_utils import generate_jwt_token, get_user_from_token, refresh_jwt_token
 from .models import OandaAccount, SystemSettings, UserSession
 from .permissions import IsAdminUser
@@ -36,6 +36,7 @@ from .serializers import (
     UserRegistrationSerializer,
     UserSettingsSerializer,
 )
+from .settings_helper import get_system_setting, refresh_settings_cache
 
 if TYPE_CHECKING:
     from accounts.models import User as UserType
@@ -697,7 +698,8 @@ class UserLogoutView(APIView):
             return streams_closed
 
         except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.error("Failed to close streams for user %s: %s", user.email, e, exc_info=True)
+            logger.error("Failed to close streams for user %s: %s",
+                         user.email, e, exc_info=True)
             return streams_closed
 
     def post(self, request: Request) -> Response:
@@ -718,7 +720,8 @@ class UserLogoutView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        token = auth_header.split(" ")[1] if len(auth_header.split(" ")) > 1 else ""
+        token = auth_header.split(" ")[1] if len(
+            auth_header.split(" ")) > 1 else ""
         if not token:
             return Response(
                 {"error": "No token provided."},
@@ -819,7 +822,8 @@ class TokenRefreshView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        token = auth_header.split(" ")[1] if len(auth_header.split(" ")) > 1 else ""
+        token = auth_header.split(" ")[1] if len(
+            auth_header.split(" ")) > 1 else ""
         if not token:
             return Response(
                 {"error": "No token provided."},
@@ -947,13 +951,15 @@ class AdminSystemSettingsView(APIView):
             Response with updated system settings
         """
         system_settings = SystemSettings.get_settings()
-        serializer = SystemSettingsSerializer(system_settings, data=request.data, partial=True)
+        serializer = SystemSettingsSerializer(
+            system_settings, data=request.data, partial=True)
 
         if serializer.is_valid():
             # Update the updated_by field
             if request.user.is_authenticated:
                 system_settings.updated_by = request.user
             serializer.save()
+            refresh_settings_cache()
 
             if request.user.is_authenticated and hasattr(request.user, "email"):
                 logger.info(
@@ -1021,7 +1027,20 @@ class AdminTestEmailView(APIView):
 
         # Prepare test email content
         subject = "Test Email - Auto Forex Trader"
-        user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+        user_email = request.user.email if hasattr(
+            request.user, "email") else "N/A"
+        backend_type = get_system_setting(
+            "email_backend_type",
+            getattr(settings, "EMAIL_BACKEND_TYPE", "smtp"),
+        )
+        email_host = get_system_setting("email_host", settings.EMAIL_HOST)
+        email_port = get_system_setting("email_port", settings.EMAIL_PORT)
+        email_use_tls = get_system_setting(
+            "email_use_tls", settings.EMAIL_USE_TLS)
+        default_from_email = get_system_setting(
+            "default_from_email",
+            settings.DEFAULT_FROM_EMAIL,
+        )
         html_message = f"""
         <html>
             <body>
@@ -1031,11 +1050,11 @@ class AdminTestEmailView(APIView):
                 <hr>
                 <p><strong>Configuration Details:</strong></p>
                 <ul>
-                    <li>Backend: {getattr(settings, 'EMAIL_BACKEND_TYPE', 'smtp').upper()}</li>
-                    <li>Host: {settings.EMAIL_HOST}</li>
-                    <li>Port: {settings.EMAIL_PORT}</li>
-                    <li>Use TLS: {settings.EMAIL_USE_TLS}</li>
-                    <li>From Email: {settings.DEFAULT_FROM_EMAIL}</li>
+                    <li>Backend: {str(backend_type).upper()}</li>
+                    <li>Host: {email_host}</li>
+                    <li>Port: {email_port}</li>
+                    <li>Use TLS: {email_use_tls}</li>
+                    <li>From Email: {default_from_email}</li>
                 </ul>
                 <p>Tested by: {request.user.username} ({user_email})</p>
             </body>
@@ -1048,11 +1067,11 @@ class AdminTestEmailView(APIView):
         If you received this email, your email configuration is working correctly.
 
         Configuration Details:
-        - Backend: {getattr(settings, 'EMAIL_BACKEND_TYPE', 'smtp').upper()}
-        - Host: {settings.EMAIL_HOST}
-        - Port: {settings.EMAIL_PORT}
-        - Use TLS: {settings.EMAIL_USE_TLS}
-        - From Email: {settings.DEFAULT_FROM_EMAIL}
+        - Backend: {str(backend_type).upper()}
+        - Host: {email_host}
+        - Port: {email_port}
+        - Use TLS: {email_use_tls}
+        - From Email: {default_from_email}
 
         Tested by: {request.user.username} ({user_email})
         """
@@ -1062,12 +1081,13 @@ class AdminTestEmailView(APIView):
             subject=subject,
             html_message=html_message,
             plain_message=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email=default_from_email,
             recipient_list=[test_email],
         )
 
         if success:
-            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            user_email = request.user.email if hasattr(
+                request.user, "email") else "N/A"
             logger.info(
                 "Test email sent successfully by admin %s to %s",
                 user_email,
@@ -1076,7 +1096,7 @@ class AdminTestEmailView(APIView):
                     "user_id": request.user.id,
                     "admin_email": user_email,
                     "test_email": test_email,
-                    "backend": getattr(settings, "EMAIL_BACKEND_TYPE", "smtp"),
+                    "backend": str(backend_type).lower(),
                 },
             )
 
@@ -1085,17 +1105,18 @@ class AdminTestEmailView(APIView):
                     "success": True,
                     "message": f"Test email sent successfully to {test_email}",
                     "configuration": {
-                        "backend": getattr(settings, "EMAIL_BACKEND_TYPE", "smtp").upper(),
-                        "host": settings.EMAIL_HOST,
-                        "port": settings.EMAIL_PORT,
-                        "use_tls": settings.EMAIL_USE_TLS,
-                        "from_email": settings.DEFAULT_FROM_EMAIL,
+                        "backend": str(backend_type).upper(),
+                        "host": email_host,
+                        "port": email_port,
+                        "use_tls": email_use_tls,
+                        "from_email": default_from_email,
                     },
                 },
                 status=status.HTTP_200_OK,
             )
 
-        user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+        user_email = request.user.email if hasattr(
+            request.user, "email") else "N/A"
         logger.error(
             "Failed to send test email by admin %s to %s",
             user_email,
@@ -1104,7 +1125,7 @@ class AdminTestEmailView(APIView):
                 "user_id": request.user.id,
                 "admin_email": user_email,
                 "test_email": test_email,
-                "backend": getattr(settings, "EMAIL_BACKEND_TYPE", "smtp"),
+                "backend": str(backend_type).lower(),
             },
         )
 
@@ -1113,11 +1134,11 @@ class AdminTestEmailView(APIView):
                 "success": False,
                 "error": "Failed to send test email. Please check your email configuration.",
                 "configuration": {
-                    "backend": getattr(settings, "EMAIL_BACKEND_TYPE", "smtp").upper(),
-                    "host": settings.EMAIL_HOST,
-                    "port": settings.EMAIL_PORT,
-                    "use_tls": settings.EMAIL_USE_TLS,
-                    "from_email": settings.DEFAULT_FROM_EMAIL,
+                    "backend": str(backend_type).upper(),
+                    "host": email_host,
+                    "port": email_port,
+                    "use_tls": email_use_tls,
+                    "from_email": default_from_email,
                 },
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1159,7 +1180,8 @@ class OandaAccountListCreateView(APIView):
         from accounts.models import OandaAccount  # pylint: disable=import-outside-toplevel
 
         # Get all accounts for the authenticated user
-        accounts = OandaAccount.objects.filter(user=request.user).order_by("-created_at")
+        accounts = OandaAccount.objects.filter(
+            user=request.user).order_by("-created_at")
 
         serializer = self.serializer_class(accounts, many=True)
 
@@ -1192,7 +1214,8 @@ class OandaAccountListCreateView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        serializer = self.serializer_class(data=request.data, context={"request": request})
+        serializer = self.serializer_class(
+            data=request.data, context={"request": request})
 
         if serializer.is_valid():
             account = serializer.save()
@@ -1250,7 +1273,8 @@ class OandaAccountDetailView(APIView):
             return None
 
         try:
-            account = OandaAccount.objects.get(id=account_id, user=request.user)
+            account = OandaAccount.objects.get(
+                id=account_id, user=request.user)
             return account
         except OandaAccount.DoesNotExist:
             return None
@@ -1417,7 +1441,8 @@ class PositionDifferentiationView(APIView):
             return None
 
         try:
-            account = OandaAccount.objects.get(id=account_id, user=request.user)
+            account = OandaAccount.objects.get(
+                id=account_id, user=request.user)
             return account
         except OandaAccount.DoesNotExist:
             return None
@@ -1582,7 +1607,8 @@ class PositionDifferentiationSuggestionView(APIView):
             return None
 
         try:
-            account = OandaAccount.objects.get(id=account_id, user=request.user)
+            account = OandaAccount.objects.get(
+                id=account_id, user=request.user)
             return account
         except OandaAccount.DoesNotExist:
             return None
@@ -1642,15 +1668,18 @@ class PositionDifferentiationSuggestionView(APIView):
         # Get suggestion if instrument specified
         suggestion = None
         if instrument:
-            suggestion = manager.get_differentiation_suggestion(instrument, base_size)
+            suggestion = manager.get_differentiation_suggestion(
+                instrument, base_size)
 
             # Check for boundary warnings
-            boundary_warning = manager.check_boundary_reached(instrument, base_size)
+            boundary_warning = manager.check_boundary_reached(
+                instrument, base_size)
             if boundary_warning:
                 stats["boundary_warning"] = boundary_warning
 
             # Get next order size preview
-            next_size, was_adjusted = manager.get_next_order_size(instrument, base_size)
+            next_size, was_adjusted = manager.get_next_order_size(
+                instrument, base_size)
             stats["next_order_size"] = {
                 "size": float(next_size),
                 "was_adjusted": was_adjusted,
@@ -1711,7 +1740,8 @@ class UserSettingsView(APIView):
         from accounts.models import UserSettings  # pylint: disable=import-outside-toplevel
 
         # Get or create user settings
-        user_settings, _ = UserSettings.objects.get_or_create(user=request.user)
+        user_settings, _ = UserSettings.objects.get_or_create(
+            user=request.user)
 
         # Serialize user profile
         user_serializer = UserProfileSerializer(request.user)
@@ -1755,7 +1785,8 @@ class UserSettingsView(APIView):
         from accounts.models import UserSettings  # pylint: disable=import-outside-toplevel
 
         # Get or create user settings
-        user_settings, _ = UserSettings.objects.get_or_create(user=request.user)
+        user_settings, _ = UserSettings.objects.get_or_create(
+            user=request.user)
 
         # Separate user profile fields from settings fields
         user_data = {}
@@ -1783,7 +1814,8 @@ class UserSettingsView(APIView):
                 settings_data[field] = request.data[field]
 
         # Validate and update user profile
-        user_serializer = UserProfileSerializer(request.user, data=user_data, partial=True)
+        user_serializer = UserProfileSerializer(
+            request.user, data=user_data, partial=True)
         if not user_serializer.is_valid():
             return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -2002,7 +2034,8 @@ class WhitelistedEmailDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        serializer = WhitelistedEmailSerializer(whitelist_entry, data=request.data, partial=True)
+        serializer = WhitelistedEmailSerializer(
+            whitelist_entry, data=request.data, partial=True)
 
         if serializer.is_valid():
             updated_entry = serializer.save()
@@ -2085,7 +2118,6 @@ class AdminTestAWSView(APIView):
         Returns:
             Response with success or error message
         """
-        import boto3  # type: ignore[import-untyped]  # pylint: disable=import-error
         from botocore.exceptions import (  # type: ignore[import-untyped]  # pylint: disable=import-error  # noqa: E501
             BotoCoreError,
             ClientError,
@@ -2109,19 +2141,32 @@ class AdminTestAWSView(APIView):
         region = aws_config.get("AWS_REGION", "us-east-1")
 
         try:
-            # Create boto3 session with configured credentials
-            session_kwargs = {}
+            session = get_aws_session()
+        except RuntimeError as exc:
+            user_email = request.user.email if hasattr(
+                request.user, "email") else "N/A"
+            logger.error(
+                "AWS session initialization failed for admin %s: %s",
+                user_email,
+                str(exc),
+                extra={
+                    "user_id": request.user.id,
+                    "admin_email": user_email,
+                    "bucket": bucket_name,
+                    "error": str(exc),
+                },
+            )
 
-            # Add credentials based on configuration method
-            if aws_config.get("AWS_ACCESS_KEY_ID") and aws_config.get("AWS_SECRET_ACCESS_KEY"):
-                session_kwargs["aws_access_key_id"] = aws_config["AWS_ACCESS_KEY_ID"]
-                session_kwargs["aws_secret_access_key"] = aws_config["AWS_SECRET_ACCESS_KEY"]
+            return Response(
+                {
+                    "success": False,
+                    "error": "Failed to initialize AWS session. Please check your AWS credentials and role configuration.",
+                    "details": str(exc),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
-            if aws_config.get("AWS_PROFILE_NAME"):
-                session_kwargs["profile_name"] = aws_config["AWS_PROFILE_NAME"]
-
-            session = boto3.Session(**session_kwargs)
-
+        try:
             # Test 0: Verify credentials using STS GetCallerIdentity
             sts_client = session.client("sts", region_name=region)
             try:
@@ -2192,7 +2237,8 @@ class AdminTestAWSView(APIView):
 
             # Test 2: Try to list objects (limited to 1 to minimize cost)
             try:
-                response = s3_client.list_objects_v2(Bucket=bucket_name, MaxKeys=1)
+                response = s3_client.list_objects_v2(
+                    Bucket=bucket_name, MaxKeys=1)
                 object_count = response.get("KeyCount", 0)
             except ClientError as e:
                 return Response(
@@ -2209,12 +2255,15 @@ class AdminTestAWSView(APIView):
 
             # Test 3: Get bucket location
             try:
-                location_response = s3_client.get_bucket_location(Bucket=bucket_name)
-                bucket_region = location_response.get("LocationConstraint") or "us-east-1"
+                location_response = s3_client.get_bucket_location(
+                    Bucket=bucket_name)
+                bucket_region = location_response.get(
+                    "LocationConstraint") or "us-east-1"
             except ClientError:
                 bucket_region = "unknown"
 
-            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            user_email = request.user.email if hasattr(
+                request.user, "email") else "N/A"
             logger.info(
                 "AWS S3 test successful by admin %s for bucket %s",
                 user_email,
@@ -2245,7 +2294,8 @@ class AdminTestAWSView(APIView):
 
         except ClientError as e:
             error_message = str(e)
-            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            user_email = request.user.email if hasattr(
+                request.user, "email") else "N/A"
             logger.error(
                 "AWS S3 test failed by admin %s: %s",
                 user_email,
@@ -2269,7 +2319,8 @@ class AdminTestAWSView(APIView):
 
         except BotoCoreError as e:
             error_message = str(e)
-            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            user_email = request.user.email if hasattr(
+                request.user, "email") else "N/A"
             logger.error(
                 "AWS configuration error by admin %s: %s",
                 user_email,
@@ -2292,7 +2343,8 @@ class AdminTestAWSView(APIView):
 
         except Exception as e:
             error_message = str(e)
-            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            user_email = request.user.email if hasattr(
+                request.user, "email") else "N/A"
             logger.error(
                 "Unexpected error during AWS test by admin %s: %s",
                 user_email,

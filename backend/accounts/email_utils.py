@@ -28,7 +28,28 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _get_aws_session() -> Any:
+def _get_system_setting(key: str, default: Any) -> Any:
+    """Fetch a system setting with graceful fallback."""
+    try:
+        from accounts.settings_helper import get_system_setting  # pylint: disable=import-outside-toplevel
+
+        return get_system_setting(key, default)
+    except Exception:  # pylint: disable=broad-except
+        return default
+
+
+def _resolve_from_email(default: str) -> str:
+    return str(_get_system_setting("default_from_email", default))
+
+
+def _resolve_email_backend_type(default: str = "smtp") -> str:
+    backend = _get_system_setting("email_backend_type", default)
+    if isinstance(backend, str):
+        return backend.lower()
+    return str(default).lower()
+
+
+def get_aws_session() -> Any:
     """
     Create AWS boto3 session with proper authentication.
 
@@ -52,30 +73,50 @@ def _get_aws_session() -> Any:
             ClientError,
         )
 
-        # Check for AWS configuration environment variables
-        aws_profile = os.environ.get("AWS_PROFILE")
-        aws_role_arn = os.environ.get("AWS_ROLE_ARN")
-        aws_credentials_file = os.environ.get("AWS_CREDENTIALS_FILE")
+        # Resolve AWS configuration from system settings first, then environment
+        credential_method = _get_system_setting(
+            "aws_credential_method", "access_keys")
+        aws_profile = _get_system_setting(
+            "aws_profile_name", os.environ.get("AWS_PROFILE"))
+        aws_role_arn = _get_system_setting(
+            "aws_role_arn", os.environ.get("AWS_ROLE_ARN"))
+        aws_credentials_file = _get_system_setting(
+            "aws_credentials_file_path",
+            os.environ.get("AWS_CREDENTIALS_FILE"),
+        )
+        access_key = _get_system_setting(
+            "aws_access_key_id", os.environ.get("AWS_ACCESS_KEY_ID"))
+        secret_key = _get_system_setting(
+            "aws_secret_access_key",
+            os.environ.get("AWS_SECRET_ACCESS_KEY"),
+        )
 
         session_kwargs: dict[str, str] = {}
 
-        # Handle custom credentials file
-        if aws_credentials_file:
+        # Handle custom credentials file explicitly
+        if credential_method == "credentials_file" and aws_credentials_file:
             logger.info("Using AWS credentials file: %s", aws_credentials_file)
             os.environ["AWS_SHARED_CREDENTIALS_FILE"] = aws_credentials_file
 
         # Create base session with profile if specified
-        if aws_profile:
+        if credential_method in {"profile", "profile_role"} and aws_profile:
             logger.info("Using AWS profile: %s", aws_profile)
             session_kwargs["profile_name"] = aws_profile
-        else:
-            logger.info("Using default AWS credentials chain")
 
-        # Create boto3 session
-        session = boto3.Session(**session_kwargs)
+        if credential_method == "access_keys" and access_key and secret_key:
+            logger.info(
+                "Using AWS access key credentials from system settings")
+            session = boto3.Session(
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_key,
+            )
+        else:
+            if not session_kwargs:
+                logger.info("Using default AWS credentials chain")
+            session = boto3.Session(**session_kwargs)
 
         # If role ARN is specified, assume the role using STS
-        if aws_role_arn:
+        if credential_method == "profile_role" and aws_role_arn:
             logger.info("Assuming AWS role: %s", aws_role_arn)
 
             # Create STS client
@@ -107,7 +148,8 @@ def _get_aws_session() -> Any:
 
     except (BotoCoreError, ClientError) as exc:
         logger.error("Failed to initialize AWS session: %s", exc)
-        raise RuntimeError(f"AWS session initialization failed: {exc}") from exc
+        raise RuntimeError(
+            f"AWS session initialization failed: {exc}") from exc
 
 
 def _send_email_via_ses(
@@ -141,13 +183,14 @@ def _send_email_via_ses(
         from botocore.exceptions import BotoCoreError, ClientError  # noqa: E501
 
         # Get AWS session with proper authentication
-        session = _get_aws_session()
+        session = get_aws_session()
 
         # Create SES client
-        ses_client = session.client(
-            "ses",
-            region_name=getattr(settings, "AWS_SES_REGION", "us-east-1"),
+        region = _get_system_setting(
+            "aws_ses_region",
+            getattr(settings, "AWS_SES_REGION", "us-east-1"),
         )
+        ses_client = session.client("ses", region_name=region)
 
         # Send email
         response = ses_client.send_email(
@@ -229,14 +272,16 @@ def _send_email(
     Returns:
         True if email sent successfully, False otherwise
     """
-    email_backend = getattr(settings, "EMAIL_BACKEND_TYPE", "smtp").lower()
+    email_backend = _resolve_email_backend_type(
+        getattr(settings, "EMAIL_BACKEND_TYPE", "smtp"))
+    resolved_from_email = _resolve_from_email(from_email)
 
     if email_backend == "ses":
         return _send_email_via_ses(
             subject=subject,
             html_message=html_message,
             plain_message=plain_message,
-            from_email=from_email,
+            from_email=resolved_from_email,
             recipient_list=recipient_list,
         )
 
@@ -245,7 +290,7 @@ def _send_email(
         send_mail(
             subject=subject,
             message=plain_message,
-            from_email=from_email,
+            from_email=resolved_from_email,
             recipient_list=recipient_list,
             html_message=html_message,
             fail_silently=False,
@@ -307,7 +352,7 @@ def send_verification_email(user: "User", verification_url: str) -> bool:
         subject=subject,
         html_message=html_message,
         plain_message=plain_message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=_resolve_from_email(settings.DEFAULT_FROM_EMAIL),
         recipient_list=[user.email],
     )
 
@@ -364,7 +409,7 @@ def send_password_reset_email(user: "User", reset_url: str) -> bool:
         subject=subject,
         html_message=html_message,
         plain_message=plain_message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=_resolve_from_email(settings.DEFAULT_FROM_EMAIL),
         recipient_list=[user.email],
     )
 
@@ -420,7 +465,7 @@ def send_welcome_email(user: "User") -> bool:
         subject=subject,
         html_message=html_message,
         plain_message=plain_message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=_resolve_from_email(settings.DEFAULT_FROM_EMAIL),
         recipient_list=[user.email],
     )
 
