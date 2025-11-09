@@ -186,8 +186,9 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
           <FormControl
             size="small"
             sx={{
-              minWidth: 200,
-              mr: 2,
+              minWidth: { xs: 140, sm: 200 },
+              mr: { xs: 1, sm: 2 },
+              flexShrink: 0,
               '& .MuiOutlinedInput-root': {
                 color: 'inherit',
                 '& fieldset': {
@@ -225,25 +226,36 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
         <Box sx={{ flexGrow: 1 }} />
 
         {/* Right side icons */}
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            columnGap: { xs: 0.5, sm: 1 },
+            flexShrink: 0,
+          }}
+        >
           {/* Language Selector */}
-          <LanguageSelector />
+          <LanguageSelector
+            buttonSize="small"
+            buttonSx={{ p: { xs: 0.5, sm: 1 } }}
+          />
 
           {/* Notification Center (Admin only) */}
-          <NotificationCenter />
+          <NotificationCenter
+            buttonSize="small"
+            buttonSx={{ p: { xs: 0.5, sm: 1 } }}
+          />
 
-          {/* User Menu - Hidden on mobile */}
+          {/* User Menu */}
           <IconButton
-            size="large"
+            size="small"
             edge="end"
             aria-label="account of current user"
             aria-controls="user-menu"
             aria-haspopup="true"
             onClick={handleUserMenuOpen}
             color="inherit"
-            sx={{
-              display: { xs: 'none', sm: 'inline-flex' },
-            }}
+            sx={{ p: { xs: 0.5, sm: 1 } }}
           >
             <AccountCircle />
           </IconButton>

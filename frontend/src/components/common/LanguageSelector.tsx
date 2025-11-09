@@ -10,8 +10,17 @@ import {
 import LanguageIcon from '@mui/icons-material/Language';
 import CheckIcon from '@mui/icons-material/Check';
 import { useTranslation } from 'react-i18next';
+import type { SxProps, Theme } from '@mui/material';
 
-const LanguageSelector = () => {
+interface LanguageSelectorProps {
+  buttonSize?: 'small' | 'medium' | 'large';
+  buttonSx?: SxProps<Theme>;
+}
+
+const LanguageSelector = ({
+  buttonSize = 'small',
+  buttonSx,
+}: LanguageSelectorProps) => {
   const { i18n, t } = useTranslation('common');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
@@ -39,11 +48,12 @@ const LanguageSelector = () => {
       <Tooltip title={t('language.selectLanguage')}>
         <IconButton
           onClick={handleClick}
-          size="small"
+          size={buttonSize}
           aria-controls={open ? 'language-menu' : undefined}
           aria-haspopup="true"
           aria-expanded={open ? 'true' : undefined}
           color="inherit"
+          sx={buttonSx}
         >
           <LanguageIcon />
         </IconButton>

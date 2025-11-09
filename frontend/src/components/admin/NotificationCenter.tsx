@@ -18,8 +18,17 @@ import { Notifications, Close } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import type { AdminNotification } from '../../types/admin';
+import type { SxProps, Theme } from '@mui/material';
 
-const NotificationCenter: React.FC = () => {
+interface NotificationCenterProps {
+  buttonSize?: 'small' | 'medium' | 'large';
+  buttonSx?: SxProps<Theme>;
+}
+
+const NotificationCenter: React.FC<NotificationCenterProps> = ({
+  buttonSize = 'large',
+  buttonSx,
+}) => {
   const { t } = useTranslation('admin');
   const { user, token } = useAuth();
   const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
@@ -223,10 +232,11 @@ const NotificationCenter: React.FC = () => {
   return (
     <>
       <IconButton
-        size="large"
+        size={buttonSize}
         aria-label={`show ${unreadCount} new notifications`}
         color="inherit"
         onClick={handleClick}
+        sx={buttonSx}
       >
         <Badge badgeContent={unreadCount} color="error">
           <Notifications />
