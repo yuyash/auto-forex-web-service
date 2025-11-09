@@ -82,9 +82,13 @@ services:
       DEBUG: ${DEBUG:-False}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
 
-      # Redis
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+    # Redis
+    REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+
+    # Celery
+    CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+    CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
 
       # Security
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Encryption key required}
@@ -103,6 +107,7 @@ services:
       - ./logs:/app/logs
       - static_volume:/app/staticfiles
       - media_volume:/app/media
+      - ${HOME}/.aws:/root/.aws:ro
     ports:
       - "8000:8000"
     command: >
@@ -162,6 +167,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
+      - ${HOME}/.aws:/root/.aws:ro
     command: celery -A trading_system worker -l info --concurrency=4
     restart: unless-stopped
     networks:
@@ -201,6 +207,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
+      - ${HOME}/.aws:/root/.aws:ro
     command: celery -A trading_system beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler --pidfile=/tmp/celerybeat.pid
     restart: unless-stopped
     networks:

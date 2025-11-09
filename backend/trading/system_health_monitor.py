@@ -196,7 +196,8 @@ class SystemHealthMonitor:
             try:
                 response = requests.get(practice_url, timeout=5)
                 # 401 is expected without auth, but means endpoint is reachable
-                practice_status = "reachable" if response.status_code in [401, 403] else "error"
+                practice_status = "reachable" if response.status_code in [
+                    401, 403] else "error"
             except Exception as e:
                 logger.warning(f"Practice API check failed: {e}")
                 practice_status = "unreachable"
@@ -204,7 +205,8 @@ class SystemHealthMonitor:
             # Check live API
             try:
                 response = requests.get(live_url, timeout=5)
-                live_status = "reachable" if response.status_code in [401, 403] else "error"
+                live_status = "reachable" if response.status_code in [
+                    401, 403] else "error"
             except Exception as e:
                 logger.warning(f"Live API check failed: {e}")
                 live_status = "unreachable"
@@ -260,15 +262,32 @@ class SystemHealthMonitor:
         try:
             from celery import current_app
 
-            inspect = current_app.control.inspect()
+            active_tasks = {}
+            scheduled_tasks = {}
+            reserved_tasks = {}
 
-            active_tasks = inspect.active()
-            scheduled_tasks = inspect.scheduled()
-            reserved_tasks = inspect.reserved()
+            # Retry a few times to handle momentary broker unavailability
+            for attempt in range(3):
+                try:
+                    inspect = current_app.control.inspect()
+                    if inspect is None:
+                        raise RuntimeError("Celery inspect returned None")
 
-            active_count = sum(len(tasks) for tasks in (active_tasks or {}).values())
-            scheduled_count = sum(len(tasks) for tasks in (scheduled_tasks or {}).values())
-            reserved_count = sum(len(tasks) for tasks in (reserved_tasks or {}).values())
+                    active_tasks = inspect.active() or {}
+                    scheduled_tasks = inspect.scheduled() or {}
+                    reserved_tasks = inspect.reserved() or {}
+                    break
+                except Exception as inner_error:  # pragma: no cover - network timing
+                    if attempt < 2:
+                        time.sleep(0.5)
+                        continue
+                    raise inner_error
+
+            active_count = sum(len(tasks) for tasks in active_tasks.values())
+            scheduled_count = sum(len(tasks)
+                                  for tasks in scheduled_tasks.values())
+            reserved_count = sum(len(tasks)
+                                 for tasks in reserved_tasks.values())
 
             return {
                 "active": active_count,
