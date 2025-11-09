@@ -7,6 +7,7 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 import type { User, SystemSettings, AuthContextType } from '../types/auth';
+import { AUTH_LOGOUT_EVENT, type AuthLogoutDetail } from '../utils/authEvents';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -146,6 +147,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       clearInterval(refreshInterval);
     };
   }, [token, refreshToken]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleForcedLogout = (event: Event) => {
+      const detail = (event as CustomEvent<AuthLogoutDetail>).detail;
+      if (detail?.message) {
+        console.warn('Authentication error:', detail.message);
+      }
+      void logout();
+    };
+
+    window.addEventListener(AUTH_LOGOUT_EVENT, handleForcedLogout);
+
+    return () => {
+      window.removeEventListener(AUTH_LOGOUT_EVENT, handleForcedLogout);
+    };
+  }, [logout]);
 
   const value = {
     user,

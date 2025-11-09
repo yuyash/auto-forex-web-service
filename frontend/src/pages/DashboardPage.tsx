@@ -39,6 +39,7 @@ import type {
   Order,
   StrategyEvent,
 } from '../types/chart';
+import { handleAuthErrorStatus } from '../utils/authEvents';
 
 const DashboardPage = () => {
   const { t } = useTranslation('dashboard');
@@ -147,6 +148,13 @@ const DashboardPage = () => {
           Authorization: `Bearer ${token}`,
         },
       });
+      if (
+        handleAuthErrorStatus(response.status, {
+          context: 'dashboard:positions',
+        })
+      ) {
+        return;
+      }
       if (response.ok) {
         const data = await response.json();
         setPositions(data.positions || []);
@@ -165,6 +173,13 @@ const DashboardPage = () => {
           Authorization: `Bearer ${token}`,
         },
       });
+      if (
+        handleAuthErrorStatus(response.status, {
+          context: 'dashboard:orders',
+        })
+      ) {
+        return;
+      }
       if (response.ok) {
         const data = await response.json();
         setOrders(data.orders || []);
@@ -183,6 +198,13 @@ const DashboardPage = () => {
           Authorization: `Bearer ${token}`,
         },
       });
+      if (
+        handleAuthErrorStatus(response.status, {
+          context: 'dashboard:events',
+        })
+      ) {
+        return;
+      }
       if (response.ok) {
         const data = await response.json();
         setStrategyEvents(data.events || []);

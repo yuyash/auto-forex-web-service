@@ -1,6 +1,7 @@
 // Shared hook for fetching OANDA accounts with caching
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { handleAuthErrorStatus } from '../utils/authEvents';
 
 export interface OandaAccount {
   id: number;
@@ -85,6 +86,14 @@ export function useOandaAccounts(): UseOandaAccountsResult {
         },
         signal: abortControllerRef.current.signal,
       }).then(async (response) => {
+        if (
+          handleAuthErrorStatus(response.status, {
+            context: 'oanda-accounts:fetch',
+          })
+        ) {
+          return [];
+        }
+
         if (!response.ok) {
           throw new Error(`Failed to fetch accounts: ${response.statusText}`);
         }

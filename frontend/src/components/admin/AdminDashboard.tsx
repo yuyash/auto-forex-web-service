@@ -17,6 +17,11 @@ import SystemHealthPanel from './SystemHealthPanel';
 import UserSessionList from './UserSessionList';
 import RunningStrategyList from './RunningStrategyList';
 import RecentEventsPanel from './RecentEventsPanel';
+import {
+  broadcastAuthLogout,
+  handleAuthErrorStatus,
+  handleWebSocketAuthClose,
+} from '../../utils/authEvents';
 
 const AdminDashboard: React.FC = () => {
   const { t } = useTranslation('admin');
@@ -45,6 +50,14 @@ const AdminDashboard: React.FC = () => {
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (
+        handleAuthErrorStatus(response.status, {
+          context: 'admin-dashboard:initial-load',
+        })
+      ) {
+        return;
+      }
 
       if (!response.ok) {
         throw new Error('Failed to fetch dashboard data');
@@ -80,7 +93,13 @@ const AdminDashboard: React.FC = () => {
         const data = JSON.parse(event.data);
 
         // Update dashboard data based on message type
-        if (data.type === 'dashboard_update') {
+        if (data.type === 'auth_error') {
+          broadcastAuthLogout({
+            source: 'ws',
+            message: data.message || 'Authentication error',
+            context: 'admin-dashboard:websocket',
+          });
+        } else if (data.type === 'dashboard_update') {
           setDashboardData((prev) => {
             const incoming = data.data as AdminDashboardData;
 
@@ -150,7 +169,15 @@ const AdminDashboard: React.FC = () => {
       console.error('WebSocket error:', error);
     };
 
-    websocket.onclose = () => {
+    websocket.onclose = (event) => {
+      if (
+        handleWebSocketAuthClose(event, {
+          context: 'admin-dashboard:websocket',
+        })
+      ) {
+        return;
+      }
+
       console.log('Admin dashboard WebSocket disconnected');
     };
 
@@ -177,6 +204,14 @@ const AdminDashboard: React.FC = () => {
         },
       });
 
+      if (
+        handleAuthErrorStatus(response.status, {
+          context: 'admin-dashboard:kickoff-user',
+        })
+      ) {
+        return;
+      }
+
       if (!response.ok) {
         throw new Error('Failed to kick off user');
       }
@@ -201,6 +236,14 @@ const AdminDashboard: React.FC = () => {
           'Content-Type': 'application/json',
         },
       });
+
+      if (
+        handleAuthErrorStatus(response.status, {
+          context: 'admin-dashboard:stop-strategy',
+        })
+      ) {
+        return;
+      }
 
       if (!response.ok) {
         throw new Error('Failed to stop strategy');
