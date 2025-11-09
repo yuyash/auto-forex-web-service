@@ -63,8 +63,10 @@ def get_email_config() -> dict:
 def get_aws_config() -> dict:
     """Get AWS configuration from system settings."""
     return {
+        "credential_method": get_system_setting("aws_credential_method", "access_keys"),
         "AWS_ACCESS_KEY_ID": get_system_setting("aws_access_key_id", ""),
         "AWS_SECRET_ACCESS_KEY": get_system_setting("aws_secret_access_key", ""),
+        "AWS_PROFILE_NAME": get_system_setting("aws_profile_name", ""),
         "AWS_REGION": get_system_setting("aws_region", "us-east-1"),
         "AWS_S3_BUCKET": get_system_setting("aws_s3_bucket", ""),
         "AWS_SES_REGION": get_system_setting("aws_ses_region", "us-east-1"),

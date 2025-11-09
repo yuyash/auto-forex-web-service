@@ -2061,3 +2061,254 @@ class WhitelistedEmailDetailView(APIView):
             {"message": "Whitelisted email deleted successfully."},
             status=status.HTTP_200_OK,
         )
+
+
+class AdminTestAWSView(APIView):
+    """
+    API endpoint for testing AWS S3 configuration.
+
+    POST /api/admin/test-aws
+    - Test AWS S3 connectivity and permissions
+    - Admin only
+
+    Requirements: AWS configuration testing for chart data
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    # pylint: disable=too-many-locals,too-many-return-statements
+    # pylint: disable=too-many-branches,too-many-statements
+    def post(self, request: Request) -> Response:
+        """
+        Test AWS S3 configuration by attempting to list bucket contents.
+
+        Returns:
+            Response with success or error message
+        """
+        import boto3  # type: ignore[import-untyped]  # pylint: disable=import-error
+        from botocore.exceptions import (  # type: ignore[import-untyped]  # pylint: disable=import-error  # noqa: E501
+            BotoCoreError,
+            ClientError,
+        )
+
+        from .settings_helper import get_aws_config
+
+        # Get AWS configuration
+        aws_config = get_aws_config()
+
+        if not aws_config.get("AWS_S3_BUCKET"):
+            return Response(
+                {
+                    "success": False,
+                    "error": "AWS S3 bucket is not configured.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        bucket_name = aws_config["AWS_S3_BUCKET"]
+        region = aws_config.get("AWS_REGION", "us-east-1")
+
+        try:
+            # Create boto3 session with configured credentials
+            session_kwargs = {}
+
+            # Add credentials based on configuration method
+            if aws_config.get("AWS_ACCESS_KEY_ID") and aws_config.get("AWS_SECRET_ACCESS_KEY"):
+                session_kwargs["aws_access_key_id"] = aws_config["AWS_ACCESS_KEY_ID"]
+                session_kwargs["aws_secret_access_key"] = aws_config["AWS_SECRET_ACCESS_KEY"]
+
+            if aws_config.get("AWS_PROFILE_NAME"):
+                session_kwargs["profile_name"] = aws_config["AWS_PROFILE_NAME"]
+
+            session = boto3.Session(**session_kwargs)
+
+            # Test 0: Verify credentials using STS GetCallerIdentity
+            sts_client = session.client("sts", region_name=region)
+            try:
+                identity = sts_client.get_caller_identity()
+                caller_identity = {
+                    "account": identity.get("Account"),
+                    "user_id": identity.get("UserId"),
+                    "arn": identity.get("Arn"),
+                }
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code", "Unknown")
+                if error_code in ["InvalidClientTokenId", "SignatureDoesNotMatch"]:
+                    return Response(
+                        {
+                            "success": False,
+                            "error": (
+                                "Invalid AWS credentials. Please check your "
+                                "Access Key ID and Secret Access Key."
+                            ),
+                            "details": str(e),
+                        },
+                        status=status.HTTP_401_UNAUTHORIZED,
+                    )
+                if error_code == "AccessDenied":
+                    return Response(
+                        {
+                            "success": False,
+                            "error": (
+                                "AWS credentials are valid but lack permissions. "
+                                "Ensure the IAM user/role has necessary permissions."
+                            ),
+                            "details": str(e),
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+                raise
+
+            # Create S3 client
+            s3_client = session.client("s3", region_name=region)
+
+            # Test 1: Check if bucket exists and is accessible
+            try:
+                s3_client.head_bucket(Bucket=bucket_name)
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code", "Unknown")
+                if error_code == "404":
+                    return Response(
+                        {
+                            "success": False,
+                            "error": f"Bucket '{bucket_name}' does not exist.",
+                            "details": str(e),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if error_code == "403":
+                    return Response(
+                        {
+                            "success": False,
+                            "error": (
+                                f"Access denied to bucket '{bucket_name}'. "
+                                "Check your credentials and permissions."
+                            ),
+                            "details": str(e),
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+                raise
+
+            # Test 2: Try to list objects (limited to 1 to minimize cost)
+            try:
+                response = s3_client.list_objects_v2(Bucket=bucket_name, MaxKeys=1)
+                object_count = response.get("KeyCount", 0)
+            except ClientError as e:
+                return Response(
+                    {
+                        "success": False,
+                        "error": (
+                            f"Cannot list objects in bucket '{bucket_name}'. "
+                            "Check your permissions."
+                        ),
+                        "details": str(e),
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            # Test 3: Get bucket location
+            try:
+                location_response = s3_client.get_bucket_location(Bucket=bucket_name)
+                bucket_region = location_response.get("LocationConstraint") or "us-east-1"
+            except ClientError:
+                bucket_region = "unknown"
+
+            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            logger.info(
+                "AWS S3 test successful by admin %s for bucket %s",
+                user_email,
+                bucket_name,
+                extra={
+                    "user_id": request.user.id,
+                    "admin_email": user_email,
+                    "bucket": bucket_name,
+                    "region": region,
+                },
+            )
+
+            return Response(
+                {
+                    "success": True,
+                    "message": f"Successfully connected to AWS S3 bucket '{bucket_name}'",
+                    "configuration": {
+                        "bucket": bucket_name,
+                        "region": region,
+                        "bucket_region": bucket_region,
+                        "object_count": object_count,
+                        "credential_method": aws_config.get("credential_method", "unknown"),
+                        "caller_identity": caller_identity,
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except ClientError as e:
+            error_message = str(e)
+            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            logger.error(
+                "AWS S3 test failed by admin %s: %s",
+                user_email,
+                error_message,
+                extra={
+                    "user_id": request.user.id,
+                    "admin_email": user_email,
+                    "bucket": bucket_name,
+                    "error": error_message,
+                },
+            )
+
+            return Response(
+                {
+                    "success": False,
+                    "error": "AWS S3 connection failed. Please check your configuration.",
+                    "details": error_message,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        except BotoCoreError as e:
+            error_message = str(e)
+            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            logger.error(
+                "AWS configuration error by admin %s: %s",
+                user_email,
+                error_message,
+                extra={
+                    "user_id": request.user.id,
+                    "admin_email": user_email,
+                    "error": error_message,
+                },
+            )
+
+            return Response(
+                {
+                    "success": False,
+                    "error": "AWS configuration error. Please check your credentials.",
+                    "details": error_message,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        except Exception as e:
+            error_message = str(e)
+            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            logger.error(
+                "Unexpected error during AWS test by admin %s: %s",
+                user_email,
+                error_message,
+                extra={
+                    "user_id": request.user.id,
+                    "admin_email": user_email,
+                    "error": error_message,
+                },
+            )
+
+            return Response(
+                {
+                    "success": False,
+                    "error": "Unexpected error during AWS test.",
+                    "details": error_message,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

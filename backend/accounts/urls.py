@@ -8,6 +8,7 @@ from django.urls import path
 
 from .views import (
     AdminSystemSettingsView,
+    AdminTestAWSView,
     AdminTestEmailView,
     EmailVerificationView,
     OandaAccountDetailView,
@@ -52,6 +53,11 @@ urlpatterns = [
         "admin/test-email",
         AdminTestEmailView.as_view(),
         name="admin_test_email",
+    ),
+    path(
+        "admin/test-aws",
+        AdminTestAWSView.as_view(),
+        name="admin_test_aws",
     ),
     path(
         "admin/whitelist/emails",

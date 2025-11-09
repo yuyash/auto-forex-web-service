@@ -67,6 +67,7 @@ const AdminSystemSettingsPage = () => {
   const [showAwsSecret, setShowAwsSecret] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
   const [testEmailAddress, setTestEmailAddress] = useState('');
+  const [testingAws, setTestingAws] = useState(false);
 
   const fetchSettings = async () => {
     try {
@@ -163,6 +164,43 @@ const AdminSystemSettingsPage = () => {
       console.error('Error sending test email:', error);
     } finally {
       setTestingEmail(false);
+    }
+  };
+
+  const handleTestAws = async () => {
+    try {
+      setTestingAws(true);
+      const response = await fetch('/api/admin/test-aws', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to test AWS configuration');
+      }
+
+      const identity = data.configuration.caller_identity;
+      const identityInfo = identity
+        ? ` | Account: ${identity.account} | ARN: ${identity.arn}`
+        : '';
+
+      showSuccess(
+        `AWS S3 connection successful! Bucket: ${data.configuration.bucket}${identityInfo}`
+      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to test AWS configuration';
+      showError(errorMessage);
+      console.error('Error testing AWS:', error);
+    } finally {
+      setTestingAws(false);
     }
   };
 
@@ -577,6 +615,27 @@ const AdminSystemSettingsPage = () => {
               onChange={(e) => handleChange('aws_s3_bucket', e.target.value)}
               placeholder="my-bucket-name"
             />
+          </Grid>
+
+          {/* Test AWS Configuration Section */}
+          <Grid size={{ xs: 12 }}>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle1" gutterBottom>
+              Test AWS Configuration
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Button
+                variant="outlined"
+                onClick={handleTestAws}
+                disabled={testingAws || !settings.aws_s3_bucket}
+                sx={{ minWidth: 200 }}
+              >
+                {testingAws ? 'Testing...' : 'Test S3 Connection'}
+              </Button>
+              <Typography variant="body2" color="text.secondary">
+                Verify AWS credentials and S3 bucket access for chart data
+              </Typography>
+            </Box>
           </Grid>
         </Grid>
       </Paper>

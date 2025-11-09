@@ -232,7 +232,7 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
           {/* Notification Center (Admin only) */}
           <NotificationCenter />
 
-          {/* User Menu */}
+          {/* User Menu - Hidden on mobile */}
           <IconButton
             size="large"
             edge="end"
@@ -241,6 +241,9 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
             aria-haspopup="true"
             onClick={handleUserMenuOpen}
             color="inherit"
+            sx={{
+              display: { xs: 'none', sm: 'inline-flex' },
+            }}
           >
             <AccountCircle />
           </IconButton>
