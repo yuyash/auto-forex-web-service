@@ -75,7 +75,13 @@ export default function BacktestTaskForm({
   const { data: configurationsData } = useConfigurations({ page_size: 100 });
   const configurations = configurationsData?.results || [];
 
-  const { data: selectedConfig } = useConfiguration(selectedConfigId || 0);
+  const parsedSelectedConfigId = Number(selectedConfigId);
+  const effectiveConfigId =
+    Number.isFinite(parsedSelectedConfigId) && parsedSelectedConfigId > 0
+      ? parsedSelectedConfigId
+      : null;
+
+  const { data: selectedConfig } = useConfiguration(effectiveConfigId);
 
   const handleNext = async () => {
     // Validate current step before proceeding

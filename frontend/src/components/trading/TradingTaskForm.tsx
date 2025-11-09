@@ -99,7 +99,13 @@ export default function TradingTaskForm({
   const configurations = configurationsData?.results || [];
 
   // Fetch selected configuration
-  const { data: selectedConfig } = useConfiguration(selectedConfigId || 0);
+  const parsedSelectedConfigId = Number(selectedConfigId);
+  const effectiveConfigId =
+    Number.isFinite(parsedSelectedConfigId) && parsedSelectedConfigId > 0
+      ? parsedSelectedConfigId
+      : null;
+
+  const { data: selectedConfig } = useConfiguration(effectiveConfigId);
 
   // Check if account already has an active task
   const { data: existingTasks } = useTradingTasks({

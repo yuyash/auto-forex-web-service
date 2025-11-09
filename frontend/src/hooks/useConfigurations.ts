@@ -109,21 +109,53 @@ interface UseConfigurationResult {
 /**
  * Hook to fetch a single strategy configuration
  */
-export function useConfiguration(id: number): UseConfigurationResult {
+export function useConfiguration(id?: number | null): UseConfigurationResult {
   const [data, setData] = useState<StrategyConfig | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const isMountedRef = useRef(true);
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const fetchData = useCallback(async () => {
-    try {
+    const currentRequestId = requestIdRef.current + 1;
+    requestIdRef.current = currentRequestId;
+
+    const hasValidId = typeof id === 'number' && Number.isFinite(id) && id > 0;
+
+    if (!hasValidId) {
+      if (isMountedRef.current && currentRequestId === requestIdRef.current) {
+        setData(null);
+        setError(null);
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    if (isMountedRef.current && currentRequestId === requestIdRef.current) {
       setIsLoading(true);
       setError(null);
+    }
+
+    try {
       const result = await configurationsApi.get(id);
-      setData(result);
+      if (isMountedRef.current && currentRequestId === requestIdRef.current) {
+        setData(result);
+      }
     } catch (err) {
-      setError(err as Error);
+      if (isMountedRef.current && currentRequestId === requestIdRef.current) {
+        setError(err as Error);
+      }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current && currentRequestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [id]);
 

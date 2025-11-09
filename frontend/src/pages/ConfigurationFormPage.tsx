@@ -20,8 +20,11 @@ const ConfigurationFormPage = () => {
   const isEditMode = Boolean(id);
 
   // Fetch configuration if editing
+  const parsedConfigId = id ? Number(id) : Number.NaN;
+  const effectiveConfigId =
+    Number.isFinite(parsedConfigId) && parsedConfigId > 0 ? parsedConfigId : null;
   const { data: configuration, isLoading: isLoadingConfig } = useConfiguration(
-    Number(id) || 0
+    effectiveConfigId
   );
 
   const { createConfiguration, updateConfiguration, isCreating, isUpdating } =
@@ -96,11 +99,11 @@ const ConfigurationFormPage = () => {
           initialData={
             configuration
               ? {
-                  name: configuration.name,
-                  strategy_type: configuration.strategy_type,
-                  description: configuration.description,
-                  parameters: configuration.parameters,
-                }
+                name: configuration.name,
+                strategy_type: configuration.strategy_type,
+                description: configuration.description,
+                parameters: configuration.parameters,
+              }
               : undefined
           }
           onSubmit={handleSubmit}
