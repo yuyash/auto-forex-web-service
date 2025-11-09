@@ -6,7 +6,8 @@ export interface OandaAccount {
   id: number;
   account_id: string;
   name: string;
-  is_practice: boolean;
+  api_type?: 'practice' | 'live';
+  is_practice?: boolean;
   is_active: boolean;
   active_strategy?: string;
 }
@@ -93,11 +94,29 @@ export function useOandaAccounts(): UseOandaAccountsResult {
 
       const result = await cache.promise;
 
+      const normalizedAccounts: OandaAccount[] = result.map((account) => {
+        const typedAccount = account as OandaAccount & {
+          api_type?: 'practice' | 'live';
+          is_practice?: boolean;
+        };
+
+        const isPractice =
+          typeof typedAccount.is_practice === 'boolean'
+            ? typedAccount.is_practice
+            : typedAccount.api_type === 'practice';
+
+        return {
+          ...typedAccount,
+          api_type: typedAccount.api_type ?? (isPractice ? 'practice' : 'live'),
+          is_practice: isPractice,
+        };
+      });
+
       // Update cache
-      cache.data = result;
+      cache.data = normalizedAccounts;
       cache.timestamp = Date.now();
 
-      setAccounts(result);
+      setAccounts(normalizedAccounts);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setError(err as Error);

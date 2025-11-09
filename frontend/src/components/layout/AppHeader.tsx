@@ -30,7 +30,10 @@ import {
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
-import { useOandaAccounts } from '../../hooks/useOandaAccounts';
+import {
+  useOandaAccounts,
+  type OandaAccount,
+} from '../../hooks/useOandaAccounts';
 import LanguageSelector from '../common/LanguageSelector';
 import NotificationCenter from '../admin/NotificationCenter';
 import Typography from '@mui/material/Typography';
@@ -98,6 +101,11 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
 
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md')); // 600px - 900px
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
+
+  const formatAccountLabel = (account: OandaAccount) => {
+    const isPractice = account.api_type === 'practice' || account.is_practice;
+    return `${account.account_id}${isPractice ? ' (Practice)' : ' (Live)'}`;
+  };
 
   return (
     <AppBar
@@ -214,8 +222,7 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
             >
               {accounts.map((account) => (
                 <MenuItem key={account.id} value={account.id.toString()}>
-                  {account.account_id}
-                  {account.is_practice ? ' (Practice)' : ' (Live)'}
+                  {formatAccountLabel(account)}
                 </MenuItem>
               ))}
             </Select>
