@@ -82,13 +82,13 @@ services:
       DEBUG: ${DEBUG:-False}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
 
-    # Redis
-    REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-    REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      # Redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
 
-    # Celery
-    CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
-    CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      # Celery
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
 
       # Security
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Encryption key required}
