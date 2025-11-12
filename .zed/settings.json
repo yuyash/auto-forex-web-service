@@ -1,0 +1,8 @@
+{
+  "auto_install_extensions": {
+    "dockerfile": true,
+    "docker-compose": true,
+    "html": true,
+    "toml": true
+  }
+}
