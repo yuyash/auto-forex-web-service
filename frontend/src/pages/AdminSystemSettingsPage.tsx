@@ -54,6 +54,8 @@ interface SystemSettings {
   aws_s3_bucket: string;
   django_log_level: string;
   tick_data_retention_days: number;
+  oanda_sync_interval_seconds: number;
+  oanda_fetch_duration_days: number;
   updated_at: string;
 }
 
@@ -678,6 +680,36 @@ const AdminSystemSettingsPage = () => {
                 )
               }
               helperText="Number of days to retain tick data before cleanup"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              fullWidth
+              label="OANDA Sync Interval (seconds)"
+              type="number"
+              value={settings.oanda_sync_interval_seconds}
+              onChange={(e) =>
+                handleChange(
+                  'oanda_sync_interval_seconds',
+                  parseInt(e.target.value)
+                )
+              }
+              helperText="Interval for OANDA account synchronization (default: 300 = 5 minutes)"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              fullWidth
+              label="OANDA Fetch Duration (days)"
+              type="number"
+              value={settings.oanda_fetch_duration_days}
+              onChange={(e) =>
+                handleChange(
+                  'oanda_fetch_duration_days',
+                  parseInt(e.target.value)
+                )
+              }
+              helperText="Number of days to fetch orders and positions from OANDA (default: 365 = 1 year)"
             />
           </Grid>
         </Grid>

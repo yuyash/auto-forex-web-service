@@ -72,7 +72,23 @@ const PositionsPage = () => {
   const [closedPositions, setClosedPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<PositionFilters>({});
+
+  // Set default date range: 7 days ago to present
+  const getDefaultStartDate = () => {
+    const date = new Date();
+    date.setDate(date.getDate() - 7);
+    return date.toISOString().split('T')[0];
+  };
+
+  const getDefaultEndDate = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+
+  const [filters, setFilters] = useState<PositionFilters>({
+    start_date: getDefaultStartDate(),
+    end_date: getDefaultEndDate(),
+    instrument: 'USD_JPY',
+  });
   const [tabValue, setTabValue] = useState(0);
   const [selectedAccountId, setSelectedAccountId] = useState<number | ''>('');
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
@@ -83,20 +99,27 @@ const PositionsPage = () => {
   const { data: accountsData } = useAccounts({ page_size: 100 });
   const accounts = accountsData?.results || [];
 
-  // Auto-select first account if only one is available
+  // Auto-select first account (default OANDA account)
   useEffect(() => {
-    if (accounts.length === 1 && !selectedAccountId) {
-      setSelectedAccountId(accounts[0].id);
+    if (accounts.length > 0 && !selectedAccountId) {
+      // Find default account or use first account
+      const defaultAccount =
+        accounts.find((acc) => acc.is_default) || accounts[0];
+      setSelectedAccountId(defaultAccount.id);
     }
   }, [accounts, selectedAccountId]);
 
   // Fetch positions from API
   const fetchPositions = useCallback(
-    async (status: 'OPEN' | 'CLOSED') => {
+    async (status: 'OPEN' | 'CLOSED' | 'ALL') => {
       if (!token || !selectedAccountId) {
         if (status === 'OPEN') {
           setActivePositions([]);
+        } else if (status === 'CLOSED') {
+          setClosedPositions([]);
         } else {
+          // ALL - fetch both
+          setActivePositions([]);
           setClosedPositions([]);
         }
         return;
@@ -105,7 +128,7 @@ const PositionsPage = () => {
       try {
         // Build query parameters
         const params = new URLSearchParams();
-        params.append('status', status);
+        params.append('status', status.toLowerCase());
         params.append('account_id', selectedAccountId.toString());
         if (filters.start_date) params.append('start_date', filters.start_date);
         if (filters.end_date) params.append('end_date', filters.end_date);
@@ -129,8 +152,14 @@ const PositionsPage = () => {
 
         if (status === 'OPEN') {
           setActivePositions(positions);
-        } else {
+        } else if (status === 'CLOSED') {
           setClosedPositions(positions);
+        } else {
+          // ALL - separate into open and closed
+          const open = positions.filter((p: Position) => !p.closed_at);
+          const closed = positions.filter((p: Position) => p.closed_at);
+          setActivePositions(open);
+          setClosedPositions(closed);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
@@ -152,8 +181,8 @@ const PositionsPage = () => {
     const fetchBoth = async () => {
       setLoading(true);
       setError(null);
-      await fetchPositions('OPEN');
-      await fetchPositions('CLOSED');
+      // Fetch all positions at once with default status 'all'
+      await fetchPositions('ALL');
       setLoading(false);
     };
     fetchBoth();
@@ -211,8 +240,7 @@ const PositionsPage = () => {
       setPositionToClose(null);
 
       // Refresh positions
-      await fetchPositions('OPEN');
-      await fetchPositions('CLOSED');
+      await fetchPositions('ALL');
     } catch (err) {
       toast.showError(
         err instanceof Error ? err.message : 'Failed to close position'
@@ -244,8 +272,7 @@ const PositionsPage = () => {
       toast.showSuccess('Account synced successfully');
 
       // Refresh positions after sync
-      await fetchPositions('OPEN');
-      await fetchPositions('CLOSED');
+      await fetchPositions('ALL');
     } catch (err) {
       const errorMsg =
         err instanceof Error ? err.message : 'Failed to sync account';
@@ -694,8 +721,7 @@ const PositionsPage = () => {
                 onClick={async () => {
                   setLoading(true);
                   setError(null);
-                  await fetchPositions('OPEN');
-                  await fetchPositions('CLOSED');
+                  await fetchPositions('ALL');
                   setLoading(false);
                 }}
                 size="small"

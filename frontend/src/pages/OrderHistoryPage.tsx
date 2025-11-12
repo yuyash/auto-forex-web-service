@@ -38,7 +38,24 @@ const OrderHistoryPage = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<OrderFilters>({});
+
+  // Set default date range: 7 days ago to present
+  const getDefaultStartDate = () => {
+    const date = new Date();
+    date.setDate(date.getDate() - 7);
+    return date.toISOString().split('T')[0];
+  };
+
+  const getDefaultEndDate = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+
+  const [filters, setFilters] = useState<OrderFilters>({
+    start_date: getDefaultStartDate(),
+    end_date: getDefaultEndDate(),
+    instrument: 'USD_JPY',
+    status: '', // All States
+  });
   const [searchOrderId, setSearchOrderId] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState<number | ''>('');
 
@@ -46,10 +63,13 @@ const OrderHistoryPage = () => {
   const { data: accountsData } = useAccounts({ page_size: 100 });
   const accounts = accountsData?.results || [];
 
-  // Auto-select first account if only one is available
+  // Auto-select first account (default OANDA account)
   useEffect(() => {
-    if (accounts.length === 1 && !selectedAccountId) {
-      setSelectedAccountId(accounts[0].id);
+    if (accounts.length > 0 && !selectedAccountId) {
+      // Find default account or use first account
+      const defaultAccount =
+        accounts.find((acc) => acc.is_default) || accounts[0];
+      setSelectedAccountId(defaultAccount.id);
     }
   }, [accounts, selectedAccountId]);
 

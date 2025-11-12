@@ -282,6 +282,7 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             # Application Settings
             "tick_data_retention_days",
             "oanda_sync_interval_seconds",
+            "oanda_fetch_duration_days",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

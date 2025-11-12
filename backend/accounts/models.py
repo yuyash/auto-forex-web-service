@@ -175,6 +175,10 @@ class SystemSettings(models.Model):
             "Interval in seconds for OANDA account synchronization " "(default: 300 = 5 minutes)"
         ),
     )
+    oanda_fetch_duration_days = models.IntegerField(
+        default=365,
+        help_text="Number of days to fetch orders and positions from OANDA (default: 365 = 1 year)",
+    )
 
     updated_at = models.DateTimeField(
         auto_now=True,
