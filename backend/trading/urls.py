@@ -19,7 +19,7 @@ from .backtest_task_views import (  # noqa: E501
 )
 from .candle_views import CandleDataView
 from .event_views import EventDetailView, EventExportView, EventListView
-from .health_views import health_check, simple_health_check
+from .health_views import health_check, oanda_health_check, simple_health_check
 from .order_views import OrderDetailView, OrderListCreateView
 from .position_views import PositionCloseView, PositionDetailView, PositionListView
 from .strategy_comparison_views import StrategyCompareResultsView, StrategyCompareView
@@ -48,6 +48,7 @@ urlpatterns = [
     # Health check endpoints (public, no authentication required)
     path("health/", health_check, name="health_check"),
     path("health/simple/", simple_health_check, name="simple_health_check"),
+    path("health/oanda/", oanda_health_check, name="oanda_health_check"),
     # Candle data endpoints
     path("candles/", CandleDataView.as_view(), name="candle_data"),
     # Strategy list endpoint

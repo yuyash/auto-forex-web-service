@@ -7,17 +7,24 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
-import { useOandaAccounts } from '../../hooks/useOandaAccounts';
 
 interface StrategyStatus {
   isActive: boolean;
   strategyName?: string;
 }
 
+interface OandaHealthStatus {
+  healthy: boolean;
+  message: string;
+}
+
 const AppFooter = () => {
   const { t } = useTranslation('common');
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [currentTime, setCurrentTime] = useState<string>('');
+  const [oandaHealth, setOandaHealth] = useState<OandaHealthStatus | null>(
+    null
+  );
 
   // Update current time in user's timezone
   useEffect(() => {
@@ -53,15 +60,54 @@ const AppFooter = () => {
     return () => clearInterval(interval);
   }, [user?.timezone]);
 
-  // Use shared hook with caching to prevent duplicate requests
-  const { hasAccounts, error } = useOandaAccounts();
+  // Check OANDA API health periodically
+  useEffect(() => {
+    // Early return if no token - don't set state
+    if (!token) {
+      return;
+    }
 
-  // Derive connection status from accounts (no useEffect needed)
-  const derivedConnectionStatus: 'connected' | 'disconnected' = error
-    ? 'disconnected'
-    : hasAccounts
-      ? 'connected'
-      : 'disconnected';
+    const checkHealth = async () => {
+      try {
+        const response = await fetch('/api/health/oanda/', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setOandaHealth({
+            healthy: data.healthy,
+            message: data.message,
+          });
+        } else {
+          setOandaHealth({
+            healthy: false,
+            message: 'Failed to check OANDA health',
+          });
+        }
+      } catch (error) {
+        console.error('Error checking OANDA health:', error);
+        setOandaHealth({
+          healthy: false,
+          message: 'Health check failed',
+        });
+      }
+    };
+
+    // Check immediately
+    checkHealth();
+
+    // Check every 30 seconds
+    const interval = setInterval(checkHealth, 30000);
+
+    return () => clearInterval(interval);
+  }, [token]);
+
+  // Derive connection status from OANDA health
+  const derivedConnectionStatus: 'connected' | 'disconnected' =
+    oandaHealth?.healthy ? 'connected' : 'disconnected';
 
   // Strategy status - currently not tracking active strategies
   // TODO: Implement by checking for running trading tasks

@@ -64,7 +64,10 @@ const DashboardPage = () => {
   // OANDA account state - using shared hook with caching
   const { accounts: oandaAccounts, hasAccounts: hasOandaAccount } =
     useOandaAccounts();
-  const oandaAccountId = oandaAccounts[0]?.account_id;
+  // Use default account or first account
+  const defaultAccount =
+    oandaAccounts.find((acc) => acc.is_default) || oandaAccounts[0];
+  const oandaAccountId = defaultAccount?.account_id;
 
   // Chart API reference for programmatic control
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

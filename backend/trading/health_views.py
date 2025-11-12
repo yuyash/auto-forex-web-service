@@ -14,7 +14,7 @@ from django.http import JsonResponse
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -105,3 +105,60 @@ def simple_health_check(request):  # type: ignore[no-untyped-def] # pylint: disa
         JsonResponse with status
     """
     return JsonResponse({"status": "ok"}, status=200)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def oanda_health_check(request: Request) -> Response:
+    """
+    Check OANDA API connectivity for the authenticated user's accounts.
+
+    This endpoint checks the health of all active OANDA accounts
+    for the authenticated user by making a lightweight API call
+    to verify connectivity and authentication.
+
+    Returns HTTP 200 with health status for each account.
+
+    Args:
+        request: HTTP request object with authenticated user
+
+    Returns:
+        Response with OANDA API health status
+    """
+    # Import here to avoid circular dependency
+    from trading.health_check import (  # pylint: disable=import-outside-toplevel
+        check_all_accounts_health,
+    )
+
+    try:
+        # Check health of all user's accounts
+        user_id = request.user.id
+        if user_id is None:
+            return Response(
+                {
+                    "healthy": False,
+                    "message": "User ID not found",
+                    "accounts": [],
+                },
+                status=status.HTTP_200_OK,
+            )
+        health_status = check_all_accounts_health(user_id)
+
+        # Return 200 even if unhealthy - client should check the 'healthy' field
+        return Response(health_status, status=status.HTTP_200_OK)
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error(
+            "OANDA health check failed for user %s: %s",
+            request.user.id,
+            str(e),
+            exc_info=True,
+        )
+        return Response(
+            {
+                "healthy": False,
+                "message": f"Health check failed: {str(e)}",
+                "accounts": [],
+            },
+            status=status.HTTP_200_OK,
+        )
