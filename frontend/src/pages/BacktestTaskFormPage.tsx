@@ -1,6 +1,7 @@
 import { Container, Box, Typography, Paper } from '@mui/material';
 import { useParams } from 'react-router-dom';
 import BacktestTaskForm from '../components/backtest/BacktestTaskForm';
+import BacktestTaskUpdateForm from '../components/backtest/BacktestTaskUpdateForm';
 import { useBacktestTask } from '../hooks/useBacktestTasks';
 import { LoadingSpinner, Breadcrumbs } from '../components/common';
 
@@ -37,24 +38,24 @@ export default function BacktestTaskFormPage() {
         </Typography>
 
         <Paper sx={{ p: 4, mt: 3 }}>
-          <BacktestTaskForm
-            taskId={taskId}
-            initialData={
-              task
-                ? {
-                    config_id: task.config_id,
-                    name: task.name,
-                    description: task.description,
-                    data_source: task.data_source,
-                    start_time: task.start_time,
-                    end_time: task.end_time,
-                    initial_balance: parseFloat(task.initial_balance),
-                    commission_per_trade: parseFloat(task.commission_per_trade),
-                    instrument: task.instrument,
-                  }
-                : undefined
-            }
-          />
+          {taskId && task ? (
+            <BacktestTaskUpdateForm
+              taskId={taskId}
+              taskName={task.name}
+              taskDescription={task.description}
+              initialData={{
+                config_id: task.config_id,
+                data_source: task.data_source,
+                start_time: task.start_time,
+                end_time: task.end_time,
+                initial_balance: parseFloat(task.initial_balance),
+                commission_per_trade: parseFloat(task.commission_per_trade),
+                instrument: task.instrument,
+              }}
+            />
+          ) : (
+            <BacktestTaskForm />
+          )}
         </Paper>
       </Box>
     </Container>

@@ -1,6 +1,7 @@
-import { Container, Box, Typography } from '@mui/material';
+import { Container, Box, Typography, Paper } from '@mui/material';
 import { useParams } from 'react-router-dom';
 import TradingTaskForm from '../components/trading/TradingTaskForm';
+import TradingTaskUpdateForm from '../components/trading/TradingTaskUpdateForm';
 import { useTradingTask } from '../hooks/useTradingTasks';
 import { LoadingSpinner, Breadcrumbs } from '../components/common';
 
@@ -14,7 +15,7 @@ export default function TradingTaskFormPage() {
 
   const isEditMode = !!taskId;
 
-  if (isEditMode && isLoading) {
+  if (isEditMode && (isLoading || !task)) {
     return (
       <Container maxWidth="lg">
         <Box
@@ -45,19 +46,21 @@ export default function TradingTaskFormPage() {
             : 'Set up a new automated trading task'}
         </Typography>
 
-        <TradingTaskForm
-          taskId={taskId}
-          initialData={
-            task
-              ? {
-                  account_id: task.account_id,
-                  config_id: task.config_id,
-                  name: task.name,
-                  description: task.description,
-                }
-              : undefined
-          }
-        />
+        <Paper sx={{ p: 4, mt: 3 }}>
+          {isEditMode && task ? (
+            <TradingTaskUpdateForm
+              taskId={taskId}
+              taskName={task.name}
+              taskDescription={task.description}
+              accountName={task.account_name}
+              initialData={{
+                config_id: task.config_id,
+              }}
+            />
+          ) : (
+            <TradingTaskForm />
+          )}
+        </Paper>
       </Box>
     </Container>
   );

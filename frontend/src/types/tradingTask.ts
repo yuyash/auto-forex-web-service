@@ -26,6 +26,7 @@ export interface TradingTaskCreateData {
 }
 
 export interface TradingTaskUpdateData {
+  config?: number;
   name?: string;
   description?: string;
   account_id?: number;

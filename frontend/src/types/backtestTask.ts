@@ -48,6 +48,7 @@ export interface BacktestTaskFormData {
 }
 
 export interface BacktestTaskUpdateData {
+  config?: number;
   name?: string;
   description?: string;
   data_source?: DataSource;

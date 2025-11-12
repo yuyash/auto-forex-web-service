@@ -1,0 +1,352 @@
+import { useState } from 'react';
+
+import {
+  Box,
+  Button,
+  Typography,
+  Paper,
+  TextField,
+  Alert,
+} from '@mui/material';
+import Grid from '@mui/material/Grid';
+import { useNavigate } from 'react-router-dom';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
+import { DateRangePicker } from '../tasks/forms/DateRangePicker';
+import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
+import { BalanceInput } from '../tasks/forms/BalanceInput';
+import { DataSourceSelector } from '../tasks/forms/DataSourceSelector';
+import { DataSource } from '../../types/common';
+import { useUpdateBacktestTask } from '../../hooks/useBacktestTaskMutations';
+import {
+  useConfiguration,
+  useConfigurations,
+} from '../../hooks/useConfigurations';
+import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
+
+// Update schema - only editable fields
+const backtestTaskUpdateSchema = z
+  .object({
+    config_id: z.coerce
+      .number({
+        message: 'Configuration must be a number',
+      })
+      .positive('Configuration is required'),
+    data_source: z.nativeEnum(DataSource),
+    start_time: z.string().min(1, 'Start date is required'),
+    end_time: z.string().min(1, 'End date is required'),
+    initial_balance: z.coerce
+      .number({
+        message: 'Initial balance must be a number',
+      })
+      .positive('Initial balance must be greater than zero'),
+    commission_per_trade: z.coerce
+      .number({
+        message: 'Commission must be a number',
+      })
+      .nonnegative('Commission cannot be negative')
+      .optional(),
+    instrument: z.string().min(1, 'Instrument is required'),
+  })
+  .refine((data) => data.start_time < data.end_time, {
+    message: 'Start date must be before end date',
+    path: ['start_time'],
+  });
+
+type BacktestTaskUpdateData = z.infer<typeof backtestTaskUpdateSchema>;
+
+interface BacktestTaskUpdateFormProps {
+  taskId: number;
+  taskName: string;
+  taskDescription?: string;
+  initialData: BacktestTaskUpdateData;
+}
+
+export default function BacktestTaskUpdateForm({
+  taskId,
+  taskName,
+  taskDescription,
+  initialData,
+}: BacktestTaskUpdateFormProps) {
+  const navigate = useNavigate();
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const updateTask = useUpdateBacktestTask();
+
+  const {
+    control,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<BacktestTaskUpdateData>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(backtestTaskUpdateSchema) as any,
+    defaultValues: initialData,
+  });
+
+  // Fetch all configurations
+  const { data: configurationsData } = useConfigurations({ page_size: 100 });
+  const configurations = configurationsData?.results || [];
+
+  // Watch selected config
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const selectedConfigId = watch('config_id');
+  const configIdNumber =
+    typeof selectedConfigId === 'string'
+      ? selectedConfigId === ''
+        ? 0
+        : Number(selectedConfigId)
+      : selectedConfigId || 0;
+
+  const { data: selectedConfig } = useConfiguration(configIdNumber);
+
+  const onSubmit = async (data: BacktestTaskUpdateData) => {
+    setSubmitError(null);
+
+    try {
+      await updateTask.mutate({
+        id: taskId,
+        data: {
+          config: data.config_id,
+          data_source: data.data_source,
+          start_time: data.start_time,
+          end_time: data.end_time,
+          initial_balance: data.initial_balance.toString(),
+          commission_per_trade: data.commission_per_trade?.toString(),
+          instrument: data.instrument,
+        },
+      });
+
+      // Invalidate cache so the task list refreshes
+      invalidateBacktestTasksCache();
+
+      navigate('/backtest-tasks');
+    } catch (error: unknown) {
+      console.error('Failed to update task:', error);
+      const err = error as {
+        data?: Record<string, string | string[]>;
+        message?: string;
+      };
+
+      let errorMessage = 'Failed to update task';
+      if (err?.data) {
+        const backendErrors = err.data;
+        const errorMessages: string[] = [];
+
+        const fieldMapping: Record<string, string> = {
+          config: 'Configuration',
+          start_time: 'Start Date',
+          end_time: 'End Date',
+          initial_balance: 'Initial Balance',
+          instrument: 'Instrument',
+        };
+
+        Object.entries(backendErrors).forEach(([field, messages]) => {
+          const fieldName = fieldMapping[field] || field;
+          const fieldErrors = Array.isArray(messages) ? messages : [messages];
+          fieldErrors.forEach((msg: string) => {
+            errorMessages.push(`${fieldName}: ${msg}`);
+          });
+        });
+
+        if (errorMessages.length > 0) {
+          errorMessage = errorMessages.join('\n');
+        }
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+
+      setSubmitError(errorMessage);
+    }
+  };
+
+  return (
+    <Box>
+      <Paper sx={{ p: 3, mb: 3, bgcolor: 'grey.50' }}>
+        <Typography variant="h6" gutterBottom>
+          Task Information (Read-only)
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Typography variant="subtitle2" color="text.secondary">
+              Task Name
+            </Typography>
+            <Typography variant="body1">{taskName}</Typography>
+          </Grid>
+          {taskDescription && (
+            <Grid size={{ xs: 12 }}>
+              <Typography variant="subtitle2" color="text.secondary">
+                Description
+              </Typography>
+              <Typography variant="body1">{taskDescription}</Typography>
+            </Grid>
+          )}
+        </Grid>
+      </Paper>
+
+      <form onSubmit={handleSubmit(onSubmit)}>
+        {submitError && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {submitError}
+          </Alert>
+        )}
+
+        <Typography variant="h6" gutterBottom>
+          Configuration
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Update the strategy configuration for this backtest task
+        </Typography>
+
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid size={{ xs: 12 }}>
+            <Controller
+              name="config_id"
+              control={control}
+              render={({ field }) => (
+                <ConfigurationSelector
+                  configurations={configurations}
+                  value={field.value}
+                  onChange={field.onChange}
+                  error={errors.config_id?.message}
+                  helperText={errors.config_id?.message}
+                />
+              )}
+            />
+          </Grid>
+
+          {selectedConfig && (
+            <Grid size={{ xs: 12 }}>
+              <Alert severity="info">
+                <Typography variant="subtitle2" gutterBottom>
+                  Configuration Preview
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Type:</strong> {selectedConfig.strategy_type}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Description:</strong>{' '}
+                  {selectedConfig.description || 'No description'}
+                </Typography>
+              </Alert>
+            </Grid>
+          )}
+        </Grid>
+
+        <Typography variant="h6" gutterBottom>
+          Backtest Parameters
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Update the backtest time range, instrument, and initial settings
+        </Typography>
+
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12 }}>
+            <Controller
+              name="data_source"
+              control={control}
+              render={({ field }) => (
+                <DataSourceSelector
+                  value={field.value}
+                  onChange={field.onChange}
+                  error={errors.data_source?.message}
+                  helperText={errors.data_source?.message}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12 }}>
+            <Controller
+              name="start_time"
+              control={control}
+              render={({ field: startField }) => (
+                <Controller
+                  name="end_time"
+                  control={control}
+                  render={({ field: endField }) => (
+                    <DateRangePicker
+                      startDate={startField.value}
+                      endDate={endField.value}
+                      onStartDateChange={startField.onChange}
+                      onEndDateChange={endField.onChange}
+                      required
+                    />
+                  )}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12 }}>
+            <Controller
+              name="instrument"
+              control={control}
+              render={({ field }) => (
+                <InstrumentSelector
+                  value={field.value}
+                  onChange={field.onChange}
+                  error={errors.instrument?.message}
+                  helperText={errors.instrument?.message as string}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Controller
+              name="initial_balance"
+              control={control}
+              render={({ field }) => (
+                <BalanceInput
+                  value={field.value}
+                  onChange={field.onChange}
+                  label="Initial Balance"
+                  currency="USD"
+                  error={errors.initial_balance?.message}
+                  helperText={errors.initial_balance?.message}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Controller
+              name="commission_per_trade"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label="Commission Per Trade"
+                  type="number"
+                  inputProps={{ min: 0, step: 0.01 }}
+                  error={!!errors.commission_per_trade}
+                  helperText={errors.commission_per_trade?.message}
+                />
+              )}
+            />
+          </Grid>
+        </Grid>
+
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
+          <Button
+            variant="outlined"
+            onClick={() => navigate('/backtest-tasks')}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={updateTask.isLoading}
+          >
+            Update Task
+          </Button>
+        </Box>
+      </form>
+    </Box>
+  );
+}
