@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -6,8 +6,6 @@ import {
   IconButton,
   Menu,
   MenuItem,
-  Select,
-  FormControl,
   Divider,
   ListItemIcon,
   ListItemText,
@@ -30,10 +28,6 @@ import {
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
-import {
-  useOandaAccounts,
-  type OandaAccount,
-} from '../../hooks/useOandaAccounts';
 import LanguageSelector from '../common/LanguageSelector';
 import NotificationCenter from '../admin/NotificationCenter';
 import Typography from '@mui/material/Typography';
@@ -51,20 +45,6 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
   const [userMenuAnchorEl, setUserMenuAnchorEl] = useState<null | HTMLElement>(
     null
   );
-
-  // Use shared hook with caching to prevent duplicate requests
-  const { accounts } = useOandaAccounts();
-
-  // Derive default account ID from accounts
-  const defaultAccountId = useMemo(
-    () => (accounts.length > 0 ? accounts[0].id.toString() : ''),
-    [accounts]
-  );
-
-  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
-
-  // Use the derived default if no selection has been made
-  const effectiveAccountId = selectedAccountId || defaultAccountId;
 
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setUserMenuAnchorEl(event.currentTarget);
@@ -95,22 +75,8 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
     navigate('/login');
   };
 
-  const handleAccountChange = (event: { target: { value: string } }) => {
-    setSelectedAccountId(String(event.target.value));
-  };
-
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md')); // 600px - 900px
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
-
-  const formatAccountLabel = (account: OandaAccount) => {
-    const isPractice = account.api_type === 'practice' || account.is_practice;
-    return `${account.account_id}${isPractice ? ' (Practice)' : ' (Live)'}`;
-  };
-
-  const formatCompactAccountLabel = (account: OandaAccount) => {
-    const isPractice = account.api_type === 'practice' || account.is_practice;
-    return `${account.account_id}${isPractice ? ' (P)' : ''}`;
-  };
 
   return (
     <AppBar
@@ -192,97 +158,6 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
               Trading
             </Button>
           </Box>
-        )}
-
-        {/* Account Selector */}
-        {accounts.length > 0 && (
-          <FormControl
-            size="small"
-            sx={{
-              minWidth: { xs: 110, sm: 200 },
-              maxWidth: { xs: 150, sm: 240 },
-              mr: { xs: 0.75, sm: 2 },
-              flexShrink: 0,
-              '& .MuiOutlinedInput-root': {
-                color: 'inherit',
-                '& fieldset': {
-                  borderColor: 'rgba(255, 255, 255, 0.3)',
-                },
-                '&:hover fieldset': {
-                  borderColor: 'rgba(255, 255, 255, 0.5)',
-                },
-                '&.Mui-focused fieldset': {
-                  borderColor: 'rgba(255, 255, 255, 0.7)',
-                },
-              },
-              '& .MuiSelect-icon': {
-                color: 'inherit',
-              },
-              '& .MuiOutlinedInput-input': {
-                display: 'flex',
-                alignItems: 'center',
-                minHeight: 0,
-                py: 0.5,
-                fontSize: { xs: '0.8rem', sm: '0.875rem' },
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              },
-            }}
-          >
-            <Select
-              value={effectiveAccountId}
-              onChange={handleAccountChange}
-              displayEmpty
-              inputProps={{ 'aria-label': 'Select OANDA Account' }}
-              renderValue={(selected) => {
-                const selectedValue = String(selected ?? '');
-                const account = accounts.find(
-                  (item) => item.id.toString() === selectedValue
-                );
-
-                if (!account) {
-                  return (
-                    <Typography
-                      component="span"
-                      noWrap
-                      sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
-                    >
-                      {t('header.selectAccount', 'Select account')}
-                    </Typography>
-                  );
-                }
-
-                const label = isMobile
-                  ? formatCompactAccountLabel(account)
-                  : formatAccountLabel(account);
-
-                return (
-                  <Typography
-                    component="span"
-                    noWrap
-                    sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
-                  >
-                    {label}
-                  </Typography>
-                );
-              }}
-            >
-              {accounts.map((account) => (
-                <MenuItem key={account.id} value={account.id.toString()}>
-                  {account.account_id}
-                  {account.api_type === 'practice' ? ' (Practice)' : ' (Live)'}
-                  <Typography
-                    component="span"
-                    noWrap
-                    sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
-                  >
-                    {formatAccountLabel(account)}
-                  </Typography>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
         )}
 
         {/* Spacer to push right side icons to the right */}

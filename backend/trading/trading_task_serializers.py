@@ -28,8 +28,8 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     config_id = serializers.IntegerField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
-    account_id = serializers.IntegerField(source="account.id", read_only=True)
-    account_name = serializers.CharField(source="account.account_id", read_only=True)
+    oanda_account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
+    oanda_account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     latest_execution = serializers.SerializerMethodField()
 
     class Meta:
@@ -40,8 +40,8 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "config_id",
             "config_name",
             "strategy_type",
-            "account_id",
-            "account_name",
+            "oanda_account_id",
+            "oanda_account_name",
             "name",
             "description",
             "status",
@@ -55,8 +55,8 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "config_id",
             "config_name",
             "strategy_type",
-            "account_id",
-            "account_name",
+            "oanda_account_id",
+            "oanda_account_name",
             "status",
             "latest_execution",
             "created_at",
@@ -89,8 +89,8 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     config_id = serializers.IntegerField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
-    account_id = serializers.IntegerField(source="account.id", read_only=True)
-    account_name = serializers.CharField(source="account.account_id", read_only=True)
+    oanda_account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
+    oanda_account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
 
     class Meta:
         model = TradingTask
@@ -100,8 +100,8 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "config_id",
             "config_name",
             "strategy_type",
-            "account_id",
-            "account_name",
+            "oanda_account_id",
+            "oanda_account_name",
             "name",
             "description",
             "status",
@@ -124,7 +124,7 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
         model = TradingTask
         fields = [
             "config",
-            "account",
+            "oanda_account",
             "name",
             "description",
         ]
@@ -136,7 +136,7 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Configuration does not belong to the current user")
         return value
 
-    def validate_account(self, value: OandaAccount) -> OandaAccount:
+    def validate_oanda_account(self, value: OandaAccount) -> OandaAccount:
         """Validate that account belongs to the user and is active."""
         user = self.context["request"].user
         if value.user != user:

@@ -8,8 +8,8 @@ export interface TradingTask {
   config_id: number;
   config_name: string;
   strategy_type: string;
-  account_id: number;
-  account_name: string;
+  oanda_account_id: number;
+  oanda_account_name: string;
   name: string;
   description: string;
   status: TaskStatus;
@@ -20,7 +20,7 @@ export interface TradingTask {
 
 export interface TradingTaskCreateData {
   config_id: number;
-  account_id: number;
+  oanda_account_id: number;
   name: string;
   description?: string;
 }
@@ -28,7 +28,7 @@ export interface TradingTaskCreateData {
 export interface TradingTaskUpdateData {
   name?: string;
   description?: string;
-  account_id?: number;
+  oanda_account_id?: number;
 }
 
 export interface TradingTaskListParams {
@@ -37,7 +37,7 @@ export interface TradingTaskListParams {
   search?: string;
   status?: TaskStatus;
   config_id?: number;
-  account_id?: number;
+  oanda_account_id?: number;
   strategy_type?: string;
   ordering?: string;
 }

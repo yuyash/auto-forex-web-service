@@ -8,6 +8,8 @@ export interface BacktestTask {
   config_id: number;
   config_name: string;
   strategy_type: string;
+  oanda_account_id?: number;
+  oanda_account_name?: string;
   name: string;
   description: string;
   data_source: DataSource;
@@ -24,6 +26,7 @@ export interface BacktestTask {
 
 export interface BacktestTaskCreateData {
   config_id: number;
+  oanda_account_id?: number;
   name: string;
   description?: string;
   data_source: DataSource;
@@ -37,6 +40,7 @@ export interface BacktestTaskCreateData {
 // Form data type - matches the validation schema (after transformation)
 export interface BacktestTaskFormData {
   config_id: number;
+  oanda_account_id?: number;
   name: string;
   description?: string;
   data_source: DataSource;

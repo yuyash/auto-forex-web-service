@@ -42,6 +42,14 @@ class BacktestTask(models.Model):
         related_name="backtest_tasks",
         help_text="Strategy configuration used by this task",
     )
+    oanda_account = models.ForeignKey(
+        "accounts.OandaAccount",
+        on_delete=models.PROTECT,
+        related_name="backtest_tasks",
+        null=True,
+        blank=True,
+        help_text="OANDA account used for this backtest (practice accounts only)",
+    )
     name = models.CharField(
         max_length=255,
         help_text="Human-readable name for this backtest task",
@@ -285,21 +293,34 @@ class BacktestTask(models.Model):
         - Date range (start_time < end_time)
         - Strategy configuration parameters
         - Initial balance is positive
+        - OANDA account (if specified) is practice account
 
         Returns:
             Tuple of (is_valid, error_message)
         """
-        # Validate date range
+        # Validate date range and initial balance
         if self.start_time >= self.end_time:
             return False, "start_time must be before end_time"
-
-        # Validate initial balance
         if self.initial_balance <= 0:
             return False, "initial_balance must be positive"
 
+        # Validate OANDA account if specified
+        if self.oanda_account:
+            if self.oanda_account.user_id != self.user_id:
+                return False, "OANDA account does not belong to the user"
+            if not self.oanda_account.is_active:
+                return False, "OANDA account is not active"
+            if self.oanda_account.api_type == "live":
+                return (
+                    False,
+                    "Live OANDA accounts cannot be used for backtesting. "
+                    "Please use a practice account.",
+                )
+
         # Validate strategy configuration
         is_valid, error_message = self.config.validate_parameters()
-        if not is_valid:
-            return False, f"Configuration validation failed: {error_message}"
-
-        return True, None
+        return (
+            (True, None)
+            if is_valid
+            else (False, f"Configuration validation failed: {error_message}")
+        )

@@ -28,6 +28,12 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     config_id = serializers.IntegerField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
+    oanda_account_id = serializers.IntegerField(
+        source="oanda_account.id", read_only=True, allow_null=True
+    )
+    oanda_account_name = serializers.CharField(
+        source="oanda_account.account_id", read_only=True, allow_null=True
+    )
     latest_execution = serializers.SerializerMethodField()
 
     class Meta:
@@ -38,6 +44,8 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "config_id",
             "config_name",
             "strategy_type",
+            "oanda_account_id",
+            "oanda_account_name",
             "name",
             "description",
             "data_source",
@@ -57,6 +65,8 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "config_id",
             "config_name",
             "strategy_type",
+            "oanda_account_id",
+            "oanda_account_name",
             "status",
             "latest_execution",
             "created_at",
@@ -89,6 +99,12 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
     config_id = serializers.IntegerField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
+    oanda_account_id = serializers.IntegerField(
+        source="oanda_account.id", read_only=True, allow_null=True
+    )
+    oanda_account_name = serializers.CharField(
+        source="oanda_account.account_id", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = BacktestTask
@@ -98,6 +114,8 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
             "config_id",
             "config_name",
             "strategy_type",
+            "oanda_account_id",
+            "oanda_account_name",
             "name",
             "description",
             "data_source",
@@ -125,6 +143,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         model = BacktestTask
         fields = [
             "config",
+            "oanda_account",
             "name",
             "description",
             "data_source",
@@ -140,6 +159,23 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
         if value.user != user:
             raise serializers.ValidationError("Configuration does not belong to the current user")
+        return value
+
+    def validate_oanda_account(self, value):  # type: ignore[no-untyped-def]
+        """Validate that account belongs to the user and is practice account."""
+        if value is None:
+            return value
+
+        user = self.context["request"].user
+        if value.user != user:
+            raise serializers.ValidationError("Account does not belong to the current user")
+        if not value.is_active:
+            raise serializers.ValidationError("Account is not active")
+        if value.api_type == "live":
+            raise serializers.ValidationError(
+                "Live OANDA accounts cannot be used for backtesting. "
+                "Please use a practice account."
+            )
         return value
 
     def validate_initial_balance(self, value: Decimal) -> Decimal:

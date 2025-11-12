@@ -45,7 +45,7 @@ class TradingTask(models.Model):
         related_name="trading_tasks",
         help_text="Strategy configuration used by this task",
     )
-    account = models.ForeignKey(
+    oanda_account = models.ForeignKey(
         OandaAccount,
         on_delete=models.PROTECT,
         related_name="trading_tasks",
@@ -101,13 +101,13 @@ class TradingTask(models.Model):
         indexes = [
             models.Index(fields=["user", "status"]),
             models.Index(fields=["user", "config"]),
-            models.Index(fields=["account", "status"]),
+            models.Index(fields=["oanda_account", "status"]),
             models.Index(fields=["created_at"]),
         ]
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.config.strategy_type}) - {self.account.account_id}"
+        return f"{self.name} ({self.config.strategy_type}) - {self.oanda_account.account_id}"
 
     def start(self) -> Any:
         """
@@ -127,7 +127,7 @@ class TradingTask(models.Model):
 
         # Check if another task is running on this account
         other_running_tasks = TradingTask.objects.filter(
-            account=self.account,
+            oanda_account=self.oanda_account,
             status=TaskStatus.RUNNING,
         ).exclude(id=self.id)
 
@@ -216,7 +216,7 @@ class TradingTask(models.Model):
 
         # Check if another task is running on this account
         other_running_tasks = TradingTask.objects.filter(
-            account=self.account,
+            oanda_account=self.oanda_account,
             status=TaskStatus.RUNNING,
         ).exclude(id=self.id)
 
@@ -258,7 +258,7 @@ class TradingTask(models.Model):
 
         # Check if another task is running on this account
         other_running_tasks = TradingTask.objects.filter(
-            account=self.account,
+            oanda_account=self.oanda_account,
             status=TaskStatus.RUNNING,
         ).exclude(id=self.id)
 
@@ -313,7 +313,7 @@ class TradingTask(models.Model):
         new_task = TradingTask.objects.create(
             user=self.user,
             config=self.config,
-            account=self.account,
+            oanda_account=self.oanda_account,
             name=new_name,
             description=self.description,
             status=TaskStatus.CREATED,
@@ -368,11 +368,11 @@ class TradingTask(models.Model):
             Tuple of (is_valid, error_message)
         """
         # Validate account ownership
-        if self.account.user_id != self.user_id:
+        if self.oanda_account.user_id != self.user_id:
             return False, "Account does not belong to the user"
 
         # Validate account is active
-        if not self.account.is_active:
+        if not self.oanda_account.is_active:
             return False, "Account is not active"
 
         # Validate strategy configuration

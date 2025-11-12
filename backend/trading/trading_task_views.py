@@ -60,13 +60,13 @@ class TradingTaskListCreateView(ListCreateAPIView):
         Query parameters:
         - status: Filter by task status
         - config_id: Filter by configuration ID
-        - account_id: Filter by account ID
+        - oanda_account_id: Filter by account ID
         - strategy_type: Filter by strategy type
         - search: Search in name or description
         - ordering: Sort field (e.g., '-created_at', 'name')
         """
         queryset = TradingTask.objects.filter(user=self.request.user.id).select_related(
-            "config", "account", "user"
+            "config", "oanda_account", "user"
         )
 
         # Filter by status
@@ -80,9 +80,9 @@ class TradingTaskListCreateView(ListCreateAPIView):
             queryset = queryset.filter(config_id=int(config_id))
 
         # Filter by account ID
-        account_id = self.request.query_params.get("account_id")
-        if account_id:
-            queryset = queryset.filter(account_id=int(account_id))
+        oanda_account_id = self.request.query_params.get("oanda_account_id")
+        if oanda_account_id:
+            queryset = queryset.filter(oanda_account_id=int(oanda_account_id))
 
         # Filter by strategy type
         strategy_type = self.request.query_params.get("strategy_type")
@@ -124,7 +124,7 @@ class TradingTaskDetailView(RetrieveUpdateDestroyAPIView):
     def get_queryset(self) -> QuerySet:
         """Get trading tasks for the authenticated user."""
         return TradingTask.objects.filter(user=self.request.user.id).select_related(
-            "config", "account", "user"
+            "config", "oanda_account", "user"
         )
 
     def perform_destroy(self, instance: TradingTask) -> None:

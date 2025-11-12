@@ -1432,17 +1432,17 @@ def stop_trading_task_v2(task_id: int) -> Dict[str, Any]:
 
     try:
         # Get the task to find the account
-        task = TradingTask.objects.select_related("account").get(id=task_id)
+        task = TradingTask.objects.select_related("oanda_account").get(id=task_id)
 
         # Stop the task execution
         result = stop_trading_task_execution(task_id)
 
         if result["success"]:
             # Stop market data streaming for the account
-            stop_market_data_stream.delay(task.account.id)
+            stop_market_data_stream.delay(task.oanda_account.id)
             logger.info(
                 "Stopped market data streaming for account %s",
-                task.account.account_id,
+                task.oanda_account.account_id,
             )
 
         return result

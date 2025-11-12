@@ -10,6 +10,11 @@ import {
   Paper,
   TextField,
   Alert,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  FormHelperText,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
@@ -20,6 +25,7 @@ import { DateRangePicker } from '../tasks/forms/DateRangePicker';
 import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
 import { DataSourceSelector } from '../tasks/forms/DataSourceSelector';
+import { useAccounts } from '../../hooks/useAccounts';
 import {
   backtestTaskSchema,
   type BacktestTaskSchemaOutput,
@@ -184,6 +190,7 @@ export default function BacktestTaskForm({
     shouldUnregister: false,
     defaultValues: initialData || {
       config_id: 0,
+      oanda_account_id: undefined,
       name: '',
       description: '',
       data_source: DataSource.POSTGRESQL,
@@ -195,6 +202,7 @@ export default function BacktestTaskForm({
     },
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const selectedConfigId = watch('config_id');
 
   // Sync saved formData back into React Hook Form when changing steps
@@ -215,6 +223,12 @@ export default function BacktestTaskForm({
   // Fetch all configurations
   const { data: configurationsData } = useConfigurations({ page_size: 100 });
   const configurations = configurationsData?.results || [];
+
+  // Fetch OANDA accounts (practice only for backtest)
+  const { data: accountsData } = useAccounts({ page_size: 100 });
+  const practiceAccounts = (accountsData?.results || []).filter(
+    (account) => account.api_type === 'practice'
+  );
 
   // Convert config_id to number for the API call
   const configIdNumber =
@@ -428,6 +442,35 @@ export default function BacktestTaskForm({
                       error={!!errors.description}
                       helperText={errors.description?.message}
                     />
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Controller
+                  name="oanda_account_id"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>OANDA Account (Optional)</InputLabel>
+                      <Select
+                        {...field}
+                        label="OANDA Account (Optional)"
+                        value={field.value || ''}
+                      >
+                        <MenuItem value="">
+                          <em>None</em>
+                        </MenuItem>
+                        {practiceAccounts.map((account) => (
+                          <MenuItem key={account.id} value={account.id}>
+                            {account.account_id} (Practice)
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      <FormHelperText>
+                        Only practice accounts can be used for backtesting
+                      </FormHelperText>
+                    </FormControl>
                   )}
                 />
               </Grid>

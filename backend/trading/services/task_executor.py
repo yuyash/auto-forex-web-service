@@ -459,7 +459,9 @@ def execute_trading_task(
     try:
         # Fetch the task
         try:
-            task = TradingTask.objects.select_related("config", "user", "account").get(id=task_id)
+            task = TradingTask.objects.select_related("config", "user", "oanda_account").get(
+                id=task_id
+            )
         except TradingTask.DoesNotExist:
             error_msg = f"TradingTask with id {task_id} does not exist"
             logger.error(error_msg)
@@ -483,7 +485,7 @@ def execute_trading_task(
 
         # Check if another task is running on this account
         other_running_tasks = TradingTask.objects.filter(
-            account=task.account,
+            oanda_account=task.oanda_account,
             status=TaskStatus.RUNNING,
         ).exclude(id=task_id)
 
@@ -536,7 +538,7 @@ def execute_trading_task(
             "Started trading task %d execution #%d on account %s",
             task_id,
             execution_number,
-            task.account.account_id,
+            task.oanda_account.account_id,
         )
 
         # Initialize strategy executor
@@ -572,7 +574,7 @@ def execute_trading_task(
             "success": True,
             "task_id": task_id,
             "execution_id": execution.id,
-            "account_id": task.account.account_id,
+            "account_id": task.oanda_account.account_id,
             "instrument": instrument,
             "error": None,
         }
@@ -629,7 +631,7 @@ def stop_trading_task_execution(task_id: int) -> dict[str, Any]:
     try:
         # Fetch the task
         try:
-            task = TradingTask.objects.select_related("config", "account").get(id=task_id)
+            task = TradingTask.objects.select_related("config", "oanda_account").get(id=task_id)
         except TradingTask.DoesNotExist:
             error_msg = f"TradingTask with id {task_id} does not exist"
             logger.error(error_msg)
