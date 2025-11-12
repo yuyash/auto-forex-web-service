@@ -304,19 +304,6 @@ class BacktestTask(models.Model):
         if self.initial_balance <= 0:
             return False, "initial_balance must be positive"
 
-        # Validate OANDA account if specified
-        if self.oanda_account:
-            if self.oanda_account.user_id != self.user_id:
-                return False, "OANDA account does not belong to the user"
-            if not self.oanda_account.is_active:
-                return False, "OANDA account is not active"
-            if self.oanda_account.api_type == "live":
-                return (
-                    False,
-                    "Live OANDA accounts cannot be used for backtesting. "
-                    "Please use a practice account.",
-                )
-
         # Validate strategy configuration
         is_valid, error_message = self.config.validate_parameters()
         return (
