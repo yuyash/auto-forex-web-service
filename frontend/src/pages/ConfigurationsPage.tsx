@@ -161,8 +161,36 @@ const ConfigurationsPage = () => {
 
       {/* Error State */}
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          Failed to load configurations: {error.message}
+        <Alert
+          severity="error"
+          sx={{ mb: 3 }}
+          action={
+            !error.message.toLowerCase().includes('connection refused') && (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => window.location.reload()}
+              >
+                Reload
+              </Button>
+            )
+          }
+        >
+          <Typography variant="body2" gutterBottom>
+            <strong>Failed to load configurations</strong>
+          </Typography>
+          <Typography variant="body2">
+            {error.message.toLowerCase().includes('connection refused') ||
+            error.message.toLowerCase().includes('failed to fetch')
+              ? 'Cannot connect to server. Please check if the backend is running.'
+              : error.message.includes('429') ||
+                  error.message.includes('Too Many Requests')
+                ? 'Too many requests. Please wait a moment and try again.'
+                : error.message.includes('502') ||
+                    error.message.includes('Bad Gateway')
+                  ? 'Server is temporarily unavailable. Please try again later.'
+                  : error.message}
+          </Typography>
         </Alert>
       )}
 

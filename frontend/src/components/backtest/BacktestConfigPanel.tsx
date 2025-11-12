@@ -33,7 +33,7 @@ interface BacktestConfigPanelProps {
 }
 
 // Common forex currency pairs
-const AVAILABLE_INSTRUMENTS = [
+const AVAILABLE_INSTRUMENT = [
   'JPY_USD',
   'EUR_USD',
   'GBP_USD',
@@ -66,7 +66,7 @@ const BacktestConfigPanel = ({
 
   // Backtest parameters
   const [dataSource, setDataSource] = useState<string>('postgresql');
-  const [instruments, setInstruments] = useState<string[]>(['JPY_USD']);
+  const [instrument, setInstrument] = useState<string>('USD_JPY');
   const [startDate, setStartDate] = useState<Date | null>(() => {
     const date = new Date();
     date.setDate(date.getDate() - 30); // 30 days ago
@@ -114,11 +114,11 @@ const BacktestConfigPanel = ({
       );
     }
 
-    if (instruments.length === 0) {
+    if (!instrument) {
       errors.push(
         t(
-          'backtest:validation.instrumentsRequired',
-          'Please select at least one instrument'
+          'backtest:validation.instrumentRequired',
+          'Please select an instrument'
         )
       );
     }
@@ -181,7 +181,7 @@ const BacktestConfigPanel = ({
     const config: BacktestConfig = {
       strategy_type: selectedStrategy,
       config: strategyConfig,
-      instruments,
+      instrument,
       data_source: dataSource,
       start_date: startDate.toISOString().split('T')[0],
       end_date: endDate.toISOString().split('T')[0],
@@ -272,27 +272,28 @@ const BacktestConfigPanel = ({
           </FormControl>
         </Box>
 
-        {/* Instruments Selector */}
+        {/* Instrument Selector */}
         <Box>
           <Typography variant="subtitle2" gutterBottom>
-            {t('backtest:config.instruments', 'Instruments')} *
+            {t('backtest:config.instrument', 'Instrument')} *
           </Typography>
           <Autocomplete
-            multiple
-            options={AVAILABLE_INSTRUMENTS}
-            value={instruments}
-            onChange={(_event, newValue) => setInstruments(newValue)}
+            options={AVAILABLE_INSTRUMENT}
+            value={instrument}
+            onChange={(_event, newValue) =>
+              setInstrument(newValue || 'USD_JPY')
+            }
             disabled={disabled || loading}
             renderInput={(params) => (
               <TextField
                 {...params}
                 placeholder={t(
-                  'backtest:config.instrumentsPlaceholder',
-                  'Select currency pairs'
+                  'backtest:config.instrumentPlaceholder',
+                  'Select currency pair'
                 )}
                 helperText={t(
-                  'backtest:config.instrumentsHelp',
-                  'Select one or more currency pairs to backtest'
+                  'backtest:config.instrumentHelp',
+                  'Select a currency pair to backtest'
                 )}
               />
             )}

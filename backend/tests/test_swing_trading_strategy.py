@@ -76,7 +76,7 @@ def strategy_instance(db, oanda_account, swing_strategy_config):  # pylint: disa
         account=oanda_account,
         strategy_type="swing_trading",
         config=swing_strategy_config,
-        instruments=["EUR_USD"],
+        instrument="EUR_USD",
         is_active=True,
     )
 

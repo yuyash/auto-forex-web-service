@@ -431,7 +431,7 @@ class SystemEventLogger(EventLogger):
         self,
         account: OandaAccount,
         stream_type: str,
-        instruments: list[str] | None = None,
+        instrument: str | None = None,
         **kwargs: Any,
     ) -> Event:
         """
@@ -442,7 +442,7 @@ class SystemEventLogger(EventLogger):
         details = {
             "stream_type": stream_type,
             "account_id": account.account_id,
-            "instruments": instruments,
+            "instrument": instrument,
             **kwargs,
         }
         return self.log_event(

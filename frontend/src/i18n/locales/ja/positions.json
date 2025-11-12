@@ -22,7 +22,7 @@
     "endDate": "終了日",
     "instrument": "通貨ペア",
     "layer": "レイヤー",
-    "allInstruments": "すべての通貨ペア",
+    "allInstrument": "すべての通貨ペア",
     "allLayers": "すべてのレイヤー"
   },
   "directions": {

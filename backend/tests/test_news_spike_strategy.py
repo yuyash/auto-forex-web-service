@@ -63,7 +63,7 @@ def strategy_instance(db, oanda_account):  # pylint: disable=unused-argument
             "trailing_stop_pips": 15,
             "trailing_activation_pips": 10,
         },
-        instruments=["EUR_USD"],
+        instrument="EUR_USD",
         is_active=True,
     )
 
@@ -642,7 +642,7 @@ class TestNewsSpikeStrategy:
         now = timezone.now()
 
         # Update strategy to trade USD_JPY
-        news_spike_strategy.instruments = ["USD_JPY"]
+        news_spike_strategy.instrument = ["USD_JPY"]
 
         # Create a position
         position = Position.objects.create(

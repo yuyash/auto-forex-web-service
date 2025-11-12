@@ -31,7 +31,7 @@ export interface RunningStrategy {
   start_time: string;
   position_count: number;
   unrealized_pnl: number;
-  instruments: string[];
+  instrument: string;
 }
 
 export interface AdminEvent {

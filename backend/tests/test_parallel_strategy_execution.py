@@ -83,7 +83,7 @@ class TestParallelStrategyExecution(TestCase):
         """Test successful parallel execution of multiple strategies."""
         config = StrategyComparisonConfig(
             strategy_configs=self.strategy_configs,
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             start_date=self.start_date,
             end_date=self.end_date,
             initial_balance=Decimal("10000"),
@@ -115,7 +115,7 @@ class TestParallelStrategyExecution(TestCase):
 
         config = StrategyComparisonConfig(
             strategy_configs=many_configs,
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             start_date=self.start_date,
             end_date=self.end_date,
             initial_balance=Decimal("10000"),
@@ -145,7 +145,7 @@ class TestParallelStrategyExecution(TestCase):
 
         config = StrategyComparisonConfig(
             strategy_configs=identical_configs,
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             start_date=self.start_date,
             end_date=self.end_date,
             initial_balance=Decimal("10000"),
@@ -182,7 +182,7 @@ class TestParallelStrategyExecution(TestCase):
 
         config = StrategyComparisonConfig(
             strategy_configs=mixed_configs,
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             start_date=self.start_date,
             end_date=self.end_date,
             initial_balance=Decimal("10000"),
@@ -445,7 +445,7 @@ class TestStrategyComparisonAPI(TestCase):
                     "config": {"base_lot": 1000},
                 }
             ],
-            "instruments": ["EUR_USD"],
+            "instrument": "EUR_USD",
             "start_date": "2024-01-01T00:00:00Z",
             "end_date": "2024-01-31T23:59:59Z",
             "initial_balance": 10000,
@@ -471,7 +471,7 @@ class TestStrategyComparisonAPI(TestCase):
                 }
                 for i in range(11)
             ],
-            "instruments": ["EUR_USD"],
+            "instrument": "EUR_USD",
             "start_date": "2024-01-01T00:00:00Z",
             "end_date": "2024-01-31T23:59:59Z",
         }
@@ -494,7 +494,7 @@ class TestStrategyComparisonAPI(TestCase):
                     "config": {},
                 }
             ],
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             start_date=datetime(2024, 1, 1, 0, 0, 0),
             end_date=datetime(2024, 1, 31, 23, 59, 59),
             initial_balance=Decimal("10000"),
@@ -529,7 +529,7 @@ class TestStrategyComparisonAPI(TestCase):
         comparison = StrategyComparison.objects.create(
             user=self.user,
             strategy_configs=[],
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             start_date=datetime(2024, 1, 1, 0, 0, 0),
             end_date=datetime(2024, 1, 31, 23, 59, 59),
             initial_balance=Decimal("10000"),

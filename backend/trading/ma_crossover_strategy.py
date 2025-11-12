@@ -206,10 +206,9 @@ class MACrossoverStrategy(BaseStrategy):
         # Components
         self.crossover_detectors: dict[str, CrossoverDetector] = {}
 
-        # Initialize crossover detectors for each instrument
-        for instrument in self.instruments:
-            detector = CrossoverDetector(self.fast_period, self.slow_period)
-            self.crossover_detectors[instrument] = detector
+        # Initialize crossover detector for the instrument
+        detector = CrossoverDetector(self.fast_period, self.slow_period)
+        self.crossover_detectors[self.instrument] = detector
 
     def on_tick(self, tick_data: TickData) -> list[Order]:
         """

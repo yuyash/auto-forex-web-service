@@ -30,7 +30,7 @@ export interface BacktestResult {
 export interface BacktestConfig {
   strategy_type: string;
   config: Record<string, unknown>;
-  instruments: string[];
+  instrument: string;
   data_source: string;
   start_date: string;
   end_date: string;
@@ -43,7 +43,7 @@ export interface Backtest {
   user: number;
   strategy_type: string;
   config: Record<string, unknown>;
-  instruments: string[];
+  instrument: string;
   data_source: string;
   start_date: string;
   end_date: string;

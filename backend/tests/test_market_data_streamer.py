@@ -111,7 +111,7 @@ class TestMarketDataStreamer:
         assert streamer.api_context is None
         assert streamer.stream is None
         assert streamer.is_connected is False
-        assert streamer.instruments == []
+        assert streamer.instrument is None
         assert streamer.tick_callback is None
 
     @patch("trading.market_data_streamer.v20.Context")
@@ -181,15 +181,15 @@ class TestMarketDataStreamer:
 
         streamer = MarketDataStreamer(mock_oanda_account)
         streamer.initialize_connection()
-        streamer.start_stream(["EUR_USD", "GBP_USD"])
+        streamer.start_stream("EUR_USD")
 
         # Verify stream was started with correct parameters
         mock_context_instance.pricing.stream.assert_called_once_with(
-            accountID="001-001-1234567-001", instruments="EUR_USD,GBP_USD", snapshot=True
+            accountID="001-001-1234567-001", instrument="EUR_USD", snapshot=True
         )
 
         assert streamer.is_connected is True
-        assert streamer.instruments == ["EUR_USD", "GBP_USD"]
+        assert streamer.instrument == "EUR_USD"
         assert streamer.stream == mock_response
 
     def test_start_stream_not_initialized(self, mock_oanda_account):
@@ -197,16 +197,16 @@ class TestMarketDataStreamer:
         streamer = MarketDataStreamer(mock_oanda_account)
 
         with pytest.raises(RuntimeError, match="Connection not initialized"):
-            streamer.start_stream(["EUR_USD"])
+            streamer.start_stream("EUR_USD")
 
     @patch("trading.market_data_streamer.v20.Context")
-    def test_start_stream_no_instruments(self, mock_v20_context, mock_oanda_account):
-        """Test starting stream fails without instruments"""
+    def test_start_stream_no_instrument(self, mock_v20_context, mock_oanda_account):
+        """Test starting stream fails without instrument"""
         streamer = MarketDataStreamer(mock_oanda_account)
         streamer.initialize_connection()
 
-        with pytest.raises(ValueError, match="At least one instrument is required"):
-            streamer.start_stream([])
+        with pytest.raises(ValueError, match="Instrument is required"):
+            streamer.start_stream("")
 
     @patch("trading.market_data_streamer.v20.Context")
     def test_process_price_message(self, mock_v20_context, mock_oanda_account):
@@ -318,7 +318,7 @@ class TestMarketDataStreamer:
 
         streamer = MarketDataStreamer(mock_oanda_account)
         streamer.initialize_connection()
-        streamer.start_stream(["EUR_USD"])
+        streamer.start_stream("EUR_USD")
 
         # Stop the stream
         streamer.stop_stream()
@@ -349,13 +349,13 @@ class TestMarketDataStreamer:
 
         streamer = MarketDataStreamer(mock_oanda_account)
         streamer.initialize_connection()
-        streamer.start_stream(["EUR_USD", "GBP_USD"])
+        streamer.start_stream("EUR_USD")
 
         status = streamer.get_connection_status()
 
         assert status["is_connected"] is True
         assert status["account_id"] == "001-001-1234567-001"
-        assert status["instruments"] == ["EUR_USD", "GBP_USD"]
+        assert status["instrument"] == "EUR_USD"
         assert status["api_type"] == "practice"
 
     def test_get_connection_status_not_connected(self, mock_oanda_account):
@@ -366,7 +366,7 @@ class TestMarketDataStreamer:
 
         assert status["is_connected"] is False
         assert status["account_id"] == "001-001-1234567-001"
-        assert status["instruments"] == []
+        assert status["instrument"] is None
         assert status["api_type"] == "practice"
 
 
@@ -525,8 +525,8 @@ class TestStreamReconnection:
         streamer = MarketDataStreamer(mock_oanda_account)
         streamer.initialize_connection()
 
-        # Set instruments (normally done by start_stream)
-        streamer.instruments = ["EUR_USD"]
+        # Set instrument (normally done by start_stream)
+        streamer.instrument = "EUR_USD"
 
         # Attempt reconnection
         result = streamer.reconnect()
@@ -557,7 +557,7 @@ class TestStreamReconnection:
 
         streamer = MarketDataStreamer(mock_oanda_account)
         streamer.initialize_connection()
-        streamer.instruments = ["EUR_USD"]
+        streamer.instrument = "EUR_USD"
 
         # Attempt reconnection
         result = streamer.reconnect()
@@ -585,7 +585,7 @@ class TestStreamReconnection:
 
         streamer = MarketDataStreamer(mock_oanda_account)
         streamer.initialize_connection()
-        streamer.instruments = ["EUR_USD"]
+        streamer.instrument = "EUR_USD"
 
         # Attempt reconnection
         result = streamer.reconnect()
@@ -598,12 +598,12 @@ class TestStreamReconnection:
         assert mock_sleep.call_count == 5
 
     @patch("trading.market_data_streamer.v20.Context")
-    def test_reconnection_no_instruments(self, mock_v20_context, mock_oanda_account):
-        """Test reconnection fails when no instruments configured"""
+    def test_reconnection_no_instrument(self, mock_v20_context, mock_oanda_account):
+        """Test reconnection fails when no instrument configured"""
         streamer = MarketDataStreamer(mock_oanda_account)
         streamer.initialize_connection()
 
-        # Don't set instruments
+        # Don't set instrument
         result = streamer.reconnect()
 
         # Verify reconnection failed
@@ -624,7 +624,7 @@ class TestStreamReconnection:
 
         streamer = MarketDataStreamer(mock_oanda_account)
         streamer.initialize_connection()
-        streamer.start_stream(["EUR_USD"])
+        streamer.start_stream("EUR_USD")
 
         # Verify reconnection manager was reset
         assert streamer.reconnection_manager.current_attempt == 0

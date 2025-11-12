@@ -30,7 +30,7 @@
     "takeProfitPips": "Take Profit (Pips)",
     "stopLossPips": "Stop Loss (Pips)",
     "maxLayers": "Max Layers",
-    "instruments": "Instruments",
+    "instrument": "Instrument",
     "additive": "Additive",
     "multiplicative": "Multiplicative"
   },

@@ -276,7 +276,7 @@ class TickDataListView(APIView):
         """
         # Generate filename
         timestamp = timezone.now().strftime("%Y%m%d_%H%M%S")
-        instrument_str = instrument if instrument else "all_instruments"
+        instrument_str = instrument if instrument else "all_instrument"
         filename = f"tick_data_{instrument_str}_{timestamp}.csv"
 
         # Create streaming response

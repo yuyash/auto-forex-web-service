@@ -233,17 +233,10 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
 
           <Grid size={{ xs: 12 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Instruments
+              Instrument
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {task.instruments.map((instrument) => (
-                <Chip
-                  key={instrument}
-                  label={instrument}
-                  size="small"
-                  variant="outlined"
-                />
-              ))}
+              <Chip label={task.instrument} size="small" variant="outlined" />
             </Box>
           </Grid>
         </Grid>

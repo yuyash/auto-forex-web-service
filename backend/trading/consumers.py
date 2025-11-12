@@ -754,7 +754,7 @@ class AdminDashboardConsumer(AsyncWebsocketConsumer):
                             "email": strategy.account.user.email,
                             "account_id": strategy.account.id,
                             "oanda_account_id": strategy.account.account_id,
-                            "instruments": strategy.instruments,
+                            "instrument": strategy.instrument,
                             "started_at": (
                                 strategy.started_at.isoformat() if strategy.started_at else None
                             ),

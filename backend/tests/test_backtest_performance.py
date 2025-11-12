@@ -27,7 +27,7 @@ def backtest_config():
     return BacktestConfig(
         strategy_type="test_strategy",
         strategy_config={},
-        instruments=["EUR_USD"],
+        instrument="EUR_USD",
         start_date=datetime(2024, 1, 1),
         end_date=datetime(2024, 1, 31),
         initial_balance=Decimal("10000.00"),

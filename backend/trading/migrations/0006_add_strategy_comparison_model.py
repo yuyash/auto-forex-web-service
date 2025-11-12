@@ -26,7 +26,7 @@ class Migration(migrations.Migration):
                     "strategy_configs",
                     models.JSONField(help_text="List of strategy configurations to compare"),
                 ),
-                ("instruments", models.JSONField(help_text="List of currency pairs")),
+                ("instrument", models.JSONField(help_text="List of currency pairs")),
                 ("start_date", models.DateTimeField(help_text="Start date for comparison period")),
                 ("end_date", models.DateTimeField(help_text="End date for comparison period")),
                 (

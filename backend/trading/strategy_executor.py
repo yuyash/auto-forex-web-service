@@ -97,7 +97,7 @@ class StrategyExecutor:
             )
             return []
 
-        # Check if instrument is in strategy's instruments list
+        # Check if instrument is in strategy's instrument
         if not self.strategy_instance.is_instrument_active(tick_data.instrument):
             logger.debug(
                 "Instrument %s not active for strategy %s, skipping",
@@ -316,7 +316,7 @@ class StrategyExecutor:
             "strategy_type": self.strategy_model.strategy_type,
             "account_id": self.account.account_id,
             "is_active": self.strategy_model.is_active,
-            "instruments": self.strategy_model.instruments,
+            "instrument": self.strategy_model.instrument,
             "started_at": (
                 self.strategy_model.started_at.isoformat()
                 if self.strategy_model.started_at

@@ -17,7 +17,7 @@
     "instrument": "Instrument",
     "status": "Status",
     "searchOrderId": "Search by Order ID",
-    "allInstruments": "All Instruments",
+    "allInstrument": "All Instrument",
     "allStatuses": "All Statuses"
   },
   "orderTypes": {

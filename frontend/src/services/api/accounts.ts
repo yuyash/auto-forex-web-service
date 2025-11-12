@@ -5,6 +5,7 @@ import type { Account } from '../../types/strategy';
 export interface AccountListParams {
   page?: number;
   page_size?: number;
+  [key: string]: unknown;
 }
 
 export interface AccountListResponse {
@@ -18,17 +19,15 @@ export const accountsApi = {
   // List all accounts for the authenticated user
   list: async (params?: AccountListParams): Promise<AccountListResponse> => {
     const response = await apiClient.get<AccountListResponse>(
-      '/api/accounts/',
-      {
-        params,
-      }
+      '/accounts/',
+      params
     );
     return response;
   },
 
   // Get a single account by ID
   get: async (id: number): Promise<Account> => {
-    const response = await apiClient.get<Account>(`/api/accounts/${id}/`);
+    const response = await apiClient.get<Account>(`/accounts/${id}/`);
     return response;
   },
 };

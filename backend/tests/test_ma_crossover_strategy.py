@@ -55,7 +55,7 @@ def strategy(db, oanda_account):
             "slow_period": 26,
             "base_units": 1000,
         },
-        instruments=["EUR_USD"],
+        instrument="EUR_USD",
         is_active=True,
     )
 
@@ -209,7 +209,7 @@ class TestMACrossoverStrategy:
         """Test on_tick with inactive instrument."""
         tick = TickData(
             account=ma_crossover_strategy.account,
-            instrument="GBP_USD",  # Not in strategy instruments
+            instrument="GBP_USD",  # Not in strategy instrument
             timestamp=timezone.now(),
             bid=Decimal("1.2500"),
             ask=Decimal("1.2502"),

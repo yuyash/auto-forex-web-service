@@ -35,13 +35,20 @@ export const backtestTasksApi = {
    * Create a new backtest task
    */
   create: (data: BacktestTaskCreateData): Promise<BacktestTask> => {
-    return apiClient.post<BacktestTask>('/backtest-tasks/', data);
+    // Transform config_id to config for backend
+    const { config_id, ...rest } = data;
+    const payload = {
+      ...rest,
+      config: config_id,
+    };
+    return apiClient.post<BacktestTask>('/backtest-tasks/', payload);
   },
 
   /**
    * Update an existing backtest task
    */
   update: (id: number, data: BacktestTaskUpdateData): Promise<BacktestTask> => {
+    // No config_id in update data, so just pass through
     return apiClient.put<BacktestTask>(`/backtest-tasks/${id}/`, data);
   },
 

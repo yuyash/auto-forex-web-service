@@ -78,7 +78,7 @@ class StrategyConfigDetailSerializer(serializers.ModelSerializer):
     """
 
     user_id = serializers.IntegerField(source="user.id", read_only=True)
-    is_in_use = serializers.BooleanField(read_only=True)
+    is_in_use = serializers.SerializerMethodField()
 
     class Meta:
         model = StrategyConfig
@@ -95,11 +95,9 @@ class StrategyConfigDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "user_id", "is_in_use", "created_at", "updated_at"]
 
-    def to_representation(self, instance: StrategyConfig) -> dict:
-        """Add is_in_use to representation."""
-        data = super().to_representation(instance)
-        data["is_in_use"] = instance.is_in_use()
-        return data
+    def get_is_in_use(self, obj: StrategyConfig) -> bool:
+        """Get whether configuration is in use by active tasks."""
+        return obj.is_in_use()
 
 
 class StrategyConfigListSerializer(serializers.ModelSerializer):
@@ -110,7 +108,7 @@ class StrategyConfigListSerializer(serializers.ModelSerializer):
     """
 
     user_id = serializers.IntegerField(source="user.id", read_only=True)
-    is_in_use = serializers.BooleanField(read_only=True)
+    is_in_use = serializers.SerializerMethodField()
 
     class Meta:
         model = StrategyConfig
@@ -126,11 +124,9 @@ class StrategyConfigListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def to_representation(self, instance: StrategyConfig) -> dict:
-        """Add is_in_use to representation."""
-        data = super().to_representation(instance)
-        data["is_in_use"] = instance.is_in_use()
-        return data
+    def get_is_in_use(self, obj: StrategyConfig) -> bool:
+        """Get whether configuration is in use by active tasks."""
+        return obj.is_in_use()
 
 
 class StrategyConfigCreateSerializer(serializers.ModelSerializer):
@@ -291,7 +287,7 @@ class StrategySerializer(serializers.ModelSerializer):
             "strategy_type",
             "is_active",
             "config",
-            "instruments",
+            "instrument",
             "started_at",
             "stopped_at",
             "created_at",
@@ -333,16 +329,16 @@ class StrategyStartSerializer(serializers.Serializer):  # pylint: disable=abstra
             "Strategy configuration parameters " "(can include position differentiation settings)"
         ),
     )
-    instruments = serializers.ListField(
-        child=serializers.CharField(),
+    instrument = serializers.CharField(
         required=True,
-        help_text="List of currency pairs to trade (e.g., ['EUR_USD', 'GBP_USD'])",
+        max_length=10,
+        help_text="Currency pair to trade (e.g., 'USD_JPY', 'EUR_USD')",
     )
 
-    def validate_instruments(self, value: list[str]) -> list[str]:
-        """Validate instruments list is not empty."""
-        if not value:
-            raise serializers.ValidationError("Instruments list cannot be empty")
+    def validate_instrument(self, value: str) -> str:
+        """Validate instrument is not empty."""
+        if not value or not value.strip():
+            raise serializers.ValidationError("Instrument cannot be empty")
         return value
 
     def validate_config(self, value: dict) -> dict:
@@ -624,7 +620,7 @@ class BacktestSerializer(serializers.ModelSerializer):
             "id",
             "strategy_type",
             "config",
-            "instruments",
+            "instrument",
             "start_date",
             "end_date",
             "initial_balance",
@@ -693,7 +689,7 @@ class BacktestListSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "strategy_type",
-            "instruments",
+            "instrument",
             "start_date",
             "end_date",
             "initial_balance",
@@ -728,10 +724,10 @@ class BacktestCreateSerializer(serializers.Serializer):  # pylint: disable=abstr
         required=True,
         help_text="Strategy configuration parameters",
     )
-    instruments = serializers.ListField(
-        child=serializers.CharField(),
+    instrument = serializers.CharField(
         required=True,
-        help_text="List of currency pairs to backtest (e.g., ['EUR_USD', 'GBP_USD'])",
+        max_length=10,
+        help_text="Currency pair to backtest (e.g., 'USD_JPY', 'EUR_USD')",
     )
     start_date = serializers.DateTimeField(
         required=True,
@@ -770,10 +766,10 @@ class BacktestCreateSerializer(serializers.Serializer):  # pylint: disable=abstr
         help_text="CPU cores limit (default: 1, max: 4)",
     )
 
-    def validate_instruments(self, value: list[str]) -> list[str]:
-        """Validate instruments list is not empty."""
-        if not value:
-            raise serializers.ValidationError("Instruments list cannot be empty")
+    def validate_instrument(self, value: str) -> str:
+        """Validate instrument is not empty."""
+        if not value or not value.strip():
+            raise serializers.ValidationError("Instrument cannot be empty")
         return value
 
     def validate(self, attrs: dict) -> dict:  # pylint: disable=arguments-renamed

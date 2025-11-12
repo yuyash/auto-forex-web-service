@@ -47,7 +47,7 @@ def backtest_config():
     return BacktestConfig(
         strategy_type="floor",
         strategy_config={"base_lot_size": 1.0},
-        instruments=["EUR_USD"],
+        instrument="EUR_USD",
         start_date=datetime.now() - timedelta(days=1),
         end_date=datetime.now(),
         initial_balance=Decimal("10000"),
@@ -454,7 +454,7 @@ class TestConfigurableLimits:
         config = BacktestConfig(
             strategy_type="floor",
             strategy_config={},
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             start_date=datetime.now(),
             end_date=datetime.now(),
             initial_balance=Decimal("10000"),
@@ -467,7 +467,7 @@ class TestConfigurableLimits:
         config = BacktestConfig(
             strategy_type="floor",
             strategy_config={},
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             start_date=datetime.now(),
             end_date=datetime.now(),
             initial_balance=Decimal("10000"),
@@ -480,7 +480,7 @@ class TestConfigurableLimits:
         config = BacktestConfig(
             strategy_type="floor",
             strategy_config={},
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             start_date=datetime.now(),
             end_date=datetime.now(),
             initial_balance=Decimal("10000"),
@@ -495,7 +495,7 @@ class TestConfigurableLimits:
         config = BacktestConfig(
             strategy_type="floor",
             strategy_config={},
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             start_date=datetime.now(),
             end_date=datetime.now(),
             initial_balance=Decimal("10000"),

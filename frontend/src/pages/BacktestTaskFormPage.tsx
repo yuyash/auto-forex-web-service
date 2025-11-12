@@ -8,7 +8,7 @@ export default function BacktestTaskFormPage() {
   const { id } = useParams<{ id: string }>();
   const taskId = id ? parseInt(id, 10) : undefined;
 
-  const { data: task, isLoading } = useBacktestTask(taskId || 0);
+  const { data: task, isLoading } = useBacktestTask(taskId);
 
   if (taskId && (isLoading || !task)) {
     return (
@@ -48,9 +48,9 @@ export default function BacktestTaskFormPage() {
                     data_source: task.data_source,
                     start_time: task.start_time,
                     end_time: task.end_time,
-                    initial_balance: task.initial_balance,
-                    commission_per_trade: task.commission_per_trade,
-                    instruments: task.instruments,
+                    initial_balance: parseFloat(task.initial_balance),
+                    commission_per_trade: parseFloat(task.commission_per_trade),
+                    instrument: task.instrument,
                   }
                 : undefined
             }

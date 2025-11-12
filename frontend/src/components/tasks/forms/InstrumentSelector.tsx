@@ -4,10 +4,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Checkbox,
   ListItemText,
   FormHelperText,
-  Chip,
   Box,
   TextField,
   InputAdornment,
@@ -16,19 +14,18 @@ import type { SelectChangeEvent } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 
 interface InstrumentSelectorProps {
-  value: string[];
-  onChange: (value: string[]) => void;
-  availableInstruments?: string[];
+  value: string;
+  onChange: (value: string) => void;
+  availableInstrument?: string[];
   label?: string;
   required?: boolean;
   disabled?: boolean;
   error?: string;
   helperText?: string;
-  maxSelections?: number;
 }
 
-// Default forex instruments
-const DEFAULT_INSTRUMENTS = [
+// Default forex instrument options
+const DEFAULT_INSTRUMENT = [
   'EUR_USD',
   'GBP_USD',
   'USD_JPY',
@@ -54,48 +51,34 @@ const DEFAULT_INSTRUMENTS = [
 export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
   value,
   onChange,
-  availableInstruments = DEFAULT_INSTRUMENTS,
-  label = 'Instruments',
+  availableInstrument = DEFAULT_INSTRUMENT,
+  label = 'Instrument',
   required = false,
   disabled = false,
   error,
   helperText,
-  maxSelections,
 }) => {
   const [searchTerm, setSearchTerm] = React.useState('');
 
-  const filteredInstruments = React.useMemo(() => {
-    if (!searchTerm) return availableInstruments;
+  const filteredInstrument = React.useMemo(() => {
+    if (!searchTerm) return availableInstrument;
     const lowerSearch = searchTerm.toLowerCase();
-    return availableInstruments.filter((instrument) =>
+    return availableInstrument.filter((instrument) =>
       instrument.toLowerCase().includes(lowerSearch)
     );
-  }, [availableInstruments, searchTerm]);
+  }, [availableInstrument, searchTerm]);
 
-  const handleChange = (event: SelectChangeEvent<string[]>) => {
-    const newValue = event.target.value as string[];
-
-    // Check max selections
-    if (maxSelections && newValue.length > maxSelections) {
-      return;
-    }
-
+  const handleChange = (event: SelectChangeEvent<string>) => {
+    const newValue = event.target.value as string;
     onChange(newValue);
   };
 
-  const handleDelete = (instrumentToDelete: string) => {
-    onChange(value.filter((instrument) => instrument !== instrumentToDelete));
-  };
-
   const validationError = React.useMemo(() => {
-    if (required && value.length === 0) {
-      return 'At least one instrument is required';
-    }
-    if (maxSelections && value.length > maxSelections) {
-      return `Maximum ${maxSelections} instrument${maxSelections > 1 ? 's' : ''} allowed`;
+    if (required && !value) {
+      return 'Instrument is required';
     }
     return null;
-  }, [value, required, maxSelections]);
+  }, [value, required]);
 
   const displayError = error || validationError;
 
@@ -110,23 +93,9 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
       <Select
         labelId="instrument-selector-label"
         id="instrument-selector"
-        multiple
         value={value}
         onChange={handleChange}
         label={label}
-        renderValue={(selected) => (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-            {selected.map((instrument) => (
-              <Chip
-                key={instrument}
-                label={instrument}
-                size="small"
-                onDelete={() => handleDelete(instrument)}
-                onMouseDown={(e) => e.stopPropagation()}
-              />
-            ))}
-          </Box>
-        )}
         MenuProps={{
           PaperProps: {
             style: {
@@ -148,7 +117,7 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
         >
           <TextField
             size="small"
-            placeholder="Search instruments..."
+            placeholder="Search instrument..."
             value={searchTerm}
             onChange={(e) => {
               e.stopPropagation();
@@ -167,26 +136,33 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
           />
         </Box>
 
-        {filteredInstruments.length === 0 ? (
-          <MenuItem disabled>No instruments found</MenuItem>
+        {filteredInstrument.length === 0 ? (
+          <MenuItem disabled>No instrument found</MenuItem>
         ) : (
-          filteredInstruments.map((instrument) => (
-            <MenuItem key={instrument} value={instrument}>
-              <Checkbox checked={value.indexOf(instrument) > -1} />
-              <ListItemText primary={instrument} />
-            </MenuItem>
-          ))
+          filteredInstrument.map((instrument) => {
+            // Only USD_JPY is enabled for now
+            const isEnabled = instrument === 'USD_JPY';
+            return (
+              <MenuItem
+                key={instrument}
+                value={instrument}
+                disabled={!isEnabled}
+                sx={{
+                  opacity: isEnabled ? 1 : 0.5,
+                }}
+              >
+                <ListItemText
+                  primary={instrument}
+                  secondary={!isEnabled ? 'Coming soon' : undefined}
+                />
+              </MenuItem>
+            );
+          })
         )}
       </Select>
       {displayError && <FormHelperText>{displayError}</FormHelperText>}
       {!displayError && helperText && (
         <FormHelperText>{helperText}</FormHelperText>
-      )}
-      {!displayError && !helperText && value.length > 0 && (
-        <FormHelperText>
-          {value.length} instrument{value.length !== 1 ? 's' : ''} selected
-          {maxSelections && ` (max ${maxSelections})`}
-        </FormHelperText>
       )}
     </FormControl>
   );

@@ -73,7 +73,7 @@ def strategy(oanda_account, strategy_config):
         strategy_type="trend_following",
         is_active=True,
         config=strategy_config,
-        instruments=["EUR_USD"],
+        instrument="EUR_USD",
     )
 
 

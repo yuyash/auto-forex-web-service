@@ -252,7 +252,7 @@ class PositionManager:
 
         Args:
             account: OANDA account
-            exit_prices: Dictionary mapping instruments to exit prices
+            exit_prices: Dictionary mapping instrument to exit prices
 
         Returns:
             List of closed Position instances

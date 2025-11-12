@@ -75,7 +75,7 @@ def strategy_instance(db, oanda_account):  # pylint: disable=unused-argument
             "ma_short_period": 20,
             "ma_long_period": 50,
         },
-        instruments=["EUR_USD"],
+        instrument="EUR_USD",
         is_active=True,
     )
 
@@ -728,7 +728,7 @@ class TestFundamentalTechnicalStrategy:
         now = timezone.now()
 
         # Update strategy to trade USD_JPY
-        fundamental_technical_strategy.instruments = ["USD_JPY"]
+        fundamental_technical_strategy.instrument = ["USD_JPY"]
 
         # Create a position
         position = Position.objects.create(

@@ -73,7 +73,7 @@ class TestStartMarketDataStream:
         # Verify result
         assert result["success"] is True
         assert result["account_id"] == "001-001-1234567-001"
-        assert result["instruments"] == ["EUR_USD", "GBP_USD"]
+        assert result["instrument"] == "EUR_USD"
         assert result["error"] is None
 
         # Verify streamer methods were called
@@ -835,7 +835,7 @@ class TestTickDataStorage:
 
         assert range_ticks.count() == 6  # Minutes 2-7 inclusive
 
-        # Test 3: Retrieve ticks for multiple instruments
+        # Test 3: Retrieve ticks for single instrument
         all_ticks = TickDataModel.objects.filter(account=mock_oanda_account).order_by(
             "instrument", "timestamp"
         )

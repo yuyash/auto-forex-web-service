@@ -10,7 +10,8 @@ export interface OandaAccount {
   api_type?: 'practice' | 'live';
   is_practice?: boolean;
   is_active: boolean;
-  active_strategy?: string;
+  balance: number;
+  currency: string;
 }
 
 // Global cache shared across all hook instances
@@ -128,8 +129,13 @@ export function useOandaAccounts(): UseOandaAccountsResult {
       setAccounts(normalizedAccounts);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        setError(err as Error);
-        console.error('Error fetching OANDA accounts:', err);
+        const error = err as Error;
+        setError(error);
+
+        // Only log non-abort errors once
+        if (!error.message.includes('aborted')) {
+          console.error('Failed to fetch OANDA accounts');
+        }
       }
     } finally {
       setIsLoading(false);

@@ -275,16 +275,15 @@ class BreakoutStrategy(BaseStrategy):
         self.sr_detectors: dict[str, SupportResistanceDetector] = {}
         self.volume_confirmations: dict[str, VolumeConfirmation] = {}
 
-        # Initialize components for each instrument
-        for instrument in self.instruments:
-            self.sr_detectors[instrument] = SupportResistanceDetector(
-                lookback_period=self.lookback_period, threshold_pips=self.threshold_pips
-            )
+        # Initialize component for the instrument
+        self.sr_detectors[self.instrument] = SupportResistanceDetector(
+            lookback_period=self.lookback_period, threshold_pips=self.threshold_pips
+        )
 
-            if self.use_volume_confirmation:
-                self.volume_confirmations[instrument] = VolumeConfirmation(
-                    lookback_period=20, volume_multiplier=self.volume_multiplier
-                )
+        if self.use_volume_confirmation:
+            self.volume_confirmations[self.instrument] = VolumeConfirmation(
+                lookback_period=20, volume_multiplier=self.volume_multiplier
+            )
 
         # State tracking
         self.last_breakout: dict[str, str | None] = {}  # instrument -> 'resistance' or 'support'

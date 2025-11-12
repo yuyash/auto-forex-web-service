@@ -30,7 +30,7 @@
     "takeProfitPips": "利益確定（ピップス）",
     "stopLossPips": "損切り（ピップス）",
     "maxLayers": "最大レイヤー数",
-    "instruments": "通貨ペア",
+    "instrument": "通貨ペア",
     "additive": "加算",
     "multiplicative": "乗算"
   },

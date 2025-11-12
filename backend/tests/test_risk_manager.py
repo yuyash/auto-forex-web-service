@@ -57,7 +57,7 @@ def strategy(oanda_account):
         account=oanda_account,
         strategy_type="floor",
         config={"lot_size": 1000},
-        instruments=["EUR_USD", "GBP_USD"],
+        instrument="EUR_USD",
         is_active=True,
     )
 
@@ -235,7 +235,7 @@ class TestATRMonitor:
 
     @patch("trading.risk_manager.ATRMonitor.get_current_atr")
     @patch("trading.risk_manager.ATRMonitor.get_normal_atr")
-    def test_monitor_instruments_with_spike(
+    def test_monitor_instrument_with_spike(
         self,
         mock_get_normal_atr,
         mock_get_current_atr,
@@ -243,24 +243,24 @@ class TestATRMonitor:
         strategy,
         strategy_state,  # pylint: disable=unused-argument
     ):
-        """Test monitoring instruments with volatility spike."""
+        """Test monitoring instrument with volatility spike."""
         monitor = ATRMonitor()
 
         # Mock ATR values - spike detected
         mock_get_current_atr.return_value = Decimal("0.0040")
         mock_get_normal_atr.return_value = Decimal("0.0008")
 
-        results = monitor.monitor_instruments(
+        results = monitor.monitor_instrument(
             oanda_account,
             strategy,
-            ["EUR_USD"],
+            "EUR_USD",
         )
 
         assert results == {"EUR_USD": True}
 
     @patch("trading.risk_manager.ATRMonitor.get_current_atr")
     @patch("trading.risk_manager.ATRMonitor.get_normal_atr")
-    def test_monitor_instruments_no_spike(
+    def test_monitor_instrument_no_spike(
         self,
         mock_get_normal_atr,
         mock_get_current_atr,
@@ -268,17 +268,17 @@ class TestATRMonitor:
         strategy,
         strategy_state,  # pylint: disable=unused-argument
     ):
-        """Test monitoring instruments without volatility spike."""
+        """Test monitoring instrument without volatility spike."""
         monitor = ATRMonitor()
 
         # Mock ATR values - no spike
         mock_get_current_atr.return_value = Decimal("0.0010")
         mock_get_normal_atr.return_value = Decimal("0.0008")
 
-        results = monitor.monitor_instruments(
+        results = monitor.monitor_instrument(
             oanda_account,
             strategy,
-            ["EUR_USD"],
+            "EUR_USD",
         )
 
         assert results == {"EUR_USD": False}
@@ -483,10 +483,10 @@ class TestRiskManagerMarginProtection:
 class TestRiskManagerIntegration:
     """Test RiskManager integration with strategy execution."""
 
-    @patch("trading.risk_manager.ATRMonitor.monitor_instruments")
+    @patch("trading.risk_manager.ATRMonitor.monitor_instrument")
     def test_check_and_execute_risk_management_volatility_lock(
         self,
-        mock_monitor_instruments,
+        mock_monitor_instrument,
         oanda_account,
         strategy,
         strategy_state,  # pylint: disable=unused-argument
@@ -496,7 +496,7 @@ class TestRiskManagerIntegration:
         risk_manager = RiskManager()
 
         # Mock volatility spike detected
-        mock_monitor_instruments.return_value = {"EUR_USD": True, "GBP_USD": False}
+        mock_monitor_instrument.return_value = {"EUR_USD": True}
 
         # Mock ATR values
         with (
@@ -517,19 +517,18 @@ class TestRiskManagerIntegration:
             )
 
         assert results["volatility_locked"] is True
-        instruments = results["instruments_monitored"]
-        assert isinstance(instruments, list)
-        assert "EUR_USD" in instruments
-        assert "GBP_USD" in instruments
+        instrument = results["instrument_monitored"]
+        assert isinstance(instrument, str)
+        assert instrument == "EUR_USD"
 
         # Verify strategy was stopped
         strategy.refresh_from_db()
         assert strategy.is_active is False
 
-    @patch("trading.risk_manager.ATRMonitor.monitor_instruments")
+    @patch("trading.risk_manager.ATRMonitor.monitor_instrument")
     def test_check_and_execute_risk_management_margin_protection(
         self,
-        mock_monitor_instruments,
+        mock_monitor_instrument,
         oanda_account,
         strategy,
         strategy_state,  # pylint: disable=unused-argument
@@ -539,7 +538,7 @@ class TestRiskManagerIntegration:
         risk_manager = RiskManager()
 
         # Mock no volatility spike
-        mock_monitor_instruments.return_value = {"EUR_USD": False, "GBP_USD": False}
+        mock_monitor_instrument.return_value = {"EUR_USD": False}
 
         # Margin ratio = 1.35, threshold = 1.0 (will trigger)
         results = risk_manager.check_and_execute_risk_management(
@@ -557,10 +556,10 @@ class TestRiskManagerIntegration:
         ).count()
         assert closed_count == 1
 
-    @patch("trading.risk_manager.ATRMonitor.monitor_instruments")
+    @patch("trading.risk_manager.ATRMonitor.monitor_instrument")
     def test_check_and_execute_risk_management_no_action(
         self,
-        mock_monitor_instruments,
+        mock_monitor_instrument,
         oanda_account,
         strategy,
         strategy_state,  # pylint: disable=unused-argument
@@ -569,7 +568,7 @@ class TestRiskManagerIntegration:
         risk_manager = RiskManager()
 
         # Mock no volatility spike
-        mock_monitor_instruments.return_value = {"EUR_USD": False, "GBP_USD": False}
+        mock_monitor_instrument.return_value = {"EUR_USD": False}
 
         # Set low margin usage to avoid margin protection
         oanda_account.margin_used = Decimal("100.00")
@@ -582,7 +581,6 @@ class TestRiskManagerIntegration:
 
         assert results["margin_protected"] is False
         assert results["volatility_locked"] is False
-        instruments = results["instruments_monitored"]
-        assert isinstance(instruments, list)
-        assert "EUR_USD" in instruments
-        assert "GBP_USD" in instruments
+        instrument = results["instrument_monitored"]
+        assert isinstance(instrument, str)
+        assert instrument == "EUR_USD"

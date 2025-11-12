@@ -270,6 +270,8 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
             >
               {accounts.map((account) => (
                 <MenuItem key={account.id} value={account.id.toString()}>
+                  {account.account_id}
+                  {account.api_type === 'practice' ? ' (Practice)' : ' (Live)'}
                   <Typography
                     component="span"
                     noWrap

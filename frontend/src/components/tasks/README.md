@@ -49,14 +49,14 @@ import { DateRangePicker } from '@/components/tasks';
 
 ### InstrumentSelector
 
-Multi-select dropdown for choosing trading instruments.
+Single-select dropdown for choosing trading instrument.
 
 ```tsx
 import { InstrumentSelector } from '@/components/tasks';
 
 <InstrumentSelector
-  value={instruments}
-  onChange={setInstruments}
+  value={instrument}
+  onChange={setInstrument}
   maxSelections={10}
   required
 />;
@@ -303,7 +303,7 @@ function BacktestTaskForm() {
     config_id: '',
     start_time: null,
     end_time: null,
-    instruments: [],
+    instrument: '',
     initial_balance: '',
     data_source: DataSource.POSTGRESQL,
   });
@@ -333,8 +333,8 @@ function BacktestTaskForm() {
         required
       />
       <InstrumentSelector
-        value={formData.instruments}
-        onChange={(value) => setFormData({ ...formData, instruments: value })}
+        value={formData.instrument}
+        onChange={(value) => setFormData({ ...formData, instrument: value })}
         required
       />
       <BalanceInput

@@ -29,7 +29,7 @@ class StrategyComparisonConfig:
 
     Attributes:
         strategy_configs: List of strategy configurations to compare
-        instruments: List of currency pairs
+        instrument: Currency pair
         start_date: Start date for comparison period
         end_date: End date for comparison period
         initial_balance: Initial account balance
@@ -38,7 +38,7 @@ class StrategyComparisonConfig:
     """
 
     strategy_configs: list[dict[str, Any]]
-    instruments: list[str]
+    instrument: str
     start_date: datetime
     end_date: datetime
     initial_balance: Decimal
@@ -83,7 +83,7 @@ def _run_single_strategy(
         config = BacktestConfig(
             strategy_type=strategy_config["strategy_type"],
             strategy_config=strategy_config["config"],
-            instruments=backtest_config_dict["instruments"],
+            instrument=backtest_config_dict["instrument"],
             start_date=datetime.fromisoformat(backtest_config_dict["start_date"]),
             end_date=datetime.fromisoformat(backtest_config_dict["end_date"]),
             initial_balance=Decimal(str(backtest_config_dict["initial_balance"])),
@@ -178,7 +178,7 @@ class ParallelStrategyExecutor:
 
         # Prepare backtest config dict
         backtest_config_dict = {
-            "instruments": self.config.instruments,
+            "instrument": self.config.instrument,
             "start_date": self.config.start_date.isoformat(),
             "end_date": self.config.end_date.isoformat(),
             "initial_balance": float(self.config.initial_balance),

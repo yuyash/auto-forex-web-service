@@ -188,7 +188,7 @@ class StrategyConfig(models.Model):
         from .trading_task_models import TradingTask as TradingTaskModel
 
         active_backtests = BacktestModel.objects.filter(
-            config=self, status__in=[TaskStatus.CREATED, TaskStatus.RUNNING]
+            config=self.id, status__in=[TaskStatus.CREATED, TaskStatus.RUNNING]
         ).exists()
 
         if active_backtests:
@@ -196,7 +196,8 @@ class StrategyConfig(models.Model):
 
         # Check TradingTask references
         active_trading_tasks = TradingTaskModel.objects.filter(
-            config=self, status__in=[TaskStatus.CREATED, TaskStatus.RUNNING, TaskStatus.PAUSED]
+            config=self.id,
+            status__in=[TaskStatus.CREATED, TaskStatus.RUNNING, TaskStatus.PAUSED],
         ).exists()
 
         if active_trading_tasks:
@@ -215,8 +216,10 @@ class StrategyConfig(models.Model):
         from .backtest_models import Backtest as BacktestModel
         from .trading_task_models import TradingTask as TradingTaskModel
 
-        backtest_tasks = list(BacktestModel.objects.filter(config=self).order_by("-created_at"))
-        trading_tasks = list(TradingTaskModel.objects.filter(config=self).order_by("-created_at"))
+        backtest_tasks = list(BacktestModel.objects.filter(config=self.id).order_by("-created_at"))
+        trading_tasks = list(
+            TradingTaskModel.objects.filter(config=self.id).order_by("-created_at")
+        )
 
         return {
             "backtest_tasks": backtest_tasks,
@@ -256,9 +259,10 @@ class Strategy(models.Model):
         default=dict,
         help_text="Strategy-specific configuration parameters",
     )
-    instruments = models.JSONField(
-        default=list,
-        help_text="List of currency pairs to trade (e.g., ['EUR_USD', 'GBP_USD'])",
+    instrument = models.CharField(
+        max_length=10,
+        default="USD_JPY",
+        help_text="Currency pair to trade (e.g., 'USD_JPY', 'EUR_USD')",
     )
     started_at = models.DateTimeField(
         null=True,

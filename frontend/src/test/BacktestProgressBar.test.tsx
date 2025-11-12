@@ -24,7 +24,7 @@ const mockBacktest = {
   status: 'running',
   progress: 50,
   strategy_type: 'MA Crossover',
-  instruments: ['EUR/USD', 'GBP/USD'],
+  instrument: ['EUR/USD', 'GBP/USD'],
   start_date: '2024-01-01',
   end_date: '2024-12-31',
   initial_balance: 10000,

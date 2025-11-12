@@ -20,6 +20,7 @@ import {
   useCopyBacktestTask,
   useDeleteBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
+import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 
 interface BacktestTaskActionsProps {
   task: BacktestTask;
@@ -52,6 +53,7 @@ export default function BacktestTaskActions({
   const handleCopyConfirm = async (newName: string) => {
     try {
       await copyTask.mutate({ id: task.id, data: { new_name: newName } });
+      invalidateBacktestTasksCache(); // Refresh task list
       setCopyDialogOpen(false);
     } catch (error) {
       console.error('Failed to copy task:', error);
@@ -66,6 +68,7 @@ export default function BacktestTaskActions({
   const handleDeleteConfirm = async () => {
     try {
       await deleteTask.mutate(task.id);
+      invalidateBacktestTasksCache(); // Refresh task list
       setDeleteDialogOpen(false);
       navigate('/backtest-tasks');
     } catch (error) {

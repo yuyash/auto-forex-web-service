@@ -315,16 +315,16 @@ describe('StrategyConfigForm', () => {
     const schemaWithArray: ConfigSchema = {
       type: 'object',
       properties: {
-        instruments: {
+        instrument: {
           type: 'array',
-          description: 'Trading instruments',
+          description: 'Trading instrument',
           items: { type: 'string' },
         },
       },
     };
 
     const configWithArray: StrategyConfig = {
-      instruments: ['EUR_USD', 'GBP_USD'],
+      instrument: ['EUR_USD', 'GBP_USD'],
     };
 
     render(
@@ -335,24 +335,24 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    const instrumentsInput = screen.getByLabelText(/Instruments/i);
-    expect(instrumentsInput).toHaveValue('EUR_USD, GBP_USD');
+    const instrumentInput = screen.getByLabelText(/Instrument/i);
+    expect(instrumentInput).toHaveValue('EUR_USD, GBP_USD');
   });
 
   it('updates array field when comma-separated values are entered', async () => {
     const schemaWithArray: ConfigSchema = {
       type: 'object',
       properties: {
-        instruments: {
+        instrument: {
           type: 'array',
-          description: 'Trading instruments',
+          description: 'Trading instrument',
           items: { type: 'string' },
         },
       },
     };
 
     const configWithArray: StrategyConfig = {
-      instruments: [],
+      instrument: [],
     };
 
     render(
@@ -363,14 +363,14 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    const instrumentsInput = screen.getByLabelText(/Instruments/i);
-    fireEvent.change(instrumentsInput, {
+    const instrumentInput = screen.getByLabelText(/Instrument/i);
+    fireEvent.change(instrumentInput, {
       target: { value: 'EUR_USD, GBP_USD, USD_JPY' },
     });
 
     await waitFor(() => {
       expect(mockOnChange).toHaveBeenCalledWith({
-        instruments: ['EUR_USD', 'GBP_USD', 'USD_JPY'],
+        instrument: ['EUR_USD', 'GBP_USD', 'USD_JPY'],
       });
     });
   });

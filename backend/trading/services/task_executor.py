@@ -45,21 +45,21 @@ def _load_backtest_data(task: BacktestTask, data_loader: Any) -> tuple[list[Any]
     """
     logger.info(
         "Loading historical data for %s from %s to %s",
-        task.config.parameters.get("instruments", []),
+        task.config.parameters.get("instrument", []),
         task.start_time,
         task.end_time,
     )
 
     tick_data = []
-    instruments = task.config.parameters.get("instruments", [])
+    instrument = task.config.parameters.get("instrument", [])
 
-    for instrument in instruments:
-        instrument_data = data_loader.load_data(
-            instrument=instrument,
-            start_date=task.start_time,
-            end_date=task.end_time,
-        )
-        tick_data.extend(instrument_data)
+    # FIXME: Changed from loop - for instrument in instrument:
+    instrument_data = data_loader.load_data(
+        instrument=instrument,
+        start_date=task.start_time,
+        end_date=task.end_time,
+    )
+    tick_data.extend(instrument_data)
 
     # Sort by timestamp
     tick_data.sort(key=lambda t: t.timestamp)
@@ -310,7 +310,7 @@ def execute_backtest_task(
                     "error": load_error,
                 }
 
-            instruments = task.config.parameters.get("instruments", [])
+            instrument = task.config.parameters.get("instrument", [])
 
             # Get resource limits
             cpu_limit = get_config("backtesting.cpu_limit", 1)
@@ -320,7 +320,7 @@ def execute_backtest_task(
             backtest_config = BacktestConfig(
                 strategy_type=task.config.strategy_type,
                 strategy_config=task.config.parameters,
-                instruments=instruments,
+                instrument=instrument,
                 start_date=task.start_time,
                 end_date=task.end_time,
                 initial_balance=task.initial_balance,
@@ -543,11 +543,11 @@ def execute_trading_task(
         # Note: The actual strategy execution happens via market data streaming
         # which is managed by the start_market_data_stream Celery task
 
-        # Get instruments from configuration
-        instruments = task.config.parameters.get("instruments", [])
+        # Get instrument from configuration
+        instrument = task.config.parameters.get("instrument", [])
 
-        if not instruments:
-            error_msg = "No instruments specified in configuration"
+        if not instrument:
+            error_msg = "No instrument specified in configuration"
             logger.error(error_msg)
             execution.mark_failed(ValueError(error_msg))
             task.status = TaskStatus.FAILED
@@ -573,7 +573,7 @@ def execute_trading_task(
             "task_id": task_id,
             "execution_id": execution.id,
             "account_id": task.account.account_id,
-            "instruments": instruments,
+            "instrument": instrument,
             "error": None,
         }
 

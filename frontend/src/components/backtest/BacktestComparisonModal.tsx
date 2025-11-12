@@ -306,7 +306,7 @@ const BacktestComparisonModal = ({
                       {new Date(data.backtest.created_at).toLocaleDateString()}
                     </Typography>
                     <Chip
-                      label={data.backtest.instruments.join(', ')}
+                      label={data.backtest.instrument}
                       size="small"
                       variant="outlined"
                     />

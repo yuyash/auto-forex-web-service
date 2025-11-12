@@ -24,7 +24,7 @@ class Backtest(models.Model):
     Backtest configuration and execution tracking.
 
     This model stores backtest configuration including strategy type,
-    parameters, instruments, date range, and execution status.
+    parameters, instrument, date range, and execution status.
 
     Requirements: 12.1, 12.4
     """
@@ -43,9 +43,10 @@ class Backtest(models.Model):
         default=dict,
         help_text="Strategy configuration parameters",
     )
-    instruments = models.JSONField(
-        default=list,
-        help_text="List of currency pairs to backtest (e.g., ['EUR_USD', 'GBP_USD'])",
+    instrument = models.CharField(
+        max_length=10,
+        default="USD_JPY",
+        help_text="Currency pair to backtest (e.g., 'USD_JPY', 'EUR_USD')",
     )
     data_source = models.CharField(
         max_length=20,
@@ -555,8 +556,10 @@ class StrategyComparison(models.Model):
     strategy_configs = models.JSONField(
         help_text="List of strategy configurations to compare",
     )
-    instruments = models.JSONField(
-        help_text="List of currency pairs",
+    instrument = models.CharField(
+        max_length=10,
+        default="USD_JPY",
+        help_text="Currency pair for comparison",
     )
     start_date = models.DateTimeField(
         help_text="Start date for comparison period",

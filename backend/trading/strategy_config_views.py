@@ -116,21 +116,32 @@ class StrategyConfigListCreateView(APIView):
         serializer = StrategyConfigCreateSerializer(data=request.data, context={"request": request})
 
         if serializer.is_valid():
-            config = serializer.save()
+            try:
+                config = serializer.save()
 
-            logger.info(
-                "Strategy configuration created",
-                extra={
-                    "user_id": request.user.id,
-                    "config_id": config.id,
-                    "strategy_type": config.strategy_type,
-                    "name": config.name,
-                },
-            )
+                logger.info(
+                    "Strategy configuration created",
+                    extra={
+                        "user_id": request.user.id,
+                        "config_id": config.id,
+                        "strategy_type": config.strategy_type,
+                        "config_name": config.name,
+                    },
+                )
 
-            # Return full details
-            response_serializer = StrategyConfigDetailSerializer(config)
-            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+                # Return full details
+                response_serializer = StrategyConfigDetailSerializer(config)
+                return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                # Handle database errors like duplicate names
+                error_message = str(e)
+                if "unique_user_config_name" in error_message or "duplicate key" in error_message:
+                    return Response(
+                        {"name": ["A configuration with this name already exists"]},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                # Re-raise other exceptions
+                raise
 
         logger.warning(
             "Strategy configuration creation failed",
@@ -238,7 +249,7 @@ class StrategyConfigDetailView(APIView):
                 extra={
                     "user_id": request.user.id,
                     "config_id": updated_config.id,
-                    "name": updated_config.name,
+                    "config_name": updated_config.name,
                 },
             )
 
@@ -280,7 +291,7 @@ class StrategyConfigDetailView(APIView):
                 extra={
                     "user_id": request.user.id,
                     "config_id": config_id,
-                    "name": config.name,
+                    "config_name": config.name,
                 },
             )
 
@@ -300,7 +311,7 @@ class StrategyConfigDetailView(APIView):
             extra={
                 "user_id": request.user.id,
                 "config_id": config_id,
-                "name": config_name,
+                "config_name": config_name,
             },
         )
 

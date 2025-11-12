@@ -231,7 +231,7 @@ class TestMACDStrategy:
                 "base_units": 1000,
                 "use_histogram_confirmation": True,
             },
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             is_active=True,
         )
         return MACDStrategy(strategy)
@@ -471,7 +471,7 @@ class TestMACDStrategy:
                 "base_units": 1000,
                 "use_histogram_confirmation": True,
             },
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             is_active=True,
         )
         strategy_instance = MACDStrategy(strategy)
@@ -490,7 +490,7 @@ class TestMACDStrategy:
                 "base_units": 1000,
                 "use_histogram_confirmation": False,
             },
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             is_active=True,
         )
         strategy_instance = MACDStrategy(strategy)
@@ -498,10 +498,10 @@ class TestMACDStrategy:
         assert strategy_instance.use_histogram_confirmation is False
 
     def test_inactive_instrument_ignored(self, strategy_instance, oanda_account):
-        """Test that ticks for inactive instruments are ignored."""
+        """Test that ticks for inactive instrument are ignored."""
         tick = TickData(
             account=oanda_account,
-            instrument="GBP_USD",  # Not in strategy instruments
+            instrument="GBP_USD",  # Not in strategy instrument
             timestamp=timezone.now(),
             bid=Decimal("1.3000"),
             ask=Decimal("1.3002"),

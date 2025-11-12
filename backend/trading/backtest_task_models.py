@@ -75,6 +75,11 @@ class BacktestTask(models.Model):
         default=Decimal("0"),
         help_text="Commission to apply per trade",
     )
+    instrument = models.CharField(
+        max_length=10,
+        default="USD_JPY",
+        help_text="Currency pair to backtest (e.g., 'USD_JPY', 'EUR_USD')",
+    )
     status = models.CharField(
         max_length=20,
         default=TaskStatus.CREATED,
@@ -232,6 +237,7 @@ class BacktestTask(models.Model):
             end_time=self.end_time,
             initial_balance=self.initial_balance,
             commission_per_trade=self.commission_per_trade,
+            instrument=self.instrument,
             status=TaskStatus.CREATED,
         )
 

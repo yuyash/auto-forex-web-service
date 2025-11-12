@@ -36,7 +36,7 @@ export interface StrategyStatus {
   is_active: boolean;
   strategy_type: string | null;
   config: StrategyConfig | null;
-  instruments: string[];
+  instrument: string;
   state: {
     status: string;
     positions_count: number;
@@ -50,7 +50,7 @@ export interface StrategyStatus {
 export interface StrategyStartRequest {
   strategy_type: string;
   config: StrategyConfig;
-  instruments: string[];
+  instrument: string;
 }
 
 export interface StrategyPerformance {

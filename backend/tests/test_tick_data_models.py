@@ -254,7 +254,7 @@ class TestTickDataModel:
         account.set_api_token("test_token")
         account.save()
 
-        # Create ticks for different instruments
+        # Create ticks for different instrument
         now = timezone.now()
         for instrument in ["EUR_USD", "GBP_USD", "USD_JPY"]:
             for i in range(3):

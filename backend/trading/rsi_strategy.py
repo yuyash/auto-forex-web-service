@@ -231,12 +231,13 @@ class RSIStrategy(BaseStrategy):
         self.rsi_calculators: dict[str, RSICalculator] = {}
         self.divergence_detectors: dict[str, DivergenceDetector] = {}
 
-        # Initialize components for each instrument
-        for instrument in self.instruments:
-            self.rsi_calculators[instrument] = RSICalculator(self.rsi_period)
+        # Initialize component for the instrument
+        self.rsi_calculators[self.instrument] = RSICalculator(self.rsi_period)
 
-            if self.use_divergence:
-                self.divergence_detectors[instrument] = DivergenceDetector(self.divergence_lookback)
+        if self.use_divergence:
+            self.divergence_detectors[self.instrument] = DivergenceDetector(
+                self.divergence_lookback
+            )
 
     def on_tick(self, tick_data: TickData) -> list[Order]:
         """

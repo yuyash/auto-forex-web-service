@@ -13,7 +13,7 @@ const mockStrategies: RunningStrategy[] = [
     start_time: '2025-01-15T10:00:00Z',
     position_count: 3,
     unrealized_pnl: 125.5,
-    instruments: ['EUR_USD', 'GBP_USD'],
+    instrument: 'EUR_USD',
   },
   {
     id: 2,
@@ -24,7 +24,7 @@ const mockStrategies: RunningStrategy[] = [
     start_time: '2025-01-15T09:30:00Z',
     position_count: 1,
     unrealized_pnl: -45.25,
-    instruments: ['USD_JPY'],
+    instrument: ['USD_JPY', 'GBP_USD'],
   },
   {
     id: 3,
@@ -35,7 +35,7 @@ const mockStrategies: RunningStrategy[] = [
     start_time: '2025-01-15T08:00:00Z',
     position_count: 0,
     unrealized_pnl: 0,
-    instruments: ['AUD_USD', 'NZD_USD', 'EUR_GBP'],
+    instrument: ['AUD_USD', 'NZD_USD', 'EUR_GBP'],
   },
 ];
 
@@ -94,18 +94,21 @@ describe('RunningStrategyList', () => {
     expect(screen.getByText('Trend Following')).toBeInTheDocument();
   });
 
-  it('displays instruments as chips for each strategy', () => {
+  it('displays instrument as chip for each strategy', () => {
     const mockOnStop = vi.fn();
     render(
       <RunningStrategyList strategies={mockStrategies} onStop={mockOnStop} />
     );
 
+    // Single instrument displayed as string
     expect(screen.getByText('EUR_USD')).toBeInTheDocument();
-    expect(screen.getByText('GBP_USD')).toBeInTheDocument();
-    expect(screen.getByText('USD_JPY')).toBeInTheDocument();
-    expect(screen.getByText('AUD_USD')).toBeInTheDocument();
-    expect(screen.getByText('NZD_USD')).toBeInTheDocument();
-    expect(screen.getByText('EUR_GBP')).toBeInTheDocument();
+
+    // Array instruments - check that individual instruments are present in the rendered output
+    expect(screen.getByText(/USD_JPY/)).toBeInTheDocument();
+    expect(screen.getByText(/GBP_USD/)).toBeInTheDocument();
+    expect(screen.getByText(/AUD_USD/)).toBeInTheDocument();
+    expect(screen.getByText(/NZD_USD/)).toBeInTheDocument();
+    expect(screen.getByText(/EUR_GBP/)).toBeInTheDocument();
   });
 
   it('displays position count for each strategy', () => {

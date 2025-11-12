@@ -25,21 +25,27 @@ export function useTaskExecutions(
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  // Stabilize params to prevent infinite loop by using individual values
+  const page = params?.page;
+  const pageSize = params?.page_size;
+
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
+      const fetchParams =
+        page || pageSize ? { page, page_size: pageSize } : undefined;
       const result =
         taskType === TaskType.BACKTEST
-          ? await backtestTasksApi.getExecutions(taskId, params)
-          : await tradingTasksApi.getExecutions(taskId, params);
+          ? await backtestTasksApi.getExecutions(taskId, fetchParams)
+          : await tradingTasksApi.getExecutions(taskId, fetchParams);
       setData(result);
     } catch (err) {
       setError(err as Error);
     } finally {
       setIsLoading(false);
     }
-  }, [taskId, taskType, params]);
+  }, [taskId, taskType, page, pageSize]); // Use primitive values instead of object
 
   useEffect(() => {
     fetchData();

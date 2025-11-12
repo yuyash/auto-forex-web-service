@@ -35,7 +35,7 @@ class BacktestConfig:
     Attributes:
         strategy_type: Type of strategy to backtest
         strategy_config: Strategy configuration parameters
-        instruments: List of currency pairs to backtest
+        instrument: Currency pair to backtest
         start_date: Start date for backtest period
         end_date: End date for backtest period
         initial_balance: Initial account balance
@@ -46,7 +46,7 @@ class BacktestConfig:
 
     strategy_type: str
     strategy_config: dict[str, Any]
-    instruments: list[str]
+    instrument: str
     start_date: datetime
     end_date: datetime
     initial_balance: Decimal

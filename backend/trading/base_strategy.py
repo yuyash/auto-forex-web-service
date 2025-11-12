@@ -37,7 +37,7 @@ class BaseStrategy(ABC):
         self.strategy = strategy
         self.account = strategy.account
         self.config = strategy.config
-        self.instruments = strategy.instruments
+        self.instrument = strategy.instrument
 
     @abstractmethod
     def on_tick(self, tick_data: TickData) -> list[Order]:
@@ -177,7 +177,7 @@ class BaseStrategy(ABC):
         """
         Calculate pip difference between two prices.
 
-        For most currency pairs, 1 pip = 0.0001
+        For most currency pair, 1 pip = 0.0001
         For JPY pairs, 1 pip = 0.01
 
         Args:
@@ -198,15 +198,15 @@ class BaseStrategy(ABC):
 
     def is_instrument_active(self, instrument: str) -> bool:
         """
-        Check if an instrument is in the strategy's active instruments list.
+        Check if an instrument matches the strategy's active instrument.
 
         Args:
             instrument: Currency pair to check (e.g., 'EUR_USD')
 
         Returns:
-            True if instrument is active for this strategy
+            True if instrument matches for this strategy
         """
-        return instrument in self.instruments
+        return instrument == self.instrument
 
     def update_strategy_state(self, state_updates: dict[str, Any]) -> None:
         """

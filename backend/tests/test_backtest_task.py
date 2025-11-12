@@ -47,7 +47,7 @@ def backtest(user):
             "scaling_mode": "additive",
             "retracement_pips": 30,
         },
-        instruments=["EUR_USD"],
+        instrument="EUR_USD",
         start_date=timezone.now() - timedelta(days=7),
         end_date=timezone.now() - timedelta(days=1),
         initial_balance=Decimal("10000.00"),
@@ -69,7 +69,7 @@ def backtest_config_dict():
             "scaling_mode": "additive",
             "retracement_pips": 30,
         },
-        "instruments": ["EUR_USD"],
+        "instrument": "EUR_USD",
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "initial_balance": 10000.00,
@@ -399,19 +399,19 @@ class TestRunBacktestTask:
             # Verify BacktestConfig was created correctly
             call_args = mock_engine_class.call_args[0][0]
             assert call_args.strategy_type == "floor"
-            assert call_args.instruments == ["EUR_USD"]
+            assert call_args.instrument == ["EUR_USD"]
             assert call_args.initial_balance == Decimal("10000.00")
             assert call_args.commission_per_trade == Decimal("5.00")
 
-    def test_task_loads_historical_data_for_all_instruments(
+    def test_task_loads_historical_data_for_instrument(
         self, backtest, sample_tick_data, mock_backtest_engine
     ):
-        """Test task loads historical data for all configured instruments."""
-        # Create config with multiple instruments
+        """Test task loads historical data for all configured instrument."""
+        # Create config with single instrument
         config_dict = {
             "strategy_type": "floor",
             "strategy_config": {},
-            "instruments": ["EUR_USD", "GBP_USD"],
+            "instrument": "EUR_USD",
             "start_date": (timezone.now() - timedelta(days=7)).isoformat(),
             "end_date": (timezone.now() - timedelta(days=1)).isoformat(),
             "initial_balance": 10000.00,

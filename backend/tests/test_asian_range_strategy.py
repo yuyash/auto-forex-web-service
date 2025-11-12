@@ -56,7 +56,7 @@ def mock_strategy(db, mock_oanda_account):
             "take_profit_pips": 30,
             "min_range_pips": 15,
         },
-        instruments=["EUR_USD", "GBP_USD"],
+        instrument="EUR_USD",
         is_active=True,
     )
     return strategy

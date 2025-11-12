@@ -17,7 +17,7 @@
     "instrument": "通貨ペア",
     "status": "状態",
     "searchOrderId": "注文IDで検索",
-    "allInstruments": "すべての通貨ペア",
+    "allInstrument": "すべての通貨ペア",
     "allStatuses": "すべての状態"
   },
   "orderTypes": {

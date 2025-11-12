@@ -63,7 +63,7 @@ def strategy_instance(db, oanda_account):  # pylint: disable=unused-argument
             "take_profit_pips": 7,
             "max_holding_minutes": 10,
         },
-        instruments=["EUR_USD"],
+        instrument="EUR_USD",
         is_active=True,
     )
 
@@ -457,7 +457,7 @@ class TestScalpingStrategy:
         now = timezone.now()
 
         # Update strategy to trade USD_JPY
-        scalping_strategy.instruments = ["USD_JPY"]
+        scalping_strategy.instrument = ["USD_JPY"]
 
         # Create bullish momentum for JPY pair
         for i in range(5):

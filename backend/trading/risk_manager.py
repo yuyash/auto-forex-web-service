@@ -12,7 +12,7 @@ Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 11.1, 11.2, 11.3, 11.4, 11.5
 
 import logging
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from django.db import transaction
 
@@ -162,19 +162,19 @@ class ATRMonitor:
 
         return None
 
-    def monitor_instruments(
+    def monitor_instrument(
         self,
         account: OandaAccount,
         strategy: Strategy,
-        instruments: List[str],
+        instrument: str,
     ) -> Dict[str, bool]:
         """
-        Monitor ATR for multiple instruments and detect volatility spikes.
+        Monitor ATR for single instrument and detect volatility spikes.
 
         Args:
             account: OandaAccount instance
             strategy: Strategy instance
-            instruments: List of currency pairs to monitor
+            instrument: Currency pair to monitor
 
         Returns:
             Dictionary mapping instrument to volatility spike status
@@ -192,43 +192,42 @@ class ATRMonitor:
             )
             return results
 
-        for instrument in instruments:
-            try:
-                # Get current ATR
-                current_atr = self.get_current_atr(account, instrument)
-                if current_atr is None:
-                    logger.warning(
-                        "Could not get current ATR for %s, skipping",
-                        instrument,
-                    )
-                    results[instrument] = False
-                    continue
-
-                # Get normal ATR baseline
-                normal_atr = self.get_normal_atr(strategy_state, instrument)
-                if normal_atr is None:
-                    logger.warning(
-                        "No normal ATR baseline for %s, skipping volatility check",
-                        instrument,
-                    )
-                    results[instrument] = False
-                    continue
-
-                # Check for volatility spike
-                is_spike = self.check_volatility_spike(current_atr, normal_atr)
-                results[instrument] = is_spike
-
-                # Update ATR in strategy state
-                strategy_state.update_atr(instrument, current_atr)
-
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                logger.error(
-                    "Error monitoring ATR for %s: %s",
+        try:
+            # Get current ATR
+            current_atr = self.get_current_atr(account, instrument)
+            if current_atr is None:
+                logger.warning(
+                    "Could not get current ATR for %s, skipping",
                     instrument,
-                    e,
-                    exc_info=True,
                 )
                 results[instrument] = False
+                return results
+
+            # Get normal ATR baseline
+            normal_atr = self.get_normal_atr(strategy_state, instrument)
+            if normal_atr is None:
+                logger.warning(
+                    "No normal ATR baseline for %s, skipping volatility check",
+                    instrument,
+                )
+                results[instrument] = False
+                return results
+
+            # Check for volatility spike
+            is_spike = self.check_volatility_spike(current_atr, normal_atr)
+            results[instrument] = is_spike
+
+            # Update ATR in strategy state
+            strategy_state.update_atr(instrument, current_atr)
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error(
+                "Error monitoring ATR for %s: %s",
+                instrument,
+                e,
+                exc_info=True,
+            )
+            results[instrument] = False
 
         return results
 
@@ -588,14 +587,14 @@ class RiskManager:
             Dictionary with risk management results:
             - volatility_locked: True if volatility lock executed
             - margin_protected: True if margin protection executed
-            - instruments_monitored: List of instruments monitored
+            - instrument_monitored: List of instrument monitored
 
         Requirements: 10.4, 11.5
         """
         results: Dict[str, object] = {
             "volatility_locked": False,
             "margin_protected": False,
-            "instruments_monitored": [],
+            "instrument_monitored": [],
         }
 
         try:
@@ -631,25 +630,23 @@ class RiskManager:
             strategy: Strategy instance
             results: Results dictionary to update
         """
-        instruments = strategy.instruments if isinstance(strategy.instruments, list) else []
-        if not instruments:
+        instrument = strategy.instrument
+        if not instrument:
             return
 
-        volatility_results = self.atr_monitor.monitor_instruments(
+        volatility_results = self.atr_monitor.monitor_instrument(
             account,
             strategy,
-            instruments,
+            instrument,
         )
-        results["instruments_monitored"] = list(volatility_results.keys())
+        results["instrument_monitored"] = instrument
 
-        # Execute volatility lock if any instrument has spike
-        for instrument, has_spike in volatility_results.items():
-            if not has_spike:
-                continue
-
-            if self._execute_volatility_lock_for_instrument(account, strategy, instrument):
-                results["volatility_locked"] = True
-                break  # Stop checking other instruments after lock
+        # Execute volatility lock if instrument has spike
+        has_spike = volatility_results.get(instrument, False)
+        if has_spike and self._execute_volatility_lock_for_instrument(
+            account, strategy, instrument
+        ):
+            results["volatility_locked"] = True
 
     def _execute_volatility_lock_for_instrument(
         self,

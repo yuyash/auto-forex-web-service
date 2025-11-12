@@ -14,7 +14,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import type { StrategyConfig } from '../../../types/configuration';
 
 interface ConfigurationSelectorProps {
-  value: number | '';
+  value: number | string | undefined;
   onChange: (value: number) => void;
   configurations: StrategyConfig[];
   isLoading?: boolean;
@@ -77,9 +77,18 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
       <Select
         labelId="configuration-selector-label"
         id="configuration-selector"
-        value={value}
+        value={value || ''}
         label={label}
-        onChange={(e) => onChange(e.target.value as number)}
+        onChange={(e) => {
+          const val = e.target.value;
+          // MUI Select returns string even though value prop is number
+          if (
+            typeof val === 'number' ||
+            (typeof val === 'string' && val !== '')
+          ) {
+            onChange(typeof val === 'string' ? Number(val) : val);
+          }
+        }}
         MenuProps={{
           PaperProps: {
             style: {

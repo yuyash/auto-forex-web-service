@@ -139,8 +139,8 @@ const OrderHistoryPage = () => {
     document.body.removeChild(link);
   };
 
-  // Get unique instruments from orders
-  const instruments = Array.from(
+  // Get unique instrument from orders
+  const instrument = Array.from(
     new Set((orders || []).map((o) => o.instrument))
   ).sort();
 
@@ -290,8 +290,8 @@ const OrderHistoryPage = () => {
               onChange={(e) => handleFilterChange('instrument', e.target.value)}
               size="small"
             >
-              <MenuItem value="">{t('orders:filters.allInstruments')}</MenuItem>
-              {instruments.map((instrument) => (
+              <MenuItem value="">{t('orders:filters.allInstrument')}</MenuItem>
+              {instrument.map((instrument) => (
                 <MenuItem key={instrument} value={instrument}>
                   {instrument}
                 </MenuItem>

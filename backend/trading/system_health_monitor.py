@@ -196,8 +196,7 @@ class SystemHealthMonitor:
             try:
                 response = requests.get(practice_url, timeout=5)
                 # 401 is expected without auth, but means endpoint is reachable
-                practice_status = "reachable" if response.status_code in [
-                    401, 403] else "error"
+                practice_status = "reachable" if response.status_code in [401, 403] else "error"
             except Exception as e:
                 logger.warning(f"Practice API check failed: {e}")
                 practice_status = "unreachable"
@@ -205,8 +204,7 @@ class SystemHealthMonitor:
             # Check live API
             try:
                 response = requests.get(live_url, timeout=5)
-                live_status = "reachable" if response.status_code in [
-                    401, 403] else "error"
+                live_status = "reachable" if response.status_code in [401, 403] else "error"
             except Exception as e:
                 logger.warning(f"Live API check failed: {e}")
                 live_status = "unreachable"
@@ -262,9 +260,9 @@ class SystemHealthMonitor:
         try:
             from celery import current_app
 
-            active_tasks = {}
-            scheduled_tasks = {}
-            reserved_tasks = {}
+            active_tasks: dict[str, list] = {}
+            scheduled_tasks: dict[str, list] = {}
+            reserved_tasks: dict[str, list] = {}
 
             # Retry a few times to handle momentary broker unavailability
             for attempt in range(3):
@@ -283,11 +281,9 @@ class SystemHealthMonitor:
                         continue
                     raise inner_error
 
-            active_count = sum(len(tasks) for tasks in active_tasks.values())
-            scheduled_count = sum(len(tasks)
-                                  for tasks in scheduled_tasks.values())
-            reserved_count = sum(len(tasks)
-                                 for tasks in reserved_tasks.values())
+            active_count = sum(len(tasks) for tasks in active_tasks.values() if tasks)
+            scheduled_count = sum(len(tasks) for tasks in scheduled_tasks.values() if tasks)
+            reserved_count = sum(len(tasks) for tasks in reserved_tasks.values() if tasks)
 
             return {
                 "active": active_count,

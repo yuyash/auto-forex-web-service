@@ -15,7 +15,7 @@ describe('CacheManager', () => {
       expect(key).toBe('EUR_USD_M5');
     });
 
-    it('should generate different keys for different instruments', () => {
+    it('should generate different keys for different instrument', () => {
       const key1 = cacheManager.getCacheKey('EUR_USD', 'M5');
       const key2 = cacheManager.getCacheKey('GBP_USD', 'M5');
       expect(key1).not.toBe(key2);
@@ -237,7 +237,7 @@ describe('CacheManager', () => {
   });
 
   describe('integration scenarios', () => {
-    it('should handle multiple instruments and granularities independently', () => {
+    it('should handle single instrument and granularities independently', () => {
       const eurData: OHLCData[] = [
         { time: 1000, open: 1.1, high: 1.2, low: 1.0, close: 1.15 },
       ];

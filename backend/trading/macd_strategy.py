@@ -284,12 +284,11 @@ class MACDStrategy(BaseStrategy):
         self.macd_calculators: dict[str, MACDCalculator] = {}
         self.crossover_detectors: dict[str, MACDCrossoverDetector] = {}
 
-        # Initialize components for each instrument
-        for instrument in self.instruments:
-            self.macd_calculators[instrument] = MACDCalculator(
-                self.fast_period, self.slow_period, self.signal_period
-            )
-            self.crossover_detectors[instrument] = MACDCrossoverDetector()
+        # Initialize component for the instrument
+        self.macd_calculators[self.instrument] = MACDCalculator(
+            self.fast_period, self.slow_period, self.signal_period
+        )
+        self.crossover_detectors[self.instrument] = MACDCrossoverDetector()
 
     def on_tick(self, tick_data: TickData) -> list[Order]:
         """

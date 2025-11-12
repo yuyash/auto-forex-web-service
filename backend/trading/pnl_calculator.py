@@ -80,7 +80,7 @@ class PnLCalculator:
 
         Args:
             positions: List of positions to calculate P&L for
-            prices: Dictionary mapping instruments to current prices
+            prices: Dictionary mapping instrument to current prices
 
         Returns:
             Dictionary mapping position IDs to unrealized P&L values
@@ -110,7 +110,7 @@ class PnLCalculator:
 
         Args:
             positions: List of positions to calculate P&L for
-            prices: Dictionary mapping instruments to current prices
+            prices: Dictionary mapping instrument to current prices
 
         Returns:
             Total unrealized P&L

@@ -13,7 +13,6 @@ import {
   Tooltip,
   Alert,
   Chip,
-  Stack,
   Button,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
@@ -154,7 +153,7 @@ const BacktestHistoryPanel = ({
                 {t('backtest:history.strategy', 'Strategy')}
               </TableCell>
               <TableCell>
-                {t('backtest:history.instruments', 'Instruments')}
+                {t('backtest:history.instrument', 'Instrument')}
               </TableCell>
               <TableCell>
                 {t('backtest:history.dateRange', 'Date Range')}
@@ -185,23 +184,11 @@ const BacktestHistoryPanel = ({
                   </Typography>
                 </TableCell>
                 <TableCell>
-                  <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                    {backtest.instruments.slice(0, 3).map((instrument) => (
-                      <Chip
-                        key={instrument}
-                        label={instrument}
-                        size="small"
-                        variant="outlined"
-                      />
-                    ))}
-                    {backtest.instruments.length > 3 && (
-                      <Chip
-                        label={`+${backtest.instruments.length - 3}`}
-                        size="small"
-                        variant="outlined"
-                      />
-                    )}
-                  </Stack>
+                  <Chip
+                    label={backtest.instrument}
+                    size="small"
+                    variant="outlined"
+                  />
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" noWrap>

@@ -34,7 +34,7 @@ class Migration(migrations.Migration):
                     models.JSONField(default=dict, help_text="Strategy configuration parameters"),
                 ),
                 (
-                    "instruments",
+                    "instrument",
                     models.JSONField(
                         default=list,
                         help_text=(

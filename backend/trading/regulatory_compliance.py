@@ -75,7 +75,7 @@ class RegulatoryComplianceManager:
         },
     }
 
-    # Major currency pairs
+    # Major currency pair
     MAJOR_PAIRS = [
         "EUR_USD",
         "GBP_USD",

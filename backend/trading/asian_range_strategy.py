@@ -217,9 +217,8 @@ class AsianRangeStrategy(BaseStrategy):
         self.session_detector = AsianSessionDetector()
         self.range_detectors: dict[str, AsianRangeDetector] = {}
 
-        # Initialize range detectors for each instrument
-        for instrument in self.instruments:
-            self.range_detectors[instrument] = AsianRangeDetector()
+        # Initialize range detector for the instrument
+        self.range_detectors[self.instrument] = AsianRangeDetector()
 
     def on_tick(  # pylint: disable=too-many-return-statements,too-many-branches
         self, tick_data: TickData

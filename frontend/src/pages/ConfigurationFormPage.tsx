@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Container,
   Paper,
@@ -10,6 +10,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { Breadcrumbs } from '../components/common';
 import ConfigurationForm from '../components/configurations/ConfigurationForm';
+import ParametersForm from '../components/configurations/ParametersForm';
 import { useConfiguration } from '../hooks/useConfigurations';
 import { useConfigurationMutations } from '../hooks/useConfigurationMutations';
 import type { StrategyConfigCreateData } from '../types/configuration';
@@ -18,19 +19,15 @@ const ConfigurationFormPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditMode = Boolean(id);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Fetch configuration if editing
-  const parsedConfigId = id ? Number(id) : Number.NaN;
-  const effectiveConfigId =
-    Number.isFinite(parsedConfigId) && parsedConfigId > 0 ? parsedConfigId : null;
-  const { data: configuration, isLoading: isLoadingConfig } = useConfiguration(
-    effectiveConfigId
-  );
+  const configId = id ? Number(id) : undefined;
+  const { data: configuration, isLoading: isLoadingConfig } =
+    useConfiguration(configId);
 
   const { createConfiguration, updateConfiguration, isCreating, isUpdating } =
     useConfigurationMutations();
-
-  const isLoading = isCreating || isUpdating;
 
   // Redirect if configuration not found in edit mode
   useEffect(() => {
@@ -40,22 +37,95 @@ const ConfigurationFormPage = () => {
   }, [isEditMode, isLoadingConfig, configuration, navigate]);
 
   const handleSubmit = async (data: StrategyConfigCreateData) => {
+    setErrorMessage(null);
     try {
-      if (isEditMode && configuration) {
-        await updateConfiguration({
-          id: configuration.id,
-          data: {
-            name: data.name,
-            description: data.description,
-            parameters: data.parameters,
-          },
-        });
-      } else {
-        await createConfiguration(data);
-      }
+      await createConfiguration(data);
       navigate('/configurations');
-    } catch (error) {
-      console.error('Failed to save configuration:', error);
+    } catch (err: unknown) {
+      console.error('Failed to save configuration:', err);
+
+      // Type assertion for error object with data property
+      const error = err as {
+        data?: {
+          name?: string[];
+          strategy_type?: string[];
+          parameters?: string | Record<string, unknown>;
+          error?: string;
+          detail?: string;
+        };
+        message?: string;
+      };
+
+      // Extract error message from API response
+      if (error.data) {
+        // Handle field-specific errors
+        if (error.data.name && Array.isArray(error.data.name)) {
+          setErrorMessage(error.data.name[0]);
+        } else if (
+          error.data.strategy_type &&
+          Array.isArray(error.data.strategy_type)
+        ) {
+          setErrorMessage(error.data.strategy_type[0]);
+        } else if (error.data.parameters) {
+          setErrorMessage(
+            typeof error.data.parameters === 'string'
+              ? error.data.parameters
+              : 'Invalid parameters'
+          );
+        } else if (error.data.error) {
+          setErrorMessage(error.data.error);
+        } else if (error.data.detail) {
+          setErrorMessage(error.data.detail);
+        } else {
+          setErrorMessage(error.message || 'Failed to save configuration');
+        }
+      } else {
+        setErrorMessage(error.message || 'Failed to save configuration');
+      }
+    }
+  };
+
+  const handleParametersSubmit = async (
+    parameters: Record<string, unknown>
+  ) => {
+    if (!configuration) return;
+
+    setErrorMessage(null);
+    try {
+      await updateConfiguration({
+        id: configuration.id,
+        data: { parameters },
+      });
+      navigate('/configurations');
+    } catch (err: unknown) {
+      console.error('Failed to update parameters:', err);
+
+      const error = err as {
+        data?: {
+          parameters?: string | Record<string, unknown>;
+          error?: string;
+          detail?: string;
+        };
+        message?: string;
+      };
+
+      if (error.data) {
+        if (error.data.parameters) {
+          setErrorMessage(
+            typeof error.data.parameters === 'string'
+              ? error.data.parameters
+              : 'Invalid parameters'
+          );
+        } else if (error.data.error) {
+          setErrorMessage(error.data.error);
+        } else if (error.data.detail) {
+          setErrorMessage(error.data.detail);
+        } else {
+          setErrorMessage(error.message || 'Failed to update parameters');
+        }
+      } else {
+        setErrorMessage(error.message || 'Failed to update parameters');
+      }
     }
   };
 
@@ -79,11 +149,11 @@ const ConfigurationFormPage = () => {
 
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" gutterBottom>
-          {isEditMode ? 'Edit Configuration' : 'Create New Configuration'}
+          {isEditMode ? 'Edit Strategy Parameters' : 'Create New Configuration'}
         </Typography>
         <Typography variant="body1" color="text.secondary">
           {isEditMode
-            ? 'Update your strategy configuration'
+            ? 'Update the parameters for your strategy configuration'
             : 'Create a reusable strategy configuration for backtesting and live trading'}
         </Typography>
       </Box>
@@ -94,22 +164,33 @@ const ConfigurationFormPage = () => {
         </Alert>
       )}
 
+      {errorMessage && (
+        <Alert
+          severity="error"
+          sx={{ mb: 3 }}
+          onClose={() => setErrorMessage(null)}
+        >
+          {errorMessage}
+        </Alert>
+      )}
+
       <Paper elevation={2} sx={{ p: 4 }}>
-        <ConfigurationForm
-          initialData={
-            configuration
-              ? {
-                name: configuration.name,
-                strategy_type: configuration.strategy_type,
-                description: configuration.description,
-                parameters: configuration.parameters,
-              }
-              : undefined
-          }
-          onSubmit={handleSubmit}
-          onCancel={handleCancel}
-          isLoading={isLoading}
-        />
+        {isEditMode && configuration ? (
+          <ParametersForm
+            strategyType={configuration.strategy_type}
+            strategyName={configuration.name}
+            initialParameters={configuration.parameters}
+            onSubmit={handleParametersSubmit}
+            onCancel={handleCancel}
+            isLoading={isUpdating}
+          />
+        ) : (
+          <ConfigurationForm
+            onSubmit={handleSubmit}
+            onCancel={handleCancel}
+            isLoading={isCreating}
+          />
+        )}
       </Paper>
     </Container>
   );

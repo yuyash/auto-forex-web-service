@@ -107,6 +107,7 @@ export default function TradingTaskForm({
 
   // Fetch accounts
   const { data: accountsData } = useAccounts({ page_size: 100 });
+  const accounts = accountsData?.results || [];
   const { data: selectedAccount } = useAccount(selectedAccountId, {
     enabled: selectedAccountId > 0,
   });
@@ -120,15 +121,19 @@ export default function TradingTaskForm({
   const effectiveConfigId =
     Number.isFinite(parsedSelectedConfigId) && parsedSelectedConfigId > 0
       ? parsedSelectedConfigId
-      : null;
+      : undefined;
 
   const { data: selectedConfig } = useConfiguration(effectiveConfigId);
 
-  // Check if account already has an active task
-  const { data: existingTasks } = useTradingTasks({
-    account_id: selectedAccountId,
-    status: TaskStatus.RUNNING,
-  });
+  // Check if account already has an active task (only if valid account selected)
+  const { data: existingTasks } = useTradingTasks(
+    selectedAccountId && selectedAccountId > 0
+      ? {
+          account_id: selectedAccountId,
+          status: TaskStatus.RUNNING,
+        }
+      : undefined
+  );
 
   const hasActiveTask =
     existingTasks && existingTasks.results.length > 0 && !taskId;
@@ -208,7 +213,7 @@ export default function TradingTaskForm({
                         <MenuItem value="">
                           <em>Select an account</em>
                         </MenuItem>
-                        {accountsData?.results.map((account) => (
+                        {accounts.map((account) => (
                           <MenuItem key={account.id} value={account.id}>
                             {account.account_id} ({account.api_type}) - Balance:{' '}
                             ${account.balance.toFixed(2)}

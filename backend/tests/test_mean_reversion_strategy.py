@@ -154,7 +154,7 @@ class TestMeanReversionStrategy:
                 "stop_loss_pips": 10,
                 "exit_at_middle": True,
             },
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             is_active=True,
         )
         return MeanReversionStrategy(strategy)
@@ -425,10 +425,10 @@ class TestMeanReversionStrategy:
             strategy_instance.validate_config({"stop_loss_pips": 0})
 
     def test_inactive_instrument_ignored(self, strategy_instance, oanda_account):
-        """Test that ticks for inactive instruments are ignored."""
+        """Test that ticks for inactive instrument are ignored."""
         tick = TickData(
             account=oanda_account,
-            instrument="GBP_USD",  # Not in strategy instruments
+            instrument="GBP_USD",  # Not in strategy instrument
             timestamp=timezone.now(),
             bid=Decimal("1.3000"),
             ask=Decimal("1.3002"),
@@ -529,7 +529,7 @@ class TestMeanReversionStrategy:
                 "stop_loss_pips": 10,
                 "exit_at_middle": False,  # Disabled
             },
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             is_active=True,
         )
         strategy_instance = MeanReversionStrategy(strategy)

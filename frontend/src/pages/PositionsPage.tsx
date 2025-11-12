@@ -196,12 +196,12 @@ const PositionsPage = () => {
     document.body.removeChild(link);
   };
 
-  // Get unique instruments from positions
+  // Get unique instrument from positions
   const allPositions = [
     ...(Array.isArray(activePositions) ? activePositions : []),
     ...(Array.isArray(closedPositions) ? closedPositions : []),
   ];
-  const instruments = Array.from(
+  const instrument = Array.from(
     new Set(allPositions.map((p) => p.instrument))
   ).sort();
 
@@ -458,9 +458,9 @@ const PositionsPage = () => {
               size="small"
             >
               <MenuItem value="">
-                {t('positions:filters.allInstruments')}
+                {t('positions:filters.allInstrument')}
               </MenuItem>
-              {instruments.map((instrument) => (
+              {instrument.map((instrument) => (
                 <MenuItem key={instrument} value={instrument}>
                   {instrument}
                 </MenuItem>

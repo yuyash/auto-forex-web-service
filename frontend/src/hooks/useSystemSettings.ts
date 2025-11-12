@@ -16,6 +16,7 @@ export const useSystemSettings = (): UseSystemSettingsReturn => {
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState<number>(0);
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -30,19 +31,26 @@ export const useSystemSettings = (): UseSystemSettingsReturn => {
 
       const data = await response.json();
       setSettings(data);
+      setRetryCount(0); // Reset retry count on success
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'An unexpected error occurred';
       setError(errorMessage);
-      console.error('Error fetching system settings:', err);
+      console.error('Failed to fetch system settings');
+
+      // Don't retry automatically - just show error
+      setRetryCount((prev) => prev + 1);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchSettings();
-  }, []);
+    // Only fetch once on mount, don't retry automatically
+    if (retryCount === 0) {
+      fetchSettings();
+    }
+  }, [retryCount]);
 
   return {
     settings,

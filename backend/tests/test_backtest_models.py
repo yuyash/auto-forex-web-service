@@ -41,7 +41,7 @@ def backtest(user):
             "scaling_mode": "additive",
             "retracement_pips": 30,
         },
-        instruments=["EUR_USD", "GBP_USD"],
+        instrument="EUR_USD",
         start_date=timezone.now() - timedelta(days=30),
         end_date=timezone.now(),
         initial_balance=Decimal("10000.00"),
@@ -62,7 +62,7 @@ class TestBacktestModel:
             user=user,
             strategy_type="floor",
             config={"lot_size": 1.0},
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             start_date=start_date,
             end_date=end_date,
             initial_balance=Decimal("10000.00"),
@@ -71,7 +71,7 @@ class TestBacktestModel:
         assert backtest.user == user
         assert backtest.strategy_type == "floor"
         assert backtest.config == {"lot_size": 1.0}
-        assert backtest.instruments == ["EUR_USD"]
+        assert backtest.instrument == "EUR_USD"
         assert backtest.start_date == start_date
         assert backtest.end_date == end_date
         assert backtest.initial_balance == Decimal("10000.00")
@@ -88,7 +88,7 @@ class TestBacktestModel:
         )
 
         assert backtest.config == {}
-        assert backtest.instruments == []
+        assert backtest.instrument == ""
         assert backtest.initial_balance == Decimal("10000.00")
         assert backtest.commission_per_trade == Decimal("0")
         assert backtest.status == TaskStatus.CREATED

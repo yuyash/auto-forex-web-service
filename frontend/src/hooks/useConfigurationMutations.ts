@@ -1,6 +1,7 @@
 // Configuration mutation hooks
 import { useState, useCallback } from 'react';
 import { configurationsApi } from '../services/api';
+import { invalidateConfigurationsCache } from './useConfigurations';
 import type {
   StrategyConfig,
   StrategyConfigCreateData,
@@ -37,6 +38,7 @@ export function useCreateConfiguration(options?: {
         setState({ data: null, isLoading: true, error: null });
         const result = await configurationsApi.create(variables);
         setState({ data: result, isLoading: false, error: null });
+        invalidateConfigurationsCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {
@@ -85,6 +87,7 @@ export function useUpdateConfiguration(options?: {
           variables.data
         );
         setState({ data: result, isLoading: false, error: null });
+        invalidateConfigurationsCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {
@@ -127,6 +130,7 @@ export function useDeleteConfiguration(options?: {
         setState({ data: null, isLoading: true, error: null });
         await configurationsApi.delete(id);
         setState({ data: undefined, isLoading: false, error: null });
+        invalidateConfigurationsCache();
         options?.onSuccess?.();
       } catch (err) {
         const error = err as Error;

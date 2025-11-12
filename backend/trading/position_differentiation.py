@@ -476,13 +476,13 @@ class PositionDifferentiationManager:
             positions.values("instrument").annotate(count=Count("id")).order_by("-count")
         )
 
-        # Find instruments with collisions
-        instruments_with_collisions = []
+        # Find instrument with collisions
+        instrument_with_collisions = []
         for item in by_instrument:
             inst = item["instrument"]
             collisions = self.detect_position_collisions(inst)
             if collisions:
-                instruments_with_collisions.append(
+                instrument_with_collisions.append(
                     {
                         "instrument": inst,
                         "position_count": item["count"],
@@ -497,5 +497,5 @@ class PositionDifferentiationManager:
             "strategy_level": self.strategy is not None,
             "total_open_positions": positions.count(),
             "positions_by_instrument": list(by_instrument),
-            "instruments_with_collisions": instruments_with_collisions,
+            "instrument_with_collisions": instrument_with_collisions,
         }

@@ -42,7 +42,7 @@
     "startTime": "開始時刻",
     "positions": "ポジション",
     "unrealizedPnL": "未実現損益",
-    "instruments": "通貨ペア",
+    "instrument": "通貨ペア",
     "stop": "停止",
     "noStrategies": "実行中の戦略なし",
     "confirmStopTitle": "戦略停止の確認",

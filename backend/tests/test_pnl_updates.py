@@ -5,7 +5,7 @@ Tests cover:
 - P&L calculation on tick updates
 - WebSocket broadcast of P&L changes
 - Batch position updates
-- Handling of multiple instruments
+- Handling of single instrument
 """
 
 from decimal import Decimal
@@ -49,7 +49,7 @@ def mock_strategy(db, mock_oanda_account):
         strategy_type="test_strategy",
         is_active=True,
         config={"test": "config"},
-        instruments=["EUR_USD", "GBP_USD"],
+        instrument="EUR_USD",
     )
     return strategy
 
@@ -450,12 +450,12 @@ class TestBatchPositionUpdates:
 
 
 @pytest.mark.django_db
-class TestMultipleInstruments:
-    """Test handling of multiple instruments"""
+class TestSingleInstrument:
+    """Test handling of single instrument"""
 
-    def test_update_multiple_instruments(self, mock_oanda_account, mock_strategy):
-        """Test updating positions for multiple instruments"""
-        # Create positions for different instruments
+    def test_update_instrument(self, mock_oanda_account, mock_strategy):
+        """Test updating positions for single instrument"""
+        # Create positions for different instrument
         eur_position = Position.objects.create(
             account=mock_oanda_account,
             strategy=mock_strategy,
@@ -483,7 +483,7 @@ class TestMultipleInstruments:
         # Create updater
         updater = PositionPnLUpdater(account=mock_oanda_account)
 
-        # Update with price data for both instruments
+        # Update with price data for both instrument
         price_data = {
             "EUR_USD": {
                 "bid": Decimal("1.1050"),
@@ -514,7 +514,7 @@ class TestMultipleInstruments:
 
     def test_update_single_instrument(self, mock_oanda_account, mock_strategy):
         """Test updating positions for a single instrument"""
-        # Create positions for different instruments
+        # Create positions for different instrument
         eur_position = Position.objects.create(
             account=mock_oanda_account,
             strategy=mock_strategy,

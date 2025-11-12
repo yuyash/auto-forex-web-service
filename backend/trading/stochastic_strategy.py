@@ -204,14 +204,13 @@ class StochasticStrategy(BaseStrategy):
         self.stochastic_calculators: dict[str, StochasticCalculator] = {}
         self.crossover_detectors: dict[str, CrossoverDetector] = {}
 
-        # Initialize components for each instrument
-        for instrument in self.instruments:
-            self.stochastic_calculators[instrument] = StochasticCalculator(
-                self.k_period, self.k_smoothing, self.d_smoothing
-            )
+        # Initialize component for the instrument
+        self.stochastic_calculators[self.instrument] = StochasticCalculator(
+            self.k_period, self.k_smoothing, self.d_smoothing
+        )
 
-            if self.use_crossover:
-                self.crossover_detectors[instrument] = CrossoverDetector()
+        if self.use_crossover:
+            self.crossover_detectors[self.instrument] = CrossoverDetector()
 
     def on_tick(self, tick_data: TickData) -> list[Order]:
         """

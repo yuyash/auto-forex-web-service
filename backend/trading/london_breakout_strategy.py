@@ -200,9 +200,8 @@ class LondonBreakoutStrategy(BaseStrategy):
         self.session_detector = LondonSessionDetector()
         self.range_detectors: dict[str, RangeDetector] = {}
 
-        # Initialize range detectors for each instrument
-        for instrument in self.instruments:
-            self.range_detectors[instrument] = RangeDetector()
+        # Initialize range detector for the instrument
+        self.range_detectors[self.instrument] = RangeDetector()
 
         # State tracking
         self.in_detection_period: dict[str, bool] = {}

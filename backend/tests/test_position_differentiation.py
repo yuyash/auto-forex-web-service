@@ -62,7 +62,7 @@ def strategy(db, account):
         strategy_type="test_strategy",
         is_active=True,
         config={},
-        instruments=["EUR_USD"],
+        instrument="EUR_USD",
     )
 
 
@@ -467,7 +467,7 @@ class TestPositionDifferentiationManager:
 
     def test_get_statistics(self, account, strategy):
         """Test getting position differentiation statistics."""
-        # Create positions in multiple instruments
+        # Create positions in single instrument
         Position.objects.create(
             account=account,
             strategy=strategy,
@@ -507,5 +507,5 @@ class TestPositionDifferentiationManager:
         assert stats["pattern"] == "increment"
         assert stats["total_open_positions"] == 3
         assert len(stats["positions_by_instrument"]) == 2
-        assert len(stats["instruments_with_collisions"]) == 1
-        assert stats["instruments_with_collisions"][0]["instrument"] == "EUR_USD"
+        assert len(stats["instrument_with_collisions"]) == 1
+        assert stats["instrument_with_collisions"][0]["instrument"] == "EUR_USD"

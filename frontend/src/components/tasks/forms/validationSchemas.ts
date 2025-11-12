@@ -15,7 +15,11 @@ export const configurationSchema = z.object({
 // Backtest task validation schema
 export const backtestTaskSchema = z
   .object({
-    config_id: z.number().positive('Configuration is required'),
+    config_id: z.coerce
+      .number({
+        message: 'Configuration must be a number',
+      })
+      .positive('Configuration is required'),
     name: z
       .string()
       .min(1, 'Name is required')
@@ -24,24 +28,18 @@ export const backtestTaskSchema = z
     data_source: z.nativeEnum(DataSource),
     start_time: z.string().min(1, 'Start date is required'),
     end_time: z.string().min(1, 'End date is required'),
-    initial_balance: z
-      .number()
-      .positive('Initial balance must be greater than zero')
-      .or(z.string().regex(/^\d+\.?\d*$/, 'Invalid balance format')),
-    commission_per_trade: z
-      .number()
+    initial_balance: z.coerce
+      .number({
+        message: 'Initial balance must be a number',
+      })
+      .positive('Initial balance must be greater than zero'),
+    commission_per_trade: z.coerce
+      .number({
+        message: 'Commission must be a number',
+      })
       .nonnegative('Commission cannot be negative')
-      .optional()
-      .or(
-        z
-          .string()
-          .regex(/^\d+\.?\d*$/, 'Invalid commission format')
-          .optional()
-      ),
-    instruments: z
-      .array(z.string())
-      .min(1, 'At least one instrument is required')
-      .max(20, 'Maximum 20 instruments allowed'),
+      .optional(),
+    instrument: z.string().min(1, 'Instrument is required'),
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
@@ -107,20 +105,20 @@ export const validateBalance = (
   return { isValid: true };
 };
 
-// Instruments validation helper
-export const validateInstruments = (
-  instruments: string[],
+// Instrument validation helper
+export const validateInstrument = (
+  instrument: string,
   min: number = 1,
   max?: number
 ): { isValid: boolean; error?: string } => {
-  if (instruments.length < min) {
+  if (instrument.length < min) {
     return {
       isValid: false,
       error: `At least ${min} instrument${min > 1 ? 's' : ''} required`,
     };
   }
 
-  if (max !== undefined && instruments.length > max) {
+  if (max !== undefined && instrument.length > max) {
     return {
       isValid: false,
       error: `Maximum ${max} instrument${max > 1 ? 's' : ''} allowed`,
@@ -132,6 +130,17 @@ export const validateInstruments = (
 
 // Export types inferred from schemas
 export type ConfigurationFormData = z.infer<typeof configurationSchema>;
-export type BacktestTaskFormData = z.infer<typeof backtestTaskSchema>;
+// Explicitly define the output type since z.coerce doesn't infer properly
+export type BacktestTaskSchemaOutput = {
+  config_id: number;
+  name: string;
+  description?: string;
+  data_source: DataSource;
+  start_time: string;
+  end_time: string;
+  initial_balance: number;
+  commission_per_trade?: number;
+  instrument: string;
+};
 export type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
 export type CopyTaskFormData = z.infer<typeof copyTaskSchema>;

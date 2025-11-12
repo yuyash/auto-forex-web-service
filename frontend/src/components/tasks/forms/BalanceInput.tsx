@@ -28,11 +28,15 @@ export const BalanceInput: React.FC<BalanceInputProps> = ({
   max,
   decimalPlaces = 2,
 }) => {
-  const [internalValue, setInternalValue] = React.useState(value.toString());
+  const [internalValue, setInternalValue] = React.useState(
+    value !== undefined && value !== null ? value.toString() : ''
+  );
 
   // Sync internal value with prop value
   React.useEffect(() => {
-    setInternalValue(value.toString());
+    setInternalValue(
+      value !== undefined && value !== null ? value.toString() : ''
+    );
   }, [value]);
 
   const validationError = React.useMemo(() => {

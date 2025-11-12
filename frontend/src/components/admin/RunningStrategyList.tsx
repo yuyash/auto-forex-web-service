@@ -142,21 +142,12 @@ const RunningStrategyList: React.FC<RunningStrategyListProps> = ({
       minWidth: 150,
     },
     {
-      id: 'instruments',
-      label: t('strategies.instruments'),
+      id: 'instrument',
+      label: t('strategies.instrument'),
       render: (row) => (
-        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-          {row.instruments.map((instrument: string) => (
-            <Chip
-              key={instrument}
-              label={instrument}
-              size="small"
-              variant="outlined"
-            />
-          ))}
-        </Box>
+        <Chip label={row.instrument} size="small" variant="outlined" />
       ),
-      minWidth: 200,
+      minWidth: 150,
     },
     {
       id: 'start_time',

@@ -214,7 +214,7 @@ class TickDataBuffer:
 def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
     self,  # pylint: disable=unused-argument
     account_id: int,
-    instruments: list[str],
+    instrument: str,
 ) -> Dict[str, Any]:
     # pylint: disable=too-many-locals,too-many-statements
     """
@@ -222,20 +222,20 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
 
     This task manages one stream per active OANDA account. It:
     - Initializes a MarketDataStreamer instance
-    - Starts streaming for specified instruments
+    - Starts streaming for specified instrument
     - Processes ticks and broadcasts to strategy executor
     - Stores ticks to database (if enabled in configuration)
     - Handles reconnection on failures
 
     Args:
         account_id: Primary key of the OandaAccount
-        instruments: List of currency pairs to stream (e.g., ['EUR_USD', 'GBP_USD'])
+        instrument: Currency pair to stream (e.g., ['EUR_USD', 'GBP_USD'])
 
     Returns:
         Dictionary containing:
             - success: Whether the stream was started successfully
             - account_id: OANDA account ID
-            - instruments: List of instruments being streamed
+            - instrument: List of instrument being streamed
             - error: Error message if stream failed to start
             - tick_storage_enabled: Whether tick storage is enabled
             - tick_storage_stats: Statistics about tick storage (if enabled)
@@ -254,7 +254,7 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
             return {
                 "success": False,
                 "account_id": None,
-                "instruments": [],
+                "instrument": [],
                 "error": error_msg,
             }
 
@@ -265,7 +265,7 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
             return {
                 "success": False,
                 "account_id": oanda_account.account_id,
-                "instruments": instruments,
+                "instrument": instrument,
                 "error": error_msg,
             }
 
@@ -279,7 +279,7 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
             return {
                 "success": True,
                 "account_id": oanda_account.account_id,
-                "instruments": instruments,
+                "instrument": instrument,
                 "error": None,
                 "message": "Stream already running",
             }
@@ -356,15 +356,15 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
         streamer.register_tick_callback(on_tick)
 
         # Start the stream
-        streamer.start_stream(instruments)
+        streamer.start_stream(instrument)
 
         # Mark stream as active in cache (expires after 1 hour)
         cache.set(cache_key, True, timeout=3600)
 
         logger.info(
-            "Successfully started market data stream for account %s with instruments: %s",
+            "Successfully started market data stream for account %s with instrument: %s",
             oanda_account.account_id,
-            ", ".join(instruments),
+            ", ".join(instrument),
         )
 
         # Process the stream (this will block until stream is stopped or fails)
@@ -410,7 +410,7 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
         return {
             "success": True,
             "account_id": oanda_account.account_id,
-            "instruments": instruments,
+            "instrument": instrument,
             "error": None,
             "tick_storage_enabled": tick_storage_enabled,
             "tick_storage_stats": tick_storage_stats,
@@ -440,7 +440,7 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
         return {
             "success": False,
             "account_id": account_id,
-            "instruments": instruments,
+            "instrument": instrument,
             "error": error_msg,
         }
 
@@ -652,10 +652,10 @@ def _load_historical_data(
     end_date: datetime,
 ) -> list:
     """
-    Load and combine historical data for all instruments.
+    Load and combine historical data for the instrument.
 
     Args:
-        config_dict: Configuration dictionary containing instruments
+        config_dict: Configuration dictionary containing instrument
         start_date: Start date for data loading
         end_date: End date for data loading
 
@@ -665,14 +665,14 @@ def _load_historical_data(
     from trading.historical_data_loader import HistoricalDataLoader
 
     logger.info(
-        "Loading historical data for instruments: %s",
-        config_dict["instruments"],
+        "Loading historical data for instrument: %s",
+        config_dict["instrument"],
     )
     data_loader = HistoricalDataLoader()
 
-    # Load data for all instruments and combine
+    # Load data for the instrument and combine
     tick_data = []
-    for instrument in config_dict["instruments"]:
+    for instrument in config_dict["instrument"]:
         instrument_data = data_loader.load_data(
             instrument=instrument,
             start_date=start_date,
@@ -712,7 +712,7 @@ def _create_backtest_config(
     return BacktestConfig(
         strategy_type=config_dict["strategy_type"],
         strategy_config=config_dict["strategy_config"],
-        instruments=config_dict["instruments"],
+        instrument=config_dict["instrument"],
         start_date=start_date,
         end_date=end_date,
         initial_balance=Decimal(str(config_dict["initial_balance"])),
@@ -995,7 +995,7 @@ def run_backtest_task(  # type: ignore[no-untyped-def]
         config_dict: Dictionary containing backtest configuration:
             - strategy_type: Type of strategy to backtest
             - strategy_config: Strategy configuration parameters
-            - instruments: List of currency pairs
+            - instrument: Currency pair
             - start_date: Start date (ISO format string)
             - end_date: End date (ISO format string)
             - initial_balance: Initial account balance
@@ -1172,8 +1172,8 @@ def _broadcast_to_strategy_executors(account: OandaAccount, tick: TickData) -> N
         # Process tick through each active strategy
         for strategy in active_strategies:
             try:
-                # Check if this instrument is in the strategy's instruments list
-                if tick.instrument not in strategy.instruments:
+                # Check if this instrument is in the strategy's instrument
+                if tick.instrument not in strategy.instrument:
                     continue
 
                 executor = StrategyExecutor(strategy)
@@ -1356,7 +1356,7 @@ def run_trading_task_v2(task_id: int) -> Dict[str, Any]:
             - task_id: TradingTask ID
             - execution_id: TaskExecution ID
             - account_id: OANDA account ID
-            - instruments: List of instruments to trade
+            - instrument: List of instrument to trade
             - error: Error message (if failed)
 
     Requirements: 4.2, 4.3, 4.4, 4.5, 7.2, 7.3
@@ -1378,15 +1378,15 @@ def run_trading_task_v2(task_id: int) -> Dict[str, Any]:
 
             # Start market data streaming for the account
             account_id = result.get("account_id")
-            instruments = result.get("instruments", [])
+            instrument = result.get("instrument", [])
 
-            if account_id and instruments:
+            if account_id and instrument:
                 # Trigger market data streaming
-                start_market_data_stream.delay(account_id, instruments)
+                start_market_data_stream.delay(account_id, instrument)
                 logger.info(
-                    "Started market data streaming for account %s with instruments: %s",
+                    "Started market data streaming for account %s with instrument: %s",
                     account_id,
-                    ", ".join(instruments),
+                    ", ".join(instrument),
                 )
         else:
             logger.error(

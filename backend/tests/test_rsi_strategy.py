@@ -223,7 +223,7 @@ class TestRSIStrategy:
                 "base_units": 1000,
                 "use_divergence": False,
             },
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             is_active=True,
         )
         return RSIStrategy(strategy)
@@ -303,7 +303,7 @@ class TestRSIStrategy:
                 "use_divergence": True,
                 "divergence_lookback": 5,
             },
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             is_active=True,
         )
         strategy_instance = RSIStrategy(strategy)
@@ -386,10 +386,10 @@ class TestRSIStrategy:
             strategy_instance.validate_config({"base_units": -100})
 
     def test_inactive_instrument_ignored(self, strategy_instance, oanda_account):
-        """Test that ticks for inactive instruments are ignored."""
+        """Test that ticks for inactive instrument are ignored."""
         tick = TickData(
             account=oanda_account,
-            instrument="GBP_USD",  # Not in strategy instruments
+            instrument="GBP_USD",  # Not in strategy instrument
             timestamp=timezone.now(),
             bid=Decimal("1.3000"),
             ask=Decimal("1.3002"),

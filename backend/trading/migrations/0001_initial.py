@@ -42,7 +42,7 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
-                    "instruments",
+                    "instrument",
                     models.JSONField(
                         default=list,
                         help_text="List of currency pairs to trade (e.g., ['EUR_USD', 'GBP_USD'])",

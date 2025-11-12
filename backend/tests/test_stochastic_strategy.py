@@ -226,7 +226,7 @@ class TestStochasticStrategy:
                 "base_units": 1000,
                 "use_crossover": True,
             },
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             is_active=True,
         )
         return StochasticStrategy(strategy)
@@ -399,10 +399,10 @@ class TestStochasticStrategy:
             strategy_instance.validate_config({"base_units": -100})
 
     def test_inactive_instrument_ignored(self, strategy_instance, oanda_account):
-        """Test that ticks for inactive instruments are ignored."""
+        """Test that ticks for inactive instrument are ignored."""
         tick = TickData(
             account=oanda_account,
-            instrument="GBP_USD",  # Not in strategy instruments
+            instrument="GBP_USD",  # Not in strategy instrument
             timestamp=timezone.now(),
             bid=Decimal("1.3000"),
             ask=Decimal("1.3002"),
@@ -451,7 +451,7 @@ class TestStochasticStrategy:
                 "base_units": 1000,
                 "use_crossover": False,
             },
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             is_active=True,
         )
         strategy_instance = StochasticStrategy(strategy)

@@ -271,9 +271,8 @@ class ADXStrategy(BaseStrategy):
         # ADX calculators for each instrument
         self.adx_calculators: dict[str, ADXCalculator] = {}
 
-        # Initialize calculators for each instrument
-        for instrument in self.instruments:
-            self.adx_calculators[instrument] = ADXCalculator(self.period)
+        # Initialize calculator for the instrument
+        self.adx_calculators[self.instrument] = ADXCalculator(self.period)
 
     def on_tick(self, tick_data: TickData) -> list[Order]:
         """

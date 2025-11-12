@@ -50,13 +50,13 @@ class TestStrategyModel:
                 "retracement_pips": 30,
                 "take_profit_pips": 25,
             },
-            instruments=["EUR_USD", "GBP_USD"],
+            instrument="EUR_USD",
         )
 
         assert strategy.strategy_type == "floor"
         assert strategy.config["lot_size"] == 1.0
         assert strategy.config["scaling_mode"] == "additive"
-        assert "EUR_USD" in strategy.instruments
+        assert "EUR_USD" in strategy.instrument
         assert strategy.is_active is False
 
     def test_strategy_start_stop(self) -> None:
@@ -78,7 +78,7 @@ class TestStrategyModel:
             account=account,
             strategy_type="floor",
             config={},
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
         )
 
         # Start strategy
@@ -111,7 +111,7 @@ class TestStrategyModel:
             account=account,
             strategy_type="floor",
             config={"lot_size": 1.0},
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
         )
 
         new_config = {"lot_size": 2.0, "scaling_mode": "multiplicative"}
@@ -145,7 +145,7 @@ class TestStrategyStateModel:
             account=account,
             strategy_type="floor",
             config={},
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
         )
 
         state = StrategyState.objects.create(
@@ -183,7 +183,7 @@ class TestStrategyStateModel:
             account=account,
             strategy_type="floor",
             config={},
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
         )
 
         state = StrategyState.objects.create(
@@ -217,7 +217,7 @@ class TestStrategyStateModel:
             account=account,
             strategy_type="floor",
             config={},
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
         )
 
         state = StrategyState.objects.create(

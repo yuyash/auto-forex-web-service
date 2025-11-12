@@ -258,9 +258,9 @@ const BacktestProgressBar = ({
           </Typography>
           <Typography variant="body2">
             <Typography component="span" color="text.secondary">
-              {t('backtest:progress.instruments', 'Instruments')}:{' '}
+              {t('backtest:progress.instrument', 'Instrument')}:{' '}
             </Typography>
-            {backtest.instruments.join(', ')}
+            {backtest.instrument}
           </Typography>
           <Typography variant="body2">
             <Typography component="span" color="text.secondary">

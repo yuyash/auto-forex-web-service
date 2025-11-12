@@ -123,11 +123,10 @@ class MeanReversionStrategy(BaseStrategy):
         # Components
         self.bb_calculators: dict[str, BollingerBandsCalculator] = {}
 
-        # Initialize components for each instrument
-        for instrument in self.instruments:
-            self.bb_calculators[instrument] = BollingerBandsCalculator(
-                self.bb_period, self.bb_std_dev
-            )
+        # Initialize component for the instrument
+        self.bb_calculators[self.instrument] = BollingerBandsCalculator(
+            self.bb_period, self.bb_std_dev
+        )
 
         # Track entry prices for stop-loss calculation
         self.entry_lower_bands: dict[str, Decimal] = {}

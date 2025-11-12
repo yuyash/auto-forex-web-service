@@ -297,9 +297,8 @@ class TrendFollowingStrategy(BaseStrategy):
         self.trend_detectors: dict[str, TrendDetector] = {}
         self.trailing_stops = TrailingStopLoss(atr_multiplier=self.atr_multiplier)
 
-        # Initialize trend detectors for each instrument
-        for instrument in self.instruments:
-            self.trend_detectors[instrument] = TrendDetector(self.fast_period, self.slow_period)
+        # Initialize trend detector for the instrument
+        self.trend_detectors[self.instrument] = TrendDetector(self.fast_period, self.slow_period)
 
         # Load state
         self._load_state()

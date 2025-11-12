@@ -9,7 +9,14 @@ import type {
 
 // Simple in-memory cache with timestamps
 const cache = new Map<string, { data: unknown; timestamp: number }>();
-const CACHE_DURATION = 30000; // 30 seconds
+const CACHE_DURATION = 60000; // 60 seconds (increased from 30)
+
+// Cache errors to prevent retry storms
+const errorCache = new Map<string, { error: Error; timestamp: number }>();
+const ERROR_CACHE_DURATION = 30000; // 30 seconds - don't retry failed requests for this long
+
+// Track in-flight requests to prevent duplicate API calls
+const inflightRequests = new Map<string, Promise<unknown>>();
 
 function getCachedData<T>(key: string): T | null {
   const cached = cache.get(key);
@@ -21,6 +28,30 @@ function getCachedData<T>(key: string): T | null {
 
 function setCachedData(key: string, data: unknown): void {
   cache.set(key, { data, timestamp: Date.now() });
+}
+
+function getCachedError(key: string): Error | null {
+  const cached = errorCache.get(key);
+  if (cached && Date.now() - cached.timestamp < ERROR_CACHE_DURATION) {
+    return cached.error;
+  }
+  return null;
+}
+
+function setCachedError(key: string, error: Error): void {
+  errorCache.set(key, { error, timestamp: Date.now() });
+}
+
+function getInflightRequest<T>(key: string): Promise<T> | null {
+  return inflightRequests.get(key) as Promise<T> | null;
+}
+
+function setInflightRequest(key: string, promise: Promise<unknown>): void {
+  inflightRequests.set(key, promise);
+  // Clean up after request completes
+  promise.finally(() => {
+    inflightRequests.delete(key);
+  });
 }
 
 interface UseTradingTasksResult {
@@ -45,18 +76,56 @@ export function useTradingTasks(
   const paramsKey = JSON.stringify(params || {});
 
   const fetchData = useCallback(async () => {
-    // Cancel any pending request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    // Skip if params is explicitly undefined
+    if (params === undefined) {
+      setData(null);
+      setIsLoading(false);
+      return;
     }
 
     const cacheKey = paramsKey;
-    const cachedData = getCachedData<PaginatedResponse<TradingTask>>(cacheKey);
 
+    // Check cache first
+    const cachedData = getCachedData<PaginatedResponse<TradingTask>>(cacheKey);
     if (cachedData) {
       setData(cachedData);
       setIsLoading(false);
+      setError(null);
       return;
+    }
+
+    // Check if there's a cached error - don't retry immediately
+    const cachedError = getCachedError(cacheKey);
+    if (cachedError) {
+      setError(cachedError);
+      setIsLoading(false);
+      return;
+    }
+
+    // Check if there's already a request in flight for this key
+    const inflightRequest =
+      getInflightRequest<PaginatedResponse<TradingTask>>(cacheKey);
+    if (inflightRequest) {
+      try {
+        const result = await inflightRequest;
+        setData(result);
+        setIsLoading(false);
+        setError(null);
+        return;
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          const error = err as Error;
+          setError(error);
+          setCachedError(cacheKey, error);
+        }
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    // Cancel any pending request from this component
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
 
     try {
@@ -64,12 +133,18 @@ export function useTradingTasks(
       setError(null);
       abortControllerRef.current = new AbortController();
 
-      const result = await tradingTasksApi.list(params);
+      // Create and track the request promise
+      const requestPromise = tradingTasksApi.list(params);
+      setInflightRequest(cacheKey, requestPromise);
+
+      const result = await requestPromise;
       setData(result);
       setCachedData(cacheKey, result);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        setError(err as Error);
+        const error = err as Error;
+        setError(error);
+        setCachedError(cacheKey, error);
       }
     } finally {
       setIsLoading(false);
@@ -105,12 +180,21 @@ interface UseTradingTaskResult {
 /**
  * Hook to fetch a single trading task
  */
-export function useTradingTask(id: number): UseTradingTaskResult {
+export function useTradingTask(
+  id?: number,
+  options?: { enabled?: boolean }
+): UseTradingTaskResult {
   const [data, setData] = useState<TradingTask | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchData = useCallback(async () => {
+    // Skip fetching if no valid ID or disabled
+    if (!id || id === 0 || options?.enabled === false) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
@@ -121,7 +205,7 @@ export function useTradingTask(id: number): UseTradingTaskResult {
     } finally {
       setIsLoading(false);
     }
-  }, [id]);
+  }, [id, options?.enabled]);
 
   useEffect(() => {
     fetchData();

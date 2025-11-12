@@ -10,13 +10,13 @@ export const queryClient = new QueryClient({
       // Cache time: how long inactive data stays in cache
       gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
 
-      // Retry configuration
-      retry: 1, // Retry failed requests once
+      // Retry configuration - disabled to prevent 429 errors when server is down
+      retry: false, // Don't retry failed requests
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
 
       // Refetch configuration
       refetchOnWindowFocus: false, // Don't refetch on window focus by default
-      refetchOnReconnect: true, // Refetch when reconnecting
+      refetchOnReconnect: false, // Don't refetch when reconnecting to prevent 429
       refetchOnMount: true, // Refetch on component mount
 
       // Background refetching

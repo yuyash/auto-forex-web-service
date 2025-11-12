@@ -193,7 +193,7 @@ class TestBreakoutStrategy:
             account=account,
             strategy_type="breakout",
             config=config,
-            instruments=["EUR_USD"],
+            instrument="EUR_USD",
             is_active=True,
         )
 

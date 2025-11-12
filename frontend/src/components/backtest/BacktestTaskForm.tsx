@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import {
   Box,
@@ -13,14 +13,17 @@ import {
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { DateRangePicker } from '../tasks/forms/DateRangePicker';
 import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
 import { DataSourceSelector } from '../tasks/forms/DataSourceSelector';
-import { backtestTaskSchema } from '../tasks/forms/validationSchemas';
+import {
+  backtestTaskSchema,
+  type BacktestTaskSchemaOutput,
+} from '../tasks/forms/validationSchemas';
 import { type BacktestTaskCreateData } from '../../types/backtestTask';
 import { DataSource } from '../../types/common';
 import {
@@ -31,12 +34,124 @@ import {
   useConfiguration,
   useConfigurations,
 } from '../../hooks/useConfigurations';
+import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 
 const steps = ['Configuration', 'Parameters', 'Review'];
 
 interface BacktestTaskFormProps {
   taskId?: number;
-  initialData?: Partial<BacktestTaskCreateData>;
+  initialData?: Partial<BacktestTaskSchemaOutput>;
+}
+
+// Separate component to avoid infinite loop with watch()
+interface ReviewContentProps {
+  selectedConfig: { name: string; id: number; description?: string };
+  formValues: {
+    config_id: number;
+    name: string;
+    description?: string;
+    data_source: DataSource;
+    start_time: string;
+    end_time: string;
+    initial_balance: number;
+    commission_per_trade: number;
+    instrument: string;
+  };
+}
+
+function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
+  const {
+    name,
+    description,
+    data_source,
+    start_time,
+    end_time,
+    initial_balance,
+    commission_per_trade,
+    instrument,
+  } = formValues;
+
+  return (
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 12 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          Task Name
+        </Typography>
+        <Typography variant="body1">{name}</Typography>
+      </Grid>
+
+      {description && (
+        <Grid size={{ xs: 12 }}>
+          <Typography variant="subtitle2" color="text.secondary">
+            Description
+          </Typography>
+          <Typography variant="body1">{description}</Typography>
+        </Grid>
+      )}
+
+      <Grid size={{ xs: 12 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          Configuration
+        </Typography>
+        <Typography variant="body1">{selectedConfig.name}</Typography>
+        {selectedConfig.description && (
+          <Typography variant="body2" color="text.secondary">
+            {selectedConfig.description}
+          </Typography>
+        )}
+      </Grid>
+
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          Data Source
+        </Typography>
+        <Typography variant="body1">
+          {data_source === DataSource.POSTGRESQL ? 'PostgreSQL' : 'AWS Athena'}
+        </Typography>
+      </Grid>
+
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          Date Range
+        </Typography>
+        <Typography variant="body1">
+          {new Date(start_time).toLocaleDateString()} -{' '}
+          {new Date(end_time).toLocaleDateString()}
+        </Typography>
+      </Grid>
+
+      <Grid size={{ xs: 12 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          Instrument
+        </Typography>
+        <Typography variant="body1">{instrument}</Typography>
+      </Grid>
+
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          Initial Balance
+        </Typography>
+        <Typography variant="body1">
+          {new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+          }).format(Number(initial_balance))}
+        </Typography>
+      </Grid>
+
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          Commission Per Trade
+        </Typography>
+        <Typography variant="body1">
+          {new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+          }).format(Number(commission_per_trade))}
+        </Typography>
+      </Grid>
+    </Grid>
+  );
 }
 
 export default function BacktestTaskForm({
@@ -45,6 +160,10 @@ export default function BacktestTaskForm({
 }: BacktestTaskFormProps) {
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
+  const [formData, setFormData] = useState<Partial<BacktestTaskSchemaOutput>>(
+    initialData || {}
+  );
+  const canSubmitRef = useRef(false); // Flag to prevent auto-submission
   const createTask = useCreateBacktestTask();
   const updateTask = useUpdateBacktestTask();
 
@@ -52,10 +171,17 @@ export default function BacktestTaskForm({
     control,
     handleSubmit,
     watch,
+    getValues,
+    setValue,
     formState: { errors },
     trigger,
-  } = useForm<BacktestTaskCreateData>({
-    resolver: zodResolver(backtestTaskSchema),
+  } = useForm<BacktestTaskSchemaOutput>({
+    resolver: zodResolver(
+      backtestTaskSchema
+    ) as Resolver<BacktestTaskSchemaOutput>,
+    mode: 'onChange',
+    reValidateMode: 'onChange',
+    shouldUnregister: false,
     defaultValues: initialData || {
       config_id: 0,
       name: '',
@@ -65,27 +191,48 @@ export default function BacktestTaskForm({
       end_time: '',
       initial_balance: 10000,
       commission_per_trade: 0,
-      instruments: [],
+      instrument: 'USD_JPY',
     },
   });
 
   const selectedConfigId = watch('config_id');
 
+  // Sync saved formData back into React Hook Form when changing steps
+  // This ensures form values persist when navigating between steps
+  useEffect(() => {
+    if (Object.keys(formData).length > 0) {
+      // Manually set each field value to restore saved state
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value !== undefined) {
+          setValue(key as keyof BacktestTaskSchemaOutput, value, {
+            shouldValidate: false,
+          });
+        }
+      });
+    }
+  }, [formData, setValue]); // Removed activeStep dependency so it runs on initial render too
+
   // Fetch all configurations
   const { data: configurationsData } = useConfigurations({ page_size: 100 });
   const configurations = configurationsData?.results || [];
 
-  const parsedSelectedConfigId = Number(selectedConfigId);
-  const effectiveConfigId =
-    Number.isFinite(parsedSelectedConfigId) && parsedSelectedConfigId > 0
-      ? parsedSelectedConfigId
-      : null;
+  // Convert config_id to number for the API call
+  const configIdNumber =
+    typeof selectedConfigId === 'string'
+      ? selectedConfigId === ''
+        ? 0
+        : Number(selectedConfigId)
+      : selectedConfigId || 0;
 
-  const { data: selectedConfig } = useConfiguration(effectiveConfigId);
+  const { data: selectedConfig } = useConfiguration(configIdNumber);
 
   const handleNext = async () => {
+    // Save current form values to state BEFORE validation
+    const currentValues = getValues();
+    setFormData((prev) => ({ ...prev, ...currentValues }));
+
     // Validate current step before proceeding
-    let fieldsToValidate: (keyof BacktestTaskCreateData)[] = [];
+    let fieldsToValidate: (keyof BacktestTaskSchemaOutput)[] = [];
 
     switch (activeStep) {
       case 0: // Configuration step
@@ -97,32 +244,110 @@ export default function BacktestTaskForm({
           'start_time',
           'end_time',
           'initial_balance',
-          'instruments',
+          'instrument',
         ];
+        break;
+      default:
+        // No validation needed for review step
         break;
     }
 
-    const isValid = await trigger(fieldsToValidate);
+    // Only validate if we have fields to validate
+    if (fieldsToValidate.length > 0) {
+      const isValid = await trigger(fieldsToValidate);
 
-    if (isValid) {
-      setActiveStep((prevActiveStep) => prevActiveStep + 1);
+      if (!isValid) {
+        // Validation failed, don't proceed
+        return;
+      }
     }
+
+    // Validation passed or no validation needed, proceed to next step
+    canSubmitRef.current = false; // Reset submit flag when navigating
+    setActiveStep((prevActiveStep) => prevActiveStep + 1);
   };
 
   const handleBack = () => {
+    // Save current form values to state before going back
+    const currentValues = getValues();
+    setFormData((prev) => ({ ...prev, ...currentValues }));
+
+    canSubmitRef.current = false; // Reset submit flag when navigating
     setActiveStep((prevActiveStep) => prevActiveStep - 1);
   };
 
-  const onSubmit = async (data: BacktestTaskCreateData) => {
+  const onSubmit = async (data: BacktestTaskSchemaOutput) => {
+    // Prevent auto-submission - only allow explicit user submission
+    if (!canSubmitRef.current) {
+      return;
+    }
+
+    // Merge the saved formData with the current form data to ensure we have all values
+    const completeData = { ...formData, ...data } as BacktestTaskSchemaOutput;
+
+    // Zod has already validated and converted types, so we can use the data directly
+    const apiData: BacktestTaskCreateData = {
+      config_id: completeData.config_id,
+      name: completeData.name,
+      description: completeData.description,
+      data_source: completeData.data_source,
+      start_time: completeData.start_time,
+      end_time: completeData.end_time,
+      initial_balance: completeData.initial_balance,
+      commission_per_trade: completeData.commission_per_trade,
+      instrument: completeData.instrument,
+    };
+
     try {
       if (taskId) {
-        await updateTask.mutate({ id: taskId, data });
+        await updateTask.mutate({ id: taskId, data: apiData });
       } else {
-        await createTask.mutate(data);
+        await createTask.mutate(apiData);
       }
+
+      // Invalidate cache so the task list refreshes
+      invalidateBacktestTasksCache();
+
       navigate('/backtest-tasks');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to save task:', error);
+      const err = error as {
+        data?: Record<string, string | string[]>;
+        message?: string;
+      };
+
+      // Extract backend validation errors if available
+      let errorMessage = 'Failed to create task';
+      if (err?.data) {
+        const backendErrors = err.data;
+        const errorMessages: string[] = [];
+
+        // Map backend field names to frontend field names
+        const fieldMapping: Record<string, string> = {
+          config: 'Configuration',
+          name: 'Task Name',
+          start_time: 'Start Date',
+          end_time: 'End Date',
+          initial_balance: 'Initial Balance',
+          instrument: 'Instrument',
+        };
+
+        Object.entries(backendErrors).forEach(([field, messages]) => {
+          const fieldName = fieldMapping[field] || field;
+          const fieldErrors = Array.isArray(messages) ? messages : [messages];
+          fieldErrors.forEach((msg: string) => {
+            errorMessages.push(`${fieldName}: ${msg}`);
+          });
+        });
+
+        if (errorMessages.length > 0) {
+          errorMessage = errorMessages.join('\n');
+        }
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+
+      alert(errorMessage);
     }
   };
 
@@ -146,7 +371,7 @@ export default function BacktestTaskForm({
                   render={({ field }) => (
                     <ConfigurationSelector
                       configurations={configurations}
-                      value={field.value}
+                      value={field.value as number | string | undefined}
                       onChange={field.onChange}
                       error={errors.config_id?.message}
                       helperText={errors.config_id?.message}
@@ -217,7 +442,7 @@ export default function BacktestTaskForm({
               Backtest Parameters
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Configure the backtest time range, instruments, and initial
+              Configure the backtest time range, instrument, and initial
               settings
             </Typography>
 
@@ -261,14 +486,14 @@ export default function BacktestTaskForm({
 
               <Grid size={{ xs: 12 }}>
                 <Controller
-                  name="instruments"
+                  name="instrument"
                   control={control}
                   render={({ field }) => (
                     <InstrumentSelector
                       value={field.value}
                       onChange={field.onChange}
-                      error={errors.instruments?.message}
-                      helperText={errors.instruments?.message as string}
+                      error={errors.instrument?.message}
+                      helperText={errors.instrument?.message as string}
                     />
                   )}
                 />
@@ -283,6 +508,7 @@ export default function BacktestTaskForm({
                       value={field.value}
                       onChange={field.onChange}
                       label="Initial Balance"
+                      currency="USD"
                       error={errors.initial_balance?.message}
                       helperText={errors.initial_balance?.message}
                     />
@@ -312,17 +538,31 @@ export default function BacktestTaskForm({
         );
 
       case 2: {
-        // Get form data for review step - extract values outside of render
-        // eslint-disable-next-line react-hooks/incompatible-library
-        const configId = watch('config_id');
-        const name = watch('name');
-        const description = watch('description');
-        const dataSource = watch('data_source');
-        const startTime = watch('start_time');
-        const endTime = watch('end_time');
-        const initialBalance = watch('initial_balance');
-        const commissionPerTrade = watch('commission_per_trade');
-        const instruments = watch('instruments');
+        // Use the saved formData state which contains all values from all steps
+        const formValues = {
+          config_id: formData.config_id as number,
+          name: formData.name as string,
+          description: formData.description,
+          data_source: formData.data_source as DataSource,
+          start_time: formData.start_time as string,
+          end_time: formData.end_time as string,
+          initial_balance: formData.initial_balance as number,
+          commission_per_trade: formData.commission_per_trade as number,
+          instrument: formData.instrument as string,
+        };
+
+        // Field name mapping for user-friendly error messages
+        const fieldNameMapping: Record<string, string> = {
+          config_id: 'Configuration',
+          name: 'Task Name',
+          description: 'Description',
+          data_source: 'Data Source',
+          start_time: 'Start Date',
+          end_time: 'End Date',
+          initial_balance: 'Initial Balance',
+          commission_per_trade: 'Commission Per Trade',
+          instrument: 'Instrument',
+        };
 
         return (
           <Box>
@@ -333,81 +573,51 @@ export default function BacktestTaskForm({
               Review your backtest task configuration before submitting
             </Typography>
 
-            <Paper sx={{ p: 3 }}>
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 12 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Task Name
-                  </Typography>
-                  <Typography variant="body1">{name}</Typography>
-                </Grid>
+            {/* Show validation errors on review step */}
+            {Object.keys(errors).length > 0 && (
+              <Alert severity="error" sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Please fix the following errors before submitting:
+                </Typography>
+                {Object.entries(errors).map(([field, error]) => {
+                  const errorObj = error as { message?: string };
+                  const errorMessage =
+                    typeof error === 'object' && error !== null
+                      ? errorObj.message || JSON.stringify(error)
+                      : String(error);
 
-                {description && (
-                  <Grid size={{ xs: 12 }}>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Description
+                  // Use friendly field name from mapping
+                  const friendlyFieldName =
+                    fieldNameMapping[field] ||
+                    field
+                      .replace(/_/g, ' ')
+                      .replace(/\b\w/g, (l) => l.toUpperCase());
+
+                  return (
+                    <Typography key={field} variant="body2">
+                      • <strong>{friendlyFieldName}:</strong> {errorMessage}
                     </Typography>
-                    <Typography variant="body1">{description}</Typography>
-                  </Grid>
-                )}
+                  );
+                })}
+                <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                  Click "Back" to return to previous steps and correct these
+                  errors.
+                </Typography>
+              </Alert>
+            )}
 
-                <Grid size={{ xs: 12 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Configuration
-                  </Typography>
-                  <Typography variant="body1">
-                    {selectedConfig?.name || `ID: ${configId}`}
-                  </Typography>
-                </Grid>
-
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Data Source
-                  </Typography>
-                  <Typography variant="body1">
-                    {dataSource === DataSource.POSTGRESQL
-                      ? 'PostgreSQL'
-                      : 'AWS Athena'}
-                  </Typography>
-                </Grid>
-
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Date Range
-                  </Typography>
-                  <Typography variant="body1">
-                    {new Date(startTime).toLocaleDateString()} -{' '}
-                    {new Date(endTime).toLocaleDateString()}
-                  </Typography>
-                </Grid>
-
-                <Grid size={{ xs: 12 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Instruments
-                  </Typography>
-                  <Typography variant="body1">
-                    {instruments.join(', ')}
-                  </Typography>
-                </Grid>
-
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Initial Balance
-                  </Typography>
-                  <Typography variant="body1">
-                    ${Number(initialBalance).toLocaleString()}
-                  </Typography>
-                </Grid>
-
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Commission Per Trade
-                  </Typography>
-                  <Typography variant="body1">
-                    ${Number(commissionPerTrade).toFixed(2)}
-                  </Typography>
-                </Grid>
-              </Grid>
+            <Paper sx={{ p: 3 }}>
+              {selectedConfig ? (
+                <ReviewContent
+                  selectedConfig={selectedConfig}
+                  formValues={formValues}
+                />
+              ) : (
+                <Alert severity="error">
+                  Configuration not found. Please go back and select a valid
+                  configuration.
+                </Alert>
+              )}
             </Paper>
           </Box>
         );
@@ -453,6 +663,9 @@ export default function BacktestTaskForm({
                 type="submit"
                 variant="contained"
                 disabled={createTask.isLoading || updateTask.isLoading}
+                onClick={() => {
+                  canSubmitRef.current = true;
+                }}
               >
                 {taskId ? 'Update Task' : 'Create Task'}
               </Button>

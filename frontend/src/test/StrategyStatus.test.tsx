@@ -10,7 +10,7 @@ const mockInactiveStatus: StrategyStatusType = {
   is_active: false,
   strategy_type: null,
   config: null,
-  instruments: [],
+  instrument: [],
   state: null,
   created_at: null,
   updated_at: null,
@@ -23,7 +23,7 @@ const mockActiveStatus: StrategyStatusType = {
     base_lot_size: 1.0,
     scaling_mode: 'additive',
   },
-  instruments: ['EUR_USD', 'GBP_USD'],
+  instrument: 'EUR_USD',
   state: {
     status: 'trading',
     positions_count: 3,

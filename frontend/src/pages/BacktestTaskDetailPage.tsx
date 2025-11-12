@@ -18,7 +18,10 @@ import {
   ArrowBack as ArrowBackIcon,
   MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
-import { useBacktestTask } from '../hooks/useBacktestTasks';
+import {
+  useBacktestTask,
+  invalidateBacktestTasksCache,
+} from '../hooks/useBacktestTasks';
 import {
   useStartBacktestTask,
   useStopBacktestTask,
@@ -130,6 +133,7 @@ export default function BacktestTaskDetailPage() {
         id: taskId,
         data: { new_name: newName },
       });
+      invalidateBacktestTasksCache(); // Refresh task list
       navigate(`/backtest-tasks/${newTask.id}`);
     } catch {
       // Error handled by mutation hook
@@ -144,6 +148,7 @@ export default function BacktestTaskDetailPage() {
   const handleDeleteConfirm = async () => {
     try {
       await deleteTask.mutate(taskId);
+      invalidateBacktestTasksCache(); // Refresh task list
       navigate('/backtest-tasks');
     } catch {
       // Error handled by mutation hook

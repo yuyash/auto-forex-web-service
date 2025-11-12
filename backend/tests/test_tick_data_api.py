@@ -358,14 +358,14 @@ class TestTickDataCSVExport:
         # Should have fewer rows due to date filter
         assert len(lines) <= 11  # header + filtered data
 
-    def test_csv_export_all_instruments(self, api_client, test_user, sample_tick_data):
+    def test_csv_export_all_instrument(self, api_client, test_user, sample_tick_data):
         """Test CSV export without instrument filter."""
         api_client.force_authenticate(user=test_user)
         url = reverse("trading:tick_data_list")
         response = api_client.get(url, {"export": "csv"})
 
         assert response.status_code == status.HTTP_200_OK
-        assert "tick_data_all_instruments" in response["Content-Disposition"]
+        assert "tick_data_all_instrument" in response["Content-Disposition"]
 
         # Parse CSV content
         content = b"".join(response.streaming_content).decode("utf-8")

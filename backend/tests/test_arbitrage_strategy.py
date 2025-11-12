@@ -67,7 +67,7 @@ def strategy_instance(oanda_account, strategy_config):
         account=oanda_account,
         strategy_type="arbitrage",
         config=strategy_config,
-        instruments=["EUR_USD", "GBP_USD"],
+        instrument="EUR_USD",
         is_active=True,
     )
     return ArbitrageStrategy(strategy)
@@ -228,7 +228,7 @@ class TestArbitrageStrategy:
 
     def test_on_tick_inactive_instrument(self, strategy_instance, tick_data):
         """Test on_tick with inactive instrument."""
-        tick_data.instrument = "USD_JPY"  # Not in strategy instruments
+        tick_data.instrument = "USD_JPY"  # Not in strategy instrument
         orders = strategy_instance.on_tick(tick_data)
         assert orders == []
 

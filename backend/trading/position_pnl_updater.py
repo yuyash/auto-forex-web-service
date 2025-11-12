@@ -28,7 +28,7 @@ class PositionPnLUpdater:
     - Fetches all open positions for active accounts
     - Calculates P&L based on current market prices
     - Batch updates positions in database
-    - Handles multiple currency pairs efficiently
+    - Handles multiple currency pair efficiently
 
     Requirements: 9.1, 9.4
     """

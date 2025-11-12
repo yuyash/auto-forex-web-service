@@ -45,6 +45,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "end_time",
             "initial_balance",
             "commission_per_trade",
+            "instrument",
             "status",
             "latest_execution",
             "created_at",
@@ -103,6 +104,7 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
             "start_time",
             "end_time",
             "initial_balance",
+            "instrument",
             "status",
             "created_at",
             "updated_at",
@@ -130,6 +132,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "end_time",
             "initial_balance",
             "commission_per_trade",
+            "instrument",
         ]
 
     def validate_config(self, value: StrategyConfig) -> StrategyConfig:

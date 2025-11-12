@@ -93,7 +93,7 @@ def strategy(oanda_account, strategy_config):
         strategy_type="mock",
         is_active=True,
         config=strategy_config,
-        instruments=["EUR_USD", "GBP_USD"],
+        instrument="EUR_USD",
     )
 
 
@@ -184,7 +184,7 @@ class TestTickProcessing:
         self, strategy, strategy_state, tick_data, mock_strategy_registered
     ):
         """Test tick processing with instrument not in strategy's list."""
-        tick_data.instrument = "USD_JPY"  # Not in strategy.instruments
+        tick_data.instrument = "USD_JPY"  # Not in strategy.instrument
 
         executor = StrategyExecutor(strategy)
         orders = executor.process_tick(tick_data)
@@ -482,7 +482,7 @@ class TestExecutorControl:
         assert status["strategy_type"] == "mock"
         assert status["account_id"] == strategy.account.account_id
         assert status["is_active"] is True
-        assert status["instruments"] == ["EUR_USD", "GBP_USD"]
+        assert status["instrument"] == "EUR_USD"
         assert "state" in status
 
     def test_get_status_with_started_at(self, strategy, strategy_state, mock_strategy_registered):

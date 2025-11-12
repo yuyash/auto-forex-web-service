@@ -53,7 +53,7 @@ def strategy(oanda_account):
         account=oanda_account,
         strategy_type="floor",
         config={"lot_size": 1000},
-        instruments=["EUR_USD"],
+        instrument="EUR_USD",
     )
 
 
@@ -361,21 +361,21 @@ class TestATRCalculator:
         assert instrument in strategy_state.atr_values
         assert Decimal(strategy_state.atr_values[instrument]) == atr_value
 
-    def test_strategy_state_update_multiple_instruments(self, strategy_state):
-        """Test updating ATR values for multiple instruments."""
-        instruments_atr = {
+    def test_strategy_state_update_instrument(self, strategy_state):
+        """Test updating ATR values for single instrument."""
+        instrument_atr = {
             "EUR_USD": Decimal("0.0025"),
             "GBP_USD": Decimal("0.0030"),
             "USD_JPY": Decimal("0.0020"),
         }
 
-        for instrument, atr_value in instruments_atr.items():
+        for instrument, atr_value in instrument_atr.items():
             strategy_state.update_atr(instrument, atr_value)
 
         # Refresh from database
         strategy_state.refresh_from_db()
 
-        for instrument, expected_atr in instruments_atr.items():
+        for instrument, expected_atr in instrument_atr.items():
             assert instrument in strategy_state.atr_values
             assert Decimal(strategy_state.atr_values[instrument]) == expected_atr
 

@@ -45,7 +45,7 @@
     "startTime": "Start Time",
     "positions": "Positions",
     "unrealizedPnL": "Unrealized P&L",
-    "instruments": "Instruments",
+    "instrument": "Instrument",
     "stop": "Stop",
     "noStrategies": "No strategies running",
     "confirmStopTitle": "Confirm Stop Strategy",

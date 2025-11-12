@@ -68,7 +68,9 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
   };
 
   // Count parameters
-  const parameterCount = Object.keys(configuration.parameters).length;
+  const parameterCount = configuration.parameters
+    ? Object.keys(configuration.parameters).length
+    : 0;
 
   return (
     <>

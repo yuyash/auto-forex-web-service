@@ -57,7 +57,7 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
                     "config": {...}
                 }
             ],
-            "instruments": ["EUR_USD", "GBP_USD"],
+            "instrument": "EUR_USD",
             "start_date": "2024-01-01T00:00:00Z",
             "end_date": "2024-12-31T23:59:59Z",
             "initial_balance": 10000,
@@ -74,7 +74,7 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
     ) -> tuple[Response | None, dict | None]:
         """Validate request data and return error response if invalid."""
         strategy_configs = request_data.get("strategy_configs", [])
-        instruments = request_data.get("instruments", [])
+        instrument = request_data.get("instrument", [])
         start_date_str = request_data.get("start_date")
         end_date_str = request_data.get("end_date")
 
@@ -96,10 +96,10 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
                 None,
             )
 
-        if not instruments:
+        if not instrument:
             return (
                 Response(
-                    {"error": "instruments is required"},
+                    {"error": "instrument is required"},
                     status=status.HTTP_400_BAD_REQUEST,
                 ),
                 None,
@@ -148,7 +148,7 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
 
         return None, {
             "strategy_configs": strategy_configs,
-            "instruments": instruments,
+            "instrument": instrument,
             "start_date": start_date,
             "end_date": end_date,
             "initial_balance": request_data.get("initial_balance", 10000),
@@ -179,7 +179,7 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
 
         assert validated_data is not None
         strategy_configs = validated_data["strategy_configs"]
-        instruments = validated_data["instruments"]
+        instrument = validated_data["instrument"]
         start_date = validated_data["start_date"]
         end_date = validated_data["end_date"]
         initial_balance = validated_data["initial_balance"]
@@ -189,7 +189,7 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
         comparison = StrategyComparison.objects.create(  # pylint: disable=no-member
             user=request.user,
             strategy_configs=strategy_configs,
-            instruments=instruments,
+            instrument=instrument,
             start_date=start_date,
             end_date=end_date,
             initial_balance=Decimal(str(initial_balance)),
@@ -206,7 +206,7 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
             data_loader = HistoricalDataLoader()
             # Load data for the first instrument (simplified for now)
             tick_data = data_loader.load_data(
-                instrument=instruments[0],
+                instrument=instrument[0],
                 start_date=start_date,
                 end_date=end_date,
             )
@@ -217,7 +217,7 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
             # Create comparison config
             comparison_config = StrategyComparisonConfig(
                 strategy_configs=strategy_configs,
-                instruments=instruments,
+                instrument=instrument,
                 start_date=start_date,
                 end_date=end_date,
                 initial_balance=Decimal(str(initial_balance)),
@@ -348,7 +348,7 @@ class StrategyCompareResultsView(APIView):
                 "id": comparison.id,
                 "status": comparison.status,
                 "strategy_configs": comparison.strategy_configs,
-                "instruments": comparison.instruments,
+                "instrument": comparison.instrument,
                 "start_date": comparison.start_date.isoformat(),
                 "end_date": comparison.end_date.isoformat(),
                 "initial_balance": float(comparison.initial_balance),

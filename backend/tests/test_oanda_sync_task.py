@@ -49,7 +49,7 @@ def mock_strategy(db, mock_oanda_account):
         strategy_type="test_strategy",
         is_active=True,
         config={"lot_size": 1000},
-        instruments=["EUR_USD"],
+        instrument="EUR_USD",
     )
     return strategy
 

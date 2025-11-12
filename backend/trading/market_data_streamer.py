@@ -186,7 +186,7 @@ class MarketDataStreamer:
         self.api_context: Optional[v20.Context] = None
         self.stream: Optional[Any] = None
         self.is_connected = False
-        self.instruments: List[str] = []
+        self.instrument: str | None = None
         self.tick_callback: Optional[Callable[[TickData], None]] = None
         self.reconnection_manager = ReconnectionManager(max_attempts=5)
 
@@ -223,12 +223,12 @@ class MarketDataStreamer:
             self.account.api_type,
         )
 
-    def start_stream(self, instruments: List[str]) -> None:
+    def start_stream(self, instrument: str) -> None:
         """
-        Start streaming market data for specified instruments.
+        Start streaming market data for specified instrument.
 
         Args:
-            instruments: List of currency pairs (e.g., ['EUR_USD', 'GBP_USD'])
+            instrument: Currency pair (e.g., 'EUR_USD')
 
         Raises:
             RuntimeError: If connection is not initialized
@@ -237,15 +237,15 @@ class MarketDataStreamer:
         if not self.api_context:
             raise RuntimeError("Connection not initialized. Call initialize_connection() first.")
 
-        if not instruments:
-            raise ValueError("At least one instrument is required")
+        if not instrument:
+            raise ValueError("Instrument is required")
 
-        self.instruments = instruments
+        self.instrument = instrument
 
         try:
             # Create pricing stream
             response = self.api_context.pricing.stream(
-                accountID=self.account.account_id, instruments=",".join(instruments), snapshot=True
+                accountID=self.account.account_id, instrument=instrument, snapshot=True
             )
 
             self.stream = response
@@ -254,9 +254,9 @@ class MarketDataStreamer:
             self.reconnection_manager.reset()
 
             logger.info(
-                "Started market data stream for account %s, instruments: %s",
+                "Started market data stream for account %s, instrument: %s",
                 self.account.account_id,
-                ", ".join(instruments),
+                instrument,
             )
 
             # Broadcast connection status
@@ -524,8 +524,8 @@ class MarketDataStreamer:
         Returns:
             True if reconnection was successful, False otherwise
         """
-        if not self.instruments:
-            logger.error("Cannot reconnect: no instruments configured")
+        if not self.instrument:
+            logger.error("Cannot reconnect: no instrument configured")
             return False
 
         logger.info("Starting reconnection process for account %s", self.account.account_id)
@@ -542,7 +542,7 @@ class MarketDataStreamer:
                 self.reconnection_manager.record_attempt()
 
                 # Attempt to start the stream
-                self.start_stream(self.instruments)
+                self.start_stream(self.instrument)
 
                 # If we get here, connection was successful
                 logger.info(
@@ -636,7 +636,7 @@ class MarketDataStreamer:
         return {
             "is_connected": self.is_connected,
             "account_id": self.account.account_id,
-            "instruments": self.instruments,
+            "instrument": self.instrument,
             "api_type": self.account.api_type,
             "reconnection_status": self.reconnection_manager.get_status(),
         }

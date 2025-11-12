@@ -48,16 +48,12 @@ interface ConfigurationFormProps {
 }
 
 // Available strategy types with descriptions
+// These must match the strategies registered in the backend
 const STRATEGY_TYPES = [
   {
     value: 'floor',
     label: 'Floor Strategy',
     description: 'Dynamic scaling strategy with ATR-based volatility lock',
-  },
-  {
-    value: 'ma_crossover',
-    label: 'MA Crossover',
-    description: 'Moving average crossover strategy',
   },
   {
     value: 'rsi',
@@ -70,19 +66,9 @@ const STRATEGY_TYPES = [
     description: 'MACD with signal line crossovers and histogram analysis',
   },
   {
-    value: 'trend_following',
-    label: 'Trend Following',
-    description: 'Trend following strategy with multiple indicators',
-  },
-  {
     value: 'mean_reversion',
     label: 'Mean Reversion',
     description: 'Mean reversion using Bollinger Bands',
-  },
-  {
-    value: 'breakout',
-    label: 'Breakout Strategy',
-    description: 'Price breakout strategy',
   },
   {
     value: 'scalping',
@@ -93,21 +79,6 @@ const STRATEGY_TYPES = [
     value: 'swing_trading',
     label: 'Swing Trading',
     description: 'Swing trading strategy for medium-term positions',
-  },
-  {
-    value: 'london_breakout',
-    label: 'London Breakout',
-    description: 'London session breakout strategy',
-  },
-  {
-    value: 'asian_range',
-    label: 'Asian Range',
-    description: 'Asian session range trading strategy',
-  },
-  {
-    value: 'news_spike',
-    label: 'News Spike',
-    description: 'News event spike trading strategy',
   },
   {
     value: 'stochastic',
@@ -225,6 +196,7 @@ const STRATEGY_CONFIG_SCHEMAS: Record<string, ConfigSchema> = {
 };
 
 // Default parameters for each strategy type
+// These should match the required parameters in the backend strategy schemas
 const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
   floor: {
     base_lot_size: 1.0,
@@ -252,33 +224,17 @@ const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
     oversold: 30,
     overbought: 70,
     position_size: 1000,
-    stop_loss_pips: 50,
-    take_profit_pips: 100,
   },
   macd: {
     fast_period: 12,
     slow_period: 26,
     signal_period: 9,
     position_size: 1000,
-    stop_loss_pips: 50,
-    take_profit_pips: 100,
-  },
-  trend_following: {
-    position_size: 1000,
-    stop_loss_pips: 50,
-    take_profit_pips: 100,
   },
   mean_reversion: {
     period: 20,
     std_dev: 2,
     position_size: 1000,
-    stop_loss_pips: 50,
-    take_profit_pips: 100,
-  },
-  breakout: {
-    position_size: 1000,
-    stop_loss_pips: 50,
-    take_profit_pips: 100,
   },
   scalping: {
     position_size: 1000,
@@ -290,29 +246,16 @@ const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
     stop_loss_pips: 100,
     take_profit_pips: 200,
   },
-  london_breakout: {
-    position_size: 1000,
-    stop_loss_pips: 50,
-    take_profit_pips: 100,
-  },
-  asian_range: {
-    position_size: 1000,
-    stop_loss_pips: 50,
-    take_profit_pips: 100,
-  },
-  news_spike: {
-    position_size: 1000,
-    stop_loss_pips: 50,
-    take_profit_pips: 100,
-  },
   stochastic: {
     k_period: 14,
     d_period: 3,
     oversold: 20,
     overbought: 80,
     position_size: 1000,
-    stop_loss_pips: 50,
-    take_profit_pips: 100,
+  },
+  arbitrage: {
+    position_size: 1000,
+    min_spread: 0.0001,
   },
 };
 
@@ -430,11 +373,15 @@ const ConfigurationForm = ({
     previousInitialDataRef.current = initialData;
   }, [selectedStrategyType, initialData, setValue]);
 
-  const handleNext = () => {
+  const handleNext = (e?: React.MouseEvent) => {
+    // Prevent form submission
+    e?.preventDefault();
     setActiveStep((prev) => prev + 1);
   };
 
-  const handleBack = () => {
+  const handleBack = (e?: React.MouseEvent) => {
+    // Prevent form submission
+    e?.preventDefault();
     setActiveStep((prev) => prev - 1);
   };
 
@@ -749,17 +696,18 @@ const ConfigurationForm = ({
 
         {/* Navigation Buttons */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
-          <Button onClick={onCancel} disabled={isLoading}>
+          <Button type="button" onClick={onCancel} disabled={isLoading}>
             Cancel
           </Button>
           <Box sx={{ display: 'flex', gap: 2 }}>
             {activeStep > 0 && (
-              <Button onClick={handleBack} disabled={isLoading}>
+              <Button type="button" onClick={handleBack} disabled={isLoading}>
                 Back
               </Button>
             )}
             {activeStep < steps.length - 1 ? (
               <Button
+                type="button"
                 variant="contained"
                 onClick={handleNext}
                 disabled={isLoading}

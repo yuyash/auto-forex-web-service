@@ -8,7 +8,9 @@ export default function TradingTaskFormPage() {
   const { id } = useParams<{ id: string }>();
   const taskId = id ? parseInt(id, 10) : undefined;
 
-  const { data: task, isLoading } = useTradingTask(taskId || 0);
+  const { data: task, isLoading } = useTradingTask(taskId, {
+    enabled: !!taskId,
+  });
 
   const isEditMode = !!taskId;
 

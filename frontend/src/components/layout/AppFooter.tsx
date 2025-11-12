@@ -54,7 +54,7 @@ const AppFooter = () => {
   }, [user?.timezone]);
 
   // Use shared hook with caching to prevent duplicate requests
-  const { accounts, hasAccounts, error } = useOandaAccounts();
+  const { hasAccounts, error } = useOandaAccounts();
 
   // Derive connection status from accounts (no useEffect needed)
   const derivedConnectionStatus: 'connected' | 'disconnected' = error
@@ -63,23 +63,9 @@ const AppFooter = () => {
       ? 'connected'
       : 'disconnected';
 
-  // Derive strategy status from accounts (no useEffect needed)
-  const derivedStrategyStatus: StrategyStatus = (() => {
-    if (!hasAccounts) {
-      return { isActive: false };
-    }
-
-    const activeStrategy = accounts.find((account) => account.active_strategy);
-
-    if (activeStrategy) {
-      return {
-        isActive: true,
-        strategyName: activeStrategy.active_strategy,
-      };
-    }
-
-    return { isActive: false };
-  })();
+  // Strategy status - currently not tracking active strategies
+  // TODO: Implement by checking for running trading tasks
+  const derivedStrategyStatus: StrategyStatus = { isActive: false };
 
   return (
     <Box
