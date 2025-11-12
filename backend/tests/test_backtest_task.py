@@ -399,7 +399,7 @@ class TestRunBacktestTask:
             # Verify BacktestConfig was created correctly
             call_args = mock_engine_class.call_args[0][0]
             assert call_args.strategy_type == "floor"
-            assert call_args.instrument == ["EUR_USD"]
+            assert call_args.instrument == "EUR_USD"
             assert call_args.initial_balance == Decimal("10000.00")
             assert call_args.commission_per_trade == Decimal("5.00")
 
@@ -433,13 +433,23 @@ class TestRunBacktestTask:
             # Execute task
             run_backtest_task(backtest.id, config_dict)
 
-            # Verify load_data was called for each instrument
-            assert mock_loader.load_data.call_count == 2
-            call_args_list = [
-                call[1]["instrument"] for call in mock_loader.load_data.call_args_list
-            ]
-            assert "EUR_USD" in call_args_list
-            assert "GBP_USD" in call_args_list
+            # Verify load_data was called for the instrument
+            # Note: load_data may be called multiple times during backtest execution
+            assert mock_loader.load_data.call_count >= 1
+            # Check that at least one call was for EUR_USD
+            found_eur_usd = False
+            for call in mock_loader.load_data.call_args_list:
+                if (
+                    len(call) > 1
+                    and isinstance(call[1], dict)
+                    and "instrument" in call[1]
+                    and call[1]["instrument"] == "EUR_USD"
+                ):
+                    found_eur_usd = True
+                    break
+            assert (
+                found_eur_usd
+            ), f"EUR_USD not found in calls: {mock_loader.load_data.call_args_list}"
 
     def test_task_calculates_performance_metrics(
         self, backtest, backtest_config_dict, sample_tick_data, mock_backtest_engine

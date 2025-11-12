@@ -229,13 +229,13 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
 
     Args:
         account_id: Primary key of the OandaAccount
-        instrument: Currency pair to stream (e.g., ['EUR_USD', 'GBP_USD'])
+        instrument: Currency pair to stream (e.g., 'EUR_USD')
 
     Returns:
         Dictionary containing:
             - success: Whether the stream was started successfully
             - account_id: OANDA account ID
-            - instrument: List of instrument being streamed
+            - instrument: Instrument being streamed
             - error: Error message if stream failed to start
             - tick_storage_enabled: Whether tick storage is enabled
             - tick_storage_stats: Statistics about tick storage (if enabled)
@@ -254,7 +254,7 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
             return {
                 "success": False,
                 "account_id": None,
-                "instrument": [],
+                "instrument": instrument,
                 "error": error_msg,
             }
 
@@ -364,7 +364,7 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
         logger.info(
             "Successfully started market data stream for account %s with instrument: %s",
             oanda_account.account_id,
-            ", ".join(instrument),
+            instrument,
         )
 
         # Process the stream (this will block until stream is stopped or fails)
@@ -670,15 +670,13 @@ def _load_historical_data(
     )
     data_loader = HistoricalDataLoader()
 
-    # Load data for the instrument and combine
-    tick_data = []
-    for instrument in config_dict["instrument"]:
-        instrument_data = data_loader.load_data(
-            instrument=instrument,
-            start_date=start_date,
-            end_date=end_date,
-        )
-        tick_data.extend(instrument_data)
+    # Load data for the instrument
+    instrument = config_dict["instrument"]
+    tick_data = data_loader.load_data(
+        instrument=instrument,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
     # Sort by timestamp
     tick_data.sort(key=lambda t: t.timestamp)

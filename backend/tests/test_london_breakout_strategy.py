@@ -263,7 +263,7 @@ class TestLondonBreakoutStrategy:
         assert london_strategy.take_profit_pips == Decimal("40")
         assert london_strategy.min_range_pips == Decimal("10")
         assert "EUR_USD" in london_strategy.range_detectors
-        assert "GBP_USD" in london_strategy.range_detectors
+        assert len(london_strategy.range_detectors) == 1
 
     def test_range_detection_during_first_hour(self, london_strategy, mock_oanda_account):
         """Test range detection during London first hour."""

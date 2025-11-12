@@ -88,7 +88,7 @@ class TestBacktestModel:
         )
 
         assert backtest.config == {}
-        assert backtest.instrument == ""
+        assert backtest.instrument == "USD_JPY"
         assert backtest.initial_balance == Decimal("10000.00")
         assert backtest.commission_per_trade == Decimal("0")
         assert backtest.status == TaskStatus.CREATED

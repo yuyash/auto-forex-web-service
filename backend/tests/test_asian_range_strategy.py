@@ -244,7 +244,7 @@ class TestAsianRangeStrategy:
         assert asian_strategy.take_profit_pips == Decimal("30")
         assert asian_strategy.min_range_pips == Decimal("15")
         assert "EUR_USD" in asian_strategy.range_detectors
-        assert "GBP_USD" in asian_strategy.range_detectors
+        assert len(asian_strategy.range_detectors) == 1
 
     def test_range_detection_during_asian_session(self, asian_strategy, mock_oanda_account):
         """Test range detection during Asian session."""

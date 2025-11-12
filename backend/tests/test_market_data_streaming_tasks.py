@@ -68,7 +68,7 @@ class TestStartMarketDataStream:
         mock_streamer.process_stream.return_value = None
 
         # Start the stream
-        result = start_market_data_stream(mock_oanda_account.id, ["EUR_USD", "GBP_USD"])
+        result = start_market_data_stream(mock_oanda_account.id, "EUR_USD")
 
         # Verify result
         assert result["success"] is True
@@ -79,7 +79,7 @@ class TestStartMarketDataStream:
         # Verify streamer methods were called
         mock_streamer.initialize_connection.assert_called_once()
         mock_streamer.register_tick_callback.assert_called_once()
-        mock_streamer.start_stream.assert_called_once_with(["EUR_USD", "GBP_USD"])
+        mock_streamer.start_stream.assert_called_once_with("EUR_USD")
         mock_streamer.process_stream.assert_called_once()
 
     def test_start_stream_account_not_found(self):
