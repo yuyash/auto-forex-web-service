@@ -789,4 +789,6 @@ TREND_FOLLOWING_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("trend_following", TREND_FOLLOWING_CONFIG_SCHEMA)(TrendFollowingStrategy)
+register_strategy(
+    "trend_following", TREND_FOLLOWING_CONFIG_SCHEMA, display_name="Trend Following Strategy"
+)(TrendFollowingStrategy)

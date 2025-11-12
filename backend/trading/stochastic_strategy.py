@@ -618,4 +618,6 @@ STOCHASTIC_STRATEGY_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("stochastic", STOCHASTIC_STRATEGY_CONFIG_SCHEMA)(StochasticStrategy)
+register_strategy(
+    "stochastic", STOCHASTIC_STRATEGY_CONFIG_SCHEMA, display_name="Stochastic Strategy"
+)(StochasticStrategy)

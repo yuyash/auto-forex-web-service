@@ -599,4 +599,8 @@ LONDON_BREAKOUT_STRATEGY_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("london_breakout", LONDON_BREAKOUT_STRATEGY_CONFIG_SCHEMA)(LondonBreakoutStrategy)
+register_strategy(
+    "london_breakout",
+    LONDON_BREAKOUT_STRATEGY_CONFIG_SCHEMA,
+    display_name="London Breakout Strategy",
+)(LondonBreakoutStrategy)

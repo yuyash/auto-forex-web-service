@@ -650,4 +650,6 @@ ASIAN_RANGE_STRATEGY_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("asian_range", ASIAN_RANGE_STRATEGY_CONFIG_SCHEMA)(AsianRangeStrategy)
+register_strategy(
+    "asian_range", ASIAN_RANGE_STRATEGY_CONFIG_SCHEMA, display_name="Asian Range Strategy"
+)(AsianRangeStrategy)

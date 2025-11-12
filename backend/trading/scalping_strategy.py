@@ -483,4 +483,6 @@ SCALPING_STRATEGY_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("scalping", SCALPING_STRATEGY_CONFIG_SCHEMA)(ScalpingStrategy)
+register_strategy("scalping", SCALPING_STRATEGY_CONFIG_SCHEMA, display_name="Scalping Strategy")(
+    ScalpingStrategy
+)

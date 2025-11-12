@@ -607,4 +607,4 @@ RSI_STRATEGY_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("rsi", RSI_STRATEGY_CONFIG_SCHEMA)(RSIStrategy)
+register_strategy("rsi", RSI_STRATEGY_CONFIG_SCHEMA, display_name="RSI Strategy")(RSIStrategy)

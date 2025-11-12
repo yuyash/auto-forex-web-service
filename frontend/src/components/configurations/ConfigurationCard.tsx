@@ -20,6 +20,10 @@ import FolderIcon from '@mui/icons-material/Folder';
 import { useNavigate } from 'react-router-dom';
 import type { StrategyConfig } from '../../types/configuration';
 import ConfigurationDeleteDialog from './ConfigurationDeleteDialog';
+import {
+  useStrategies,
+  getStrategyDisplayName,
+} from '../../hooks/useStrategies';
 
 interface ConfigurationCardProps {
   configuration: StrategyConfig;
@@ -30,6 +34,7 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const menuOpen = Boolean(anchorEl);
+  const { strategies } = useStrategies();
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -55,8 +60,8 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
     navigate(`/backtest-tasks?config=${configuration.id}`);
   };
 
-  const formatStrategyType = (type: string) => {
-    return type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+  const getDisplayName = (strategyId: string) => {
+    return getStrategyDisplayName(strategies, strategyId);
   };
 
   const formatDate = (dateString: string) => {
@@ -125,7 +130,7 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
           {/* Strategy Type */}
           <Box sx={{ mb: 2 }}>
             <Chip
-              label={formatStrategyType(configuration.strategy_type)}
+              label={getDisplayName(configuration.strategy_type)}
               color="primary"
               size="small"
               variant="outlined"

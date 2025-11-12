@@ -685,4 +685,6 @@ BREAKOUT_STRATEGY_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("breakout", BREAKOUT_STRATEGY_CONFIG_SCHEMA)(BreakoutStrategy)
+register_strategy("breakout", BREAKOUT_STRATEGY_CONFIG_SCHEMA, display_name="Breakout Strategy")(
+    BreakoutStrategy
+)

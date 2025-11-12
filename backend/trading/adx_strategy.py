@@ -636,4 +636,4 @@ ADX_STRATEGY_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("adx", ADX_STRATEGY_CONFIG_SCHEMA)(ADXStrategy)
+register_strategy("adx", ADX_STRATEGY_CONFIG_SCHEMA, display_name="ADX Strategy")(ADXStrategy)

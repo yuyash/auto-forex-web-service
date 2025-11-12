@@ -666,4 +666,4 @@ MACD_STRATEGY_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("macd", MACD_STRATEGY_CONFIG_SCHEMA)(MACDStrategy)
+register_strategy("macd", MACD_STRATEGY_CONFIG_SCHEMA, display_name="MACD Strategy")(MACDStrategy)

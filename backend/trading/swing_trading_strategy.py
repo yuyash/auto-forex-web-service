@@ -616,4 +616,6 @@ SWING_TRADING_STRATEGY_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("swing_trading", SWING_TRADING_STRATEGY_CONFIG_SCHEMA)(SwingTradingStrategy)
+register_strategy(
+    "swing_trading", SWING_TRADING_STRATEGY_CONFIG_SCHEMA, display_name="Swing Trading Strategy"
+)(SwingTradingStrategy)

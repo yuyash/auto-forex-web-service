@@ -537,4 +537,6 @@ ARBITRAGE_STRATEGY_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("arbitrage", ARBITRAGE_STRATEGY_CONFIG_SCHEMA)(ArbitrageStrategy)
+register_strategy("arbitrage", ARBITRAGE_STRATEGY_CONFIG_SCHEMA, display_name="Arbitrage Strategy")(
+    ArbitrageStrategy
+)

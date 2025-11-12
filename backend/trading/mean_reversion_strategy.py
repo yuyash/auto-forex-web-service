@@ -507,4 +507,6 @@ MEAN_REVERSION_STRATEGY_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("mean_reversion", MEAN_REVERSION_STRATEGY_CONFIG_SCHEMA)(MeanReversionStrategy)
+register_strategy(
+    "mean_reversion", MEAN_REVERSION_STRATEGY_CONFIG_SCHEMA, display_name="Mean Reversion Strategy"
+)(MeanReversionStrategy)

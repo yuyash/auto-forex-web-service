@@ -28,6 +28,7 @@ from .strategy_config_views import (
     StrategyConfigListCreateView,
     StrategyConfigTasksView,
 )
+from .strategy_list_views import StrategyListView
 from .trading_task_views import (  # noqa: E501
     TradingTaskCopyView,
     TradingTaskDetailView,
@@ -49,6 +50,8 @@ urlpatterns = [
     path("health/simple/", simple_health_check, name="simple_health_check"),
     # Candle data endpoints
     path("candles/", CandleDataView.as_view(), name="candle_data"),
+    # Strategy list endpoint
+    path("strategies/", StrategyListView.as_view(), name="strategy_list"),
     # Strategy configuration endpoints
     path(
         "strategy-configs/",

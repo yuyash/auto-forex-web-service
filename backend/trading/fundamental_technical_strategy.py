@@ -781,6 +781,8 @@ FUNDAMENTAL_TECHNICAL_STRATEGY_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("fundamental_technical", FUNDAMENTAL_TECHNICAL_STRATEGY_CONFIG_SCHEMA)(
-    FundamentalTechnicalStrategy
-)
+register_strategy(
+    "fundamental_technical",
+    FUNDAMENTAL_TECHNICAL_STRATEGY_CONFIG_SCHEMA,
+    display_name="Fundamental Technical Strategy",
+)(FundamentalTechnicalStrategy)

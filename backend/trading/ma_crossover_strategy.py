@@ -485,4 +485,6 @@ MA_CROSSOVER_CONFIG_SCHEMA = {
 }
 
 # Register the strategy
-register_strategy("ma_crossover", MA_CROSSOVER_CONFIG_SCHEMA)(MACrossoverStrategy)
+register_strategy("ma_crossover", MA_CROSSOVER_CONFIG_SCHEMA, display_name="MA Crossover Strategy")(
+    MACrossoverStrategy
+)
