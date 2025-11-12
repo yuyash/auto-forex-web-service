@@ -76,7 +76,7 @@ export default function TradingTaskForm({
   } = useForm<TradingTaskFormData>({
     resolver: zodResolver(tradingTaskSchema),
     defaultValues: {
-      oanda_account_id: initialData?.oanda_account_id || 0,
+      account_id: initialData?.account_id || 0,
       config_id: initialData?.config_id || 0,
       name: initialData?.name || '',
       description: initialData?.description || '',
@@ -84,9 +84,9 @@ export default function TradingTaskForm({
     },
   });
 
-  const selectedAccountId = useWatch<TradingTaskFormData, 'oanda_account_id'>({
+  const selectedAccountId = useWatch<TradingTaskFormData, 'account_id'>({
     control,
-    name: 'oanda_account_id',
+    name: 'account_id',
     defaultValue: 0,
   });
   const selectedConfigId = useWatch<TradingTaskFormData, 'config_id'>({
@@ -129,7 +129,7 @@ export default function TradingTaskForm({
   const { data: existingTasks } = useTradingTasks(
     selectedAccountId && selectedAccountId > 0
       ? {
-          oanda_account_id: selectedAccountId,
+          account_id: selectedAccountId,
           status: TaskStatus.RUNNING,
         }
       : undefined
@@ -144,7 +144,7 @@ export default function TradingTaskForm({
 
     switch (activeStep) {
       case 0: // Account step
-        fieldsToValidate = ['oanda_account_id'];
+        fieldsToValidate = ['account_id'];
         break;
       case 1: // Configuration step
         fieldsToValidate = ['config_id', 'name'];
@@ -168,7 +168,7 @@ export default function TradingTaskForm({
   const onSubmit = async (data: TradingTaskFormData) => {
     try {
       const taskData: TradingTaskCreateData = {
-        oanda_account_id: data.oanda_account_id,
+        account_id: data.account_id,
         config_id: data.config_id,
         name: data.name,
         description: data.description,
@@ -200,14 +200,10 @@ export default function TradingTaskForm({
             <Grid container spacing={3}>
               <Grid size={{ xs: 12 }}>
                 <Controller
-                  name="oanda_account_id"
+                  name="account_id"
                   control={control}
                   render={({ field }) => (
-                    <FormControl
-                      fullWidth
-                      error={!!errors.oanda_account_id}
-                      required
-                    >
+                    <FormControl fullWidth error={!!errors.account_id} required>
                       <InputLabel>Account</InputLabel>
                       <Select
                         {...field}
@@ -224,9 +220,9 @@ export default function TradingTaskForm({
                           </MenuItem>
                         ))}
                       </Select>
-                      {errors.oanda_account_id && (
+                      {errors.account_id && (
                         <FormHelperText>
-                          {errors.oanda_account_id.message}
+                          {errors.account_id.message}
                         </FormHelperText>
                       )}
                     </FormControl>
