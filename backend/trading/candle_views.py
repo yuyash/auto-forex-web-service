@@ -156,8 +156,11 @@ class CandleDataView(APIView):
             if account_id:
                 account = OandaAccount.objects.get(account_id=account_id, user=request.user.id)
             else:
-                # Use first account if not specified
-                account = OandaAccount.objects.filter(user=request.user.id).first()
+                # Use default account if not specified, otherwise use first account
+                account = (
+                    OandaAccount.objects.filter(user=request.user.id, is_default=True).first()
+                    or OandaAccount.objects.filter(user=request.user.id).first()
+                )
 
             if account is None:
                 return Response(

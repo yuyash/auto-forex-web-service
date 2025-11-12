@@ -62,6 +62,7 @@ const AccountManagement = () => {
     api_token: '',
     api_type: 'practice',
   });
+  const [isDefault, setIsDefault] = useState(false);
 
   const [formErrors, setFormErrors] = useState<Partial<AccountFormData>>({});
 
@@ -80,7 +81,9 @@ const AccountManagement = () => {
       }
 
       const data = await response.json();
-      setAccounts(data);
+      // Handle both paginated and non-paginated responses
+      const accountsData = data.results || data;
+      setAccounts(Array.isArray(accountsData) ? accountsData : []);
     } catch (error) {
       console.error('Error fetching accounts:', error);
       showError(t('common:errors.fetchFailed', 'Failed to load data'));
@@ -102,6 +105,7 @@ const AccountManagement = () => {
       api_token: '',
       api_type: 'practice',
     });
+    setIsDefault(accounts.length === 0); // First account is default
     setFormErrors({});
     setShowApiToken(false);
     setDialogOpen(true);
@@ -115,6 +119,7 @@ const AccountManagement = () => {
       api_token: '', // Don't populate token for security
       api_type: account.api_type,
     });
+    setIsDefault(account.is_default || false);
     setFormErrors({});
     setShowApiToken(false);
     setDialogOpen(true);
@@ -129,6 +134,7 @@ const AccountManagement = () => {
       api_token: '',
       api_type: 'practice',
     });
+    setIsDefault(false);
     setFormErrors({});
   };
 
@@ -170,9 +176,10 @@ const AccountManagement = () => {
       const method = editingAccount ? 'PUT' : 'POST';
 
       // Only include api_token if it's provided
-      const payload: Partial<AccountFormData> = {
+      const payload: Partial<AccountFormData> & { is_default?: boolean } = {
         account_id: formData.account_id,
         api_type: formData.api_type,
+        is_default: isDefault,
       };
 
       if (formData.api_token.trim()) {
@@ -287,7 +294,7 @@ const AccountManagement = () => {
         display="flex"
         justifyContent="space-between"
         alignItems="center"
-        mb={3}
+        mb={2}
       >
         <Typography variant="h6">
           {t('settings:accounts.title', 'OANDA Accounts')}
@@ -301,6 +308,15 @@ const AccountManagement = () => {
           {t('settings:accounts.addAccount', 'Add Account')}
         </Button>
       </Box>
+
+      <Alert severity="info" sx={{ mb: 3 }}>
+        <Typography variant="body2">
+          {t(
+            'settings:accounts.defaultAccountInfo',
+            'The default account is used to fetch market data and collect tick data for analysis. The candle chart will use the default account to display price data. You can switch the default account at any time.'
+          )}
+        </Typography>
+      </Alert>
 
       {accounts.length === 0 ? (
         <Alert severity="info">
@@ -363,12 +379,20 @@ const AccountManagement = () => {
                     <Typography variant="body1">{account.currency}</Typography>
                   </Box>
 
-                  <Box>
+                  <Box display="flex" gap={1}>
                     <Chip
                       label={account.is_active ? 'Active' : 'Inactive'}
                       color={account.is_active ? 'success' : 'default'}
                       size="small"
                     />
+                    {account.is_default && (
+                      <Chip
+                        label="Default"
+                        color="primary"
+                        size="small"
+                        variant="outlined"
+                      />
+                    )}
                   </Box>
                 </CardContent>
                 <CardActions>
@@ -491,6 +515,36 @@ const AccountManagement = () => {
                 </MenuItem>
               </Select>
             </FormControl>
+
+            <Box sx={{ mt: 2 }}>
+              <Box display="flex" alignItems="center" gap={1}>
+                <input
+                  type="checkbox"
+                  id="is-default-checkbox"
+                  checked={isDefault}
+                  onChange={(e) => setIsDefault(e.target.checked)}
+                  disabled={accounts.length === 0 && !editingAccount}
+                />
+                <label htmlFor="is-default-checkbox">
+                  <Typography variant="body2">
+                    {t(
+                      'settings:accounts.setAsDefault',
+                      'Set as default account'
+                    )}
+                  </Typography>
+                </label>
+              </Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mt: 0.5, display: 'block' }}
+              >
+                {t(
+                  'settings:accounts.defaultAccountDescription',
+                  'The default account is used to collect market data and latest tick data. Only one account can be set as default at a time.'
+                )}
+              </Typography>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>

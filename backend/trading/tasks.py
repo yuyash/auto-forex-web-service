@@ -646,6 +646,103 @@ def cleanup_old_tick_data(retention_days: int | None = None) -> Dict[str, Any]:
         }
 
 
+@shared_task(bind=True, max_retries=3)
+def collect_tick_data_for_default_account(
+    self: Any,  # pylint: disable=unused-argument
+    user_id: int,
+    instruments: List[str] | None = None,
+) -> Dict[str, Any]:
+    """
+    Collect tick data for the user's default OANDA account.
+
+    This task starts a market data stream for the default account and stores
+    tick data to the database. It's automatically started when a default account
+    is set and stopped when the default account is changed or removed.
+
+    Args:
+        user_id: ID of the user whose default account to use
+        instruments: List of instruments to stream (default: all active instruments)
+
+    Returns:
+        Dictionary containing:
+            - success: Whether the stream was started successfully
+            - account_id: ID of the default account
+            - instruments: List of instruments being streamed
+            - error: Error message if stream failed to start
+
+    Requirements: 7.1, 7.2, 12.1
+    """
+    try:
+        # Get the user's default account
+        default_account = OandaAccount.objects.filter(
+            user_id=user_id, is_default=True, is_active=True
+        ).first()
+
+        if not default_account:
+            error_msg = f"No default account found for user {user_id}"
+            logger.warning(error_msg)
+            return {
+                "success": False,
+                "account_id": None,
+                "instruments": [],
+                "error": error_msg,
+            }
+
+        # Use provided instruments or default to major pairs
+        if instruments is None:
+            instruments = [
+                "EUR_USD",
+                "GBP_USD",
+                "USD_JPY",
+                "USD_CHF",
+                "AUD_USD",
+                "USD_CAD",
+                "NZD_USD",
+            ]
+
+        logger.info(
+            "Starting tick data collection for default account %s (user: %d, instruments: %s)",
+            default_account.account_id,
+            user_id,
+            instruments,
+        )
+
+        # Start the market data stream using the existing task
+        result = start_market_data_stream.delay(
+            account_id=default_account.id, instruments=instruments
+        )
+
+        logger.info(
+            "Tick data collection started for account %s (task: %s)",
+            default_account.account_id,
+            result.id,
+        )
+
+        return {
+            "success": True,
+            "account_id": default_account.id,
+            "instruments": instruments,
+            "task_id": result.id,
+            "error": None,
+        }
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"Failed to start tick data collection: {str(e)}"
+        logger.error(
+            "Error starting tick data collection for user %d: %s",
+            user_id,
+            error_msg,
+            exc_info=True,
+        )
+
+        return {
+            "success": False,
+            "account_id": None,
+            "instruments": [],
+            "error": error_msg,
+        }
+
+
 def _load_historical_data(
     config_dict: Dict[str, Any],
     start_date: datetime,

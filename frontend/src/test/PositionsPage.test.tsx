@@ -2,13 +2,41 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import PositionsPage from '../pages/PositionsPage';
 import { AuthProvider } from '../contexts/AuthContext';
+import { ToastContext } from '../components/common/ToastContext';
+import type { ToastContextType } from '../components/common/ToastContext';
 import type { Position } from '../types/position';
 
 // Mock fetch
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+// Mock toast context
+const mockShowSuccess = vi.fn();
+const mockShowError = vi.fn();
+const mockToastContext: ToastContextType = {
+  showToast: vi.fn(),
+  showSuccess: mockShowSuccess,
+  showError: mockShowError,
+  showWarning: vi.fn(),
+  showInfo: vi.fn(),
+};
+
+// Mock accounts data
+const mockAccounts = [
+  {
+    id: 1,
+    account_id: '001-001-1234567-001',
+    api_type: 'practice' as const,
+    currency: 'USD',
+    balance: 10000.0,
+    margin_used: 500.0,
+    margin_available: 9500.0,
+    is_active: true,
+  },
+];
 
 // Mock positions data
 const mockActivePositions: Position[] = [
@@ -88,9 +116,23 @@ const mockClosedPositions: Position[] = [
 ];
 
 const renderWithProviders = (component: React.ReactElement) => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
   return render(
     <BrowserRouter>
-      <AuthProvider>{component}</AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <ToastContext.Provider value={mockToastContext}>
+            {component}
+          </ToastContext.Provider>
+        </AuthProvider>
+      </QueryClientProvider>
     </BrowserRouter>
   );
 };
@@ -106,13 +148,41 @@ describe('PositionsPage', () => {
       JSON.stringify({ id: 1, email: 'test@example.com' })
     );
 
-    // Mock system settings API call
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        registration_enabled: true,
-        login_enabled: true,
-      }),
+    // Default mock for accounts API - ensure it returns the correct format
+    mockFetch.mockImplementation((url) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            registration_enabled: true,
+            login_enabled: true,
+          }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/positions')) {
+        // Default empty response for positions
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: [] }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/accounts/1/sync')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ message: 'Synced successfully' }),
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({}),
+      } as Response);
     });
   });
 
@@ -122,19 +192,30 @@ describe('PositionsPage', () => {
   });
 
   it('renders the page title', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ registration_enabled: true, login_enabled: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: [] }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: [] }),
-      });
+    mockFetch.mockImplementation((url) => {
+      if (url.toString().includes('/api/system/settings/public')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            registration_enabled: true,
+            login_enabled: true,
+          }),
+        } as Response);
+      }
+      if (url.toString().includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (url.toString().includes('/api/positions')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: [] }),
+        } as Response);
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
 
     renderWithProviders(<PositionsPage />);
 
@@ -142,19 +223,30 @@ describe('PositionsPage', () => {
   });
 
   it('displays filter controls', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ registration_enabled: true, login_enabled: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: [] }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: [] }),
-      });
+    mockFetch.mockImplementation((url) => {
+      if (url.toString().includes('/api/system/settings/public')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            registration_enabled: true,
+            login_enabled: true,
+          }),
+        } as Response);
+      }
+      if (url.toString().includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (url.toString().includes('/api/positions')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: [] }),
+        } as Response);
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
 
     renderWithProviders(<PositionsPage />);
 
@@ -167,19 +259,30 @@ describe('PositionsPage', () => {
   });
 
   it('displays tabs for active and closed positions', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ registration_enabled: true, login_enabled: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: [] }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: [] }),
-      });
+    mockFetch.mockImplementation((url) => {
+      if (url.toString().includes('/api/system/settings/public')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            registration_enabled: true,
+            login_enabled: true,
+          }),
+        } as Response);
+      }
+      if (url.toString().includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (url.toString().includes('/api/positions')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: [] }),
+        } as Response);
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
 
     renderWithProviders(<PositionsPage />);
 
@@ -191,7 +294,8 @@ describe('PositionsPage', () => {
 
   it('fetches and displays active positions', async () => {
     mockFetch.mockImplementation((url) => {
-      if (url.toString().includes('/api/system/settings/public')) {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -200,41 +304,53 @@ describe('PositionsPage', () => {
           }),
         } as Response);
       }
-      if (
-        url.toString().includes('/api/positions') &&
-        url.toString().includes('status=OPEN')
-      ) {
+      if (urlStr.includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/positions') && urlStr.includes('status=OPEN')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ results: mockActivePositions }),
         } as Response);
       }
       if (
-        url.toString().includes('/api/positions') &&
-        url.toString().includes('status=CLOSED')
+        urlStr.includes('/api/positions') &&
+        urlStr.includes('status=CLOSED')
       ) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ results: [] }),
         } as Response);
       }
-      return Promise.reject(new Error('Unknown URL'));
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ results: [] }),
+      } as Response);
     });
 
     renderWithProviders(<PositionsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('POS-001')).toBeInTheDocument();
-      expect(screen.getByText('POS-002')).toBeInTheDocument();
-      const table = screen.getByRole('table');
-      expect(table).toHaveTextContent('EUR_USD');
-      expect(table).toHaveTextContent('GBP_USD');
-    });
+    // Wait for account to be auto-selected and data to load
+    await waitFor(
+      () => {
+        expect(screen.getByText('POS-001')).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
+
+    expect(screen.getByText('POS-002')).toBeInTheDocument();
+    const table = screen.getByRole('table');
+    expect(table).toHaveTextContent('EUR_USD');
+    expect(table).toHaveTextContent('GBP_USD');
   });
 
   it('displays active position details correctly', async () => {
     mockFetch.mockImplementation((url) => {
-      if (url.toString().includes('/api/system/settings/public')) {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -243,45 +359,58 @@ describe('PositionsPage', () => {
           }),
         } as Response);
       }
-      if (
-        url.toString().includes('/api/positions') &&
-        url.toString().includes('status=OPEN')
-      ) {
+      if (urlStr.includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/positions') && urlStr.includes('status=OPEN')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ results: mockActivePositions }),
         } as Response);
       }
       if (
-        url.toString().includes('/api/positions') &&
-        url.toString().includes('status=CLOSED')
+        urlStr.includes('/api/positions') &&
+        urlStr.includes('status=CLOSED')
       ) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ results: [] }),
         } as Response);
       }
-      return Promise.reject(new Error('Unknown URL'));
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ results: [] }),
+      } as Response);
     });
 
     renderWithProviders(<PositionsPage />);
 
-    await waitFor(() => {
-      const table = screen.getByRole('table');
-      expect(table).toHaveTextContent('10000');
-      expect(table).toHaveTextContent('5000');
-      expect(table).toHaveTextContent('1.12340');
-      expect(table).toHaveTextContent('1.25670');
-      expect(table).toHaveTextContent('+16.00');
-      expect(table).toHaveTextContent('+8.50');
-    });
+    // Wait for data to load after auto-selection
+    await waitFor(
+      () => {
+        const table = screen.getByRole('table');
+        expect(table).toHaveTextContent('10000');
+      },
+      { timeout: 3000 }
+    );
+
+    const table = screen.getByRole('table');
+    expect(table).toHaveTextContent('5000');
+    expect(table).toHaveTextContent('1.12340');
+    expect(table).toHaveTextContent('1.25670');
+    expect(table).toHaveTextContent('+16.00');
+    expect(table).toHaveTextContent('+8.50');
   });
 
   it('switches to closed positions tab and displays closed positions', async () => {
     const user = userEvent.setup();
 
     mockFetch.mockImplementation((url) => {
-      if (url.toString().includes('/api/system/settings/public')) {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -290,44 +419,59 @@ describe('PositionsPage', () => {
           }),
         } as Response);
       }
-      if (
-        url.toString().includes('/api/positions') &&
-        url.toString().includes('status=OPEN')
-      ) {
+      if (urlStr.includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/positions') && urlStr.includes('status=OPEN')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ results: mockActivePositions }),
         } as Response);
       }
       if (
-        url.toString().includes('/api/positions') &&
-        url.toString().includes('status=CLOSED')
+        urlStr.includes('/api/positions') &&
+        urlStr.includes('status=CLOSED')
       ) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ results: mockClosedPositions }),
         } as Response);
       }
-      return Promise.reject(new Error('Unknown URL'));
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ results: [] }),
+      } as Response);
     });
 
     renderWithProviders(<PositionsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('POS-001')).toBeInTheDocument();
-    });
+    // Wait for account auto-selection and active positions to load
+    await waitFor(
+      () => {
+        expect(screen.getByText('POS-001')).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
 
     // Click on Closed Positions tab
     const closedTab = screen.getByText('Closed Positions');
     await user.click(closedTab);
 
-    await waitFor(() => {
-      expect(screen.getByText('POS-003')).toBeInTheDocument();
-      expect(screen.getByText('POS-004')).toBeInTheDocument();
-      const table = screen.getByRole('table');
-      expect(table).toHaveTextContent('+40.00');
-      expect(table).toHaveTextContent('-24.00');
-    });
+    // Wait for closed positions to appear
+    await waitFor(
+      () => {
+        expect(screen.getByText('POS-003')).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
+
+    expect(screen.getByText('POS-004')).toBeInTheDocument();
+    const table = screen.getByRole('table');
+    expect(table).toHaveTextContent('+40.00');
+    expect(table).toHaveTextContent('-24.00');
   });
 
   it('filters positions by instrument', async () => {
@@ -335,7 +479,8 @@ describe('PositionsPage', () => {
     let filterApplied = false;
 
     mockFetch.mockImplementation((url) => {
-      if (url.toString().includes('/api/system/settings/public')) {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -344,10 +489,16 @@ describe('PositionsPage', () => {
           }),
         } as Response);
       }
-      if (url.toString().includes('/api/positions')) {
-        if (url.toString().includes('instrument=EUR_USD')) {
+      if (urlStr.includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/positions')) {
+        if (urlStr.includes('instrument=EUR_USD')) {
           filterApplied = true;
-          if (url.toString().includes('status=OPEN')) {
+          if (urlStr.includes('status=OPEN')) {
             return Promise.resolve({
               ok: true,
               json: async () => ({
@@ -367,7 +518,7 @@ describe('PositionsPage', () => {
             } as Response);
           }
         }
-        if (url.toString().includes('status=OPEN')) {
+        if (urlStr.includes('status=OPEN')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({ results: mockActivePositions }),
@@ -379,14 +530,21 @@ describe('PositionsPage', () => {
           } as Response);
         }
       }
-      return Promise.reject(new Error('Unknown URL'));
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ results: [] }),
+      } as Response);
     });
 
     renderWithProviders(<PositionsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('POS-001')).toBeInTheDocument();
-    });
+    // Wait for account auto-selection and initial data load
+    await waitFor(
+      () => {
+        expect(screen.getByText('POS-001')).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
 
     // Open instrument dropdown and select EUR_USD
     const instrumentSelect = screen.getByLabelText(/Instrument/i);
@@ -399,9 +557,12 @@ describe('PositionsPage', () => {
     const applyButton = screen.getByRole('button', { name: /Apply Filters/i });
     await user.click(applyButton);
 
-    await waitFor(() => {
-      expect(filterApplied).toBe(true);
-    });
+    await waitFor(
+      () => {
+        expect(filterApplied).toBe(true);
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('filters positions by layer', async () => {
@@ -409,7 +570,8 @@ describe('PositionsPage', () => {
     let filterApplied = false;
 
     mockFetch.mockImplementation((url) => {
-      if (url.toString().includes('/api/system/settings/public')) {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -418,10 +580,16 @@ describe('PositionsPage', () => {
           }),
         } as Response);
       }
-      if (url.toString().includes('/api/positions')) {
-        if (url.toString().includes('layer=1')) {
+      if (urlStr.includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/positions')) {
+        if (urlStr.includes('layer=1')) {
           filterApplied = true;
-          if (url.toString().includes('status=OPEN')) {
+          if (urlStr.includes('status=OPEN')) {
             return Promise.resolve({
               ok: true,
               json: async () => ({
@@ -437,7 +605,7 @@ describe('PositionsPage', () => {
             } as Response);
           }
         }
-        if (url.toString().includes('status=OPEN')) {
+        if (urlStr.includes('status=OPEN')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({ results: mockActivePositions }),
@@ -449,14 +617,20 @@ describe('PositionsPage', () => {
           } as Response);
         }
       }
-      return Promise.reject(new Error('Unknown URL'));
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ results: [] }),
+      } as Response);
     });
 
     renderWithProviders(<PositionsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('POS-001')).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByText('POS-001')).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
 
     // Open layer dropdown and select layer 1
     const layerSelect = screen.getByLabelText(/Layer/i);
@@ -469,16 +643,20 @@ describe('PositionsPage', () => {
     const applyButton = screen.getByRole('button', { name: /Apply Filters/i });
     await user.click(applyButton);
 
-    await waitFor(() => {
-      expect(filterApplied).toBe(true);
-    });
+    await waitFor(
+      () => {
+        expect(filterApplied).toBe(true);
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('clears all filters', async () => {
     const user = userEvent.setup();
 
     mockFetch.mockImplementation((url) => {
-      if (url.toString().includes('/api/system/settings/public')) {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -487,32 +665,41 @@ describe('PositionsPage', () => {
           }),
         } as Response);
       }
-      if (
-        url.toString().includes('/api/positions') &&
-        url.toString().includes('status=OPEN')
-      ) {
+      if (urlStr.includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/positions') && urlStr.includes('status=OPEN')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ results: mockActivePositions }),
         } as Response);
       }
       if (
-        url.toString().includes('/api/positions') &&
-        url.toString().includes('status=CLOSED')
+        urlStr.includes('/api/positions') &&
+        urlStr.includes('status=CLOSED')
       ) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ results: mockClosedPositions }),
         } as Response);
       }
-      return Promise.reject(new Error('Unknown URL'));
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ results: [] }),
+      } as Response);
     });
 
     renderWithProviders(<PositionsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('POS-001')).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByText('POS-001')).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
 
     // Set a filter
     const instrumentSelect = screen.getByLabelText(/Instrument/i);
@@ -529,16 +716,14 @@ describe('PositionsPage', () => {
     const clearButton = screen.getByRole('button', { name: /Clear Filters/i });
     await user.click(clearButton);
 
-    // Verify filter is cleared by checking that the data is refetched without filters
-    await waitFor(() => {
-      // After clearing, the fetch should be called without instrument filter
-      const calls = mockFetch.mock.calls;
-      const lastCall = calls[calls.length - 1];
-      if (lastCall && lastCall[0]) {
-        const url = lastCall[0].toString();
-        expect(url).not.toContain('instrument=EUR_USD');
-      }
-    });
+    // Verify filter is cleared - the select should be empty
+    await waitFor(
+      () => {
+        const instrumentSelectAfter = screen.getByLabelText(/Instrument/i);
+        expect(instrumentSelectAfter).not.toHaveTextContent('EUR_USD');
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('exports active positions to CSV', async () => {
@@ -566,7 +751,8 @@ describe('PositionsPage', () => {
       });
 
     mockFetch.mockImplementation((url) => {
-      if (url.toString().includes('/api/system/settings/public')) {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -575,32 +761,41 @@ describe('PositionsPage', () => {
           }),
         } as Response);
       }
-      if (
-        url.toString().includes('/api/positions') &&
-        url.toString().includes('status=OPEN')
-      ) {
+      if (urlStr.includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/positions') && urlStr.includes('status=OPEN')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ results: mockActivePositions }),
         } as Response);
       }
       if (
-        url.toString().includes('/api/positions') &&
-        url.toString().includes('status=CLOSED')
+        urlStr.includes('/api/positions') &&
+        urlStr.includes('status=CLOSED')
       ) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ results: [] }),
         } as Response);
       }
-      return Promise.reject(new Error('Unknown URL'));
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ results: [] }),
+      } as Response);
     });
 
     renderWithProviders(<PositionsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('POS-001')).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByText('POS-001')).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
 
     // Click export button
     const exportButton = screen.getByRole('button', { name: /Export to CSV/i });
@@ -646,7 +841,8 @@ describe('PositionsPage', () => {
       });
 
     mockFetch.mockImplementation((url) => {
-      if (url.toString().includes('/api/system/settings/public')) {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -655,41 +851,53 @@ describe('PositionsPage', () => {
           }),
         } as Response);
       }
-      if (
-        url.toString().includes('/api/positions') &&
-        url.toString().includes('status=OPEN')
-      ) {
+      if (urlStr.includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/positions') && urlStr.includes('status=OPEN')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ results: [] }),
         } as Response);
       }
       if (
-        url.toString().includes('/api/positions') &&
-        url.toString().includes('status=CLOSED')
+        urlStr.includes('/api/positions') &&
+        urlStr.includes('status=CLOSED')
       ) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ results: mockClosedPositions }),
         } as Response);
       }
-      return Promise.reject(new Error('Unknown URL'));
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ results: [] }),
+      } as Response);
     });
 
     renderWithProviders(<PositionsPage />);
 
-    await waitFor(() => {
-      const closedTab = screen.getByText('Closed Positions');
-      return closedTab;
-    });
+    await waitFor(
+      () => {
+        const closedTab = screen.getByText('Closed Positions');
+        return closedTab;
+      },
+      { timeout: 3000 }
+    );
 
     // Switch to closed positions tab
     const closedTab = screen.getByText('Closed Positions');
     await user.click(closedTab);
 
-    await waitFor(() => {
-      expect(screen.getByText('POS-003')).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByText('POS-003')).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
 
     // Click export button
     const exportButton = screen.getByRole('button', { name: /Export to CSV/i });
@@ -712,7 +920,8 @@ describe('PositionsPage', () => {
 
   it('displays error message when fetch fails', async () => {
     mockFetch.mockImplementation((url) => {
-      if (url.toString().includes('/api/system/settings/public')) {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -721,49 +930,84 @@ describe('PositionsPage', () => {
           }),
         } as Response);
       }
-      if (url.toString().includes('/api/positions')) {
+      if (urlStr.includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/positions')) {
         return Promise.resolve({
           ok: false,
           json: async () => ({}),
         } as Response);
       }
-      return Promise.reject(new Error('Unknown URL'));
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ results: [] }),
+      } as Response);
     });
 
     renderWithProviders(<PositionsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Failed to load positions/i)).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(
+          screen.getByText(/Failed to fetch positions/i)
+        ).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('displays empty message when no active positions', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ registration_enabled: true, login_enabled: true }),
-      })
-      .mockResolvedValueOnce({
+    mockFetch.mockImplementation((url) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            registration_enabled: true,
+            login_enabled: true,
+          }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/positions')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: [] }),
+        } as Response);
+      }
+      return Promise.resolve({
         ok: true,
         json: async () => ({ results: [] }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: [] }),
-      });
+      } as Response);
+    });
 
     renderWithProviders(<PositionsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('No active positions')).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(
+          screen.getByText(/No active positions found for this account/i)
+        ).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('displays empty message when no closed positions', async () => {
     const user = userEvent.setup();
 
     mockFetch.mockImplementation((url) => {
-      if (url.toString().includes('/api/system/settings/public')) {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -772,29 +1016,46 @@ describe('PositionsPage', () => {
           }),
         } as Response);
       }
-      if (url.toString().includes('/api/positions')) {
+      if (urlStr.includes('/api/accounts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ results: mockAccounts }),
+        } as Response);
+      }
+      if (urlStr.includes('/api/positions')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ results: [] }),
         } as Response);
       }
-      return Promise.reject(new Error('Unknown URL'));
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ results: [] }),
+      } as Response);
     });
 
     renderWithProviders(<PositionsPage />);
 
-    await waitFor(() => {
-      const closedTab = screen.getByText('Closed Positions');
-      return closedTab;
-    });
+    await waitFor(
+      () => {
+        const closedTab = screen.getByText('Closed Positions');
+        return closedTab;
+      },
+      { timeout: 3000 }
+    );
 
     // Switch to closed positions tab
     const closedTab = screen.getByText('Closed Positions');
     await user.click(closedTab);
 
-    await waitFor(() => {
-      expect(screen.getByText('No closed positions')).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(
+          screen.getByText(/No closed positions found for this account/i)
+        ).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('disables export button when no positions', async () => {

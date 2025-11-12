@@ -73,6 +73,7 @@ export interface Account {
   margin_used: string; // Decimal field from backend, serialized as string
   margin_available: string; // Decimal field from backend, serialized as string
   is_active: boolean;
+  is_default?: boolean;
   jurisdiction?: string;
   enable_position_differentiation?: boolean;
   position_diff_increment?: number;

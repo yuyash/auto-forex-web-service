@@ -75,10 +75,11 @@ class TestOandaAccountListView:
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 1
-        assert response.data[0]["account_id"] == "001-001-1234567-001"
-        assert response.data[0]["api_type"] == "practice"
-        assert "api_token" not in response.data[0]  # Should not expose token
+        assert response.data["count"] == 1
+        assert len(response.data["results"]) == 1
+        assert response.data["results"][0]["account_id"] == "001-001-1234567-001"
+        assert response.data["results"][0]["api_type"] == "practice"
+        assert "api_token" not in response.data["results"][0]  # Should not expose token
 
     def test_list_accounts_unauthenticated(self, api_client: APIClient) -> None:
         """Test listing accounts without authentication."""
@@ -96,7 +97,8 @@ class TestOandaAccountListView:
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 0
+        assert response.data["count"] == 0
+        assert len(response.data["results"]) == 0
 
     def test_list_accounts_multiple(self, api_client: APIClient, user: User) -> None:
         """Test listing multiple accounts."""
@@ -123,7 +125,8 @@ class TestOandaAccountListView:
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 2
+        assert response.data["count"] == 2
+        assert len(response.data["results"]) == 2
 
     def test_list_accounts_only_own_accounts(
         self, api_client: APIClient, user: User, other_user: User
@@ -154,8 +157,9 @@ class TestOandaAccountListView:
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 1
-        assert response.data[0]["account_id"] == "001-001-1234567-001"
+        assert response.data["count"] == 1
+        assert len(response.data["results"]) == 1
+        assert response.data["results"][0]["account_id"] == "001-001-1234567-001"
 
 
 @pytest.mark.django_db

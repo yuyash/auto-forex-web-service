@@ -10,14 +10,22 @@ import {
   Chip,
   Alert,
   CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import {
   Download as DownloadIcon,
   FilterList as FilterListIcon,
+  Add as AddIcon,
+  Settings as SettingsIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useAccounts } from '../hooks/useAccounts';
 import { Breadcrumbs } from '../components/common';
 import DataTable from '../components/common/DataTable';
 import type { Column } from '../components/common/DataTable';
@@ -26,15 +34,31 @@ import type { Order, OrderFilters } from '../types/order';
 const OrderHistoryPage = () => {
   const { t } = useTranslation(['orders', 'common']);
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<OrderFilters>({});
   const [searchOrderId, setSearchOrderId] = useState('');
+  const [selectedAccountId, setSelectedAccountId] = useState<number | ''>('');
+
+  // Fetch accounts
+  const { data: accountsData } = useAccounts({ page_size: 100 });
+  const accounts = accountsData?.results || [];
+
+  // Auto-select first account if only one is available
+  useEffect(() => {
+    if (accounts.length === 1 && !selectedAccountId) {
+      setSelectedAccountId(accounts[0].id);
+    }
+  }, [accounts, selectedAccountId]);
 
   // Fetch orders from API
   const fetchOrders = useCallback(async () => {
-    if (!token) return;
+    if (!token || !selectedAccountId) {
+      setOrders([]);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -42,6 +66,7 @@ const OrderHistoryPage = () => {
     try {
       // Build query parameters
       const params = new URLSearchParams();
+      params.append('account_id', selectedAccountId.toString());
       if (filters.start_date) params.append('start_date', filters.start_date);
       if (filters.end_date) params.append('end_date', filters.end_date);
       if (filters.instrument) params.append('instrument', filters.instrument);
@@ -69,6 +94,7 @@ const OrderHistoryPage = () => {
     }
   }, [
     token,
+    selectedAccountId,
     filters.start_date,
     filters.end_date,
     filters.instrument,
@@ -93,6 +119,38 @@ const OrderHistoryPage = () => {
   const handleClearFilters = () => {
     setFilters({});
     setSearchOrderId('');
+  };
+
+  // Handle create order
+  const handleCreateOrder = () => {
+    navigate('/orders/new');
+  };
+
+  // Handle refresh (sync with OANDA)
+  const handleRefresh = async () => {
+    if (!selectedAccountId || !token) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/accounts/${selectedAccountId}/sync/`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to sync account');
+      }
+
+      // Refresh orders after sync
+      await fetchOrders();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sync account');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Export to CSV
@@ -244,9 +302,71 @@ const OrderHistoryPage = () => {
       }}
     >
       <Breadcrumbs />
-      <Typography variant="h4" gutterBottom>
-        {t('orders:title')}
-      </Typography>
+
+      {/* Header */}
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 3,
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
+        <Typography variant="h4" component="h1">
+          {t('orders:title')}
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={handleRefresh}
+            disabled={!selectedAccountId || loading}
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<SettingsIcon />}
+            onClick={() => navigate('/settings?tab=accounts')}
+          >
+            Account Settings
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleCreateOrder}
+            disabled={!selectedAccountId}
+          >
+            Create Order
+          </Button>
+        </Box>
+      </Box>
+
+      {/* Account Selector */}
+      <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, width: '100%' }}>
+        <FormControl fullWidth>
+          <InputLabel>Trading Account</InputLabel>
+          <Select
+            value={selectedAccountId}
+            onChange={(e) =>
+              setSelectedAccountId(e.target.value as number | '')
+            }
+            label="Trading Account"
+          >
+            <MenuItem value="">
+              <em>Select an account</em>
+            </MenuItem>
+            {accounts.map((account) => (
+              <MenuItem key={account.id} value={account.id}>
+                {account.account_id} ({account.api_type}) - Balance: $
+                {parseFloat(account.balance).toFixed(2)}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Paper>
 
       {/* Filters Section */}
       <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, width: '100%' }}>
@@ -404,11 +524,26 @@ const OrderHistoryPage = () => {
       )}
 
       {/* Orders Table */}
-      {!loading && (
+      {!loading && !selectedAccountId && (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            Select an Account
+          </Typography>
+          <Typography color="text.secondary">
+            Please select a trading account to view its order history
+          </Typography>
+        </Paper>
+      )}
+
+      {!loading && selectedAccountId && (
         <DataTable<Order>
           columns={columns}
           data={orders}
-          emptyMessage={t('orders:messages.noOrders')}
+          emptyMessage={
+            selectedAccountId
+              ? 'No orders found for this account'
+              : t('orders:messages.noOrders')
+          }
           defaultRowsPerPage={25}
           rowsPerPageOptions={[10, 25, 50, 100]}
         />

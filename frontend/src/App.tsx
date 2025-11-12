@@ -47,6 +47,7 @@ const TradingTaskFormPage = lazy(() => import('./pages/TradingTaskFormPage'));
 const TradingTaskDetailPage = lazy(
   () => import('./pages/TradingTaskDetailPage')
 );
+const CreateOrderPage = lazy(() => import('./pages/CreateOrderPage'));
 
 // Loading fallback component
 function PageLoadingFallback() {
@@ -144,6 +145,7 @@ function AppRoutes() {
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/orders/new" element={<CreateOrderPage />} />
             <Route path="/positions" element={<PositionsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />

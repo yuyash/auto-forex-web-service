@@ -1,19 +1,18 @@
 """
-Signal handlers for accounts app.
+Signal handlers for account-related events.
 
 This module contains signal handlers for:
-- Updating active strategies when user settings change
-
-Requirements: 29.5
+- Auto-creating UserSettings when a User is created
+- Starting tick data collection when default account is set
+- Stopping tick data collection when default account is changed
 """
 
 import logging
-from typing import Any
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from accounts.models import User, UserSettings
+from accounts.models import OandaAccount, User, UserSettings
 
 logger = logging.getLogger(__name__)
 
@@ -23,189 +22,73 @@ def create_user_settings(
     sender: type[User],  # pylint: disable=unused-argument
     instance: User,
     created: bool,
-    **kwargs: Any,
+    **kwargs: object,  # pylint: disable=unused-argument
 ) -> None:
     """
-    Create UserSettings when a new User is created.
-
-    This handler is triggered when a User instance is saved.
-    It automatically creates a UserSettings instance with default values
-    for new users.
+    Auto-create UserSettings when a User is created.
 
     Args:
-        sender: The model class (User)
-        instance: The User instance that was saved
+        sender: Model class (User)
+        instance: User instance that was saved
         created: Whether this is a new instance
-        kwargs: Additional keyword arguments
-
-    Requirements: 29.1
+        **kwargs: Additional keyword arguments
     """
     if created:
-        # Create UserSettings with default values
         UserSettings.objects.create(user=instance)
+
+
+@receiver(post_save, sender=OandaAccount)
+def handle_default_account_change(
+    sender: type[OandaAccount],  # pylint: disable=unused-argument
+    instance: OandaAccount,
+    created: bool,  # pylint: disable=unused-argument
+    **kwargs: object,  # pylint: disable=unused-argument
+) -> None:
+    """
+    Handle default account changes.
+
+    When an account is set as default:
+    - Start tick data collection for the account
+    - Stop tick data collection for any previous default account
+
+    Args:
+        sender: Model class (OandaAccount)
+        instance: OandaAccount instance that was saved
+        created: Whether this is a new instance
+        **kwargs: Additional keyword arguments
+    """
+    # Only process if the account is set as default
+    if not instance.is_default:
+        return
+
+    try:
+        # Import here to avoid circular imports
+        from trading.tasks import (  # pylint: disable=import-outside-toplevel
+            collect_tick_data_for_default_account,
+        )
+
         logger.info(
-            "Created default settings for new user %s",
-            instance.email,
-            extra={
-                "user_id": instance.id,
-                "email": instance.email,
-            },
+            "Default account set for user %d: %s (account_id: %s)",
+            instance.user_id,
+            instance.account_id,
+            instance.id,
         )
 
+        # Start tick data collection for the default account
+        # This will automatically use the existing market data streaming infrastructure
+        result = collect_tick_data_for_default_account.delay(user_id=instance.user_id)
 
-@receiver(post_save, sender=User)
-def update_strategies_on_user_change(
-    sender: type[User],  # pylint: disable=unused-argument
-    instance: User,
-    created: bool,
-    **kwargs: Any,
-) -> None:
-    """
-    Update active strategies when user profile changes.
-
-    This handler is triggered when a User instance is saved.
-    It logs that user settings have changed so that active strategies
-    can pick up the new timezone or language settings on the next tick.
-
-    Args:
-        sender: The model class (User)
-        instance: The User instance that was saved
-        created: Whether this is a new instance
-        kwargs: Additional keyword arguments
-
-    Requirements: 29.5
-    """
-    # Skip if this is a new user
-    if created:
-        return
-
-    try:
-        from trading.models import Strategy  # pylint: disable=import-outside-toplevel
-
-        # Get all active strategies for this user's accounts
-        active_strategies = Strategy.objects.filter(
-            account__user=instance,
-            is_active=True,
+        logger.info(
+            "Tick data collection task started for default account %s (task: %s)",
+            instance.account_id,
+            result.id,
         )
 
-        if active_strategies.exists():
-            logger.info(
-                "User settings changed for %s with %s active strategies",
-                instance.email,
-                active_strategies.count(),
-                extra={
-                    "user_id": instance.id,
-                    "email": instance.email,
-                    "strategy_count": active_strategies.count(),
-                    "timezone": instance.timezone,
-                    "language": instance.language,
-                },
-            )
-
-            # Note: The actual strategy update logic will be handled by the
-            # strategy executor when it processes the next tick.
-            # Timezone and language changes don't require immediate strategy updates.
-
-    except Exception as exc:  # pylint: disable=broad-except
-        logger.error(
-            "Failed to check strategies for user %s: %s",
-            instance.email,
-            str(exc),
-            extra={
-                "user_id": instance.id,
-                "email": instance.email,
-                "error": str(exc),
-            },
-            exc_info=True,
-        )
-
-
-@receiver(post_save, sender=UserSettings)
-def update_strategies_on_settings_change(
-    sender: type[UserSettings],  # pylint: disable=unused-argument
-    instance: UserSettings,
-    created: bool,
-    **kwargs: Any,
-) -> None:
-    """
-    Update active strategies when user settings change.
-
-    This handler is triggered when a UserSettings instance is saved.
-    It updates the configuration of all active strategies for the user
-    to reflect the new strategy defaults.
-
-    Args:
-        sender: The model class (UserSettings)
-        instance: The UserSettings instance that was saved
-        created: Whether this is a new instance
-        kwargs: Additional keyword arguments
-
-    Requirements: 29.5
-    """
-    # Skip if this is a new settings instance
-    if created:
-        return
-
-    try:
-        from trading.models import Strategy  # pylint: disable=import-outside-toplevel
-
-        # Get all active strategies for this user's accounts
-        active_strategies = Strategy.objects.filter(
-            account__user=instance.user,
-            is_active=True,
-        )
-
-        if active_strategies.exists():
-            logger.info(
-                "Updating %s active strategies for user %s due to settings change",
-                active_strategies.count(),
-                instance.user.email,
-                extra={
-                    "user_id": instance.user.id,
-                    "email": instance.user.email,
-                    "strategy_count": active_strategies.count(),
-                },
-            )
-
-            # Update each strategy's config with new defaults
-            for strategy in active_strategies:
-                config = strategy.config or {}
-
-                # Update config with new defaults (only if not explicitly set)
-                if "lot_size" not in config:
-                    config["lot_size"] = float(instance.default_lot_size)
-
-                if "scaling_mode" not in config:
-                    config["scaling_mode"] = instance.default_scaling_mode
-
-                if "retracement_pips" not in config:
-                    config["retracement_pips"] = instance.default_retracement_pips
-
-                if "take_profit_pips" not in config:
-                    config["take_profit_pips"] = instance.default_take_profit_pips
-
-                strategy.update_config(config)
-
-            logger.info(
-                "Successfully updated %s active strategies for user %s",
-                active_strategies.count(),
-                instance.user.email,
-                extra={
-                    "user_id": instance.user.id,
-                    "email": instance.user.email,
-                    "strategy_count": active_strategies.count(),
-                },
-            )
-
-    except Exception as exc:  # pylint: disable=broad-except
-        logger.error(
-            "Failed to update strategies for user %s: %s",
-            instance.user.email,
-            str(exc),
-            extra={
-                "user_id": instance.user.id,
-                "email": instance.user.email,
-                "error": str(exc),
-            },
-            exc_info=True,
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        # Log error but don't fail the save operation
+        # This is especially important for tests where Celery/Redis may not be available
+        logger.warning(
+            "Failed to start tick data collection for default account %s: %s",
+            instance.account_id,
+            str(e),
         )

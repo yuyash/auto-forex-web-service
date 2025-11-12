@@ -12,15 +12,31 @@ import {
   CircularProgress,
   Tabs,
   Tab,
+  FormControl,
+  InputLabel,
+  Select,
+  IconButton,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  DialogContentText,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import {
   Download as DownloadIcon,
   FilterList as FilterListIcon,
+  Close as CloseIcon,
+  Settings as SettingsIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useAccounts } from '../hooks/useAccounts';
 import { Breadcrumbs } from '../components/common';
+import { useToast } from '../components/common';
 import DataTable from '../components/common/DataTable';
 import type { Column } from '../components/common/DataTable';
 import type { Position, PositionFilters } from '../types/position';
@@ -50,22 +66,47 @@ const TabPanel = (props: TabPanelProps) => {
 const PositionsPage = () => {
   const { t } = useTranslation(['positions', 'common']);
   const { token } = useAuth();
+  const navigate = useNavigate();
+  const toast = useToast();
   const [activePositions, setActivePositions] = useState<Position[]>([]);
   const [closedPositions, setClosedPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<PositionFilters>({});
   const [tabValue, setTabValue] = useState(0);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | ''>('');
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [positionToClose, setPositionToClose] = useState<Position | null>(null);
+  const [closingPosition, setClosingPosition] = useState(false);
+
+  // Fetch accounts
+  const { data: accountsData } = useAccounts({ page_size: 100 });
+  const accounts = accountsData?.results || [];
+
+  // Auto-select first account if only one is available
+  useEffect(() => {
+    if (accounts.length === 1 && !selectedAccountId) {
+      setSelectedAccountId(accounts[0].id);
+    }
+  }, [accounts, selectedAccountId]);
 
   // Fetch positions from API
   const fetchPositions = useCallback(
     async (status: 'OPEN' | 'CLOSED') => {
-      if (!token) return;
+      if (!token || !selectedAccountId) {
+        if (status === 'OPEN') {
+          setActivePositions([]);
+        } else {
+          setClosedPositions([]);
+        }
+        return;
+      }
 
       try {
         // Build query parameters
         const params = new URLSearchParams();
         params.append('status', status);
+        params.append('account_id', selectedAccountId.toString());
         if (filters.start_date) params.append('start_date', filters.start_date);
         if (filters.end_date) params.append('end_date', filters.end_date);
         if (filters.instrument) params.append('instrument', filters.instrument);
@@ -98,6 +139,7 @@ const PositionsPage = () => {
 
     [
       token,
+      selectedAccountId,
       filters.start_date,
       filters.end_date,
       filters.instrument,
@@ -133,6 +175,85 @@ const PositionsPage = () => {
   // Handle tab change
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
+  };
+
+  // Handle close position click
+  const handleClosePositionClick = (position: Position) => {
+    setPositionToClose(position);
+    setCloseDialogOpen(true);
+  };
+
+  // Handle close position confirm
+  const handleClosePositionConfirm = async () => {
+    if (!positionToClose || !token) return;
+
+    setClosingPosition(true);
+    try {
+      const response = await fetch(
+        `/api/positions/${positionToClose.id}/close`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to close position');
+      }
+
+      toast.showSuccess(
+        `Position ${positionToClose.position_id} closed successfully`
+      );
+      setCloseDialogOpen(false);
+      setPositionToClose(null);
+
+      // Refresh positions
+      await fetchPositions('OPEN');
+      await fetchPositions('CLOSED');
+    } catch (err) {
+      toast.showError(
+        err instanceof Error ? err.message : 'Failed to close position'
+      );
+    } finally {
+      setClosingPosition(false);
+    }
+  };
+
+  // Handle refresh (sync with OANDA)
+  const handleRefresh = async () => {
+    if (!selectedAccountId || !token) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/accounts/${selectedAccountId}/sync/`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to sync account');
+      }
+
+      toast.showSuccess('Account synced successfully');
+
+      // Refresh positions after sync
+      await fetchPositions('OPEN');
+      await fetchPositions('CLOSED');
+    } catch (err) {
+      const errorMsg =
+        err instanceof Error ? err.message : 'Failed to sync account';
+      setError(errorMsg);
+      toast.showError(errorMsg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Export to CSV
@@ -216,6 +337,22 @@ const PositionsPage = () => {
 
   // Define table columns for active positions
   const activeColumns: Column<Position>[] = [
+    {
+      id: 'actions',
+      label: 'Actions',
+      render: (position) => (
+        <Tooltip title="Close Position">
+          <IconButton
+            size="small"
+            color="error"
+            onClick={() => handleClosePositionClick(position)}
+          >
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      ),
+      minWidth: 80,
+    },
     {
       id: 'opened_at',
       label: t('positions:columns.date'),
@@ -411,9 +548,63 @@ const PositionsPage = () => {
       }}
     >
       <Breadcrumbs />
-      <Typography variant="h4" gutterBottom>
-        {t('positions:title')}
-      </Typography>
+
+      {/* Header */}
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 3,
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
+        <Typography variant="h4" component="h1">
+          {t('positions:title')}
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={handleRefresh}
+            disabled={!selectedAccountId || loading}
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<SettingsIcon />}
+            onClick={() => navigate('/settings?tab=accounts')}
+          >
+            Account Settings
+          </Button>
+        </Box>
+      </Box>
+
+      {/* Account Selector */}
+      <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, width: '100%' }}>
+        <FormControl fullWidth>
+          <InputLabel>Trading Account</InputLabel>
+          <Select
+            value={selectedAccountId}
+            onChange={(e) =>
+              setSelectedAccountId(e.target.value as number | '')
+            }
+            label="Trading Account"
+          >
+            <MenuItem value="">
+              <em>Select an account</em>
+            </MenuItem>
+            {accounts.map((account) => (
+              <MenuItem key={account.id} value={account.id}>
+                {account.account_id} ({account.api_type}) - Balance: $
+                {parseFloat(account.balance).toFixed(2)}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Paper>
 
       {/* Filters Section */}
       <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, width: '100%' }}>
@@ -580,13 +771,29 @@ const PositionsPage = () => {
         </Box>
       )}
 
+      {/* No Account Selected Message */}
+      {!loading && !selectedAccountId && (
+        <Paper sx={{ p: 4, textAlign: 'center', mt: 2 }}>
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            Select an Account
+          </Typography>
+          <Typography color="text.secondary">
+            Please select a trading account to view its positions
+          </Typography>
+        </Paper>
+      )}
+
       {/* Active Positions Tab */}
       <TabPanel value={tabValue} index={0}>
-        {!loading && (
+        {!loading && selectedAccountId && (
           <DataTable<Position>
             columns={activeColumns}
             data={activePositions}
-            emptyMessage={t('positions:messages.noActivePositions')}
+            emptyMessage={
+              selectedAccountId
+                ? 'No active positions found for this account'
+                : t('positions:messages.noActivePositions')
+            }
             defaultRowsPerPage={25}
             rowsPerPageOptions={[10, 25, 50, 100]}
           />
@@ -595,16 +802,75 @@ const PositionsPage = () => {
 
       {/* Closed Positions Tab */}
       <TabPanel value={tabValue} index={1}>
-        {!loading && (
+        {!loading && selectedAccountId && (
           <DataTable<Position>
             columns={closedColumns}
             data={closedPositions}
-            emptyMessage={t('positions:messages.noClosedPositions')}
+            emptyMessage={
+              selectedAccountId
+                ? 'No closed positions found for this account'
+                : t('positions:messages.noClosedPositions')
+            }
             defaultRowsPerPage={25}
             rowsPerPageOptions={[10, 25, 50, 100]}
           />
         )}
       </TabPanel>
+
+      {/* Close Position Confirmation Dialog */}
+      <Dialog
+        open={closeDialogOpen}
+        onClose={() => !closingPosition && setCloseDialogOpen(false)}
+      >
+        <DialogTitle>Close Position</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to close this position?
+            {positionToClose && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>Position ID:</strong> {positionToClose.position_id}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Instrument:</strong> {positionToClose.instrument}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Direction:</strong> {positionToClose.direction}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Units:</strong> {positionToClose.units}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Unrealized P&L:</strong>{' '}
+                  <Chip
+                    label={`${positionToClose.unrealized_pnl >= 0 ? '+' : ''}${positionToClose.unrealized_pnl.toFixed(2)}`}
+                    size="small"
+                    color={
+                      positionToClose.unrealized_pnl >= 0 ? 'success' : 'error'
+                    }
+                  />
+                </Typography>
+              </Box>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setCloseDialogOpen(false)}
+            disabled={closingPosition}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleClosePositionConfirm}
+            color="error"
+            variant="contained"
+            disabled={closingPosition}
+          >
+            {closingPosition ? 'Closing...' : 'Close Position'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

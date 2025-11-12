@@ -169,6 +169,12 @@ class SystemSettings(models.Model):
         default=90,
         help_text="Number of days to retain tick data before cleanup",
     )
+    oanda_sync_interval_seconds = models.IntegerField(
+        default=300,
+        help_text=(
+            "Interval in seconds for OANDA account synchronization " "(default: 300 = 5 minutes)"
+        ),
+    )
 
     updated_at = models.DateTimeField(
         auto_now=True,
@@ -839,6 +845,10 @@ class OandaAccount(models.Model):
         ],
         help_text="Pattern for position differentiation",
     )
+    is_default = models.BooleanField(
+        default=False,
+        help_text="Whether this is the default account for market data collection",
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         help_text="Timestamp when the account was added",
@@ -856,6 +866,7 @@ class OandaAccount(models.Model):
         indexes = [
             models.Index(fields=["user", "is_active"]),
             models.Index(fields=["account_id"]),
+            models.Index(fields=["user", "is_default"]),
             models.Index(fields=["created_at"]),
         ]
         ordering = ["-created_at"]
@@ -964,3 +975,16 @@ class OandaAccount(models.Model):
         self.is_active = False
         self.status = "idle"
         self.save(update_fields=["is_active", "status", "updated_at"])
+
+    def set_as_default(self) -> None:
+        """
+        Set this account as the default account for the user.
+        Automatically unsets any other default account for the same user.
+        """
+        # Unset any existing default account for this user
+        OandaAccount.objects.filter(user=self.user, is_default=True).exclude(id=self.id).update(
+            is_default=False
+        )
+        # Set this account as default
+        self.is_default = True
+        self.save(update_fields=["is_default", "updated_at"])

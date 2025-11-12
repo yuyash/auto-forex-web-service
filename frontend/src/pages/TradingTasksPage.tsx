@@ -23,6 +23,7 @@ import {
   Add as AddIcon,
   Search as SearchIcon,
   Warning as WarningIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTradingTasks } from '../hooks/useTradingTasks';
@@ -156,7 +157,14 @@ export default function TradingTasksPage() {
           <Typography variant="h4" component="h1">
             Trading Tasks
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              startIcon={<SettingsIcon />}
+              onClick={() => navigate('/settings?tab=accounts')}
+            >
+              Account Settings
+            </Button>
             <Button
               variant="outlined"
               onClick={() => navigate('/configurations?from=trading-tasks')}

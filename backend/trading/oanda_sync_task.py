@@ -8,6 +8,7 @@ Requirements: 8.3, 9.1, 9.5
 """
 
 import logging
+from collections import defaultdict
 from decimal import Decimal
 from typing import Any, Dict, List
 
@@ -323,12 +324,20 @@ class PositionReconciler:
             # Fetch open positions from database
             db_positions = self._fetch_db_positions()
 
-            # Create lookup dictionaries by instrument
-            oanda_positions_dict = {pos["instrument"]: pos for pos in oanda_positions}
-            db_positions_dict = {pos.instrument: pos for pos in db_positions}
+            # Create lookup dictionaries
+            # OANDA: one position per instrument+direction (aggregated)
+            oanda_positions_dict = {
+                f"{pos['instrument']}_{pos['direction']}": pos for pos in oanda_positions
+            }
+
+            # DB: group positions by instrument+direction (can have multiple per group)
+            db_positions_grouped = defaultdict(list)
+            for pos in db_positions:
+                key = f"{pos.instrument}_{pos.direction}"
+                db_positions_grouped[key].append(pos)
 
             # Find discrepancies
-            self._reconcile_positions(oanda_positions_dict, db_positions_dict)
+            self._reconcile_positions(oanda_positions_dict, db_positions_grouped)
 
             logger.info(
                 "Position reconciliation completed for account %s: "
@@ -369,7 +378,13 @@ class PositionReconciler:
             List of position dictionaries from OANDA
         """
         try:
+            logger.info("Fetching positions from OANDA for account %s", self.account.account_id)
             response = self.api.position.list_open(self.account.account_id)
+            logger.info(
+                "OANDA API response status: %d, has positions attr: %s",
+                response.status,
+                hasattr(response, "positions"),
+            )
 
             if response.status != 200:
                 logger.error(
@@ -380,12 +395,25 @@ class PositionReconciler:
 
             positions = []
             if hasattr(response, "positions") and response.positions:
+                logger.info("OANDA returned %d position objects", len(response.positions))
                 for position in response.positions:
                     # OANDA returns positions with long and short sides
                     # We need to extract the active side
                     pos_dict = position.dict()
+                    logger.info(
+                        "Processing OANDA position: %s",
+                        pos_dict.get("instrument"),
+                    )
+
                     long_units = Decimal(str(pos_dict.get("long", {}).get("units", 0)))
                     short_units = Decimal(str(pos_dict.get("short", {}).get("units", 0)))
+
+                    logger.info(
+                        "Position %s: long_units=%s, short_units=%s",
+                        pos_dict.get("instrument"),
+                        long_units,
+                        short_units,
+                    )
 
                     if long_units != 0:
                         positions.append(
@@ -417,10 +445,11 @@ class PositionReconciler:
                             }
                         )
 
-            logger.debug(
-                "Fetched %d open positions from OANDA for account %s",
+            logger.info(
+                "Fetched %d open positions from OANDA for account %s: %s",
                 len(positions),
                 self.account.account_id,
+                [p["instrument"] for p in positions],
             )
 
             return positions
@@ -451,64 +480,121 @@ class PositionReconciler:
     def _reconcile_positions(
         self,
         oanda_positions_dict: Dict[str, Dict[str, Any]],
-        db_positions_dict: Dict[str, Position],
+        db_positions_grouped: Dict[str, List[Position]],
     ) -> None:
         """
         Reconcile positions between OANDA and database.
 
+        OANDA aggregates all positions for an instrument+direction into one,
+        while the database may have multiple positions (layers) for the same instrument+direction.
+
         Args:
-            oanda_positions_dict: Dictionary of OANDA positions by instrument
-            db_positions_dict: Dictionary of database positions by instrument
+            oanda_positions_dict: Dictionary of OANDA positions by instrument+direction key
+            db_positions_grouped: Dictionary of database position lists by instrument+direction key
         """
         # Check for positions in database but not in OANDA (closed positions)
-        for instrument, db_position in db_positions_dict.items():
-            if instrument not in oanda_positions_dict:
+        for key, db_position_list in db_positions_grouped.items():
+            if key not in oanda_positions_dict:
+                # All positions for this instrument+direction are closed
                 self.discrepancies_found += 1
                 logger.warning(
-                    "Position %s found in database but not in OANDA - marking as closed",
-                    db_position.position_id,
+                    "Positions for %s found in database but not in OANDA - "
+                    "marking %d positions as closed",
+                    key,
+                    len(db_position_list),
                 )
 
-                # Close the position
-                with transaction.atomic():
-                    db_position.closed_at = timezone.now()
-                    db_position.realized_pnl = db_position.unrealized_pnl
-                    db_position.save(update_fields=["closed_at", "realized_pnl"])
+                # Close all positions for this instrument+direction
+                for db_position in db_position_list:
+                    with transaction.atomic():
+                        db_position.closed_at = timezone.now()
+                        db_position.realized_pnl = db_position.unrealized_pnl
+                        db_position.save(update_fields=["closed_at", "realized_pnl"])
 
-                self.positions_updated += 1
+                    self.positions_updated += 1
 
-                # Log reconciliation event
-                Event.log_trading_event(
-                    event_type="position_reconciliation",
-                    description=f"Position {db_position.position_id} reconciled: marked as closed",
-                    severity="warning",
-                    user=self.account.user,
-                    account=self.account,
-                    details={
-                        "position_id": db_position.position_id,
-                        "instrument": instrument,
-                        "action": "marked_closed",
-                        "reason": "not_found_in_oanda",
-                        "realized_pnl": str(db_position.realized_pnl),
-                    },
-                )
+                    # Log reconciliation event
+                    Event.log_trading_event(
+                        event_type="position_reconciliation",
+                        description=(
+                            f"Position {db_position.position_id} reconciled: " "marked as closed"
+                        ),
+                        severity="warning",
+                        user=self.account.user,
+                        account=self.account,
+                        details={
+                            "position_id": db_position.position_id,
+                            "instrument": db_position.instrument,
+                            "direction": db_position.direction,
+                            "action": "marked_closed",
+                            "reason": "not_found_in_oanda",
+                            "realized_pnl": str(db_position.realized_pnl),
+                        },
+                    )
 
         # Check for positions in OANDA but not in database (missed position creation)
-        for instrument, oanda_position in oanda_positions_dict.items():
-            if instrument not in db_positions_dict:
+        logger.info(
+            "Checking OANDA positions against DB: OANDA has %d, DB has %d",
+            len(oanda_positions_dict),
+            len(db_positions_grouped),
+        )
+
+        for key, oanda_position in oanda_positions_dict.items():
+            logger.info(
+                "Checking %s: in DB = %s",
+                key,
+                key in db_positions_grouped,
+            )
+
+            if key not in db_positions_grouped:
+                # No positions in DB for this instrument+direction, create one
                 self.discrepancies_found += 1
                 logger.warning(
                     "Position for %s found in OANDA but not in database - creating database record",
-                    instrument,
+                    key,
                 )
 
                 # Create missing position record
                 self._create_missing_position(oanda_position)
                 self.positions_updated += 1
             else:
-                # Position exists in both - update details
-                db_position = db_positions_dict[instrument]
-                self._update_position_details(db_position, oanda_position)
+                # Positions exist in both - verify total units match
+                db_position_list = db_positions_grouped[key]
+                total_db_units = sum(pos.units for pos in db_position_list)
+                oanda_units = oanda_position["units"]
+
+                # Check if units match (within tolerance)
+                units_match = abs(total_db_units - oanda_units) < Decimal("0.01")
+
+                if not units_match:
+                    self.discrepancies_found += 1
+                    logger.warning(
+                        "Unit mismatch for %s: DB total=%s, OANDA=%s",
+                        key,
+                        total_db_units,
+                        oanda_units,
+                    )
+
+                    # Log the discrepancy but don't auto-fix
+                    # (could be due to partial fills, pending orders, etc.)
+                    Event.log_trading_event(
+                        event_type="position_reconciliation",
+                        description=f"Unit mismatch detected for {key}",
+                        severity="warning",
+                        user=self.account.user,
+                        account=self.account,
+                        details={
+                            "instrument_direction": key,
+                            "db_total_units": str(total_db_units),
+                            "oanda_units": str(oanda_units),
+                            "db_position_count": len(db_position_list),
+                            "action": "logged_discrepancy",
+                        },
+                    )
+
+                # Update unrealized P&L for all positions in this group
+                for db_position in db_position_list:
+                    self._update_position_details(db_position, oanda_position)
 
     def _create_missing_position(self, oanda_position: Dict[str, Any]) -> None:
         """
@@ -533,10 +619,7 @@ class PositionReconciler:
                 unrealized_pnl=oanda_position["unrealized_pl"],
             )
 
-            logger.info(
-                "Created missing position record: %s",
-                position.position_id,
-            )
+            logger.info("Created missing position record: %s", position.position_id)
 
             # Log reconciliation event
             Event.log_trading_event(
@@ -626,16 +709,105 @@ class PositionReconciler:
 
 
 @shared_task(bind=True, max_retries=3)
-def oanda_sync_task(self: Any) -> Dict[str, Any]:  # pylint: disable=unused-argument
+def sync_account_task(
+    self: Any, account_id: int  # pylint: disable=unused-argument
+) -> Dict[str, Any]:
     """
-    Periodic synchronization task for OANDA orders and positions.
+    Periodic synchronization task for a single OANDA account.
 
     This task:
-    - Polls OANDA API for current orders and positions
+    - Polls OANDA API for current orders and positions for one account
     - Compares with database records
     - Reconciles any discrepancies (missed fills, cancellations)
     - Logs sync operations and discrepancies found
-    - Scheduled to run every 5 minutes
+    - Scheduled to run every 5 minutes per account
+
+    Args:
+        account_id: ID of the OandaAccount to sync
+
+    Returns:
+        Dictionary containing sync results
+
+    Requirements: 8.3, 9.1, 9.5
+    """
+    logger.info("Starting OANDA sync for account ID %d", account_id)
+
+    results: Dict[str, Any] = {
+        "success": True,
+        "account_id": account_id,
+        "order_discrepancies": 0,
+        "position_discrepancies": 0,
+        "total_updates": 0,
+        "errors": [],
+    }
+
+    try:
+        # Get the account
+        try:
+            account = OandaAccount.objects.select_related("user").get(id=account_id, is_active=True)
+        except OandaAccount.DoesNotExist:
+            error_msg = f"Account {account_id} not found or not active"
+            logger.warning(error_msg)
+            results["success"] = False
+            results["errors"].append(error_msg)
+            return results
+
+        logger.info("Syncing account %s", account.account_id)
+
+        # Reconcile orders
+        order_reconciler = OrderReconciler(account)
+        order_result = order_reconciler.reconcile()
+
+        if order_result["success"]:
+            results["order_discrepancies"] = order_result["discrepancies_found"]
+            results["total_updates"] += order_result["orders_updated"]
+        else:
+            results["errors"].append(f"Order reconciliation: {order_result['error']}")
+            results["success"] = False
+
+        # Reconcile positions
+        position_reconciler = PositionReconciler(account)
+        position_result = position_reconciler.reconcile()
+
+        if position_result["success"]:
+            results["position_discrepancies"] = position_result["discrepancies_found"]
+            results["total_updates"] += position_result["positions_updated"]
+        else:
+            results["errors"].append(f"Position reconciliation: {position_result['error']}")
+            results["success"] = False
+
+        logger.info(
+            "Completed sync for account %s: order discrepancies=%d, position discrepancies=%d",
+            account.account_id,
+            results["order_discrepancies"],
+            results["position_discrepancies"],
+        )
+
+        # Log event
+        Event.log_system_event(
+            event_type="oanda_account_sync",
+            description=f"Account {account.account_id} synced: "
+            f"{results['total_updates']} updates",
+            severity="info" if results["success"] else "warning",
+            details=results,
+        )
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"Error syncing account {account_id}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        results["errors"].append(error_msg)
+        results["success"] = False
+
+    return results
+
+
+@shared_task(bind=True, max_retries=3)
+def oanda_sync_task(self: Any) -> Dict[str, Any]:  # pylint: disable=unused-argument
+    """
+    Periodic synchronization task for all OANDA accounts.
+
+    This task triggers individual sync tasks for each active account.
+    Scheduled to run every 5 minutes.
 
     Returns:
         Dictionary containing:
@@ -648,7 +820,7 @@ def oanda_sync_task(self: Any) -> Dict[str, Any]:  # pylint: disable=unused-argu
 
     Requirements: 8.3, 9.1, 9.5
     """
-    logger.info("Starting OANDA synchronization task")
+    logger.info("Starting OANDA synchronization task for all accounts")
 
     results: Dict[str, Any] = {
         "success": True,
@@ -667,45 +839,23 @@ def oanda_sync_task(self: Any) -> Dict[str, Any]:  # pylint: disable=unused-argu
 
         for account in active_accounts:
             try:
-                logger.info("Syncing account %s", account.account_id)
-
-                # Reconcile orders
-                order_reconciler = OrderReconciler(account)
-                order_result = order_reconciler.reconcile()
-
-                if order_result["success"]:
-                    results["total_order_discrepancies"] += order_result["discrepancies_found"]
-                    results["total_updates"] += order_result["orders_updated"]
-                else:
-                    results["errors"].append(
-                        f"Account {account.account_id} order reconciliation: "
-                        f"{order_result['error']}"
-                    )
-
-                # Reconcile positions
-                position_reconciler = PositionReconciler(account)
-                position_result = position_reconciler.reconcile()
-
-                if position_result["success"]:
-                    results["total_position_discrepancies"] += position_result[
-                        "discrepancies_found"
-                    ]
-                    results["total_updates"] += position_result["positions_updated"]
-                else:
-                    results["errors"].append(
-                        f"Account {account.account_id} position reconciliation: "
-                        f"{position_result['error']}"
-                    )
-
-                results["accounts_synced"] += 1
-
-                logger.info(
-                    "Completed sync for account %s: "
-                    "order discrepancies=%d, position discrepancies=%d",
-                    account.account_id,
-                    order_result["discrepancies_found"],
-                    position_result["discrepancies_found"],
+                # Trigger individual account sync task
+                account_result = sync_account_task.apply_async(
+                    args=[account.id],
+                    expires=240,  # Task expires after 4 minutes
                 )
+
+                # Wait for result (with timeout)
+                sync_result = account_result.get(timeout=240)
+
+                if sync_result["success"]:
+                    results["total_order_discrepancies"] += sync_result["order_discrepancies"]
+                    results["total_position_discrepancies"] += sync_result["position_discrepancies"]
+                    results["total_updates"] += sync_result["total_updates"]
+                    results["accounts_synced"] += 1
+                else:
+                    results["errors"].extend(sync_result["errors"])
+                    results["success"] = False
 
             except Exception as e:  # pylint: disable=broad-exception-caught
                 error_msg = f"Error syncing account {account.account_id}: {str(e)}"

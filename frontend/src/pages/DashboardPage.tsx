@@ -461,7 +461,8 @@ const DashboardPage = () => {
               positions={currentPositions}
               orders={currentOrders}
               strategyEvents={currentStrategyEvents}
-              enableRealTimeUpdates={hasOandaAccount && !!oandaAccountId}
+              autoRefresh={hasOandaAccount && !!oandaAccountId}
+              refreshInterval={60000}
               accountId={oandaAccountId}
               refreshTrigger={chartRefreshTrigger}
               onChartReady={(chartApi) => {

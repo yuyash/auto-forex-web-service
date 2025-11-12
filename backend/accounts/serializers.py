@@ -281,6 +281,7 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             "django_log_level",
             # Application Settings
             "tick_data_retention_days",
+            "oanda_sync_interval_seconds",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]
@@ -515,6 +516,7 @@ class OandaAccountSerializer(serializers.ModelSerializer):
             "enable_position_differentiation",
             "position_diff_increment",
             "position_diff_pattern",
+            "is_default",
             "created_at",
             "updated_at",
         ]
@@ -658,6 +660,7 @@ class OandaAccountSerializer(serializers.ModelSerializer):
 
         # Extract api_token before creating the account
         api_token = validated_data.pop("api_token")
+        is_default = validated_data.pop("is_default", False)
 
         # Get user from request context
         request = self.context.get("request")
@@ -666,12 +669,22 @@ class OandaAccountSerializer(serializers.ModelSerializer):
 
         user = request.user
 
+        # Check if this is the first account for the user
+        existing_accounts_count = OandaAccount.objects.filter(user=user).count()
+        if existing_accounts_count == 0:
+            # First account is automatically set as default
+            is_default = True
+
         # Create account
         account = OandaAccount.objects.create(user=user, **validated_data)
 
         # Set encrypted API token
         account.set_api_token(api_token)
         account.save()
+
+        # Set as default if needed (this will save again)
+        if is_default:
+            account.set_as_default()
 
         return account
 
@@ -686,8 +699,9 @@ class OandaAccountSerializer(serializers.ModelSerializer):
         Returns:
             Updated OandaAccount instance
         """
-        # Extract api_token if provided
+        # Extract api_token and is_default if provided
         api_token = validated_data.pop("api_token", None)
+        is_default = validated_data.pop("is_default", None)
 
         # Update fields
         for attr, value in validated_data.items():
@@ -697,7 +711,18 @@ class OandaAccountSerializer(serializers.ModelSerializer):
         if api_token:
             instance.set_api_token(api_token)
 
-        instance.save()
+        # Handle default account change
+        if is_default is not None and is_default != instance.is_default:
+            if is_default:
+                instance.set_as_default()
+            else:
+                # Don't allow unsetting default without setting another account as default
+                # This is handled by the set_as_default method
+                instance.is_default = False
+                instance.save()
+        else:
+            instance.save()
+
         return instance
 
 
