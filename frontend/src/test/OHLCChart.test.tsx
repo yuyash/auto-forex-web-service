@@ -21,6 +21,7 @@ const mockSubscribeVisibleLogicalRangeChange = vi.fn();
 const mockUnsubscribeVisibleLogicalRangeChange = vi.fn();
 const mockGetVisibleLogicalRange = vi.fn();
 const mockGetVisibleRange = vi.fn();
+const mockScrollToPosition = vi.fn();
 const mockRemove = vi.fn();
 const mockApplyOptions = vi.fn();
 const mockSubscribeCrosshairMove = vi.fn();
@@ -38,6 +39,7 @@ vi.mock('lightweight-charts', () => ({
     timeScale: vi.fn(() => ({
       fitContent: mockFitContent,
       getVisibleRange: mockGetVisibleRange,
+      scrollToPosition: mockScrollToPosition,
       subscribeVisibleLogicalRangeChange:
         mockSubscribeVisibleLogicalRangeChange,
       unsubscribeVisibleLogicalRangeChange:
