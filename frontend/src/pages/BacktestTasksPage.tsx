@@ -135,7 +135,7 @@ export default function BacktestTasksPage() {
           <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
               variant="outlined"
-              onClick={() => navigate('/configurations')}
+              onClick={() => navigate('/configurations?from=backtest-tasks')}
             >
               Manage Configurations
             </Button>

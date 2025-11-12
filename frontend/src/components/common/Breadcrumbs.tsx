@@ -1,5 +1,9 @@
 import { Breadcrumbs as MuiBreadcrumbs, Link, Typography } from '@mui/material';
-import { Link as RouterLink, useLocation } from 'react-router-dom';
+import {
+  Link as RouterLink,
+  useLocation,
+  useSearchParams,
+} from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import HomeIcon from '@mui/icons-material/Home';
@@ -11,7 +15,11 @@ interface BreadcrumbItem {
 
 const Breadcrumbs = () => {
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { t } = useTranslation('common');
+
+  // Check if we came from a specific page
+  const fromPage = searchParams.get('from');
 
   // Route configuration for breadcrumbs
   const routeConfig: Record<string, BreadcrumbItem[]> = {
@@ -52,7 +60,7 @@ const Breadcrumbs = () => {
       { label: t('breadcrumbs.admin'), path: '/admin' },
       { label: t('breadcrumbs.users') },
     ],
-    // Configuration routes
+    // Configuration routes - default without context
     '/configurations': [
       { label: t('breadcrumbs.home'), path: '/dashboard' },
       { label: 'Configurations' },
@@ -87,14 +95,75 @@ const Breadcrumbs = () => {
   // Handle dynamic routes (e.g., /backtest-tasks/:id, /configurations/:id/edit)
   let breadcrumbs = routeConfig[location.pathname];
 
+  // Special handling for configurations page with context
+  if (location.pathname === '/configurations' && fromPage) {
+    if (fromPage === 'backtest-tasks') {
+      breadcrumbs = [
+        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: 'Backtest Tasks', path: '/backtest-tasks' },
+        { label: 'Configurations' },
+      ];
+    } else if (fromPage === 'trading-tasks') {
+      breadcrumbs = [
+        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: 'Trading Tasks', path: '/trading-tasks' },
+        { label: 'Configurations' },
+      ];
+    }
+  }
+
+  // Special handling for new configuration page with context
+  if (location.pathname === '/configurations/new' && fromPage) {
+    if (fromPage === 'backtest-tasks') {
+      breadcrumbs = [
+        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: 'Backtest Tasks', path: '/backtest-tasks' },
+        {
+          label: 'Configurations',
+          path: '/configurations?from=backtest-tasks',
+        },
+        { label: 'New Configuration' },
+      ];
+    } else if (fromPage === 'trading-tasks') {
+      breadcrumbs = [
+        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: 'Trading Tasks', path: '/trading-tasks' },
+        { label: 'Configurations', path: '/configurations?from=trading-tasks' },
+        { label: 'New Configuration' },
+      ];
+    }
+  }
+
   if (!breadcrumbs) {
     // Check for dynamic routes
     if (location.pathname.match(/^\/configurations\/\d+\/edit$/)) {
-      breadcrumbs = [
-        { label: t('breadcrumbs.home'), path: '/dashboard' },
-        { label: 'Configurations', path: '/configurations' },
-        { label: 'Edit Configuration' },
-      ];
+      if (fromPage === 'backtest-tasks') {
+        breadcrumbs = [
+          { label: t('breadcrumbs.home'), path: '/dashboard' },
+          { label: 'Backtest Tasks', path: '/backtest-tasks' },
+          {
+            label: 'Configurations',
+            path: '/configurations?from=backtest-tasks',
+          },
+          { label: 'Edit Configuration' },
+        ];
+      } else if (fromPage === 'trading-tasks') {
+        breadcrumbs = [
+          { label: t('breadcrumbs.home'), path: '/dashboard' },
+          { label: 'Trading Tasks', path: '/trading-tasks' },
+          {
+            label: 'Configurations',
+            path: '/configurations?from=trading-tasks',
+          },
+          { label: 'Edit Configuration' },
+        ];
+      } else {
+        breadcrumbs = [
+          { label: t('breadcrumbs.home'), path: '/dashboard' },
+          { label: 'Configurations', path: '/configurations' },
+          { label: 'Edit Configuration' },
+        ];
+      }
     } else if (location.pathname.match(/^\/backtest-tasks\/\d+$/)) {
       breadcrumbs = [
         { label: t('breadcrumbs.home'), path: '/dashboard' },

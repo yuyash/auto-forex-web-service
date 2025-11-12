@@ -157,7 +157,7 @@ export default function TradingTasksPage() {
           <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
               variant="outlined"
-              onClick={() => navigate('/configurations')}
+              onClick={() => navigate('/configurations?from=trading-tasks')}
             >
               Manage Configurations
             </Button>
