@@ -116,10 +116,19 @@ const OHLCChart = ({
     y: number;
   }>({ x: 0, y: 0 });
 
+  // Track if user is viewing the latest data
+  const [isViewingLatest, setIsViewingLatest] = useState<boolean>(true);
+
   /**
    * Load initial data when component mounts or instrument/granularity changes
    */
   const loadInitialData = useCallback(async () => {
+    console.log('[OHLCChart] Loading initial data', {
+      instrument,
+      granularity,
+      timestamp: new Date().toISOString(),
+    });
+
     setIsLoading(true);
     setLoadingDirection(null);
     setError(null);
@@ -127,11 +136,40 @@ const OHLCChart = ({
 
     try {
       const data = await fetchCandles(instrument, granularity, 5000);
+
+      console.log('[OHLCChart] Initial data loaded successfully', {
+        instrument,
+        granularity,
+        candleCount: data.length,
+        firstCandle:
+          data.length > 0
+            ? {
+                time: data[0].time,
+                date: new Date(data[0].time * 1000).toISOString(),
+              }
+            : null,
+        lastCandle:
+          data.length > 0
+            ? {
+                time: data[data.length - 1].time,
+                date: new Date(data[data.length - 1].time * 1000).toISOString(),
+              }
+            : null,
+      });
+
       // Only update data after successful fetch to prevent flash
       setAllData(data);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to load initial data';
+
+      console.error('[OHLCChart] Failed to load initial data', {
+        instrument,
+        granularity,
+        error: errorMessage,
+        errorDetails: err,
+      });
+
       setError(errorMessage);
       // Only clear data on error
       setAllData([]);
@@ -144,6 +182,10 @@ const OHLCChart = ({
    * Load initial data on mount and when instrument/granularity changes
    */
   useEffect(() => {
+    console.log('[OHLCChart] Effect triggered - loading initial data', {
+      instrument,
+      granularity,
+    });
     loadInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instrument, granularity]);
@@ -153,10 +195,22 @@ const OHLCChart = ({
    */
   const loadOlderData = useCallback(async () => {
     if (isLoading || allData.length === 0) {
+      console.log('[OHLCChart] Skipping older data load', {
+        reason: isLoading ? 'already loading' : 'no data',
+        isLoading,
+        dataLength: allData.length,
+      });
       return;
     }
 
     const oldestTime = allData[0].time;
+    console.log('[OHLCChart] Loading older data', {
+      instrument,
+      granularity,
+      oldestTime,
+      oldestDate: new Date(oldestTime * 1000).toISOString(),
+    });
+
     setIsLoading(true);
     setLoadingDirection('older');
 
@@ -168,26 +222,47 @@ const OHLCChart = ({
         oldestTime
       );
 
+      console.log('[OHLCChart] Older data fetched', {
+        fetchedCount: olderData.length,
+        oldestTime,
+      });
+
       if (olderData.length > 0) {
         // Check if API returned actually older data or just the latest data
         const hasActuallyOlderData = olderData.some((c) => c.time < oldestTime);
 
         if (!hasActuallyOlderData) {
+          console.log('[OHLCChart] No actually older data returned');
           return;
         }
 
         // Filter out any candles that overlap with existing data (including boundary)
         const filteredOlderData = olderData.filter((c) => c.time < oldestTime);
 
+        console.log('[OHLCChart] Filtered older data', {
+          filteredCount: filteredOlderData.length,
+          originalCount: olderData.length,
+        });
+
         if (filteredOlderData.length > 0) {
           // Sort older data before prepending to ensure order
           filteredOlderData.sort((a, b) => a.time - b.time);
           setAllData((prevData) => [...filteredOlderData, ...prevData]);
+
+          console.log('[OHLCChart] Older data prepended successfully', {
+            newTotalCount: filteredOlderData.length + allData.length,
+          });
         }
       }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to load older data';
+
+      console.error('[OHLCChart] Failed to load older data', {
+        error: errorMessage,
+        errorDetails: err,
+      });
+
       setError(errorMessage);
       // Don't clear allData on error
     } finally {
@@ -201,6 +276,11 @@ const OHLCChart = ({
    */
   const loadNewerData = useCallback(async () => {
     if (isLoading || allData.length === 0) {
+      console.log('[OHLCChart] Skipping newer data load', {
+        reason: isLoading ? 'already loading' : 'no data',
+        isLoading,
+        dataLength: allData.length,
+      });
       return;
     }
 
@@ -210,8 +290,28 @@ const OHLCChart = ({
 
     // Check if already at current time
     if (currentTime - newestTime <= granularityDuration) {
+      console.log(
+        '[OHLCChart] Already at current time, skipping newer data load',
+        {
+          newestTime,
+          newestDate: new Date(newestTime * 1000).toISOString(),
+          currentTime,
+          currentDate: new Date(currentTime * 1000).toISOString(),
+          timeDiff: currentTime - newestTime,
+          granularityDuration,
+        }
+      );
       return;
     }
+
+    console.log('[OHLCChart] Loading newer data', {
+      instrument,
+      granularity,
+      newestTime,
+      newestDate: new Date(newestTime * 1000).toISOString(),
+      currentTime,
+      currentDate: new Date(currentTime * 1000).toISOString(),
+    });
 
     setIsLoading(true);
     setLoadingDirection('newer');
@@ -226,17 +326,37 @@ const OHLCChart = ({
         newestTime // 'after' parameter
       );
 
+      console.log('[OHLCChart] Newer data fetched', {
+        fetchedCount: newerData.length,
+        newestTime,
+      });
+
       // Filter out any candles that overlap with existing data
       const newCandles = newerData.filter((c) => c.time > newestTime);
+
+      console.log('[OHLCChart] Filtered newer data', {
+        filteredCount: newCandles.length,
+        originalCount: newerData.length,
+      });
 
       if (newCandles.length > 0) {
         // Sort new candles before appending to ensure order
         newCandles.sort((a, b) => a.time - b.time);
         setAllData((prevData) => [...prevData, ...newCandles]);
+
+        console.log('[OHLCChart] Newer data appended successfully', {
+          newTotalCount: allData.length + newCandles.length,
+        });
       }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to load newer data';
+
+      console.error('[OHLCChart] Failed to load newer data', {
+        error: errorMessage,
+        errorDetails: err,
+      });
+
       setError(errorMessage);
       // Don't clear allData on error
     } finally {
@@ -251,6 +371,10 @@ const OHLCChart = ({
    */
   useEffect(() => {
     if (refreshTrigger > 0 && allData.length > 0) {
+      console.log('[OHLCChart] Refresh trigger activated', {
+        refreshTrigger,
+        dataLength: allData.length,
+      });
       loadNewerData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -261,14 +385,25 @@ const OHLCChart = ({
    */
   useEffect(() => {
     if (!autoRefresh || allData.length === 0) {
+      console.log('[OHLCChart] Auto-refresh disabled or no data', {
+        autoRefresh,
+        dataLength: allData.length,
+      });
       return;
     }
 
+    console.log('[OHLCChart] Auto-refresh enabled', {
+      refreshInterval,
+      dataLength: allData.length,
+    });
+
     const intervalId = setInterval(() => {
+      console.log('[OHLCChart] Auto-refresh interval triggered');
       loadNewerData();
     }, refreshInterval);
 
     return () => {
+      console.log('[OHLCChart] Auto-refresh cleanup');
       clearInterval(intervalId);
     };
   }, [autoRefresh, refreshInterval, allData.length, loadNewerData]);
@@ -411,9 +546,18 @@ const OHLCChart = ({
       const totalBars = allDataRef.current.length;
 
       // Check if user is viewing the latest candles (within 50 bars of the end)
-      const isViewingLatest = logicalRange.to > totalBars - 50;
+      const viewingLatest = logicalRange.to > totalBars - 50;
+
+      console.log('[OHLCChart] Visible range changed', {
+        logicalRange,
+        totalBars,
+        isViewingLatest: viewingLatest,
+      });
+
+      setIsViewingLatest(viewingLatest);
+
       if (onViewingLatestChange) {
-        onViewingLatestChange(isViewingLatest);
+        onViewingLatestChange(viewingLatest);
       }
 
       // Clear existing debounce timer
@@ -514,13 +658,23 @@ const OHLCChart = ({
    */
   useEffect(() => {
     if (!candlestickSeriesRef.current || !chartRef.current) {
+      console.log('[OHLCChart] Chart not ready for data update', {
+        hasCandlestickSeries: !!candlestickSeriesRef.current,
+        hasChart: !!chartRef.current,
+      });
       return;
     }
 
     if (allData.length === 0) {
+      console.log('[OHLCChart] No data to display, clearing chart');
       candlestickSeriesRef.current.setData([]);
       return;
     }
+
+    console.log('[OHLCChart] Processing data for chart update', {
+      totalDataPoints: allData.length,
+      isInitialLoad,
+    });
 
     // Filter out invalid data and map to candlestick format
     const candlestickData: CandlestickData<Time>[] = allData
@@ -536,6 +690,10 @@ const OHLCChart = ({
           !isNaN(item.high) &&
           !isNaN(item.low) &&
           !isNaN(item.close);
+
+        if (!isValid) {
+          console.warn('[OHLCChart] Invalid data point filtered out', { item });
+        }
 
         return isValid;
       })
@@ -553,14 +711,48 @@ const OHLCChart = ({
     // Remove duplicates - keep the last occurrence of each timestamp
     const deduplicatedData: CandlestickData<Time>[] = [];
     const seenTimes = new Set<number>();
+    let duplicateCount = 0;
 
     for (let i = candlestickData.length - 1; i >= 0; i--) {
       const time = candlestickData[i].time as number;
       if (!seenTimes.has(time)) {
         seenTimes.add(time);
         deduplicatedData.unshift(candlestickData[i]);
+      } else {
+        duplicateCount++;
       }
     }
+
+    if (duplicateCount > 0) {
+      console.warn('[OHLCChart] Removed duplicate timestamps', {
+        duplicateCount,
+      });
+    }
+
+    console.log('[OHLCChart] Setting chart data', {
+      validDataPoints: candlestickData.length,
+      deduplicatedDataPoints: deduplicatedData.length,
+      firstCandle:
+        deduplicatedData.length > 0
+          ? {
+              time: deduplicatedData[0].time,
+              date: new Date(
+                (deduplicatedData[0].time as number) * 1000
+              ).toISOString(),
+            }
+          : null,
+      lastCandle:
+        deduplicatedData.length > 0
+          ? {
+              time: deduplicatedData[deduplicatedData.length - 1].time,
+              date: new Date(
+                (deduplicatedData[deduplicatedData.length - 1].time as number) *
+                  1000
+              ).toISOString(),
+            }
+          : null,
+      isViewingLatest,
+    });
 
     // Save the current visible TIME RANGE (not logical range) before updating data
     const timeScale = chartRef.current.timeScale();
@@ -570,8 +762,18 @@ const OHLCChart = ({
 
     // Only fit content on initial load, otherwise preserve viewport
     if (isInitialLoad && allData.length > 0 && candlestickData.length > 0) {
+      console.log('[OHLCChart] Initial load complete, fitting content');
       chartRef.current.timeScale().fitContent();
       setIsInitialLoad(false);
+    } else if (isViewingLatest && deduplicatedData.length > 0) {
+      // If user is viewing the latest data, scroll to show the newest candles
+      console.log(
+        '[OHLCChart] User is viewing latest, scrolling to newest data'
+      );
+
+      // Scroll to the rightmost position to show the latest data
+      // Use scrollToPosition with negative offset to show the latest bars
+      timeScale.scrollToPosition(-5, false); // Show last 5 bars with some padding
     } else if (
       visibleTimeRange &&
       !isInitialLoad &&
@@ -580,9 +782,10 @@ const OHLCChart = ({
     ) {
       // Restore the viewport TIME RANGE after data update
       // This maintains the same absolute time window regardless of data changes
+      console.log('[OHLCChart] User scrolled away, preserving visible range');
       timeScale.setVisibleRange(visibleTimeRange);
     }
-  }, [allData, isInitialLoad]);
+  }, [allData, isInitialLoad, isViewingLatest]);
 
   // Update position, order, and strategy event markers
   useEffect(() => {

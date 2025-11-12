@@ -26,6 +26,7 @@ import type { SelectChangeEvent } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useOandaAccounts } from '../hooks/useOandaAccounts';
+import { useChartPreferences } from '../hooks/useChartPreferences';
 import { OHLCChart } from '../components/chart';
 import { Breadcrumbs } from '../components/common';
 import ChartControls from '../components/chart/ChartControls';
@@ -45,9 +46,10 @@ const DashboardPage = () => {
   const { t } = useTranslation('dashboard');
   const { token } = useAuth();
 
-  // Chart state
-  const [instrument, setInstrument] = useState<string>('USD_JPY');
-  const [granularity, setGranularity] = useState<Granularity>('H1');
+  // Chart preferences with localStorage persistence
+  const { preferences, updatePreference } = useChartPreferences();
+  const { instrument, granularity, autoRefreshEnabled, refreshInterval } =
+    preferences;
 
   // Data state
   const [positions, setPositions] = useState<Position[]>([]);
@@ -56,18 +58,38 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-refresh settings - start disabled to prevent resource exhaustion
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
-  const [refreshInterval, setRefreshInterval] = useState<number>(60); // seconds
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // OANDA account state - using shared hook with caching
-  const { accounts: oandaAccounts, hasAccounts: hasOandaAccount } =
-    useOandaAccounts();
+  const {
+    accounts: oandaAccounts,
+    hasAccounts: hasOandaAccount,
+    isLoading: accountsLoading,
+  } = useOandaAccounts();
+
+  // Log account state
+  useEffect(() => {
+    console.log('[DashboardPage] OANDA accounts state', {
+      accountCount: oandaAccounts.length,
+      hasOandaAccount,
+      isLoading: accountsLoading,
+      accounts: oandaAccounts.map((a) => ({
+        id: a.id,
+        account_id: a.account_id,
+        is_default: a.is_default,
+      })),
+    });
+  }, [oandaAccounts, hasOandaAccount, accountsLoading]);
+
   // Use default account or first account
   const defaultAccount =
     oandaAccounts.find((acc) => acc.is_default) || oandaAccounts[0];
   const oandaAccountId = defaultAccount?.account_id;
+
+  console.log('[DashboardPage] Selected account', {
+    hasDefaultAccount: !!defaultAccount,
+    accountId: oandaAccountId,
+  });
 
   // Chart API reference for programmatic control
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,7 +100,7 @@ const DashboardPage = () => {
 
   /**
    * Simple fetchCandles function that makes API calls
-   * Returns OHLCData[] or empty array on error
+   * Returns OHLCData[] or throws error
    *
    * @param before - Unix timestamp to fetch older data (candles ending before this time)
    * @param after - Unix timestamp to fetch newer data (candles starting after this time)
@@ -91,6 +113,16 @@ const DashboardPage = () => {
       before?: number,
       after?: number
     ): Promise<OHLCData[]> => {
+      const params = {
+        instrument: inst,
+        granularity: gran,
+        count,
+        before,
+        after,
+      };
+
+      console.log('[DashboardPage] Fetching candles', params);
+
       try {
         let url = `/api/candles?instrument=${inst}&granularity=${gran}&count=${count}`;
         if (before) {
@@ -100,30 +132,67 @@ const DashboardPage = () => {
           url += `&after=${after}`;
         }
 
+        console.log('[DashboardPage] API request URL:', url);
+
         const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
 
+        console.log('[DashboardPage] API response status:', response.status);
+
         // Check for rate limiting
         if (
           response.status === 429 ||
           response.headers.get('X-Rate-Limited') === 'true'
         ) {
+          console.warn('[DashboardPage] Rate limited, returning empty array');
           return [];
         }
 
         if (!response.ok) {
-          return [];
+          const errorText = await response.text();
+          console.error('[DashboardPage] API error response', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText,
+          });
+          throw new Error(
+            `Failed to fetch candles: ${response.status} ${response.statusText}`
+          );
         }
 
         const data = await response.json();
         const candles = data.candles || [];
+
+        console.log('[DashboardPage] Candles fetched successfully', {
+          count: candles.length,
+          firstCandle:
+            candles.length > 0
+              ? {
+                  time: candles[0].time,
+                  date: new Date(candles[0].time * 1000).toISOString(),
+                }
+              : null,
+          lastCandle:
+            candles.length > 0
+              ? {
+                  time: candles[candles.length - 1].time,
+                  date: new Date(
+                    candles[candles.length - 1].time * 1000
+                  ).toISOString(),
+                }
+              : null,
+        });
+
         return candles;
       } catch (err) {
-        console.error('❌ Error fetching candles:', err);
-        return [];
+        console.error('[DashboardPage] Error fetching candles', {
+          error: err instanceof Error ? err.message : String(err),
+          params,
+        });
+        throw err;
       }
     },
     [token]
@@ -272,14 +341,24 @@ const DashboardPage = () => {
 
   // Handle refresh interval change
   const handleRefreshIntervalChange = (event: SelectChangeEvent<number>) => {
-    setRefreshInterval(Number(event.target.value));
+    updatePreference('refreshInterval', Number(event.target.value));
   };
 
   // Handle auto-refresh toggle
   const handleAutoRefreshToggle = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    setAutoRefreshEnabled(event.target.checked);
+    updatePreference('autoRefreshEnabled', event.target.checked);
+  };
+
+  // Handle instrument change
+  const handleInstrumentChange = (newInstrument: string) => {
+    updatePreference('instrument', newInstrument);
+  };
+
+  // Handle granularity change
+  const handleGranularityChange = (newGranularity: Granularity) => {
+    updatePreference('granularity', newGranularity);
   };
 
   // Handle manual refresh - reload data without remounting
@@ -341,7 +420,12 @@ const DashboardPage = () => {
             mb: 2,
           }}
         >
-          <Typography variant="h6">Market Chart</Typography>
+          <Box>
+            <Typography variant="h6">Market Chart</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Settings are automatically saved
+            </Typography>
+          </Box>
 
           {/* Auto-refresh controls */}
           <Box
@@ -399,8 +483,8 @@ const DashboardPage = () => {
             <ChartControls
               instrument={instrument}
               granularity={granularity}
-              onInstrumentChange={setInstrument}
-              onGranularityChange={setGranularity}
+              onInstrumentChange={handleInstrumentChange}
+              onGranularityChange={handleGranularityChange}
             />
           </Box>
 

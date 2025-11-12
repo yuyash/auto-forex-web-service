@@ -68,6 +68,16 @@ const PositionsPage = () => {
   const { token } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
+
+  // Helper function to format direction display
+  const formatDirection = (direction: string) => {
+    return t(`positions:directions.${direction.toUpperCase()}`);
+  };
+
+  // Helper function to get direction color
+  const getDirectionColor = (direction: string): 'success' | 'error' => {
+    return direction.toLowerCase() === 'long' ? 'success' : 'error';
+  };
   const [activePositions, setActivePositions] = useState<Position[]>([]);
   const [closedPositions, setClosedPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(false);
@@ -309,17 +319,17 @@ const PositionsPage = () => {
       new Date(position.opened_at).toLocaleString(),
       position.position_id,
       position.instrument,
-      position.direction,
+      formatDirection(position.direction),
       position.units.toString(),
-      position.entry_price.toFixed(5),
+      Number(position.entry_price).toFixed(5),
       tabValue === 0
-        ? position.current_price.toFixed(5)
+        ? Number(position.current_price).toFixed(5)
         : position.closed_at
           ? new Date(position.closed_at).toLocaleString()
           : 'N/A',
       tabValue === 0
-        ? position.unrealized_pnl.toFixed(2)
-        : (position.realized_pnl || 0).toFixed(2),
+        ? Number(position.unrealized_pnl).toFixed(2)
+        : Number(position.realized_pnl || 0).toFixed(2),
       position.layer?.toString() || 'N/A',
       position.strategy || 'N/A',
     ]);
@@ -406,9 +416,9 @@ const PositionsPage = () => {
       sortable: true,
       render: (position) => (
         <Chip
-          label={t(`positions:directions.${position.direction}`)}
+          label={formatDirection(position.direction)}
           size="small"
-          color={position.direction === 'LONG' ? 'success' : 'error'}
+          color={getDirectionColor(position.direction)}
         />
       ),
       minWidth: 100,
@@ -425,7 +435,7 @@ const PositionsPage = () => {
       label: t('positions:columns.entryPrice'),
       sortable: true,
       align: 'right',
-      render: (position) => position.entry_price.toFixed(5),
+      render: (position) => Number(position.entry_price).toFixed(5),
       minWidth: 120,
     },
     {
@@ -433,7 +443,7 @@ const PositionsPage = () => {
       label: t('positions:columns.currentPrice'),
       sortable: true,
       align: 'right',
-      render: (position) => position.current_price.toFixed(5),
+      render: (position) => Number(position.current_price).toFixed(5),
       minWidth: 120,
     },
     {
@@ -442,7 +452,7 @@ const PositionsPage = () => {
       sortable: true,
       align: 'right',
       render: (position) => {
-        const pnl = position.unrealized_pnl;
+        const pnl = Number(position.unrealized_pnl);
         return (
           <Chip
             label={`${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`}
@@ -498,9 +508,9 @@ const PositionsPage = () => {
       sortable: true,
       render: (position) => (
         <Chip
-          label={t(`positions:directions.${position.direction}`)}
+          label={formatDirection(position.direction)}
           size="small"
-          color={position.direction === 'LONG' ? 'success' : 'error'}
+          color={getDirectionColor(position.direction)}
         />
       ),
       minWidth: 100,
@@ -517,7 +527,7 @@ const PositionsPage = () => {
       label: t('positions:columns.entryPrice'),
       sortable: true,
       align: 'right',
-      render: (position) => position.entry_price.toFixed(5),
+      render: (position) => Number(position.entry_price).toFixed(5),
       minWidth: 120,
     },
     {
@@ -536,7 +546,7 @@ const PositionsPage = () => {
       sortable: true,
       align: 'right',
       render: (position) => {
-        const pnl = position.realized_pnl || 0;
+        const pnl = Number(position.realized_pnl || 0);
         return (
           <Chip
             label={`${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`}
@@ -861,7 +871,12 @@ const PositionsPage = () => {
                   <strong>Instrument:</strong> {positionToClose.instrument}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Direction:</strong> {positionToClose.direction}
+                  <strong>Direction:</strong>{' '}
+                  <Chip
+                    label={formatDirection(positionToClose.direction)}
+                    size="small"
+                    color={getDirectionColor(positionToClose.direction)}
+                  />
                 </Typography>
                 <Typography variant="body2">
                   <strong>Units:</strong> {positionToClose.units}
@@ -869,10 +884,12 @@ const PositionsPage = () => {
                 <Typography variant="body2">
                   <strong>Unrealized P&L:</strong>{' '}
                   <Chip
-                    label={`${positionToClose.unrealized_pnl >= 0 ? '+' : ''}${positionToClose.unrealized_pnl.toFixed(2)}`}
+                    label={`${Number(positionToClose.unrealized_pnl) >= 0 ? '+' : ''}${Number(positionToClose.unrealized_pnl).toFixed(2)}`}
                     size="small"
                     color={
-                      positionToClose.unrealized_pnl >= 0 ? 'success' : 'error'
+                      Number(positionToClose.unrealized_pnl) >= 0
+                        ? 'success'
+                        : 'error'
                     }
                   />
                 </Typography>

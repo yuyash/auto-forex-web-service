@@ -47,7 +47,15 @@ export function useOandaAccounts(): UseOandaAccountsResult {
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchData = useCallback(async () => {
+    console.log('[useOandaAccounts] fetchData called', {
+      hasToken: !!token,
+      cacheAge: cache.data ? Date.now() - cache.timestamp : null,
+      hasCachedData: !!cache.data,
+      hasPendingRequest: !!cache.promise,
+    });
+
     if (!token) {
+      console.log('[useOandaAccounts] No token, clearing accounts');
       setAccounts([]);
       setIsLoading(false);
       return;
@@ -55,6 +63,10 @@ export function useOandaAccounts(): UseOandaAccountsResult {
 
     // Check cache first
     if (cache.data && Date.now() - cache.timestamp < CACHE_DURATION) {
+      console.log('[useOandaAccounts] Using cached data', {
+        accountCount: cache.data.length,
+        cacheAge: Date.now() - cache.timestamp,
+      });
       setAccounts(cache.data);
       setIsLoading(false);
       return;
@@ -62,12 +74,17 @@ export function useOandaAccounts(): UseOandaAccountsResult {
 
     // If there's already a pending request, wait for it instead of making a new one
     if (cache.promise) {
+      console.log('[useOandaAccounts] Waiting for pending request');
       try {
         const result = await cache.promise;
+        console.log('[useOandaAccounts] Pending request completed', {
+          accountCount: result.length,
+        });
         setAccounts(result);
         setIsLoading(false);
         return;
       } catch (err) {
+        console.error('[useOandaAccounts] Pending request failed', err);
         setError(err as Error);
         setIsLoading(false);
         return;
@@ -80,6 +97,7 @@ export function useOandaAccounts(): UseOandaAccountsResult {
     }
 
     try {
+      console.log('[useOandaAccounts] Fetching accounts from API');
       setIsLoading(true);
       setError(null);
       abortControllerRef.current = new AbortController();
@@ -91,22 +109,64 @@ export function useOandaAccounts(): UseOandaAccountsResult {
         },
         signal: abortControllerRef.current.signal,
       }).then(async (response) => {
+        console.log('[useOandaAccounts] API response received', {
+          status: response.status,
+          ok: response.ok,
+        });
+
         if (
           handleAuthErrorStatus(response.status, {
             context: 'oanda-accounts:fetch',
           })
         ) {
+          console.log(
+            '[useOandaAccounts] Auth error handled, returning empty array'
+          );
           return [];
         }
 
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[useOandaAccounts] API error', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText,
+          });
           throw new Error(`Failed to fetch accounts: ${response.statusText}`);
         }
         const data = await response.json();
-        return Array.isArray(data) ? data : [];
+        console.log('[useOandaAccounts] API data parsed', {
+          isArray: Array.isArray(data),
+          dataType: typeof data,
+          keys: data ? Object.keys(data) : null,
+          data: data,
+        });
+
+        // Handle different response formats
+        if (Array.isArray(data)) {
+          return data;
+        } else if (data && typeof data === 'object') {
+          // Check for common pagination formats
+          if (Array.isArray(data.results)) {
+            return data.results;
+          } else if (Array.isArray(data.data)) {
+            return data.data;
+          } else if (Array.isArray(data.accounts)) {
+            return data.accounts;
+          }
+        }
+
+        console.warn(
+          '[useOandaAccounts] Unexpected API response format, returning empty array'
+        );
+        return [];
       });
 
       const result = await cache.promise;
+
+      console.log('[useOandaAccounts] Processing accounts', {
+        rawCount: result.length,
+      });
 
       const normalizedAccounts: OandaAccount[] = result.map((account) => {
         const typedAccount = account as OandaAccount & {
@@ -126,6 +186,16 @@ export function useOandaAccounts(): UseOandaAccountsResult {
         };
       });
 
+      console.log('[useOandaAccounts] Accounts normalized', {
+        count: normalizedAccounts.length,
+        accounts: normalizedAccounts.map((a) => ({
+          id: a.id,
+          account_id: a.account_id,
+          api_type: a.api_type,
+          is_active: a.is_active,
+        })),
+      });
+
       // Update cache
       cache.data = normalizedAccounts;
       cache.timestamp = Date.now();
@@ -134,6 +204,10 @@ export function useOandaAccounts(): UseOandaAccountsResult {
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         const error = err as Error;
+        console.error('[useOandaAccounts] Fetch failed', {
+          error: error.message,
+          name: error.name,
+        });
         setError(error);
 
         // Only log non-abort errors once

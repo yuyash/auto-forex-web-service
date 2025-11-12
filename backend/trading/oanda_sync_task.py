@@ -7,8 +7,11 @@ to reconcile orders and positions, ensuring data consistency.
 Requirements: 8.3, 9.1, 9.5
 """
 
+# pylint: disable=too-many-lines
+
 import logging
 from collections import defaultdict
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List
 
@@ -18,7 +21,7 @@ from django.utils import timezone
 import v20
 from celery import shared_task
 
-from accounts.models import OandaAccount
+from accounts.models import OandaAccount, SystemSettings
 from trading.event_models import Event
 from trading.models import Order, Position
 
@@ -54,6 +57,7 @@ class OrderReconciler:
         )
         self.discrepancies_found = 0
         self.orders_updated = 0
+        self.orders_created = 0
 
     def reconcile(self) -> Dict[str, Any]:
         """
@@ -69,30 +73,35 @@ class OrderReconciler:
 
         try:
             # Fetch pending orders from OANDA
-            oanda_orders = self._fetch_oanda_orders()
+            oanda_pending_orders = self._fetch_oanda_orders()
 
             # Fetch pending orders from database
-            db_orders = self._fetch_db_orders()
+            db_pending_orders = self._fetch_db_orders()
 
-            # Create lookup dictionaries
-            oanda_orders_dict = {order["id"]: order for order in oanda_orders}
-            db_orders_dict = {order.order_id: order for order in db_orders}
+            # Create lookup dictionaries for pending orders
+            oanda_orders_dict = {order["id"]: order for order in oanda_pending_orders}
+            db_orders_dict = {order.order_id: order for order in db_pending_orders}
 
-            # Find discrepancies
+            # Reconcile pending orders
             self._reconcile_orders(oanda_orders_dict, db_orders_dict)
+
+            # Fetch and sync completed orders from transaction history
+            self._sync_completed_orders()
 
             logger.info(
                 "Order reconciliation completed for account %s: "
-                "%d discrepancies found, %d orders updated",
+                "%d discrepancies found, %d orders updated, %d orders created",
                 self.account.account_id,
                 self.discrepancies_found,
                 self.orders_updated,
+                self.orders_created,
             )
 
             return {
                 "success": True,
                 "discrepancies_found": self.discrepancies_found,
                 "orders_updated": self.orders_updated,
+                "orders_created": self.orders_created,
                 "error": None,
             }
 
@@ -109,6 +118,7 @@ class OrderReconciler:
                 "success": False,
                 "discrepancies_found": self.discrepancies_found,
                 "orders_updated": self.orders_updated,
+                "orders_created": self.orders_created,
                 "error": error_msg,
             }
 
@@ -120,6 +130,7 @@ class OrderReconciler:
             List of order dictionaries from OANDA
         """
         try:
+            logger.info("Fetching orders from OANDA for account %s", self.account.account_id)
             response = self.api.order.list_pending(self.account.account_id)
 
             if response.status != 200:
@@ -130,11 +141,27 @@ class OrderReconciler:
                 return []
 
             orders = []
-            if hasattr(response, "orders") and response.orders:
-                for order in response.orders:
-                    orders.append(order.dict())
+            # The response has a 'body' attribute that contains the orders
+            oanda_orders = None
+            if hasattr(response, "body") and isinstance(response.body, dict):
+                oanda_orders = response.body.get("orders", [])
+            elif hasattr(response, "orders"):
+                oanda_orders = response.orders
 
-            logger.debug(
+            if oanda_orders:
+                for order in oanda_orders:
+                    # Handle both v20 Order objects and plain dicts
+                    if hasattr(order, "dict"):
+                        order_dict = order.dict()
+                    elif isinstance(order, dict):
+                        order_dict = order
+                    else:
+                        logger.warning("Unknown order type: %s", type(order))
+                        continue
+
+                    orders.append(order_dict)
+
+            logger.info(
                 "Fetched %d pending orders from OANDA for account %s",
                 len(orders),
                 self.account.account_id,
@@ -273,6 +300,253 @@ class OrderReconciler:
                 exc_info=True,
             )
 
+    def _sync_completed_orders(self) -> None:  # pylint: disable=too-many-branches
+        """
+        Fetch completed orders from OANDA transaction history and sync to database.
+
+        This method fetches ORDER_FILL and ORDER_CANCEL transactions from OANDA
+        and creates/updates corresponding order records in the database.
+        """
+        try:
+            # Get system settings for fetch duration
+            settings = SystemSettings.objects.first()
+            fetch_days = settings.oanda_fetch_duration_days if settings else 365
+
+            # Calculate from_time (fetch_days ago)
+            from_time = timezone.now() - timedelta(days=fetch_days)
+            from_time_str = from_time.strftime("%Y-%m-%dT%H:%M:%S.000000000Z")
+
+            logger.info(
+                "Fetching transaction history from OANDA for account %s (from %s)",
+                self.account.account_id,
+                from_time_str,
+            )
+
+            # Fetch transactions from OANDA using the list method with pagination
+            # We'll fetch recent transactions and filter by time
+            response = self.api.transaction.list(
+                self.account.account_id,
+                pageSize=1000,  # Max page size
+            )
+
+            if response.status != 200:
+                logger.error(
+                    "Failed to fetch transactions from OANDA: status %d",
+                    response.status,
+                )
+                return
+
+            all_transactions = []
+            if hasattr(response, "body") and isinstance(response.body, dict):
+                all_transactions = response.body.get("transactions", [])
+            elif hasattr(response, "transactions"):
+                all_transactions = response.transactions
+
+            if not all_transactions:
+                logger.info("No transactions found in OANDA response")
+                return
+
+            logger.info(
+                "Fetched %d total transactions from OANDA",
+                len(all_transactions),
+            )
+
+            # Filter transactions by time range
+            transactions = []
+            for txn in all_transactions:
+                if hasattr(txn, "dict"):
+                    txn_dict = txn.dict()
+                elif isinstance(txn, dict):
+                    txn_dict = txn
+                else:
+                    continue
+
+                txn_time_str = txn_dict.get("time", "")
+                try:
+                    txn_time = datetime.fromisoformat(txn_time_str.replace("Z", "+00:00"))
+                    if txn_time >= from_time:
+                        transactions.append(txn)
+                except (ValueError, AttributeError):
+                    continue
+
+            logger.info(
+                "Filtered to %d transactions in time range",
+                len(transactions),
+            )
+
+            # Filter for order-related transactions
+            order_transactions = []
+            for txn in transactions:
+                # Handle both v20 Transaction objects and plain dicts
+                if hasattr(txn, "dict"):
+                    txn_dict = txn.dict()
+                elif isinstance(txn, dict):
+                    txn_dict = txn
+                else:
+                    continue
+
+                txn_type = txn_dict.get("type", "")
+
+                # Filter for order fill and cancel transactions
+                if txn_type in ["ORDER_FILL", "ORDER_CANCEL", "ORDER_CANCEL_REJECT"]:
+                    order_transactions.append(txn_dict)
+
+            logger.info(
+                "Found %d order-related transactions (ORDER_FILL, ORDER_CANCEL)",
+                len(order_transactions),
+            )
+
+            # Process each transaction
+            for txn in order_transactions:
+                self._process_order_transaction(txn)
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error(
+                "Error syncing completed orders for account %s: %s",
+                self.account.account_id,
+                e,
+                exc_info=True,
+            )
+
+    def _process_order_transaction(self, txn_data: Dict[str, Any]) -> None:
+        """
+        Process a single order transaction from OANDA.
+
+        Args:
+            txn_data: Transaction data from OANDA API
+        """
+        try:
+            txn_type = txn_data.get("type", "")
+            order_id = txn_data.get("orderID")
+
+            if not order_id:
+                return
+
+            # Check if order already exists in database
+            try:
+                order = Order.objects.get(order_id=order_id)
+
+                # Update existing order status
+                if txn_type == "ORDER_FILL" and order.status != "filled":
+                    order.status = "filled"
+                    order.filled_at = datetime.fromisoformat(
+                        txn_data.get("time", "").replace("Z", "+00:00")
+                    )
+                    order.save(update_fields=["status", "filled_at"])
+                    self.orders_updated += 1
+
+                    logger.info(
+                        "Updated order %s status to filled",
+                        order_id,
+                    )
+
+                elif txn_type == "ORDER_CANCEL" and order.status != "cancelled":
+                    order.status = "cancelled"
+                    order.save(update_fields=["status"])
+                    self.orders_updated += 1
+
+                    logger.info(
+                        "Updated order %s status to cancelled",
+                        order_id,
+                    )
+
+            except Order.DoesNotExist:
+                # Order doesn't exist in database, create it
+                self._create_order_from_transaction(txn_data)
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error(
+                "Error processing order transaction %s: %s",
+                txn_data.get("id"),
+                e,
+                exc_info=True,
+            )
+
+    def _create_order_from_transaction(self, txn_data: Dict[str, Any]) -> None:
+        """
+        Create an order record from a transaction.
+
+        Args:
+            txn_data: Transaction data from OANDA API
+        """
+        try:
+            txn_type = txn_data.get("type", "")
+            order_id = txn_data.get("orderID")
+
+            # Get order details from transaction
+            instrument = txn_data.get("instrument", "")
+            units = Decimal(str(txn_data.get("units", 0)))
+            direction = "long" if units > 0 else "short"
+
+            # Determine order type from transaction
+            order_type = "market"  # Default to market
+            if "ORDER_FILL" in txn_type:
+                # Try to infer from transaction reason
+                reason = txn_data.get("reason", "")
+                if "LIMIT" in reason:
+                    order_type = "limit"
+                elif "STOP" in reason:
+                    order_type = "stop"
+
+            # Determine status
+            status = "filled" if txn_type == "ORDER_FILL" else "cancelled"
+
+            # Get price
+            price = None
+            if txn_type == "ORDER_FILL":
+                price = Decimal(str(txn_data.get("price", 0)))
+
+            # Get timestamp
+            filled_at = None
+            if txn_type == "ORDER_FILL":
+                filled_at = datetime.fromisoformat(txn_data.get("time", "").replace("Z", "+00:00"))
+
+            # Create order record
+            Order.objects.create(
+                account=self.account,
+                order_id=str(order_id),  # Ensure order_id is a string
+                instrument=instrument,
+                order_type=order_type,
+                direction=direction,
+                units=abs(units),
+                price=price,
+                status=status,
+                filled_at=filled_at,
+            )
+
+            self.orders_created += 1
+
+            logger.info(
+                "Created order record from transaction: %s (status: %s)",
+                order_id,
+                status,
+            )
+
+            # Log event
+            Event.log_trading_event(
+                event_type="order_reconciliation",
+                description=f"Order {order_id} created from transaction history",
+                severity="info",
+                user=self.account.user,
+                account=self.account,
+                details={
+                    "order_id": order_id,
+                    "instrument": instrument,
+                    "action": "created_from_transaction",
+                    "order_type": order_type,
+                    "direction": direction,
+                    "status": status,
+                    "units": str(abs(units)),
+                },
+            )
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error(
+                "Error creating order from transaction: %s",
+                e,
+                exc_info=True,
+            )
+
 
 class PositionReconciler:
     """
@@ -370,7 +644,7 @@ class PositionReconciler:
                 "error": error_msg,
             }
 
-    def _fetch_oanda_positions(self) -> List[Dict[str, Any]]:
+    def _fetch_oanda_positions(self) -> List[Dict[str, Any]]:  # pylint: disable=too-many-branches
         """
         Fetch open positions from OANDA API.
 
@@ -380,11 +654,6 @@ class PositionReconciler:
         try:
             logger.info("Fetching positions from OANDA for account %s", self.account.account_id)
             response = self.api.position.list_open(self.account.account_id)
-            logger.info(
-                "OANDA API response status: %d, has positions attr: %s",
-                response.status,
-                hasattr(response, "positions"),
-            )
 
             if response.status != 200:
                 logger.error(
@@ -394,26 +663,29 @@ class PositionReconciler:
                 return []
 
             positions = []
-            if hasattr(response, "positions") and response.positions:
-                logger.info("OANDA returned %d position objects", len(response.positions))
-                for position in response.positions:
+            # The response has a 'body' attribute that contains the positions
+            oanda_positions = None
+            if hasattr(response, "body") and isinstance(response.body, dict):
+                oanda_positions = response.body.get("positions", [])
+            elif hasattr(response, "positions"):
+                oanda_positions = response.positions
+
+            if oanda_positions:
+                for position in oanda_positions:
                     # OANDA returns positions with long and short sides
                     # We need to extract the active side
-                    pos_dict = position.dict()
-                    logger.info(
-                        "Processing OANDA position: %s",
-                        pos_dict.get("instrument"),
-                    )
+
+                    # Handle both v20 Position objects and plain dicts
+                    if hasattr(position, "dict"):
+                        pos_dict = position.dict()
+                    elif isinstance(position, dict):
+                        pos_dict = position
+                    else:
+                        logger.warning("Unknown position type: %s", type(position))
+                        continue
 
                     long_units = Decimal(str(pos_dict.get("long", {}).get("units", 0)))
                     short_units = Decimal(str(pos_dict.get("short", {}).get("units", 0)))
-
-                    logger.info(
-                        "Position %s: long_units=%s, short_units=%s",
-                        pos_dict.get("instrument"),
-                        long_units,
-                        short_units,
-                    )
 
                     if long_units != 0:
                         positions.append(
@@ -761,6 +1033,7 @@ def sync_account_task(
         if order_result["success"]:
             results["order_discrepancies"] = order_result["discrepancies_found"]
             results["total_updates"] += order_result["orders_updated"]
+            results["total_updates"] += order_result.get("orders_created", 0)
         else:
             results["errors"].append(f"Order reconciliation: {order_result['error']}")
             results["success"] = False
