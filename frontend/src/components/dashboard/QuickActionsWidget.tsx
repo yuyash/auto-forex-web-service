@@ -4,12 +4,19 @@ import {
   Tune as ConfigIcon,
   Assessment as BacktestIcon,
   PlayCircleOutline as TradingIcon,
+  AccountBalanceWallet as AccountIcon,
 } from '@mui/icons-material';
 
 const QuickActionsWidget = () => {
   const navigate = useNavigate();
 
   const actions = [
+    {
+      label: 'Add Account',
+      icon: <AccountIcon />,
+      path: '/settings',
+      color: 'info' as const,
+    },
     {
       label: 'New Configuration',
       icon: <ConfigIcon />,

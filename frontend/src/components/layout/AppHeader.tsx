@@ -24,6 +24,7 @@ import {
   AccountBalance as PositionsIcon,
   Assignment as BacktestTaskIcon,
   PlayCircleOutline as TradingTaskIcon,
+  AccountBalanceWallet,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -57,6 +58,11 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
   const handleProfileClick = () => {
     handleUserMenuClose();
     navigate('/profile');
+  };
+
+  const handleAccountsClick = () => {
+    handleUserMenuClose();
+    navigate('/settings');
   };
 
   const handleSettingsClick = () => {
@@ -233,6 +239,12 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
                 <Person fontSize="small" />
               </ListItemIcon>
               <ListItemText>Profile</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={handleAccountsClick}>
+              <ListItemIcon>
+                <AccountBalanceWallet fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Accounts</ListItemText>
             </MenuItem>
             <MenuItem onClick={handleSettingsClick}>
               <ListItemIcon>
