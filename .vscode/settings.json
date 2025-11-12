@@ -20,6 +20,8 @@
     "ls *",
     "rm *",
     "sed *",
+    "sleep *",
+    "ssh *",
     "tail *",
     "touch *",
     "uname *",
