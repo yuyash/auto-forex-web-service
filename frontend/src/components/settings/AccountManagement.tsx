@@ -374,6 +374,49 @@ const AccountManagement = () => {
 
                   <Box mb={1}>
                     <Typography variant="body2" color="text.secondary">
+                      {t('settings:accounts.marginUsed', 'Margin Used')}
+                    </Typography>
+                    <Typography variant="body1">
+                      {formatBalance(account.margin_used, account.currency)}
+                    </Typography>
+                  </Box>
+
+                  <Box mb={1}>
+                    <Typography variant="body2" color="text.secondary">
+                      {t(
+                        'settings:accounts.marginAvailable',
+                        'Margin Available'
+                      )}
+                    </Typography>
+                    <Typography variant="body1">
+                      {formatBalance(
+                        account.margin_available,
+                        account.currency
+                      )}
+                    </Typography>
+                  </Box>
+
+                  <Box mb={1}>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('settings:accounts.unrealizedPnL', 'Unrealized P&L')}
+                    </Typography>
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        color:
+                          parseFloat(account.unrealized_pnl) >= 0
+                            ? 'success.main'
+                            : 'error.main',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {parseFloat(account.unrealized_pnl) >= 0 ? '+' : ''}
+                      {formatBalance(account.unrealized_pnl, account.currency)}
+                    </Typography>
+                  </Box>
+
+                  <Box mb={1}>
+                    <Typography variant="body2" color="text.secondary">
                       {t('settings:accounts.currency', 'Currency')}
                     </Typography>
                     <Typography variant="body1">{account.currency}</Typography>

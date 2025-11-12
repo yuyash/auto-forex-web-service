@@ -100,14 +100,6 @@ const DashboardPage = () => {
           url += `&after=${after}`;
         }
 
-        console.log('📡 Fetching candles:', {
-          inst,
-          gran,
-          count,
-          before,
-          after,
-        });
-
         const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -119,20 +111,15 @@ const DashboardPage = () => {
           response.status === 429 ||
           response.headers.get('X-Rate-Limited') === 'true'
         ) {
-          console.warn('⚠️ Rate limited by API');
           return [];
         }
 
         if (!response.ok) {
-          const errorData = await response.json();
-          console.error('❌ API error:', response.status, errorData);
           return [];
         }
 
         const data = await response.json();
         const candles = data.candles || [];
-
-        console.log('✅ Fetched', candles.length, 'candles');
         return candles;
       } catch (err) {
         console.error('❌ Error fetching candles:', err);
@@ -256,7 +243,6 @@ const DashboardPage = () => {
     // Set up new timer if auto-refresh is enabled
     if (autoRefreshEnabled && refreshInterval > 0) {
       refreshTimerRef.current = setInterval(async () => {
-        console.log('🔄 Auto-refresh triggered');
         // Fetch sequentially to avoid overwhelming the browser
         try {
           await fetchPositions();
@@ -298,7 +284,6 @@ const DashboardPage = () => {
 
   // Handle manual refresh - reload data without remounting
   const handleManualRefresh = useCallback(() => {
-    console.log('🔄 Manual refresh: Reloading chart data');
     fetchPositions();
     fetchOrders();
     fetchStrategyEvents();

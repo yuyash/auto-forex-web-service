@@ -63,18 +63,6 @@ class CandleDataView(APIView):
         after = request.query_params.get("after")  # Unix timestamp - for newer data
         account_id = request.query_params.get("account_id")
 
-        logger.info(
-            "📥 Candle request: instrument=%s, granularity=%s, count=%s, "
-            "before=%s, after=%s, from_time=%s, to_time=%s",
-            instrument,
-            granularity,
-            count,
-            before,
-            after,
-            from_time,
-            to_time,
-        )
-
         # Validate required parameters
         if not instrument:
             return Response(
@@ -118,14 +106,6 @@ class CandleDataView(APIView):
                 before_as_to_time = datetime.fromtimestamp(to_timestamp, tz=timezone.utc).strftime(
                     "%Y-%m-%dT%H:%M:%S.%fZ"
                 )
-
-                logger.info(
-                    "Fetching older data: to=%s (%d), count=%d, excluding boundary at %d",
-                    before_as_to_time,
-                    to_timestamp,
-                    count_int,
-                    before_timestamp,
-                )
             except (ValueError, OSError) as e:
                 logger.warning("Failed to parse 'before' timestamp: %s", e)
 
@@ -139,14 +119,6 @@ class CandleDataView(APIView):
                 after_as_from_time = datetime.fromtimestamp(
                     from_timestamp, tz=timezone.utc
                 ).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-
-                logger.info(
-                    "Fetching newer data: from=%s (%d), count=%d, excluding boundary at %d",
-                    after_as_from_time,
-                    from_timestamp,
-                    count_int,
-                    after_timestamp,
-                )
             except (ValueError, OSError) as e:
                 logger.warning("Failed to parse 'after' timestamp: %s", e)
 
@@ -179,11 +151,6 @@ class CandleDataView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        # CACHING DISABLED - Always fetch fresh data from OANDA
-        # This ensures we always get the correct data for different before/after parameters
-        # Cache was causing issues where different requests returned the same cached data
-        logger.info("🔄 Cache disabled - fetching fresh data from OANDA API")
 
         # Fetch candles from OANDA
         try:
@@ -218,15 +185,10 @@ class CandleDataView(APIView):
                 params["count"] = count_int
 
             # Fetch candles
-            logger.info("🌐 Calling OANDA API with params: %s", params)
-            logger.info("🔍 OANDA request details: instrument=%s, params=%s", instrument, params)
-
             response = api_context.instrument.candles(
                 instrument=instrument,
                 **params,
             )
-
-            logger.info("📡 OANDA response status: %d", response.status)
 
             if response.status != 200:
                 logger.error(
@@ -241,9 +203,6 @@ class CandleDataView(APIView):
 
             # Parse and format candles
             candles_data: List[Dict[str, Any]] = []
-            raw_candles_count = len(response.body.get("candles", [])) if response.body else 0
-            logger.info("📊 Raw candles from OANDA: %d", raw_candles_count)
-
             incomplete_count = 0
             invalid_mid_count = 0
             invalid_time_count = 0
@@ -282,40 +241,11 @@ class CandleDataView(APIView):
                         }
                     )
 
-            logger.info(
-                "✅ Processed candles: %d valid, %d incomplete, %d invalid_mid, %d invalid_time",
-                len(candles_data),
-                incomplete_count,
-                invalid_mid_count,
-                invalid_time_count,
-            )
-
-            if candles_data:
-                first_candle = candles_data[0]
-                last_candle = candles_data[-1]
-                first_time_str = datetime.fromtimestamp(
-                    first_candle["time"], tz=timezone.utc
-                ).strftime("%Y-%m-%d %H:%M:%S")
-                last_time_str = datetime.fromtimestamp(
-                    last_candle["time"], tz=timezone.utc
-                ).strftime("%Y-%m-%d %H:%M:%S")
-                logger.info(
-                    "📅 Time range: %s (%d) to %s (%d)",
-                    first_time_str,
-                    first_candle["time"],
-                    last_time_str,
-                    last_candle["time"],
-                )
-
             response_data = {
                 "instrument": instrument,
                 "granularity": granularity,
                 "candles": candles_data,
             }
-
-            # CACHING DISABLED - No longer storing in cache
-            # This ensures each request gets fresh data from OANDA
-            logger.info("✅ Returning %d candles to client (no caching)", len(candles_data))
 
             response = Response(response_data, status=status.HTTP_200_OK)
             response["X-Cache-Hit"] = "false"
@@ -324,22 +254,15 @@ class CandleDataView(APIView):
             return response
 
         except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.error("❌ Error fetching candles: %s", e, exc_info=True)
-            logger.error("❌ Error type: %s", type(e).__name__)
-            logger.error("❌ Error details: %s", str(e))
-
-            # CACHING DISABLED - No stale cache fallback
-            # Rate limiting errors will be returned to the client
+            logger.error("Error fetching candles: %s", e, exc_info=True)
             is_rate_limit = "429" in str(e) or "rate limit" in str(e).lower()
 
             if is_rate_limit:
-                logger.error("❌ Rate limit detected - no cached data available (caching disabled)")
                 return Response(
                     {"error": "Rate limit exceeded. Please try again later."},
                     status=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
 
-            logger.error("❌ Returning error to client")
             return Response(
                 {"error": f"Failed to fetch candles: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

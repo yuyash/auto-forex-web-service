@@ -189,10 +189,6 @@ export class BatchFetcher {
     instrument: string,
     granularity: string
   ): Promise<OHLCData[]> {
-    console.log(
-      `Fetching initial batch: ${this.DEFAULT_BATCH_SIZE} candles for ${instrument} ${granularity}`
-    );
-
     try {
       const candles = await this.fetchCandles({
         instrument,
@@ -200,7 +196,6 @@ export class BatchFetcher {
         count: this.DEFAULT_BATCH_SIZE,
       });
 
-      console.log(`Fetched ${candles.length} candles in initial batch`);
       return candles;
     } catch (error) {
       console.error('Failed to fetch initial batch:', error);
@@ -220,10 +215,6 @@ export class BatchFetcher {
     granularity: string,
     before: number
   ): Promise<OHLCData[]> {
-    console.log(
-      `Fetching older batch: ${this.DEFAULT_BATCH_SIZE} candles before ${before} for ${instrument} ${granularity}`
-    );
-
     try {
       const candles = await this.fetchCandles({
         instrument,
@@ -232,7 +223,6 @@ export class BatchFetcher {
         before,
       });
 
-      console.log(`Fetched ${candles.length} older candles`);
       return candles;
     } catch (error) {
       console.error('Failed to fetch older batch:', error);
@@ -250,10 +240,6 @@ export class BatchFetcher {
     instrument: string,
     granularity: string
   ): Promise<OHLCData[]> {
-    console.log(
-      `Fetching newer batch: ${this.DEFAULT_BATCH_SIZE} latest candles for ${instrument} ${granularity}`
-    );
-
     try {
       const candles = await this.fetchCandles({
         instrument,
@@ -261,7 +247,6 @@ export class BatchFetcher {
         count: this.DEFAULT_BATCH_SIZE,
       });
 
-      console.log(`Fetched ${candles.length} newer candles`);
       return candles;
     } catch (error) {
       console.error('Failed to fetch newer batch:', error);

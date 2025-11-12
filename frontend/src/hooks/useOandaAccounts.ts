@@ -10,7 +10,11 @@ export interface OandaAccount {
   api_type?: 'practice' | 'live';
   is_practice?: boolean;
   is_active: boolean;
+  is_default?: boolean;
   balance: number;
+  margin_used?: string;
+  margin_available?: string;
+  unrealized_pnl?: string;
   currency: string;
 }
 

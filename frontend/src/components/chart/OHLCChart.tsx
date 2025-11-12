@@ -120,7 +120,6 @@ const OHLCChart = ({
    * Load initial data when component mounts or instrument/granularity changes
    */
   const loadInitialData = useCallback(async () => {
-    console.log('🔄 Loading initial data for', instrument, granularity);
     setIsLoading(true);
     setLoadingDirection(null);
     setError(null);
@@ -130,17 +129,9 @@ const OHLCChart = ({
       const data = await fetchCandles(instrument, granularity, 5000);
       // Only update data after successful fetch to prevent flash
       setAllData(data);
-      console.log('✅ Loaded', data.length, 'candles');
-      console.log(
-        '📊 Data range:',
-        data[0]?.time,
-        'to',
-        data[data.length - 1]?.time
-      );
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to load initial data';
-      console.error('❌ Error loading initial data:', err);
       setError(errorMessage);
       // Only clear data on error
       setAllData([]);
@@ -153,7 +144,6 @@ const OHLCChart = ({
    * Load initial data on mount and when instrument/granularity changes
    */
   useEffect(() => {
-    console.log('🔄 Instrument or granularity changed, loading fresh data');
     loadInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instrument, granularity]);
@@ -163,18 +153,10 @@ const OHLCChart = ({
    */
   const loadOlderData = useCallback(async () => {
     if (isLoading || allData.length === 0) {
-      console.log(
-        '⏸️ Skipping loadOlderData: isLoading=',
-        isLoading,
-        'allData.length=',
-        allData.length
-      );
       return;
     }
 
     const oldestTime = allData[0].time;
-    console.log('🔄 Loading older data, current oldest:', oldestTime);
-
     setIsLoading(true);
     setLoadingDirection('older');
 
@@ -186,57 +168,26 @@ const OHLCChart = ({
         oldestTime
       );
 
-      console.log('📥 Received', olderData.length, 'older candles from API');
-      if (olderData.length > 0) {
-        console.log(
-          '📊 Older data range:',
-          olderData[0]?.time,
-          'to',
-          olderData[olderData.length - 1]?.time
-        );
-      }
-
       if (olderData.length > 0) {
         // Check if API returned actually older data or just the latest data
         const hasActuallyOlderData = olderData.some((c) => c.time < oldestTime);
 
         if (!hasActuallyOlderData) {
-          console.warn(
-            '⚠️ API returned no data older than',
-            oldestTime,
-            '- may have reached the beginning or API issue'
-          );
           return;
         }
 
         // Filter out any candles that overlap with existing data (including boundary)
         const filteredOlderData = olderData.filter((c) => c.time < oldestTime);
 
-        console.log(
-          '🔍 After filtering:',
-          filteredOlderData.length,
-          'candles (removed',
-          olderData.length - filteredOlderData.length,
-          'duplicates)'
-        );
-
         if (filteredOlderData.length > 0) {
           // Sort older data before prepending to ensure order
           filteredOlderData.sort((a, b) => a.time - b.time);
           setAllData((prevData) => [...filteredOlderData, ...prevData]);
-          console.log(
-            '➕ Prepended',
-            filteredOlderData.length,
-            'older candles'
-          );
         }
-      } else {
-        console.log('ℹ️ No older data available');
       }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to load older data';
-      console.error('❌ Error loading older data:', err);
       setError(errorMessage);
       // Don't clear allData on error
     } finally {
@@ -250,12 +201,6 @@ const OHLCChart = ({
    */
   const loadNewerData = useCallback(async () => {
     if (isLoading || allData.length === 0) {
-      console.log(
-        '⏸️ Skipping loadNewerData: isLoading=',
-        isLoading,
-        'allData.length=',
-        allData.length
-      );
       return;
     }
 
@@ -265,11 +210,8 @@ const OHLCChart = ({
 
     // Check if already at current time
     if (currentTime - newestTime <= granularityDuration) {
-      console.log('ℹ️ Already at current time, no newer data to load');
       return;
     }
-
-    console.log('🔄 Loading newer data, current newest:', newestTime);
 
     setIsLoading(true);
     setLoadingDirection('newer');
@@ -284,16 +226,6 @@ const OHLCChart = ({
         newestTime // 'after' parameter
       );
 
-      console.log('📥 Received', newerData.length, 'newer candles from API');
-      if (newerData.length > 0) {
-        console.log(
-          '📊 Newer data range:',
-          newerData[0]?.time,
-          'to',
-          newerData[newerData.length - 1]?.time
-        );
-      }
-
       // Filter out any candles that overlap with existing data
       const newCandles = newerData.filter((c) => c.time > newestTime);
 
@@ -301,14 +233,10 @@ const OHLCChart = ({
         // Sort new candles before appending to ensure order
         newCandles.sort((a, b) => a.time - b.time);
         setAllData((prevData) => [...prevData, ...newCandles]);
-        console.log('➕ Appended', newCandles.length, 'newer candles');
-      } else {
-        console.log('ℹ️ No new candles to append (already at latest)');
       }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to load newer data';
-      console.error('❌ Error loading newer data:', err);
       setError(errorMessage);
       // Don't clear allData on error
     } finally {
@@ -323,7 +251,6 @@ const OHLCChart = ({
    */
   useEffect(() => {
     if (refreshTrigger > 0 && allData.length > 0) {
-      console.log('🔄 Refresh trigger activated, fetching newer data');
       loadNewerData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -337,19 +264,11 @@ const OHLCChart = ({
       return;
     }
 
-    console.log(
-      '⏰ Setting up auto-refresh with interval:',
-      refreshInterval,
-      'ms'
-    );
-
     const intervalId = setInterval(() => {
-      console.log('⏰ Auto-refresh triggered');
       loadNewerData();
     }, refreshInterval);
 
     return () => {
-      console.log('⏰ Clearing auto-refresh interval');
       clearInterval(intervalId);
     };
   }, [autoRefresh, refreshInterval, allData.length, loadNewerData]);
@@ -381,7 +300,6 @@ const OHLCChart = ({
 
   // Initialize chart - only once on mount
   useEffect(() => {
-    console.log('🎨 Initializing chart (should only happen once)');
     if (!chartContainerRef.current) return;
 
     // Create chart instance
@@ -462,13 +380,6 @@ const OHLCChart = ({
           const height = chartContainerRef.current.clientHeight;
 
           if (width > 0 && height > 0) {
-            console.log(
-              '📐 Window resized, updating chart to:',
-              width,
-              'x',
-              height
-            );
-
             // Apply new dimensions
             chartRef.current.applyOptions({
               width: Math.floor(width),
@@ -514,12 +425,10 @@ const OHLCChart = ({
       scrollDebounceTimerRef.current = setTimeout(() => {
         // Load older data when within 10 bars of left edge
         if (logicalRange.from < 10) {
-          console.log('📍 Near left edge, loading older data');
           loadOlderDataRef.current();
         }
         // Load newer data when within 10 bars of right edge
         else if (logicalRange.to > totalBars - 10) {
-          console.log('📍 Near right edge, loading newer data');
           loadNewerDataRef.current();
         }
       }, 300);
@@ -531,8 +440,6 @@ const OHLCChart = ({
 
     // Cleanup
     return () => {
-      console.log('🧹 Cleaning up chart');
-
       // Clear debounce timers
       if (scrollDebounceTimerRef.current) {
         clearTimeout(scrollDebounceTimerRef.current);
@@ -606,30 +513,14 @@ const OHLCChart = ({
    * Update chart rendering when allData changes
    */
   useEffect(() => {
-    console.log('🔄 Render effect triggered', {
-      hasChart: !!chartRef.current,
-      hasSeries: !!candlestickSeriesRef.current,
-      dataLength: allData.length,
-    });
-
     if (!candlestickSeriesRef.current || !chartRef.current) {
-      console.log('⚠️ Chart or series not ready yet');
       return;
     }
 
     if (allData.length === 0) {
-      console.log('📊 No data to render yet - clearing chart');
       candlestickSeriesRef.current.setData([]);
       return;
     }
-
-    console.log('📊 Rendering', allData.length, 'candles');
-    console.log(
-      '📊 Data range:',
-      allData[0]?.time,
-      'to',
-      allData[allData.length - 1]?.time
-    );
 
     // Filter out invalid data and map to candlestick format
     const candlestickData: CandlestickData<Time>[] = allData
@@ -645,10 +536,6 @@ const OHLCChart = ({
           !isNaN(item.high) &&
           !isNaN(item.low) &&
           !isNaN(item.close);
-
-        if (!isValid) {
-          console.warn('⚠️ Filtering out invalid candle:', item);
-        }
 
         return isValid;
       })
@@ -675,23 +562,14 @@ const OHLCChart = ({
       }
     }
 
-    if (deduplicatedData.length !== candlestickData.length) {
-      console.warn(
-        `⚠️ Removed ${candlestickData.length - deduplicatedData.length} duplicate timestamps`
-      );
-    }
-
     // Save the current visible TIME RANGE (not logical range) before updating data
     const timeScale = chartRef.current.timeScale();
     const visibleTimeRange = timeScale.getVisibleRange();
 
-    console.log('📊 Setting data on series...');
     candlestickSeriesRef.current.setData(deduplicatedData);
-    console.log('✅ Data set successfully');
 
     // Only fit content on initial load, otherwise preserve viewport
     if (isInitialLoad && allData.length > 0 && candlestickData.length > 0) {
-      console.log('📐 Initial load - fitting content');
       chartRef.current.timeScale().fitContent();
       setIsInitialLoad(false);
     } else if (
@@ -702,7 +580,6 @@ const OHLCChart = ({
     ) {
       // Restore the viewport TIME RANGE after data update
       // This maintains the same absolute time window regardless of data changes
-      console.log('📍 Restoring viewport time range:', visibleTimeRange);
       timeScale.setVisibleRange(visibleTimeRange);
     }
   }, [allData, isInitialLoad]);
