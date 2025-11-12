@@ -196,8 +196,15 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
           </Alert>
         )}
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-          <Box sx={{ flex: 1 }} onClick={handleView}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            mb: 2,
+            gap: 1,
+          }}
+        >
+          <Box sx={{ flex: 1, minWidth: 0 }} onClick={handleView}>
             <Typography variant="h6" component="h2" gutterBottom>
               {currentTask.name}
             </Typography>
@@ -231,13 +238,21 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
             )}
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              alignItems: 'flex-start',
+              flexShrink: 0,
+            }}
+          >
             {currentTask.status === TaskStatus.CREATED && (
               <Tooltip title="Start">
                 <IconButton
                   color="primary"
                   onClick={handleStart}
                   disabled={startTask.isLoading}
+                  size="small"
                 >
                   <PlayIcon />
                 </IconButton>
@@ -250,6 +265,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
                     color="warning"
                     onClick={handlePause}
                     disabled={pauseTask.isLoading}
+                    size="small"
                   >
                     <PauseIcon />
                   </IconButton>
@@ -259,6 +275,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
                     color="error"
                     onClick={handleStop}
                     disabled={stopTask.isLoading}
+                    size="small"
                   >
                     <StopIcon />
                   </IconButton>
@@ -272,6 +289,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
                     color="primary"
                     onClick={handleResume}
                     disabled={resumeTask.isLoading}
+                    size="small"
                   >
                     <ResumeIcon />
                   </IconButton>
@@ -281,6 +299,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
                     color="error"
                     onClick={handleStop}
                     disabled={stopTask.isLoading}
+                    size="small"
                   >
                     <StopIcon />
                   </IconButton>
@@ -293,17 +312,18 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
                   color="primary"
                   onClick={handleStart}
                   disabled={startTask.isLoading}
+                  size="small"
                 >
                   <PlayIcon />
                 </IconButton>
               </Tooltip>
             )}
             <Tooltip title="View Details">
-              <IconButton color="primary" onClick={handleView}>
+              <IconButton color="primary" onClick={handleView} size="small">
                 <ViewIcon />
               </IconButton>
             </Tooltip>
-            <IconButton onClick={handleActionsClick}>
+            <IconButton onClick={handleActionsClick} size="small">
               <MoreVertIcon />
             </IconButton>
           </Box>

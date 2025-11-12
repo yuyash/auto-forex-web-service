@@ -11,15 +11,24 @@ import {
   Link,
   CircularProgress,
   IconButton,
-  Menu,
-  MenuItem,
   Button,
   Alert,
+  Menu,
+  MenuItem,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
-  MoreVert as MoreVertIcon,
+  PlayArrow,
   Stop as StopIcon,
+  Pause as PauseIcon,
+  PlayCircleOutline as ResumeIcon,
+  Refresh as RefreshIcon,
+  ContentCopy as ContentCopyIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import { useTradingTask } from '../hooks/useTradingTasks';
 import {
@@ -94,6 +103,9 @@ export default function TradingTaskDetailPage() {
   const copyTask = useCopyTradingTask();
   const deleteTask = useDeleteTradingTask();
 
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
@@ -118,15 +130,6 @@ export default function TradingTaskDetailPage() {
   const handleStart = async () => {
     try {
       await startTask.mutate(taskId);
-      handleMenuClose();
-    } catch {
-      // Error handled by mutation hook
-    }
-  };
-
-  const handleStop = async () => {
-    try {
-      await stopTask.mutate(taskId);
       handleMenuClose();
     } catch {
       // Error handled by mutation hook
@@ -308,22 +311,91 @@ export default function TradingTaskDetailPage() {
             )}
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            {canStop && (
-              <Button
-                variant="contained"
-                color="error"
-                startIcon={<StopIcon />}
-                onClick={handleEmergencyStop}
-                size="small"
-              >
-                Emergency Stop
-              </Button>
-            )}
+          {isMobile ? (
             <IconButton onClick={handleMenuOpen}>
               <MoreVertIcon />
             </IconButton>
-          </Box>
+          ) : (
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {canStart && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<PlayArrow />}
+                  onClick={handleStart}
+                  disabled={startTask.isLoading}
+                >
+                  Start
+                </Button>
+              )}
+              {canPause && (
+                <Button
+                  variant="contained"
+                  color="warning"
+                  startIcon={<PauseIcon />}
+                  onClick={handlePause}
+                  disabled={pauseTask.isLoading}
+                >
+                  Pause
+                </Button>
+              )}
+              {canResume && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<ResumeIcon />}
+                  onClick={handleResume}
+                  disabled={resumeTask.isLoading}
+                >
+                  Resume
+                </Button>
+              )}
+              {canStop && (
+                <Button
+                  variant="contained"
+                  color="error"
+                  startIcon={<StopIcon />}
+                  onClick={handleEmergencyStop}
+                >
+                  Emergency Stop
+                </Button>
+              )}
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={handleRerun}
+                disabled={rerunTask.isLoading}
+              >
+                Rerun
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<ContentCopyIcon />}
+                onClick={handleCopy}
+              >
+                Copy
+              </Button>
+              {canEdit && (
+                <Button
+                  variant="outlined"
+                  startIcon={<EditIcon />}
+                  onClick={handleEdit}
+                >
+                  Edit
+                </Button>
+              )}
+              {canDelete && (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={handleDelete}
+                >
+                  Delete
+                </Button>
+              )}
+            </Box>
+          )}
         </Box>
 
         <Menu
@@ -334,7 +406,9 @@ export default function TradingTaskDetailPage() {
           {canStart && <MenuItem onClick={handleStart}>Start</MenuItem>}
           {canPause && <MenuItem onClick={handlePause}>Pause</MenuItem>}
           {canResume && <MenuItem onClick={handleResume}>Resume</MenuItem>}
-          {canStop && <MenuItem onClick={handleStop}>Stop</MenuItem>}
+          {canStop && (
+            <MenuItem onClick={handleEmergencyStop}>Emergency Stop</MenuItem>
+          )}
           <MenuItem onClick={handleRerun}>Rerun</MenuItem>
           <MenuItem onClick={handleCopy}>Copy</MenuItem>
           {canEdit && <MenuItem onClick={handleEdit}>Edit</MenuItem>}

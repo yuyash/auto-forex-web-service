@@ -11,11 +11,20 @@ import {
   Link,
   CircularProgress,
   IconButton,
+  Button,
   Menu,
   MenuItem,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
+  PlayArrow,
+  Stop as StopIcon,
+  Refresh as RefreshIcon,
+  ContentCopy as ContentCopyIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
   MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import {
@@ -87,6 +96,9 @@ export default function BacktestTaskDetailPage() {
   const rerunTask = useRerunBacktestTask();
   const copyTask = useCopyBacktestTask();
   const deleteTask = useDeleteBacktestTask();
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -233,11 +245,70 @@ export default function BacktestTaskDetailPage() {
             )}
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          {isMobile ? (
             <IconButton onClick={handleMenuOpen}>
               <MoreVertIcon />
             </IconButton>
-          </Box>
+          ) : (
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {canStart && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<PlayArrow />}
+                  onClick={handleStart}
+                  disabled={startTask.isLoading}
+                >
+                  Start
+                </Button>
+              )}
+              {canStop && (
+                <Button
+                  variant="contained"
+                  color="error"
+                  startIcon={<StopIcon />}
+                  onClick={handleStop}
+                  disabled={stopTask.isLoading}
+                >
+                  Stop
+                </Button>
+              )}
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={handleRerun}
+                disabled={rerunTask.isLoading}
+              >
+                Rerun
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<ContentCopyIcon />}
+                onClick={handleCopy}
+              >
+                Copy
+              </Button>
+              {canEdit && (
+                <Button
+                  variant="outlined"
+                  startIcon={<EditIcon />}
+                  onClick={handleEdit}
+                >
+                  Edit
+                </Button>
+              )}
+              {canDelete && (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={handleDelete}
+                >
+                  Delete
+                </Button>
+              )}
+            </Box>
+          )}
         </Box>
 
         <Menu
