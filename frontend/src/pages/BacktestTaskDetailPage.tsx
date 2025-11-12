@@ -38,6 +38,7 @@ import { TaskConfigTab } from '../components/backtest/detail/TaskConfigTab';
 import { CopyTaskDialog } from '../components/tasks/actions/CopyTaskDialog';
 import { DeleteTaskDialog } from '../components/tasks/actions/DeleteTaskDialog';
 import { TaskStatus } from '../types/common';
+import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -79,6 +80,7 @@ export default function BacktestTaskDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const { data: task, isLoading, error } = useBacktestTask(taskId);
+  const { strategies } = useStrategies();
 
   const startTask = useStartBacktestTask();
   const stopTask = useStopBacktestTask();
@@ -220,7 +222,8 @@ export default function BacktestTaskDetailPage() {
             </Box>
 
             <Typography variant="body2" color="text.secondary">
-              Configuration: {task.config_name} • Strategy: {task.strategy_type}
+              Configuration: {task.config_name} • Strategy:{' '}
+              {getStrategyDisplayName(strategies, task.strategy_type)}
             </Typography>
 
             {task.description && (

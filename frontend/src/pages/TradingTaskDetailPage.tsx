@@ -38,6 +38,7 @@ import { DeleteTaskDialog } from '../components/tasks/actions/DeleteTaskDialog';
 import { ConfirmDialog } from '../components/tasks/actions/ConfirmDialog';
 import { LiveTaskTab } from '../components/trading/detail/LiveTaskTab';
 import { TaskPerformanceTab } from '../components/trading/detail/TaskPerformanceTab';
+import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
 import { TaskExecutionsTab } from '../components/backtest/detail/TaskExecutionsTab';
 import { TradingTaskConfigTab } from '../components/trading/detail/TradingTaskConfigTab';
 import { TaskStatus, TaskType } from '../types/common';
@@ -83,6 +84,7 @@ export default function TradingTaskDetailPage() {
   const [emergencyStopDialogOpen, setEmergencyStopDialogOpen] = useState(false);
 
   const { data: task, isLoading, error } = useTradingTask(taskId);
+  const { strategies } = useStrategies();
 
   const startTask = useStartTradingTask();
   const stopTask = useStopTradingTask();
@@ -296,7 +298,7 @@ export default function TradingTaskDetailPage() {
 
             <Typography variant="body2" color="text.secondary">
               Account: {task.account_name} • Configuration: {task.config_name} •
-              Strategy: {task.strategy_type}
+              Strategy: {getStrategyDisplayName(strategies, task.strategy_type)}
             </Typography>
 
             {task.description && (

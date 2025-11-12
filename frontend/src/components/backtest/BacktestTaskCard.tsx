@@ -30,6 +30,10 @@ import {
   useRerunBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
 import { useBacktestTaskPolling } from '../../hooks/useBacktestTasks';
+import {
+  useStrategies,
+  getStrategyDisplayName,
+} from '../../hooks/useStrategies';
 
 interface BacktestTaskCardProps {
   task: BacktestTask;
@@ -42,6 +46,9 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
   const startTask = useStartBacktestTask();
   const stopTask = useStopBacktestTask();
   const rerunTask = useRerunBacktestTask();
+
+  // Fetch strategies for display names
+  const { strategies } = useStrategies();
 
   // Poll for updates when task is running
   const pollingEnabled = task.status === TaskStatus.RUNNING;
@@ -130,7 +137,10 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
               <StatusBadge status={currentTask.status} />
               <Chip
-                label={currentTask.strategy_type}
+                label={getStrategyDisplayName(
+                  strategies,
+                  currentTask.strategy_type
+                )}
                 size="small"
                 variant="outlined"
               />

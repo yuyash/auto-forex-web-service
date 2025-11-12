@@ -31,6 +31,7 @@ import { TaskStatus } from '../types/common';
 import TradingTaskCard from '../components/trading/TradingTaskCard';
 import { Breadcrumbs } from '../components/common';
 import { LoadingSpinner } from '../components/common';
+import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -93,11 +94,12 @@ export default function TradingTasksPage() {
     ordering: sortBy,
   });
 
-  // Fetch configurations for filter dropdown
+  // Fetch configurations for filter dropdown and strategies
   const { data: configurationsData } = useConfigurations({
     page: 1,
     page_size: 100, // Get enough for dropdown
   });
+  const { strategies } = useStrategies();
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -223,7 +225,9 @@ export default function TradingTasksPage() {
                   <MenuItem value="">All Configurations</MenuItem>
                   {configurationsData?.results.map((config) => (
                     <MenuItem key={config.id} value={config.id}>
-                      {config.name} ({config.strategy_type})
+                      {config.name} (
+                      {getStrategyDisplayName(strategies, config.strategy_type)}
+                      )
                     </MenuItem>
                   ))}
                 </Select>

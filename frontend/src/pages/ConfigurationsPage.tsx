@@ -22,6 +22,7 @@ import { useConfigurations } from '../hooks/useConfigurations';
 import { Breadcrumbs } from '../components/common';
 import ConfigurationCard from '../components/configurations/ConfigurationCard';
 import type { SelectChangeEvent } from '@mui/material';
+import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
 
 const ConfigurationsPage = () => {
   const navigate = useNavigate();
@@ -46,6 +47,9 @@ const ConfigurationsPage = () => {
 
   const hasNextPage = data?.next !== null;
   const hasPreviousPage = data?.previous !== null;
+
+  // Fetch strategies for display names
+  const { strategies } = useStrategies();
 
   // Get unique strategy types for filter
   const strategyTypes = useMemo(() => {
@@ -149,9 +153,7 @@ const ConfigurationsPage = () => {
               <MenuItem value="all">All Types</MenuItem>
               {strategyTypes.map((type) => (
                 <MenuItem key={type} value={type}>
-                  {type
-                    .replace(/_/g, ' ')
-                    .replace(/\b\w/g, (l) => l.toUpperCase())}
+                  {getStrategyDisplayName(strategies, type)}
                 </MenuItem>
               ))}
             </Select>

@@ -34,6 +34,10 @@ import {
 } from '../../hooks/useTradingTaskMutations';
 import { useTradingTaskPolling } from '../../hooks/useTradingTasks';
 import { useToast } from '../common';
+import {
+  useStrategies,
+  getStrategyDisplayName,
+} from '../../hooks/useStrategies';
 
 interface TradingTaskCardProps {
   task: TradingTask;
@@ -49,6 +53,9 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
   const stopTask = useStopTradingTask();
   const pauseTask = usePauseTradingTask();
   const resumeTask = useResumeTradingTask();
+
+  // Fetch strategies for display names
+  const { strategies } = useStrategies();
 
   // Poll for updates when task is running or paused (more frequent for live trading)
   const pollingEnabled =
@@ -197,7 +204,10 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
               <StatusBadge status={currentTask.status} />
               <Chip
-                label={currentTask.strategy_type}
+                label={getStrategyDisplayName(
+                  strategies,
+                  currentTask.strategy_type
+                )}
                 size="small"
                 variant="outlined"
               />

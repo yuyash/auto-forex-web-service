@@ -12,6 +12,10 @@ import {
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import type { StrategyConfig } from '../../../types/configuration';
+import {
+  useStrategies,
+  getStrategyDisplayName,
+} from '../../../hooks/useStrategies';
 
 interface ConfigurationSelectorProps {
   value: number | string | undefined;
@@ -39,6 +43,7 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
   strategyTypeFilter,
 }) => {
   const [searchTerm, setSearchTerm] = React.useState('');
+  const { strategies } = useStrategies();
 
   const filteredConfigurations = React.useMemo(() => {
     let filtered = configurations;
@@ -146,7 +151,7 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
               <Box>
                 <Box sx={{ fontWeight: 500 }}>{config.name}</Box>
                 <Box sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-                  {config.strategy_type}
+                  {getStrategyDisplayName(strategies, config.strategy_type)}
                   {config.description &&
                     ` • ${config.description.substring(0, 50)}${config.description.length > 50 ? '...' : ''}`}
                 </Box>
@@ -159,7 +164,8 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
       {!error && helperText && <FormHelperText>{helperText}</FormHelperText>}
       {selectedConfig && !error && !helperText && (
         <FormHelperText>
-          Strategy: {selectedConfig.strategy_type}
+          Strategy:{' '}
+          {getStrategyDisplayName(strategies, selectedConfig.strategy_type)}
           {selectedConfig.is_in_use && ' • Currently in use'}
         </FormHelperText>
       )}

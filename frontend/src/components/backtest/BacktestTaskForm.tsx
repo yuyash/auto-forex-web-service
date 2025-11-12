@@ -35,6 +35,10 @@ import {
   useConfigurations,
 } from '../../hooks/useConfigurations';
 import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
+import {
+  useStrategies,
+  getStrategyDisplayName,
+} from '../../hooks/useStrategies';
 
 const steps = ['Configuration', 'Parameters', 'Review'];
 
@@ -213,9 +217,10 @@ export default function BacktestTaskForm({
     }
   }, [formData, setValue]); // Removed activeStep dependency so it runs on initial render too
 
-  // Fetch all configurations
+  // Fetch all configurations and strategies
   const { data: configurationsData } = useConfigurations({ page_size: 100 });
   const configurations = configurationsData?.results || [];
+  const { strategies } = useStrategies();
 
   // Convert config_id to number for the API call
   const configIdNumber =
@@ -388,7 +393,11 @@ export default function BacktestTaskForm({
                       Configuration Preview
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Type:</strong> {selectedConfig.strategy_type}
+                      <strong>Type:</strong>{' '}
+                      {getStrategyDisplayName(
+                        strategies,
+                        selectedConfig.strategy_type
+                      )}
                     </Typography>
                     <Typography variant="body2">
                       <strong>Description:</strong>{' '}

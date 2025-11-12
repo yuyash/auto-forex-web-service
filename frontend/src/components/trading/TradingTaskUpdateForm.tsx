@@ -12,6 +12,10 @@ import {
   useConfiguration,
   useConfigurations,
 } from '../../hooks/useConfigurations';
+import {
+  useStrategies,
+  getStrategyDisplayName,
+} from '../../hooks/useStrategies';
 
 // Update schema - only editable fields
 const tradingTaskUpdateSchema = z.object({
@@ -49,9 +53,10 @@ export default function TradingTaskUpdateForm({
     defaultValues: initialData,
   });
 
-  // Fetch all configurations
+  // Fetch all configurations and strategies
   const { data: configurationsData } = useConfigurations({ page_size: 100 });
   const configurations = configurationsData?.results || [];
+  const { strategies } = useStrategies();
 
   // Watch selected config
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -173,7 +178,11 @@ export default function TradingTaskUpdateForm({
                   Configuration Preview
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Type:</strong> {selectedConfig.strategy_type}
+                  <strong>Type:</strong>{' '}
+                  {getStrategyDisplayName(
+                    strategies,
+                    selectedConfig.strategy_type
+                  )}
                 </Typography>
                 <Typography variant="body2">
                   <strong>Description:</strong>{' '}

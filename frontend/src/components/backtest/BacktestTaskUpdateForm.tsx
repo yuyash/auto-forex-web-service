@@ -25,6 +25,10 @@ import {
   useConfigurations,
 } from '../../hooks/useConfigurations';
 import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
+import {
+  useStrategies,
+  getStrategyDisplayName,
+} from '../../hooks/useStrategies';
 
 // Update schema - only editable fields
 const backtestTaskUpdateSchema = z
@@ -85,9 +89,10 @@ export default function BacktestTaskUpdateForm({
     defaultValues: initialData,
   });
 
-  // Fetch all configurations
+  // Fetch all configurations and strategies
   const { data: configurationsData } = useConfigurations({ page_size: 100 });
   const configurations = configurationsData?.results || [];
+  const { strategies } = useStrategies();
 
   // Watch selected config
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -223,7 +228,11 @@ export default function BacktestTaskUpdateForm({
                   Configuration Preview
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Type:</strong> {selectedConfig.strategy_type}
+                  <strong>Type:</strong>{' '}
+                  {getStrategyDisplayName(
+                    strategies,
+                    selectedConfig.strategy_type
+                  )}
                 </Typography>
                 <Typography variant="body2">
                   <strong>Description:</strong>{' '}
