@@ -28,8 +28,9 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     config_id = serializers.IntegerField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
-    oanda_account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
-    oanda_account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
+    account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
+    account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
+    account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
     latest_execution = serializers.SerializerMethodField()
 
     class Meta:
@@ -40,8 +41,9 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "config_id",
             "config_name",
             "strategy_type",
-            "oanda_account_id",
-            "oanda_account_name",
+            "account_id",
+            "account_name",
+            "account_type",
             "name",
             "description",
             "status",
@@ -55,8 +57,9 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "config_id",
             "config_name",
             "strategy_type",
-            "oanda_account_id",
-            "oanda_account_name",
+            "account_id",
+            "account_name",
+            "account_type",
             "status",
             "latest_execution",
             "created_at",
@@ -89,8 +92,9 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     config_id = serializers.IntegerField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
-    oanda_account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
-    oanda_account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
+    account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
+    account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
+    account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
 
     class Meta:
         model = TradingTask
@@ -100,8 +104,9 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "config_id",
             "config_name",
             "strategy_type",
-            "oanda_account_id",
-            "oanda_account_name",
+            "account_id",
+            "account_name",
+            "account_type",
             "name",
             "description",
             "status",

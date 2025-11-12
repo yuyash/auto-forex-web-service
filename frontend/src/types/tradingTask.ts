@@ -10,6 +10,7 @@ export interface TradingTask {
   strategy_type: string;
   account_id: number;
   account_name: string;
+  account_type: 'live' | 'practice';
   name: string;
   description: string;
   status: TaskStatus;

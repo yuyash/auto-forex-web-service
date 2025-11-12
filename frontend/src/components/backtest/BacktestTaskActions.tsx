@@ -85,6 +85,7 @@ export default function BacktestTaskActions({
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={onClose}
+        disableRestoreFocus
         anchorOrigin={{
           vertical: 'bottom',
           horizontal: 'right',

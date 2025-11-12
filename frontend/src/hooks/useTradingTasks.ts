@@ -18,6 +18,15 @@ const ERROR_CACHE_DURATION = 30000; // 30 seconds - don't retry failed requests 
 // Track in-flight requests to prevent duplicate API calls
 const inflightRequests = new Map<string, Promise<unknown>>();
 
+/**
+ * Invalidate all trading task caches
+ * Call this after create/update/delete operations
+ */
+export function invalidateTradingTasksCache(): void {
+  cache.clear();
+  errorCache.clear();
+}
+
 function getCachedData<T>(key: string): T | null {
   const cached = cache.get(key);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {

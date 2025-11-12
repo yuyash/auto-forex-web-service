@@ -1,6 +1,7 @@
 // Trading Task mutation hooks
 import { useState, useCallback } from 'react';
 import { tradingTasksApi } from '../services/api';
+import { invalidateTradingTasksCache } from './useTradingTasks';
 import type {
   TradingTask,
   TradingTaskCreateData,
@@ -38,6 +39,7 @@ export function useCreateTradingTask(options?: {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.create(variables);
         setState({ data: result, isLoading: false, error: null });
+        invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {
@@ -79,6 +81,7 @@ export function useUpdateTradingTask(options?: {
           variables.data
         );
         setState({ data: result, isLoading: false, error: null });
+        invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {
@@ -117,6 +120,7 @@ export function useDeleteTradingTask(options?: {
         setState({ data: null, isLoading: true, error: null });
         await tradingTasksApi.delete(id);
         setState({ data: undefined, isLoading: false, error: null });
+        invalidateTradingTasksCache();
         options?.onSuccess?.();
       } catch (err) {
         const error = err as Error;
@@ -154,6 +158,7 @@ export function useCopyTradingTask(options?: {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.copy(variables.id, variables.data);
         setState({ data: result, isLoading: false, error: null });
+        invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {

@@ -316,7 +316,6 @@ export default function BacktestTaskForm({
 
       navigate('/backtest-tasks');
     } catch (error: unknown) {
-      console.error('Failed to save task:', error);
       const err = error as {
         data?: Record<string, string | string[]>;
         message?: string;

@@ -76,7 +76,6 @@ export default function TradingTaskUpdateForm({
 
       navigate('/trading-tasks');
     } catch (error: unknown) {
-      console.error('Failed to update task:', error);
       const err = error as {
         data?: Record<string, string | string[]>;
         message?: string;

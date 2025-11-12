@@ -262,13 +262,15 @@ const AccountManagement = () => {
   };
 
   // Format balance
-  const formatBalance = (balance: number, currency: string) => {
+  const formatBalance = (balance: string | number, currency: string) => {
+    const numericBalance =
+      typeof balance === 'string' ? parseFloat(balance) : balance;
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(balance);
+    }).format(numericBalance);
   };
 
   if (loading) {

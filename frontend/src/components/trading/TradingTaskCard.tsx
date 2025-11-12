@@ -205,11 +205,27 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
           }}
         >
           <Box sx={{ flex: 1, minWidth: 0 }} onClick={handleView}>
-            <Typography variant="h6" component="h2" gutterBottom>
+            <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>
               {currentTask.name}
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 1,
+                alignItems: 'center',
+                mb: 1,
+                flexWrap: 'wrap',
+              }}
+            >
               <StatusBadge status={currentTask.status} />
+              {currentTask.account_type === 'live' && (
+                <Chip
+                  label="LIVE ACCOUNT"
+                  size="small"
+                  color="error"
+                  sx={{ fontWeight: 'bold' }}
+                />
+              )}
               <Chip
                 label={getStrategyDisplayName(
                   strategies,

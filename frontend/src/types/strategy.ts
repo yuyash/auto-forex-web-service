@@ -69,9 +69,9 @@ export interface Account {
   account_id: string;
   api_type: 'practice' | 'live';
   currency: string;
-  balance: number;
-  margin_used: number;
-  margin_available: number;
+  balance: string; // Decimal field from backend, serialized as string
+  margin_used: string; // Decimal field from backend, serialized as string
+  margin_available: string; // Decimal field from backend, serialized as string
   is_active: boolean;
   jurisdiction?: string;
   enable_position_differentiation?: boolean;

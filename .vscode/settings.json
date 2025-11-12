@@ -71,5 +71,6 @@
   },
   "flake8.args": [
     "--toml-config"
-  ]
+  ],
+  "typescript.autoClosingTags": false
 }

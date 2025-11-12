@@ -35,12 +35,12 @@ export const tradingTasksApi = {
    * Create a new trading task
    */
   create: (data: TradingTaskCreateData): Promise<TradingTask> => {
-    // Transform config_id and account_id to config and account for backend
+    // Transform config_id and account_id to config and oanda_account for backend
     const { config_id, account_id, ...rest } = data;
     const payload = {
       ...rest,
       config: config_id,
-      account: account_id,
+      oanda_account: account_id,
     };
     return apiClient.post<TradingTask>('/trading-tasks/', payload);
   },
@@ -49,9 +49,9 @@ export const tradingTasksApi = {
    * Update an existing trading task
    */
   update: (id: number, data: TradingTaskUpdateData): Promise<TradingTask> => {
-    // Transform account_id to account if present
+    // Transform account_id to oanda_account if present
     const { account_id, ...rest } = data;
-    const payload = account_id ? { ...rest, account: account_id } : data;
+    const payload = account_id ? { ...rest, oanda_account: account_id } : data;
     return apiClient.put<TradingTask>(`/trading-tasks/${id}/`, payload);
   },
 

@@ -1196,7 +1196,15 @@ class OandaAccountListCreateView(APIView):
             },
         )
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        # Return paginated response format for consistency with other endpoints
+        response_data = {
+            "count": accounts.count(),
+            "next": None,
+            "previous": None,
+            "results": serializer.data,
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
     def post(self, request: Request) -> Response:
         """

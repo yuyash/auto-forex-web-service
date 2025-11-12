@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 import {
   Box,
@@ -22,7 +22,7 @@ import {
 import Grid from '@mui/material/Grid';
 import { Warning as WarningIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useForm, Controller, useWatch } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
@@ -35,9 +35,13 @@ import {
   useConfiguration,
   useConfigurations,
 } from '../../hooks/useConfigurations';
-import { useAccounts, useAccount } from '../../hooks/useAccounts';
+import { useAccounts } from '../../hooks/useAccounts';
 import { useTradingTasks } from '../../hooks/useTradingTasks';
 import { TaskStatus } from '../../types/common';
+import {
+  useStrategies,
+  getStrategyDisplayName,
+} from '../../hooks/useStrategies';
 
 const steps = ['Account', 'Configuration', 'Review'];
 
@@ -47,9 +51,7 @@ const tradingTaskSchema = z.object({
   config_id: z.number().min(1, 'Configuration is required'),
   name: z.string().min(1, 'Name is required').max(255),
   description: z.string().optional(),
-  risk_acknowledged: z.boolean().refine((val) => val === true, {
-    message: 'You must acknowledge the risks of live trading',
-  }),
+  risk_acknowledged: z.boolean().optional(),
 });
 
 type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
@@ -65,6 +67,9 @@ export default function TradingTaskForm({
 }: TradingTaskFormProps) {
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
+  const [formData, setFormData] = useState<Partial<TradingTaskFormData>>(
+    initialData || {}
+  );
   const createTask = useCreateTradingTask();
   const updateTask = useUpdateTradingTask();
 
@@ -73,6 +78,9 @@ export default function TradingTaskForm({
     handleSubmit,
     formState: { errors },
     trigger,
+    watch,
+    getValues,
+    setValue,
   } = useForm<TradingTaskFormData>({
     resolver: zodResolver(tradingTaskSchema),
     defaultValues: {
@@ -84,46 +92,65 @@ export default function TradingTaskForm({
     },
   });
 
-  const selectedAccountId = useWatch<TradingTaskFormData, 'account_id'>({
-    control,
-    name: 'account_id',
-    defaultValue: 0,
-  });
-  const selectedConfigId = useWatch<TradingTaskFormData, 'config_id'>({
-    control,
-    name: 'config_id',
-    defaultValue: 0,
-  });
-  const watchedName = useWatch<TradingTaskFormData, 'name'>({
-    control,
-    name: 'name',
-    defaultValue: '',
-  });
-  const watchedDescription = useWatch<TradingTaskFormData, 'description'>({
-    control,
-    name: 'description',
-    defaultValue: '',
-  });
+  // Sync saved formData back into React Hook Form when changing steps
+  useEffect(() => {
+    if (Object.keys(formData).length > 0) {
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value !== undefined) {
+          setValue(key as keyof TradingTaskFormData, value, {
+            shouldValidate: false,
+          });
+        }
+      });
+    }
+  }, [formData, setValue]);
+
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const selectedAccountId = watch('account_id');
+
+  const selectedConfigId = watch('config_id');
+
+  const watchedName = watch('name');
+
+  const watchedDescription = watch('description');
 
   // Fetch accounts
   const { data: accountsData } = useAccounts({ page_size: 100 });
   const accounts = accountsData?.results || [];
-  const { data: selectedAccount } = useAccount(selectedAccountId, {
-    enabled: selectedAccountId > 0,
-  });
 
-  // Fetch all configurations
+  // For review step, use saved formData instead of watch
+  // This ensures values persist across step changes
+  const effectiveAccountId =
+    activeStep === 2 && formData.account_id
+      ? formData.account_id
+      : selectedAccountId;
+
+  // Convert account_id to number for finding the account
+  const accountIdNumber =
+    typeof effectiveAccountId === 'string'
+      ? effectiveAccountId === ''
+        ? 0
+        : Number(effectiveAccountId)
+      : effectiveAccountId || 0;
+
+  const selectedAccount = accounts.find(
+    (account) => account.id === accountIdNumber
+  );
+
+  // Fetch all configurations and strategies
   const { data: configurationsData } = useConfigurations({ page_size: 100 });
   const configurations = configurationsData?.results || [];
+  const { strategies } = useStrategies();
 
-  // Fetch selected configuration
-  const parsedSelectedConfigId = Number(selectedConfigId);
-  const effectiveConfigId =
-    Number.isFinite(parsedSelectedConfigId) && parsedSelectedConfigId > 0
-      ? parsedSelectedConfigId
-      : undefined;
+  // Convert config_id to number for the API call
+  const configIdNumber =
+    typeof selectedConfigId === 'string'
+      ? selectedConfigId === ''
+        ? 0
+        : Number(selectedConfigId)
+      : selectedConfigId || 0;
 
-  const { data: selectedConfig } = useConfiguration(effectiveConfigId);
+  const { data: selectedConfig } = useConfiguration(configIdNumber);
 
   // Check if account already has an active task (only if valid account selected)
   const { data: existingTasks } = useTradingTasks(
@@ -139,6 +166,10 @@ export default function TradingTaskForm({
     existingTasks && existingTasks.results.length > 0 && !taskId;
 
   const handleNext = async () => {
+    // Save current form values to state BEFORE validation
+    const currentValues = getValues();
+    setFormData((prev) => ({ ...prev, ...currentValues }));
+
     // Validate current step before proceeding
     let fieldsToValidate: (keyof TradingTaskFormData)[] = [];
 
@@ -149,29 +180,50 @@ export default function TradingTaskForm({
       case 1: // Configuration step
         fieldsToValidate = ['config_id', 'name'];
         break;
-      case 2: // Review step
-        fieldsToValidate = ['risk_acknowledged'];
+      default:
+        // No validation needed for review step
         break;
     }
 
-    const isValid = await trigger(fieldsToValidate);
+    // Only validate if we have fields to validate
+    if (fieldsToValidate.length > 0) {
+      const isValid = await trigger(fieldsToValidate);
 
-    if (isValid) {
-      setActiveStep((prevActiveStep) => prevActiveStep + 1);
+      if (!isValid) {
+        // Validation failed, don't proceed
+        return;
+      }
     }
+
+    // Validation passed or no validation needed, proceed to next step
+    setActiveStep((prevActiveStep) => prevActiveStep + 1);
   };
 
   const handleBack = () => {
+    // Save current form values to state before going back
+    const currentValues = getValues();
+    setFormData((prev) => ({ ...prev, ...currentValues }));
     setActiveStep((prevActiveStep) => prevActiveStep - 1);
   };
 
   const onSubmit = async (data: TradingTaskFormData) => {
     try {
+      // Merge the saved formData with the current form data to ensure we have all values
+      const completeData = { ...formData, ...data } as TradingTaskFormData;
+
+      // For live accounts, validate risk acknowledgment
+      if (
+        selectedAccount?.api_type === 'live' &&
+        !completeData.risk_acknowledged
+      ) {
+        return;
+      }
+
       const taskData: TradingTaskCreateData = {
-        account_id: data.account_id,
-        config_id: data.config_id,
-        name: data.name,
-        description: data.description,
+        account_id: completeData.account_id,
+        config_id: completeData.config_id,
+        name: completeData.name,
+        description: completeData.description,
       };
 
       if (taskId) {
@@ -180,8 +232,8 @@ export default function TradingTaskForm({
         await createTask.mutate(taskData);
       }
       navigate('/trading-tasks');
-    } catch (error) {
-      console.error('Failed to save task:', error);
+    } catch {
+      // Error is already handled by the mutation hook
     }
   };
 
@@ -209,6 +261,14 @@ export default function TradingTaskForm({
                         {...field}
                         label="Account"
                         value={field.value || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          field.onChange(
+                            typeof value === 'string' && value === ''
+                              ? 0
+                              : Number(value)
+                          );
+                        }}
                       >
                         <MenuItem value="">
                           <em>Select an account</em>
@@ -216,7 +276,7 @@ export default function TradingTaskForm({
                         {accounts.map((account) => (
                           <MenuItem key={account.id} value={account.id}>
                             {account.account_id} ({account.api_type}) - Balance:{' '}
-                            ${account.balance.toFixed(2)}
+                            ${parseFloat(account.balance).toFixed(2)}
                           </MenuItem>
                         ))}
                       </Select>
@@ -253,7 +313,7 @@ export default function TradingTaskForm({
                     </Typography>
                     <Typography variant="body2">
                       <strong>Balance:</strong> $
-                      {selectedAccount.balance.toFixed(2)}
+                      {parseFloat(selectedAccount.balance).toFixed(2)}
                     </Typography>
                     <Typography variant="body2">
                       <strong>Currency:</strong> {selectedAccount.currency}
@@ -317,7 +377,11 @@ export default function TradingTaskForm({
                       Configuration Preview
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Type:</strong> {selectedConfig.strategy_type}
+                      <strong>Type:</strong>{' '}
+                      {getStrategyDisplayName(
+                        strategies,
+                        selectedConfig.strategy_type
+                      )}
                     </Typography>
                     <Typography variant="body2">
                       <strong>Description:</strong>{' '}
@@ -407,8 +471,16 @@ export default function TradingTaskForm({
                       Account
                     </Typography>
                     <Typography variant="body1" gutterBottom>
-                      {selectedAccount?.account_id} ({selectedAccount?.api_type}
-                      )
+                      {selectedAccount ? (
+                        <>
+                          {selectedAccount.account_id} (
+                          {selectedAccount.api_type})
+                        </>
+                      ) : selectedAccountId > 0 ? (
+                        'Loading account...'
+                      ) : (
+                        'No account selected'
+                      )}
                     </Typography>
                   </Box>
 
@@ -417,62 +489,92 @@ export default function TradingTaskForm({
                       Configuration
                     </Typography>
                     <Typography variant="body1" gutterBottom>
-                      {selectedConfig?.name} ({selectedConfig?.strategy_type})
+                      {selectedConfig ? (
+                        <>
+                          {selectedConfig.name} (
+                          {getStrategyDisplayName(
+                            strategies,
+                            selectedConfig.strategy_type
+                          )}
+                          )
+                        </>
+                      ) : (
+                        'Loading...'
+                      )}
                     </Typography>
                   </Box>
                 </Paper>
               </Grid>
 
-              <Grid size={{ xs: 12 }}>
-                <Alert severity="error" icon={<WarningIcon />}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    <strong>RISK WARNING</strong>
-                  </Typography>
-                  <Typography variant="body2" gutterBottom>
-                    Live trading involves substantial risk of loss. You should
-                    carefully consider whether trading is appropriate for you in
-                    light of your experience, objectives, financial resources,
-                    and other relevant circumstances.
-                  </Typography>
-                  <Typography variant="body2" gutterBottom>
-                    • Real money will be at risk
-                  </Typography>
-                  <Typography variant="body2" gutterBottom>
-                    • Past performance does not guarantee future results
-                  </Typography>
-                  <Typography variant="body2" gutterBottom>
-                    • Monitor your trading task closely
-                  </Typography>
-                  <Typography variant="body2">
-                    • You can stop the task at any time
-                  </Typography>
-                </Alert>
-              </Grid>
+              {selectedAccount?.api_type === 'live' && (
+                <>
+                  <Grid size={{ xs: 12 }}>
+                    <Alert severity="error" icon={<WarningIcon />}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        <strong>LIVE TRADING RISK WARNING</strong>
+                      </Typography>
+                      <Typography variant="body2" gutterBottom>
+                        Live trading involves substantial risk of loss. You
+                        should carefully consider whether trading is appropriate
+                        for you in light of your experience, objectives,
+                        financial resources, and other relevant circumstances.
+                      </Typography>
+                      <Typography variant="body2" gutterBottom>
+                        • Real money will be at risk
+                      </Typography>
+                      <Typography variant="body2" gutterBottom>
+                        • Past performance does not guarantee future results
+                      </Typography>
+                      <Typography variant="body2" gutterBottom>
+                        • Monitor your trading task closely
+                      </Typography>
+                      <Typography variant="body2">
+                        • You can stop the task at any time
+                      </Typography>
+                    </Alert>
+                  </Grid>
 
-              <Grid size={{ xs: 12 }}>
-                <Controller
-                  name="risk_acknowledged"
-                  control={control}
-                  render={({ field }) => (
-                    <FormControl error={!!errors.risk_acknowledged}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={field.value}
-                            onChange={field.onChange}
+                  <Grid size={{ xs: 12 }}>
+                    <Controller
+                      name="risk_acknowledged"
+                      control={control}
+                      render={({ field }) => (
+                        <FormControl error={!!errors.risk_acknowledged}>
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={field.value}
+                                onChange={field.onChange}
+                              />
+                            }
+                            label="I understand and acknowledge the risks of live trading"
                           />
-                        }
-                        label="I understand and acknowledge the risks of live trading"
-                      />
-                      {errors.risk_acknowledged && (
-                        <FormHelperText>
-                          {errors.risk_acknowledged.message}
-                        </FormHelperText>
+                          {errors.risk_acknowledged && (
+                            <FormHelperText>
+                              {errors.risk_acknowledged.message}
+                            </FormHelperText>
+                          )}
+                        </FormControl>
                       )}
-                    </FormControl>
-                  )}
-                />
-              </Grid>
+                    />
+                  </Grid>
+                </>
+              )}
+
+              {selectedAccount?.api_type === 'practice' && (
+                <Grid size={{ xs: 12 }}>
+                  <Alert severity="info">
+                    <Typography variant="subtitle2" gutterBottom>
+                      <strong>Practice Account</strong>
+                    </Typography>
+                    <Typography variant="body2">
+                      This is a practice account with virtual funds. No real
+                      money is at risk. Use this to test your strategies before
+                      deploying to a live account.
+                    </Typography>
+                  </Alert>
+                </Grid>
+              )}
             </Grid>
           </Box>
         );

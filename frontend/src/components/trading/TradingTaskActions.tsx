@@ -144,6 +144,7 @@ export default function TradingTaskActions({
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={onClose}
+        disableRestoreFocus
         anchorOrigin={{
           vertical: 'bottom',
           horizontal: 'right',
