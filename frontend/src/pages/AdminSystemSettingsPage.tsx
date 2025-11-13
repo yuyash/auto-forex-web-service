@@ -51,7 +51,10 @@ interface SystemSettings {
   aws_secret_access_key: string;
   aws_ses_region: string;
   aws_region: string;
-  aws_s3_bucket: string;
+  athena_database_name: string;
+  athena_table_name: string;
+  athena_output_bucket: string;
+  athena_instruments: string;
   django_log_level: string;
   tick_data_retention_days: number;
   oanda_sync_interval_seconds: number;
@@ -609,15 +612,6 @@ const AdminSystemSettingsPage = () => {
               helperText="Region for SES email service"
             />
           </Grid>
-          <Grid size={{ xs: 12 }}>
-            <TextField
-              fullWidth
-              label="AWS S3 Bucket"
-              value={settings.aws_s3_bucket}
-              onChange={(e) => handleChange('aws_s3_bucket', e.target.value)}
-              placeholder="my-bucket-name"
-            />
-          </Grid>
 
           {/* Test AWS Configuration Section */}
           <Grid size={{ xs: 12 }}>
@@ -629,15 +623,75 @@ const AdminSystemSettingsPage = () => {
               <Button
                 variant="outlined"
                 onClick={handleTestAws}
-                disabled={testingAws || !settings.aws_s3_bucket}
+                disabled={testingAws || !settings.athena_output_bucket}
                 sx={{ minWidth: 200 }}
               >
                 {testingAws ? 'Testing...' : 'Test S3 Connection'}
               </Button>
               <Typography variant="body2" color="text.secondary">
-                Verify AWS credentials and S3 bucket access for chart data
+                Verify AWS credentials and S3 bucket access for Athena queries
               </Typography>
             </Box>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* Athena Settings */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Athena Historical Data Settings
+        </Typography>
+        <Divider sx={{ mb: 3 }} />
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              fullWidth
+              label="Athena Database Name"
+              value={settings.athena_database_name}
+              onChange={(e) =>
+                handleChange('athena_database_name', e.target.value)
+              }
+              placeholder="forex_hist_data_db"
+              helperText="AWS Athena database name for historical forex data"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              fullWidth
+              label="Athena Table Name"
+              value={settings.athena_table_name}
+              onChange={(e) =>
+                handleChange('athena_table_name', e.target.value)
+              }
+              placeholder="quotes"
+              helperText="Athena table name for historical forex quotes"
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              fullWidth
+              label="Athena Output S3 Bucket"
+              value={settings.athena_output_bucket}
+              onChange={(e) =>
+                handleChange('athena_output_bucket', e.target.value)
+              }
+              placeholder="my-athena-results"
+              helperText="S3 bucket for Athena query results (without s3:// prefix)"
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              fullWidth
+              label="Athena Instruments"
+              value={settings.athena_instruments}
+              onChange={(e) =>
+                handleChange('athena_instruments', e.target.value)
+              }
+              placeholder="EUR_USD,GBP_USD,USD_JPY"
+              helperText="Comma-separated list of instruments to import from Athena"
+              multiline
+              rows={2}
+            />
           </Grid>
         </Grid>
       </Paper>
