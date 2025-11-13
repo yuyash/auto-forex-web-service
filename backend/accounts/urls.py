@@ -12,6 +12,7 @@ from .views import (
     AdminSystemSettingsView,
     AdminTestAWSView,
     AdminTestEmailView,
+    AdminTriggerAthenaImportView,
     EmailVerificationView,
     OandaAccountDetailView,
     OandaAccountListCreateView,
@@ -60,6 +61,11 @@ urlpatterns = [
         "admin/test-aws",
         AdminTestAWSView.as_view(),
         name="admin_test_aws",
+    ),
+    path(
+        "admin/trigger-athena-import",
+        AdminTriggerAthenaImportView.as_view(),
+        name="admin_trigger_athena_import",
     ),
     path(
         "admin/whitelist/emails",

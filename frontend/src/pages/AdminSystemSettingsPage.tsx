@@ -73,6 +73,7 @@ const AdminSystemSettingsPage = () => {
   const [testingEmail, setTestingEmail] = useState(false);
   const [testEmailAddress, setTestEmailAddress] = useState('');
   const [testingAws, setTestingAws] = useState(false);
+  const [triggeringImport, setTriggeringImport] = useState(false);
 
   const fetchSettings = async () => {
     try {
@@ -206,6 +207,39 @@ const AdminSystemSettingsPage = () => {
       console.error('Error testing AWS:', error);
     } finally {
       setTestingAws(false);
+    }
+  };
+
+  const handleTriggerAthenaImport = async () => {
+    try {
+      setTriggeringImport(true);
+      const response = await fetch('/api/admin/trigger-athena-import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to trigger Athena import');
+      }
+
+      showSuccess(
+        `Athena import started successfully! Task ID: ${data.task_id}`
+      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to trigger Athena import';
+      showError(errorMessage);
+      console.error('Error triggering Athena import:', error);
+    } finally {
+      setTriggeringImport(false);
     }
   };
 
@@ -692,6 +726,28 @@ const AdminSystemSettingsPage = () => {
               multiline
               rows={2}
             />
+          </Grid>
+
+          {/* Trigger Athena Import Section */}
+          <Grid size={{ xs: 12 }}>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle1" gutterBottom>
+              Import Historical Data
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleTriggerAthenaImport}
+                disabled={triggeringImport || !settings.athena_output_bucket}
+                sx={{ minWidth: 200 }}
+              >
+                {triggeringImport ? 'Importing...' : 'Import from Athena'}
+              </Button>
+              <Typography variant="body2" color="text.secondary">
+                Import historical forex data from Athena for all active accounts
+              </Typography>
+            </Box>
           </Grid>
         </Grid>
       </Paper>

@@ -2391,3 +2391,84 @@ class AdminTestAWSView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class AdminTriggerAthenaImportView(APIView):
+    """
+    API endpoint for triggering Athena historical data import.
+
+    POST /api/admin/trigger-athena-import
+    - Trigger Athena data import for all active accounts or specific account
+    - Admin only
+
+    Requirements: Historical data import from Athena
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request: Request) -> Response:
+        """
+        Trigger Athena historical data import.
+
+        Args:
+            request: HTTP request with optional account_id
+
+        Returns:
+            Response with task ID and status
+        """
+        from trading.athena_import_task import import_athena_data_daily
+
+        account_id = request.data.get("account_id")
+
+        try:
+            # Trigger the import task
+            task = import_athena_data_daily.delay(account_id=account_id)
+
+            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            logger.info(
+                "Admin %s triggered Athena import (task: %s, account_id: %s)",
+                user_email,
+                task.id,
+                account_id or "all",
+                extra={
+                    "user_id": request.user.id,
+                    "admin_email": user_email,
+                    "task_id": task.id,
+                    "account_id": account_id,
+                },
+            )
+
+            account_msg = f"account {account_id}" if account_id else "all active accounts"
+            return Response(
+                {
+                    "success": True,
+                    "message": f"Athena import triggered for {account_msg}",
+                    "task_id": task.id,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            error_message = str(e)
+            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            logger.error(
+                "Failed to trigger Athena import for admin %s: %s",
+                user_email,
+                error_message,
+                exc_info=True,
+                extra={
+                    "user_id": request.user.id,
+                    "admin_email": user_email,
+                    "account_id": account_id,
+                    "error": error_message,
+                },
+            )
+
+            return Response(
+                {
+                    "success": False,
+                    "error": "Failed to trigger Athena import.",
+                    "details": error_message,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
