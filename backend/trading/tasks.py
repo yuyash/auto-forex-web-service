@@ -707,22 +707,31 @@ def collect_tick_data_for_default_account(
             instruments,
         )
 
-        # Start the market data stream using the existing task
-        result = start_market_data_stream.delay(
-            account_id=default_account.id, instruments=instruments
-        )
+        # Start the market data stream for each instrument
+        task_ids = []
+        for instrument in instruments:
+            result = start_market_data_stream.delay(
+                account_id=default_account.id, instrument=instrument
+            )
+            task_ids.append(result.id)
+            logger.info(
+                "Started tick data stream for %s on account %s (task: %s)",
+                instrument,
+                default_account.account_id,
+                result.id,
+            )
 
         logger.info(
-            "Tick data collection started for account %s (task: %s)",
+            "Tick data collection started for account %s (%d streams)",
             default_account.account_id,
-            result.id,
+            len(task_ids),
         )
 
         return {
             "success": True,
             "account_id": default_account.id,
             "instruments": instruments,
-            "task_id": result.id,
+            "task_ids": task_ids,
             "error": None,
         }
 

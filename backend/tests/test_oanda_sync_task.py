@@ -460,26 +460,19 @@ class TestOandaSyncTask:
         account2.set_api_token("test_token_67890")
         account2.save()
 
-        # Mock the async task result
+        # Mock the async task result (fire-and-forget, no .get() call)
         mock_result = Mock()
-        mock_result.get.return_value = {
-            "success": True,
-            "order_discrepancies": 1,
-            "position_discrepancies": 2,
-            "total_updates": 3,
-            "errors": [],
-        }
+        mock_result.id = "task-id-123"
         mock_sync_account_task.apply_async.return_value = mock_result
 
         # Run sync task
         result = oanda_sync_task()
 
-        # Verify results
+        # Verify results (fire-and-forget pattern)
         assert result["success"] is True
         assert result["accounts_synced"] == 2
-        assert result["total_order_discrepancies"] == 2  # 1 per account
-        assert result["total_position_discrepancies"] == 4  # 2 per account
-        assert result["total_updates"] == 6  # 3 per account
+        assert result["tasks_triggered"] == 2
+        assert len(result["task_ids"]) == 2
         assert len(result["errors"]) == 0
 
         # Verify sync_account_task was called for each account
@@ -490,25 +483,17 @@ class TestOandaSyncTask:
         self, mock_sync_account_task, mock_oanda_account
     ):
         """Test sync task handles reconciliation errors gracefully"""
-        # Mock the async task result with error
-        mock_result = Mock()
-        mock_result.get.return_value = {
-            "success": False,
-            "order_discrepancies": 0,
-            "position_discrepancies": 0,
-            "total_updates": 0,
-            "errors": ["API connection failed"],
-        }
-        mock_sync_account_task.apply_async.return_value = mock_result
+        # Mock the async task to raise an exception during apply_async
+        mock_sync_account_task.apply_async.side_effect = Exception("Task queue error")
 
         # Run sync task
         result = oanda_sync_task()
 
-        # Verify results
-        assert result["success"] is False  # Task fails when account sync fails
-        assert result["accounts_synced"] == 0  # Account not counted as synced when it fails
+        # Verify results (fire-and-forget pattern - errors during task triggering)
+        assert result["success"] is False  # Task fails when triggering fails
+        assert result["accounts_synced"] == 0  # No tasks successfully triggered
         assert len(result["errors"]) >= 1
-        assert "API connection failed" in result["errors"][0]
+        assert "Task queue error" in result["errors"][0]
 
     @patch("trading.oanda_sync_task.PositionReconciler")
     @patch("trading.oanda_sync_task.OrderReconciler")

@@ -1079,16 +1079,16 @@ def oanda_sync_task(self: Any) -> Dict[str, Any]:  # pylint: disable=unused-argu
     """
     Periodic synchronization task for all OANDA accounts.
 
-    This task triggers individual sync tasks for each active account.
+    This task triggers individual sync tasks for each active account asynchronously.
+    Does not wait for subtasks to complete (fire-and-forget pattern).
     Scheduled to run every 5 minutes.
 
     Returns:
         Dictionary containing:
-            - success: Whether the sync was successful
-            - accounts_synced: Number of accounts synced
-            - total_order_discrepancies: Total order discrepancies found
-            - total_position_discrepancies: Total position discrepancies found
-            - total_updates: Total records updated
+            - success: Whether tasks were triggered successfully
+            - accounts_synced: Number of account sync tasks triggered
+            - tasks_triggered: Number of tasks started
+            - task_ids: List of Celery task IDs
             - errors: List of error messages
 
     Requirements: 8.3, 9.1, 9.5
@@ -1098,9 +1098,7 @@ def oanda_sync_task(self: Any) -> Dict[str, Any]:  # pylint: disable=unused-argu
     results: Dict[str, Any] = {
         "success": True,
         "accounts_synced": 0,
-        "total_order_discrepancies": 0,
-        "total_position_discrepancies": 0,
-        "total_updates": 0,
+        "tasks_triggered": 0,
         "errors": [],
     }
 
@@ -1110,48 +1108,48 @@ def oanda_sync_task(self: Any) -> Dict[str, Any]:  # pylint: disable=unused-argu
 
         logger.info("Found %d active OANDA accounts to sync", active_accounts.count())
 
+        # Trigger individual account sync tasks asynchronously
+        task_ids = []
         for account in active_accounts:
             try:
-                # Trigger individual account sync task
+                # Trigger individual account sync task (fire-and-forget)
                 account_result = sync_account_task.apply_async(
                     args=[account.id],
                     expires=240,  # Task expires after 4 minutes
                 )
-
-                # Wait for result (with timeout)
-                sync_result = account_result.get(timeout=240)
-
-                if sync_result["success"]:
-                    results["total_order_discrepancies"] += sync_result["order_discrepancies"]
-                    results["total_position_discrepancies"] += sync_result["position_discrepancies"]
-                    results["total_updates"] += sync_result["total_updates"]
-                    results["accounts_synced"] += 1
-                else:
-                    results["errors"].extend(sync_result["errors"])
-                    results["success"] = False
+                task_ids.append(account_result.id)
+                results["accounts_synced"] += 1
+                logger.info(
+                    "Triggered sync for account %s (task: %s)",
+                    account.account_id,
+                    account_result.id,
+                )
 
             except Exception as e:  # pylint: disable=broad-exception-caught
-                error_msg = f"Error syncing account {account.account_id}: {str(e)}"
+                error_msg = f"Error triggering sync for account {account.account_id}: {str(e)}"
                 logger.error(error_msg, exc_info=True)
                 results["errors"].append(error_msg)
                 results["success"] = False
 
+        # Store task IDs in results
+        results["task_ids"] = task_ids
+        results["tasks_triggered"] = len(task_ids)
+
         # Log system event
         Event.log_system_event(
-            event_type="oanda_sync_completed",
-            description=f"OANDA sync completed: {results['accounts_synced']} accounts synced",
+            event_type="oanda_sync_triggered",
+            description=(
+                f"OANDA sync triggered: {results['accounts_synced']} " "account sync tasks started"
+            ),
             severity="info" if results["success"] else "warning",
             details=results,
         )
 
         logger.info(
             "OANDA synchronization task completed: "
-            "accounts_synced=%d, order_discrepancies=%d, position_discrepancies=%d, "
-            "total_updates=%d, errors=%d",
+            "accounts_synced=%d, tasks_triggered=%d, errors=%d",
             results["accounts_synced"],
-            results["total_order_discrepancies"],
-            results["total_position_discrepancies"],
-            results["total_updates"],
+            results["tasks_triggered"],
             len(results["errors"]),
         )
 
