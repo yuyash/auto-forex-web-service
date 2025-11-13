@@ -654,11 +654,24 @@ class AdminDashboardConsumer(AsyncWebsocketConsumer):
         Background task that periodically sends system metrics and dashboard data.
 
         This task runs continuously while the WebSocket is connected,
-        sending full dashboard updates every 5 seconds.
+        sending full dashboard updates based on system settings interval.
         """
+        from channels.db import database_sync_to_async
+
+        from accounts.models import SystemSettings
+
+        @database_sync_to_async
+        def get_update_interval() -> int:
+            try:
+                settings = SystemSettings.get_settings()
+                return getattr(settings, "system_health_update_interval", 5)
+            except Exception:  # pylint: disable=broad-exception-caught
+                return 5  # Default to 5 seconds on error
+
         while True:
             await self._send_dashboard_data()
-            await asyncio.sleep(5)  # Send dashboard data every 5 seconds
+            interval = await get_update_interval()
+            await asyncio.sleep(interval)
 
     async def _send_dashboard_data(self) -> None:
         """

@@ -241,13 +241,31 @@ class SystemHealthMonitor:
             Number of active streaming connections
         """
         try:
-            # Check Redis for active stream keys
-            if self.redis_client:
-                stream_keys = self.redis_client.keys("stream:*")
-                return len(stream_keys)
-            return 0
+            from celery import current_app
+
+            # Count active market data stream tasks
+            inspect = current_app.control.inspect(timeout=2.0)
+            if inspect is None:
+                logger.warning("Celery inspect returned None for streams count")
+                return 0
+
+            active_tasks = inspect.active() or {}
+
+            # Count tasks with name containing 'market_data_stream'
+            stream_count = 0
+            for worker_tasks in active_tasks.values():
+                if worker_tasks:
+                    for task in worker_tasks:
+                        task_name = task.get("name", "")
+                        if "start_market_data_stream" in task_name:
+                            stream_count += 1
+
+            if stream_count > 0:
+                logger.debug("Found %d active market data streams", stream_count)
+
+            return stream_count
         except Exception as e:
-            logger.error(f"Failed to get active streams count: {e}")
+            logger.error(f"Failed to get active streams count: {e}", exc_info=True)
             return 0
 
     def get_celery_tasks_count(self) -> Dict[str, int]:
@@ -267,18 +285,28 @@ class SystemHealthMonitor:
             # Retry a few times to handle momentary broker unavailability
             for attempt in range(3):
                 try:
-                    inspect = current_app.control.inspect()
+                    inspect = current_app.control.inspect(timeout=2.0)
                     if inspect is None:
                         raise RuntimeError("Celery inspect returned None")
 
                     active_tasks = inspect.active() or {}
                     scheduled_tasks = inspect.scheduled() or {}
                     reserved_tasks = inspect.reserved() or {}
+
+                    # Log for debugging
+                    if active_tasks or scheduled_tasks or reserved_tasks:
+                        logger.debug(
+                            "Celery tasks: active=%d, scheduled=%d, reserved=%d",
+                            sum(len(t) for t in active_tasks.values() if t),
+                            sum(len(t) for t in scheduled_tasks.values() if t),
+                            sum(len(t) for t in reserved_tasks.values() if t),
+                        )
                     break
                 except Exception as inner_error:  # pragma: no cover - network timing
                     if attempt < 2:
                         time.sleep(0.5)
                         continue
+                    logger.warning("Celery inspect attempt %d failed: %s", attempt + 1, inner_error)
                     raise inner_error
 
             active_count = sum(len(tasks) for tasks in active_tasks.values() if tasks)
@@ -292,7 +320,7 @@ class SystemHealthMonitor:
                 "total": active_count + scheduled_count + reserved_count,
             }
         except Exception as e:
-            logger.error(f"Failed to get Celery tasks count: {e}")
+            logger.error(f"Failed to get Celery tasks count: {e}", exc_info=True)
             return {
                 "active": 0,
                 "scheduled": 0,

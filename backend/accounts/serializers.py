@@ -285,6 +285,8 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             "django_log_level",
             # Application Settings
             "tick_data_retention_days",
+            "tick_data_instruments",
+            "system_health_update_interval",
             "oanda_sync_interval_seconds",
             "oanda_fetch_duration_days",
             "updated_at",

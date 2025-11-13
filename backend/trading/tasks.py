@@ -688,17 +688,49 @@ def collect_tick_data_for_default_account(
                 "error": error_msg,
             }
 
-        # Use provided instruments or default to major pairs
+        # Use provided instruments or get from system settings
         if instruments is None:
-            instruments = [
-                "EUR_USD",
-                "GBP_USD",
-                "USD_JPY",
-                "USD_CHF",
-                "AUD_USD",
-                "USD_CAD",
-                "NZD_USD",
-            ]
+            from accounts.models import SystemSettings
+
+            try:
+                settings = SystemSettings.get_settings()
+                if settings and hasattr(settings, "tick_data_instruments"):
+                    instruments_str = getattr(settings, "tick_data_instruments", "")
+                    if instruments_str:
+                        instruments = [i.strip() for i in instruments_str.split(",")]
+                    else:
+                        # Fallback to defaults if field is empty
+                        instruments = [
+                            "EUR_USD",
+                            "GBP_USD",
+                            "USD_JPY",
+                            "USD_CHF",
+                            "AUD_USD",
+                            "USD_CAD",
+                            "NZD_USD",
+                        ]
+                else:
+                    # Fallback to defaults if settings not available
+                    instruments = [
+                        "EUR_USD",
+                        "GBP_USD",
+                        "USD_JPY",
+                        "USD_CHF",
+                        "AUD_USD",
+                        "USD_CAD",
+                        "NZD_USD",
+                    ]
+            except Exception:  # pylint: disable=broad-exception-caught
+                # Fallback to defaults on any error
+                instruments = [
+                    "EUR_USD",
+                    "GBP_USD",
+                    "USD_JPY",
+                    "USD_CHF",
+                    "AUD_USD",
+                    "USD_CAD",
+                    "NZD_USD",
+                ]
 
         logger.info(
             "Starting tick data collection for default account %s (user: %d, instruments: %s)",

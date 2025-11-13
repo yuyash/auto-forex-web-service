@@ -201,6 +201,18 @@ class SystemSettings(models.Model):
         default=365,
         help_text="Number of days to fetch orders and positions from OANDA (default: 365 = 1 year)",
     )
+    tick_data_instruments = models.TextField(
+        blank=True,
+        default="EUR_USD,GBP_USD,USD_JPY,USD_CHF,AUD_USD,USD_CAD,NZD_USD",
+        help_text=(
+            "Comma-separated list of instruments for live tick data collection "
+            "(e.g., EUR_USD,GBP_USD)"
+        ),
+    )
+    system_health_update_interval = models.IntegerField(
+        default=5,
+        help_text="Interval in seconds for system health updates in admin dashboard (default: 5)",
+    )
 
     updated_at = models.DateTimeField(
         auto_now=True,

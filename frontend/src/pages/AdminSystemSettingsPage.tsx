@@ -57,6 +57,8 @@ interface SystemSettings {
   athena_instruments: string;
   django_log_level: string;
   tick_data_retention_days: number;
+  tick_data_instruments: string;
+  system_health_update_interval: number;
   oanda_sync_interval_seconds: number;
   oanda_fetch_duration_days: number;
   updated_at: string;
@@ -790,6 +792,35 @@ const AdminSystemSettingsPage = () => {
                 )
               }
               helperText="Number of days to retain tick data before cleanup"
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              fullWidth
+              label="Tick Data Instruments"
+              value={settings.tick_data_instruments}
+              onChange={(e) =>
+                handleChange('tick_data_instruments', e.target.value)
+              }
+              placeholder="EUR_USD,GBP_USD,USD_JPY"
+              helperText="Comma-separated list of instruments for live tick data collection"
+              multiline
+              rows={2}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              fullWidth
+              label="System Health Update Interval (seconds)"
+              type="number"
+              value={settings.system_health_update_interval}
+              onChange={(e) =>
+                handleChange(
+                  'system_health_update_interval',
+                  parseInt(e.target.value)
+                )
+              }
+              helperText="Interval for system health updates in admin dashboard (default: 5)"
             />
           </Grid>
           <Grid size={{ xs: 12, md: 6 }}>
