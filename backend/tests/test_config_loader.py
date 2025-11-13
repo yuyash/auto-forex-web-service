@@ -74,11 +74,13 @@ class TestConfigLoader:
         assert "logging" in config
 
     def test_load_nonexistent_file(self) -> None:
-        """Test loading a non-existent configuration file."""
+        """Test loading a non-existent configuration file returns empty config."""
         loader = ConfigLoader("/nonexistent/path/config.yaml")
 
-        with pytest.raises(FileNotFoundError):
-            loader.load()
+        # Config file is optional - should return empty dict instead of raising error
+        config = loader.load()
+        assert config == {}
+        assert loader._config == {}
 
     def test_load_empty_file(self) -> None:
         """Test loading an empty configuration file."""

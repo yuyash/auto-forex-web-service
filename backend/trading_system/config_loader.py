@@ -139,7 +139,9 @@ class ConfigLoader:
             ConfigValidationError: If the configuration is invalid.
         """
         if not self.config_path.exists():
-            raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
+            # Config file is optional - use empty config and rely on defaults
+            self._config = {}
+            return self._config
 
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
