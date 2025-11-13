@@ -276,7 +276,11 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             "aws_secret_access_key",
             "aws_ses_region",
             "aws_region",
-            "aws_s3_bucket",
+            # Athena Settings
+            "athena_database_name",
+            "athena_table_name",
+            "athena_output_bucket",
+            "athena_instruments",
             # Logging Settings
             "django_log_level",
             # Application Settings
