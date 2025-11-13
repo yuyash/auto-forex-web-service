@@ -9,6 +9,8 @@ This module contains models for:
 - OandaAccount: OANDA trading account with encrypted API token
 """
 
+# pylint: disable=too-many-lines
+
 import base64
 import hashlib
 from datetime import timedelta
@@ -143,11 +145,31 @@ class SystemSettings(models.Model):
         default="us-east-1",
         help_text="Default AWS region",
     )
-    aws_s3_bucket = models.CharField(
+    # Athena Settings for Historical Data
+    athena_database_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="forex_hist_data_db",
+        help_text="Athena database name for historical forex data",
+    )
+    athena_table_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="quotes",
+        help_text="Athena table name for historical forex quotes",
+    )
+    athena_output_bucket = models.CharField(
         max_length=255,
         blank=True,
         default="",
-        help_text="S3 bucket name for file storage",
+        help_text="S3 bucket for Athena query results (e.g., my-athena-results)",
+    )
+    athena_instruments = models.TextField(
+        blank=True,
+        default="EUR_USD,GBP_USD,USD_JPY,USD_CHF,AUD_USD,USD_CAD,NZD_USD",
+        help_text=(
+            "Comma-separated list of instruments to import from Athena " "(e.g., EUR_USD,GBP_USD)"
+        ),
     )
 
     # Logging Settings

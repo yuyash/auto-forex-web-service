@@ -4,5 +4,41 @@
     "docker-compose": true,
     "html": true,
     "toml": true
+  },
+  "languages": {
+    "Python": {
+      "auto_indent": true,
+      "completions": {
+        "lsp": true
+      },
+      "format_on_save": "on",
+      "formatter": "language_server",
+      "preferred_line_length": 100,
+      "soft_wrap": "preferred_line_length",
+      "tab_size": 4
+    },
+    "TypeScript": {
+      "auto_indent": true,
+      "completions": {
+        "lsp": true
+      },
+      "format_on_save": "on",
+      "formatter": "language_server",
+      "preferred_line_length": 100,
+      "soft_wrap": "preferred_line_length",
+      "tab_size": 2
+    }
+  },
+  "lsp": {
+    "basedpyright": {
+      "settings": {
+        "basedpyright.analysis": {
+          "diagnosticMode": "workspace",
+          "inlayHints": {
+            "callArgumentNames": false
+          }
+        }
+      }
+    }
   }
 }

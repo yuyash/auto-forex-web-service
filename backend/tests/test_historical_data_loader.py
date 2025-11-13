@@ -176,55 +176,26 @@ class TestHistoricalDataLoaderInitialization:
         loader = HistoricalDataLoader(data_source="postgresql")
 
         assert loader.data_source == "postgresql"
-        assert loader.s3_client is None
         assert loader.athena_client is None
 
-    def test_initialization_s3_source_with_config(self):
-        """Test initialization with S3 data source and configuration."""
+    def test_initialization_athena_source_with_config(self):
+        """Test initialization with Athena data source and configuration."""
         with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
             mock_session = Mock()
-            mock_s3_client = Mock()
             mock_athena_client = Mock()
-            mock_session.client.side_effect = lambda service: (
-                mock_s3_client if service == "s3" else mock_athena_client
-            )
+            mock_session.client.return_value = mock_athena_client
             mock_session_class.return_value = mock_session
 
             loader = HistoricalDataLoader(
-                data_source="s3",
-                s3_bucket="test-bucket",
+                data_source="athena",
                 athena_database="test-db",
+                athena_output_bucket="test-bucket",
             )
 
-            assert loader.data_source == "s3"
-            assert loader.s3_bucket == "test-bucket"
+            assert loader.data_source == "athena"
             assert loader.athena_database == "test-db"
-            assert loader.s3_client == mock_s3_client
+            assert loader.athena_output_bucket == "test-bucket"
             assert loader.athena_client == mock_athena_client
-
-    def test_initialization_s3_source_from_settings(self):
-        """Test initialization with S3 source using settings."""
-        with patch("trading.historical_data_loader.settings") as mock_settings:
-            mock_settings.SYSTEM_CONFIG = {
-                "backtesting": {
-                    "s3_bucket": "settings-bucket",
-                    "athena_database": "settings-db",
-                }
-            }
-
-            with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
-                mock_session = Mock()
-                mock_s3_client = Mock()
-                mock_athena_client = Mock()
-                mock_session.client.side_effect = lambda service: (
-                    mock_s3_client if service == "s3" else mock_athena_client
-                )
-                mock_session_class.return_value = mock_session
-
-                loader = HistoricalDataLoader(data_source="s3")
-
-                assert loader.s3_bucket == "settings-bucket"
-                assert loader.athena_database == "settings-db"
 
 
 class TestAWSClientInitialization:
@@ -234,22 +205,18 @@ class TestAWSClientInitialization:
         """Test AWS client initialization with default credentials."""
         with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
             mock_session = Mock()
-            mock_s3_client = Mock()
             mock_athena_client = Mock()
-            mock_session.client.side_effect = lambda service: (
-                mock_s3_client if service == "s3" else mock_athena_client
-            )
+            mock_session.client.return_value = mock_athena_client
             mock_session_class.return_value = mock_session
 
             loader = HistoricalDataLoader(
-                data_source="s3",
-                s3_bucket="test-bucket",
+                data_source="athena",
                 athena_database="test-db",
+                athena_output_bucket="test-bucket",
             )
 
             # Verify session was created without profile
             mock_session_class.assert_called_once_with()
-            assert loader.s3_client == mock_s3_client
             assert loader.athena_client == mock_athena_client
 
     def test_aws_client_initialization_with_profile(self):
@@ -259,22 +226,19 @@ class TestAWSClientInitialization:
             patch("trading.historical_data_loader.boto3.Session") as mock_session_class,
         ):
             mock_session = Mock()
-            mock_s3_client = Mock()
             mock_athena_client = Mock()
-            mock_session.client.side_effect = lambda service: (
-                mock_s3_client if service == "s3" else mock_athena_client
-            )
+            mock_session.client.return_value = mock_athena_client
             mock_session_class.return_value = mock_session
 
             loader = HistoricalDataLoader(
-                data_source="s3",
-                s3_bucket="test-bucket",
+                data_source="athena",
                 athena_database="test-db",
+                athena_output_bucket="test-bucket",
             )
 
             # Verify session was created with profile
             mock_session_class.assert_called_once_with(profile_name="test-profile")
-            assert loader.s3_client == mock_s3_client
+            assert loader.athena_client == mock_athena_client
 
     def test_aws_client_initialization_with_role_arn(self):
         """Test AWS client initialization with AWS_ROLE_ARN."""
@@ -298,25 +262,22 @@ class TestAWSClientInitialization:
             }
             base_session.client.return_value = sts_client
 
-            # Mock S3 and Athena clients
-            mock_s3_client = Mock()
+            # Mock Athena client
             mock_athena_client = Mock()
-            assumed_session.client.side_effect = lambda service: (
-                mock_s3_client if service == "s3" else mock_athena_client
-            )
+            assumed_session.client.return_value = mock_athena_client
 
             # Return different sessions for base and assumed
             mock_session_class.side_effect = [base_session, assumed_session]
 
             loader = HistoricalDataLoader(
-                data_source="s3",
-                s3_bucket="test-bucket",
+                data_source="athena",
                 athena_database="test-db",
+                athena_output_bucket="test-bucket",
             )
 
             # Verify role was assumed
             sts_client.assume_role.assert_called_once()
-            assert loader.s3_client == mock_s3_client
+            assert loader.athena_client == mock_athena_client
 
     def test_aws_client_initialization_with_credentials_file(self):
         """Test AWS client initialization with AWS_CREDENTIALS_FILE."""
@@ -325,24 +286,21 @@ class TestAWSClientInitialization:
             patch("trading.historical_data_loader.boto3.Session") as mock_session_class,
         ):
             mock_session = Mock()
-            mock_s3_client = Mock()
             mock_athena_client = Mock()
-            mock_session.client.side_effect = lambda service: (
-                mock_s3_client if service == "s3" else mock_athena_client
-            )
+            mock_session.client.return_value = mock_athena_client
             mock_session_class.return_value = mock_session
 
             loader = HistoricalDataLoader(
-                data_source="s3",
-                s3_bucket="test-bucket",
+                data_source="athena",
                 athena_database="test-db",
+                athena_output_bucket="test-bucket",
             )
 
             # Verify credentials file was set in environment
             import os
 
             assert os.environ.get("AWS_SHARED_CREDENTIALS_FILE") == "/path/to/credentials"
-            assert loader.s3_client == mock_s3_client
+            assert loader.athena_client == mock_athena_client
 
     def test_aws_client_initialization_failure(self):
         """Test AWS client initialization handles failures."""
@@ -351,9 +309,9 @@ class TestAWSClientInitialization:
 
             with pytest.raises(RuntimeError) as exc_info:
                 HistoricalDataLoader(
-                    data_source="s3",
-                    s3_bucket="test-bucket",
+                    data_source="athena",
                     athena_database="test-db",
+                    athena_output_bucket="test-bucket",
                 )
 
             assert "AWS client initialization failed" in str(exc_info.value)
@@ -413,18 +371,15 @@ class TestPostgreSQLDataLoading:
             assert tick_data[i].timestamp <= tick_data[i + 1].timestamp
 
 
-class TestS3DataLoading:
-    """Test loading data from S3 using Athena."""
+class TestAthenaDataLoading:
+    """Test loading data from Athena."""
 
-    def test_load_from_s3_success(self):
-        """Test successful data loading from S3/Athena."""
+    def test_load_from_athena_success(self):
+        """Test successful data loading from Athena."""
         with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
             mock_session = Mock()
-            mock_s3_client = Mock()
             mock_athena_client = Mock()
-            mock_session.client.side_effect = lambda service: (
-                mock_s3_client if service == "s3" else mock_athena_client
-            )
+            mock_session.client.return_value = mock_athena_client
             mock_session_class.return_value = mock_session
 
             # Mock Athena query execution
@@ -437,7 +392,7 @@ class TestS3DataLoading:
                 "QueryExecution": {"Status": {"State": "SUCCEEDED"}}
             }
 
-            # Mock query results
+            # Mock query results (Polygon.io format)
             mock_athena_client.get_paginator.return_value.paginate.return_value = [
                 {
                     "ResultSet": {
@@ -445,12 +400,10 @@ class TestS3DataLoading:
                             {"Data": []},  # Header row
                             {
                                 "Data": [
-                                    {"VarCharValue": "EUR_USD"},
-                                    {"VarCharValue": "2024-01-01T12:00:00"},
+                                    {"VarCharValue": "C:EUR-USD"},
                                     {"VarCharValue": "1.1000"},
                                     {"VarCharValue": "1.1002"},
-                                    {"VarCharValue": "1.1001"},
-                                    {"VarCharValue": "0.0002"},
+                                    {"VarCharValue": "1704110400000000000"},  # nanoseconds
                                 ]
                             },
                         ]
@@ -459,9 +412,9 @@ class TestS3DataLoading:
             ]
 
             loader = HistoricalDataLoader(
-                data_source="s3",
-                s3_bucket="test-bucket",
+                data_source="athena",
                 athena_database="test-db",
+                athena_output_bucket="test-bucket",
             )
 
             start_date = datetime(2024, 1, 1, 12, 0, 0)
@@ -473,11 +426,11 @@ class TestS3DataLoading:
             assert tick_data[0].instrument == "EUR_USD"
             assert tick_data[0].bid == Decimal("1.1000")
 
-    def test_load_from_s3_missing_bucket(self):
-        """Test S3 loading fails without bucket configuration."""
+    def test_load_from_athena_missing_bucket(self):
+        """Test Athena loading fails without output bucket configuration."""
         with patch("trading.historical_data_loader.boto3.Session"):
-            loader = HistoricalDataLoader(data_source="s3", athena_database="test-db")
-            loader.s3_bucket = None
+            loader = HistoricalDataLoader(data_source="athena", athena_database="test-db")
+            loader.athena_output_bucket = ""
 
             start_date = datetime(2024, 1, 1, 12, 0, 0)
             end_date = datetime(2024, 1, 1, 12, 0, 10)
@@ -485,13 +438,13 @@ class TestS3DataLoading:
             with pytest.raises(ValueError) as exc_info:
                 loader.load_data("EUR_USD", start_date, end_date)
 
-            assert "S3 bucket not configured" in str(exc_info.value)
+            assert "Athena output bucket not configured" in str(exc_info.value)
 
-    def test_load_from_s3_missing_database(self):
-        """Test S3 loading fails without Athena database configuration."""
+    def test_load_from_athena_missing_database(self):
+        """Test Athena loading fails without database configuration."""
         with patch("trading.historical_data_loader.boto3.Session"):
-            loader = HistoricalDataLoader(data_source="s3", s3_bucket="test-bucket")
-            loader.athena_database = None
+            loader = HistoricalDataLoader(data_source="athena", athena_output_bucket="test-bucket")
+            loader.athena_database = ""
 
             start_date = datetime(2024, 1, 1, 12, 0, 0)
             end_date = datetime(2024, 1, 1, 12, 0, 10)
@@ -505,11 +458,8 @@ class TestS3DataLoading:
         """Test handling of Athena query execution failure."""
         with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
             mock_session = Mock()
-            mock_s3_client = Mock()
             mock_athena_client = Mock()
-            mock_session.client.side_effect = lambda service: (
-                mock_s3_client if service == "s3" else mock_athena_client
-            )
+            mock_session.client.return_value = mock_athena_client
             mock_session_class.return_value = mock_session
 
             # Mock query execution failure
@@ -519,9 +469,9 @@ class TestS3DataLoading:
             )
 
             loader = HistoricalDataLoader(
-                data_source="s3",
-                s3_bucket="test-bucket",
+                data_source="athena",
                 athena_database="test-db",
+                athena_output_bucket="test-bucket",
             )
 
             start_date = datetime(2024, 1, 1, 12, 0, 0)
@@ -530,17 +480,14 @@ class TestS3DataLoading:
             with pytest.raises(RuntimeError) as exc_info:
                 loader.load_data("EUR_USD", start_date, end_date)
 
-            assert "S3/Athena data loading failed" in str(exc_info.value)
+            assert "Athena data loading failed" in str(exc_info.value)
 
     def test_athena_query_timeout(self):
         """Test handling of Athena query timeout."""
         with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
             mock_session = Mock()
-            mock_s3_client = Mock()
             mock_athena_client = Mock()
-            mock_session.client.side_effect = lambda service: (
-                mock_s3_client if service == "s3" else mock_athena_client
-            )
+            mock_session.client.return_value = mock_athena_client
             mock_session_class.return_value = mock_session
 
             # Mock query execution
@@ -554,9 +501,9 @@ class TestS3DataLoading:
             }
 
             loader = HistoricalDataLoader(
-                data_source="s3",
-                s3_bucket="test-bucket",
+                data_source="athena",
                 athena_database="test-db",
+                athena_output_bucket="test-bucket",
             )
 
             # Patch time.sleep to avoid actual waiting
@@ -570,11 +517,8 @@ class TestS3DataLoading:
         """Test handling of Athena query FAILED status."""
         with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
             mock_session = Mock()
-            mock_s3_client = Mock()
             mock_athena_client = Mock()
-            mock_session.client.side_effect = lambda service: (
-                mock_s3_client if service == "s3" else mock_athena_client
-            )
+            mock_session.client.return_value = mock_athena_client
             mock_session_class.return_value = mock_session
 
             # Mock query execution
@@ -590,9 +534,9 @@ class TestS3DataLoading:
             }
 
             loader = HistoricalDataLoader(
-                data_source="s3",
-                s3_bucket="test-bucket",
+                data_source="athena",
                 athena_database="test-db",
+                athena_output_bucket="test-bucket",
             )
 
             with pytest.raises(RuntimeError) as exc_info:
@@ -616,15 +560,12 @@ class TestDataSourceSelection:
         assert len(tick_data) > 0
         assert all(isinstance(tick, TickDataPoint) for tick in tick_data)
 
-    def test_load_data_s3_source(self):
-        """Test load_data uses S3/Athena when configured."""
+    def test_load_data_athena_source(self):
+        """Test load_data uses Athena when configured."""
         with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
             mock_session = Mock()
-            mock_s3_client = Mock()
             mock_athena_client = Mock()
-            mock_session.client.side_effect = lambda service: (
-                mock_s3_client if service == "s3" else mock_athena_client
-            )
+            mock_session.client.return_value = mock_athena_client
             mock_session_class.return_value = mock_session
 
             # Mock Athena operations
@@ -639,9 +580,9 @@ class TestDataSourceSelection:
             ]
 
             loader = HistoricalDataLoader(
-                data_source="s3",
-                s3_bucket="test-bucket",
+                data_source="athena",
                 athena_database="test-db",
+                athena_output_bucket="test-bucket",
             )
 
             start_date = datetime(2024, 1, 1, 12, 0, 0)
@@ -745,12 +686,12 @@ class TestAthenaQueryBuilding:
     """Test Athena SQL query building."""
 
     def test_build_athena_query(self):
-        """Test building Athena SQL query."""
+        """Test building Athena SQL query for Polygon.io format."""
         with patch("trading.historical_data_loader.boto3.Session"):
             loader = HistoricalDataLoader(
-                data_source="s3",
-                s3_bucket="test-bucket",
+                data_source="athena",
                 athena_database="test-db",
+                athena_output_bucket="test-bucket",
             )
 
             start_date = datetime(2024, 1, 1, 12, 0, 0)
@@ -759,8 +700,7 @@ class TestAthenaQueryBuilding:
             query = loader._build_athena_query("EUR_USD", start_date, end_date)
 
             assert "SELECT" in query
-            assert "FROM test-db.tick_data" in query
-            assert "WHERE instrument = 'EUR_USD'" in query
-            assert "2024-01-01 12:00:00" in query
-            assert "2024-01-01 13:00:00" in query
-            assert "ORDER BY timestamp ASC" in query
+            assert 'FROM "test-db"' in query
+            assert "C:EUR-USD" in query  # Polygon.io format
+            assert "participant_timestamp" in query
+            assert "ORDER BY participant_timestamp ASC" in query

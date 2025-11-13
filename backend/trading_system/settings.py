@@ -183,6 +183,13 @@ CELERY_BEAT_SCHEDULE = {
             "expires": 240.0,  # Task expires after 4 minutes if not executed
         },
     },
+    "daily-athena-import": {
+        "task": "trading.athena_import_task.schedule_daily_athena_import",
+        "schedule": crontab(hour=1, minute=0),  # Daily at 1:00 AM UTC
+        "options": {
+            "expires": 7200.0,  # Task expires after 2 hours if not executed
+        },
+    },
 }
 
 

@@ -92,3 +92,54 @@ def handle_default_account_change(
             instance.account_id,
             str(e),
         )
+
+
+@receiver(post_save, sender=OandaAccount)
+def trigger_athena_import_on_account_creation(
+    sender: type[OandaAccount],  # pylint: disable=unused-argument
+    instance: OandaAccount,
+    created: bool,
+    **kwargs: object,  # pylint: disable=unused-argument
+) -> None:
+    """
+    Trigger Athena historical data import when a new OANDA account is created.
+
+    This imports the previous day's data to populate the tick_data table.
+
+    Args:
+        sender: Model class (OandaAccount)
+        instance: OandaAccount instance that was saved
+        created: Whether this is a new instance
+        **kwargs: Additional keyword arguments
+    """
+    if not created or not instance.is_active:
+        return
+
+    try:
+        # Import here to avoid circular imports
+        from trading.athena_import_task import (  # pylint: disable=import-outside-toplevel
+            import_athena_data_daily,
+        )
+
+        logger.info(
+            "New OANDA account created: %s (id: %s), triggering Athena import",
+            instance.account_id,
+            instance.id,
+        )
+
+        # Trigger import for the new account (last 7 days)
+        result = import_athena_data_daily.delay(account_id=instance.id, days_back=7)
+
+        logger.info(
+            "Athena import task started for account %s (task: %s)",
+            instance.account_id,
+            result.id,
+        )
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        # Log error but don't fail the save operation
+        logger.warning(
+            "Failed to trigger Athena import for account %s: %s",
+            instance.account_id,
+            str(e),
+        )

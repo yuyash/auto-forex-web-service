@@ -3,7 +3,7 @@ Historical data loader for backtesting.
 
 This module provides functionality to load historical tick data from multiple sources:
 - PostgreSQL database (TickData model)
-- AWS S3 + Athena for large-scale historical data
+- AWS Athena for large-scale historical data from Polygon.io
 
 AWS Authentication:
 - Uses IAM roles for EC2/ECS instances (recommended for production)
@@ -22,7 +22,6 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from django.conf import settings
 from django.db.models import QuerySet
 
 import boto3  # type: ignore[import-untyped]  # pylint: disable=import-error
@@ -120,7 +119,7 @@ class HistoricalDataLoader:
 
     Supports loading data from:
     - PostgreSQL database (TickData model)
-    - AWS S3 + Athena for large-scale historical data
+    - AWS Athena for large-scale historical data (Polygon.io format)
 
     AWS Authentication:
     - Uses IAM roles by default (recommended for production)
@@ -133,45 +132,58 @@ class HistoricalDataLoader:
 
     def __init__(
         self,
-        data_source: Literal["postgresql", "s3"] = "postgresql",
-        s3_bucket: str | None = None,
+        data_source: Literal["postgresql", "athena"] = "postgresql",
         athena_database: str | None = None,
+        athena_table: str | None = None,
+        athena_output_bucket: str | None = None,
     ):
         """
         Initialize HistoricalDataLoader.
 
         Args:
-            data_source: Data source to use ('postgresql' or 's3')
-            s3_bucket: S3 bucket name for historical data (required for s3 source)
-            athena_database: Athena database name (required for s3 source)
+            data_source: Data source to use ('postgresql' or 'athena')
+            athena_database: Athena database name (default: forex_hist_data_db)
+            athena_table: Athena table name (default: quotes)
+            athena_output_bucket: S3 bucket for Athena query results
         """
         self.data_source = data_source
-        self.s3_bucket = s3_bucket or self._get_config_value("s3_bucket")
-        self.athena_database = athena_database or self._get_config_value("athena_database")
+        self.athena_database = athena_database or self._get_system_setting(
+            "athena_database_name", "forex_hist_data_db"
+        )
+        self.athena_table = athena_table or self._get_system_setting("athena_table_name", "quotes")
+        self.athena_output_bucket = athena_output_bucket or self._get_system_setting(
+            "athena_output_bucket", ""
+        )
 
-        # Initialize AWS clients if using S3 source
-        self.s3_client = None
+        # Initialize AWS clients if using Athena source
         self.athena_client = None
-        if self.data_source == "s3":
+        if self.data_source == "athena":
             self._initialize_aws_clients()
 
-    def _get_config_value(self, key: str) -> str | None:
+    def _get_system_setting(self, key: str, default: str) -> str:
         """
-        Get configuration value from settings.
+        Get configuration value from SystemSettings model.
 
         Args:
             key: Configuration key
+            default: Default value if not found
 
         Returns:
-            Configuration value or None
+            Configuration value or default
         """
-        config = getattr(settings, "SYSTEM_CONFIG", {})
-        backtesting_config = config.get("backtesting", {})
-        return backtesting_config.get(key)  # type: ignore[no-any-return]
+        try:
+            from accounts.models import SystemSettings
+
+            system_settings = SystemSettings.objects.first()
+            if system_settings:
+                return str(getattr(system_settings, key, default))
+            return default
+        except Exception:  # pylint: disable=broad-exception-caught
+            return default
 
     def _initialize_aws_clients(self) -> None:
         """
-        Initialize AWS S3 and Athena clients with proper authentication.
+        Initialize AWS Athena client with proper authentication.
 
         Authentication priority:
         1. AWS_PROFILE environment variable (profile-based)
@@ -191,12 +203,12 @@ class HistoricalDataLoader:
 
             # Handle custom credentials file
             if aws_credentials_file:
-                logger.info(f"Using AWS credentials file: {aws_credentials_file}")
+                logger.info("Using AWS credentials file: %s", aws_credentials_file)
                 os.environ["AWS_SHARED_CREDENTIALS_FILE"] = aws_credentials_file
 
             # Create base session with profile if specified
             if aws_profile:
-                logger.info(f"Using AWS profile: {aws_profile}")
+                logger.info("Using AWS profile: %s", aws_profile)
                 session_kwargs["profile_name"] = aws_profile
             else:
                 logger.info("Using default AWS credentials chain")
@@ -206,7 +218,7 @@ class HistoricalDataLoader:
 
             # If role ARN is specified, assume the role using STS
             if aws_role_arn:
-                logger.info(f"Assuming AWS role: {aws_role_arn}")
+                logger.info("Assuming AWS role: %s", aws_role_arn)
                 credentials = self._assume_role(session, aws_role_arn)
 
                 # Create new session with assumed role credentials
@@ -217,16 +229,12 @@ class HistoricalDataLoader:
                 )
                 logger.info("Successfully assumed role")
 
-            # Initialize S3 client
-            self.s3_client = session.client("s3")
-            logger.info("S3 client initialized successfully")
-
             # Initialize Athena client
             self.athena_client = session.client("athena")
             logger.info("Athena client initialized successfully")
 
         except (BotoCoreError, ClientError) as e:
-            logger.error(f"Failed to initialize AWS clients: {e}")
+            logger.error("Failed to initialize AWS clients: %s", e)
             raise RuntimeError(f"AWS client initialization failed: {e}") from e
 
     def _assume_role(self, session: boto3.Session, role_arn: str) -> dict[str, str]:
@@ -256,12 +264,12 @@ class HistoricalDataLoader:
 
             # Extract credentials
             credentials = response["Credentials"]
-            logger.info(f"Role assumed successfully, expires at: {credentials['Expiration']}")
+            logger.info("Role assumed successfully, expires at: %s", credentials["Expiration"])
 
             return credentials  # type: ignore[no-any-return]
 
         except (BotoCoreError, ClientError) as e:
-            logger.error(f"Failed to assume role {role_arn}: {e}")
+            logger.error("Failed to assume role %s: %s", role_arn, e)
             raise RuntimeError(f"Role assumption failed: {e}") from e
 
     def load_data(
@@ -287,8 +295,8 @@ class HistoricalDataLoader:
         """
         if self.data_source == "postgresql":
             return self._load_from_postgresql(instrument, start_date, end_date)
-        if self.data_source == "s3":
-            return self._load_from_s3(instrument, start_date, end_date)
+        if self.data_source == "athena":
+            return self._load_from_athena(instrument, start_date, end_date)
         raise ValueError(f"Invalid data source: {self.data_source}")
 
     def _load_from_postgresql(
@@ -309,7 +317,7 @@ class HistoricalDataLoader:
             List of TickDataPoint objects
         """
         logger.info(
-            f"Loading tick data from PostgreSQL: {instrument} " f"from {start_date} to {end_date}"
+            "Loading tick data from PostgreSQL: %s from %s to %s", instrument, start_date, end_date
         )
 
         try:
@@ -323,24 +331,30 @@ class HistoricalDataLoader:
             # Convert to TickDataPoint objects
             tick_data = [TickDataPoint.from_tick_data_model(tick) for tick in queryset]
 
-            logger.info(f"Loaded {len(tick_data)} ticks from PostgreSQL")
+            logger.info("Loaded %d ticks from PostgreSQL", len(tick_data))
             return tick_data
 
         except Exception as e:
-            logger.error(f"Failed to load data from PostgreSQL: {e}")
+            logger.error("Failed to load data from PostgreSQL: %s", e)
             raise RuntimeError(f"PostgreSQL data loading failed: {e}") from e
 
-    def _load_from_s3(
+    def _load_from_athena(
         self,
         instrument: str,
         start_date: datetime,
         end_date: datetime,
     ) -> list[TickDataPoint]:
         """
-        Load tick data from S3 using Athena query.
+        Load tick data from Athena (Polygon.io format).
+
+        Polygon.io format:
+        - ticker: e.g., "C:EUR-USD"
+        - ask_price, bid_price: prices
+        - participant_timestamp: nanoseconds since epoch
+        - year, month, day: partition keys
 
         Args:
-            instrument: Currency pair
+            instrument: Currency pair (e.g., 'EUR_USD')
             start_date: Start date
             end_date: End date
 
@@ -348,18 +362,18 @@ class HistoricalDataLoader:
             List of TickDataPoint objects
 
         Raises:
-            ValueError: If S3 bucket or Athena database is not configured
+            ValueError: If Athena database or output bucket is not configured
             RuntimeError: If Athena query fails
         """
-        if not self.s3_bucket:
-            raise ValueError("S3 bucket not configured")
         if not self.athena_database:
             raise ValueError("Athena database not configured")
+        if not self.athena_output_bucket:
+            raise ValueError("Athena output bucket not configured")
         if not self.athena_client:
             raise RuntimeError("Athena client not initialized")
 
         logger.info(
-            f"Loading tick data from S3/Athena: {instrument} " f"from {start_date} to {end_date}"
+            "Loading tick data from Athena: %s from %s to %s", instrument, start_date, end_date
         )
 
         try:
@@ -375,12 +389,12 @@ class HistoricalDataLoader:
             # Fetch query results
             tick_data = self._fetch_query_results(query_execution_id)
 
-            logger.info(f"Loaded {len(tick_data)} ticks from S3/Athena")
+            logger.info("Loaded %d ticks from Athena", len(tick_data))
             return tick_data
 
         except Exception as e:
-            logger.error(f"Failed to load data from S3/Athena: {e}")
-            raise RuntimeError(f"S3/Athena data loading failed: {e}") from e
+            logger.error("Failed to load data from Athena: %s", e)
+            raise RuntimeError(f"Athena data loading failed: {e}") from e
 
     def _build_athena_query(
         self,
@@ -389,30 +403,38 @@ class HistoricalDataLoader:
         end_date: datetime,
     ) -> str:
         """
-        Build Athena SQL query for tick data retrieval.
+        Build Athena SQL query for Polygon.io tick data retrieval.
+
+        Converts instrument format: EUR_USD -> C:EUR-USD
+        Converts timestamp from nanoseconds to datetime
 
         Args:
-            instrument: Currency pair
+            instrument: Currency pair (e.g., 'EUR_USD')
             start_date: Start date
             end_date: End date
 
         Returns:
             SQL query string
         """
+        # Convert instrument format: EUR_USD -> C:EUR-USD
+        polygon_ticker = f"C:{instrument.replace('_', '-')}"
+
+        # Convert dates to timestamps (nanoseconds)
+        start_timestamp_ns = int(start_date.timestamp() * 1_000_000_000)
+        end_timestamp_ns = int(end_date.timestamp() * 1_000_000_000)
+
         # SQL query uses controlled inputs (config, datetime objects), not user strings
         query = f"""
         SELECT
-            instrument,
-            timestamp,
-            bid,
-            ask,
-            mid,
-            spread
-        FROM {self.athena_database}.tick_data
-        WHERE instrument = '{instrument}'
-            AND timestamp >= TIMESTAMP '{start_date.strftime('%Y-%m-%d %H:%M:%S')}'
-            AND timestamp <= TIMESTAMP '{end_date.strftime('%Y-%m-%d %H:%M:%S')}'
-        ORDER BY timestamp ASC
+            ticker,
+            bid_price,
+            ask_price,
+            participant_timestamp
+        FROM "{self.athena_database}"."{self.athena_table}"
+        WHERE ticker = '{polygon_ticker}'
+            AND participant_timestamp >= {start_timestamp_ns}
+            AND participant_timestamp <= {end_timestamp_ns}
+        ORDER BY participant_timestamp ASC
         """  # nosec B608
         return query
 
@@ -434,7 +456,7 @@ class HistoricalDataLoader:
 
         try:
             # Define output location for query results
-            output_location = f"s3://{self.s3_bucket}/athena-results/"
+            output_location = f"s3://{self.athena_output_bucket}/athena-results/"
 
             # Execute query
             response = self.athena_client.start_query_execution(
@@ -444,11 +466,11 @@ class HistoricalDataLoader:
             )
 
             query_execution_id = response["QueryExecutionId"]
-            logger.info(f"Athena query started: {query_execution_id}")
+            logger.info("Athena query started: %s", query_execution_id)
             return query_execution_id
 
         except (BotoCoreError, ClientError) as e:
-            logger.error(f"Failed to execute Athena query: {e}")
+            logger.error("Failed to execute Athena query: %s", e)
             raise RuntimeError(f"Athena query execution failed: {e}") from e
 
     def _wait_for_query_completion(
@@ -480,7 +502,7 @@ class HistoricalDataLoader:
                 status = response["QueryExecution"]["Status"]["State"]
 
                 if status == "SUCCEEDED":
-                    logger.info(f"Athena query completed: {query_execution_id}")
+                    logger.info("Athena query completed: %s", query_execution_id)
                     return
                 if status in ["FAILED", "CANCELLED"]:
                     reason = response["QueryExecution"]["Status"].get(
@@ -493,14 +515,21 @@ class HistoricalDataLoader:
                 elapsed += 2
 
             except (BotoCoreError, ClientError) as e:
-                logger.error(f"Failed to check query status: {e}")
+                logger.error("Failed to check query status: %s", e)
                 raise RuntimeError(f"Query status check failed: {e}") from e
 
         raise RuntimeError(f"Athena query timed out after {max_wait_seconds} seconds")
 
-    def _fetch_query_results(self, query_execution_id: str) -> list[TickDataPoint]:
+    def _fetch_query_results(  # pylint: disable=too-many-locals
+        self, query_execution_id: str
+    ) -> list[TickDataPoint]:
         """
-        Fetch results from completed Athena query.
+        Fetch results from completed Athena query and convert Polygon.io format.
+
+        Polygon.io format:
+        - ticker: "C:EUR-USD" -> convert to "EUR_USD"
+        - bid_price, ask_price: Decimal values
+        - participant_timestamp: nanoseconds since epoch -> convert to datetime
 
         Args:
             query_execution_id: Query execution ID
@@ -524,20 +553,37 @@ class HistoricalDataLoader:
 
                 for row in rows:
                     data = row["Data"]
+
+                    # Extract values
+                    ticker = data[0]["VarCharValue"]  # e.g., "C:EUR-USD"
+                    bid_price = Decimal(data[1]["VarCharValue"])
+                    ask_price = Decimal(data[2]["VarCharValue"])
+                    timestamp_ns = int(data[3]["VarCharValue"])
+
+                    # Convert ticker format: C:EUR-USD -> EUR_USD
+                    instrument = ticker.replace("C:", "").replace("-", "_")
+
+                    # Convert timestamp from nanoseconds to datetime
+                    timestamp = datetime.fromtimestamp(timestamp_ns / 1_000_000_000)
+
+                    # Calculate mid and spread
+                    mid = (bid_price + ask_price) / 2
+                    spread = ask_price - bid_price
+
                     tick = TickDataPoint(
-                        instrument=data[0]["VarCharValue"],
-                        timestamp=datetime.fromisoformat(data[1]["VarCharValue"]),
-                        bid=Decimal(data[2]["VarCharValue"]),
-                        ask=Decimal(data[3]["VarCharValue"]),
-                        mid=Decimal(data[4]["VarCharValue"]),
-                        spread=Decimal(data[5]["VarCharValue"]),
+                        instrument=instrument,
+                        timestamp=timestamp,
+                        bid=bid_price,
+                        ask=ask_price,
+                        mid=mid,
+                        spread=spread,
                     )
                     tick_data.append(tick)
 
             return tick_data
 
         except (BotoCoreError, ClientError) as e:
-            logger.error(f"Failed to fetch query results: {e}")
+            logger.error("Failed to fetch query results: %s", e)
             raise RuntimeError(f"Query results fetch failed: {e}") from e
 
     def normalize_data(self, raw_data: list[dict[str, Any]]) -> list[TickDataPoint]:
@@ -557,7 +603,7 @@ class HistoricalDataLoader:
                 tick = TickDataPoint.from_dict(data)
                 normalized_data.append(tick)
             except (KeyError, ValueError) as e:
-                logger.warning(f"Failed to normalize tick data: {e}")
+                logger.warning("Failed to normalize tick data: %s", e)
                 continue
 
         return normalized_data
