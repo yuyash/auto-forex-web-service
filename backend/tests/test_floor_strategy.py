@@ -411,8 +411,9 @@ class TestFloorStrategy:
         """Test on_tick creates initial entry order."""
         floor_strategy = FloorStrategy(strategy)
 
-        # Create first layer with empty positions
-        layer = floor_strategy.layer_manager.create_layer(1, strategy.config)
+        # Verify initial layer was created during initialization
+        assert len(floor_strategy.layer_manager.layers) == 1
+        layer = floor_strategy.layer_manager.get_layer(1)
         assert layer is not None
         assert len(layer.positions) == 0
 
@@ -528,8 +529,8 @@ class TestFloorStrategy:
         """Test position update handling."""
         floor_strategy = FloorStrategy(strategy)
 
-        # Create a layer
-        layer = floor_strategy.layer_manager.create_layer(1, strategy.config)
+        # Get the existing layer created during initialization
+        layer = floor_strategy.layer_manager.get_layer(1)
         assert layer is not None
 
         # Create a position

@@ -368,10 +368,10 @@ class TestBacktestEngineResourceLogging:
         engine = BacktestEngine(backtest_config)
 
         # Mock strategy registry to raise an error
-        with patch("trading.strategy_registry.StrategyRegistry") as mock_registry:
+        with patch("trading.strategy_registry.registry") as mock_registry:
             mock_strategy = Mock()
             mock_strategy.on_tick.side_effect = Exception("Strategy error")
-            mock_registry.get_strategy.return_value = Mock(return_value=mock_strategy)
+            mock_registry.get_strategy_class.return_value = Mock(return_value=mock_strategy)
 
             # Mock ResourceMonitor
             with patch("trading.backtest_engine.ResourceMonitor") as mock_monitor_class:
@@ -381,7 +381,7 @@ class TestBacktestEngineResourceLogging:
                 mock_monitor_class.return_value = mock_monitor
 
                 # Should raise exception but still log resources
-                with pytest.raises(Exception, match=".*"):
+                with pytest.raises(Exception, match="Strategy error"):
                     engine.run(sample_tick_data)
 
                 # Verify monitoring was stopped (which triggers logging)

@@ -18,7 +18,7 @@ from decimal import Decimal
 
 import pytest
 
-from trading.backtest_engine import BacktestConfig, BacktestEngine
+from trading.backtest_engine import BacktestConfig, BacktestEngine, BacktestTrade, EquityPoint
 
 
 @pytest.fixture
@@ -45,42 +45,42 @@ def backtest_engine(backtest_config):
 def sample_trades_winning():
     """Create sample winning trades."""
     return [
-        {
-            "instrument": "EUR_USD",
-            "direction": "long",
-            "units": 10000,
-            "entry_price": 1.1000,
-            "exit_price": 1.1050,
-            "entry_time": "2024-01-01T10:00:00",
-            "exit_time": "2024-01-01T11:00:00",
-            "duration": 3600,
-            "pnl": 50.0,
-            "reason": "take_profit",
-        },
-        {
-            "instrument": "EUR_USD",
-            "direction": "long",
-            "units": 10000,
-            "entry_price": 1.1050,
-            "exit_price": 1.1100,
-            "entry_time": "2024-01-01T12:00:00",
-            "exit_time": "2024-01-01T13:00:00",
-            "duration": 3600,
-            "pnl": 50.0,
-            "reason": "take_profit",
-        },
-        {
-            "instrument": "EUR_USD",
-            "direction": "long",
-            "units": 10000,
-            "entry_price": 1.1100,
-            "exit_price": 1.1150,
-            "entry_time": "2024-01-01T14:00:00",
-            "exit_time": "2024-01-01T15:00:00",
-            "duration": 3600,
-            "pnl": 50.0,
-            "reason": "take_profit",
-        },
+        BacktestTrade(
+            instrument="EUR_USD",
+            direction="long",
+            units=10000,
+            entry_price=1.1000,
+            exit_price=1.1050,
+            entry_time=datetime(2024, 1, 1, 10, 0, 0),
+            exit_time=datetime(2024, 1, 1, 11, 0, 0),
+            duration=3600,
+            pnl=50.0,
+            reason="take_profit",
+        ),
+        BacktestTrade(
+            instrument="EUR_USD",
+            direction="long",
+            units=10000,
+            entry_price=1.1050,
+            exit_price=1.1100,
+            entry_time=datetime(2024, 1, 1, 12, 0, 0),
+            exit_time=datetime(2024, 1, 1, 13, 0, 0),
+            duration=3600,
+            pnl=50.0,
+            reason="take_profit",
+        ),
+        BacktestTrade(
+            instrument="EUR_USD",
+            direction="long",
+            units=10000,
+            entry_price=1.1100,
+            exit_price=1.1150,
+            entry_time=datetime(2024, 1, 1, 14, 0, 0),
+            exit_time=datetime(2024, 1, 1, 15, 0, 0),
+            duration=3600,
+            pnl=50.0,
+            reason="take_profit",
+        ),
     ]
 
 
@@ -88,66 +88,66 @@ def sample_trades_winning():
 def sample_trades_mixed():
     """Create sample mixed (winning and losing) trades."""
     return [
-        {
-            "instrument": "EUR_USD",
-            "direction": "long",
-            "units": 10000,
-            "entry_price": 1.1000,
-            "exit_price": 1.1050,
-            "entry_time": "2024-01-01T10:00:00",
-            "exit_time": "2024-01-01T11:00:00",
-            "duration": 3600,
-            "pnl": 50.0,
-            "reason": "take_profit",
-        },
-        {
-            "instrument": "EUR_USD",
-            "direction": "long",
-            "units": 10000,
-            "entry_price": 1.1050,
-            "exit_price": 1.1020,
-            "entry_time": "2024-01-01T12:00:00",
-            "exit_time": "2024-01-01T13:00:00",
-            "duration": 3600,
-            "pnl": -30.0,
-            "reason": "stop_loss",
-        },
-        {
-            "instrument": "EUR_USD",
-            "direction": "long",
-            "units": 10000,
-            "entry_price": 1.1020,
-            "exit_price": 1.1080,
-            "entry_time": "2024-01-01T14:00:00",
-            "exit_time": "2024-01-01T15:00:00",
-            "duration": 3600,
-            "pnl": 60.0,
-            "reason": "take_profit",
-        },
-        {
-            "instrument": "EUR_USD",
-            "direction": "long",
-            "units": 10000,
-            "entry_price": 1.1080,
-            "exit_price": 1.1050,
-            "entry_time": "2024-01-01T16:00:00",
-            "exit_time": "2024-01-01T17:00:00",
-            "duration": 3600,
-            "pnl": -30.0,
-            "reason": "stop_loss",
-        },
-        {
-            "instrument": "EUR_USD",
-            "direction": "long",
-            "units": 10000,
-            "entry_price": 1.1050,
-            "exit_price": 1.1100,
-            "entry_time": "2024-01-01T18:00:00",
-            "exit_time": "2024-01-01T19:00:00",
-            "duration": 3600,
-            "pnl": 50.0,
-            "reason": "take_profit",
-        },
+        BacktestTrade(
+            instrument="EUR_USD",
+            direction="long",
+            units=10000,
+            entry_price=1.1000,
+            exit_price=1.1050,
+            entry_time=datetime(2024, 1, 1, 10, 0, 0),
+            exit_time=datetime(2024, 1, 1, 11, 0, 0),
+            duration=3600,
+            pnl=50.0,
+            reason="take_profit",
+        ),
+        BacktestTrade(
+            instrument="EUR_USD",
+            direction="long",
+            units=10000,
+            entry_price=1.1050,
+            exit_price=1.1020,
+            entry_time=datetime(2024, 1, 1, 12, 0, 0),
+            exit_time=datetime(2024, 1, 1, 13, 0, 0),
+            duration=3600,
+            pnl=-30.0,
+            reason="stop_loss",
+        ),
+        BacktestTrade(
+            instrument="EUR_USD",
+            direction="long",
+            units=10000,
+            entry_price=1.1020,
+            exit_price=1.1080,
+            entry_time=datetime(2024, 1, 1, 14, 0, 0),
+            exit_time=datetime(2024, 1, 1, 15, 0, 0),
+            duration=3600,
+            pnl=60.0,
+            reason="take_profit",
+        ),
+        BacktestTrade(
+            instrument="EUR_USD",
+            direction="long",
+            units=10000,
+            entry_price=1.1080,
+            exit_price=1.1050,
+            entry_time=datetime(2024, 1, 1, 16, 0, 0),
+            exit_time=datetime(2024, 1, 1, 17, 0, 0),
+            duration=3600,
+            pnl=-30.0,
+            reason="stop_loss",
+        ),
+        BacktestTrade(
+            instrument="EUR_USD",
+            direction="long",
+            units=10000,
+            entry_price=1.1050,
+            exit_price=1.1100,
+            entry_time=datetime(2024, 1, 1, 18, 0, 0),
+            exit_time=datetime(2024, 1, 1, 19, 0, 0),
+            duration=3600,
+            pnl=50.0,
+            reason="take_profit",
+        ),
     ]
 
 
@@ -156,10 +156,10 @@ def sample_equity_curve_upward():
     """Create sample equity curve with upward trend."""
     base_time = datetime(2024, 1, 1, 10, 0, 0)
     return [
-        {"timestamp": base_time.isoformat(), "balance": 10000.0},
-        {"timestamp": (base_time + timedelta(hours=1)).isoformat(), "balance": 10050.0},
-        {"timestamp": (base_time + timedelta(hours=2)).isoformat(), "balance": 10100.0},
-        {"timestamp": (base_time + timedelta(hours=3)).isoformat(), "balance": 10150.0},
+        EquityPoint(timestamp=base_time, balance=10000.0),
+        EquityPoint(timestamp=base_time + timedelta(hours=1), balance=10050.0),
+        EquityPoint(timestamp=base_time + timedelta(hours=2), balance=10100.0),
+        EquityPoint(timestamp=base_time + timedelta(hours=3), balance=10150.0),
     ]
 
 
@@ -168,12 +168,12 @@ def sample_equity_curve_with_drawdown():
     """Create sample equity curve with drawdown."""
     base_time = datetime(2024, 1, 1, 10, 0, 0)
     return [
-        {"timestamp": base_time.isoformat(), "balance": 10000.0},
-        {"timestamp": (base_time + timedelta(hours=1)).isoformat(), "balance": 10050.0},
-        {"timestamp": (base_time + timedelta(hours=2)).isoformat(), "balance": 10020.0},  # Drawdown
-        {"timestamp": (base_time + timedelta(hours=3)).isoformat(), "balance": 10080.0},
-        {"timestamp": (base_time + timedelta(hours=4)).isoformat(), "balance": 10050.0},  # Drawdown
-        {"timestamp": (base_time + timedelta(hours=5)).isoformat(), "balance": 10100.0},
+        EquityPoint(timestamp=base_time, balance=10000.0),
+        EquityPoint(timestamp=base_time + timedelta(hours=1), balance=10050.0),
+        EquityPoint(timestamp=base_time + timedelta(hours=2), balance=10020.0),  # Drawdown
+        EquityPoint(timestamp=base_time + timedelta(hours=3), balance=10080.0),
+        EquityPoint(timestamp=base_time + timedelta(hours=4), balance=10050.0),  # Drawdown
+        EquityPoint(timestamp=base_time + timedelta(hours=5), balance=10100.0),
     ]
 
 
@@ -186,8 +186,8 @@ class TestTotalReturnCalculation:
         backtest_engine.trade_log = sample_trades_winning
         backtest_engine.balance = Decimal("10150.00")  # Initial 10000 + 150 profit
         backtest_engine.equity_curve = [
-            {"timestamp": "2024-01-01T10:00:00", "balance": 10000.0},
-            {"timestamp": "2024-01-01T15:00:00", "balance": 10150.0},
+            EquityPoint(timestamp=datetime(2024, 1, 1, 10, 0, 0), balance=10000.0),
+            EquityPoint(timestamp=datetime(2024, 1, 1, 15, 0, 0), balance=10150.0),
         ]
 
         # Calculate metrics
@@ -203,23 +203,23 @@ class TestTotalReturnCalculation:
         """Test total return calculation with losing trades."""
         # Set up engine state with losses
         backtest_engine.trade_log = [
-            {
-                "instrument": "EUR_USD",
-                "direction": "long",
-                "units": 10000,
-                "entry_price": 1.1000,
-                "exit_price": 1.0950,
-                "entry_time": "2024-01-01T10:00:00",
-                "exit_time": "2024-01-01T11:00:00",
-                "duration": 3600,
-                "pnl": -50.0,
-                "reason": "stop_loss",
-            }
+            BacktestTrade(
+                instrument="EUR_USD",
+                direction="long",
+                units=10000,
+                entry_price=1.1000,
+                exit_price=1.0950,
+                entry_time=datetime(2024, 1, 1, 10, 0, 0),
+                exit_time=datetime(2024, 1, 1, 11, 0, 0),
+                duration=3600,
+                pnl=-50.0,
+                reason="stop_loss",
+            )
         ]
         backtest_engine.balance = Decimal("9950.00")
         backtest_engine.equity_curve = [
-            {"timestamp": "2024-01-01T10:00:00", "balance": 10000.0},
-            {"timestamp": "2024-01-01T11:00:00", "balance": 9950.0},
+            EquityPoint(timestamp=datetime(2024, 1, 1, 10, 0, 0), balance=10000.0),
+            EquityPoint(timestamp=datetime(2024, 1, 1, 11, 0, 0), balance=9950.0),
         ]
 
         # Calculate metrics
@@ -318,7 +318,9 @@ class TestSharpeRatioCalculation:
     def test_sharpe_ratio_with_insufficient_data(self, backtest_engine):
         """Test Sharpe ratio calculation with insufficient data."""
         # Set up engine state with only one point
-        backtest_engine.equity_curve = [{"timestamp": "2024-01-01T10:00:00", "balance": 10000.0}]
+        backtest_engine.equity_curve = [
+            EquityPoint(timestamp=datetime(2024, 1, 1, 10, 0, 0), balance=10000.0)
+        ]
 
         # Calculate Sharpe ratio
         sharpe = backtest_engine._calculate_sharpe_ratio()
@@ -330,9 +332,9 @@ class TestSharpeRatioCalculation:
         """Test Sharpe ratio calculation with zero volatility."""
         # Set up engine state with constant balance (no volatility)
         backtest_engine.equity_curve = [
-            {"timestamp": "2024-01-01T10:00:00", "balance": 10000.0},
-            {"timestamp": "2024-01-01T11:00:00", "balance": 10000.0},
-            {"timestamp": "2024-01-01T12:00:00", "balance": 10000.0},
+            EquityPoint(timestamp=datetime(2024, 1, 1, 10, 0, 0), balance=10000.0),
+            EquityPoint(timestamp=datetime(2024, 1, 1, 11, 0, 0), balance=10000.0),
+            EquityPoint(timestamp=datetime(2024, 1, 1, 12, 0, 0), balance=10000.0),
         ]
 
         # Calculate Sharpe ratio
@@ -428,18 +430,18 @@ class TestProfitFactorCalculation:
         """Test profit factor calculation with only losing trades."""
         # Set up engine state
         backtest_engine.trade_log = [
-            {
-                "instrument": "EUR_USD",
-                "direction": "long",
-                "units": 10000,
-                "entry_price": 1.1000,
-                "exit_price": 1.0950,
-                "entry_time": "2024-01-01T10:00:00",
-                "exit_time": "2024-01-01T11:00:00",
-                "duration": 3600,
-                "pnl": -50.0,
-                "reason": "stop_loss",
-            }
+            BacktestTrade(
+                instrument="EUR_USD",
+                direction="long",
+                units=10000,
+                entry_price=1.1000,
+                exit_price=1.0950,
+                entry_time=datetime(2024, 1, 1, 10, 0, 0),
+                exit_time=datetime(2024, 1, 1, 11, 0, 0),
+                duration=3600,
+                pnl=-50.0,
+                reason="stop_loss",
+            )
         ]
         backtest_engine.balance = Decimal("9950.00")
         backtest_engine.equity_curve = []
@@ -502,12 +504,12 @@ class TestEquityCurveGeneration:
 
         # Verify equity curve structure
         assert len(backtest_engine.equity_curve) == 4
-        assert all("timestamp" in point for point in backtest_engine.equity_curve)
-        assert all("balance" in point for point in backtest_engine.equity_curve)
+        assert all(hasattr(point, "timestamp") for point in backtest_engine.equity_curve)
+        assert all(hasattr(point, "balance") for point in backtest_engine.equity_curve)
 
         # Verify balance progression
-        assert backtest_engine.equity_curve[0]["balance"] == 10000.0
-        assert backtest_engine.equity_curve[-1]["balance"] == 10150.0
+        assert backtest_engine.equity_curve[0].balance == 10000.0
+        assert backtest_engine.equity_curve[-1].balance == 10150.0
 
     def test_equity_curve_used_in_calculations(
         self, backtest_engine, sample_equity_curve_with_drawdown, sample_trades_mixed
@@ -538,12 +540,12 @@ class TestComprehensivePerformanceMetrics:
         backtest_engine.trade_log = sample_trades_mixed
         backtest_engine.balance = Decimal("10100.00")
         backtest_engine.equity_curve = [
-            {"timestamp": "2024-01-01T10:00:00", "balance": 10000.0},
-            {"timestamp": "2024-01-01T11:00:00", "balance": 10050.0},
-            {"timestamp": "2024-01-01T12:00:00", "balance": 10020.0},
-            {"timestamp": "2024-01-01T13:00:00", "balance": 10080.0},
-            {"timestamp": "2024-01-01T14:00:00", "balance": 10050.0},
-            {"timestamp": "2024-01-01T15:00:00", "balance": 10100.0},
+            EquityPoint(timestamp=datetime(2024, 1, 1, 10, 0, 0), balance=10000.0),
+            EquityPoint(timestamp=datetime(2024, 1, 1, 11, 0, 0), balance=10050.0),
+            EquityPoint(timestamp=datetime(2024, 1, 1, 12, 0, 0), balance=10020.0),
+            EquityPoint(timestamp=datetime(2024, 1, 1, 13, 0, 0), balance=10080.0),
+            EquityPoint(timestamp=datetime(2024, 1, 1, 14, 0, 0), balance=10050.0),
+            EquityPoint(timestamp=datetime(2024, 1, 1, 15, 0, 0), balance=10100.0),
         ]
 
         # Calculate metrics
