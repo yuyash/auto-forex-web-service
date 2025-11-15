@@ -20,9 +20,27 @@ interface TaskProgressUpdate {
   timestamp: string;
 }
 
+interface BacktestIntermediateResults {
+  task_id: number;
+  task_type: string;
+  execution_id: number;
+  day_date: string;
+  progress: number;
+  days_processed: number;
+  total_days: number;
+  ticks_processed: number;
+  balance: number;
+  total_trades: number;
+  metrics: Record<string, unknown>;
+  recent_trades: unknown[];
+  equity_curve: unknown[];
+  timestamp: string;
+}
+
 interface UseTaskStatusWebSocketOptions {
   onStatusUpdate?: (update: TaskStatusUpdate) => void;
   onProgressUpdate?: (update: TaskProgressUpdate) => void;
+  onIntermediateResults?: (results: BacktestIntermediateResults) => void;
   onComplete?: (update: TaskStatusUpdate) => void;
   onFailed?: (update: TaskStatusUpdate) => void;
   onStopped?: (update: TaskStatusUpdate) => void;
@@ -45,8 +63,14 @@ export function useTaskStatusWebSocket(
   const reconnectDelay = 3000; // 3 seconds
   const connectRef = useRef<(() => void) | null>(null);
 
-  const { onStatusUpdate, onProgressUpdate, onComplete, onFailed, onStopped } =
-    options;
+  const {
+    onStatusUpdate,
+    onProgressUpdate,
+    onIntermediateResults,
+    onComplete,
+    onFailed,
+    onStopped,
+  } = options;
 
   const handleStatusUpdate = useCallback(
     (update: TaskStatusUpdate) => {
@@ -101,6 +125,10 @@ export function useTaskStatusWebSocket(
           const update = message.data as TaskProgressUpdate;
           console.log('[TaskStatus WS] Progress update:', update);
           onProgressUpdate?.(update);
+        } else if (message.type === 'backtest_intermediate_results') {
+          const results = message.data as BacktestIntermediateResults;
+          console.log('[TaskStatus WS] Intermediate results:', results);
+          onIntermediateResults?.(results);
         } else if (message.type === 'pong') {
           // Ignore pong responses
         } else {
@@ -137,7 +165,13 @@ export function useTaskStatusWebSocket(
     };
 
     wsRef.current = ws;
-  }, [isAuthenticated, token, handleStatusUpdate, onProgressUpdate]);
+  }, [
+    isAuthenticated,
+    token,
+    handleStatusUpdate,
+    onProgressUpdate,
+    onIntermediateResults,
+  ]);
 
   useEffect(() => {
     // Store connect function in ref for use in onclose handler

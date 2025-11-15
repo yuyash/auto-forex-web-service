@@ -199,6 +199,8 @@ export function useStartTradingTask(options?: {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.start(id);
         setState({ data: result, isLoading: false, error: null });
+        // Invalidate cache to force refetch
+        invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {
@@ -237,6 +239,8 @@ export function useStopTradingTask(options?: {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.stop(id);
         setState({ data: result, isLoading: false, error: null });
+        // Invalidate cache to force refetch
+        invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {
@@ -275,6 +279,8 @@ export function usePauseTradingTask(options?: {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.pause(id);
         setState({ data: result, isLoading: false, error: null });
+        // Invalidate cache to force refetch
+        invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {
@@ -313,6 +319,8 @@ export function useResumeTradingTask(options?: {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.resume(id);
         setState({ data: result, isLoading: false, error: null });
+        // Invalidate cache to force refetch
+        invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {
@@ -353,6 +361,8 @@ export function useRerunTradingTask(options?: {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.rerun(id);
         setState({ data: result, isLoading: false, error: null });
+        // Invalidate cache to force refetch
+        invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {

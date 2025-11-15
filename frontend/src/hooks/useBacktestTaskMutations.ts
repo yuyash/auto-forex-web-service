@@ -1,6 +1,7 @@
 // Backtest Task mutation hooks
 import { useState, useCallback } from 'react';
 import { backtestTasksApi } from '../services/api';
+import { invalidateBacktestTasksCache } from './useBacktestTasks';
 import type {
   BacktestTask,
   BacktestTaskCreateData,
@@ -197,6 +198,8 @@ export function useStartBacktestTask(options?: {
         setState({ data: null, isLoading: true, error: null });
         const result = await backtestTasksApi.start(id);
         setState({ data: result, isLoading: false, error: null });
+        // Invalidate cache to force refetch
+        invalidateBacktestTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {
@@ -235,6 +238,8 @@ export function useStopBacktestTask(options?: {
         setState({ data: null, isLoading: true, error: null });
         const result = await backtestTasksApi.stop(id);
         setState({ data: result, isLoading: false, error: null });
+        // Invalidate cache to force refetch
+        invalidateBacktestTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {
@@ -275,6 +280,8 @@ export function useRerunBacktestTask(options?: {
         setState({ data: null, isLoading: true, error: null });
         const result = await backtestTasksApi.rerun(id);
         setState({ data: result, isLoading: false, error: null });
+        // Invalidate cache to force refetch
+        invalidateBacktestTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {

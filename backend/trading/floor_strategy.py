@@ -257,6 +257,11 @@ class FloorStrategy(BaseStrategy):
         # Load state from database if exists
         self._load_state()
 
+        # Create initial layer if no layers exist
+        if not self.layer_manager.layers:
+            layer_config = self._get_layer_config(1)
+            self.layer_manager.create_layer(1, layer_config)
+
     def _load_state(self) -> None:
         """Load strategy state from database."""
         state = self.get_strategy_state()

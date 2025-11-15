@@ -11,6 +11,7 @@ Requirements: 4.1, 4.2, 4.3, 4.6, 4.8, 7.3, 7.4, 7.5, 4.7, 4.9
 
 import logging
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Generator
 
@@ -73,6 +74,49 @@ def _load_backtest_data(task: BacktestTask, data_loader: Any) -> tuple[list[Any]
     return tick_data, None
 
 
+def _load_backtest_data_by_day(
+    task: BacktestTask, data_loader: Any, current_date: datetime
+) -> tuple[list[Any], str | None]:
+    """
+    Load historical data for a single day.
+
+    Args:
+        task: BacktestTask instance
+        data_loader: HistoricalDataLoader instance
+        current_date: Date to load data for
+
+    Returns:
+        Tuple of (tick_data, error_message)
+    """
+    # Set start and end times for the day
+    day_start = current_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1) - timedelta(microseconds=1)
+
+    # Don't exceed the task's end time
+    day_end = min(day_end, task.end_time)
+
+    logger.info(
+        "Loading data for %s on %s",
+        task.instrument,
+        current_date.strftime("%Y-%m-%d"),
+    )
+
+    # Load data for this day
+    instrument_data = data_loader.load_data(
+        instrument=task.instrument,
+        start_date=day_start,
+        end_date=day_end,
+    )
+
+    # Sort by timestamp
+    instrument_data.sort(key=lambda t: t.timestamp)
+
+    logger.info(
+        "Loaded %d tick data points for %s", len(instrument_data), current_date.strftime("%Y-%m-%d")
+    )
+    return instrument_data, None
+
+
 def _create_execution_metrics(
     execution: TaskExecution,
     performance_metrics: dict[str, Any],
@@ -85,12 +129,20 @@ def _create_execution_metrics(
     Args:
         execution: TaskExecution instance
         performance_metrics: Performance metrics dictionary
-        equity_curve: Equity curve data
-        trade_log: Trade log data
+        equity_curve: List of EquityPoint objects or dicts
+        trade_log: List of BacktestTrade objects or dicts
 
     Returns:
         ExecutionMetrics instance
     """
+    # Convert objects to dicts for JSON storage
+    equity_curve_dicts = [
+        point.to_dict() if hasattr(point, "to_dict") else point for point in equity_curve
+    ]
+    trade_log_dicts = [
+        trade.to_dict() if hasattr(trade, "to_dict") else trade for trade in trade_log
+    ]
+
     return ExecutionMetrics.objects.create(
         execution=execution,
         total_return=Decimal(str(performance_metrics.get("total_return", 0))),
@@ -112,8 +164,8 @@ def _create_execution_metrics(
         ),
         average_win=Decimal(str(performance_metrics.get("average_win", 0))),
         average_loss=Decimal(str(performance_metrics.get("average_loss", 0))),
-        equity_curve=equity_curve,
-        trade_log=trade_log,
+        equity_curve=equity_curve_dicts,
+        trade_log=trade_log_dicts,
     )
 
 
@@ -304,8 +356,8 @@ def execute_backtest_task(
             execution.add_log("INFO", f"Instrument: {task.instrument}")
             execution.add_log("INFO", f"Initial balance: {task.initial_balance}")
 
-            # Load historical data
-            execution.add_log("INFO", f"Loading historical data from {task.data_source}...")
+            # Initialize data loader
+            execution.add_log("INFO", f"Initializing data loader from {task.data_source}...")
             # Validate data_source is one of the expected literal values
             if task.data_source not in ("postgresql", "athena"):
                 raise ValueError(f"Invalid data source: {task.data_source}")
@@ -314,36 +366,26 @@ def execute_backtest_task(
 
             data_source = cast(Literal["postgresql", "athena"], task.data_source)
             data_loader = HistoricalDataLoader(data_source=data_source)
-            tick_data, load_error = _load_backtest_data(task, data_loader)
 
-            if load_error:
-                logger.error(load_error)
-                execution.add_log("ERROR", load_error)
-                execution.mark_failed(RuntimeError(load_error))
-                task.status = TaskStatus.FAILED
-                task.save(update_fields=["status", "updated_at"])
-                return {
-                    "success": False,
-                    "task_id": task_id,
-                    "execution_id": execution.id,
-                    "error": load_error,
-                }
-
-            execution.add_log("INFO", f"Loaded {len(tick_data)} tick data points")
+            # Calculate total days for progress tracking
+            total_days = (task.end_time.date() - task.start_time.date()).days + 1
+            execution.add_log("INFO", f"Processing {total_days} days of data incrementally...")
 
             instrument = task.config.parameters.get("instrument", [])
 
-            # Get resource limits from SystemSettings
+            # Get resource limits and batch size from SystemSettings
             from accounts.models import SystemSettings
 
             try:
                 sys_settings = SystemSettings.get_settings()
                 cpu_limit = sys_settings.backtest_cpu_limit
                 memory_limit = sys_settings.backtest_memory_limit
+                day_batch_size = sys_settings.backtest_day_batch_size
             except Exception:  # pylint: disable=broad-exception-caught
                 # Fallback to config file if SystemSettings not available
                 cpu_limit = get_config("backtesting.cpu_limit", 1)
                 memory_limit = get_config("backtesting.memory_limit", 2147483648)  # 2GB
+                day_batch_size = 1  # Default to 1 day per batch
 
             # Create backtest configuration
             backtest_config = BacktestConfig(
@@ -358,8 +400,8 @@ def execute_backtest_task(
                 memory_limit=memory_limit,
             )
 
-            # Run backtest with progress callback
-            logger.info("Running backtest engine for task %d", task_id)
+            # Initialize backtest engine
+            logger.info("Initializing backtest engine for task %d", task_id)
             execution.add_log("INFO", "Starting backtest engine...")
             execution.add_log(
                 "INFO",
@@ -367,19 +409,169 @@ def execute_backtest_task(
             )
             engine = BacktestEngine(backtest_config)
 
-            # Define progress callback to update execution progress
-            def progress_callback(progress: int) -> None:
-                """Update execution progress in database and notify via WebSocket."""
+            # Define callback for day completion with intermediate results
+            # pylint: disable=unused-argument
+            def day_complete_callback(day_date: Any, intermediate_results: dict[str, Any]) -> None:
+                """Send intermediate backtest results via WebSocket after each day."""
                 try:
-                    # update_progress now handles WebSocket notification internally
+                    # Update progress
+                    progress = intermediate_results["progress"]
                     execution.update_progress(progress, user_id=task.user.id)
+
+                    # Log progress
+                    execution.add_log(
+                        "INFO",
+                        f"Day {intermediate_results['days_processed']}/{intermediate_days}: "
+                        f"{intermediate_results['day_date']} - "
+                        f"Balance: ${intermediate_results['balance']:,.2f}, "
+                        f"Trades: {intermediate_results['total_trades']}",
+                    )
+
+                    # Send intermediate results via WebSocket
+                    from trading.services.notifications import send_backtest_intermediate_results
+
+                    send_backtest_intermediate_results(
+                        task_id=task_id,
+                        execution_id=execution.id,
+                        user_id=task.user.id,
+                        intermediate_results=intermediate_results,
+                    )
                 except Exception as e:  # pylint: disable=broad-exception-caught
-                    logger.warning("Failed to update progress: %s", e)
+                    logger.warning("Failed to send intermediate results: %s", e)
 
-            # Set progress callback on engine
-            engine.progress_callback = progress_callback
+            # Run incremental backtest with fetch-execute-notify cycle
+            batch_msg = f"batch of {day_batch_size} day(s)" if day_batch_size > 1 else "day"
+            execution.add_log(
+                "INFO",
+                f"Starting incremental backtest " f"(fetch → execute → notify per {batch_msg})...",
+            )
+            execution.add_log("INFO", f"Day batch size: {day_batch_size}")
 
-            trade_log, equity_curve, performance_metrics = engine.run(tick_data)
+            # Initialize strategy and monitoring
+            # pylint: disable=protected-access
+            engine._initialize_strategy()
+            engine._start_resource_monitoring()
+            engine._set_cpu_limit()
+            # pylint: enable=protected-access
+
+            # Process in batches: fetch N days → execute N days → notify
+            current_date = task.start_time
+            day_index = 0
+            intermediate_days = total_days
+            batch_tick_count = 0
+
+            while current_date.date() <= task.end_time.date():
+                # STEP 1: Fetch data for this day
+                execution.add_log(
+                    "INFO", f"Fetching data for {current_date.strftime('%Y-%m-%d')}..."
+                )
+                day_tick_data, load_error = _load_backtest_data_by_day(
+                    task, data_loader, current_date
+                )
+
+                if load_error:
+                    logger.error(load_error)
+                    execution.add_log("ERROR", load_error)
+                    if engine.resource_monitor:
+                        engine.resource_monitor.stop()
+                    execution.mark_failed(RuntimeError(load_error))
+                    task.status = TaskStatus.FAILED
+                    task.save(update_fields=["status", "updated_at"])
+                    return {
+                        "success": False,
+                        "task_id": task_id,
+                        "execution_id": execution.id,
+                        "error": load_error,
+                    }
+
+                # STEP 2: Execute backtest for this day
+                if day_tick_data:
+                    date_str = current_date.strftime("%Y-%m-%d")
+                    execution.add_log(
+                        "INFO",
+                        f"Processing {len(day_tick_data)} ticks for {date_str}...",
+                    )
+                    batch_tick_count += len(day_tick_data)
+
+                    for tick in day_tick_data:
+                        # Check resource limits
+                        if engine.resource_monitor and engine.resource_monitor.is_exceeded():
+                            engine.terminated = True
+                            memory_mb = engine.config.memory_limit / 1024 / 1024
+                            error_msg = f"Memory limit exceeded ({memory_mb:.0f}MB)"
+                            execution.add_log("ERROR", error_msg)
+                            if engine.resource_monitor:
+                                engine.resource_monitor.stop()
+                            raise RuntimeError(error_msg)
+
+                        # Process tick
+                        engine._process_tick(tick)  # pylint: disable=protected-access
+
+                    # Record equity at end of day
+                    # pylint: disable=protected-access
+                    engine._record_equity(day_tick_data[-1].timestamp)
+
+                # Move to next day
+                day_index += 1
+                current_date += timedelta(days=1)
+
+                # STEP 3: Send notification after batch is complete or at end
+                should_notify = (day_index % day_batch_size == 0) or (
+                    current_date.date() > task.end_time.date()
+                )
+
+                if should_notify:
+                    # Calculate intermediate metrics and notify
+                    intermediate_metrics = engine.calculate_performance_metrics()
+                    progress = int((day_index / total_days) * 100)
+
+                    # Prepare intermediate results
+                    recent_trades = (
+                        [t.to_dict() for t in engine.trade_log[-10:]] if engine.trade_log else []
+                    )
+                    equity_points = (
+                        [p.to_dict() for p in engine.equity_curve[-100:]]
+                        if engine.equity_curve
+                        else []
+                    )
+
+                    # Use the last processed date for the batch
+                    batch_end_date = (current_date - timedelta(days=1)).date()
+
+                    intermediate_results = {
+                        "day_date": batch_end_date.isoformat(),
+                        "progress": progress,
+                        "days_processed": day_index,
+                        "total_days": total_days,
+                        "ticks_processed": batch_tick_count,
+                        "balance": float(engine.balance),
+                        "total_trades": len(engine.trade_log),
+                        "metrics": intermediate_metrics,
+                        "recent_trades": recent_trades,
+                        "equity_curve": equity_points,
+                    }
+
+                    # Send notification
+                    day_complete_callback(batch_end_date, intermediate_results)
+
+                    # Reset batch tick counter
+                    batch_tick_count = 0
+
+            # Stop resource monitoring
+            if engine.resource_monitor:
+                engine.resource_monitor.stop()
+                engine._log_resource_usage()  # pylint: disable=protected-access
+
+            # Get final results
+            trade_log = engine.trade_log
+            equity_curve = engine.equity_curve
+            performance_metrics = engine.calculate_performance_metrics()
+
+            execution.add_log(
+                "INFO",
+                f"Incremental backtest completed: {len(trade_log)} trades, "
+                f"final balance: {engine.balance}",
+            )
 
             execution.add_log("INFO", "=" * 60)
             execution.add_log("INFO", "BACKTEST EXECUTION COMPLETED")
@@ -442,19 +634,15 @@ def execute_backtest_task(
                 execution.add_log("INFO", "-" * 60)
                 for i, trade in enumerate(trade_log[:10], 1):  # Show first 10 trades
                     execution.add_log("INFO", f"Trade #{i}:")
-                    execution.add_log("INFO", f"  Type: {trade.get('type', 'N/A')}")
-                    execution.add_log("INFO", f"  Instrument: {trade.get('instrument', 'N/A')}")
-                    execution.add_log("INFO", f"  Units: {trade.get('units', 0)}")
-                    execution.add_log("INFO", f"  Entry Price: {trade.get('entry_price', 0):.5f}")
-                    if trade.get("exit_price"):
-                        execution.add_log("INFO", f"  Exit Price: {trade.get('exit_price'):.5f}")
-                    if trade.get("pnl") is not None:
-                        pnl = trade.get("pnl", 0)
-                        pnl_sign = "+" if pnl >= 0 else ""
-                        execution.add_log("INFO", f"  P&L: {pnl_sign}${pnl:,.2f}")
-                    execution.add_log("INFO", f"  Entry Time: {trade.get('entry_time', 'N/A')}")
-                    if trade.get("exit_time"):
-                        execution.add_log("INFO", f"  Exit Time: {trade.get('exit_time')}")
+                    execution.add_log("INFO", f"  Direction: {trade.direction}")
+                    execution.add_log("INFO", f"  Instrument: {trade.instrument}")
+                    execution.add_log("INFO", f"  Units: {trade.units}")
+                    execution.add_log("INFO", f"  Entry Price: {trade.entry_price:.5f}")
+                    execution.add_log("INFO", f"  Exit Price: {trade.exit_price:.5f}")
+                    pnl_sign = "+" if trade.pnl >= 0 else ""
+                    execution.add_log("INFO", f"  P&L: {pnl_sign}${trade.pnl:,.2f}")
+                    execution.add_log("INFO", f"  Entry Time: {trade.entry_time.isoformat()}")
+                    execution.add_log("INFO", f"  Exit Time: {trade.exit_time.isoformat()}")
                     execution.add_log("INFO", "")
 
                 if len(trade_log) > 10:

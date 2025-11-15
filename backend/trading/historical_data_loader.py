@@ -31,6 +31,32 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class TickDataWrapper:
+    """
+    Lightweight wrapper that mimics TickData model interface for backtesting.
+
+    This class provides the same attributes as the TickData Django model
+    but without database dependencies, making it suitable for backtesting.
+    """
+
+    instrument: str
+    timestamp: datetime
+    bid: Decimal
+    ask: Decimal
+    mid: Decimal
+    spread: Decimal
+
+    # Optional attributes that strategies might access
+    account: Any = None
+    created_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        """Set created_at to timestamp if not provided."""
+        if self.created_at is None:
+            self.created_at = self.timestamp
+
+
+@dataclass
 class TickDataPoint:
     """
     Normalized tick data point for backtesting.
@@ -50,6 +76,22 @@ class TickDataPoint:
     ask: Decimal
     mid: Decimal
     spread: Decimal
+
+    def to_tick_data(self) -> "TickDataWrapper":
+        """
+        Convert TickDataPoint to TickData-compatible wrapper for strategy consumption.
+
+        Returns:
+            TickDataWrapper instance with same interface as TickData model
+        """
+        return TickDataWrapper(
+            instrument=self.instrument,
+            timestamp=self.timestamp,
+            bid=self.bid,
+            ask=self.ask,
+            mid=self.mid,
+            spread=self.spread,
+        )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TickDataPoint":

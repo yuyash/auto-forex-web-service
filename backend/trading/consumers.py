@@ -1254,6 +1254,37 @@ class TaskStatusConsumer(AsyncWebsocketConsumer):
             progress_data.get("progress"),
         )
 
+    async def backtest_intermediate_results(self, event: Dict[str, Any]) -> None:
+        """
+        Handle intermediate backtest results from the channel layer.
+
+        This method is called after each day is processed during incremental backtest.
+        It forwards the intermediate results to the WebSocket client.
+
+        Args:
+            event: Event data containing intermediate backtest results
+        """
+        # Extract results data from event
+        results_data = event.get("data", {})
+
+        # Send intermediate results to WebSocket client
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "backtest_intermediate_results",
+                    "data": results_data,
+                }
+            )
+        )
+
+        logger.debug(
+            "Backtest intermediate results sent to user %s: task %s day %s/%s",
+            self.user.username if self.user else "Unknown",
+            results_data.get("task_id"),
+            results_data.get("days_processed"),
+            results_data.get("total_days"),
+        )
+
 
 class AdminNotificationConsumer(AsyncWebsocketConsumer):
     """

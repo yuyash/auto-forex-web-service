@@ -162,3 +162,43 @@ def send_execution_progress_notification(
     except Exception:  # nosec B110  # pylint: disable=broad-exception-caught
         # Don't fail the execution if WebSocket notification fails
         pass
+
+
+def send_backtest_intermediate_results(
+    task_id: int,
+    execution_id: int,
+    user_id: int,
+    intermediate_results: dict[str, Any],
+) -> None:
+    """
+    Send intermediate backtest results via WebSocket after each day is processed.
+
+    Args:
+        task_id: Task ID
+        execution_id: Execution ID
+        user_id: User ID who owns the task
+        intermediate_results: Dictionary containing intermediate metrics and results
+    """
+    try:
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+
+        group_name = f"task_status_user_{user_id}"
+
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                "type": "backtest_intermediate_results",
+                "data": {
+                    "task_id": task_id,
+                    "task_type": "backtest",
+                    "execution_id": execution_id,
+                    "timestamp": timezone.now().isoformat(),
+                    **intermediate_results,
+                },
+            },
+        )
+    except Exception:  # nosec B110  # pylint: disable=broad-exception-caught
+        # Don't fail the execution if WebSocket notification fails
+        pass

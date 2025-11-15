@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -40,6 +40,7 @@ import {
   useCopyTradingTask,
   useDeleteTradingTask,
 } from '../hooks/useTradingTaskMutations';
+import { useTaskStatusWebSocket } from '../hooks/useTaskStatusWebSocket';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
 import { CopyTaskDialog } from '../components/tasks/actions/CopyTaskDialog';
@@ -92,8 +93,34 @@ export default function TradingTaskDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [emergencyStopDialogOpen, setEmergencyStopDialogOpen] = useState(false);
 
-  const { data: task, isLoading, error } = useTradingTask(taskId);
+  const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
   const { strategies } = useStrategies();
+
+  // Listen to WebSocket updates for this task
+  useTaskStatusWebSocket({
+    onStatusUpdate: (update) => {
+      // Refetch task data when this specific task's status changes
+      if (update.task_id === taskId && update.task_type === 'trading') {
+        console.log(
+          '[TradingTaskDetail] Status update received, refetching task data'
+        );
+        refetch();
+      }
+    },
+  });
+
+  // Refetch task data after mutations complete
+  useEffect(() => {
+    const handleMutationSuccess = () => {
+      refetch();
+    };
+
+    // Listen for custom events from mutations
+    window.addEventListener('trading-task-mutated', handleMutationSuccess);
+    return () => {
+      window.removeEventListener('trading-task-mutated', handleMutationSuccess);
+    };
+  }, [refetch]);
 
   const startTask = useStartTradingTask();
   const stopTask = useStopTradingTask();
@@ -130,6 +157,7 @@ export default function TradingTaskDetailPage() {
   const handleStart = async () => {
     try {
       await startTask.mutate(taskId);
+      await refetch(); // Force immediate refetch to show updated status
       handleMenuClose();
     } catch {
       // Error handled by mutation hook
@@ -139,6 +167,7 @@ export default function TradingTaskDetailPage() {
   const handlePause = async () => {
     try {
       await pauseTask.mutate(taskId);
+      await refetch(); // Force immediate refetch to show updated status
       handleMenuClose();
     } catch {
       // Error handled by mutation hook
@@ -148,6 +177,7 @@ export default function TradingTaskDetailPage() {
   const handleResume = async () => {
     try {
       await resumeTask.mutate(taskId);
+      await refetch(); // Force immediate refetch to show updated status
       handleMenuClose();
     } catch {
       // Error handled by mutation hook
@@ -157,6 +187,8 @@ export default function TradingTaskDetailPage() {
   const handleRerun = async () => {
     try {
       await rerunTask.mutate(taskId);
+      // Force immediate refetch after mutation completes
+      await refetch();
       handleMenuClose();
     } catch {
       // Error handled by mutation hook
@@ -201,6 +233,7 @@ export default function TradingTaskDetailPage() {
   const handleEmergencyStopConfirm = async () => {
     try {
       await stopTask.mutate(taskId);
+      await refetch(); // Force immediate refetch to show updated status
       setEmergencyStopDialogOpen(false);
     } catch {
       // Error handled by mutation hook

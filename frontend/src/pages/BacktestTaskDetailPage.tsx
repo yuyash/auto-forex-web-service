@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -38,6 +38,7 @@ import {
   useDeleteBacktestTask,
   useRerunBacktestTask,
 } from '../hooks/useBacktestTaskMutations';
+import { useTaskStatusWebSocket } from '../hooks/useTaskStatusWebSocket';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
 import { TaskOverviewTab } from '../components/backtest/detail/TaskOverviewTab';
@@ -88,8 +89,57 @@ export default function BacktestTaskDetailPage() {
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const { data: task, isLoading, error } = useBacktestTask(taskId);
+  const { data: task, isLoading, error, refetch } = useBacktestTask(taskId);
   const { strategies } = useStrategies();
+  const [liveResults, setLiveResults] = useState<{
+    day_date: string;
+    progress: number;
+    days_processed: number;
+    total_days: number;
+    balance: number;
+    total_trades: number;
+    metrics: Record<string, string | number>;
+    equity_curve: Array<{ timestamp: string; equity: number; balance: number }>;
+  } | null>(null);
+
+  // Listen to WebSocket updates for this task
+  useTaskStatusWebSocket({
+    onStatusUpdate: (update) => {
+      // Refetch task data when this specific task's status changes
+      if (update.task_id === taskId && update.task_type === 'backtest') {
+        console.log(
+          '[BacktestTaskDetail] Status update received, refetching task data'
+        );
+        refetch();
+      }
+    },
+    onIntermediateResults: (results) => {
+      // Update live results when intermediate results are received
+      if (results.task_id === taskId) {
+        console.log(
+          '[BacktestTaskDetail] Intermediate results received:',
+          results
+        );
+        setLiveResults(results);
+      }
+    },
+  });
+
+  // Refetch task data after mutations complete
+  useEffect(() => {
+    const handleMutationSuccess = () => {
+      refetch();
+    };
+
+    // Listen for custom events from mutations
+    window.addEventListener('backtest-task-mutated', handleMutationSuccess);
+    return () => {
+      window.removeEventListener(
+        'backtest-task-mutated',
+        handleMutationSuccess
+      );
+    };
+  }, [refetch]);
 
   const startTask = useStartBacktestTask();
   const stopTask = useStopBacktestTask();
@@ -121,19 +171,35 @@ export default function BacktestTaskDetailPage() {
     handleMenuClose();
   };
 
-  const handleStart = () => {
-    startTask.mutate(taskId);
-    handleMenuClose();
+  const handleStart = async () => {
+    try {
+      await startTask.mutate(taskId);
+      await refetch(); // Force immediate refetch to show updated status
+      handleMenuClose();
+    } catch {
+      // Error handled by mutation hook
+    }
   };
 
-  const handleStop = () => {
-    stopTask.mutate(taskId);
-    handleMenuClose();
+  const handleStop = async () => {
+    try {
+      await stopTask.mutate(taskId);
+      await refetch(); // Force immediate refetch to show updated status
+      handleMenuClose();
+    } catch {
+      // Error handled by mutation hook
+    }
   };
 
-  const handleRerun = () => {
-    rerunTask.mutate(taskId);
-    handleMenuClose();
+  const handleRerun = async () => {
+    try {
+      await rerunTask.mutate(taskId);
+      // Force immediate refetch after mutation completes
+      await refetch();
+      handleMenuClose();
+    } catch {
+      // Error handled by mutation hook
+    }
   };
 
   const handleCopy = () => {
@@ -344,7 +410,7 @@ export default function BacktestTaskDetailPage() {
         </Tabs>
 
         <TabPanel value={tabValue} index={0}>
-          <TaskOverviewTab task={task} />
+          <TaskOverviewTab task={task} liveResults={liveResults} />
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>

@@ -93,6 +93,72 @@ class BacktestPosition:
         return (self.entry_price - current_price) * self.units
 
 
+@dataclass
+class BacktestTrade:
+    """
+    Completed trade record for backtesting.
+
+    Attributes:
+        instrument: Currency pair
+        direction: Trade direction ('long' or 'short')
+        units: Position size in units
+        entry_price: Entry price
+        exit_price: Exit price
+        entry_time: Entry timestamp
+        exit_time: Exit timestamp
+        duration: Trade duration in seconds
+        pnl: Profit/loss for the trade
+        reason: Reason for closing (e.g., 'take_profit', 'stop_loss', 'manual')
+    """
+
+    instrument: str
+    direction: str
+    units: float
+    entry_price: float
+    exit_price: float
+    entry_time: datetime
+    exit_time: datetime
+    duration: float
+    pnl: float
+    reason: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "instrument": self.instrument,
+            "direction": self.direction,
+            "units": self.units,
+            "entry_price": self.entry_price,
+            "exit_price": self.exit_price,
+            "entry_time": self.entry_time.isoformat(),
+            "exit_time": self.exit_time.isoformat(),
+            "duration": self.duration,
+            "pnl": self.pnl,
+            "reason": self.reason,
+        }
+
+
+@dataclass
+class EquityPoint:
+    """
+    Equity curve data point.
+
+    Attributes:
+        timestamp: Timestamp of the equity snapshot
+        balance: Account balance at this point
+    """
+
+    timestamp: datetime
+    balance: float
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "timestamp": self.timestamp.isoformat(),
+            "balance": self.balance,
+        }
+
+
 class ResourceMonitor:
     """
     Monitor resource usage during backtest execution.
@@ -191,15 +257,17 @@ class BacktestEngine:
         """
         self.config = config
         self.balance = config.initial_balance
-        self.equity_curve: list[dict[str, Any]] = []
-        self.trade_log: list[dict[str, Any]] = []
+        self.equity_curve: list[EquityPoint] = []
+        self.trade_log: list[BacktestTrade] = []
         self.positions: list[BacktestPosition] = []
         self.strategy: BaseStrategy | None = None
         self.resource_monitor: ResourceMonitor | None = None
         self.terminated = False
         self.progress_callback: Any = None  # Optional callback for progress updates
 
-    def run(self, tick_data: list[TickDataPoint]) -> tuple[list[dict], list[dict], dict[str, Any]]:
+    def run(
+        self, tick_data: list[TickDataPoint]
+    ) -> tuple[list[BacktestTrade], list[EquityPoint], dict[str, Any]]:
         """
         Run backtest on historical tick data.
 
@@ -249,7 +317,7 @@ class BacktestEngine:
                     progress = int((i / total_ticks) * 100)
                     logger.info(f"Backtest progress: {progress}%")
                     if self.progress_callback:
-                        self.progress_callback(progress)
+                        self.progress_callback(progress)  # pylint: disable=not-callable
 
             # Record final equity
             self._record_equity(tick_data[-1].timestamp if tick_data else datetime.now())
@@ -266,6 +334,131 @@ class BacktestEngine:
 
         except Exception as e:
             logger.error(f"Backtest failed: {e}")
+            raise
+
+        finally:
+            # Stop resource monitoring
+            if self.resource_monitor:
+                self.resource_monitor.stop()
+                self._log_resource_usage()
+
+    def run_incremental(  # pylint: disable=too-many-locals
+        self, tick_data: list[TickDataPoint], day_complete_callback: Any = None
+    ) -> tuple[list[BacktestTrade], list[EquityPoint], dict[str, Any]]:
+        """
+        Run backtest incrementally, calling callback after each day with intermediate results.
+
+        Args:
+            tick_data: List of historical tick data points
+            day_complete_callback: Optional callback(day_date, intermediate_results)
+                called after each day
+
+        Returns:
+            Tuple of (trade_log, equity_curve, performance_metrics)
+
+        Raises:
+            RuntimeError: If backtest fails or resource limit exceeded
+        """
+        logger.info(
+            f"Starting incremental backtest: {self.config.strategy_type} "
+            f"from {self.config.start_date} to {self.config.end_date}"
+        )
+
+        try:
+            # Initialize strategy
+            self._initialize_strategy()
+
+            # Start resource monitoring
+            self._start_resource_monitoring()
+
+            # Set CPU limit (soft limit only, doesn't enforce)
+            self._set_cpu_limit()
+
+            # Record initial equity
+            if tick_data:
+                self._record_equity(tick_data[0].timestamp)
+
+            # Group ticks by day
+            from collections import defaultdict
+
+            ticks_by_day = defaultdict(list)
+            for tick in tick_data:
+                day_key = tick.timestamp.date()
+                ticks_by_day[day_key].append(tick)
+
+            # Sort days
+            sorted_days = sorted(ticks_by_day.keys())
+            total_days = len(sorted_days)
+
+            # Process each day
+            for day_index, day_date in enumerate(sorted_days):
+                day_ticks = ticks_by_day[day_date]
+
+                # Process all ticks for this day
+                for tick in day_ticks:
+                    # Check if resource limit exceeded
+                    if self.resource_monitor and self.resource_monitor.is_exceeded():
+                        self.terminated = True
+                        raise RuntimeError(
+                            f"Backtest terminated: memory limit exceeded "
+                            f"({self.config.memory_limit / 1024 / 1024:.0f}MB)"
+                        )
+
+                    # Process tick
+                    self._process_tick(tick)
+
+                # Record equity at end of day
+                if day_ticks:
+                    self._record_equity(day_ticks[-1].timestamp)
+
+                # Calculate intermediate metrics
+                intermediate_metrics = self.calculate_performance_metrics()
+
+                # Calculate progress
+                progress = int(((day_index + 1) / total_days) * 100)
+
+                # Call callback with intermediate results
+                if day_complete_callback:
+                    # Convert objects to dicts for JSON serialization
+                    recent_trades = (
+                        [t.to_dict() for t in self.trade_log[-10:]] if self.trade_log else []
+                    )
+                    equity_points = (
+                        [p.to_dict() for p in self.equity_curve[-100:]] if self.equity_curve else []
+                    )
+
+                    intermediate_results = {
+                        "day_date": day_date.isoformat(),
+                        "progress": progress,
+                        "days_processed": day_index + 1,
+                        "total_days": total_days,
+                        "ticks_processed": len(day_ticks),
+                        "balance": float(self.balance),
+                        "total_trades": len(self.trade_log),
+                        "metrics": intermediate_metrics,
+                        "recent_trades": recent_trades,
+                        "equity_curve": equity_points,
+                    }
+                    day_complete_callback(day_date, intermediate_results)
+
+                logger.info(
+                    f"Completed day {day_index + 1}/{total_days}: {day_date} "
+                    f"({len(day_ticks)} ticks, {len(self.trade_log)} total trades, "
+                    f"balance: {self.balance:.2f})"
+                )
+
+            # Calculate final performance metrics
+            performance_metrics = self.calculate_performance_metrics()
+
+            logger.info(
+                f"Incremental backtest completed: {len(self.trade_log)} trades, "
+                f"final balance: {self.balance}"
+            )
+
+            return self.trade_log, self.equity_curve, performance_metrics
+
+        except Exception as e:
+            logger.error(f"Incremental backtest failed: {e}")
             raise
 
         finally:
@@ -328,20 +521,13 @@ class BacktestEngine:
 
         # Call strategy on_tick
         if self.strategy:
-            # Create TickData object for strategy
-            tick_data_obj = TickDataPoint(
-                instrument=tick.instrument,
-                timestamp=tick.timestamp,
-                bid=tick.bid,
-                ask=tick.ask,
-                mid=tick.mid,
-                spread=tick.ask - tick.bid,
-            )
+            # Convert TickDataPoint to TickData-compatible wrapper for strategy
+            tick_data_obj = tick.to_tick_data()
             orders = self.strategy.on_tick(tick_data_obj)  # type: ignore[arg-type]
 
             # Execute orders
             for order in orders:
-                self._execute_order(order, tick)  # type: ignore[arg-type]
+                self._execute_order(order, tick)
 
         # Record equity periodically (every 100 ticks)
         if len(self.equity_curve) == 0 or len(self.equity_curve) % 100 == 0:
@@ -392,31 +578,29 @@ class BacktestEngine:
         for position, exit_price, reason in positions_to_close:
             self._close_position(position, exit_price, tick.timestamp, reason)
 
-    def _execute_order(self, order: dict[str, Any], tick: TickDataPoint) -> None:
+    def _execute_order(self, order: Any, tick: TickDataPoint) -> None:
         """
         Execute order with commission (bid/ask spread already in tick data).
 
         Args:
-            order: Order dictionary
+            order: Order model instance
             tick: Current tick data
         """
         # Use bid/ask prices directly (spread already included)
-        if order["direction"] == "long":
+        if order.direction == "long":
             execution_price = tick.ask
         else:
             execution_price = tick.bid
 
         # Create position
         position = BacktestPosition(
-            instrument=order["instrument"],
-            direction=order["direction"],
-            units=Decimal(str(order["units"])),
+            instrument=order.instrument,
+            direction=order.direction,
+            units=Decimal(str(order.units)),
             entry_price=execution_price,
             entry_time=tick.timestamp,
-            stop_loss=Decimal(str(order.get("stop_loss"))) if order.get("stop_loss") else None,
-            take_profit=(
-                Decimal(str(order.get("take_profit"))) if order.get("take_profit") else None
-            ),
+            stop_loss=Decimal(str(order.stop_loss)) if order.stop_loss else None,
+            take_profit=Decimal(str(order.take_profit)) if order.take_profit else None,
         )
 
         self.positions.append(position)
@@ -425,8 +609,8 @@ class BacktestEngine:
         self.balance -= self.config.commission_per_trade
 
         logger.debug(
-            f"Order executed: {order['direction']} {order['units']} "
-            f"{order['instrument']} @ {execution_price}"
+            f"Order executed: {order.direction} {order.units} "
+            f"{order.instrument} @ {execution_price}"
         )
 
     def _close_position(
@@ -455,18 +639,18 @@ class BacktestEngine:
         self.balance += pnl
 
         # Record trade
-        trade = {
-            "instrument": position.instrument,
-            "direction": position.direction,
-            "units": float(position.units),
-            "entry_price": float(position.entry_price),
-            "exit_price": float(exit_price),
-            "entry_time": position.entry_time.isoformat(),
-            "exit_time": exit_time.isoformat(),
-            "duration": (exit_time - position.entry_time).total_seconds(),
-            "pnl": float(pnl),
-            "reason": reason,
-        }
+        trade = BacktestTrade(
+            instrument=position.instrument,
+            direction=position.direction,
+            units=float(position.units),
+            entry_price=float(position.entry_price),
+            exit_price=float(exit_price),
+            entry_time=position.entry_time,
+            exit_time=exit_time,
+            duration=(exit_time - position.entry_time).total_seconds(),
+            pnl=float(pnl),
+            reason=reason,
+        )
         self.trade_log.append(trade)
 
         # Remove position
@@ -488,12 +672,7 @@ class BacktestEngine:
 
         equity = self.balance + unrealized_pnl
 
-        self.equity_curve.append(
-            {
-                "timestamp": timestamp.isoformat(),
-                "balance": float(equity),
-            }
-        )
+        self.equity_curve.append(EquityPoint(timestamp=timestamp, balance=float(equity)))
 
     def _log_resource_usage(self) -> None:
         """Log resource usage metrics."""
@@ -549,8 +728,8 @@ class BacktestEngine:
         )
 
         # Calculate win/loss statistics
-        winning_trades = [t for t in self.trade_log if t.get("pnl", 0) > 0]
-        losing_trades = [t for t in self.trade_log if t.get("pnl", 0) < 0]
+        winning_trades = [t for t in self.trade_log if t.pnl > 0]
+        losing_trades = [t for t in self.trade_log if t.pnl < 0]
 
         metrics["winning_trades"] = len(winning_trades)
         metrics["losing_trades"] = len(losing_trades)
@@ -560,25 +739,25 @@ class BacktestEngine:
 
         # Calculate average win/loss
         if winning_trades:
-            total_wins = sum(t.get("pnl", 0) for t in winning_trades)
+            total_wins = sum(t.pnl for t in winning_trades)
             metrics["average_win"] = total_wins / len(winning_trades)
-            metrics["largest_win"] = max(t.get("pnl", 0) for t in winning_trades)
+            metrics["largest_win"] = max(t.pnl for t in winning_trades)
         else:
             metrics["average_win"] = 0.0
             metrics["largest_win"] = 0.0
 
         if losing_trades:
-            total_losses = sum(t.get("pnl", 0) for t in losing_trades)
+            total_losses = sum(t.pnl for t in losing_trades)
             metrics["average_loss"] = total_losses / len(losing_trades)
-            metrics["largest_loss"] = min(t.get("pnl", 0) for t in losing_trades)
+            metrics["largest_loss"] = min(t.pnl for t in losing_trades)
         else:
             metrics["average_loss"] = 0.0
             metrics["largest_loss"] = 0.0
 
         # Calculate profit factor
         if losing_trades:
-            gross_profit = sum(t.get("pnl", 0) for t in winning_trades)
-            gross_loss = abs(sum(t.get("pnl", 0) for t in losing_trades))
+            gross_profit = sum(t.pnl for t in winning_trades)
+            gross_loss = abs(sum(t.pnl for t in losing_trades))
             metrics["profit_factor"] = gross_profit / gross_loss if gross_loss > 0 else None
         else:
             metrics["profit_factor"] = None
@@ -592,7 +771,7 @@ class BacktestEngine:
 
         # Calculate average trade duration
         if self.trade_log:
-            total_duration = sum(t.get("duration", 0) for t in self.trade_log)
+            total_duration = sum(t.duration for t in self.trade_log)
             metrics["average_trade_duration"] = total_duration / len(self.trade_log)
         else:
             metrics["average_trade_duration"] = 0.0
@@ -655,7 +834,7 @@ class BacktestEngine:
         max_dd_amount = 0.0
 
         for point in self.equity_curve:
-            balance = point.get("balance", 0)
+            balance = point.balance
             peak = max(peak, balance)
 
             drawdown_amount = peak - balance
@@ -690,8 +869,8 @@ class BacktestEngine:
         # Calculate returns between equity curve points
         returns = []
         for i in range(1, len(self.equity_curve)):
-            prev_balance = self.equity_curve[i - 1].get("balance", 0)
-            curr_balance = self.equity_curve[i].get("balance", 0)
+            prev_balance = self.equity_curve[i - 1].balance
+            curr_balance = self.equity_curve[i].balance
 
             if prev_balance > 0:
                 daily_return = (curr_balance - prev_balance) / prev_balance

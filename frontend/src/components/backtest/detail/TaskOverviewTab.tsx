@@ -25,13 +25,25 @@ import {
   TrendingDown as TrendingDownIcon,
 } from '@mui/icons-material';
 
+interface LiveResults {
+  day_date: string;
+  progress: number;
+  days_processed: number;
+  total_days: number;
+  balance: number;
+  total_trades: number;
+  metrics: Record<string, string | number>;
+  equity_curve: Array<{ timestamp: string; equity: number; balance: number }>;
+}
+
 interface TaskOverviewTabProps {
   task: BacktestTask;
+  liveResults?: LiveResults | null;
 }
 
 type DateRange = 'all' | '1m' | '3m' | '6m' | '1y';
 
-export function TaskOverviewTab({ task }: TaskOverviewTabProps) {
+export function TaskOverviewTab({ task, liveResults }: TaskOverviewTabProps) {
   const [dateRange, setDateRange] = useState<DateRange>('all');
 
   // Fetch latest execution with full metrics
@@ -105,11 +117,180 @@ export function TaskOverviewTab({ task }: TaskOverviewTabProps) {
   }
 
   if (task.status === TaskStatus.RUNNING) {
+    // Show live results if available
+    if (liveResults && liveResults.metrics) {
+      const liveMetrics = liveResults.metrics;
+
+      return (
+        <Box sx={{ px: 3 }}>
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Typography variant="body2">
+              <strong>Backtest in progress:</strong> Day{' '}
+              {liveResults.days_processed} of {liveResults.total_days} (
+              {liveResults.progress}%)
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              Current date: {liveResults.day_date} • Balance: $
+              {liveResults.balance.toFixed(2)} • Trades:{' '}
+              {liveResults.total_trades}
+            </Typography>
+          </Alert>
+
+          {/* Live Key Metrics Grid */}
+          <Grid container spacing={3} sx={{ mb: 4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <MetricCard
+                title="Total Return (Live)"
+                value={`${parseFloat(String(liveMetrics.total_return || 0)).toFixed(2)}%`}
+                icon={<TrendingUpIcon />}
+                color={
+                  parseFloat(String(liveMetrics.total_return || 0)) >= 0
+                    ? 'success'
+                    : 'error'
+                }
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <MetricCard
+                title="Win Rate (Live)"
+                value={`${parseFloat(String(liveMetrics.win_rate || 0)).toFixed(2)}%`}
+                icon={<ShowChartIcon />}
+                color="primary"
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <MetricCard
+                title="Total Trades (Live)"
+                value={liveResults.total_trades.toString()}
+                icon={<SwapHorizIcon />}
+                color="info"
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <MetricCard
+                title="Max Drawdown (Live)"
+                value={`${parseFloat(String(liveMetrics.max_drawdown || 0)).toFixed(2)}%`}
+                icon={<TrendingDownIcon />}
+                color="warning"
+              />
+            </Grid>
+          </Grid>
+
+          {/* Live Equity Curve Chart */}
+          {liveResults.equity_curve && liveResults.equity_curve.length > 0 && (
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ mb: 3 }}>
+                Equity Curve (Live - Last 100 points)
+              </Typography>
+              <EquityCurveChart data={liveResults.equity_curve} height={400} />
+            </Paper>
+          )}
+
+          {/* Live Additional Metrics */}
+          {(liveMetrics.sharpe_ratio || liveMetrics.profit_factor) && (
+            <Paper sx={{ p: 3, mt: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Additional Metrics (Live)
+              </Typography>
+
+              <Grid container spacing={3}>
+                {liveMetrics.sharpe_ratio && (
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Sharpe Ratio
+                      </Typography>
+                      <Typography variant="h5">
+                        {parseFloat(String(liveMetrics.sharpe_ratio)).toFixed(
+                          2
+                        )}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                )}
+
+                {liveMetrics.profit_factor && (
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Profit Factor
+                      </Typography>
+                      <Typography variant="h5">
+                        {parseFloat(String(liveMetrics.profit_factor)).toFixed(
+                          2
+                        )}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                )}
+
+                {liveMetrics.average_win && (
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Average Win
+                      </Typography>
+                      <Typography variant="h5">
+                        $
+                        {parseFloat(String(liveMetrics.average_win)).toFixed(2)}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                )}
+
+                {liveMetrics.average_loss && (
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Average Loss
+                      </Typography>
+                      <Typography variant="h5" color="error.main">
+                        $
+                        {parseFloat(String(liveMetrics.average_loss)).toFixed(
+                          2
+                        )}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                )}
+
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Winning Trades
+                    </Typography>
+                    <Typography variant="h5" color="success.main">
+                      {liveMetrics.winning_trades || 0}
+                    </Typography>
+                  </Box>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Losing Trades
+                    </Typography>
+                    <Typography variant="h5" color="error.main">
+                      {liveMetrics.losing_trades || 0}
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Paper>
+          )}
+        </Box>
+      );
+    }
+
+    // No live results yet
     return (
       <Box sx={{ px: 3 }}>
         <Alert severity="info">
-          This task is currently running. Results will be available once the
-          execution completes.
+          This task is currently running. Live results will appear here as the
+          backtest progresses.
         </Alert>
       </Box>
     );

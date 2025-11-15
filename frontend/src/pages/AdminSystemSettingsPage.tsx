@@ -60,6 +60,7 @@ interface SystemSettings {
   django_log_level: string;
   backtest_cpu_limit: number;
   backtest_memory_limit: number;
+  backtest_day_batch_size: number;
   tick_data_retention_days: number;
   tick_data_instruments: string;
   system_health_update_interval: number;
@@ -1139,6 +1140,22 @@ const AdminSystemSettingsPage = () => {
               }
               helperText="Memory limit per backtest task in GB (default: 2GB)"
               inputProps={{ min: 0.5, max: 32, step: 0.5 }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              fullWidth
+              label="Backtest Day Batch Size"
+              type="number"
+              value={settings.backtest_day_batch_size}
+              onChange={(e) =>
+                handleChange(
+                  'backtest_day_batch_size',
+                  parseInt(e.target.value) || 1
+                )
+              }
+              helperText="Days to process before sending progress update (1 = real-time per day, higher = less frequent updates)"
+              inputProps={{ min: 1, max: 30, step: 1 }}
             />
           </Grid>
         </Grid>

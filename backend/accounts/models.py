@@ -233,6 +233,13 @@ class SystemSettings(models.Model):
         default=2147483648,  # 2GB in bytes
         help_text="Memory limit per backtest task in bytes (default: 2147483648 = 2GB)",
     )
+    backtest_day_batch_size = models.IntegerField(
+        default=1,
+        help_text=(
+            "Number of days to fetch and process before sending progress update "
+            "(default: 1 = real-time updates per day)"
+        ),
+    )
 
     updated_at = models.DateTimeField(
         auto_now=True,
