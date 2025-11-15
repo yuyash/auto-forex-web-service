@@ -217,6 +217,12 @@ class SystemSettings(models.Model):
         default=5,
         help_text="Interval in seconds for system health updates in admin dashboard (default: 5)",
     )
+    external_api_check_interval = models.IntegerField(
+        default=60,
+        help_text=(
+            "Interval in seconds for external API health checks " "(e.g., OANDA API) (default: 60)"
+        ),
+    )
 
     # Backtesting Resource Limits
     backtest_cpu_limit = models.IntegerField(

@@ -58,7 +58,9 @@ class SystemHealthMonitor:
             Dictionary containing CPU usage information
         """
         try:
-            cpu_percent = psutil.cpu_percent(interval=1)
+            # Use interval=0 for non-blocking call (uses cached value from previous call)
+            # This is acceptable for frequent dashboard updates
+            cpu_percent = psutil.cpu_percent(interval=0)
             cpu_count = psutil.cpu_count()
             load_avg = psutil.getloadavg() if hasattr(psutil, "getloadavg") else (0, 0, 0)
 
@@ -193,8 +195,9 @@ class SystemHealthMonitor:
             live_status = "unknown"
 
             # Check practice API (without auth, just to see if endpoint is reachable)
+            # Use short timeout (1s) since this runs frequently for dashboard updates
             try:
-                response = requests.get(practice_url, timeout=5)
+                response = requests.get(practice_url, timeout=1)
                 # 401 is expected without auth, but means endpoint is reachable
                 practice_status = "reachable" if response.status_code in [401, 403] else "error"
             except Exception as e:
@@ -202,8 +205,9 @@ class SystemHealthMonitor:
                 practice_status = "unreachable"
 
             # Check live API
+            # Use short timeout (1s) since this runs frequently for dashboard updates
             try:
-                response = requests.get(live_url, timeout=5)
+                response = requests.get(live_url, timeout=1)
                 live_status = "reachable" if response.status_code in [401, 403] else "error"
             except Exception as e:
                 logger.warning(f"Live API check failed: {e}")
@@ -282,32 +286,31 @@ class SystemHealthMonitor:
             scheduled_tasks: dict[str, list] = {}
             reserved_tasks: dict[str, list] = {}
 
-            # Retry a few times to handle momentary broker unavailability
-            for attempt in range(3):
-                try:
-                    inspect = current_app.control.inspect(timeout=2.0)
-                    if inspect is None:
-                        raise RuntimeError("Celery inspect returned None")
+            # Use shorter timeout and single attempt for frequent dashboard updates
+            # Retry logic can be added for less frequent checks if needed
+            try:
+                inspect = current_app.control.inspect(timeout=0.5)
+                if inspect is None:
+                    raise RuntimeError("Celery inspect returned None")
 
-                    active_tasks = inspect.active() or {}
-                    scheduled_tasks = inspect.scheduled() or {}
-                    reserved_tasks = inspect.reserved() or {}
+                active_tasks = inspect.active() or {}
+                scheduled_tasks = inspect.scheduled() or {}
+                reserved_tasks = inspect.reserved() or {}
 
-                    # Log for debugging
-                    if active_tasks or scheduled_tasks or reserved_tasks:
-                        logger.debug(
-                            "Celery tasks: active=%d, scheduled=%d, reserved=%d",
-                            sum(len(t) for t in active_tasks.values() if t),
-                            sum(len(t) for t in scheduled_tasks.values() if t),
-                            sum(len(t) for t in reserved_tasks.values() if t),
-                        )
-                    break
-                except Exception as inner_error:  # pragma: no cover - network timing
-                    if attempt < 2:
-                        time.sleep(0.5)
-                        continue
-                    logger.warning("Celery inspect attempt %d failed: %s", attempt + 1, inner_error)
-                    raise inner_error
+                # Log for debugging
+                if active_tasks or scheduled_tasks or reserved_tasks:
+                    logger.debug(
+                        "Celery tasks: active=%d, scheduled=%d, reserved=%d",
+                        sum(len(t) for t in active_tasks.values() if t),
+                        sum(len(t) for t in scheduled_tasks.values() if t),
+                        sum(len(t) for t in reserved_tasks.values() if t),
+                    )
+            except Exception as inner_error:  # pragma: no cover - network timing
+                logger.warning("Celery inspect failed: %s", inner_error)
+                # Return empty results instead of raising - dashboard should still work
+                active_tasks = {}
+                scheduled_tasks = {}
+                reserved_tasks = {}
 
             active_count = sum(len(tasks) for tasks in active_tasks.values() if tasks)
             scheduled_count = sum(len(tasks) for tasks in scheduled_tasks.values() if tasks)
@@ -328,24 +331,34 @@ class SystemHealthMonitor:
                 "total": 0,
             }
 
-    def get_health_summary(self) -> Dict[str, Any]:
+    def get_health_summary(self, include_external_apis: bool = False) -> Dict[str, Any]:
         """
         Get comprehensive system health summary.
+
+        Args:
+            include_external_apis: Whether to include external API checks (default: False)
+                                   Set to False for frequent dashboard updates to avoid
+                                   slow external API timeouts.
 
         Returns:
             Dictionary containing all health metrics
         """
-        return {
+        health_data = {
             "timestamp": timezone.now().isoformat(),
             "cpu": self.get_cpu_usage(),
             "memory": self.get_memory_usage(),
             "database": self.check_database_connection(),
             "redis": self.check_redis_connection(),
-            "oanda_api": self.check_oanda_api_connection(),
             "active_streams": self.get_active_streams_count(),
             "celery_tasks": self.get_celery_tasks_count(),
             "overall_status": self._calculate_overall_status(),
         }
+
+        # Only include external API checks if explicitly requested
+        if include_external_apis:
+            health_data["oanda_api"] = self.check_oanda_api_connection()
+
+        return health_data
 
     def _calculate_overall_status(self) -> str:
         """

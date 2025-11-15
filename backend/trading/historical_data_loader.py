@@ -360,13 +360,13 @@ class HistoricalDataLoader:
         end_timestamp_ns = int(end_date.timestamp() * 1_000_000_000)
 
         # Extract partition values for efficient querying
-        # Note: Partition columns are stored as strings in Athena
+        # Note: Partition columns are stored as strings in Athena with zero-padding
         start_year = str(start_date.year)
-        start_month = str(start_date.month)
-        start_day = str(start_date.day)
+        start_month = str(start_date.month).zfill(2)
+        start_day = str(start_date.day).zfill(2)
         end_year = str(end_date.year)
-        end_month = str(end_date.month)
-        end_day = str(end_date.day)
+        end_month = str(end_date.month).zfill(2)
+        end_day = str(end_date.day).zfill(2)
 
         # Build partition filter for efficient scanning
         # If same day, use exact partition

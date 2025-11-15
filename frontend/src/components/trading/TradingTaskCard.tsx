@@ -46,6 +46,9 @@ interface TradingTaskCardProps {
 export default function TradingTaskCard({ task }: TradingTaskCardProps) {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
+    null
+  );
   const toast = useToast();
   const prevTaskRef = useRef<TradingTask>(task);
 
@@ -59,15 +62,24 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
 
   // Poll for updates when task is running or paused (more frequent for live trading)
   const pollingEnabled =
-    task.status === TaskStatus.RUNNING || task.status === TaskStatus.PAUSED;
+    task.status === TaskStatus.RUNNING ||
+    task.status === TaskStatus.PAUSED ||
+    optimisticStatus === TaskStatus.RUNNING ||
+    optimisticStatus === TaskStatus.PAUSED;
   const { data: updatedTask } = useTradingTaskPolling(
     task.id,
     pollingEnabled,
     5000 // Poll every 5 seconds for live trading
   );
 
-  // Use updated task data if available
+  // Use optimistic status if set, otherwise use updated task data or original task
   const currentTask = updatedTask || task;
+
+  // Clear optimistic status when actual status matches (derived state pattern)
+  const displayStatus =
+    optimisticStatus && currentTask.status !== optimisticStatus
+      ? optimisticStatus
+      : currentTask.status;
 
   // Show toast notifications for status changes and trades
   useEffect(() => {
@@ -123,33 +135,49 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
 
   const handleStart = async () => {
     try {
+      // Optimistically update status to RUNNING
+      setOptimisticStatus(TaskStatus.RUNNING);
       await startTask.mutate(task.id);
     } catch (error) {
       console.error('Failed to start task:', error);
+      // Revert optimistic update on error
+      setOptimisticStatus(null);
     }
   };
 
   const handleStop = async () => {
     try {
+      // Optimistically update status to STOPPED
+      setOptimisticStatus(TaskStatus.STOPPED);
       await stopTask.mutate(task.id);
     } catch (error) {
       console.error('Failed to stop task:', error);
+      // Revert optimistic update on error
+      setOptimisticStatus(null);
     }
   };
 
   const handlePause = async () => {
     try {
+      // Optimistically update status to PAUSED
+      setOptimisticStatus(TaskStatus.PAUSED);
       await pauseTask.mutate(task.id);
     } catch (error) {
       console.error('Failed to pause task:', error);
+      // Revert optimistic update on error
+      setOptimisticStatus(null);
     }
   };
 
   const handleResume = async () => {
     try {
+      // Optimistically update status to RUNNING
+      setOptimisticStatus(TaskStatus.RUNNING);
       await resumeTask.mutate(task.id);
     } catch (error) {
       console.error('Failed to resume task:', error);
+      // Revert optimistic update on error
+      setOptimisticStatus(null);
     }
   };
 
@@ -178,16 +206,14 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
         },
         transition: 'box-shadow 0.3s',
         border:
-          currentTask.status === TaskStatus.RUNNING ? '2px solid' : '1px solid',
+          displayStatus === TaskStatus.RUNNING ? '2px solid' : '1px solid',
         borderColor:
-          currentTask.status === TaskStatus.RUNNING
-            ? 'success.main'
-            : 'divider',
+          displayStatus === TaskStatus.RUNNING ? 'success.main' : 'divider',
       }}
     >
       <CardContent>
         {/* Risk Warning for Live Trading */}
-        {currentTask.status === TaskStatus.RUNNING && (
+        {displayStatus === TaskStatus.RUNNING && (
           <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 2 }}>
             <Typography variant="caption">
               <strong>Live Trading Active:</strong> Real money is at risk.
@@ -217,7 +243,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
                 flexWrap: 'wrap',
               }}
             >
-              <StatusBadge status={currentTask.status} />
+              <StatusBadge status={displayStatus} />
               {currentTask.account_type === 'live' && (
                 <Chip
                   label="LIVE ACCOUNT"
@@ -262,7 +288,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
               flexShrink: 0,
             }}
           >
-            {currentTask.status === TaskStatus.CREATED && (
+            {displayStatus === TaskStatus.CREATED && (
               <Tooltip title="Start">
                 <IconButton
                   color="primary"
@@ -274,7 +300,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
                 </IconButton>
               </Tooltip>
             )}
-            {currentTask.status === TaskStatus.RUNNING && (
+            {displayStatus === TaskStatus.RUNNING && (
               <>
                 <Tooltip title="Pause">
                   <IconButton
@@ -298,7 +324,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
                 </Tooltip>
               </>
             )}
-            {currentTask.status === TaskStatus.PAUSED && (
+            {displayStatus === TaskStatus.PAUSED && (
               <>
                 <Tooltip title="Resume">
                   <IconButton
@@ -322,7 +348,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
                 </Tooltip>
               </>
             )}
-            {currentTask.status === TaskStatus.STOPPED && (
+            {displayStatus === TaskStatus.STOPPED && (
               <Tooltip title="Start">
                 <IconButton
                   color="primary"
@@ -346,8 +372,8 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
         </Box>
 
         {/* Live Metrics for Running/Paused Tasks */}
-        {(currentTask.status === TaskStatus.RUNNING ||
-          currentTask.status === TaskStatus.PAUSED) && (
+        {(displayStatus === TaskStatus.RUNNING ||
+          displayStatus === TaskStatus.PAUSED) && (
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid size={{ xs: 6, sm: 4 }}>
               <MetricCard
@@ -374,8 +400,8 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
         )}
 
         {/* Performance Metrics for Stopped/Completed Tasks */}
-        {(currentTask.status === TaskStatus.STOPPED ||
-          currentTask.status === TaskStatus.COMPLETED) &&
+        {(displayStatus === TaskStatus.STOPPED ||
+          displayStatus === TaskStatus.COMPLETED) &&
           currentTask.latest_execution && (
             <Grid container spacing={2} sx={{ mt: 1 }}>
               {currentTask.latest_execution.total_return && (
@@ -411,7 +437,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
           )}
 
         {/* Error message for failed tasks */}
-        {currentTask.status === TaskStatus.FAILED && (
+        {displayStatus === TaskStatus.FAILED && (
           <Box
             sx={{
               mt: 2,
@@ -441,7 +467,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
           <Typography variant="caption" color="text.secondary">
             Created: {formatDateTime(currentTask.created_at)}
           </Typography>
-          {currentTask.status === TaskStatus.RUNNING && (
+          {displayStatus === TaskStatus.RUNNING && (
             <Chip
               label="LIVE"
               size="small"

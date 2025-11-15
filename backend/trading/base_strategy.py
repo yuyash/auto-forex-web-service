@@ -27,17 +27,26 @@ class BaseStrategy(ABC):
     Requirements: 5.1, 5.3
     """
 
-    def __init__(self, strategy: Strategy) -> None:
+    def __init__(self, strategy: Strategy | dict) -> None:
         """
-        Initialize the strategy with a Strategy model instance.
+        Initialize the strategy with a Strategy model instance or config dict.
 
         Args:
-            strategy: Strategy model instance containing configuration
+            strategy: Strategy model instance (for live trading) or
+                     config dict (for backtesting)
         """
-        self.strategy = strategy
-        self.account = strategy.account
-        self.config = strategy.config
-        self.instrument = strategy.instrument
+        if isinstance(strategy, dict):
+            # Backtesting mode - strategy is a config dict
+            self.strategy = None
+            self.account = None
+            self.config = strategy
+            self.instrument = strategy.get("instrument", [])
+        else:
+            # Live trading mode - strategy is a Strategy model instance
+            self.strategy = strategy
+            self.account = strategy.account
+            self.config = strategy.config
+            self.instrument = strategy.instrument
 
     @abstractmethod
     def on_tick(self, tick_data: TickData) -> list[Order]:
@@ -206,7 +215,12 @@ class BaseStrategy(ABC):
         Returns:
             True if instrument matches for this strategy
         """
-        return instrument == self.instrument
+        # Handle both string and list instrument types
+        if isinstance(self.instrument, list):
+            return instrument in self.instrument
+        # Cast comparison result to bool for mypy
+        result: bool = instrument == self.instrument
+        return result
 
     def update_strategy_state(self, state_updates: dict[str, Any]) -> None:
         """
@@ -215,6 +229,9 @@ class BaseStrategy(ABC):
         Args:
             state_updates: Dictionary of state updates to apply
         """
+        if not self.strategy:
+            return
+
         if not hasattr(self.strategy, "state"):
             # Create state if it doesn't exist
             # pylint: disable=import-outside-toplevel
@@ -240,7 +257,7 @@ class BaseStrategy(ABC):
         Returns:
             Dictionary containing strategy state
         """
-        if not hasattr(self.strategy, "state"):
+        if not self.strategy or not hasattr(self.strategy, "state"):
             return {}
 
         state = self.strategy.state
@@ -269,6 +286,9 @@ class BaseStrategy(ABC):
         if details is None:
             details = {}
 
+        if not self.account:
+            return
+
         Event.objects.create(
             category="trading",
             event_type=event_type,
@@ -281,13 +301,17 @@ class BaseStrategy(ABC):
 
     def __str__(self) -> str:
         """String representation of the strategy."""
-        return f"{self.__class__.__name__} for {self.account.account_id}"
+        if self.account:
+            return f"{self.__class__.__name__} for {self.account.account_id}"
+        return f"{self.__class__.__name__} (backtest mode)"
 
     def __repr__(self) -> str:
         """Developer-friendly representation of the strategy."""
-        return (
-            f"<{self.__class__.__name__} "
-            f"strategy_id={self.strategy.id} "
-            f"account={self.account.account_id} "
-            f"active={self.strategy.is_active}>"
-        )
+        if self.strategy and self.account:
+            return (
+                f"<{self.__class__.__name__} "
+                f"strategy_id={self.strategy.id} "
+                f"account={self.account.account_id} "
+                f"active={self.strategy.is_active}>"
+            )
+        return f"<{self.__class__.__name__} (backtest mode)>"

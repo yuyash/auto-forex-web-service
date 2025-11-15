@@ -16,6 +16,7 @@ import { useAccessibility } from './hooks/useAccessibility';
 import { ToastProvider } from './components/common';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { QueryProvider } from './providers/QueryProvider';
+import { TaskStatusListener } from './components/tasks/TaskStatusListener';
 
 // Lazy load page components for code splitting
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -30,7 +31,6 @@ const AdminSystemSettingsPage = lazy(
   () => import('./pages/AdminSystemSettingsPage')
 );
 const AdminWhitelistPage = lazy(() => import('./pages/AdminWhitelistPage'));
-const EventViewerPage = lazy(() => import('./pages/EventViewerPage'));
 const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const ConfigurationsPage = lazy(() => import('./pages/ConfigurationsPage'));
@@ -190,7 +190,6 @@ function AppRoutes() {
               element={<AdminSystemSettingsPage />}
             />
             <Route path="/admin/whitelist" element={<AdminWhitelistPage />} />
-            <Route path="/admin/events" element={<EventViewerPage />} />
             <Route path="/admin/users" element={<UserManagementPage />} />
           </Route>
         </Route>
@@ -212,6 +211,7 @@ function ThemedApp() {
       <QueryProvider>
         <ToastProvider>
           <AuthProvider>
+            <TaskStatusListener />
             <BrowserRouter>
               <AppRoutes />
             </BrowserRouter>

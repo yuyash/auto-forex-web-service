@@ -288,6 +288,7 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             "tick_data_retention_days",
             "tick_data_instruments",
             "system_health_update_interval",
+            "external_api_check_interval",
             "oanda_sync_interval_seconds",
             "oanda_fetch_duration_days",
             # Backtesting Resource Limits

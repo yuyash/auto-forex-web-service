@@ -467,10 +467,8 @@ class TradingTaskExecutionsView(APIView):
         serializer = TaskExecutionSerializer(executions, many=True)
         return Response(
             {
-                "task_id": task.id,
-                "task_name": task.name,
-                "total_executions": executions.count(),
-                "executions": serializer.data,
+                "count": executions.count(),
+                "results": serializer.data,
             },
             status=status.HTTP_200_OK,
         )

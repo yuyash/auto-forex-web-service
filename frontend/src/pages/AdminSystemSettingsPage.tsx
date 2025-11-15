@@ -58,9 +58,12 @@ interface SystemSettings {
   athena_instruments: string;
   athena_query_timeout: number;
   django_log_level: string;
+  backtest_cpu_limit: number;
+  backtest_memory_limit: number;
   tick_data_retention_days: number;
   tick_data_instruments: string;
   system_health_update_interval: number;
+  external_api_check_interval: number;
   oanda_sync_interval_seconds: number;
   oanda_fetch_duration_days: number;
   updated_at: string;
@@ -1057,7 +1060,22 @@ const AdminSystemSettingsPage = () => {
                   parseInt(e.target.value)
                 )
               }
-              helperText="Interval for system health updates in admin dashboard (default: 5)"
+              helperText="Interval for internal system health updates (CPU, memory, etc.) (default: 5)"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              fullWidth
+              label="External API Check Interval (seconds)"
+              type="number"
+              value={settings.external_api_check_interval}
+              onChange={(e) =>
+                handleChange(
+                  'external_api_check_interval',
+                  parseInt(e.target.value)
+                )
+              }
+              helperText="Interval for external API health checks (e.g., OANDA API) (default: 60)"
             />
           </Grid>
           <Grid size={{ xs: 12, md: 6 }}>
@@ -1088,6 +1106,39 @@ const AdminSystemSettingsPage = () => {
                 )
               }
               helperText="Number of days to fetch orders and positions from OANDA (default: 365 = 1 year)"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              fullWidth
+              label="Backtest CPU Limit (cores)"
+              type="number"
+              value={settings.backtest_cpu_limit}
+              onChange={(e) =>
+                handleChange(
+                  'backtest_cpu_limit',
+                  parseInt(e.target.value) || 1
+                )
+              }
+              helperText="CPU core limit per backtest task (default: 1)"
+              inputProps={{ min: 1, max: 16, step: 1 }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              fullWidth
+              label="Backtest Memory Limit (GB)"
+              type="number"
+              value={(settings.backtest_memory_limit / 1073741824).toFixed(1)}
+              onChange={(e) =>
+                handleChange(
+                  'backtest_memory_limit',
+                  Math.round(parseFloat(e.target.value) * 1073741824) ||
+                    2147483648
+                )
+              }
+              helperText="Memory limit per backtest task in GB (default: 2GB)"
+              inputProps={{ min: 0.5, max: 32, step: 0.5 }}
             />
           </Grid>
         </Grid>

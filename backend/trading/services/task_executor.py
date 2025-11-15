@@ -7,6 +7,8 @@ handling TaskExecution creation, status updates, and ExecutionMetrics generation
 Requirements: 4.1, 4.2, 4.3, 4.6, 4.8, 7.3, 7.4, 7.5, 4.7, 4.9
 """
 
+# pylint: disable=too-many-lines
+
 import logging
 from contextlib import contextmanager
 from decimal import Decimal
@@ -21,6 +23,7 @@ from trading.backtest_task_models import BacktestTask
 from trading.enums import TaskStatus, TaskType
 from trading.execution_models import ExecutionMetrics, TaskExecution
 from trading.historical_data_loader import HistoricalDataLoader
+from trading.services.notifications import send_task_status_notification
 from trading.trading_task_models import TradingTask
 from trading_system.config_loader import get_config
 
@@ -45,17 +48,16 @@ def _load_backtest_data(task: BacktestTask, data_loader: Any) -> tuple[list[Any]
     """
     logger.info(
         "Loading historical data for %s from %s to %s",
-        task.config.parameters.get("instrument", []),
+        task.instrument,
         task.start_time,
         task.end_time,
     )
 
     tick_data = []
-    instrument = task.config.parameters.get("instrument", [])
 
-    # FIXME: Changed from loop - for instrument in instrument:
+    # Use the instrument from the task model (string field)
     instrument_data = data_loader.load_data(
-        instrument=instrument,
+        instrument=task.instrument,
         start_date=task.start_time,
         end_date=task.end_time,
     )
@@ -193,7 +195,8 @@ def is_task_locked(task_type: str, task_id: int) -> bool:
     return cache.get(lock_key) is not None
 
 
-# pylint: disable=too-many-locals,too-many-statements
+# pylint: disable=too-many-locals,too-many-statements,too-many-branches
+# flake8: noqa: C901
 def execute_backtest_task(
     task_id: int,
 ) -> dict[str, Any]:
@@ -293,13 +296,29 @@ def execute_backtest_task(
                 task_id,
                 execution_number,
             )
+            execution.add_log("INFO", f"Started backtest execution #{execution_number}")
+            start_str = task.start_time.strftime("%Y-%m-%d %H:%M")
+            end_str = task.end_time.strftime("%Y-%m-%d %H:%M")
+            execution.add_log("INFO", f"Period: {start_str} to {end_str}")
+            execution.add_log("INFO", f"Strategy: {task.config.strategy_type}")
+            execution.add_log("INFO", f"Instrument: {task.instrument}")
+            execution.add_log("INFO", f"Initial balance: {task.initial_balance}")
 
             # Load historical data
-            data_loader = HistoricalDataLoader()
+            execution.add_log("INFO", f"Loading historical data from {task.data_source}...")
+            # Validate data_source is one of the expected literal values
+            if task.data_source not in ("postgresql", "athena"):
+                raise ValueError(f"Invalid data source: {task.data_source}")
+            # Type narrowing: after validation, we know it's one of the literal values
+            from typing import Literal, cast
+
+            data_source = cast(Literal["postgresql", "athena"], task.data_source)
+            data_loader = HistoricalDataLoader(data_source=data_source)
             tick_data, load_error = _load_backtest_data(task, data_loader)
 
             if load_error:
                 logger.error(load_error)
+                execution.add_log("ERROR", load_error)
                 execution.mark_failed(RuntimeError(load_error))
                 task.status = TaskStatus.FAILED
                 task.save(update_fields=["status", "updated_at"])
@@ -310,15 +329,17 @@ def execute_backtest_task(
                     "error": load_error,
                 }
 
+            execution.add_log("INFO", f"Loaded {len(tick_data)} tick data points")
+
             instrument = task.config.parameters.get("instrument", [])
 
             # Get resource limits from SystemSettings
             from accounts.models import SystemSettings
 
             try:
-                settings = SystemSettings.get_settings()
-                cpu_limit = settings.backtest_cpu_limit
-                memory_limit = settings.backtest_memory_limit
+                sys_settings = SystemSettings.get_settings()
+                cpu_limit = sys_settings.backtest_cpu_limit
+                memory_limit = sys_settings.backtest_memory_limit
             except Exception:  # pylint: disable=broad-exception-caught
                 # Fallback to config file if SystemSettings not available
                 cpu_limit = get_config("backtesting.cpu_limit", 1)
@@ -339,13 +360,19 @@ def execute_backtest_task(
 
             # Run backtest with progress callback
             logger.info("Running backtest engine for task %d", task_id)
+            execution.add_log("INFO", "Starting backtest engine...")
+            execution.add_log(
+                "INFO",
+                f"CPU limit: {cpu_limit} cores, Memory limit: {memory_limit / (1024**3):.1f}GB",
+            )
             engine = BacktestEngine(backtest_config)
 
             # Define progress callback to update execution progress
             def progress_callback(progress: int) -> None:
-                """Update execution progress in database."""
+                """Update execution progress in database and notify via WebSocket."""
                 try:
-                    execution.update_progress(progress)
+                    # update_progress now handles WebSocket notification internally
+                    execution.update_progress(progress, user_id=task.user.id)
                 except Exception as e:  # pylint: disable=broad-exception-caught
                     logger.warning("Failed to update progress: %s", e)
 
@@ -353,6 +380,88 @@ def execute_backtest_task(
             engine.progress_callback = progress_callback
 
             trade_log, equity_curve, performance_metrics = engine.run(tick_data)
+
+            execution.add_log("INFO", "=" * 60)
+            execution.add_log("INFO", "BACKTEST EXECUTION COMPLETED")
+            execution.add_log("INFO", "=" * 60)
+
+            # Initial state
+            execution.add_log("INFO", "")
+            execution.add_log("INFO", "INITIAL STATE:")
+            execution.add_log("INFO", f"  Initial Balance: ${task.initial_balance:,.2f}")
+            execution.add_log("INFO", f"  Commission per Trade: ${task.commission_per_trade}")
+
+            # Final state
+            execution.add_log("INFO", "")
+            execution.add_log("INFO", "FINAL STATE:")
+            execution.add_log("INFO", f"  Final Balance: ${engine.balance:,.2f}")
+            execution.add_log(
+                "INFO", f"  Total Return: {performance_metrics.get('total_return', 0):.2f}%"
+            )
+            execution.add_log(
+                "INFO", f"  Total P&L: ${performance_metrics.get('total_pnl', 0):,.2f}"
+            )
+
+            # Trading statistics
+            execution.add_log("INFO", "")
+            execution.add_log("INFO", "TRADING STATISTICS:")
+            execution.add_log("INFO", f"  Total Trades: {len(trade_log)}")
+            execution.add_log(
+                "INFO", f"  Winning Trades: {performance_metrics.get('winning_trades', 0)}"
+            )
+            execution.add_log(
+                "INFO", f"  Losing Trades: {performance_metrics.get('losing_trades', 0)}"
+            )
+            execution.add_log("INFO", f"  Win Rate: {performance_metrics.get('win_rate', 0):.2f}%")
+
+            # Performance metrics
+            execution.add_log("INFO", "")
+            execution.add_log("INFO", "PERFORMANCE METRICS:")
+            execution.add_log(
+                "INFO", f"  Max Drawdown: {performance_metrics.get('max_drawdown', 0):.2f}%"
+            )
+            execution.add_log(
+                "INFO", f"  Average Win: ${performance_metrics.get('average_win', 0):,.2f}"
+            )
+            execution.add_log(
+                "INFO", f"  Average Loss: ${performance_metrics.get('average_loss', 0):,.2f}"
+            )
+            if performance_metrics.get("sharpe_ratio") is not None:
+                execution.add_log(
+                    "INFO", f"  Sharpe Ratio: {performance_metrics.get('sharpe_ratio'):.3f}"
+                )
+            if performance_metrics.get("profit_factor") is not None:
+                execution.add_log(
+                    "INFO", f"  Profit Factor: {performance_metrics.get('profit_factor'):.3f}"
+                )
+
+            # Trade details
+            if len(trade_log) > 0:
+                execution.add_log("INFO", "")
+                execution.add_log("INFO", "TRADE LOG:")
+                execution.add_log("INFO", "-" * 60)
+                for i, trade in enumerate(trade_log[:10], 1):  # Show first 10 trades
+                    execution.add_log("INFO", f"Trade #{i}:")
+                    execution.add_log("INFO", f"  Type: {trade.get('type', 'N/A')}")
+                    execution.add_log("INFO", f"  Instrument: {trade.get('instrument', 'N/A')}")
+                    execution.add_log("INFO", f"  Units: {trade.get('units', 0)}")
+                    execution.add_log("INFO", f"  Entry Price: {trade.get('entry_price', 0):.5f}")
+                    if trade.get("exit_price"):
+                        execution.add_log("INFO", f"  Exit Price: {trade.get('exit_price'):.5f}")
+                    if trade.get("pnl") is not None:
+                        pnl = trade.get("pnl", 0)
+                        pnl_sign = "+" if pnl >= 0 else ""
+                        execution.add_log("INFO", f"  P&L: {pnl_sign}${pnl:,.2f}")
+                    execution.add_log("INFO", f"  Entry Time: {trade.get('entry_time', 'N/A')}")
+                    if trade.get("exit_time"):
+                        execution.add_log("INFO", f"  Exit Time: {trade.get('exit_time')}")
+                    execution.add_log("INFO", "")
+
+                if len(trade_log) > 10:
+                    execution.add_log("INFO", f"... and {len(trade_log) - 10} more trades")
+                    execution.add_log("INFO", "")
+
+            execution.add_log("INFO", "=" * 60)
 
             logger.info(
                 "Backtest completed: %d trades, final balance: %s",
@@ -372,6 +481,16 @@ def execute_backtest_task(
                 # Update task status
                 task.status = TaskStatus.COMPLETED
                 task.save(update_fields=["status", "updated_at"])
+
+                # Send WebSocket notification
+                send_task_status_notification(
+                    user_id=task.user.id,
+                    task_id=task.id,
+                    task_name=task.name,
+                    task_type="backtest",
+                    status=TaskStatus.COMPLETED,
+                    execution_id=execution.id,
+                )
 
             logger.info(
                 "Backtest task %d execution #%d completed successfully",
@@ -398,12 +517,24 @@ def execute_backtest_task(
 
             # Mark execution as failed
             if execution:
+                execution.add_log("ERROR", f"Execution failed: {str(e)}")
                 execution.mark_failed(e)
 
             # Update task status
             if task:
                 task.status = TaskStatus.FAILED
                 task.save(update_fields=["status", "updated_at"])
+
+                # Send WebSocket notification
+                send_task_status_notification(
+                    user_id=task.user.id,
+                    task_id=task.id,
+                    task_name=task.name,
+                    task_type="backtest",
+                    status=TaskStatus.FAILED,
+                    execution_id=execution.id if execution else None,
+                    error_message=error_msg,
+                )
 
             return {
                 "success": False,
@@ -561,6 +692,11 @@ def execute_trading_task(
             task.oanda_account.account_id,
         )
 
+        execution.add_log("INFO", f"Started trading execution #{execution_number}")
+        execution.add_log("INFO", f"Strategy: {task.config.strategy_type}")
+        execution.add_log("INFO", f"Account: {task.oanda_account.account_id}")
+        execution.add_log("INFO", f"Account type: {task.oanda_account.api_type}")
+
         # Initialize strategy executor
         # Note: The actual strategy execution happens via market data streaming
         # which is managed by the start_market_data_stream Celery task
@@ -571,6 +707,7 @@ def execute_trading_task(
         if not instrument:
             error_msg = "No instrument specified in configuration"
             logger.error(error_msg)
+            execution.add_log("ERROR", error_msg)
             execution.mark_failed(ValueError(error_msg))
             task.status = TaskStatus.FAILED
             task.save(update_fields=["status", "updated_at"])
@@ -580,6 +717,8 @@ def execute_trading_task(
                 "execution_id": execution.id,
                 "error": error_msg,
             }
+
+        execution.add_log("INFO", f"Instrument: {instrument}")
 
         # Start market data streaming for the account
         # This will be handled by the Celery task in the next subtask

@@ -519,6 +519,9 @@ class TrendFollowingStrategy(BaseStrategy):
             Position size in units
         """
         # Get account balance
+        if not self.account:
+            return self.base_units
+
         account_balance = self.account.balance
 
         # Calculate risk amount

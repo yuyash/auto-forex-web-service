@@ -69,6 +69,11 @@ class TaskExecution(models.Model):
         default="",
         help_text="Full traceback for debugging",
     )
+    logs = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Execution logs as list of {timestamp, level, message} objects",
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         help_text="Record creation timestamp",
@@ -101,17 +106,60 @@ class TaskExecution(models.Model):
         self.status = TaskStatus.COMPLETED
         self.completed_at = timezone.now()
         self.progress = 100
-        self.save(update_fields=["status", "completed_at", "progress"])
+        # Include logs in save to ensure they're persisted
+        self.save(update_fields=["status", "completed_at", "progress", "logs"])
 
-    def update_progress(self, progress: int) -> None:
+    def update_progress(self, progress: int, user_id: int | None = None) -> None:
         """
         Update execution progress.
 
         Args:
             progress: Progress percentage (0-100)
+            user_id: Optional user ID for WebSocket notification
         """
         self.progress = max(0, min(100, progress))
         self.save(update_fields=["progress"])
+
+        # Send real-time progress update via WebSocket if user_id provided
+        if user_id is not None:
+            from trading.services.notifications import send_execution_progress_notification
+
+            send_execution_progress_notification(
+                task_type=self.task_type,
+                task_id=self.task_id,
+                execution_id=self.id,
+                progress=self.progress,
+                user_id=user_id,
+            )
+
+    def add_log(self, level: str, message: str) -> None:
+        """
+        Add a log entry to the execution logs.
+
+        Args:
+            level: Log level (INFO, WARNING, ERROR, etc.)
+            message: Log message
+        """
+        log_entry = {
+            "timestamp": timezone.now().isoformat(),
+            "level": level,
+            "message": message,
+        }
+        if not isinstance(self.logs, list):
+            self.logs = []
+        self.logs.append(log_entry)
+        self.save(update_fields=["logs"])
+
+        # Send real-time log update via WebSocket
+        from trading.services.notifications import send_execution_log_notification
+
+        send_execution_log_notification(
+            task_type=self.task_type,
+            task_id=self.task_id,
+            execution_id=self.id,
+            execution_number=self.execution_number,
+            log_entry=log_entry,
+        )
 
     def mark_failed(self, error: Exception) -> None:
         """
@@ -126,7 +174,10 @@ class TaskExecution(models.Model):
         self.completed_at = timezone.now()
         self.error_message = str(error)
         self.error_traceback = traceback.format_exc()
-        self.save(update_fields=["status", "completed_at", "error_message", "error_traceback"])
+        # Include logs in save to ensure they're persisted even on failure
+        self.save(
+            update_fields=["status", "completed_at", "error_message", "error_traceback", "logs"]
+        )
 
     def get_duration(self) -> str | None:
         """

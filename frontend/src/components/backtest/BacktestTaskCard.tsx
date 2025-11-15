@@ -42,6 +42,9 @@ interface BacktestTaskCardProps {
 export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
+    null
+  );
 
   const startTask = useStartBacktestTask();
   const stopTask = useStopBacktestTask();
@@ -50,16 +53,24 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
   // Fetch strategies for display names
   const { strategies } = useStrategies();
 
-  // Poll for updates when task is running
-  const pollingEnabled = task.status === TaskStatus.RUNNING;
+  // Poll for updates when task is running or optimistically set to running
+  const pollingEnabled =
+    task.status === TaskStatus.RUNNING ||
+    optimisticStatus === TaskStatus.RUNNING;
   const { data: updatedTask } = useBacktestTaskPolling(
     task.id,
     pollingEnabled,
     10000 // Poll every 10 seconds
   );
 
-  // Use updated task data if available
+  // Use optimistic status if set, otherwise use updated task data or original task
   const currentTask = updatedTask || task;
+
+  // Clear optimistic status when actual status matches (derived state pattern)
+  const displayStatus =
+    optimisticStatus && currentTask.status !== optimisticStatus
+      ? optimisticStatus
+      : currentTask.status;
 
   const handleActionsClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -75,25 +86,37 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
 
   const handleStart = async () => {
     try {
+      // Optimistically update status to RUNNING
+      setOptimisticStatus(TaskStatus.RUNNING);
       await startTask.mutate(task.id);
     } catch (error) {
       console.error('Failed to start task:', error);
+      // Revert optimistic update on error
+      setOptimisticStatus(null);
     }
   };
 
   const handleStop = async () => {
     try {
+      // Optimistically update status to STOPPED
+      setOptimisticStatus(TaskStatus.STOPPED);
       await stopTask.mutate(task.id);
     } catch (error) {
       console.error('Failed to stop task:', error);
+      // Revert optimistic update on error
+      setOptimisticStatus(null);
     }
   };
 
   const handleRerun = async () => {
     try {
+      // Optimistically update status to RUNNING
+      setOptimisticStatus(TaskStatus.RUNNING);
       await rerunTask.mutate(task.id);
     } catch (error) {
       console.error('Failed to rerun task:', error);
+      // Revert optimistic update on error
+      setOptimisticStatus(null);
     }
   };
 
@@ -116,7 +139,7 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
   };
 
   // Calculate progress for running tasks (mock - would come from backend)
-  const progress = currentTask.status === TaskStatus.RUNNING ? 50 : 0; // Mock progress
+  const progress = displayStatus === TaskStatus.RUNNING ? 50 : 0; // Mock progress
 
   return (
     <Card
@@ -142,7 +165,7 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
               {currentTask.name}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
-              <StatusBadge status={currentTask.status} />
+              <StatusBadge status={displayStatus} />
               <Chip
                 label={getStrategyDisplayName(
                   strategies,
@@ -172,7 +195,7 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
               flexShrink: 0,
             }}
           >
-            {currentTask.status === TaskStatus.CREATED && (
+            {displayStatus === TaskStatus.CREATED && (
               <Tooltip title="Start">
                 <IconButton
                   color="primary"
@@ -184,7 +207,7 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
                 </IconButton>
               </Tooltip>
             )}
-            {currentTask.status === TaskStatus.RUNNING && (
+            {displayStatus === TaskStatus.RUNNING && (
               <Tooltip title="Stop">
                 <IconButton
                   color="error"
@@ -196,9 +219,9 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
                 </IconButton>
               </Tooltip>
             )}
-            {(currentTask.status === TaskStatus.COMPLETED ||
-              currentTask.status === TaskStatus.FAILED ||
-              currentTask.status === TaskStatus.STOPPED) && (
+            {(displayStatus === TaskStatus.COMPLETED ||
+              displayStatus === TaskStatus.FAILED ||
+              displayStatus === TaskStatus.STOPPED) && (
               <Tooltip title="Rerun">
                 <IconButton
                   color="primary"
@@ -222,14 +245,14 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
         </Box>
 
         {/* Progress bar for running tasks */}
-        {currentTask.status === TaskStatus.RUNNING && (
+        {displayStatus === TaskStatus.RUNNING && (
           <Box sx={{ mb: 2 }}>
             <ProgressIndicator value={progress} label="Progress" />
           </Box>
         )}
 
         {/* Metrics for completed tasks */}
-        {currentTask.status === TaskStatus.COMPLETED &&
+        {displayStatus === TaskStatus.COMPLETED &&
           currentTask.latest_execution && (
             <Grid container spacing={2} sx={{ mt: 1 }}>
               {currentTask.latest_execution.total_return && (
@@ -265,7 +288,7 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
           )}
 
         {/* Error message for failed tasks */}
-        {currentTask.status === TaskStatus.FAILED && (
+        {displayStatus === TaskStatus.FAILED && (
           <Box
             sx={{
               mt: 2,
@@ -295,7 +318,7 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
           <Typography variant="caption" color="text.secondary">
             Created: {formatDateTime(currentTask.created_at)}
           </Typography>
-          {currentTask.status === TaskStatus.COMPLETED && (
+          {displayStatus === TaskStatus.COMPLETED && (
             <Typography variant="caption" color="text.secondary">
               Completed: {formatDateTime(currentTask.updated_at)}
             </Typography>

@@ -1,14 +1,14 @@
 // Task Execution hooks for data fetching
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { backtestTasksApi, tradingTasksApi } from '../services/api';
 import { TaskType } from '../types';
 import type { TaskExecution, PaginatedResponse } from '../types';
 
 interface UseTaskExecutionsResult {
-  data: PaginatedResponse<TaskExecution> | null;
+  data: PaginatedResponse<TaskExecution> | undefined;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refetch: () => void;
 }
 
 /**
@@ -19,51 +19,40 @@ export function useTaskExecutions(
   taskType: TaskType,
   params?: { page?: number; page_size?: number }
 ): UseTaskExecutionsResult {
-  const [data, setData] = useState<PaginatedResponse<TaskExecution> | null>(
-    null
-  );
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const queryKey =
+    taskType === TaskType.BACKTEST
+      ? ['backtest-task-executions', taskId, params]
+      : ['trading-task-executions', taskId, params];
 
-  // Stabilize params to prevent infinite loop by using individual values
-  const page = params?.page;
-  const pageSize = params?.page_size;
-
-  const fetchData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey,
+    queryFn: async () => {
       const fetchParams =
-        page || pageSize ? { page, page_size: pageSize } : undefined;
-      const result =
-        taskType === TaskType.BACKTEST
-          ? await backtestTasksApi.getExecutions(taskId, fetchParams)
-          : await tradingTasksApi.getExecutions(taskId, fetchParams);
-      setData(result);
-    } catch (err) {
-      setError(err as Error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [taskId, taskType, page, pageSize]); // Use primitive values instead of object
+        params?.page || params?.page_size
+          ? { page: params.page, page_size: params.page_size }
+          : undefined;
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+      return taskType === TaskType.BACKTEST
+        ? await backtestTasksApi.getExecutions(taskId, fetchParams)
+        : await tradingTasksApi.getExecutions(taskId, fetchParams);
+    },
+    staleTime: 5000, // Consider data fresh for 5 seconds
+    refetchOnWindowFocus: true,
+  });
 
   return {
     data,
     isLoading,
-    error,
-    refetch: fetchData,
+    error: error as Error | null,
+    refetch,
   };
 }
 
 interface UseTaskExecutionResult {
-  data: TaskExecution | null;
+  data: TaskExecution | undefined;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refetch: () => void;
 }
 
 /**
@@ -74,34 +63,25 @@ export function useTaskExecution(
   executionId: number,
   taskType: TaskType
 ): UseTaskExecutionResult {
-  const [data, setData] = useState<TaskExecution | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const queryKey =
+    taskType === TaskType.BACKTEST
+      ? ['backtest-task-execution', taskId, executionId]
+      : ['trading-task-execution', taskId, executionId];
 
-  const fetchData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const result =
-        taskType === TaskType.BACKTEST
-          ? await backtestTasksApi.getExecution(taskId, executionId)
-          : await tradingTasksApi.getExecution(taskId, executionId);
-      setData(result);
-    } catch (err) {
-      setError(err as Error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [taskId, executionId, taskType]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      return taskType === TaskType.BACKTEST
+        ? await backtestTasksApi.getExecution(taskId, executionId)
+        : await tradingTasksApi.getExecution(taskId, executionId);
+    },
+    staleTime: 10000, // Consider data fresh for 10 seconds
+  });
 
   return {
     data,
     isLoading,
-    error,
-    refetch: fetchData,
+    error: error as Error | null,
+    refetch,
   };
 }

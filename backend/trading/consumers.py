@@ -553,6 +553,7 @@ class AdminDashboardConsumer(AsyncWebsocketConsumer):
         self.user = None
         self.group_name = "admin_dashboard"
         self.metrics_task: Optional[asyncio.Task] = None
+        self.external_api_task: Optional[asyncio.Task] = None
 
     async def connect(self) -> None:
         """
@@ -588,8 +589,11 @@ class AdminDashboardConsumer(AsyncWebsocketConsumer):
         # Accept the WebSocket connection
         await self.accept()
 
-        # Start sending periodic metrics
+        # Start sending periodic metrics (fast cycle - internal system health)
         self.metrics_task = asyncio.create_task(self._send_metrics_periodically())
+
+        # Start checking external APIs (slow cycle - external services)
+        self.external_api_task = asyncio.create_task(self._check_external_apis_periodically())
 
         logger.info(
             "Admin user %s connected to admin dashboard stream",
@@ -613,6 +617,12 @@ class AdminDashboardConsumer(AsyncWebsocketConsumer):
             self.metrics_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self.metrics_task
+
+        # Cancel the external API check task
+        if self.external_api_task and not self.external_api_task.done():
+            self.external_api_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self.external_api_task
 
         # Leave the channel group
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
@@ -664,13 +674,30 @@ class AdminDashboardConsumer(AsyncWebsocketConsumer):
         def get_update_interval() -> int:
             try:
                 settings = SystemSettings.get_settings()
-                return getattr(settings, "system_health_update_interval", 5)
-            except Exception:  # pylint: disable=broad-exception-caught
+                interval = getattr(settings, "system_health_update_interval", 5)
+                logger.info(
+                    "Retrieved system_health_update_interval: %s (type: %s)",
+                    interval,
+                    type(interval).__name__,
+                )
+                return interval
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error("Error getting update interval: %s", e)
                 return 5  # Default to 5 seconds on error
 
         while True:
+            start_time = asyncio.get_event_loop().time()
             await self._send_dashboard_data()
+            end_time = asyncio.get_event_loop().time()
+            execution_time = end_time - start_time
+
             interval = await get_update_interval()
+            logger.info(
+                "Dashboard data sent to admin user %s (took %.2fs), next update in %s seconds",
+                self.user.username if self.user else "Unknown",
+                execution_time,
+                interval,
+            )
             await asyncio.sleep(interval)
 
     async def _send_dashboard_data(self) -> None:
@@ -691,11 +718,13 @@ class AdminDashboardConsumer(AsyncWebsocketConsumer):
 
             @database_sync_to_async
             def get_dashboard_data() -> Dict[str, Any]:
-                # Get system health
+                # Get system health (exclude external API checks for performance)
                 monitor = SystemHealthMonitor()
-                health_data = monitor.get_health_summary()
+                health_data = monitor.get_health_summary(include_external_apis=False)
 
                 # Transform health data
+                # Note: oanda_api_status is NOT included here - it's sent separately
+                # via external_api_update messages to avoid performance issues
                 health = {
                     "cpu_usage": health_data.get("cpu", {}).get("cpu_percent", 0),
                     "memory_usage": health_data.get("memory", {}).get("percent", 0),
@@ -708,11 +737,6 @@ class AdminDashboardConsumer(AsyncWebsocketConsumer):
                     "redis_status": (
                         "connected"
                         if health_data.get("redis", {}).get("connected")
-                        else "disconnected"
-                    ),
-                    "oanda_api_status": (
-                        "connected"
-                        if health_data.get("oanda_api", {}).get("status") == "healthy"
                         else "disconnected"
                     ),
                     "active_streams": health_data.get("active_streams", 0),
@@ -798,6 +822,86 @@ class AdminDashboardConsumer(AsyncWebsocketConsumer):
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error collecting dashboard data: %s", e)
 
+    async def _check_external_apis_periodically(self) -> None:
+        """
+        Background task that periodically checks external API health.
+
+        This task runs on a longer interval (default 60s) to avoid
+        frequent timeouts and performance issues with external services.
+        Sends an immediate check on connection, then continues with regular interval.
+        """
+        from channels.db import database_sync_to_async
+
+        from accounts.models import SystemSettings
+        from trading.system_health_monitor import SystemHealthMonitor
+
+        @database_sync_to_async
+        def get_external_api_interval() -> int:
+            try:
+                settings = SystemSettings.get_settings()
+                return getattr(settings, "external_api_check_interval", 60)
+            except Exception:  # pylint: disable=broad-exception-caught
+                return 60  # Default to 60 seconds on error
+
+        @database_sync_to_async
+        def get_oanda_api_status() -> Dict[str, Any]:
+            from django.utils import timezone as tz
+
+            monitor = SystemHealthMonitor()
+            status = monitor.check_oanda_api_connection()
+            status["timestamp"] = tz.now().isoformat()
+            return status
+
+        # Send immediate check on connection (don't wait for first interval)
+        try:
+            oanda_status = await get_oanda_api_status()
+            message_data = {
+                "type": "external_api_update",
+                "data": {
+                    "oanda_api": oanda_status,
+                },
+            }
+            await self.send(text_data=json.dumps(message_data))
+            logger.info(
+                "Initial external API status sent to admin user %s (status: %s)",
+                self.user.username if self.user else "Unknown",
+                oanda_status.get("status"),
+            )
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error sending initial external API status: %s", e)
+
+        # Continue with regular interval checks
+        while True:
+            try:
+                interval = await get_external_api_interval()
+                await asyncio.sleep(interval)
+
+                # Check OANDA API status
+                oanda_status = await get_oanda_api_status()
+
+                # Send external API status update
+                message_data = {
+                    "type": "external_api_update",
+                    "data": {
+                        "oanda_api": oanda_status,
+                    },
+                }
+                await self.send(text_data=json.dumps(message_data))
+
+                logger.info(
+                    (
+                        "External API status sent to admin user %s (status: %s), "
+                        "next check in %s seconds"
+                    ),
+                    self.user.username if self.user else "Unknown",
+                    oanda_status.get("status"),
+                    interval,
+                )
+
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error("Error checking external APIs: %s", e)
+                await asyncio.sleep(60)  # Wait before retrying on error
+
     async def dashboard_update(self, event: Dict[str, Any]) -> None:
         """
         Handle dashboard update events from the channel layer.
@@ -817,6 +921,337 @@ class AdminDashboardConsumer(AsyncWebsocketConsumer):
         logger.debug(
             "Dashboard update sent to user %s",
             self.user.username if self.user else "Unknown",
+        )
+
+
+class TaskLogsConsumer(AsyncWebsocketConsumer):
+    """
+    WebSocket consumer for streaming task execution logs in real-time.
+
+    This consumer:
+    - Accepts WebSocket connections from authenticated users
+    - Subscribes to log updates for a specific task
+    - Broadcasts log entries as they are created
+    - Handles connection lifecycle (connect, disconnect, receive)
+
+    URL Pattern: ws://host/ws/tasks/<task_type>/<task_id>/logs/
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        """Initialize the consumer."""
+        super().__init__(*args, **kwargs)
+        self.user = None
+        self.task_type: Optional[str] = None
+        self.task_id: Optional[int] = None
+        self.group_name: Optional[str] = None
+
+    async def connect(self) -> None:
+        """
+        Handle WebSocket connection.
+
+        This method:
+        1. Authenticates the user
+        2. Validates task ownership
+        3. Joins the task-specific log channel group
+        4. Accepts the WebSocket connection
+        """
+        # Get user from scope (set by authentication middleware)
+        self.user = self.scope.get("user")
+
+        # Check if user is authenticated
+        if not self.user or not self.user.is_authenticated:
+            logger.warning("Unauthenticated WebSocket connection attempt for task logs")
+            await self.close(code=4001)
+            return
+
+        # Get task type and ID from URL route
+        self.task_type = self.scope["url_route"]["kwargs"]["task_type"]
+        self.task_id = int(self.scope["url_route"]["kwargs"]["task_id"])
+
+        # Validate that the task belongs to the user
+        try:
+            from channels.db import database_sync_to_async
+
+            @database_sync_to_async
+            def validate_task_ownership() -> bool:
+                if self.task_type == "backtest":
+                    from trading.backtest_task_models import BacktestTask
+
+                    return BacktestTask.objects.filter(id=self.task_id, user=self.user).exists()
+                if self.task_type == "trading":
+                    from trading.trading_task_models import TradingTask
+
+                    return TradingTask.objects.filter(id=self.task_id, user=self.user).exists()
+                return False
+
+            is_owner = await validate_task_ownership()
+
+            if not is_owner:
+                logger.warning(
+                    "User %s attempted to access logs for task %s/%s they don't own",
+                    self.user.username,
+                    self.task_type,
+                    self.task_id,
+                )
+                await self.close(code=4003)
+                return
+
+            # Create group name for this task's logs
+            self.group_name = f"task_logs_{self.task_type}_{self.task_id}"
+
+            # Join the channel group
+            await self.channel_layer.group_add(self.group_name, self.channel_name)
+
+            # Accept the WebSocket connection
+            await self.accept()
+
+            logger.info(
+                "User %s connected to logs for %s task %s",
+                self.user.username,
+                self.task_type,
+                self.task_id,
+            )
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error during WebSocket connection: %s", e)
+            await self.close(code=4000)
+
+    async def disconnect(self, code: int) -> None:
+        """
+        Handle WebSocket disconnection.
+
+        This method:
+        1. Leaves the channel group
+        2. Logs the disconnection
+
+        Args:
+            code: WebSocket close code
+        """
+        # Leave the channel group
+        if self.group_name:
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+        logger.info(
+            "User %s disconnected from logs for %s task %s (code: %s)",
+            self.user.username if self.user else "Unknown",
+            self.task_type,
+            self.task_id,
+            code,
+        )
+
+    async def receive(
+        self, text_data: Optional[str] = None, bytes_data: Optional[bytes] = None
+    ) -> None:
+        """
+        Handle messages received from the WebSocket client.
+
+        Args:
+            text_data: Text message from client
+            bytes_data: Binary message from client
+        """
+        if text_data:
+            try:
+                data = json.loads(text_data)
+                message_type = data.get("type")
+
+                if message_type == "ping":
+                    # Respond to ping with pong
+                    await self.send(text_data=json.dumps({"type": "pong"}))
+                else:
+                    logger.warning("Unknown message type: %s", message_type)
+
+            except json.JSONDecodeError:
+                logger.error("Invalid JSON received from client")
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error("Error processing client message: %s", e)
+
+    async def execution_log(self, event: Dict[str, Any]) -> None:
+        """
+        Handle execution log events from the channel layer.
+
+        This method is called when a new log entry is added to the execution.
+        It forwards the log to the WebSocket client.
+
+        Args:
+            event: Event data containing log information
+        """
+        # Extract log data from event
+        log_data = event.get("data", {})
+
+        # Send log update to WebSocket client
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "execution_log",
+                    "data": log_data,
+                }
+            )
+        )
+
+        logger.debug(
+            "Log sent to user %s for execution %s: %s",
+            self.user.username if self.user else "Unknown",
+            log_data.get("execution_id"),
+            log_data.get("log", {}).get("message", "")[:50],
+        )
+
+
+class TaskStatusConsumer(AsyncWebsocketConsumer):
+    """
+    WebSocket consumer for streaming task status updates to users.
+
+    This consumer:
+    - Accepts WebSocket connections from authenticated users
+    - Subscribes to task status updates for the user's tasks
+    - Broadcasts status changes (completed, failed, stopped) to connected clients
+    - Handles connection lifecycle (connect, disconnect, receive)
+
+    URL Pattern: ws://host/ws/tasks/status/
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        """Initialize the consumer."""
+        super().__init__(*args, **kwargs)
+        self.user = None
+        self.group_name: Optional[str] = None
+
+    async def connect(self) -> None:
+        """
+        Handle WebSocket connection.
+
+        This method:
+        1. Authenticates the user
+        2. Joins the user-specific task status channel group
+        3. Accepts the WebSocket connection
+        """
+        # Get user from scope (set by authentication middleware)
+        self.user = self.scope.get("user")
+
+        # Check if user is authenticated
+        if not self.user or not self.user.is_authenticated:
+            logger.warning("Unauthenticated WebSocket connection attempt for task status")
+            await self.close(code=4001)
+            return
+
+        # Create group name for this user's tasks
+        self.group_name = f"task_status_user_{self.user.id}"
+
+        # Join the channel group
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+
+        # Accept the WebSocket connection
+        await self.accept()
+
+        logger.info(
+            "User %s connected to task status updates",
+            self.user.username,
+        )
+
+    async def disconnect(self, code: int) -> None:
+        """
+        Handle WebSocket disconnection.
+
+        This method:
+        1. Leaves the channel group
+        2. Logs the disconnection
+
+        Args:
+            code: WebSocket close code
+        """
+        # Leave the channel group
+        if self.group_name:
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+        logger.info(
+            "User %s disconnected from task status updates (code: %s)",
+            self.user.username if self.user else "Unknown",
+            code,
+        )
+
+    async def receive(
+        self, text_data: Optional[str] = None, bytes_data: Optional[bytes] = None
+    ) -> None:
+        """
+        Handle messages received from the WebSocket client.
+
+        Args:
+            text_data: Text message from client
+            bytes_data: Binary message from client
+        """
+        if text_data:
+            try:
+                data = json.loads(text_data)
+                message_type = data.get("type")
+
+                if message_type == "ping":
+                    # Respond to ping with pong
+                    await self.send(text_data=json.dumps({"type": "pong"}))
+                else:
+                    logger.warning("Unknown message type: %s", message_type)
+
+            except json.JSONDecodeError:
+                logger.error("Invalid JSON received from client")
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error("Error processing client message: %s", e)
+
+    async def task_status_update(self, event: Dict[str, Any]) -> None:
+        """
+        Handle task status update events from the channel layer.
+
+        This method is called when a task status changes (completed, failed, stopped).
+        It forwards the update to the WebSocket client.
+
+        Args:
+            event: Event data containing task status information
+        """
+        # Extract task data from event
+        task_data = event.get("data", {})
+
+        # Send task status update to WebSocket client
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "task_status_update",
+                    "data": task_data,
+                }
+            )
+        )
+
+        logger.debug(
+            "Task status update sent to user %s: task %s is now %s",
+            self.user.username if self.user else "Unknown",
+            task_data.get("task_id"),
+            task_data.get("status"),
+        )
+
+    async def task_progress_update(self, event: Dict[str, Any]) -> None:
+        """
+        Handle task progress update events from the channel layer.
+
+        This method is called when a task execution progress changes.
+        It forwards the progress update to the WebSocket client.
+
+        Args:
+            event: Event data containing task progress information
+        """
+        # Extract progress data from event
+        progress_data = event.get("data", {})
+
+        # Send task progress update to WebSocket client
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "task_progress_update",
+                    "data": progress_data,
+                }
+            )
+        )
+
+        logger.debug(
+            "Task progress update sent to user %s: task %s is at %s%%",
+            self.user.username if self.user else "Unknown",
+            progress_data.get("task_id"),
+            progress_data.get("progress"),
         )
 
 

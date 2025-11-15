@@ -156,6 +156,8 @@ class ArbitrageStrategy(BaseStrategy):
             return orders
 
         # Update price for this broker (using account as broker identifier)
+        if not self.account:
+            return orders
         broker_id = str(self.account.account_id)
         self.price_detector.update_price(
             broker_id, tick_data.instrument, tick_data.bid, tick_data.ask
@@ -514,14 +516,14 @@ ARBITRAGE_STRATEGY_CONFIG_SCHEMA = {
         "max_execution_delay_ms": {
             "type": "number",
             "title": "Max Execution Delay (ms)",
-            "description": "Maximum acceptable execution delay in milliseconds",
+            "description": ("Maximum acceptable execution delay in milliseconds"),
             "default": 500,
             "minimum": 1,
         },
         "max_slippage_pips": {
             "type": "number",
             "title": "Max Slippage Pips",
-            "description": "Maximum acceptable slippage in pips before closing positions",
+            "description": ("Maximum acceptable slippage in pips before closing positions"),
             "default": 0.5,
             "minimum": 0.1,
         },

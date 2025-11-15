@@ -134,6 +134,17 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "commission_per_trade",
             "instrument",
         ]
+        # Make fields optional for partial updates (PATCH)
+        extra_kwargs = {
+            "config": {"required": False},
+            "name": {"required": False},
+            "data_source": {"required": False},
+            "start_time": {"required": False},
+            "end_time": {"required": False},
+            "initial_balance": {"required": False},
+            "commission_per_trade": {"required": False},
+            "instrument": {"required": False},
+        }
 
     def validate_config(self, value: StrategyConfig) -> StrategyConfig:
         """Validate that config belongs to the user."""

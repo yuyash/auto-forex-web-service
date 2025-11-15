@@ -35,11 +35,13 @@ const SystemHealthPanel: React.FC<SystemHealthPanelProps> = ({ health }) => {
   }
 
   const getStatusIcon = (status: string) => {
-    return status === 'connected' ? (
-      <CheckCircleIcon color="success" />
-    ) : (
-      <ErrorIcon color="error" />
-    );
+    if (status === 'connected') {
+      return <CheckCircleIcon color="success" />;
+    } else if (status === 'unknown') {
+      return <CloudIcon color="disabled" />;
+    } else {
+      return <ErrorIcon color="error" />;
+    }
   };
 
   const getStatusColor = (
@@ -52,7 +54,9 @@ const SystemHealthPanel: React.FC<SystemHealthPanelProps> = ({ health }) => {
     | 'secondary'
     | 'info'
     | 'warning' => {
-    return status === 'connected' ? 'success' : 'error';
+    if (status === 'connected') return 'success';
+    if (status === 'unknown') return 'default';
+    return 'error';
   };
 
   const getUsageColor = (usage: number): 'success' | 'warning' | 'error' => {

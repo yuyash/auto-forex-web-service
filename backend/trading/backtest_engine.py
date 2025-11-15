@@ -276,14 +276,10 @@ class BacktestEngine:
 
     def _initialize_strategy(self) -> None:
         """Initialize strategy instance."""
-        from trading.strategy_registry import StrategyRegistry as Registry
+        from trading.strategy_registry import registry
 
-        # Registry is a class with class methods
-        strategy_class = Registry.get_strategy(  # type: ignore[attr-defined]
-            self.config.strategy_type
-        )
-        if not strategy_class:
-            raise ValueError(f"Strategy not found: {self.config.strategy_type}")
+        # Get strategy class from registry
+        strategy_class = registry.get_strategy_class(self.config.strategy_type)
 
         self.strategy = strategy_class(self.config.strategy_config)
         logger.info(f"Strategy initialized: {self.config.strategy_type}")

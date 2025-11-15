@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import {
   Box,
@@ -7,23 +7,20 @@ import {
   Alert,
   List,
   ListItemButton,
-  Collapse,
-  Divider,
   CircularProgress,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import {
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
   PlayArrow as PlayArrowIcon,
 } from '@mui/icons-material';
 import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
+import { useTaskLogsWebSocket } from '../../../hooks/useTaskLogsWebSocket';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
 import { ErrorDisplay } from '../../tasks/display/ErrorDisplay';
 import { TaskStatus, TaskType } from '../../../types/common';
-import type { TaskExecution } from '../../../types/execution';
+import type { TaskExecution, ExecutionLog } from '../../../types/execution';
 
 interface TaskExecutionsTabProps {
   taskId: number;
@@ -32,20 +29,17 @@ interface TaskExecutionsTabProps {
 
 interface ExecutionItemProps {
   execution: TaskExecution;
+  taskId: number;
+  taskType: TaskType;
+  isSelected: boolean;
+  onSelect: () => void;
 }
 
-function ExecutionItem({ execution }: ExecutionItemProps) {
-  const [expanded, setExpanded] = useState(false);
-
-  const handleToggle = () => {
-    setExpanded(!expanded);
-  };
-
-  const formatDuration = (duration?: string) => {
-    if (!duration) return 'N/A';
-    return duration;
-  };
-
+function ExecutionItem({
+  execution,
+  isSelected,
+  onSelect,
+}: ExecutionItemProps) {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
   };
@@ -53,19 +47,29 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
   const getStatusIcon = (status: TaskStatus) => {
     switch (status) {
       case TaskStatus.COMPLETED:
-        return <CheckCircleIcon color="success" />;
+        return <CheckCircleIcon color="success" fontSize="small" />;
       case TaskStatus.FAILED:
-        return <ErrorIcon color="error" />;
+        return <ErrorIcon color="error" fontSize="small" />;
       case TaskStatus.RUNNING:
-        return <PlayArrowIcon color="primary" />;
+        return <PlayArrowIcon color="primary" fontSize="small" />;
       default:
         return null;
     }
   };
 
   return (
-    <Paper variant="outlined" sx={{ mb: 2 }}>
-      <ListItemButton onClick={handleToggle}>
+    <Paper
+      variant="outlined"
+      sx={{
+        mb: 1,
+        bgcolor: isSelected ? 'action.selected' : 'background.paper',
+        cursor: 'pointer',
+        '&:hover': {
+          bgcolor: isSelected ? 'action.selected' : 'action.hover',
+        },
+      }}
+    >
+      <ListItemButton onClick={onSelect} selected={isSelected}>
         <Box
           sx={{
             display: 'flex',
@@ -91,208 +95,46 @@ function ExecutionItem({ execution }: ExecutionItemProps) {
               <StatusBadge status={execution.status} size="small" />
             </Box>
 
-            <Typography variant="body2" color="text.secondary">
-              Started: {formatDate(execution.started_at)}
-              {execution.completed_at &&
-                ` • Completed: ${formatDate(execution.completed_at)}`}
-              {execution.duration &&
-                ` • Duration: ${formatDuration(execution.duration)}`}
+            <Typography variant="caption" color="text.secondary">
+              {formatDate(execution.started_at)}
             </Typography>
-          </Box>
 
-          {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            {/* Show progress bar for running executions */}
+            {execution.status === TaskStatus.RUNNING && (
+              <Box
+                sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}
+              >
+                <Box sx={{ flex: 1, position: 'relative' }}>
+                  <Box
+                    sx={{
+                      height: 4,
+                      bgcolor: 'grey.200',
+                      borderRadius: 1,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        height: '100%',
+                        bgcolor: 'primary.main',
+                        width: `${execution.progress || 0}%`,
+                        transition: 'width 0.3s ease',
+                      }}
+                    />
+                  </Box>
+                </Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ minWidth: 40 }}
+                >
+                  {execution.progress || 0}%
+                </Typography>
+              </Box>
+            )}
+          </Box>
         </Box>
       </ListItemButton>
-
-      <Collapse in={expanded} timeout="auto" unmountOnExit>
-        <Box sx={{ p: 3, pt: 2 }}>
-          <Divider sx={{ mb: 2 }} />
-
-          {/* Execution Details */}
-          <Grid container spacing={2} sx={{ mb: 2 }}>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <Typography variant="body2" color="text.secondary">
-                Execution ID
-              </Typography>
-              <Typography variant="body1">{execution.id}</Typography>
-            </Grid>
-
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <Typography variant="body2" color="text.secondary">
-                Status
-              </Typography>
-              <Typography variant="body1">
-                {execution.status.charAt(0).toUpperCase() +
-                  execution.status.slice(1)}
-              </Typography>
-            </Grid>
-
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <Typography variant="body2" color="text.secondary">
-                Started At
-              </Typography>
-              <Typography variant="body1">
-                {formatDate(execution.started_at)}
-              </Typography>
-            </Grid>
-
-            {execution.completed_at && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Completed At
-                </Typography>
-                <Typography variant="body1">
-                  {formatDate(execution.completed_at)}
-                </Typography>
-              </Grid>
-            )}
-
-            {execution.duration && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Duration
-                </Typography>
-                <Typography variant="body1">
-                  {formatDuration(execution.duration)}
-                </Typography>
-              </Grid>
-            )}
-          </Grid>
-
-          {/* Metrics Summary */}
-          {execution.metrics && (
-            <>
-              <Divider sx={{ my: 2 }} />
-              <Typography variant="subtitle2" sx={{ mb: 2 }}>
-                Performance Metrics
-              </Typography>
-
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Total Return
-                  </Typography>
-                  <Typography
-                    variant="body1"
-                    fontWeight="medium"
-                    color={
-                      parseFloat(execution.metrics.total_return) >= 0
-                        ? 'success.main'
-                        : 'error.main'
-                    }
-                  >
-                    {parseFloat(execution.metrics.total_return).toFixed(2)}%
-                  </Typography>
-                </Grid>
-
-                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Total P&L
-                  </Typography>
-                  <Typography
-                    variant="body1"
-                    fontWeight="medium"
-                    color={
-                      parseFloat(execution.metrics.total_pnl) >= 0
-                        ? 'success.main'
-                        : 'error.main'
-                    }
-                  >
-                    ${parseFloat(execution.metrics.total_pnl).toFixed(2)}
-                  </Typography>
-                </Grid>
-
-                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Total Trades
-                  </Typography>
-                  <Typography variant="body1" fontWeight="medium">
-                    {execution.metrics.total_trades}
-                  </Typography>
-                </Grid>
-
-                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Win Rate
-                  </Typography>
-                  <Typography variant="body1" fontWeight="medium">
-                    {parseFloat(execution.metrics.win_rate).toFixed(2)}%
-                  </Typography>
-                </Grid>
-
-                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Max Drawdown
-                  </Typography>
-                  <Typography variant="body1" fontWeight="medium">
-                    {parseFloat(execution.metrics.max_drawdown).toFixed(2)}%
-                  </Typography>
-                </Grid>
-
-                {execution.metrics.sharpe_ratio && (
-                  <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Sharpe Ratio
-                    </Typography>
-                    <Typography variant="body1" fontWeight="medium">
-                      {parseFloat(execution.metrics.sharpe_ratio).toFixed(2)}
-                    </Typography>
-                  </Grid>
-                )}
-
-                {execution.metrics.profit_factor && (
-                  <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Profit Factor
-                    </Typography>
-                    <Typography variant="body1" fontWeight="medium">
-                      {parseFloat(execution.metrics.profit_factor).toFixed(2)}
-                    </Typography>
-                  </Grid>
-                )}
-              </Grid>
-            </>
-          )}
-
-          {/* Error Details */}
-          {execution.status === TaskStatus.FAILED &&
-            execution.error_message && (
-              <>
-                <Divider sx={{ my: 2 }} />
-                <Alert severity="error">
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    Error Message
-                  </Typography>
-                  <Typography variant="body2">
-                    {execution.error_message}
-                  </Typography>
-
-                  {execution.error_traceback && (
-                    <Box sx={{ mt: 2 }}>
-                      <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                        Stack Trace
-                      </Typography>
-                      <Box
-                        component="pre"
-                        sx={{
-                          p: 1,
-                          bgcolor: 'grey.900',
-                          color: 'grey.100',
-                          borderRadius: 1,
-                          overflow: 'auto',
-                          fontSize: '0.75rem',
-                          maxHeight: '200px',
-                        }}
-                      >
-                        {execution.error_traceback}
-                      </Box>
-                    </Box>
-                  )}
-                </Alert>
-              </>
-            )}
-        </Box>
-      </Collapse>
     </Paper>
   );
 }
@@ -301,11 +143,69 @@ export function TaskExecutionsTab({
   taskId,
   taskType = TaskType.BACKTEST,
 }: TaskExecutionsTabProps) {
+  const [selectedExecution, setSelectedExecution] =
+    useState<TaskExecution | null>(null);
+  const [liveLogs, setLiveLogs] = useState<ExecutionLog[]>([]);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
   const {
     data: executionsData,
     isLoading,
     error,
   } = useTaskExecutions(taskId, taskType);
+
+  const executions = executionsData?.results || [];
+
+  // Debug logging
+  console.log('[TaskExecutionsTab] Task ID:', taskId);
+  console.log('[TaskExecutionsTab] Task Type:', taskType);
+  console.log('[TaskExecutionsTab] Executions Data:', executionsData);
+  console.log('[TaskExecutionsTab] Executions:', executions);
+  console.log('[TaskExecutionsTab] Loading:', isLoading);
+  console.log('[TaskExecutionsTab] Error:', error);
+
+  // Auto-select the most recent execution (only when executions first load)
+  useEffect(() => {
+    if (executions.length > 0 && !selectedExecution) {
+      setSelectedExecution(executions[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [executions.length]);
+
+  // Connect to WebSocket for live logs when an execution is selected and running
+  const shouldConnectToLogs = selectedExecution?.status === TaskStatus.RUNNING;
+
+  useTaskLogsWebSocket({
+    taskType: taskType === TaskType.BACKTEST ? 'backtest' : 'trading',
+    taskId,
+    enabled: shouldConnectToLogs,
+    onLog: (update) => {
+      // Only add logs for the selected execution
+      if (selectedExecution && update.execution_id === selectedExecution.id) {
+        setLiveLogs((prev) => [...prev, update.log]);
+      }
+    },
+  });
+
+  // Auto-scroll to bottom when new logs arrive
+  useEffect(() => {
+    if (liveLogs.length > 0) {
+      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [liveLogs]);
+
+  // Reset live logs when selection changes (using execution ID as key)
+  const executionId = selectedExecution?.id;
+  useEffect(() => {
+    setLiveLogs([]);
+  }, [executionId]);
+
+  // Combine stored logs with live logs
+  const allLogs = selectedExecution
+    ? selectedExecution.status === TaskStatus.RUNNING
+      ? [...(selectedExecution.logs || []), ...liveLogs]
+      : selectedExecution.logs || []
+    : [];
 
   if (isLoading) {
     return (
@@ -330,8 +230,6 @@ export function TaskExecutionsTab({
     );
   }
 
-  const executions = executionsData?.results || [];
-
   if (executions.length === 0) {
     return (
       <Box sx={{ px: 3 }}>
@@ -344,33 +242,166 @@ export function TaskExecutionsTab({
 
   return (
     <Box sx={{ px: 3 }}>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          Execution History
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {executions.length} execution{executions.length !== 1 ? 's' : ''}{' '}
-          found
-        </Typography>
-      </Box>
-
-      <List sx={{ p: 0 }}>
-        {executions.map((execution) => (
-          <ExecutionItem key={execution.id} execution={execution} />
-        ))}
-      </List>
-
-      {/* Future: Add comparison functionality */}
-      {executions.length > 1 && (
-        <Box sx={{ mt: 3 }}>
-          <Alert severity="info">
-            <Typography variant="body2">
-              <strong>Coming Soon:</strong> Compare multiple executions
-              side-by-side to analyze performance differences.
+      <Grid container spacing={3}>
+        {/* Execution List */}
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              Execution History
             </Typography>
-          </Alert>
-        </Box>
-      )}
+            <Typography variant="body2" color="text.secondary">
+              {executions.length} execution{executions.length !== 1 ? 's' : ''}
+            </Typography>
+          </Box>
+
+          <List sx={{ p: 0 }}>
+            {executions.map((execution) => (
+              <ExecutionItem
+                key={execution.id}
+                execution={execution}
+                taskId={taskId}
+                taskType={taskType}
+                isSelected={selectedExecution?.id === execution.id}
+                onSelect={() => setSelectedExecution(execution)}
+              />
+            ))}
+          </List>
+        </Grid>
+
+        {/* Logs Panel */}
+        <Grid size={{ xs: 12, md: 8 }}>
+          {selectedExecution ? (
+            <Paper
+              variant="outlined"
+              sx={{
+                height: '100%',
+                minHeight: '500px',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Typography variant="h6">
+                    Execution #{selectedExecution.execution_number} Logs
+                    {selectedExecution.status === TaskStatus.RUNNING &&
+                      liveLogs.length > 0 && (
+                        <Typography
+                          component="span"
+                          variant="caption"
+                          sx={{ ml: 1, color: 'success.main' }}
+                        >
+                          • Live
+                        </Typography>
+                      )}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {allLogs.length}{' '}
+                    {allLogs.length === 1 ? 'entry' : 'entries'}
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{ mt: 1, display: 'flex', gap: 1, alignItems: 'center' }}
+                >
+                  <StatusBadge status={selectedExecution.status} size="small" />
+                  <Typography variant="caption" color="text.secondary">
+                    Started:{' '}
+                    {new Date(selectedExecution.started_at).toLocaleString()}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box sx={{ flex: 1, overflow: 'auto', p: 2, bgcolor: 'grey.50' }}>
+                {allLogs.length > 0 ? (
+                  <Box sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                    {allLogs.map((log: ExecutionLog, index: number) => (
+                      <Box
+                        key={index}
+                        sx={{
+                          mb: 0.5,
+                          display: 'flex',
+                          gap: 1,
+                          alignItems: 'flex-start',
+                        }}
+                      >
+                        <Typography
+                          component="span"
+                          sx={{
+                            color: 'text.secondary',
+                            fontSize: '0.75rem',
+                            minWidth: '140px',
+                          }}
+                        >
+                          {new Date(log.timestamp).toLocaleTimeString()}
+                        </Typography>
+                        <Typography
+                          component="span"
+                          sx={{
+                            fontWeight: 'bold',
+                            minWidth: '60px',
+                            color:
+                              log.level === 'ERROR'
+                                ? 'error.main'
+                                : log.level === 'WARNING'
+                                  ? 'warning.main'
+                                  : 'info.main',
+                          }}
+                        >
+                          {log.level}
+                        </Typography>
+                        <Typography
+                          component="span"
+                          sx={{ flex: 1, wordBreak: 'break-word' }}
+                        >
+                          {log.message}
+                        </Typography>
+                      </Box>
+                    ))}
+                    <div ref={logsEndRef} />
+                  </Box>
+                ) : (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      height: '100%',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <Typography variant="body2" color="text.secondary">
+                      {selectedExecution.status === TaskStatus.RUNNING
+                        ? 'Waiting for logs...'
+                        : 'No logs available for this execution'}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            </Paper>
+          ) : (
+            <Paper
+              variant="outlined"
+              sx={{
+                height: '100%',
+                minHeight: '500px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                Select an execution to view logs
+              </Typography>
+            </Paper>
+          )}
+        </Grid>
+      </Grid>
     </Box>
   );
 }

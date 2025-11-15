@@ -1,16 +1,24 @@
 // Task Execution and Metrics types
 import { TaskStatus, TaskType } from './common';
 
+export interface ExecutionLog {
+  timestamp: string;
+  level: string;
+  message: string;
+}
+
 export interface TaskExecution {
   id: number;
   task_type: TaskType;
   task_id: number;
   execution_number: number;
   status: TaskStatus;
+  progress: number;
   started_at: string;
   completed_at?: string;
   error_message?: string;
   error_traceback?: string;
+  logs?: ExecutionLog[];
   duration?: string;
   metrics?: ExecutionMetrics;
   created_at: string;

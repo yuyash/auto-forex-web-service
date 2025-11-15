@@ -16,7 +16,7 @@ import type { AdminDashboardData } from '../../types/admin';
 import SystemHealthPanel from './SystemHealthPanel';
 import UserSessionList from './UserSessionList';
 import RunningStrategyList from './RunningStrategyList';
-import RecentEventsPanel from './RecentEventsPanel';
+import EventViewer from './EventViewer';
 import {
   broadcastAuthLogout,
   handleAuthErrorStatus,
@@ -92,6 +92,13 @@ const AdminDashboard: React.FC = () => {
       try {
         const data = JSON.parse(event.data);
 
+        // Debug logging - remove after testing
+        console.log(
+          '[Dashboard WS] Received message:',
+          data.type,
+          new Date().toISOString()
+        );
+
         // Update dashboard data based on message type
         if (data.type === 'auth_error') {
           broadcastAuthLogout({
@@ -107,14 +114,29 @@ const AdminDashboard: React.FC = () => {
               return incoming;
             }
 
+            // Merge health data, preserving oanda_api_status from previous state
+            // since it's updated separately via external_api_update messages
+            const preservedOandaStatus =
+              prev.health?.oanda_api_status ?? 'unknown';
+            const mergedHealth = incoming.health
+              ? {
+                  ...incoming.health,
+                  oanda_api_status: preservedOandaStatus,
+                }
+              : prev.health;
+
+            console.log(
+              '[Dashboard WS] Preserving OANDA status:',
+              preservedOandaStatus
+            );
+
             return {
               ...prev,
               ...incoming,
-              recent_events: incoming.recent_events ?? prev.recent_events ?? [],
               online_users: incoming.online_users ?? prev.online_users,
               running_strategies:
                 incoming.running_strategies ?? prev.running_strategies,
-              health: incoming.health ?? prev.health,
+              health: mergedHealth,
             };
           });
         } else if (data.type === 'metrics') {
@@ -144,15 +166,27 @@ const AdminDashboard: React.FC = () => {
           setDashboardData((prev) =>
             prev ? { ...prev, running_strategies: data.data } : null
           );
-        } else if (data.type === 'event') {
+        } else if (data.type === 'external_api_update') {
+          // Update OANDA API status from external API check
+          const oandaStatus =
+            data.data.oanda_api?.status === 'healthy'
+              ? 'connected'
+              : 'disconnected';
+          console.log(
+            '[Dashboard WS] OANDA API status update:',
+            data.data.oanda_api?.status,
+            '->',
+            oandaStatus
+          );
+
           setDashboardData((prev) => {
             if (!prev) return null;
             return {
               ...prev,
-              recent_events: [data.data, ...(prev.recent_events ?? [])].slice(
-                0,
-                50
-              ),
+              health: {
+                ...prev.health,
+                oanda_api_status: oandaStatus,
+              },
             };
           });
         } else if (data.type === 'pong') {
@@ -361,9 +395,9 @@ const AdminDashboard: React.FC = () => {
           />
         </Grid>
 
-        {/* Recent Events */}
+        {/* Events Panel */}
         <Grid size={{ xs: 12 }}>
-          <RecentEventsPanel events={dashboardData.recent_events ?? []} />
+          <EventViewer />
         </Grid>
 
         {/* Admin Actions */}
@@ -391,12 +425,6 @@ const AdminDashboard: React.FC = () => {
               onClick={() => navigate('/admin/whitelist')}
             >
               Email Whitelist
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={() => navigate('/admin/events')}
-            >
-              {t('events.viewAll', 'View All Events')}
             </Button>
           </Box>
         </Grid>

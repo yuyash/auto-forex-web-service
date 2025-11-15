@@ -71,7 +71,8 @@ const OrderHistoryPage = () => {
         accounts.find((acc) => acc.is_default) || accounts[0];
       setSelectedAccountId(defaultAccount.id);
     }
-  }, [accounts, selectedAccountId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts.length, selectedAccountId]);
 
   // Fetch orders from API
   const fetchOrders = useCallback(async () => {

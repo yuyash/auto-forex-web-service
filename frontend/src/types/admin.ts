@@ -6,7 +6,7 @@ export interface SystemHealth {
   disk_usage?: number;
   database_status?: 'connected' | 'disconnected';
   redis_status?: 'connected' | 'disconnected';
-  oanda_api_status?: 'connected' | 'disconnected';
+  oanda_api_status?: 'connected' | 'disconnected' | 'unknown';
   active_streams?: number;
   celery_tasks?: number;
   timestamp?: string;

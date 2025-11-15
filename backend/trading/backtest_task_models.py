@@ -166,6 +166,18 @@ class BacktestTask(models.Model):
             started_at=timezone.now(),
         )
 
+        # Send WebSocket notification
+        from trading.services.notifications import send_task_status_notification
+
+        send_task_status_notification(
+            user_id=self.user.id,
+            task_id=self.id,
+            task_name=self.name,
+            task_type="backtest",
+            status=TaskStatus.RUNNING,
+            execution_id=execution.id,
+        )
+
         return execution
 
     def stop(self) -> None:
@@ -190,6 +202,18 @@ class BacktestTask(models.Model):
             latest_execution.status = TaskStatus.STOPPED
             latest_execution.completed_at = timezone.now()
             latest_execution.save(update_fields=["status", "completed_at"])
+
+        # Send WebSocket notification
+        from trading.services.notifications import send_task_status_notification
+
+        send_task_status_notification(
+            user_id=self.user.id,
+            task_id=self.id,
+            task_name=self.name,
+            task_type="backtest",
+            status=TaskStatus.STOPPED,
+            execution_id=latest_execution.id if latest_execution else None,
+        )
 
     def rerun(self) -> Any:
         """
@@ -232,6 +256,18 @@ class BacktestTask(models.Model):
             execution_number=next_execution_number,
             status=TaskStatus.RUNNING,
             started_at=timezone.now(),
+        )
+
+        # Send WebSocket notification
+        from trading.services.notifications import send_task_status_notification
+
+        send_task_status_notification(
+            user_id=self.user.id,
+            task_id=self.id,
+            task_name=self.name,
+            task_type="backtest",
+            status=TaskStatus.RUNNING,
+            execution_id=execution.id,
         )
 
         return execution

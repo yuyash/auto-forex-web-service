@@ -621,6 +621,9 @@ class FloorStrategy(BaseStrategy):
         """
         # Get account margin data
         # Refresh from database to get latest values
+        if not self.account:
+            return False
+
         self.account.refresh_from_db()
         margin_used = self.account.margin_used
         unrealized_pnl = self.account.unrealized_pnl

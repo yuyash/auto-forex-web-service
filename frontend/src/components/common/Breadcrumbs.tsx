@@ -50,11 +50,6 @@ const Breadcrumbs = () => {
       { label: t('breadcrumbs.admin'), path: '/admin' },
       { label: 'Email Whitelist' },
     ],
-    '/admin/events': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
-      { label: t('breadcrumbs.admin'), path: '/admin' },
-      { label: t('breadcrumbs.events') },
-    ],
     '/admin/users': [
       { label: t('breadcrumbs.home'), path: '/dashboard' },
       { label: t('breadcrumbs.admin'), path: '/admin' },
