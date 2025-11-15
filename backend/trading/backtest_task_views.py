@@ -224,9 +224,10 @@ class BacktestTaskStartView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        # TODO: Queue the backtest task for execution (will be implemented in task 6.2)
-        # from .tasks import run_backtest_task
-        # run_backtest_task.delay(task.id, execution.id)
+        # Queue the backtest task for execution
+        from .tasks import run_backtest_task_v2
+
+        run_backtest_task_v2.delay(task.id)
 
         # Serialize and return
         execution_serializer = TaskExecutionSerializer(execution)
@@ -328,9 +329,10 @@ class BacktestTaskRerunView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        # TODO: Queue the backtest task for execution (will be implemented in task 6.2)
-        # from .tasks import run_backtest_task
-        # run_backtest_task.delay(task.id, execution.id)
+        # Queue the backtest task for execution
+        from .tasks import run_backtest_task_v2
+
+        run_backtest_task_v2.delay(task.id)
 
         # Serialize and return
         execution_serializer = TaskExecutionSerializer(execution)

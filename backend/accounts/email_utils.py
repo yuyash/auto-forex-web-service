@@ -31,7 +31,9 @@ logger = logging.getLogger(__name__)
 def _get_system_setting(key: str, default: Any) -> Any:
     """Fetch a system setting with graceful fallback."""
     try:
-        from accounts.settings_helper import get_system_setting  # pylint: disable=import-outside-toplevel
+        from accounts.settings_helper import (  # pylint: disable=import-outside-toplevel
+            get_system_setting,
+        )
 
         return get_system_setting(key, default)
     except Exception:  # pylint: disable=broad-except
@@ -47,6 +49,174 @@ def _resolve_email_backend_type(default: str = "smtp") -> str:
     if isinstance(backend, str):
         return backend.lower()
     return str(default).lower()
+
+
+def _get_aws_config() -> dict[str, Any]:
+    """Get AWS configuration from system settings and environment."""
+    return {
+        "credential_method": _get_system_setting("aws_credential_method", "access_keys"),
+        "aws_profile": _get_system_setting("aws_profile_name", os.environ.get("AWS_PROFILE")),
+        "aws_role_arn": _get_system_setting("aws_role_arn", os.environ.get("AWS_ROLE_ARN")),
+        "aws_credentials_file": _get_system_setting(
+            "aws_credentials_file_path", os.environ.get("AWS_CREDENTIALS_FILE")
+        ),
+        "access_key": _get_system_setting("aws_access_key_id", os.environ.get("AWS_ACCESS_KEY_ID")),
+        "secret_key": _get_system_setting(
+            "aws_secret_access_key", os.environ.get("AWS_SECRET_ACCESS_KEY")
+        ),
+    }
+
+
+def _log_aws_config(config: dict[str, Any]) -> None:
+    """Log AWS configuration for debugging."""
+    logger.info(
+        "AWS Configuration - Method: %s, Profile: %s, Role ARN: %s, Has Access Key: %s",
+        config["credential_method"],
+        config["aws_profile"] or "None",
+        config["aws_role_arn"] or "None",
+        "Yes" if config["access_key"] else "No",
+    )
+
+
+def _check_aws_files(aws_profile: str | None) -> None:
+    """Check AWS credentials and config files accessibility."""
+    aws_creds_path = os.path.expanduser("~/.aws/credentials")
+    aws_config_path = os.path.expanduser("~/.aws/config")
+    logger.info(
+        "AWS files accessibility - credentials: %s, config: %s",
+        "exists" if os.path.exists(aws_creds_path) else "NOT FOUND",
+        "exists" if os.path.exists(aws_config_path) else "NOT FOUND",
+    )
+
+    if aws_profile and os.path.exists(aws_config_path):
+        try:
+            with open(aws_config_path, "r", encoding="utf-8") as f:
+                config_content = f.read()
+                if (
+                    f"[profile {aws_profile}]" in config_content
+                    or f"[{aws_profile}]" in config_content
+                ):
+                    logger.info("Profile '%s' found in config file", aws_profile)
+                else:
+                    logger.warning("Profile '%s' NOT found in config file", aws_profile)
+        except Exception as e:
+            logger.error("Failed to read config file: %s", e)
+
+
+def _create_base_session(config: dict[str, Any]) -> Any:
+    """Create base boto3 session based on credential method."""
+    import boto3  # pylint: disable=import-error
+
+    credential_method = config["credential_method"]
+    aws_credentials_file = config["aws_credentials_file"]
+    aws_profile = config["aws_profile"]
+    access_key = config["access_key"]
+    secret_key = config["secret_key"]
+
+    # Handle custom credentials file
+    if credential_method == "credentials_file" and aws_credentials_file:
+        logger.info("Using AWS credentials file: %s", aws_credentials_file)
+        os.environ["AWS_SHARED_CREDENTIALS_FILE"] = aws_credentials_file
+
+    # Create session with access keys
+    if credential_method == "access_keys" and access_key and secret_key:
+        logger.info("Using AWS access key credentials from system settings")
+        return boto3.Session(aws_access_key_id=access_key, aws_secret_access_key=secret_key)
+
+    # Create session with profile
+    session_kwargs: dict[str, str] = {}
+    if credential_method in {"profile", "profile_role"} and aws_profile:
+        logger.info("Using AWS profile: %s", aws_profile)
+        session_kwargs["profile_name"] = aws_profile
+
+    if not session_kwargs:
+        logger.info("Using default AWS credentials chain")
+    logger.info("Creating boto3 session with kwargs: %s", session_kwargs)
+    return boto3.Session(**session_kwargs)
+
+
+def _verify_session_credentials(session: Any) -> None:
+    """Verify that session has valid credentials."""
+    try:
+        credentials = session.get_credentials()
+        if credentials:
+            logger.info(
+                "Successfully retrieved credentials from session. Access Key ID: %s...",
+                credentials.access_key[:10] if credentials.access_key else "None",
+            )
+        else:
+            logger.warning("Session created but no credentials found")
+    except Exception as e:
+        logger.error("Failed to retrieve credentials from session: %s", e)
+
+
+def _assume_role(session: Any, role_arn: str) -> Any:
+    """Assume AWS role using STS and return new session."""
+    import boto3  # pylint: disable=import-error
+    from botocore.exceptions import ClientError  # pylint: disable=import-error
+
+    logger.info("Attempting to assume AWS role: %s", role_arn)
+
+    try:
+        sts_client = session.client("sts")
+
+        # Verify current identity
+        try:
+            caller_identity = sts_client.get_caller_identity()
+            logger.info(
+                "Current AWS identity - Account: %s, ARN: %s",
+                caller_identity.get("Account"),
+                caller_identity.get("Arn"),
+            )
+        except Exception as e:
+            logger.error("Failed to get caller identity: %s", e)
+
+        # Assume role
+        logger.info("Calling assume_role with RoleArn: %s", role_arn)
+        response = sts_client.assume_role(
+            RoleArn=role_arn,
+            RoleSessionName="forex-trading-email",
+            DurationSeconds=3600,
+        )
+
+        credentials = response["Credentials"]
+        logger.info(
+            "Role assumed successfully! Expires at: %s, Access Key: %s...",
+            credentials["Expiration"],
+            credentials["AccessKeyId"][:10],
+        )
+
+        # Create new session with assumed role credentials
+        new_session = boto3.Session(
+            aws_access_key_id=credentials["AccessKeyId"],
+            aws_secret_access_key=credentials["SecretAccessKey"],
+            aws_session_token=credentials["SessionToken"],
+        )
+
+        # Verify assumed role identity
+        try:
+            assumed_sts = new_session.client("sts")
+            assumed_identity = assumed_sts.get_caller_identity()
+            logger.info(
+                "Assumed role identity - Account: %s, ARN: %s",
+                assumed_identity.get("Account"),
+                assumed_identity.get("Arn"),
+            )
+        except Exception as e:
+            logger.error("Failed to verify assumed role identity: %s", e)
+
+        return new_session
+
+    except ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "Unknown")
+        error_message = e.response.get("Error", {}).get("Message", str(e))
+        logger.error(
+            "Failed to assume role - Error Code: %s, Message: %s", error_code, error_message
+        )
+        raise
+    except Exception as e:
+        logger.error("Unexpected error during role assumption: %s", e)
+        raise
 
 
 def get_aws_session() -> Any:
@@ -66,90 +236,26 @@ def get_aws_session() -> Any:
         RuntimeError: If AWS client initialization fails
     """
     try:
-        # pylint: disable=import-error
-        import boto3  # type: ignore[import-untyped]  # noqa: E501
-        from botocore.exceptions import (  # type: ignore[import-untyped]  # noqa: E501
-            BotoCoreError,
-            ClientError,
-        )
+        from botocore.exceptions import BotoCoreError, ClientError  # pylint: disable=import-error
 
-        # Resolve AWS configuration from system settings first, then environment
-        credential_method = _get_system_setting(
-            "aws_credential_method", "access_keys")
-        aws_profile = _get_system_setting(
-            "aws_profile_name", os.environ.get("AWS_PROFILE"))
-        aws_role_arn = _get_system_setting(
-            "aws_role_arn", os.environ.get("AWS_ROLE_ARN"))
-        aws_credentials_file = _get_system_setting(
-            "aws_credentials_file_path",
-            os.environ.get("AWS_CREDENTIALS_FILE"),
-        )
-        access_key = _get_system_setting(
-            "aws_access_key_id", os.environ.get("AWS_ACCESS_KEY_ID"))
-        secret_key = _get_system_setting(
-            "aws_secret_access_key",
-            os.environ.get("AWS_SECRET_ACCESS_KEY"),
-        )
+        # Get configuration
+        config = _get_aws_config()
+        _log_aws_config(config)
+        _check_aws_files(config["aws_profile"])
 
-        session_kwargs: dict[str, str] = {}
+        # Create base session
+        session = _create_base_session(config)
+        _verify_session_credentials(session)
 
-        # Handle custom credentials file explicitly
-        if credential_method == "credentials_file" and aws_credentials_file:
-            logger.info("Using AWS credentials file: %s", aws_credentials_file)
-            os.environ["AWS_SHARED_CREDENTIALS_FILE"] = aws_credentials_file
-
-        # Create base session with profile if specified
-        if credential_method in {"profile", "profile_role"} and aws_profile:
-            logger.info("Using AWS profile: %s", aws_profile)
-            session_kwargs["profile_name"] = aws_profile
-
-        if credential_method == "access_keys" and access_key and secret_key:
-            logger.info(
-                "Using AWS access key credentials from system settings")
-            session = boto3.Session(
-                aws_access_key_id=access_key,
-                aws_secret_access_key=secret_key,
-            )
-        else:
-            if not session_kwargs:
-                logger.info("Using default AWS credentials chain")
-            session = boto3.Session(**session_kwargs)
-
-        # If role ARN is specified, assume the role using STS
-        if credential_method == "profile_role" and aws_role_arn:
-            logger.info("Assuming AWS role: %s", aws_role_arn)
-
-            # Create STS client
-            sts_client = session.client("sts")
-
-            # Assume role
-            response = sts_client.assume_role(
-                RoleArn=aws_role_arn,
-                RoleSessionName="forex-trading-email",
-                DurationSeconds=3600,  # 1 hour
-            )
-
-            # Extract credentials
-            credentials = response["Credentials"]
-            logger.info(
-                "Role assumed successfully, expires at: %s",
-                credentials["Expiration"],
-            )
-
-            # Create new session with assumed role credentials
-            session = boto3.Session(
-                aws_access_key_id=credentials["AccessKeyId"],
-                aws_secret_access_key=credentials["SecretAccessKey"],
-                aws_session_token=credentials["SessionToken"],
-            )
-            logger.info("Successfully assumed role")
+        # Assume role if needed
+        if config["credential_method"] == "profile_role" and config["aws_role_arn"]:
+            session = _assume_role(session, config["aws_role_arn"])
 
         return session
 
     except (BotoCoreError, ClientError) as exc:
         logger.error("Failed to initialize AWS session: %s", exc)
-        raise RuntimeError(
-            f"AWS session initialization failed: {exc}") from exc
+        raise RuntimeError(f"AWS session initialization failed: {exc}") from exc
 
 
 def _send_email_via_ses(
@@ -179,8 +285,7 @@ def _send_email_via_ses(
         True if email sent successfully, False otherwise
     """
     try:
-        # pylint: disable=import-error
-        from botocore.exceptions import BotoCoreError, ClientError  # noqa: E501
+        from botocore.exceptions import BotoCoreError, ClientError  # pylint: disable=import-error
 
         # Get AWS session with proper authentication
         session = get_aws_session()
@@ -272,8 +377,7 @@ def _send_email(
     Returns:
         True if email sent successfully, False otherwise
     """
-    email_backend = _resolve_email_backend_type(
-        getattr(settings, "EMAIL_BACKEND_TYPE", "smtp"))
+    email_backend = _resolve_email_backend_type(getattr(settings, "EMAIL_BACKEND_TYPE", "smtp"))
     resolved_from_email = _resolve_from_email(from_email)
 
     if email_backend == "ses":

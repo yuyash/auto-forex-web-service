@@ -280,7 +280,9 @@ export default function BacktestTaskUpdateForm({
                       endDate={endField.value}
                       onStartDateChange={startField.onChange}
                       onEndDateChange={endField.onChange}
+                      maxDate={new Date()}
                       required
+                      helperText="Backtesting requires historical data. Future dates are not allowed."
                     />
                   )}
                 />

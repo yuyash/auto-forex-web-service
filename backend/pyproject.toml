@@ -119,6 +119,8 @@ module = [
     "channels_redis.*",
     "psutil.*",
     "redis.*",
+    "boto3.*",
+    "botocore.*",
 ]
 ignore_missing_imports = true
 

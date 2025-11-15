@@ -18,6 +18,7 @@ import {
   Grid,
   InputAdornment,
   IconButton,
+  LinearProgress,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -55,6 +56,7 @@ interface SystemSettings {
   athena_table_name: string;
   athena_output_bucket: string;
   athena_instruments: string;
+  athena_query_timeout: number;
   django_log_level: string;
   tick_data_retention_days: number;
   tick_data_instruments: string;
@@ -76,6 +78,19 @@ const AdminSystemSettingsPage = () => {
   const [testEmailAddress, setTestEmailAddress] = useState('');
   const [testingAws, setTestingAws] = useState(false);
   const [triggeringImport, setTriggeringImport] = useState(false);
+  const [importStartDate, setImportStartDate] = useState('');
+  const [importEndDate, setImportEndDate] = useState('');
+  const [importInProgress, setImportInProgress] = useState(false);
+  const [importProgress, setImportProgress] = useState<{
+    current_day: number;
+    total_days: number;
+    percentage: number;
+    status: string;
+    message: string;
+    error?: string;
+  } | null>(null);
+  const [importCompleted, setImportCompleted] = useState(false);
+  const [importFailed, setImportFailed] = useState(false);
 
   const fetchSettings = async () => {
     try {
@@ -104,6 +119,57 @@ const AdminSystemSettingsPage = () => {
     fetchSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  // Polling mechanism for import progress
+  useEffect(() => {
+    if (!importInProgress) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch('/api/admin/athena-import-progress', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setImportProgress({
+            current_day: data.current_day,
+            total_days: data.total_days,
+            percentage: data.percentage,
+            status: data.status,
+            message: data.message,
+            error: data.error,
+          });
+
+          // Stop polling if complete or failed
+          if (data.status === 'completed') {
+            setImportInProgress(false);
+            setImportCompleted(true);
+            setImportFailed(false);
+            clearInterval(pollInterval);
+          } else if (data.status === 'failed') {
+            setImportInProgress(false);
+            setImportCompleted(false);
+            setImportFailed(true);
+            clearInterval(pollInterval);
+          }
+        } else if (response.status === 404) {
+          // No import in progress
+          setImportInProgress(false);
+          setImportProgress(null);
+          clearInterval(pollInterval);
+        }
+      } catch (error) {
+        // Handle polling errors gracefully - log to console and continue polling
+        console.error('Failed to fetch import progress:', error);
+      }
+    }, 2000); // Poll every 2 seconds
+
+    // Clean up interval on component unmount
+    return () => clearInterval(pollInterval);
+  }, [importInProgress, token]);
 
   const handleSave = async () => {
     if (!settings) return;
@@ -215,13 +281,23 @@ const AdminSystemSettingsPage = () => {
   const handleTriggerAthenaImport = async () => {
     try {
       setTriggeringImport(true);
+      setImportProgress(null);
+      setImportCompleted(false);
+      setImportFailed(false);
+
+      const body: { start_date?: string; end_date?: string } = {};
+      if (importStartDate && importEndDate) {
+        body.start_date = new Date(importStartDate).toISOString();
+        body.end_date = new Date(importEndDate).toISOString();
+      }
+
       const response = await fetch('/api/admin/trigger-athena-import', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
@@ -230,8 +306,22 @@ const AdminSystemSettingsPage = () => {
         throw new Error(data.error || 'Failed to trigger Athena import');
       }
 
+      const totalDays = data.total_days || 1;
+
+      // Initialize progress state with data from trigger response
+      setImportProgress({
+        current_day: 0,
+        total_days: totalDays,
+        percentage: 0,
+        status: 'running',
+        message: `Starting import for ${totalDays} day(s)...`,
+      });
+
+      // Start polling for progress updates
+      setImportInProgress(true);
+
       showSuccess(
-        `Athena import started successfully! Task ID: ${data.task_id}`
+        `Athena import started for ${totalDays} day(s)! ${data.task_ids?.length || 1} task(s) queued.`
       );
     } catch (error) {
       const errorMessage =
@@ -240,9 +330,26 @@ const AdminSystemSettingsPage = () => {
           : 'Failed to trigger Athena import';
       showError(errorMessage);
       console.error('Error triggering Athena import:', error);
+      setImportProgress(null);
+      setImportInProgress(false);
     } finally {
       setTriggeringImport(false);
     }
+  };
+
+  const handleRetryImport = () => {
+    // Clear error state and retry
+    setImportFailed(false);
+    setImportCompleted(false);
+    setImportProgress(null);
+    handleTriggerAthenaImport();
+  };
+
+  const handleClearImportStatus = () => {
+    // Clear completion/error state
+    setImportCompleted(false);
+    setImportFailed(false);
+    setImportProgress(null);
   };
 
   if (loading) {
@@ -490,6 +597,19 @@ const AdminSystemSettingsPage = () => {
             </>
           )}
 
+          {settings.email_backend_type === 'ses' && (
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                label="AWS SES Region"
+                value={settings.aws_ses_region}
+                onChange={(e) => handleChange('aws_ses_region', e.target.value)}
+                placeholder="us-east-1"
+                helperText="Region for SES email service"
+              />
+            </Grid>
+          )}
+
           {/* Test Email Section */}
           <Grid size={{ xs: 12 }}>
             <Divider sx={{ my: 2 }} />
@@ -638,17 +758,6 @@ const AdminSystemSettingsPage = () => {
             </>
           )}
 
-          <Grid size={{ xs: 12, md: 6 }}>
-            <TextField
-              fullWidth
-              label="AWS SES Region"
-              value={settings.aws_ses_region}
-              onChange={(e) => handleChange('aws_ses_region', e.target.value)}
-              placeholder="us-east-1"
-              helperText="Region for SES email service"
-            />
-          </Grid>
-
           {/* Test AWS Configuration Section */}
           <Grid size={{ xs: 12 }}>
             <Divider sx={{ my: 2 }} />
@@ -659,13 +768,13 @@ const AdminSystemSettingsPage = () => {
               <Button
                 variant="outlined"
                 onClick={handleTestAws}
-                disabled={testingAws || !settings.athena_output_bucket}
+                disabled={testingAws}
                 sx={{ minWidth: 200 }}
               >
-                {testingAws ? 'Testing...' : 'Test S3 Connection'}
+                {testingAws ? 'Testing...' : 'Test AWS Connection'}
               </Button>
               <Typography variant="body2" color="text.secondary">
-                Verify AWS credentials and S3 bucket access for Athena queries
+                Verify AWS credentials and role assumption using STS
               </Typography>
             </Box>
           </Grid>
@@ -729,6 +838,23 @@ const AdminSystemSettingsPage = () => {
               rows={2}
             />
           </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              fullWidth
+              label="Athena Query Timeout (seconds)"
+              type="number"
+              value={settings.athena_query_timeout}
+              onChange={(e) =>
+                handleChange(
+                  'athena_query_timeout',
+                  parseInt(e.target.value) || 600
+                )
+              }
+              placeholder="600"
+              helperText="Maximum time to wait for Athena query completion (default: 600 seconds / 10 minutes)"
+              inputProps={{ min: 60, max: 3600, step: 60 }}
+            />
+          </Grid>
 
           {/* Trigger Athena Import Section */}
           <Grid size={{ xs: 12 }}>
@@ -736,12 +862,123 @@ const AdminSystemSettingsPage = () => {
             <Typography variant="subtitle1" gutterBottom>
               Import Historical Data
             </Typography>
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <TextField
+                  fullWidth
+                  label="Start Date"
+                  type="date"
+                  value={importStartDate}
+                  onChange={(e) => setImportStartDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  helperText="Leave empty to import yesterday's data"
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <TextField
+                  fullWidth
+                  label="End Date"
+                  type="date"
+                  value={importEndDate}
+                  onChange={(e) => setImportEndDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  helperText="Leave empty to import yesterday's data"
+                />
+              </Grid>
+            </Grid>
+            {/* Success Alert */}
+            {importCompleted && (
+              <Alert
+                severity="success"
+                sx={{ mb: 2 }}
+                onClose={handleClearImportStatus}
+              >
+                <Typography variant="body2" fontWeight="medium">
+                  Import completed successfully!
+                </Typography>
+                <Typography variant="body2">
+                  {importProgress?.message ||
+                    'All data has been imported from Athena.'}
+                </Typography>
+              </Alert>
+            )}
+
+            {/* Error Alert */}
+            {importFailed && (
+              <Alert
+                severity="error"
+                sx={{ mb: 2 }}
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={handleRetryImport}
+                  >
+                    Retry
+                  </Button>
+                }
+              >
+                <Typography variant="body2" fontWeight="medium">
+                  Import failed
+                </Typography>
+                <Typography variant="body2">
+                  {importProgress?.error ||
+                    importProgress?.message ||
+                    'An error occurred during the import process.'}
+                </Typography>
+              </Alert>
+            )}
+
+            {/* Progress Bar (only show when import is in progress) */}
+            {importInProgress && importProgress && (
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  {importProgress.message}
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Box sx={{ flex: 1 }}>
+                    <LinearProgress
+                      variant="determinate"
+                      value={importProgress.percentage}
+                      sx={{
+                        height: 10,
+                        borderRadius: 1,
+                        bgcolor: 'grey.300',
+                        '& .MuiLinearProgress-bar': {
+                          borderRadius: 1,
+                          bgcolor: 'primary.main',
+                        },
+                      }}
+                    />
+                  </Box>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ minWidth: 50, textAlign: 'right' }}
+                  >
+                    {importProgress.percentage.toFixed(1)}%
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ mt: 0.5, display: 'block' }}
+                >
+                  Day {importProgress.current_day} of{' '}
+                  {importProgress.total_days}
+                </Typography>
+              </Box>
+            )}
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
               <Button
                 variant="contained"
                 color="primary"
                 onClick={handleTriggerAthenaImport}
-                disabled={triggeringImport || !settings.athena_output_bucket}
+                disabled={
+                  triggeringImport ||
+                  importInProgress ||
+                  !settings.athena_output_bucket
+                }
                 sx={{ minWidth: 200 }}
               >
                 {triggeringImport ? 'Importing...' : 'Import from Athena'}

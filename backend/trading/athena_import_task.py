@@ -32,6 +32,7 @@ Requirements: 12.1
 import logging
 from datetime import datetime, timedelta
 
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
@@ -43,12 +44,89 @@ from trading.tick_data_models import TickData
 
 logger = logging.getLogger(__name__)
 
+# Cache key for progress tracking
+PROGRESS_CACHE_KEY = "athena_import_progress"
+PROGRESS_CACHE_TTL = 3600  # 1 hour
+
+
+def _get_progress_state() -> dict | None:
+    """
+    Get current progress state from cache.
+
+    Returns:
+        Progress state dictionary or None if not found
+    """
+    try:
+        result = cache.get(PROGRESS_CACHE_KEY)
+        return dict(result) if result else None
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Failed to get progress state from cache: %s", e)
+        return None
+
+
+def _update_progress_state(updates: dict) -> None:
+    """
+    Update progress state in cache.
+
+    Args:
+        updates: Dictionary with fields to update
+    """
+    try:
+        # Get current state or create new one
+        progress = _get_progress_state() or {}
+
+        # Update with new values
+        progress.update(updates)
+
+        # Calculate percentage if current_day and total_days are present
+        if "current_day" in progress and "total_days" in progress:
+            total_days = progress["total_days"]
+            current_day = progress["current_day"]
+            if total_days > 0:
+                progress["percentage"] = (current_day / total_days) * 100
+            else:
+                progress["percentage"] = 0
+
+        # Save to cache
+        cache.set(PROGRESS_CACHE_KEY, progress, PROGRESS_CACHE_TTL)
+        logger.debug("Updated progress state: %s", progress)
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Failed to update progress state in cache: %s", e)
+
+
+def _increment_progress() -> None:
+    """
+    Increment the current_day counter in progress state.
+    """
+    try:
+        progress = _get_progress_state()
+        if progress:
+            current_day = progress.get("current_day", 0)
+            total_days = progress.get("total_days", 0)
+
+            # Increment current day
+            current_day += 1
+
+            # Update message
+            message = f"Importing day {current_day} of {total_days}"
+
+            _update_progress_state(
+                {
+                    "current_day": current_day,
+                    "message": message,
+                }
+            )
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Failed to increment progress: %s", e)
+
 
 @shared_task(bind=True, max_retries=3)
-def import_athena_data_daily(  # pylint: disable=too-many-locals,too-many-branches
+def import_athena_data_daily(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements  # noqa: E501
     self: Task,
     account_id: int | None = None,
     days_back: int = 1,
+    specific_date: str | None = None,
 ) -> dict[str, int | str | list[str]]:
     """
     Import historical tick data from Athena to PostgreSQL.
@@ -59,6 +137,7 @@ def import_athena_data_daily(  # pylint: disable=too-many-locals,too-many-branch
     Args:
         account_id: Optional specific account ID to import for
         days_back: Number of days back to fetch (default: 1 for yesterday)
+        specific_date: Optional ISO format date string to import specific date
 
     Returns:
         Dictionary with import statistics:
@@ -68,7 +147,11 @@ def import_athena_data_daily(  # pylint: disable=too-many-locals,too-many-branch
             - instruments: List of instruments imported
             - errors: List of error messages
     """
-    logger.info("Starting Athena data import task (days_back=%d)", days_back)
+    logger.info(
+        "Starting Athena data import task (days_back=%d, specific_date=%s)",
+        days_back,
+        specific_date or "None",
+    )
 
     results: dict[str, int | str | list[str]] = {
         "success": True,
@@ -79,6 +162,8 @@ def import_athena_data_daily(  # pylint: disable=too-many-locals,too-many-branch
     }
 
     try:
+        # Increment progress at the start of each day's import
+        _increment_progress()
         # Get accounts to process
         if account_id:
             accounts = OandaAccount.objects.filter(id=account_id, is_active=True)
@@ -92,9 +177,15 @@ def import_athena_data_daily(  # pylint: disable=too-many-locals,too-many-branch
                 errors_list.append("No active OANDA accounts found")
             return results
 
-        # Calculate date range (yesterday by default)
-        end_date = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        start_date = end_date - timedelta(days=days_back)
+        # Calculate date range
+        if specific_date:
+            # Use specific date provided
+            start_date = datetime.fromisoformat(specific_date.replace("Z", "+00:00"))
+            end_date = start_date + timedelta(days=1)
+        else:
+            # Default to yesterday
+            end_date = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            start_date = end_date - timedelta(days=days_back)
 
         logger.info(
             "Importing data from %s to %s for %d accounts",
@@ -149,6 +240,23 @@ def import_athena_data_daily(  # pylint: disable=too-many-locals,too-many-branch
             results["total_ticks_imported"],
         )
 
+        # Check if this is the last day - mark as completed
+        progress = _get_progress_state()
+        if progress:
+            current_day = progress.get("current_day", 0)
+            total_days = progress.get("total_days", 0)
+
+            if current_day >= total_days:
+                # All days completed
+                _update_progress_state(
+                    {
+                        "status": "completed",
+                        "message": f"Import completed successfully ({total_days} days)",
+                        "completed_at": timezone.now().isoformat(),
+                    }
+                )
+                logger.info("All days imported successfully")
+
         return results
 
     except Exception as e:  # pylint: disable=broad-exception-caught
@@ -158,6 +266,16 @@ def import_athena_data_daily(  # pylint: disable=too-many-locals,too-many-branch
         errors_list = results.get("errors", [])
         if isinstance(errors_list, list):
             errors_list.append(error_msg)
+
+        # Mark progress as failed
+        _update_progress_state(
+            {
+                "status": "failed",
+                "message": "Import failed",
+                "error": error_msg,
+                "completed_at": timezone.now().isoformat(),
+            }
+        )
 
         # Retry on failure
         raise self.retry(exc=e, countdown=300) from e  # Retry after 5 minutes
@@ -258,7 +376,7 @@ def _import_ticks_batch(
 
     # Process in batches
     for i in range(0, len(tick_data_points), batch_size):
-        batch = tick_data_points[i : i + batch_size]
+        batch = tick_data_points[i : i + batch_size]  # noqa: E203
 
         try:
             with transaction.atomic():

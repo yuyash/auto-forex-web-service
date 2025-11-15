@@ -25,6 +25,9 @@ from django.utils import timezone
 from celery import shared_task
 
 from accounts.models import OandaAccount
+from trading.athena_import_task import (  # noqa: F401  # pylint: disable=unused-import
+    import_athena_data_daily,
+)
 from trading.enums import TaskStatus
 from trading.market_data_streamer import MarketDataStreamer, TickData
 from trading.oanda_sync_task import oanda_sync_task  # noqa: F401  # pylint: disable=unused-import
@@ -1005,13 +1008,21 @@ def _initialize_backtest(backtest_id: int) -> tuple[Any, Dict[str, Any] | None]:
 
 def _get_resource_limits() -> tuple:
     """
-    Get resource limits from configuration.
+    Get resource limits from SystemSettings or configuration fallback.
 
     Returns:
         Tuple of (cpu_limit, memory_limit)
     """
-    cpu_limit = get_config("backtesting.cpu_limit", 1)
-    memory_limit = get_config("backtesting.memory_limit", 2147483648)  # 2GB
+    from accounts.models import SystemSettings
+
+    try:
+        settings = SystemSettings.get_settings()
+        cpu_limit = settings.backtest_cpu_limit
+        memory_limit = settings.backtest_memory_limit
+    except Exception:  # pylint: disable=broad-exception-caught
+        # Fallback to config file if SystemSettings not available
+        cpu_limit = get_config("backtesting.cpu_limit", 1)
+        memory_limit = get_config("backtesting.memory_limit", 2147483648)  # 2GB
 
     logger.info(
         "Resource limits: CPU=%d cores, Memory=%dMB",
@@ -1103,120 +1114,6 @@ def _execute_backtest(
                 backtest, backtest_id, e, engine, memory_limit, cpu_limit
             )
         raise
-
-
-@shared_task(
-    bind=True,
-    time_limit=3600,  # 1 hour hard limit
-    soft_time_limit=3300,  # 55 minutes soft limit
-)
-def run_backtest_task(  # type: ignore[no-untyped-def]
-    self,  # pylint: disable=unused-argument
-    backtest_id: int,
-    config_dict: Dict[str, Any],
-) -> Dict[str, Any]:
-    """
-    Execute a backtest with resource limits.
-
-    This task runs a backtest with configured CPU and memory limits.
-    It monitors resource usage during execution and terminates the backtest
-    if limits are exceeded.
-
-    Resource limits are configured in system.yaml:
-    - cpu_limit: Number of CPU cores (default: 1)
-    - memory_limit: Memory limit in bytes (default: 2GB)
-
-    Args:
-        backtest_id: Primary key of the Backtest model instance
-        config_dict: Dictionary containing backtest configuration:
-            - strategy_type: Type of strategy to backtest
-            - strategy_config: Strategy configuration parameters
-            - instrument: Currency pair
-            - start_date: Start date (ISO format string)
-            - end_date: End date (ISO format string)
-            - initial_balance: Initial account balance
-            - commission_per_trade: Commission per trade (optional,
-              bid/ask spread already in tick data)
-
-    Returns:
-        Dictionary containing:
-            - success: Whether the backtest completed successfully
-            - backtest_id: Backtest ID
-            - trade_count: Number of trades executed
-            - final_balance: Final account balance
-            - resource_usage: Resource usage statistics
-            - error: Error message if backtest failed
-            - terminated: Whether backtest was terminated due to resource limits
-
-    Requirements: 12.2, 12.3
-    """
-    from trading.backtest_engine import BacktestEngine
-    from trading.backtest_models import Backtest
-
-    try:
-        # Initialize backtest
-        backtest, error_response = _initialize_backtest(backtest_id)
-        if error_response:
-            return error_response
-
-        logger.info(
-            "Starting backtest %d: %s from %s to %s",
-            backtest_id,
-            config_dict.get("strategy_type"),
-            config_dict.get("start_date"),
-            config_dict.get("end_date"),
-        )
-
-        # Prepare backtest configuration and data
-        backtest_config, tick_data, cpu_limit, memory_limit = _prepare_backtest_data(config_dict)
-
-        if not tick_data:
-            error_msg = "No historical data available for the specified period"
-            logger.error(error_msg)
-            backtest.status = "failed"
-            backtest.error_message = error_msg
-            backtest.save(update_fields=["status", "error_message"])
-            return {
-                "success": False,
-                "backtest_id": backtest_id,
-                "error": error_msg,
-            }
-
-        # Create and run backtest engine
-        return _execute_backtest(
-            backtest,
-            backtest_id,
-            BacktestEngine(backtest_config),
-            tick_data,
-            memory_limit,
-            cpu_limit,
-        )
-
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        error_msg = f"Backtest failed: {str(e)}"
-        logger.error(
-            "Error running backtest %d: %s",
-            backtest_id,
-            error_msg,
-            exc_info=True,
-        )
-
-        # Update backtest status
-        try:
-            backtest = Backtest.objects.get(id=backtest_id)
-            backtest.status = "failed"
-            backtest.error_message = error_msg
-            backtest.completed_at = timezone.now()
-            backtest.save()
-        except Exception as save_error:  # pylint: disable=broad-exception-caught
-            logger.error("Failed to update backtest status: %s", save_error)
-
-        return {
-            "success": False,
-            "backtest_id": backtest_id,
-            "error": error_msg,
-            "terminated": False,
-        }
 
 
 @shared_task
@@ -1393,6 +1290,99 @@ def _parse_tick_timestamp(time_str: str) -> datetime:
         logger.error("Error parsing timestamp '%s': %s", time_str, e)
         # Fallback to current time
         return timezone.now()
+
+
+@shared_task(
+    bind=True,
+    time_limit=3600,  # 1 hour hard limit
+    soft_time_limit=3300,  # 55 minutes soft limit
+)
+def run_backtest_task(  # type: ignore[no-untyped-def]
+    self,  # pylint: disable=unused-argument
+    backtest_id: int,
+    config_dict: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Execute a backtest with the provided configuration.
+
+    This is the legacy version that accepts backtest_id and config_dict.
+    For new code, use run_backtest_task_v2 which works with BacktestTask model.
+
+    Args:
+        backtest_id: Primary key of the Backtest model instance
+        config_dict: Configuration dictionary containing strategy and backtest parameters
+
+    Returns:
+        Dictionary containing:
+            - success: Whether the backtest completed successfully
+            - backtest_id: Backtest ID
+            - trade_count: Number of trades executed
+            - final_balance: Final account balance
+            - total_return: Total profit/loss
+            - win_rate: Percentage of winning trades
+            - resource_usage: Resource usage statistics
+            - error: Error message (if backtest failed)
+            - terminated: Whether backtest was terminated due to resource limits
+
+    Requirements: 12.2
+    """
+    logger.info("Starting backtest execution for backtest_id=%d", backtest_id)
+
+    try:
+        # Initialize backtest
+        backtest, error_response = _initialize_backtest(backtest_id)
+        if error_response:
+            return error_response
+
+        # Prepare backtest data
+        backtest_config, tick_data, cpu_limit, memory_limit = _prepare_backtest_data(config_dict)
+
+        # Check if we have data
+        if not tick_data:
+            error_msg = "No historical data available for the specified date range"
+            logger.error("Backtest %d failed: %s", backtest_id, error_msg)
+            backtest.status = TaskStatus.FAILED
+            backtest.error_message = error_msg
+            backtest.completed_at = timezone.now()
+            backtest.save()
+            return {
+                "success": False,
+                "backtest_id": backtest_id,
+                "error": error_msg,
+            }
+
+        # Create and run backtest engine
+        from trading.backtest_engine import BacktestEngine
+
+        engine = BacktestEngine(backtest_config)
+        return _execute_backtest(backtest, backtest_id, engine, tick_data, memory_limit, cpu_limit)
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"Backtest execution failed: {str(e)}"
+        logger.error(
+            "Error in run_backtest_task for backtest_id=%d: %s",
+            backtest_id,
+            error_msg,
+            exc_info=True,
+        )
+
+        # Update backtest status
+        try:
+            from trading.backtest_models import Backtest
+
+            backtest = Backtest.objects.get(id=backtest_id)
+            backtest.status = TaskStatus.FAILED
+            backtest.error_message = error_msg
+            backtest.completed_at = timezone.now()
+            backtest.save()
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.debug("Could not save backtest error state: %s", e)
+
+        return {
+            "success": False,
+            "backtest_id": backtest_id,
+            "error": error_msg,
+        }
 
 
 @shared_task(

@@ -2130,46 +2130,32 @@ class WhitelistedEmailDetailView(APIView):
 
 class AdminTestAWSView(APIView):
     """
-    API endpoint for testing AWS S3 configuration.
+    API endpoint for testing AWS configuration.
 
     POST /api/admin/test-aws
-    - Test AWS S3 connectivity and permissions
+    - Test AWS credentials and role assumption using STS
     - Admin only
 
-    Requirements: AWS configuration testing for chart data
+    Requirements: AWS configuration testing
     """
 
     permission_classes = [IsAuthenticated, IsAdminUser]
 
-    # pylint: disable=too-many-locals,too-many-return-statements
-    # pylint: disable=too-many-branches,too-many-statements
-    def post(self, request: Request) -> Response:
+    def post(  # pylint: disable=too-many-locals,too-many-return-statements
+        self, request: Request
+    ) -> Response:
         """
-        Test AWS S3 configuration by attempting to list bucket contents.
+        Test AWS configuration by verifying credentials with STS get-caller-identity.
 
         Returns:
-            Response with success or error message
+            Response with success or error message including caller identity
         """
-        from botocore.exceptions import (  # type: ignore[import-untyped]  # pylint: disable=import-error  # noqa: E501
-            BotoCoreError,
-            ClientError,
-        )
+        from botocore.exceptions import BotoCoreError, ClientError  # pylint: disable=import-error
 
         from .settings_helper import get_aws_config
 
         # Get AWS configuration
         aws_config = get_aws_config()
-
-        if not aws_config.get("AWS_S3_BUCKET"):
-            return Response(
-                {
-                    "success": False,
-                    "error": "AWS S3 bucket is not configured.",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        bucket_name = aws_config["AWS_S3_BUCKET"]
         region = aws_config.get("AWS_REGION", "us-east-1")
 
         try:
@@ -2183,7 +2169,6 @@ class AdminTestAWSView(APIView):
                 extra={
                     "user_id": request.user.id,
                     "admin_email": user_email,
-                    "bucket": bucket_name,
                     "error": str(exc),
                 },
             )
@@ -2201,120 +2186,34 @@ class AdminTestAWSView(APIView):
             )
 
         try:
-            # Test 0: Verify credentials using STS GetCallerIdentity
+            # Test AWS credentials using STS GetCallerIdentity
             sts_client = session.client("sts", region_name=region)
-            try:
-                identity = sts_client.get_caller_identity()
-                caller_identity = {
-                    "account": identity.get("Account"),
-                    "user_id": identity.get("UserId"),
-                    "arn": identity.get("Arn"),
-                }
-            except ClientError as e:
-                error_code = e.response.get("Error", {}).get("Code", "Unknown")
-                if error_code in ["InvalidClientTokenId", "SignatureDoesNotMatch"]:
-                    return Response(
-                        {
-                            "success": False,
-                            "error": (
-                                "Invalid AWS credentials. Please check your "
-                                "Access Key ID and Secret Access Key."
-                            ),
-                            "details": str(e),
-                        },
-                        status=status.HTTP_401_UNAUTHORIZED,
-                    )
-                if error_code == "AccessDenied":
-                    return Response(
-                        {
-                            "success": False,
-                            "error": (
-                                "AWS credentials are valid but lack permissions. "
-                                "Ensure the IAM user/role has necessary permissions."
-                            ),
-                            "details": str(e),
-                        },
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
-                raise
+            identity = sts_client.get_caller_identity()
 
-            # Create S3 client
-            s3_client = session.client("s3", region_name=region)
-
-            # Test 1: Check if bucket exists and is accessible
-            try:
-                s3_client.head_bucket(Bucket=bucket_name)
-            except ClientError as e:
-                error_code = e.response.get("Error", {}).get("Code", "Unknown")
-                if error_code == "404":
-                    return Response(
-                        {
-                            "success": False,
-                            "error": f"Bucket '{bucket_name}' does not exist.",
-                            "details": str(e),
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                if error_code == "403":
-                    return Response(
-                        {
-                            "success": False,
-                            "error": (
-                                f"Access denied to bucket '{bucket_name}'. "
-                                "Check your credentials and permissions."
-                            ),
-                            "details": str(e),
-                        },
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
-                raise
-
-            # Test 2: Try to list objects (limited to 1 to minimize cost)
-            try:
-                response = s3_client.list_objects_v2(Bucket=bucket_name, MaxKeys=1)
-                object_count = response.get("KeyCount", 0)
-            except ClientError as e:
-                return Response(
-                    {
-                        "success": False,
-                        "error": (
-                            f"Cannot list objects in bucket '{bucket_name}'. "
-                            "Check your permissions."
-                        ),
-                        "details": str(e),
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
-            # Test 3: Get bucket location
-            try:
-                location_response = s3_client.get_bucket_location(Bucket=bucket_name)
-                bucket_region = location_response.get("LocationConstraint") or "us-east-1"
-            except ClientError:
-                bucket_region = "unknown"
+            caller_identity = {
+                "account": identity.get("Account"),
+                "user_id": identity.get("UserId"),
+                "arn": identity.get("Arn"),
+            }
 
             user_email = request.user.email if hasattr(request.user, "email") else "N/A"
             logger.info(
-                "AWS S3 test successful by admin %s for bucket %s",
+                "AWS credentials test successful by admin %s",
                 user_email,
-                bucket_name,
                 extra={
                     "user_id": request.user.id,
                     "admin_email": user_email,
-                    "bucket": bucket_name,
                     "region": region,
+                    "caller_identity": caller_identity,
                 },
             )
 
             return Response(
                 {
                     "success": True,
-                    "message": f"Successfully connected to AWS S3 bucket '{bucket_name}'",
+                    "message": "Successfully verified AWS credentials and role assumption",
                     "configuration": {
-                        "bucket": bucket_name,
                         "region": region,
-                        "bucket_region": bucket_region,
-                        "object_count": object_count,
                         "credential_method": aws_config.get("credential_method", "unknown"),
                         "caller_identity": caller_identity,
                     },
@@ -2323,24 +2222,53 @@ class AdminTestAWSView(APIView):
             )
 
         except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "Unknown")
             error_message = str(e)
             user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+
             logger.error(
-                "AWS S3 test failed by admin %s: %s",
+                "AWS credentials test failed by admin %s: %s",
                 user_email,
                 error_message,
                 extra={
                     "user_id": request.user.id,
                     "admin_email": user_email,
-                    "bucket": bucket_name,
                     "error": error_message,
+                    "error_code": error_code,
                 },
             )
+
+            # Handle specific error codes
+            if error_code in ["InvalidClientTokenId", "SignatureDoesNotMatch"]:
+                return Response(
+                    {
+                        "success": False,
+                        "error": (
+                            "Invalid AWS credentials. Please check your "
+                            "Access Key ID and Secret Access Key."
+                        ),
+                        "details": error_message,
+                    },
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            if error_code == "AccessDenied":
+                return Response(
+                    {
+                        "success": False,
+                        "error": (
+                            "AWS credentials are valid but lack permissions. "
+                            "Ensure the IAM user/role has necessary permissions."
+                        ),
+                        "details": error_message,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
             return Response(
                 {
                     "success": False,
-                    "error": "AWS S3 connection failed. Please check your configuration.",
+                    "error": "AWS credentials test failed. Please check your configuration.",
                     "details": error_message,
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -2406,44 +2334,139 @@ class AdminTriggerAthenaImportView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdminUser]
 
-    def post(self, request: Request) -> Response:
+    def post(self, request: Request) -> Response:  # pylint: disable=too-many-locals
         """
         Trigger Athena historical data import.
 
         Args:
-            request: HTTP request with optional account_id
+            request: HTTP request with optional account_id, start_date, end_date
 
         Returns:
-            Response with task ID and status
+            Response with task IDs and status
         """
+        from datetime import datetime, timedelta
+
+        from django.core.cache import cache
+        from django.utils import timezone as django_timezone
+
         from trading.athena_import_task import import_athena_data_daily
 
+        # Check if import is already in progress
+        existing_progress = cache.get("athena_import_progress")
+        if existing_progress and existing_progress.get("in_progress"):
+            logger.warning(
+                "Admin %s attempted to trigger Athena import while one is already in progress",
+                request.user.email if hasattr(request.user, "email") else "N/A",
+                extra={
+                    "user_id": request.user.id,
+                    "existing_progress": existing_progress,
+                },
+            )
+            return Response(
+                {
+                    "success": False,
+                    "error": "Import already in progress",
+                    "message": (
+                        "An Athena import is already running. " "Please wait for it to complete."
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         account_id = request.data.get("account_id")
+        start_date_str = request.data.get("start_date")
+        end_date_str = request.data.get("end_date")
 
         try:
-            # Trigger the import task
-            task = import_athena_data_daily.delay(account_id=account_id)
+            # Parse dates if provided, otherwise default to yesterday
+            if start_date_str and end_date_str:
+                start_date = datetime.fromisoformat(start_date_str.replace("Z", "+00:00"))
+                end_date = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
+            else:
+                # Default to yesterday
+                end_date = django_timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                start_date = end_date - timedelta(days=1)
+
+            # Calculate number of days
+            days_diff = (end_date.date() - start_date.date()).days
+            if days_diff < 0:
+                return Response(
+                    {
+                        "success": False,
+                        "error": "Start date must be before or equal to end date",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            total_days = days_diff + 1
+
+            # Initialize progress state in cache
+            started_at = django_timezone.now().isoformat()
+            initial_progress = {
+                "in_progress": True,
+                "current_day": 0,
+                "total_days": total_days,
+                "percentage": 0.0,
+                "status": "running",
+                "message": f"Starting import of {total_days} day(s)...",
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "started_at": started_at,
+                "completed_at": None,
+                "error": None,
+                "task_ids": [],
+            }
+
+            # Store initial progress with 1-hour TTL
+            cache.set("athena_import_progress", initial_progress, timeout=3600)
+
+            # Trigger one task per day for better progress tracking
+            task_ids = []
+            current_date = start_date
+            while current_date <= end_date:
+                task = import_athena_data_daily.delay(
+                    account_id=account_id, days_back=1, specific_date=current_date.isoformat()
+                )
+                task_ids.append(task.id)
+                current_date += timedelta(days=1)
+
+            # Update progress with task IDs
+            initial_progress["task_ids"] = task_ids
+            cache.set("athena_import_progress", initial_progress, timeout=3600)
 
             user_email = request.user.email if hasattr(request.user, "email") else "N/A"
             logger.info(
-                "Admin %s triggered Athena import (task: %s, account_id: %s)",
+                "Admin %s triggered Athena import "
+                "(tasks: %d, account_id: %s, date range: %s to %s)",
                 user_email,
-                task.id,
+                len(task_ids),
                 account_id or "all",
+                start_date.date(),
+                end_date.date(),
                 extra={
                     "user_id": request.user.id,
                     "admin_email": user_email,
-                    "task_id": task.id,
+                    "task_ids": task_ids,
                     "account_id": account_id,
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
                 },
             )
 
             account_msg = f"account {account_id}" if account_id else "all active accounts"
+            days_msg = f"{total_days} day(s)" if total_days > 1 else "1 day"
             return Response(
                 {
                     "success": True,
-                    "message": f"Athena import triggered for {account_msg}",
-                    "task_id": task.id,
+                    "message": f"Athena import triggered for {account_msg} ({days_msg})",
+                    "task_ids": task_ids,
+                    "total_days": total_days,
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                    "in_progress": True,
+                    "current_day": 0,
+                    "percentage": 0.0,
+                    "status": "running",
                 },
                 status=status.HTTP_200_OK,
             )
@@ -2471,4 +2494,99 @@ class AdminTriggerAthenaImportView(APIView):
                     "details": error_message,
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class AdminAthenaImportProgressView(APIView):
+    """
+    API endpoint for retrieving Athena import progress.
+
+    GET /api/admin/athena-import-progress
+    - Get real-time progress of running Athena import tasks
+    - Admin only
+
+    Requirements: 2.1, 2.2
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request: Request) -> Response:
+        """
+        Get current Athena import progress.
+
+        Args:
+            request: HTTP request
+
+        Returns:
+            Response with progress information or error
+        """
+        from django.core.cache import cache
+
+        try:
+            # Read progress from Django cache
+            progress = cache.get("athena_import_progress")
+
+            if not progress:
+                # No import in progress
+                return Response(
+                    {
+                        "error": "No import in progress",
+                        "message": "There is no active Athena import task.",
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # Return progress data
+            response_data = {
+                "in_progress": progress.get("in_progress", False),
+                "current_day": progress.get("current_day", 0),
+                "total_days": progress.get("total_days", 0),
+                "percentage": progress.get("percentage", 0.0),
+                "status": progress.get("status", "unknown"),
+                "message": progress.get("message", ""),
+                "start_date": progress.get("start_date"),
+                "end_date": progress.get("end_date"),
+                "started_at": progress.get("started_at"),
+                "completed_at": progress.get("completed_at"),
+                "error": progress.get("error"),
+            }
+
+            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            logger.debug(
+                "Admin %s retrieved Athena import progress (day %d of %d)",
+                user_email,
+                response_data["current_day"],
+                response_data["total_days"],
+                extra={
+                    "user_id": request.user.id,
+                    "admin_email": user_email,
+                    "progress": response_data,
+                },
+            )
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            error_message = str(e)
+            user_email = request.user.email if hasattr(request.user, "email") else "N/A"
+            logger.error(
+                "Failed to retrieve Athena import progress for admin %s: %s",
+                user_email,
+                error_message,
+                exc_info=True,
+                extra={
+                    "user_id": request.user.id,
+                    "admin_email": user_email,
+                    "error": error_message,
+                },
+            )
+
+            # Return 503 if cache is unavailable
+            return Response(
+                {
+                    "error": "Progress tracking temporarily unavailable",
+                    "message": "Unable to retrieve import progress. Please try again later.",
+                    "details": error_message,
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )

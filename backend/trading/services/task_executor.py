@@ -312,9 +312,17 @@ def execute_backtest_task(
 
             instrument = task.config.parameters.get("instrument", [])
 
-            # Get resource limits
-            cpu_limit = get_config("backtesting.cpu_limit", 1)
-            memory_limit = get_config("backtesting.memory_limit", 2147483648)  # 2GB
+            # Get resource limits from SystemSettings
+            from accounts.models import SystemSettings
+
+            try:
+                settings = SystemSettings.get_settings()
+                cpu_limit = settings.backtest_cpu_limit
+                memory_limit = settings.backtest_memory_limit
+            except Exception:  # pylint: disable=broad-exception-caught
+                # Fallback to config file if SystemSettings not available
+                cpu_limit = get_config("backtesting.cpu_limit", 1)
+                memory_limit = get_config("backtesting.memory_limit", 2147483648)  # 2GB
 
             # Create backtest configuration
             backtest_config = BacktestConfig(
@@ -329,9 +337,21 @@ def execute_backtest_task(
                 memory_limit=memory_limit,
             )
 
-            # Run backtest
+            # Run backtest with progress callback
             logger.info("Running backtest engine for task %d", task_id)
             engine = BacktestEngine(backtest_config)
+
+            # Define progress callback to update execution progress
+            def progress_callback(progress: int) -> None:
+                """Update execution progress in database."""
+                try:
+                    execution.update_progress(progress)
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    logger.warning("Failed to update progress: %s", e)
+
+            # Set progress callback on engine
+            engine.progress_callback = progress_callback
+
             trade_log, equity_curve, performance_metrics = engine.run(tick_data)
 
             logger.info(

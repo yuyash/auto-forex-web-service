@@ -349,17 +349,13 @@ class TestRunBacktestTask:
         with (
             patch("trading.historical_data_loader.HistoricalDataLoader") as mock_loader_class,
             patch("trading.backtest_engine.BacktestEngine") as mock_engine_class,
-            patch("trading.tasks.get_config") as mock_get_config,
+            patch("accounts.models.SystemSettings.get_settings") as mock_get_settings,
         ):
-            # Mock configuration
-            def get_config_side_effect(key, default):
-                config_map = {
-                    "backtesting.cpu_limit": 2,
-                    "backtesting.memory_limit": 1073741824,  # 1GB
-                }
-                return config_map.get(key, default)
-
-            mock_get_config.side_effect = get_config_side_effect
+            # Mock SystemSettings to return custom limits
+            mock_settings = Mock()
+            mock_settings.backtest_cpu_limit = 2
+            mock_settings.backtest_memory_limit = 1073741824  # 1GB
+            mock_get_settings.return_value = mock_settings
 
             # Mock data loader
             mock_loader = Mock()

@@ -171,6 +171,10 @@ class SystemSettings(models.Model):
             "Comma-separated list of instruments to import from Athena " "(e.g., EUR_USD,GBP_USD)"
         ),
     )
+    athena_query_timeout = models.IntegerField(
+        default=600,
+        help_text="Maximum time to wait for Athena query completion (in seconds)",
+    )
 
     # Logging Settings
     django_log_level = models.CharField(
@@ -212,6 +216,16 @@ class SystemSettings(models.Model):
     system_health_update_interval = models.IntegerField(
         default=5,
         help_text="Interval in seconds for system health updates in admin dashboard (default: 5)",
+    )
+
+    # Backtesting Resource Limits
+    backtest_cpu_limit = models.IntegerField(
+        default=1,
+        help_text="CPU core limit per backtest task (default: 1)",
+    )
+    backtest_memory_limit = models.BigIntegerField(
+        default=2147483648,  # 2GB in bytes
+        help_text="Memory limit per backtest task in bytes (default: 2147483648 = 2GB)",
     )
 
     updated_at = models.DateTimeField(

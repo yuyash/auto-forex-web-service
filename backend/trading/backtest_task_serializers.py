@@ -150,12 +150,36 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs: dict) -> dict:
         """Validate date ranges and configuration."""
+        from django.utils import timezone
+
         start_time = attrs.get("start_time")
         end_time = attrs.get("end_time")
+        now = timezone.now()
 
         # Validate date range
         if start_time and end_time and start_time >= end_time:
             raise serializers.ValidationError({"start_time": "start_time must be before end_time"})
+
+        # Validate end_time is not in the future
+        if end_time and end_time > now:
+            raise serializers.ValidationError(
+                {
+                    "end_time": (
+                        "end_time cannot be in the future. " "Backtesting requires historical data."
+                    )
+                }
+            )
+
+        # Validate start_time is not in the future
+        if start_time and start_time > now:
+            raise serializers.ValidationError(
+                {
+                    "start_time": (
+                        "start_time cannot be in the future. "
+                        "Backtesting requires historical data."
+                    )
+                }
+            )
 
         # Validate configuration parameters
         config = attrs.get("config")

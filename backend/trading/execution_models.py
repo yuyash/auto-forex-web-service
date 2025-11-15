@@ -45,6 +45,10 @@ class TaskExecution(models.Model):
         db_index=True,
         help_text="Current execution status",
     )
+    progress = models.IntegerField(
+        default=0,
+        help_text="Execution progress percentage (0-100)",
+    )
     started_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -96,7 +100,18 @@ class TaskExecution(models.Model):
         """Mark execution as completed."""
         self.status = TaskStatus.COMPLETED
         self.completed_at = timezone.now()
-        self.save(update_fields=["status", "completed_at"])
+        self.progress = 100
+        self.save(update_fields=["status", "completed_at", "progress"])
+
+    def update_progress(self, progress: int) -> None:
+        """
+        Update execution progress.
+
+        Args:
+            progress: Progress percentage (0-100)
+        """
+        self.progress = max(0, min(100, progress))
+        self.save(update_fields=["progress"])
 
     def mark_failed(self, error: Exception) -> None:
         """

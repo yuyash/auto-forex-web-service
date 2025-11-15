@@ -86,7 +86,7 @@ class TradingTask(models.Model):
                 name="unique_user_trading_task_name",
             ),
             models.CheckConstraint(
-                check=models.Q(
+                condition=models.Q(
                     status__in=[
                         TaskStatus.CREATED,
                         TaskStatus.RUNNING,
@@ -142,6 +142,17 @@ class TradingTask(models.Model):
         # Import here to avoid circular dependency
         from .execution_models import TaskExecution
 
+        # Calculate next execution number
+        last_execution = (
+            TaskExecution.objects.filter(
+                task_type=TaskType.TRADING,
+                task_id=self.id,
+            )
+            .order_by("-execution_number")
+            .first()
+        )
+        next_execution_number = (last_execution.execution_number + 1) if last_execution else 1
+
         # Update task status
         self.status = TaskStatus.RUNNING
         self.save(update_fields=["status", "updated_at"])
@@ -150,6 +161,7 @@ class TradingTask(models.Model):
         execution = TaskExecution.objects.create(
             task_type=TaskType.TRADING,
             task_id=self.id,
+            execution_number=next_execution_number,
             status=TaskStatus.RUNNING,
             started_at=timezone.now(),
         )
@@ -273,6 +285,17 @@ class TradingTask(models.Model):
         # Import here to avoid circular dependency
         from .execution_models import TaskExecution
 
+        # Calculate next execution number
+        last_execution = (
+            TaskExecution.objects.filter(
+                task_type=TaskType.TRADING,
+                task_id=self.id,
+            )
+            .order_by("-execution_number")
+            .first()
+        )
+        next_execution_number = (last_execution.execution_number + 1) if last_execution else 1
+
         # Update task status
         self.status = TaskStatus.RUNNING
         self.save(update_fields=["status", "updated_at"])
@@ -281,6 +304,7 @@ class TradingTask(models.Model):
         execution = TaskExecution.objects.create(
             task_type=TaskType.TRADING,
             task_id=self.id,
+            execution_number=next_execution_number,
             status=TaskStatus.RUNNING,
             started_at=timezone.now(),
         )

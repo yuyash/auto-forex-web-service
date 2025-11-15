@@ -12,7 +12,7 @@ from decimal import Decimal
 from unittest.mock import Mock, patch
 
 import pytest
-from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
+from botocore.exceptions import BotoCoreError, ClientError
 
 from accounts.models import User
 from trading.historical_data_loader import HistoricalDataLoader, TickDataPoint
@@ -180,11 +180,11 @@ class TestHistoricalDataLoaderInitialization:
 
     def test_initialization_athena_source_with_config(self):
         """Test initialization with Athena data source and configuration."""
-        with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
+        with patch("accounts.email_utils.get_aws_session") as mock_get_session:
             mock_session = Mock()
             mock_athena_client = Mock()
             mock_session.client.return_value = mock_athena_client
-            mock_session_class.return_value = mock_session
+            mock_get_session.return_value = mock_session
 
             loader = HistoricalDataLoader(
                 data_source="athena",
@@ -203,11 +203,11 @@ class TestAWSClientInitialization:
 
     def test_aws_client_initialization_default(self):
         """Test AWS client initialization with default credentials."""
-        with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
+        with patch("accounts.email_utils.get_aws_session") as mock_get_session:
             mock_session = Mock()
             mock_athena_client = Mock()
             mock_session.client.return_value = mock_athena_client
-            mock_session_class.return_value = mock_session
+            mock_get_session.return_value = mock_session
 
             loader = HistoricalDataLoader(
                 data_source="athena",
@@ -215,20 +215,20 @@ class TestAWSClientInitialization:
                 athena_output_bucket="test-bucket",
             )
 
-            # Verify session was created without profile
-            mock_session_class.assert_called_once_with()
+            # Verify session was created
+            mock_get_session.assert_called_once()
             assert loader.athena_client == mock_athena_client
 
     def test_aws_client_initialization_with_profile(self):
         """Test AWS client initialization with AWS_PROFILE."""
         with (
             patch.dict("os.environ", {"AWS_PROFILE": "test-profile"}),
-            patch("trading.historical_data_loader.boto3.Session") as mock_session_class,
+            patch("accounts.email_utils.get_aws_session") as mock_get_session,
         ):
             mock_session = Mock()
             mock_athena_client = Mock()
             mock_session.client.return_value = mock_athena_client
-            mock_session_class.return_value = mock_session
+            mock_get_session.return_value = mock_session
 
             loader = HistoricalDataLoader(
                 data_source="athena",
@@ -236,38 +236,20 @@ class TestAWSClientInitialization:
                 athena_output_bucket="test-bucket",
             )
 
-            # Verify session was created with profile
-            mock_session_class.assert_called_once_with(profile_name="test-profile")
+            # Verify session was created
+            mock_get_session.assert_called_once()
             assert loader.athena_client == mock_athena_client
 
     def test_aws_client_initialization_with_role_arn(self):
         """Test AWS client initialization with AWS_ROLE_ARN."""
         with (
             patch.dict("os.environ", {"AWS_ROLE_ARN": "arn:aws:iam::123456789:role/test"}),
-            patch("trading.historical_data_loader.boto3.Session") as mock_session_class,
+            patch("accounts.email_utils.get_aws_session") as mock_get_session,
         ):
-            # Create mock sessions
-            base_session = Mock()
-            assumed_session = Mock()
-
-            # Mock STS client for role assumption
-            sts_client = Mock()
-            sts_client.assume_role.return_value = {
-                "Credentials": {
-                    "AccessKeyId": "test-key",
-                    "SecretAccessKey": "test-secret",
-                    "SessionToken": "test-token",
-                    "Expiration": datetime.now(),
-                }
-            }
-            base_session.client.return_value = sts_client
-
-            # Mock Athena client
+            mock_session = Mock()
             mock_athena_client = Mock()
-            assumed_session.client.return_value = mock_athena_client
-
-            # Return different sessions for base and assumed
-            mock_session_class.side_effect = [base_session, assumed_session]
+            mock_session.client.return_value = mock_athena_client
+            mock_get_session.return_value = mock_session
 
             loader = HistoricalDataLoader(
                 data_source="athena",
@@ -275,20 +257,20 @@ class TestAWSClientInitialization:
                 athena_output_bucket="test-bucket",
             )
 
-            # Verify role was assumed
-            sts_client.assume_role.assert_called_once()
+            # Verify session was created
+            mock_get_session.assert_called_once()
             assert loader.athena_client == mock_athena_client
 
     def test_aws_client_initialization_with_credentials_file(self):
         """Test AWS client initialization with AWS_CREDENTIALS_FILE."""
         with (
             patch.dict("os.environ", {"AWS_CREDENTIALS_FILE": "/path/to/credentials"}),
-            patch("trading.historical_data_loader.boto3.Session") as mock_session_class,
+            patch("accounts.email_utils.get_aws_session") as mock_get_session,
         ):
             mock_session = Mock()
             mock_athena_client = Mock()
             mock_session.client.return_value = mock_athena_client
-            mock_session_class.return_value = mock_session
+            mock_get_session.return_value = mock_session
 
             loader = HistoricalDataLoader(
                 data_source="athena",
@@ -296,16 +278,14 @@ class TestAWSClientInitialization:
                 athena_output_bucket="test-bucket",
             )
 
-            # Verify credentials file was set in environment
-            import os
-
-            assert os.environ.get("AWS_SHARED_CREDENTIALS_FILE") == "/path/to/credentials"
+            # Verify session was created
+            mock_get_session.assert_called_once()
             assert loader.athena_client == mock_athena_client
 
     def test_aws_client_initialization_failure(self):
         """Test AWS client initialization handles failures."""
-        with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
-            mock_session_class.side_effect = BotoCoreError()
+        with patch("accounts.email_utils.get_aws_session") as mock_get_session:
+            mock_get_session.side_effect = BotoCoreError()
 
             with pytest.raises(RuntimeError) as exc_info:
                 HistoricalDataLoader(
@@ -376,11 +356,11 @@ class TestAthenaDataLoading:
 
     def test_load_from_athena_success(self):
         """Test successful data loading from Athena."""
-        with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
+        with patch("accounts.email_utils.get_aws_session") as mock_get_session:
             mock_session = Mock()
             mock_athena_client = Mock()
             mock_session.client.return_value = mock_athena_client
-            mock_session_class.return_value = mock_session
+            mock_get_session.return_value = mock_session
 
             # Mock Athena query execution
             mock_athena_client.start_query_execution.return_value = {
@@ -428,7 +408,7 @@ class TestAthenaDataLoading:
 
     def test_load_from_athena_missing_bucket(self):
         """Test Athena loading fails without output bucket configuration."""
-        with patch("trading.historical_data_loader.boto3.Session"):
+        with patch("accounts.email_utils.get_aws_session"):
             loader = HistoricalDataLoader(data_source="athena", athena_database="test-db")
             loader.athena_output_bucket = ""
 
@@ -442,7 +422,7 @@ class TestAthenaDataLoading:
 
     def test_load_from_athena_missing_database(self):
         """Test Athena loading fails without database configuration."""
-        with patch("trading.historical_data_loader.boto3.Session"):
+        with patch("accounts.email_utils.get_aws_session"):
             loader = HistoricalDataLoader(data_source="athena", athena_output_bucket="test-bucket")
             loader.athena_database = ""
 
@@ -456,11 +436,11 @@ class TestAthenaDataLoading:
 
     def test_athena_query_execution_failure(self):
         """Test handling of Athena query execution failure."""
-        with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
+        with patch("accounts.email_utils.get_aws_session") as mock_get_session:
             mock_session = Mock()
             mock_athena_client = Mock()
             mock_session.client.return_value = mock_athena_client
-            mock_session_class.return_value = mock_session
+            mock_get_session.return_value = mock_session
 
             # Mock query execution failure
             mock_athena_client.start_query_execution.side_effect = ClientError(
@@ -484,11 +464,11 @@ class TestAthenaDataLoading:
 
     def test_athena_query_timeout(self):
         """Test handling of Athena query timeout."""
-        with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
+        with patch("accounts.email_utils.get_aws_session") as mock_get_session:
             mock_session = Mock()
             mock_athena_client = Mock()
             mock_session.client.return_value = mock_athena_client
-            mock_session_class.return_value = mock_session
+            mock_get_session.return_value = mock_session
 
             # Mock query execution
             mock_athena_client.start_query_execution.return_value = {
@@ -515,11 +495,11 @@ class TestAthenaDataLoading:
 
     def test_athena_query_failed_status(self):
         """Test handling of Athena query FAILED status."""
-        with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
+        with patch("accounts.email_utils.get_aws_session") as mock_get_session:
             mock_session = Mock()
             mock_athena_client = Mock()
             mock_session.client.return_value = mock_athena_client
-            mock_session_class.return_value = mock_session
+            mock_get_session.return_value = mock_session
 
             # Mock query execution
             mock_athena_client.start_query_execution.return_value = {
@@ -562,11 +542,11 @@ class TestDataSourceSelection:
 
     def test_load_data_athena_source(self):
         """Test load_data uses Athena when configured."""
-        with patch("trading.historical_data_loader.boto3.Session") as mock_session_class:
+        with patch("accounts.email_utils.get_aws_session") as mock_get_session:
             mock_session = Mock()
             mock_athena_client = Mock()
             mock_session.client.return_value = mock_athena_client
-            mock_session_class.return_value = mock_session
+            mock_get_session.return_value = mock_session
 
             # Mock Athena operations
             mock_athena_client.start_query_execution.return_value = {
@@ -687,7 +667,7 @@ class TestAthenaQueryBuilding:
 
     def test_build_athena_query(self):
         """Test building Athena SQL query for Polygon.io format."""
-        with patch("trading.historical_data_loader.boto3.Session"):
+        with patch("accounts.email_utils.get_aws_session"):
             loader = HistoricalDataLoader(
                 data_source="athena",
                 athena_database="test-db",

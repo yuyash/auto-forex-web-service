@@ -197,6 +197,7 @@ class BacktestEngine:
         self.strategy: BaseStrategy | None = None
         self.resource_monitor: ResourceMonitor | None = None
         self.terminated = False
+        self.progress_callback: Any = None  # Optional callback for progress updates
 
     def run(self, tick_data: list[TickDataPoint]) -> tuple[list[dict], list[dict], dict[str, Any]]:
         """
@@ -243,10 +244,12 @@ class BacktestEngine:
                 # Process tick
                 self._process_tick(tick)
 
-                # Log progress every 10%
-                if i % (total_ticks // 10) == 0:
+                # Log and report progress every 10%
+                if total_ticks > 0 and i % max(1, total_ticks // 10) == 0:
                     progress = int((i / total_ticks) * 100)
                     logger.info(f"Backtest progress: {progress}%")
+                    if self.progress_callback:
+                        self.progress_callback(progress)
 
             # Record final equity
             self._record_equity(tick_data[-1].timestamp if tick_data else datetime.now())

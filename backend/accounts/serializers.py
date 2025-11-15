@@ -281,6 +281,7 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             "athena_table_name",
             "athena_output_bucket",
             "athena_instruments",
+            "athena_query_timeout",
             # Logging Settings
             "django_log_level",
             # Application Settings
@@ -289,6 +290,9 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             "system_health_update_interval",
             "oanda_sync_interval_seconds",
             "oanda_fetch_duration_days",
+            # Backtesting Resource Limits
+            "backtest_cpu_limit",
+            "backtest_memory_limit",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

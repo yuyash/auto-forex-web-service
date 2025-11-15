@@ -9,6 +9,7 @@ from django.urls import path
 from trading.sync_views import AccountSyncView
 
 from .views import (
+    AdminAthenaImportProgressView,
     AdminSystemSettingsView,
     AdminTestAWSView,
     AdminTestEmailView,
@@ -66,6 +67,11 @@ urlpatterns = [
         "admin/trigger-athena-import",
         AdminTriggerAthenaImportView.as_view(),
         name="admin_trigger_athena_import",
+    ),
+    path(
+        "admin/athena-import-progress",
+        AdminAthenaImportProgressView.as_view(),
+        name="admin_athena_import_progress",
     ),
     path(
         "admin/whitelist/emails",

@@ -16,19 +16,14 @@ Requirements: 12.1
 """
 
 import logging
-import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal
 
 from django.db.models import QuerySet
 
-import boto3  # type: ignore[import-untyped]  # pylint: disable=import-error
-from botocore.exceptions import (  # type: ignore[import-untyped]  # pylint: disable=import-error
-    BotoCoreError,
-    ClientError,
-)
+from botocore.exceptions import BotoCoreError, ClientError  # pylint: disable=import-error
 
 from trading.tick_data_models import TickData
 
@@ -154,6 +149,7 @@ class HistoricalDataLoader:
         self.athena_output_bucket = athena_output_bucket or self._get_system_setting(
             "athena_output_bucket", ""
         )
+        self.athena_query_timeout = int(self._get_system_setting("athena_query_timeout", "600"))
 
         # Initialize AWS clients if using Athena source
         self.athena_client = None
@@ -186,48 +182,21 @@ class HistoricalDataLoader:
         Initialize AWS Athena client with proper authentication.
 
         Authentication priority:
-        1. AWS_PROFILE environment variable (profile-based)
-        2. AWS_ROLE_ARN environment variable (role assumption with STS)
-        3. AWS_CREDENTIALS_FILE (custom credentials location)
-        4. IAM role (default for EC2/ECS instances)
+        1. System Settings (database configuration)
+        2. Environment variables (AWS_PROFILE, AWS_ROLE_ARN, AWS_CREDENTIALS_FILE)
+        3. IAM role (default for EC2/ECS instances)
 
         Never uses hardcoded AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY.
         """
         try:
-            # Check for AWS configuration environment variables
-            aws_profile = os.environ.get("AWS_PROFILE")
-            aws_role_arn = os.environ.get("AWS_ROLE_ARN")
-            aws_credentials_file = os.environ.get("AWS_CREDENTIALS_FILE")
+            # Import here to avoid circular dependency
+            from accounts.email_utils import get_aws_session
 
-            session_kwargs: dict[str, Any] = {}
+            logger.info("Initializing AWS clients for Athena using system settings")
 
-            # Handle custom credentials file
-            if aws_credentials_file:
-                logger.info("Using AWS credentials file: %s", aws_credentials_file)
-                os.environ["AWS_SHARED_CREDENTIALS_FILE"] = aws_credentials_file
-
-            # Create base session with profile if specified
-            if aws_profile:
-                logger.info("Using AWS profile: %s", aws_profile)
-                session_kwargs["profile_name"] = aws_profile
-            else:
-                logger.info("Using default AWS credentials chain")
-
-            # Create boto3 session
-            session = boto3.Session(**session_kwargs)
-
-            # If role ARN is specified, assume the role using STS
-            if aws_role_arn:
-                logger.info("Assuming AWS role: %s", aws_role_arn)
-                credentials = self._assume_role(session, aws_role_arn)
-
-                # Create new session with assumed role credentials
-                session = boto3.Session(
-                    aws_access_key_id=credentials["AccessKeyId"],
-                    aws_secret_access_key=credentials["SecretAccessKey"],
-                    aws_session_token=credentials["SessionToken"],
-                )
-                logger.info("Successfully assumed role")
+            # Use the centralized AWS session logic from email_utils
+            # This respects system settings configuration
+            session = get_aws_session()
 
             # Initialize Athena client
             self.athena_client = session.client("athena")
@@ -236,41 +205,6 @@ class HistoricalDataLoader:
         except (BotoCoreError, ClientError) as e:
             logger.error("Failed to initialize AWS clients: %s", e)
             raise RuntimeError(f"AWS client initialization failed: {e}") from e
-
-    def _assume_role(self, session: boto3.Session, role_arn: str) -> dict[str, str]:
-        """
-        Assume an AWS IAM role using STS.
-
-        Args:
-            session: Boto3 session to use for assuming role
-            role_arn: ARN of the role to assume
-
-        Returns:
-            Dictionary containing temporary credentials
-
-        Raises:
-            RuntimeError: If role assumption fails
-        """
-        try:
-            # Create STS client
-            sts_client = session.client("sts")
-
-            # Assume role
-            response = sts_client.assume_role(
-                RoleArn=role_arn,
-                RoleSessionName="forex-trading-backtest",
-                DurationSeconds=3600,  # 1 hour
-            )
-
-            # Extract credentials
-            credentials = response["Credentials"]
-            logger.info("Role assumed successfully, expires at: %s", credentials["Expiration"])
-
-            return credentials  # type: ignore[no-any-return]
-
-        except (BotoCoreError, ClientError) as e:
-            logger.error("Failed to assume role %s: %s", role_arn, e)
-            raise RuntimeError(f"Role assumption failed: {e}") from e
 
     def load_data(
         self,
@@ -384,7 +318,9 @@ class HistoricalDataLoader:
             query_execution_id = self._execute_athena_query(query)
 
             # Wait for query completion
-            self._wait_for_query_completion(query_execution_id)
+            self._wait_for_query_completion(
+                query_execution_id, max_wait_seconds=self.athena_query_timeout
+            )
 
             # Fetch query results
             tick_data = self._fetch_query_results(query_execution_id)
@@ -423,6 +359,43 @@ class HistoricalDataLoader:
         start_timestamp_ns = int(start_date.timestamp() * 1_000_000_000)
         end_timestamp_ns = int(end_date.timestamp() * 1_000_000_000)
 
+        # Extract partition values for efficient querying
+        # Note: Partition columns are stored as strings in Athena
+        start_year = str(start_date.year)
+        start_month = str(start_date.month)
+        start_day = str(start_date.day)
+        end_year = str(end_date.year)
+        end_month = str(end_date.month)
+        end_day = str(end_date.day)
+
+        # Build partition filter for efficient scanning
+        # If same day, use exact partition
+        if start_date.date() == end_date.date():
+            partition_filter = (
+                f"year = '{start_year}' AND month = '{start_month}' " f"AND day = '{start_day}'"
+            )
+        # If same month, filter by month and day range
+        elif start_year == end_year and start_month == end_month:
+            partition_filter = (
+                f"year = '{start_year}' AND month = '{start_month}' "
+                f"AND day >= '{start_day}' AND day <= '{end_day}'"
+            )
+        # If same year, filter by year and month/day range
+        elif start_year == end_year:
+            partition_filter = (
+                f"year = '{start_year}' AND "
+                f"((month = '{start_month}' AND day >= '{start_day}') OR "
+                f"(month > '{start_month}' AND month < '{end_month}') OR "
+                f"(month = '{end_month}' AND day <= '{end_day}'))"
+            )
+        # Different years - use year range
+        else:
+            partition_filter = (
+                f"((year = '{start_year}' AND month >= '{start_month}') OR "
+                f"(year > '{start_year}' AND year < '{end_year}') OR "
+                f"(year = '{end_year}' AND month <= '{end_month}'))"
+            )
+
         # SQL query uses controlled inputs (config, datetime objects), not user strings
         query = f"""
         SELECT
@@ -431,11 +404,20 @@ class HistoricalDataLoader:
             ask_price,
             participant_timestamp
         FROM "{self.athena_database}"."{self.athena_table}"
-        WHERE ticker = '{polygon_ticker}'
+        WHERE {partition_filter}
+            AND ticker = '{polygon_ticker}'
             AND participant_timestamp >= {start_timestamp_ns}
             AND participant_timestamp <= {end_timestamp_ns}
         ORDER BY participant_timestamp ASC
         """  # nosec B608
+
+        logger.info(
+            "Query partition filter: %s (scanning %s to %s)",
+            partition_filter,
+            start_date.date(),
+            end_date.date(),
+        )
+
         return query
 
     def _execute_athena_query(self, query: str) -> str:
@@ -458,6 +440,14 @@ class HistoricalDataLoader:
             # Define output location for query results
             output_location = f"s3://{self.athena_output_bucket}/athena-results/"
 
+            logger.info(
+                "Executing Athena query - Database: %s, Table: %s, Output: %s",
+                self.athena_database,
+                self.athena_table,
+                output_location,
+            )
+            logger.debug("Query: %s", query)
+
             # Execute query
             response = self.athena_client.start_query_execution(
                 QueryString=query,
@@ -466,7 +456,14 @@ class HistoricalDataLoader:
             )
 
             query_execution_id = response["QueryExecutionId"]
-            logger.info("Athena query started: %s", query_execution_id)
+            logger.info(
+                "Athena query started: %s (view in console: "
+                "https://console.aws.amazon.com/athena/home?region=%s"
+                "#query/history/%s)",
+                query_execution_id,
+                self.athena_client.meta.region_name,
+                query_execution_id,
+            )
             return query_execution_id
 
         except (BotoCoreError, ClientError) as e:
@@ -476,7 +473,7 @@ class HistoricalDataLoader:
     def _wait_for_query_completion(
         self,
         query_execution_id: str,
-        max_wait_seconds: int = 300,
+        max_wait_seconds: int = 600,  # Increased to 10 minutes for large queries
     ) -> None:
         """
         Wait for Athena query to complete.
@@ -494,6 +491,9 @@ class HistoricalDataLoader:
         import time
 
         elapsed = 0
+        last_log_time = 0
+        log_interval = 30  # Log every 30 seconds
+
         while elapsed < max_wait_seconds:
             try:
                 response = self.athena_client.get_query_execution(
@@ -501,14 +501,51 @@ class HistoricalDataLoader:
                 )
                 status = response["QueryExecution"]["Status"]["State"]
 
+                # Log progress periodically
+                if elapsed - last_log_time >= log_interval:
+                    stats = response["QueryExecution"].get("Statistics", {})
+                    data_scanned = stats.get("DataScannedInBytes", 0)
+                    execution_time = stats.get("EngineExecutionTimeInMillis", 0)
+                    logger.info(
+                        "Athena query %s status: %s (elapsed: %ds, "
+                        "data scanned: %.2f MB, execution time: %.2fs)",
+                        query_execution_id,
+                        status,
+                        elapsed,
+                        data_scanned / (1024 * 1024),
+                        execution_time / 1000,
+                    )
+                    last_log_time = elapsed
+
                 if status == "SUCCEEDED":
-                    logger.info("Athena query completed: %s", query_execution_id)
+                    stats = response["QueryExecution"].get("Statistics", {})
+                    data_scanned = stats.get("DataScannedInBytes", 0)
+                    execution_time = stats.get("EngineExecutionTimeInMillis", 0)
+                    logger.info(
+                        "Athena query completed: %s "
+                        "(data scanned: %.2f MB, execution time: %.2fs)",
+                        query_execution_id,
+                        data_scanned / (1024 * 1024),
+                        execution_time / 1000,
+                    )
                     return
                 if status in ["FAILED", "CANCELLED"]:
                     reason = response["QueryExecution"]["Status"].get(
                         "StateChangeReason", "Unknown"
                     )
-                    raise RuntimeError(f"Athena query {status}: {reason}")
+                    error_message = (
+                        response["QueryExecution"]["Status"]
+                        .get("AthenaError", {})
+                        .get("ErrorMessage", "No error message")
+                    )
+                    logger.error(
+                        "Athena query %s: %s - Reason: %s, Error: %s",
+                        status,
+                        query_execution_id,
+                        reason,
+                        error_message,
+                    )
+                    raise RuntimeError(f"Athena query {status}: {reason} - {error_message}")
 
                 # Wait before checking again
                 time.sleep(2)
@@ -517,6 +554,20 @@ class HistoricalDataLoader:
             except (BotoCoreError, ClientError) as e:
                 logger.error("Failed to check query status: %s", e)
                 raise RuntimeError(f"Query status check failed: {e}") from e
+
+        # Log final status before timing out
+        try:
+            response = self.athena_client.get_query_execution(QueryExecutionId=query_execution_id)
+            status = response["QueryExecution"]["Status"]["State"]
+            stats = response["QueryExecution"].get("Statistics", {})
+            logger.error(
+                "Athena query timed out after %d seconds. Final status: %s, Statistics: %s",
+                max_wait_seconds,
+                status,
+                stats,
+            )
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.debug("Could not retrieve final query status: %s", e)
 
         raise RuntimeError(f"Athena query timed out after {max_wait_seconds} seconds")
 
@@ -563,8 +614,10 @@ class HistoricalDataLoader:
                     # Convert ticker format: C:EUR-USD -> EUR_USD
                     instrument = ticker.replace("C:", "").replace("-", "_")
 
-                    # Convert timestamp from nanoseconds to datetime
-                    timestamp = datetime.fromtimestamp(timestamp_ns / 1_000_000_000)
+                    # Convert timestamp from nanoseconds to timezone-aware datetime (UTC)
+                    timestamp = datetime.fromtimestamp(
+                        timestamp_ns / 1_000_000_000, tz=timezone.utc
+                    )
 
                     # Calculate mid and spread
                     mid = (bid_price + ask_price) / 2
