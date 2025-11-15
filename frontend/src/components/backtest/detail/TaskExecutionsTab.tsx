@@ -8,6 +8,12 @@ import {
   List,
   ListItemButton,
   CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import {
@@ -317,54 +323,92 @@ export function TaskExecutionsTab({
                 </Box>
               </Box>
 
-              <Box sx={{ flex: 1, overflow: 'auto', p: 2, bgcolor: 'grey.50' }}>
+              <Box sx={{ flex: 1, overflow: 'auto' }}>
                 {allLogs.length > 0 ? (
-                  <Box sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                    {allLogs.map((log: ExecutionLog, index: number) => (
-                      <Box
-                        key={index}
-                        sx={{
-                          mb: 0.5,
-                          display: 'flex',
-                          gap: 1,
-                          alignItems: 'flex-start',
-                        }}
-                      >
-                        <Typography
-                          component="span"
-                          sx={{
-                            color: 'text.secondary',
-                            fontSize: '0.75rem',
-                            minWidth: '140px',
-                          }}
-                        >
-                          {new Date(log.timestamp).toLocaleTimeString()}
-                        </Typography>
-                        <Typography
-                          component="span"
-                          sx={{
-                            fontWeight: 'bold',
-                            minWidth: '60px',
-                            color:
-                              log.level === 'ERROR'
-                                ? 'error.main'
-                                : log.level === 'WARNING'
-                                  ? 'warning.main'
-                                  : 'info.main',
-                          }}
-                        >
-                          {log.level}
-                        </Typography>
-                        <Typography
-                          component="span"
-                          sx={{ flex: 1, wordBreak: 'break-word' }}
-                        >
-                          {log.message}
-                        </Typography>
-                      </Box>
-                    ))}
+                  <TableContainer>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell
+                            sx={{
+                              fontWeight: 'bold',
+                              bgcolor: 'background.paper',
+                              width: '140px',
+                            }}
+                          >
+                            Timestamp
+                          </TableCell>
+                          <TableCell
+                            sx={{
+                              fontWeight: 'bold',
+                              bgcolor: 'background.paper',
+                              width: '100px',
+                            }}
+                          >
+                            Level
+                          </TableCell>
+                          <TableCell
+                            sx={{
+                              fontWeight: 'bold',
+                              bgcolor: 'background.paper',
+                            }}
+                          >
+                            Message
+                          </TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {allLogs.map((log: ExecutionLog, index: number) => (
+                          <TableRow
+                            key={index}
+                            sx={{
+                              '&:nth-of-type(odd)': {
+                                bgcolor: 'grey.50',
+                              },
+                              '&:hover': {
+                                bgcolor: 'action.hover',
+                              },
+                            }}
+                          >
+                            <TableCell
+                              sx={{
+                                fontFamily: 'monospace',
+                                fontSize: '0.75rem',
+                                color: 'text.secondary',
+                              }}
+                            >
+                              {new Date(log.timestamp).toLocaleTimeString()}
+                            </TableCell>
+                            <TableCell
+                              sx={{
+                                fontFamily: 'monospace',
+                                fontWeight: 'bold',
+                                fontSize: '0.75rem',
+                                color:
+                                  log.level === 'ERROR'
+                                    ? 'error.main'
+                                    : log.level === 'WARNING'
+                                      ? 'warning.main'
+                                      : 'info.main',
+                              }}
+                            >
+                              {log.level}
+                            </TableCell>
+                            <TableCell
+                              sx={{
+                                fontFamily: 'monospace',
+                                fontSize: '0.875rem',
+                                wordBreak: 'break-word',
+                              }}
+                            >
+                              {log.message}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                     <div ref={logsEndRef} />
-                  </Box>
+                  </TableContainer>
                 ) : (
                   <Box
                     sx={{
@@ -373,6 +417,7 @@ export function TaskExecutionsTab({
                       alignItems: 'center',
                       height: '100%',
                       textAlign: 'center',
+                      p: 2,
                     }}
                   >
                     <Typography variant="body2" color="text.secondary">
