@@ -98,8 +98,20 @@ export default function BacktestTaskDetailPage() {
     total_days: number;
     balance: number;
     total_trades: number;
-    metrics: Record<string, string | number>;
-    equity_curve: Array<{ timestamp: string; equity: number; balance: number }>;
+    metrics: {
+      total_return?: number;
+      total_pnl?: number;
+      win_rate?: number;
+      winning_trades?: number;
+      losing_trades?: number;
+      max_drawdown?: number;
+      sharpe_ratio?: number;
+      profit_factor?: number;
+      average_win?: number;
+      average_loss?: number;
+      [key: string]: string | number | undefined;
+    };
+    equity_curve: Array<{ timestamp: string; balance: number }>;
   } | null>(null);
 
   // Listen to WebSocket updates for this task

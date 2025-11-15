@@ -25,6 +25,25 @@ import {
   TrendingDown as TrendingDownIcon,
 } from '@mui/icons-material';
 
+interface EquityPoint {
+  timestamp: string;
+  balance: number;
+}
+
+interface LiveMetrics {
+  total_return?: number;
+  total_pnl?: number;
+  win_rate?: number;
+  winning_trades?: number;
+  losing_trades?: number;
+  max_drawdown?: number;
+  sharpe_ratio?: number;
+  profit_factor?: number;
+  average_win?: number;
+  average_loss?: number;
+  [key: string]: string | number | undefined;
+}
+
 interface LiveResults {
   day_date: string;
   progress: number;
@@ -32,8 +51,8 @@ interface LiveResults {
   total_days: number;
   balance: number;
   total_trades: number;
-  metrics: Record<string, string | number>;
-  equity_curve: Array<{ timestamp: string; equity: number; balance: number }>;
+  metrics: LiveMetrics;
+  equity_curve: EquityPoint[];
 }
 
 interface TaskOverviewTabProps {

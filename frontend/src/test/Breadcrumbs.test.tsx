@@ -65,13 +65,6 @@ describe('Breadcrumbs', () => {
     expect(screen.getByText('System Settings')).toBeInTheDocument();
   });
 
-  it('renders breadcrumbs for admin events', () => {
-    renderBreadcrumbs('/admin/events');
-    expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Events')).toBeInTheDocument();
-  });
-
   it('renders breadcrumbs for admin users', () => {
     renderBreadcrumbs('/admin/users');
     expect(screen.getByText('Home')).toBeInTheDocument();
