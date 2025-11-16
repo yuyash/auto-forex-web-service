@@ -7,7 +7,7 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Breadcrumbs } from '../components/common';
 import ConfigurationForm from '../components/configurations/ConfigurationForm';
 import ParametersForm from '../components/configurations/ParametersForm';
@@ -17,8 +17,16 @@ import type { StrategyConfigCreateData } from '../types/configuration';
 
 const ConfigurationFormPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams<{ id: string }>();
   const isEditMode = Boolean(id);
+
+  // Get navigation state to determine where we came from
+  const fromState = location.state as {
+    from?: 'backtest-tasks' | 'trading-tasks';
+    taskId?: number;
+    taskName?: string;
+  } | null;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Fetch configuration if editing
@@ -145,7 +153,29 @@ const ConfigurationFormPage = () => {
 
   return (
     <Container maxWidth="md" sx={{ mt: 4, mb: 4, px: 3 }}>
-      <Breadcrumbs />
+      <Breadcrumbs
+        customPath={
+          fromState?.from
+            ? [
+                {
+                  label:
+                    fromState.from === 'backtest-tasks'
+                      ? 'Backtest Tasks'
+                      : 'Trading Tasks',
+                  path: `/${fromState.from}`,
+                },
+                ...(fromState.taskId && fromState.taskName
+                  ? [
+                      {
+                        label: fromState.taskName,
+                        path: `/${fromState.from}/${fromState.taskId}`,
+                      },
+                    ]
+                  : []),
+              ]
+            : undefined
+        }
+      />
 
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" gutterBottom>

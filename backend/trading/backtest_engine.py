@@ -441,12 +441,6 @@ class BacktestEngine:
                     }
                     day_complete_callback(day_date, intermediate_results)
 
-                logger.info(
-                    f"Completed day {day_index + 1}/{total_days}: {day_date} "
-                    f"({len(day_ticks)} ticks, {len(self.trade_log)} total trades, "
-                    f"balance: {self.balance:.2f})"
-                )
-
             # Calculate final performance metrics
             performance_metrics = self.calculate_performance_metrics()
 
@@ -474,8 +468,14 @@ class BacktestEngine:
         # Get strategy class from registry
         strategy_class = registry.get_strategy_class(self.config.strategy_type)
 
-        self.strategy = strategy_class(self.config.strategy_config)
-        logger.info(f"Strategy initialized: {self.config.strategy_type}")
+        # Add instrument to strategy config for backtest mode
+        strategy_config = self.config.strategy_config.copy()
+        strategy_config["instrument"] = self.config.instrument
+
+        self.strategy = strategy_class(strategy_config)
+        logger.info(
+            f"Strategy initialized: {self.config.strategy_type} for {self.config.instrument}"
+        )
 
     def _start_resource_monitoring(self) -> None:
         """Start resource monitoring."""

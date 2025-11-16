@@ -430,7 +430,7 @@ export default function BacktestTaskDetailPage() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
-          <TaskExecutionsTab taskId={taskId} />
+          <TaskExecutionsTab taskId={taskId} taskStatus={task.status} />
         </TabPanel>
 
         <TabPanel value={tabValue} index={3}>

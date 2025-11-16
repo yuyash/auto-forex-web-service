@@ -224,7 +224,7 @@ class TradingTaskStartView(APIView):
 
         # Start the task
         try:
-            execution = task.start()
+            task.start()
         except ValueError as e:
             return Response(
                 {"error": str(e)},
@@ -233,15 +233,13 @@ class TradingTaskStartView(APIView):
 
         # TODO: Queue the trading task for execution (will be implemented in task 6.3)
         # from .tasks import run_trading_task
-        # run_trading_task.delay(task.id, execution.id)
+        # run_trading_task.delay(task.id)
 
-        # Serialize and return
-        execution_serializer = TaskExecutionSerializer(execution)
+        # Return success response
         return Response(
             {
                 "message": "Trading task started successfully",
                 "task_id": task.id,
-                "execution": execution_serializer.data,
             },
             status=status.HTTP_202_ACCEPTED,
         )
@@ -411,7 +409,7 @@ class TradingTaskRerunView(APIView):
 
         # Rerun the task
         try:
-            execution = task.rerun()
+            task.rerun()
         except ValueError as e:
             return Response(
                 {"error": str(e)},
@@ -420,15 +418,13 @@ class TradingTaskRerunView(APIView):
 
         # TODO: Queue the trading task for execution (will be implemented in task 6.3)
         # from .tasks import run_trading_task
-        # run_trading_task.delay(task.id, execution.id)
+        # run_trading_task.delay(task.id)
 
-        # Serialize and return
-        execution_serializer = TaskExecutionSerializer(execution)
+        # Return success response
         return Response(
             {
                 "message": "Trading task rerun started successfully",
                 "task_id": task.id,
-                "execution": execution_serializer.data,
             },
             status=status.HTTP_202_ACCEPTED,
         )

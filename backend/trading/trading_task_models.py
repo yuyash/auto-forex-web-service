@@ -109,15 +109,13 @@ class TradingTask(models.Model):
     def __str__(self) -> str:
         return f"{self.name} ({self.config.strategy_type}) - {self.oanda_account.account_id}"
 
-    def start(self) -> Any:
+    def start(self) -> None:
         """
         Start the trading task.
 
-        Creates a new TaskExecution record and transitions task to running state.
+        Transitions task to running state. The actual TaskExecution record
+        will be created by the Celery task that performs the trading.
         Enforces one active task per account constraint.
-
-        Returns:
-            TaskExecution: The created execution record
 
         Raises:
             ValueError: If task is already running or another task is running on the account
@@ -139,46 +137,9 @@ class TradingTask(models.Model):
                     "Only one task can run per account at a time."
                 )
 
-        # Import here to avoid circular dependency
-        from .execution_models import TaskExecution
-
-        # Calculate next execution number
-        last_execution = (
-            TaskExecution.objects.filter(
-                task_type=TaskType.TRADING,
-                task_id=self.id,
-            )
-            .order_by("-execution_number")
-            .first()
-        )
-        next_execution_number = (last_execution.execution_number + 1) if last_execution else 1
-
         # Update task status
         self.status = TaskStatus.RUNNING
         self.save(update_fields=["status", "updated_at"])
-
-        # Create new execution
-        execution = TaskExecution.objects.create(
-            task_type=TaskType.TRADING,
-            task_id=self.id,
-            execution_number=next_execution_number,
-            status=TaskStatus.RUNNING,
-            started_at=timezone.now(),
-        )
-
-        # Send WebSocket notification
-        from trading.services.notifications import send_task_status_notification
-
-        send_task_status_notification(
-            user_id=self.user.id,
-            task_id=self.id,
-            task_name=self.name,
-            task_type="trading",
-            status=TaskStatus.RUNNING,
-            execution_id=execution.id,
-        )
-
-        return execution
 
     def stop(self) -> None:
         """
@@ -298,15 +259,13 @@ class TradingTask(models.Model):
             execution_id=latest_execution.id if latest_execution else None,
         )
 
-    def rerun(self) -> Any:
+    def rerun(self) -> None:
         """
         Rerun the trading task from the beginning.
 
-        Creates a new execution with the same configuration. Task can be in any
-        state (stopped, failed) to be rerun, but not running or paused.
-
-        Returns:
-            TaskExecution: The created execution record
+        Transitions task to running state. The actual TaskExecution record
+        will be created by the Celery task that performs the trading.
+        Task can be in any state (stopped, failed) to be rerun, but not running or paused.
 
         Raises:
             ValueError: If task is currently running or paused
@@ -330,46 +289,9 @@ class TradingTask(models.Model):
                     "Only one task can run per account at a time."
                 )
 
-        # Import here to avoid circular dependency
-        from .execution_models import TaskExecution
-
-        # Calculate next execution number
-        last_execution = (
-            TaskExecution.objects.filter(
-                task_type=TaskType.TRADING,
-                task_id=self.id,
-            )
-            .order_by("-execution_number")
-            .first()
-        )
-        next_execution_number = (last_execution.execution_number + 1) if last_execution else 1
-
         # Update task status
         self.status = TaskStatus.RUNNING
         self.save(update_fields=["status", "updated_at"])
-
-        # Create new execution
-        execution = TaskExecution.objects.create(
-            task_type=TaskType.TRADING,
-            task_id=self.id,
-            execution_number=next_execution_number,
-            status=TaskStatus.RUNNING,
-            started_at=timezone.now(),
-        )
-
-        # Send WebSocket notification
-        from trading.services.notifications import send_task_status_notification
-
-        send_task_status_notification(
-            user_id=self.user.id,
-            task_id=self.id,
-            task_name=self.name,
-            task_type="trading",
-            status=TaskStatus.RUNNING,
-            execution_id=execution.id,
-        )
-
-        return execution
 
     def copy(self, new_name: str) -> "TradingTask":
         """

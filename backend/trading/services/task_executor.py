@@ -371,7 +371,8 @@ def execute_backtest_task(
             total_days = (task.end_time.date() - task.start_time.date()).days + 1
             execution.add_log("INFO", f"Processing {total_days} days of data incrementally...")
 
-            instrument = task.config.parameters.get("instrument", [])
+            # Get instrument from task (not from config parameters)
+            instrument = task.instrument
 
             # Get resource limits and batch size from SystemSettings
             from accounts.models import SystemSettings

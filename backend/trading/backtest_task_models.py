@@ -124,14 +124,12 @@ class BacktestTask(models.Model):
     def __str__(self) -> str:
         return f"{self.name} ({self.config.strategy_type})"
 
-    def start(self) -> Any:
+    def start(self) -> None:
         """
         Start the backtest task.
 
-        Creates a new TaskExecution record and transitions task to running state.
-
-        Returns:
-            TaskExecution: The created execution record
+        Transitions task to running state. The actual TaskExecution record
+        will be created by the Celery task that performs the backtest.
 
         Raises:
             ValueError: If task is already running
@@ -139,46 +137,9 @@ class BacktestTask(models.Model):
         if self.status == TaskStatus.RUNNING:
             raise ValueError("Task is already running")
 
-        # Import here to avoid circular dependency
-        from .execution_models import TaskExecution
-
-        # Calculate next execution number
-        last_execution = (
-            TaskExecution.objects.filter(
-                task_type=TaskType.BACKTEST,
-                task_id=self.id,
-            )
-            .order_by("-execution_number")
-            .first()
-        )
-        next_execution_number = (last_execution.execution_number + 1) if last_execution else 1
-
         # Update task status
         self.status = TaskStatus.RUNNING
         self.save(update_fields=["status", "updated_at"])
-
-        # Create new execution
-        execution = TaskExecution.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=self.id,
-            execution_number=next_execution_number,
-            status=TaskStatus.RUNNING,
-            started_at=timezone.now(),
-        )
-
-        # Send WebSocket notification
-        from trading.services.notifications import send_task_status_notification
-
-        send_task_status_notification(
-            user_id=self.user.id,
-            task_id=self.id,
-            task_name=self.name,
-            task_type="backtest",
-            status=TaskStatus.RUNNING,
-            execution_id=execution.id,
-        )
-
-        return execution
 
     def stop(self) -> None:
         """
@@ -215,15 +176,13 @@ class BacktestTask(models.Model):
             execution_id=latest_execution.id if latest_execution else None,
         )
 
-    def rerun(self) -> Any:
+    def rerun(self) -> None:
         """
         Rerun the backtest task from the beginning.
 
-        Creates a new execution with the same configuration. Task can be in any
-        state (completed, failed, stopped) to be rerun.
-
-        Returns:
-            TaskExecution: The created execution record
+        Transitions task to running state. The actual TaskExecution record
+        will be created by the Celery task that performs the backtest.
+        Task can be in any state (completed, failed, stopped) to be rerun.
 
         Raises:
             ValueError: If task is currently running
@@ -231,46 +190,9 @@ class BacktestTask(models.Model):
         if self.status == TaskStatus.RUNNING:
             raise ValueError("Cannot rerun a task that is currently running. Stop it first.")
 
-        # Import here to avoid circular dependency
-        from .execution_models import TaskExecution
-
-        # Calculate next execution number
-        last_execution = (
-            TaskExecution.objects.filter(
-                task_type=TaskType.BACKTEST,
-                task_id=self.id,
-            )
-            .order_by("-execution_number")
-            .first()
-        )
-        next_execution_number = (last_execution.execution_number + 1) if last_execution else 1
-
         # Update task status
         self.status = TaskStatus.RUNNING
         self.save(update_fields=["status", "updated_at"])
-
-        # Create new execution
-        execution = TaskExecution.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=self.id,
-            execution_number=next_execution_number,
-            status=TaskStatus.RUNNING,
-            started_at=timezone.now(),
-        )
-
-        # Send WebSocket notification
-        from trading.services.notifications import send_task_status_notification
-
-        send_task_status_notification(
-            user_id=self.user.id,
-            task_id=self.id,
-            task_name=self.name,
-            task_type="backtest",
-            status=TaskStatus.RUNNING,
-            execution_id=execution.id,
-        )
-
-        return execution
 
     def copy(self, new_name: str) -> "BacktestTask":
         """

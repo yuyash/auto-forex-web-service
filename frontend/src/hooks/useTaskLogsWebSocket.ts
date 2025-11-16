@@ -39,7 +39,7 @@ export function useTaskLogsWebSocket(options: UseTaskLogsWebSocketOptions) {
   const connectRef = useRef<(() => void) | null>(null);
 
   const connect = useCallback(() => {
-    if (!isAuthenticated || !token || !enabled) {
+    if (!isAuthenticated || !token || !enabled || !taskId || taskId <= 0) {
       return;
     }
 
@@ -51,6 +51,7 @@ export function useTaskLogsWebSocket(options: UseTaskLogsWebSocketOptions) {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/tasks/${taskType}/${taskId}/logs/?token=${token}`;
 
+    console.log(`[TaskLogs WS] Attempting to connect to: ${wsUrl}`);
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {

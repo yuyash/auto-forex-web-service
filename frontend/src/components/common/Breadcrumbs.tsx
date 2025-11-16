@@ -13,12 +13,16 @@ interface BreadcrumbItem {
   path?: string;
 }
 
-const Breadcrumbs = () => {
+interface BreadcrumbsProps {
+  customPath?: BreadcrumbItem[];
+}
+
+const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { t } = useTranslation('common');
 
-  // Check if we came from a specific page
+  // Check if we came from a specific page (via query param)
   const fromPage = searchParams.get('from');
 
   // Route configuration for breadcrumbs
@@ -86,6 +90,60 @@ const Breadcrumbs = () => {
       { label: 'New Task' },
     ],
   };
+
+  // If customPath is provided, use it directly
+  if (customPath) {
+    const breadcrumbs = [
+      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      ...customPath,
+      {
+        label: location.pathname.includes('/edit')
+          ? 'Edit Configuration'
+          : 'Configuration',
+      },
+    ];
+
+    return (
+      <MuiBreadcrumbs
+        separator={<NavigateNextIcon fontSize="small" />}
+        aria-label="breadcrumb"
+        sx={{ mb: 2 }}
+      >
+        {breadcrumbs.map((crumb, index) => {
+          const isLast = index === breadcrumbs.length - 1;
+
+          if (isLast) {
+            return (
+              <Typography
+                key={crumb.label}
+                color="text.primary"
+                sx={{ display: 'flex', alignItems: 'center' }}
+              >
+                {index === 0 && (
+                  <HomeIcon sx={{ mr: 0.5 }} fontSize="inherit" />
+                )}
+                {crumb.label}
+              </Typography>
+            );
+          }
+
+          return (
+            <Link
+              key={crumb.label}
+              component={RouterLink}
+              to={crumb.path || '#'}
+              underline="hover"
+              color="inherit"
+              sx={{ display: 'flex', alignItems: 'center' }}
+            >
+              {index === 0 && <HomeIcon sx={{ mr: 0.5 }} fontSize="inherit" />}
+              {crumb.label}
+            </Link>
+          );
+        })}
+      </MuiBreadcrumbs>
+    );
+  }
 
   // Handle dynamic routes (e.g., /backtest-tasks/:id, /configurations/:id/edit)
   let breadcrumbs = routeConfig[location.pathname];

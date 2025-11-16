@@ -11,6 +11,8 @@ The strategy supports:
 Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
 """
 
+# pylint: disable=too-many-lines
+
 from decimal import Decimal
 from typing import Any
 
@@ -250,9 +252,17 @@ class FloorStrategy(BaseStrategy):
             str(self.get_config_value("volatility_lock_multiplier", 5.0))
         )
 
+        # Entry signal configuration
+        self.entry_signal_lookback_ticks = self.get_config_value("entry_signal_lookback_ticks", 10)
+
         # State
         self.is_locked = False
         self.normal_atr: Decimal | None = None
+
+        # Initialize tracking attributes
+        self._logged_inactive_instruments: set[str] = set()
+        self._price_history: dict[str, list[dict[str, Any]]] = {}
+        self._no_signal_log_count = 0
 
         # Load state from database if exists
         self._load_state()
@@ -313,6 +323,19 @@ class FloorStrategy(BaseStrategy):
 
         # Check if instrument is active for this strategy
         if not self.is_instrument_active(tick_data.instrument):
+            # Log first time we see an inactive instrument
+            if not hasattr(self, "_logged_inactive_instruments"):
+                self._logged_inactive_instruments = set()
+            if tick_data.instrument not in self._logged_inactive_instruments:
+                self.log_strategy_event(
+                    "inactive_instrument",
+                    f"Skipping tick for inactive instrument: {tick_data.instrument}",
+                    {
+                        "instrument": tick_data.instrument,
+                        "strategy_instrument": str(self.instrument),
+                    },
+                )
+                self._logged_inactive_instruments.add(tick_data.instrument)
             return orders
 
         # Check volatility lock
@@ -343,6 +366,105 @@ class FloorStrategy(BaseStrategy):
 
         return orders
 
+    def _check_entry_signal(self, tick_data: TickData) -> dict[str, Any] | None:
+        """
+        Check for entry signal using simple technical analysis.
+
+        According to spec: "Direction (long or short) is chosen after a quick
+        technical check (trend, support/resistance, indicator)."
+
+        This implementation uses a simple price momentum check:
+        - Compare current price to price from N ticks ago
+        - If price is rising consistently, signal long
+        - If price is falling consistently, signal short
+
+        Args:
+            tick_data: Current tick data
+
+        Returns:
+            Dictionary with direction and reason, or None if no signal
+        """
+        # Get or create history for this instrument
+        if tick_data.instrument not in self._price_history:
+            self._price_history[tick_data.instrument] = []
+
+        instrument_history = self._price_history[tick_data.instrument]
+
+        # Add current price to history
+        instrument_history.append(
+            {
+                "timestamp": tick_data.timestamp.timestamp(),
+                "price": tick_data.mid,
+            }
+        )
+
+        # Keep only last 100 ticks
+        if len(instrument_history) > 100:
+            self._price_history[tick_data.instrument] = instrument_history[-100:]
+            instrument_history = self._price_history[tick_data.instrument]
+
+        # Need at least N ticks for signal (configurable)
+        if len(instrument_history) < self.entry_signal_lookback_ticks:
+            return None
+
+        # Calculate price momentum over last N ticks
+        recent_prices = [
+            p["price"] for p in instrument_history[-self.entry_signal_lookback_ticks :]
+        ]
+        oldest_price = recent_prices[0]
+        current_price = recent_prices[-1]
+
+        # Calculate pip movement
+        pip_movement = (current_price - oldest_price) * Decimal("10000")
+
+        # Log periodically for debugging
+        # Log at key milestones: when we first reach lookback threshold, then every 100 ticks
+        should_log = (
+            len(instrument_history) == self.entry_signal_lookback_ticks
+            or len(instrument_history) % 100 == 0
+        )
+        if should_log:
+            lookback = self.entry_signal_lookback_ticks
+            msg = f"Analyzing momentum: {pip_movement:.1f} pips " f"over {lookback} ticks"
+            self.log_strategy_event(
+                "entry_signal_check",
+                msg,
+                {
+                    "instrument": tick_data.instrument,
+                    "pip_movement": str(pip_movement),
+                    "oldest_price": str(oldest_price),
+                    "current_price": str(current_price),
+                    "history_length": len(instrument_history),
+                    "lookback_ticks": lookback,
+                },
+            )
+
+        # Spec says: "Initial entry: Any price level is acceptable"
+        # So we ALWAYS enter, just determine direction based on momentum
+        if pip_movement > 0:
+            direction = "long"
+            reason = f"Upward momentum: {pip_movement:.1f} pips"
+        else:
+            direction = "short"
+            reason = f"Downward momentum: {pip_movement:.1f} pips"
+
+        lookback = self.entry_signal_lookback_ticks
+        msg = f"{direction.upper()} entry: {pip_movement:.1f} pips " f"over {lookback} ticks"
+        self.log_strategy_event(
+            "entry_signal_triggered",
+            msg,
+            {
+                "direction": direction,
+                "pip_movement": str(pip_movement),
+                "lookback_ticks": lookback,
+            },
+        )
+
+        return {
+            "direction": direction,
+            "reason": reason,
+        }
+
     def _process_layer(self, layer: Layer, tick_data: TickData) -> list[Order]:
         """
         Process a single layer.
@@ -360,6 +482,16 @@ class FloorStrategy(BaseStrategy):
         if not layer.positions:
             order = self._create_initial_entry_order(layer, tick_data)
             if order:
+                self.log_strategy_event(
+                    "order_created",
+                    f"Created order for layer {layer.layer_number}",
+                    {
+                        "order_id": order.order_id,
+                        "direction": order.direction,
+                        "units": str(order.units),
+                        "price": str(order.price),
+                    },
+                )
                 orders.append(order)
             return orders
 
@@ -391,9 +523,29 @@ class FloorStrategy(BaseStrategy):
         Returns:
             Order instance or None
         """
-        # For simplicity, we'll use a simple direction determination
-        # In production, this would use technical analysis
-        direction = "long"  # Default direction
+        # Determine entry signal and direction
+        entry_signal = self._check_entry_signal(tick_data)
+        if not entry_signal:
+            # Log why we're not entering (only first few times to avoid spam)
+            if self._no_signal_log_count < 3:
+                history_len = 0
+                if tick_data.instrument in self._price_history:
+                    history_len = len(self._price_history[tick_data.instrument])
+                required = self.entry_signal_lookback_ticks
+                msg = f"No entry signal yet - need {required} ticks, " f"have {history_len}"
+                self.log_strategy_event(
+                    "no_entry_signal",
+                    msg,
+                    {
+                        "layer": layer.layer_number,
+                        "history_length": history_len,
+                        "required_ticks": required,
+                    },
+                )
+                self._no_signal_log_count += 1
+            return None
+
+        direction = entry_signal["direction"]
 
         order = Order(
             account=self.account,
@@ -415,6 +567,7 @@ class FloorStrategy(BaseStrategy):
                 "direction": direction,
                 "units": str(self.base_lot_size),
                 "price": str(tick_data.mid),
+                "signal": entry_signal.get("reason", ""),
             },
         )
 
@@ -977,6 +1130,20 @@ FLOOR_STRATEGY_CONFIG_SCHEMA = {
             ),
             "default": 0.5,
             "minimum": 0,
+        },
+        "entry_signal_lookback_ticks": {
+            "type": "integer",
+            "title": "Initial Entry: Lookback Ticks",
+            "description": (
+                "Number of ticks to analyze for determining entry direction "
+                "(Step 1: 'quick technical check'). "
+                "Analyzes momentum over this period to decide long vs short. "
+                "Per spec: 'Any price level is acceptable' - "
+                "we always enter after this many ticks."
+            ),
+            "default": 10,
+            "minimum": 5,
+            "maximum": 100,
         },
     },
     "required": [

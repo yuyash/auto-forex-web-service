@@ -31,6 +31,7 @@ import type { TaskExecution, ExecutionLog } from '../../../types/execution';
 interface TaskExecutionsTabProps {
   taskId: number;
   taskType?: TaskType;
+  taskStatus?: TaskStatus;
 }
 
 interface ExecutionItemProps {
@@ -148,6 +149,7 @@ function ExecutionItem({
 export function TaskExecutionsTab({
   taskId,
   taskType = TaskType.BACKTEST,
+  taskStatus,
 }: TaskExecutionsTabProps) {
   const [selectedExecution, setSelectedExecution] =
     useState<TaskExecution | null>(null);
@@ -158,6 +160,7 @@ export function TaskExecutionsTab({
     data: executionsData,
     isLoading,
     error,
+    refetch: refetchExecutions,
   } = useTaskExecutions(taskId, taskType);
 
   const executions = executionsData?.results || [];
@@ -178,8 +181,18 @@ export function TaskExecutionsTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [executions.length]);
 
+  // Refetch executions when task status changes (e.g., after rerun)
+  useEffect(() => {
+    if (taskStatus) {
+      refetchExecutions();
+    }
+  }, [taskStatus, refetchExecutions]);
+
   // Connect to WebSocket for live logs when an execution is selected and running
-  const shouldConnectToLogs = selectedExecution?.status === TaskStatus.RUNNING;
+  // Only connect if we have a valid execution ID
+  const shouldConnectToLogs =
+    selectedExecution?.status === TaskStatus.RUNNING &&
+    selectedExecution?.id !== undefined;
 
   useTaskLogsWebSocket({
     taskType: taskType === TaskType.BACKTEST ? 'backtest' : 'trading',
@@ -193,6 +206,9 @@ export function TaskExecutionsTab({
     },
   });
 
+  // Track the last known log count to avoid infinite loops
+  const lastLogCountRef = useRef<number>(0);
+
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
     if (liveLogs.length > 0) {
@@ -204,7 +220,29 @@ export function TaskExecutionsTab({
   const executionId = selectedExecution?.id;
   useEffect(() => {
     setLiveLogs([]);
-  }, [executionId]);
+    lastLogCountRef.current = selectedExecution?.logs?.length || 0;
+  }, [executionId, selectedExecution?.logs?.length]);
+
+  // Update selectedExecution when executions data changes (to get latest logs from API)
+  useEffect(() => {
+    const currentExecutionId = selectedExecution?.id;
+    if (currentExecutionId && executions.length > 0) {
+      const updatedExecution = executions.find(
+        (exec) => exec.id === currentExecutionId
+      );
+      if (updatedExecution) {
+        // Check if logs have been updated from the API
+        const apiLogCount = updatedExecution.logs?.length || 0;
+
+        if (apiLogCount > lastLogCountRef.current) {
+          // API has new logs, update selectedExecution and clear liveLogs to avoid duplicates
+          lastLogCountRef.current = apiLogCount;
+          setSelectedExecution(updatedExecution);
+          setLiveLogs([]);
+        }
+      }
+    }
+  }, [executions, selectedExecution?.id]);
 
   // Combine stored logs with live logs
   const allLogs = selectedExecution

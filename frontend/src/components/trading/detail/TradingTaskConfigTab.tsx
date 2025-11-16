@@ -43,7 +43,9 @@ export function TradingTaskConfigTab({ task }: TradingTaskConfigTabProps) {
   };
 
   const handleEditConfig = () => {
-    navigate(`/configurations/${task.config_id}/edit`);
+    navigate(`/configurations/${task.config_id}/edit`, {
+      state: { from: 'trading-tasks', taskId: task.id, taskName: task.name },
+    });
     handleMenuClose();
   };
 

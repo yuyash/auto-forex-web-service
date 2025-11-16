@@ -217,7 +217,7 @@ class BacktestTaskStartView(APIView):
 
         # Start the task
         try:
-            execution = task.start()
+            task.start()
         except ValueError as e:
             return Response(
                 {"error": str(e)},
@@ -229,13 +229,11 @@ class BacktestTaskStartView(APIView):
 
         run_backtest_task_v2.delay(task.id)
 
-        # Serialize and return
-        execution_serializer = TaskExecutionSerializer(execution)
+        # Return success response
         return Response(
             {
                 "message": "Backtest task started successfully",
                 "task_id": task.id,
-                "execution": execution_serializer.data,
             },
             status=status.HTTP_202_ACCEPTED,
         )
@@ -322,7 +320,7 @@ class BacktestTaskRerunView(APIView):
 
         # Rerun the task
         try:
-            execution = task.rerun()
+            task.rerun()
         except ValueError as e:
             return Response(
                 {"error": str(e)},
@@ -334,13 +332,11 @@ class BacktestTaskRerunView(APIView):
 
         run_backtest_task_v2.delay(task.id)
 
-        # Serialize and return
-        execution_serializer = TaskExecutionSerializer(execution)
+        # Return success response
         return Response(
             {
                 "message": "Backtest task rerun started successfully",
                 "task_id": task.id,
-                "execution": execution_serializer.data,
             },
             status=status.HTTP_202_ACCEPTED,
         )

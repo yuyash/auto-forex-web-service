@@ -11,6 +11,7 @@ Tests cover:
 Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
 """
 
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -417,12 +418,29 @@ class TestFloorStrategy:
         assert layer is not None
         assert len(layer.positions) == 0
 
-        orders = floor_strategy.on_tick(tick_data)
+        # Feed 10 ticks with upward momentum to generate entry signal
+        # Start at 1.1000 and increase by 0.0006 (6 pips) each tick for strong signal
+        base_price = Decimal("1.1000")
+        for i in range(10):
+            price = base_price + (Decimal("0.0006") * i)
+            bid = price - Decimal("0.0001")
+            ask = price + Decimal("0.0001")
+            tick = TickData(
+                instrument="EUR_USD",
+                timestamp=tick_data.timestamp + timedelta(seconds=i),
+                bid=bid,
+                ask=ask,
+                mid=(bid + ask) / Decimal("2"),
+                spread=ask - bid,
+            )
+            orders = floor_strategy.on_tick(tick)
 
+        # The last tick should generate an entry order
         assert len(orders) == 1
         assert orders[0].order_type == "market"
         assert orders[0].instrument == "EUR_USD"
         assert orders[0].units == Decimal("1.0")
+        assert orders[0].direction == "long"  # Upward momentum
 
     def test_calculate_pips(self, strategy):
         """Test pip calculation."""

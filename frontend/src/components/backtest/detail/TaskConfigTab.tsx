@@ -43,7 +43,9 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
   };
 
   const handleEditConfig = () => {
-    navigate(`/configurations/${task.config_id}/edit`);
+    navigate(`/configurations/${task.config_id}/edit`, {
+      state: { from: 'backtest-tasks', taskId: task.id, taskName: task.name },
+    });
     handleMenuClose();
   };
 
