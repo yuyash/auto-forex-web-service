@@ -1098,22 +1098,26 @@ class TaskLogsConsumer(AsyncWebsocketConsumer):
 
 class TaskStatusConsumer(AsyncWebsocketConsumer):
     """
-    WebSocket consumer for streaming task status updates to users.
+    WebSocket consumer for streaming task status updates and logs to users.
 
     This consumer:
     - Accepts WebSocket connections from authenticated users
     - Subscribes to task status updates for the user's tasks
+    - Subscribes to execution log updates for the user's tasks
     - Broadcasts status changes (completed, failed, stopped) to connected clients
+    - Broadcasts real-time execution logs to connected clients
     - Handles connection lifecycle (connect, disconnect, receive)
 
     URL Pattern: ws://host/ws/tasks/status/
+
+    Requirements: 3.3, 3.4, 3.5, 6.7
     """
 
     def __init__(self, *args: Any, **kwargs: Any):
         """Initialize the consumer."""
         super().__init__(*args, **kwargs)
         self.user = None
-        self.group_name: Optional[str] = None
+        self.status_group_name: Optional[str] = None
 
     async def connect(self) -> None:
         """
@@ -1123,6 +1127,8 @@ class TaskStatusConsumer(AsyncWebsocketConsumer):
         1. Authenticates the user
         2. Joins the user-specific task status channel group
         3. Accepts the WebSocket connection
+
+        Requirements: 3.3, 3.4
         """
         # Get user from scope (set by authentication middleware)
         self.user = self.scope.get("user")
@@ -1134,16 +1140,16 @@ class TaskStatusConsumer(AsyncWebsocketConsumer):
             return
 
         # Create group name for this user's tasks
-        self.group_name = f"task_status_user_{self.user.id}"
+        self.status_group_name = f"task_status_user_{self.user.id}"
 
-        # Join the channel group
-        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        # Join the channel group for status updates
+        await self.channel_layer.group_add(self.status_group_name, self.channel_name)
 
         # Accept the WebSocket connection
         await self.accept()
 
         logger.info(
-            "User %s connected to task status updates",
+            "User %s connected to task status updates and logs",
             self.user.username,
         )
 
@@ -1152,15 +1158,17 @@ class TaskStatusConsumer(AsyncWebsocketConsumer):
         Handle WebSocket disconnection.
 
         This method:
-        1. Leaves the channel group
+        1. Leaves the channel groups
         2. Logs the disconnection
 
         Args:
             code: WebSocket close code
+
+        Requirements: 3.3
         """
-        # Leave the channel group
-        if self.group_name:
-            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        # Leave the status channel group
+        if self.status_group_name:
+            await self.channel_layer.group_discard(self.status_group_name, self.channel_name)
 
         logger.info(
             "User %s disconnected from task status updates (code: %s)",
@@ -1284,6 +1292,72 @@ class TaskStatusConsumer(AsyncWebsocketConsumer):
             results_data.get("days_processed"),
             results_data.get("total_days"),
         )
+
+    async def execution_log(self, event: Dict[str, Any]) -> None:
+        """
+        Handle execution log events from the channel layer.
+
+        This method is called when a new log entry is generated during task execution.
+        It verifies task ownership before forwarding the log to the WebSocket client.
+
+        Args:
+            event: Event data containing log information
+
+        Requirements: 6.7
+        """
+        log_data = event.get("data")
+
+        if not log_data:
+            logger.warning("Received execution log event without data")
+            return
+
+        # Verify user owns this task
+        from channels.db import database_sync_to_async
+
+        @database_sync_to_async
+        def check_ownership() -> bool:
+            """Check if the user owns the task."""
+            task_id = log_data.get("task_id")
+            task_type = log_data.get("task_type")
+
+            if not task_id or not task_type:
+                return False
+
+            if task_type == "backtest":
+                from trading.backtest_task_models import BacktestTask
+
+                return BacktestTask.objects.filter(id=task_id, user=self.user).exists()
+            if task_type == "trading":
+                from trading.trading_task_models import TradingTask
+
+                return TradingTask.objects.filter(id=task_id, user=self.user).exists()
+            return False
+
+        # Only send log if user owns the task
+        if await check_ownership():
+            await self.send(
+                text_data=json.dumps(
+                    {
+                        "type": "execution_log",
+                        "data": log_data,
+                    }
+                )
+            )
+
+            logger.debug(
+                "Execution log sent to user %s for task %s/%s: %s",
+                self.user.username if self.user else "Unknown",
+                log_data.get("task_type"),
+                log_data.get("task_id"),
+                log_data.get("log", {}).get("message", "")[:50],
+            )
+        else:
+            logger.warning(
+                "User %s attempted to receive logs for task %s/%s they don't own",
+                self.user.username if self.user else "Unknown",
+                log_data.get("task_type"),
+                log_data.get("task_id"),
+            )
 
 
 class AdminNotificationConsumer(AsyncWebsocketConsumer):

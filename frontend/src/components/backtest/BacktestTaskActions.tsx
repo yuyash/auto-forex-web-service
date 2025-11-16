@@ -21,6 +21,7 @@ import {
   useDeleteBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
 import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
+import { useToast } from '../common';
 
 interface BacktestTaskActionsProps {
   task: BacktestTask;
@@ -34,6 +35,7 @@ export default function BacktestTaskActions({
   onClose,
 }: BacktestTaskActionsProps) {
   const navigate = useNavigate();
+  const { showError } = useToast();
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
@@ -57,10 +59,19 @@ export default function BacktestTaskActions({
       setCopyDialogOpen(false);
     } catch (error) {
       console.error('Failed to copy task:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to copy task';
+      showError(errorMessage);
     }
   };
 
   const handleDeleteClick = () => {
+    // Check if task is running before opening dialog
+    if (task.status === TaskStatus.RUNNING) {
+      showError('Cannot delete running task. Stop it first.');
+      onClose();
+      return;
+    }
     onClose();
     setDeleteDialogOpen(true);
   };
@@ -73,6 +84,16 @@ export default function BacktestTaskActions({
       navigate('/backtest-tasks');
     } catch (error) {
       console.error('Failed to delete task:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to delete task';
+
+      // Check if error is about running task
+      if (errorMessage.includes('running') || errorMessage.includes('409')) {
+        showError('Cannot delete running task. Stop it first.');
+      } else {
+        showError(errorMessage);
+      }
+      setDeleteDialogOpen(false);
     }
   };
 

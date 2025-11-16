@@ -1668,3 +1668,127 @@ def resume_trading_task_v2(task_id: int) -> Dict[str, Any]:
             "task_id": task_id,
             "error": error_msg,
         }
+
+
+@shared_task
+def cleanup_stale_locks_task() -> Dict[str, Any]:
+    """
+    Clean up stale task locks that haven't received heartbeat updates.
+
+    This task runs periodically (every 1 minute) to detect and clean up locks
+    that are older than 5 minutes without a heartbeat update. This prevents
+    orphaned locks from blocking task execution indefinitely.
+
+    When a stale lock is detected:
+    1. The lock is automatically released
+    2. The associated task status is updated to "failed"
+    3. An error message is recorded
+    4. The cleanup action is logged for monitoring
+
+    Returns:
+        Dictionary containing:
+            - success: Whether the cleanup completed successfully
+            - cleaned_count: Number of stale locks cleaned up
+            - failed_tasks: List of task IDs that were marked as failed
+            - error: Error message if cleanup failed
+
+    Requirements: 7.3, 7.4, 7.5
+    """
+    from trading.backtest_task_models import BacktestTask
+    from trading.services.task_lock_manager import TaskLockManager
+
+    logger.info("Starting stale lock cleanup task")
+
+    try:
+        lock_manager = TaskLockManager()
+        cleaned_count = 0
+        failed_tasks = []
+
+        # Get all running backtest tasks
+        running_tasks = BacktestTask.objects.filter(status=TaskStatus.RUNNING)
+
+        logger.info("Checking %d running tasks for stale locks", running_tasks.count())
+
+        for task in running_tasks:
+            try:
+                # Check if lock is stale
+                was_stale = lock_manager.cleanup_stale_lock(
+                    task_type="backtest",
+                    task_id=task.id,
+                )
+
+                if was_stale:
+                    cleaned_count += 1
+                    failed_tasks.append(task.id)
+
+                    # Update task status to failed
+                    task.status = TaskStatus.FAILED
+                    task.save(update_fields=["status", "updated_at"])
+
+                    # Update latest execution status
+                    latest_execution = task.get_latest_execution()
+                    if latest_execution and latest_execution.status == TaskStatus.RUNNING:
+                        latest_execution.status = TaskStatus.FAILED
+                        latest_execution.error_message = (
+                            "Task terminated due to stale lock (no heartbeat for >5 minutes)"
+                        )
+                        latest_execution.completed_at = timezone.now()
+                        latest_execution.save(
+                            update_fields=["status", "error_message", "completed_at"]
+                        )
+
+                    logger.warning(
+                        "Cleaned up stale lock for task %d and marked as failed",
+                        task.id,
+                    )
+
+                    # Send WebSocket notification
+                    from trading.services.notifications import send_task_status_notification
+
+                    send_task_status_notification(
+                        user_id=task.user.id,
+                        task_id=task.id,
+                        task_name=task.name,
+                        task_type="backtest",
+                        status=TaskStatus.FAILED,
+                        execution_id=latest_execution.id if latest_execution else None,
+                        error_message=(
+                            "Task terminated due to stale lock (no heartbeat for >5 minutes)"
+                        ),
+                    )
+
+            except Exception as task_error:  # pylint: disable=broad-exception-caught
+                logger.error(
+                    "Error checking stale lock for task %d: %s",
+                    task.id,
+                    task_error,
+                    exc_info=True,
+                )
+
+        logger.info(
+            "Stale lock cleanup completed: cleaned %d locks, failed %d tasks",
+            cleaned_count,
+            len(failed_tasks),
+        )
+
+        return {
+            "success": True,
+            "cleaned_count": cleaned_count,
+            "failed_tasks": failed_tasks,
+            "error": None,
+        }
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"Stale lock cleanup failed: {str(e)}"
+        logger.error(
+            "Error in cleanup_stale_locks_task: %s",
+            error_msg,
+            exc_info=True,
+        )
+
+        return {
+            "success": False,
+            "cleaned_count": 0,
+            "failed_tasks": [],
+            "error": error_msg,
+        }

@@ -56,6 +56,10 @@ app.conf.beat_schedule = {
         "task": "trading.tasks.cleanup_old_tick_data",
         "schedule": 86400.0,  # Run daily (86400 seconds = 24 hours)
     },
+    "cleanup-stale-locks": {
+        "task": "trading.tasks.cleanup_stale_locks_task",
+        "schedule": 60.0,  # Run every 1 minute (60 seconds)
+    },
     "oanda-sync-task": {
         "task": "trading.oanda_sync_task.oanda_sync_task",
         "schedule": 300.0,  # Default: Run every 5 minutes (configurable in System Settings)

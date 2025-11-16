@@ -24,7 +24,6 @@ from trading.backtest_task_models import BacktestTask
 from trading.enums import TaskStatus, TaskType
 from trading.execution_models import ExecutionMetrics, TaskExecution
 from trading.historical_data_loader import HistoricalDataLoader
-from trading.services.notifications import send_task_status_notification
 from trading.trading_task_models import TradingTask
 from trading_system.config_loader import get_config
 
@@ -247,23 +246,26 @@ def is_task_locked(task_type: str, task_id: int) -> bool:
     return cache.get(lock_key) is not None
 
 
-# pylint: disable=too-many-locals,too-many-statements,too-many-branches
+# pylint: disable=too-many-locals,too-many-statements,too-many-branches,too-many-nested-blocks,too-many-return-statements
 # flake8: noqa: C901
 def execute_backtest_task(
     task_id: int,
 ) -> dict[str, Any]:
     """
-    Execute a backtest task.
+    Execute a backtest task with integrated progress tracking and state management.
 
     This function:
-    1. Acquires execution lock to prevent concurrent execution
+    1. Acquires execution lock using TaskLockManager
     2. Validates the task configuration
     3. Creates a TaskExecution record
-    4. Loads historical data
-    5. Runs the backtest engine
-    6. Creates ExecutionMetrics on completion
-    7. Handles errors and updates status
-    8. Releases execution lock
+    4. Initializes ProgressReporter, StateSynchronizer, and BacktestLogger
+    5. Loads historical data day-by-day
+    6. Runs the backtest engine with heartbeat updates
+    7. Checks cancellation flag every iteration
+    8. Reports progress after each day
+    9. Creates ExecutionMetrics on completion
+    10. Handles errors and updates status
+    11. Releases execution lock
 
     Args:
         task_id: ID of the BacktestTask to execute
@@ -276,16 +278,37 @@ def execute_backtest_task(
             - metrics: Performance metrics (if successful)
             - error: Error message (if failed)
 
-    Requirements: 4.1, 4.6, 4.7, 4.9, 7.1, 7.3, 7.4, 7.5
+    Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 4.1, 4.6, 4.7, 4.9, 5.2, 6.1, 6.2, 6.3,
+        6.4, 7.1, 7.3, 7.4, 7.5
     """
+    from trading.services.backtest_logger import BacktestLogger
+    from trading.services.progress_reporter import ProgressReporter
+    from trading.services.state_synchronizer import StateSynchronizer
+    from trading.services.task_lock_manager import TaskLockManager
+
     execution = None
     task = None
+    lock_manager = TaskLockManager()
 
-    # Acquire execution lock
-    with task_execution_lock("backtest", task_id) as lock_acquired:
-        if not lock_acquired:
-            error_msg = "Task is already running. Cannot start concurrent execution."
-            logger.error("Failed to acquire lock for backtest task %d", task_id)
+    # Acquire execution lock using TaskLockManager
+    if not lock_manager.acquire_lock("backtest", task_id):
+        error_msg = "Task is already running. Cannot start concurrent execution."
+        logger.error("Failed to acquire lock for backtest task %d", task_id)
+        return {
+            "success": False,
+            "task_id": task_id,
+            "execution_id": None,
+            "error": error_msg,
+        }
+
+    try:
+        # Fetch the task
+        try:
+            task = BacktestTask.objects.select_related("config", "user").get(id=task_id)
+        except BacktestTask.DoesNotExist:
+            error_msg = f"BacktestTask with id {task_id} does not exist"
+            logger.error(error_msg)
+            lock_manager.release_lock("backtest", task_id)
             return {
                 "success": False,
                 "task_id": task_id,
@@ -293,144 +316,326 @@ def execute_backtest_task(
                 "error": error_msg,
             }
 
-        try:
-            # Fetch the task
-            try:
-                task = BacktestTask.objects.select_related("config", "user").get(id=task_id)
-            except BacktestTask.DoesNotExist:
-                error_msg = f"BacktestTask with id {task_id} does not exist"
-                logger.error(error_msg)
-                return {
-                    "success": False,
-                    "task_id": task_id,
-                    "execution_id": None,
-                    "error": error_msg,
-                }
+        # Validate configuration
+        is_valid, error_message = task.validate_configuration()
+        if not is_valid:
+            logger.error("Task %d validation failed: %s", task_id, error_message)
+            lock_manager.release_lock("backtest", task_id)
+            return {
+                "success": False,
+                "task_id": task_id,
+                "execution_id": None,
+                "error": f"Validation failed: {error_message}",
+            }
 
-            # Validate configuration
-            is_valid, error_message = task.validate_configuration()
-            if not is_valid:
-                logger.error("Task %d validation failed: %s", task_id, error_message)
-                return {
-                    "success": False,
-                    "task_id": task_id,
-                    "execution_id": None,
-                    "error": f"Validation failed: {error_message}",
-                }
-
-            # Create TaskExecution record
-            with transaction.atomic():
-                # Get next execution number
-                last_execution = (
-                    TaskExecution.objects.filter(
-                        task_type=TaskType.BACKTEST,
-                        task_id=task_id,
-                    )
-                    .order_by("-execution_number")
-                    .first()
-                )
-                execution_number = (last_execution.execution_number + 1) if last_execution else 1
-
-                execution = TaskExecution.objects.create(
+        # Create TaskExecution record
+        with transaction.atomic():
+            # Get next execution number
+            last_execution = (
+                TaskExecution.objects.filter(
                     task_type=TaskType.BACKTEST,
                     task_id=task_id,
-                    execution_number=execution_number,
-                    status=TaskStatus.RUNNING,
-                    started_at=timezone.now(),
+                )
+                .order_by("-execution_number")
+                .first()
+            )
+            execution_number = (last_execution.execution_number + 1) if last_execution else 1
+
+            execution = TaskExecution.objects.create(
+                task_type=TaskType.BACKTEST,
+                task_id=task_id,
+                execution_number=execution_number,
+                status=TaskStatus.RUNNING,
+                started_at=timezone.now(),
+            )
+
+            # Update task status
+            task.status = TaskStatus.RUNNING
+            task.save(update_fields=["status", "updated_at"])
+
+        # Initialize services
+        state_synchronizer = StateSynchronizer()
+        backtest_logger = BacktestLogger(
+            task_id=task.id,
+            execution_id=execution.id,
+            execution_number=execution.execution_number,
+            user_id=task.user.id,
+        )
+
+        # Calculate total days for progress tracking
+        total_days = (task.end_time.date() - task.start_time.date()).days + 1
+        progress_reporter = ProgressReporter(
+            task_id=task.id, execution_id=execution.id, user_id=task.user.id, total_days=total_days
+        )
+
+        logger.info(
+            "Started backtest task %d execution #%d",
+            task_id,
+            execution_number,
+        )
+
+        # Use BacktestLogger for structured logging
+        start_str = task.start_time.strftime("%Y-%m-%d %H:%M")
+        end_str = task.end_time.strftime("%Y-%m-%d %H:%M")
+        backtest_logger.log_execution_start(total_days, f"{start_str} to {end_str}")
+        execution.add_log("INFO", f"Started backtest execution #{execution_number}")
+        execution.add_log("INFO", f"Period: {start_str} to {end_str}")
+        execution.add_log("INFO", f"Strategy: {task.config.strategy_type}")
+        execution.add_log("INFO", f"Instrument: {task.instrument}")
+        execution.add_log("INFO", f"Initial balance: {task.initial_balance}")
+
+        # Initialize data loader
+        execution.add_log("INFO", f"Initializing data loader from {task.data_source}...")
+        # Validate data_source is one of the expected literal values
+        if task.data_source not in ("postgresql", "athena"):
+            raise ValueError(f"Invalid data source: {task.data_source}")
+        # Type narrowing: after validation, we know it's one of the literal values
+        from typing import Literal, cast
+
+        data_source = cast(Literal["postgresql", "athena"], task.data_source)
+        data_loader = HistoricalDataLoader(data_source=data_source)
+
+        execution.add_log("INFO", f"Processing {total_days} days of data incrementally...")
+
+        # Get instrument from task (not from config parameters)
+        instrument = task.instrument
+
+        # Get resource limits and batch size from SystemSettings
+        from accounts.models import SystemSettings
+
+        try:
+            sys_settings = SystemSettings.get_settings()
+            cpu_limit = sys_settings.backtest_cpu_limit
+            memory_limit = sys_settings.backtest_memory_limit
+            day_batch_size = sys_settings.backtest_day_batch_size
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Fallback to config file if SystemSettings not available
+            cpu_limit = get_config("backtesting.cpu_limit", 1)
+            memory_limit = get_config("backtesting.memory_limit", 2147483648)  # 2GB
+            day_batch_size = 1  # Default to 1 day per batch
+
+        # Create backtest configuration
+        backtest_config = BacktestConfig(
+            strategy_type=task.config.strategy_type,
+            strategy_config=task.config.parameters,
+            instrument=instrument,
+            start_date=task.start_time,
+            end_date=task.end_time,
+            initial_balance=task.initial_balance,
+            commission_per_trade=task.commission_per_trade,
+            cpu_limit=cpu_limit,
+            memory_limit=memory_limit,
+        )
+
+        # Initialize backtest engine
+        logger.info("Initializing backtest engine for task %d", task_id)
+        execution.add_log("INFO", "Starting backtest engine...")
+        execution.add_log(
+            "INFO",
+            f"CPU limit: {cpu_limit} cores, Memory limit: {memory_limit / (1024**3):.1f}GB",
+        )
+        engine = BacktestEngine(backtest_config)
+
+        # Run incremental backtest with fetch-execute-notify cycle
+        batch_msg = f"batch of {day_batch_size} day(s)" if day_batch_size > 1 else "day"
+        execution.add_log(
+            "INFO",
+            f"Starting incremental backtest " f"(fetch → execute → notify per {batch_msg})...",
+        )
+        execution.add_log("INFO", f"Day batch size: {day_batch_size}")
+
+        # Initialize strategy and monitoring
+        # pylint: disable=protected-access
+        engine._initialize_strategy()
+        engine._start_resource_monitoring()
+        engine._set_cpu_limit()
+        # pylint: enable=protected-access
+
+        # Process in batches: fetch N days → execute N days → notify
+        current_date = task.start_time
+        day_index = 0
+        batch_tick_count = 0
+        execution_start_time = timezone.now()
+
+        while current_date.date() <= task.end_time.date():
+            # Check cancellation flag at the start of each day
+            if lock_manager.check_cancellation_flag("backtest", task_id):
+                logger.info("Task %d cancelled by user", task_id)
+                backtest_logger.log_warning("Task cancelled by user")
+                execution.add_log("WARNING", "Task cancelled by user")
+
+                # Stop resource monitoring
+                if engine.resource_monitor:
+                    engine.resource_monitor.stop()
+
+                # Transition to stopped state
+                state_synchronizer.transition_to_stopped(task, execution)
+
+                # Release lock
+                lock_manager.release_lock("backtest", task_id)
+
+                return {
+                    "success": False,
+                    "task_id": task_id,
+                    "execution_id": execution.id,
+                    "error": "Task cancelled by user",
+                }
+
+            # Update heartbeat
+            lock_manager.update_heartbeat("backtest", task_id)
+
+            # Report day start
+            progress_reporter.report_day_start(current_date, day_index)
+            backtest_logger.log_day_start(day_index, total_days, current_date.strftime("%Y-%m-%d"))
+
+            # STEP 1: Fetch data for this day
+            execution.add_log("INFO", f"Fetching data for {current_date.strftime('%Y-%m-%d')}...")
+            day_tick_data, load_error = _load_backtest_data_by_day(task, data_loader, current_date)
+
+            if load_error:
+                logger.error(load_error)
+                backtest_logger.log_error(load_error)
+                execution.add_log("ERROR", load_error)
+                if engine.resource_monitor:
+                    engine.resource_monitor.stop()
+
+                # Transition to failed state
+                state_synchronizer.transition_to_failed(task, execution, load_error)
+
+                # Release lock
+                lock_manager.release_lock("backtest", task_id)
+
+                return {
+                    "success": False,
+                    "task_id": task_id,
+                    "execution_id": execution.id,
+                    "error": load_error,
+                }
+
+            # STEP 2: Execute backtest for this day
+            day_start_time = timezone.now()
+            if day_tick_data:
+                date_str = current_date.strftime("%Y-%m-%d")
+                backtest_logger.log_day_processing(day_index, total_days, len(day_tick_data))
+                execution.add_log(
+                    "INFO",
+                    f"Processing {len(day_tick_data)} ticks for {date_str}...",
+                )
+                batch_tick_count += len(day_tick_data)
+
+                # For large tick batches (>100k), report intermediate progress
+                tick_count = len(day_tick_data)
+                report_interval = 10000 if tick_count > 100000 else tick_count + 1
+
+                for tick_idx, tick in enumerate(day_tick_data):
+                    # Check cancellation flag periodically during large batches
+                    if tick_idx % 10000 == 0 and lock_manager.check_cancellation_flag(
+                        "backtest", task_id
+                    ):
+                        logger.info("Task %d cancelled by user during tick processing", task_id)
+                        backtest_logger.log_warning("Task cancelled by user during tick processing")
+                        execution.add_log("WARNING", "Task cancelled by user")
+
+                        if engine.resource_monitor:
+                            engine.resource_monitor.stop()
+
+                        state_synchronizer.transition_to_stopped(task, execution)
+                        lock_manager.release_lock("backtest", task_id)
+
+                        return {
+                            "success": False,
+                            "task_id": task_id,
+                            "execution_id": execution.id,
+                            "error": "Task cancelled by user",
+                        }
+
+                    # Check resource limits
+                    if engine.resource_monitor and engine.resource_monitor.is_exceeded():
+                        engine.terminated = True
+                        memory_mb = engine.config.memory_limit / 1024 / 1024
+                        error_msg = f"Memory limit exceeded ({memory_mb:.0f}MB)"
+                        backtest_logger.log_error(error_msg)
+                        execution.add_log("ERROR", error_msg)
+                        if engine.resource_monitor:
+                            engine.resource_monitor.stop()
+                        raise RuntimeError(error_msg)
+
+                    # Process tick
+                    engine._process_tick(tick)  # pylint: disable=protected-access
+
+                    # Report intermediate progress for large batches
+                    if tick_idx > 0 and tick_idx % report_interval == 0:
+                        elapsed = (timezone.now() - day_start_time).total_seconds()
+                        progress_reporter.report_day_progress(tick_idx, tick_count)
+                        backtest_logger.log_tick_progress(
+                            tick_idx, tick_count, elapsed, day_index, total_days
+                        )
+
+                # Record equity at end of day
+                # pylint: disable=protected-access
+                engine._record_equity(day_tick_data[-1].timestamp)
+
+            # Calculate day processing time
+            day_processing_time = (timezone.now() - day_start_time).total_seconds()
+
+            # Report day complete
+            progress_reporter.report_day_complete(day_index, day_processing_time)
+            backtest_logger.log_day_complete(day_index, total_days, day_processing_time)
+
+            # Move to next day
+            day_index += 1
+            current_date += timedelta(days=1)
+
+            # STEP 3: Send notification after batch is complete or at end
+            should_notify = (day_index % day_batch_size == 0) or (
+                current_date.date() > task.end_time.date()
+            )
+
+            if should_notify:
+                # Calculate intermediate metrics and notify
+                intermediate_metrics = engine.calculate_performance_metrics()
+                progress = int((day_index / total_days) * 100)
+
+                # Prepare intermediate results
+                recent_trades = (
+                    [t.to_dict() for t in engine.trade_log[-10:]] if engine.trade_log else []
+                )
+                equity_points = (
+                    [p.to_dict() for p in engine.equity_curve[-100:]] if engine.equity_curve else []
                 )
 
-                # Update task status
-                task.status = TaskStatus.RUNNING
-                task.save(update_fields=["status", "updated_at"])
+                # Use the last processed date for the batch
+                batch_end_date = (current_date - timedelta(days=1)).date()
 
-            logger.info(
-                "Started backtest task %d execution #%d",
-                task_id,
-                execution_number,
-            )
-            execution.add_log("INFO", f"Started backtest execution #{execution_number}")
-            start_str = task.start_time.strftime("%Y-%m-%d %H:%M")
-            end_str = task.end_time.strftime("%Y-%m-%d %H:%M")
-            execution.add_log("INFO", f"Period: {start_str} to {end_str}")
-            execution.add_log("INFO", f"Strategy: {task.config.strategy_type}")
-            execution.add_log("INFO", f"Instrument: {task.instrument}")
-            execution.add_log("INFO", f"Initial balance: {task.initial_balance}")
+                intermediate_results = {
+                    "day_date": batch_end_date.isoformat(),
+                    "progress": progress,
+                    "days_processed": day_index,
+                    "total_days": total_days,
+                    "ticks_processed": batch_tick_count,
+                    "balance": float(engine.balance),
+                    "total_trades": len(engine.trade_log),
+                    "metrics": intermediate_metrics,
+                    "recent_trades": recent_trades,
+                    "equity_curve": equity_points,
+                }
 
-            # Initialize data loader
-            execution.add_log("INFO", f"Initializing data loader from {task.data_source}...")
-            # Validate data_source is one of the expected literal values
-            if task.data_source not in ("postgresql", "athena"):
-                raise ValueError(f"Invalid data source: {task.data_source}")
-            # Type narrowing: after validation, we know it's one of the literal values
-            from typing import Literal, cast
+                # Update progress via execution model
+                execution.update_progress(progress, user_id=task.user.id)
 
-            data_source = cast(Literal["postgresql", "athena"], task.data_source)
-            data_loader = HistoricalDataLoader(data_source=data_source)
+                # Log progress
+                execution.add_log(
+                    "INFO",
+                    f"Day {day_index}/{total_days}: "
+                    f"{batch_end_date.isoformat()} - "
+                    f"Balance: ${intermediate_results['balance']:,.2f}, "
+                    f"Trades: {intermediate_results['total_trades']}",
+                )
 
-            # Calculate total days for progress tracking
-            total_days = (task.end_time.date() - task.start_time.date()).days + 1
-            execution.add_log("INFO", f"Processing {total_days} days of data incrementally...")
+                # Send intermediate results via WebSocket
+                from trading.services.notifications import send_backtest_intermediate_results
 
-            # Get instrument from task (not from config parameters)
-            instrument = task.instrument
-
-            # Get resource limits and batch size from SystemSettings
-            from accounts.models import SystemSettings
-
-            try:
-                sys_settings = SystemSettings.get_settings()
-                cpu_limit = sys_settings.backtest_cpu_limit
-                memory_limit = sys_settings.backtest_memory_limit
-                day_batch_size = sys_settings.backtest_day_batch_size
-            except Exception:  # pylint: disable=broad-exception-caught
-                # Fallback to config file if SystemSettings not available
-                cpu_limit = get_config("backtesting.cpu_limit", 1)
-                memory_limit = get_config("backtesting.memory_limit", 2147483648)  # 2GB
-                day_batch_size = 1  # Default to 1 day per batch
-
-            # Create backtest configuration
-            backtest_config = BacktestConfig(
-                strategy_type=task.config.strategy_type,
-                strategy_config=task.config.parameters,
-                instrument=instrument,
-                start_date=task.start_time,
-                end_date=task.end_time,
-                initial_balance=task.initial_balance,
-                commission_per_trade=task.commission_per_trade,
-                cpu_limit=cpu_limit,
-                memory_limit=memory_limit,
-            )
-
-            # Initialize backtest engine
-            logger.info("Initializing backtest engine for task %d", task_id)
-            execution.add_log("INFO", "Starting backtest engine...")
-            execution.add_log(
-                "INFO",
-                f"CPU limit: {cpu_limit} cores, Memory limit: {memory_limit / (1024**3):.1f}GB",
-            )
-            engine = BacktestEngine(backtest_config)
-
-            # Define callback for day completion with intermediate results
-            # pylint: disable=unused-argument
-            def day_complete_callback(day_date: Any, intermediate_results: dict[str, Any]) -> None:
-                """Send intermediate backtest results via WebSocket after each day."""
                 try:
-                    # Update progress
-                    progress = intermediate_results["progress"]
-                    execution.update_progress(progress, user_id=task.user.id)
-
-                    # Log progress
-                    execution.add_log(
-                        "INFO",
-                        f"Day {intermediate_results['days_processed']}/{intermediate_days}: "
-                        f"{intermediate_results['day_date']} - "
-                        f"Balance: ${intermediate_results['balance']:,.2f}, "
-                        f"Trades: {intermediate_results['total_trades']}",
-                    )
-
-                    # Send intermediate results via WebSocket
-                    from trading.services.notifications import send_backtest_intermediate_results
-
                     send_backtest_intermediate_results(
                         task_id=task_id,
                         execution_id=execution.id,
@@ -440,297 +645,172 @@ def execute_backtest_task(
                 except Exception as e:  # pylint: disable=broad-exception-caught
                     logger.warning("Failed to send intermediate results: %s", e)
 
-            # Run incremental backtest with fetch-execute-notify cycle
-            batch_msg = f"batch of {day_batch_size} day(s)" if day_batch_size > 1 else "day"
+                # Reset batch tick counter
+                batch_tick_count = 0
+
+        # Finalize strategy to save final state
+        if engine.strategy and hasattr(engine.strategy, "finalize"):
+            try:
+                engine.strategy.finalize()
+                execution.add_log("INFO", "Strategy state finalized")
+            except Exception as e:
+                logger.warning("Failed to finalize strategy: %s", e)
+
+        # Stop resource monitoring
+        if engine.resource_monitor:
+            engine.resource_monitor.stop()
+            engine._log_resource_usage()  # pylint: disable=protected-access
+
+        # Get final results
+        trade_log = engine.trade_log
+        equity_curve = engine.equity_curve
+        performance_metrics = engine.calculate_performance_metrics()
+
+        # Calculate total execution time
+        total_execution_time = (timezone.now() - execution_start_time).total_seconds()
+
+        # Log execution complete
+        backtest_logger.log_execution_complete(total_execution_time, len(trade_log))
+
+        execution.add_log(
+            "INFO",
+            f"Incremental backtest completed: {len(trade_log)} trades, "
+            f"final balance: {engine.balance}",
+        )
+
+        execution.add_log("INFO", "=" * 60)
+        execution.add_log("INFO", "BACKTEST EXECUTION COMPLETED")
+        execution.add_log("INFO", "=" * 60)
+
+        # Initial state
+        execution.add_log("INFO", "")
+        execution.add_log("INFO", "INITIAL STATE:")
+        execution.add_log("INFO", f"  Initial Balance: ${task.initial_balance:,.2f}")
+        execution.add_log("INFO", f"  Commission per Trade: ${task.commission_per_trade}")
+
+        # Final state
+        execution.add_log("INFO", "")
+        execution.add_log("INFO", "FINAL STATE:")
+        execution.add_log("INFO", f"  Final Balance: ${engine.balance:,.2f}")
+        execution.add_log(
+            "INFO", f"  Total Return: {performance_metrics.get('total_return', 0):.2f}%"
+        )
+        execution.add_log("INFO", f"  Total P&L: ${performance_metrics.get('total_pnl', 0):,.2f}")
+
+        # Trading statistics
+        execution.add_log("INFO", "")
+        execution.add_log("INFO", "TRADING STATISTICS:")
+        execution.add_log("INFO", f"  Total Trades: {len(trade_log)}")
+        execution.add_log(
+            "INFO", f"  Winning Trades: {performance_metrics.get('winning_trades', 0)}"
+        )
+        execution.add_log("INFO", f"  Losing Trades: {performance_metrics.get('losing_trades', 0)}")
+        execution.add_log("INFO", f"  Win Rate: {performance_metrics.get('win_rate', 0):.2f}%")
+
+        # Performance metrics
+        execution.add_log("INFO", "")
+        execution.add_log("INFO", "PERFORMANCE METRICS:")
+        execution.add_log(
+            "INFO", f"  Max Drawdown: {performance_metrics.get('max_drawdown', 0):.2f}%"
+        )
+        execution.add_log(
+            "INFO", f"  Average Win: ${performance_metrics.get('average_win', 0):,.2f}"
+        )
+        execution.add_log(
+            "INFO", f"  Average Loss: ${performance_metrics.get('average_loss', 0):,.2f}"
+        )
+        if performance_metrics.get("sharpe_ratio") is not None:
             execution.add_log(
-                "INFO",
-                f"Starting incremental backtest " f"(fetch → execute → notify per {batch_msg})...",
+                "INFO", f"  Sharpe Ratio: {performance_metrics.get('sharpe_ratio'):.3f}"
             )
-            execution.add_log("INFO", f"Day batch size: {day_batch_size}")
-
-            # Initialize strategy and monitoring
-            # pylint: disable=protected-access
-            engine._initialize_strategy()
-            engine._start_resource_monitoring()
-            engine._set_cpu_limit()
-            # pylint: enable=protected-access
-
-            # Process in batches: fetch N days → execute N days → notify
-            current_date = task.start_time
-            day_index = 0
-            intermediate_days = total_days
-            batch_tick_count = 0
-
-            while current_date.date() <= task.end_time.date():
-                # STEP 1: Fetch data for this day
-                execution.add_log(
-                    "INFO", f"Fetching data for {current_date.strftime('%Y-%m-%d')}..."
-                )
-                day_tick_data, load_error = _load_backtest_data_by_day(
-                    task, data_loader, current_date
-                )
-
-                if load_error:
-                    logger.error(load_error)
-                    execution.add_log("ERROR", load_error)
-                    if engine.resource_monitor:
-                        engine.resource_monitor.stop()
-                    execution.mark_failed(RuntimeError(load_error))
-                    task.status = TaskStatus.FAILED
-                    task.save(update_fields=["status", "updated_at"])
-                    return {
-                        "success": False,
-                        "task_id": task_id,
-                        "execution_id": execution.id,
-                        "error": load_error,
-                    }
-
-                # STEP 2: Execute backtest for this day
-                if day_tick_data:
-                    date_str = current_date.strftime("%Y-%m-%d")
-                    execution.add_log(
-                        "INFO",
-                        f"Processing {len(day_tick_data)} ticks for {date_str}...",
-                    )
-                    batch_tick_count += len(day_tick_data)
-
-                    for tick in day_tick_data:
-                        # Check resource limits
-                        if engine.resource_monitor and engine.resource_monitor.is_exceeded():
-                            engine.terminated = True
-                            memory_mb = engine.config.memory_limit / 1024 / 1024
-                            error_msg = f"Memory limit exceeded ({memory_mb:.0f}MB)"
-                            execution.add_log("ERROR", error_msg)
-                            if engine.resource_monitor:
-                                engine.resource_monitor.stop()
-                            raise RuntimeError(error_msg)
-
-                        # Process tick
-                        engine._process_tick(tick)  # pylint: disable=protected-access
-
-                    # Record equity at end of day
-                    # pylint: disable=protected-access
-                    engine._record_equity(day_tick_data[-1].timestamp)
-
-                # Move to next day
-                day_index += 1
-                current_date += timedelta(days=1)
-
-                # STEP 3: Send notification after batch is complete or at end
-                should_notify = (day_index % day_batch_size == 0) or (
-                    current_date.date() > task.end_time.date()
-                )
-
-                if should_notify:
-                    # Calculate intermediate metrics and notify
-                    intermediate_metrics = engine.calculate_performance_metrics()
-                    progress = int((day_index / total_days) * 100)
-
-                    # Prepare intermediate results
-                    recent_trades = (
-                        [t.to_dict() for t in engine.trade_log[-10:]] if engine.trade_log else []
-                    )
-                    equity_points = (
-                        [p.to_dict() for p in engine.equity_curve[-100:]]
-                        if engine.equity_curve
-                        else []
-                    )
-
-                    # Use the last processed date for the batch
-                    batch_end_date = (current_date - timedelta(days=1)).date()
-
-                    intermediate_results = {
-                        "day_date": batch_end_date.isoformat(),
-                        "progress": progress,
-                        "days_processed": day_index,
-                        "total_days": total_days,
-                        "ticks_processed": batch_tick_count,
-                        "balance": float(engine.balance),
-                        "total_trades": len(engine.trade_log),
-                        "metrics": intermediate_metrics,
-                        "recent_trades": recent_trades,
-                        "equity_curve": equity_points,
-                    }
-
-                    # Send notification
-                    day_complete_callback(batch_end_date, intermediate_results)
-
-                    # Reset batch tick counter
-                    batch_tick_count = 0
-
-            # Stop resource monitoring
-            if engine.resource_monitor:
-                engine.resource_monitor.stop()
-                engine._log_resource_usage()  # pylint: disable=protected-access
-
-            # Get final results
-            trade_log = engine.trade_log
-            equity_curve = engine.equity_curve
-            performance_metrics = engine.calculate_performance_metrics()
-
+        if performance_metrics.get("profit_factor") is not None:
             execution.add_log(
-                "INFO",
-                f"Incremental backtest completed: {len(trade_log)} trades, "
-                f"final balance: {engine.balance}",
+                "INFO", f"  Profit Factor: {performance_metrics.get('profit_factor'):.3f}"
             )
 
-            execution.add_log("INFO", "=" * 60)
-            execution.add_log("INFO", "BACKTEST EXECUTION COMPLETED")
-            execution.add_log("INFO", "=" * 60)
-
-            # Initial state
+        # Trade details
+        if len(trade_log) > 0:
             execution.add_log("INFO", "")
-            execution.add_log("INFO", "INITIAL STATE:")
-            execution.add_log("INFO", f"  Initial Balance: ${task.initial_balance:,.2f}")
-            execution.add_log("INFO", f"  Commission per Trade: ${task.commission_per_trade}")
-
-            # Final state
-            execution.add_log("INFO", "")
-            execution.add_log("INFO", "FINAL STATE:")
-            execution.add_log("INFO", f"  Final Balance: ${engine.balance:,.2f}")
-            execution.add_log(
-                "INFO", f"  Total Return: {performance_metrics.get('total_return', 0):.2f}%"
-            )
-            execution.add_log(
-                "INFO", f"  Total P&L: ${performance_metrics.get('total_pnl', 0):,.2f}"
-            )
-
-            # Trading statistics
-            execution.add_log("INFO", "")
-            execution.add_log("INFO", "TRADING STATISTICS:")
-            execution.add_log("INFO", f"  Total Trades: {len(trade_log)}")
-            execution.add_log(
-                "INFO", f"  Winning Trades: {performance_metrics.get('winning_trades', 0)}"
-            )
-            execution.add_log(
-                "INFO", f"  Losing Trades: {performance_metrics.get('losing_trades', 0)}"
-            )
-            execution.add_log("INFO", f"  Win Rate: {performance_metrics.get('win_rate', 0):.2f}%")
-
-            # Performance metrics
-            execution.add_log("INFO", "")
-            execution.add_log("INFO", "PERFORMANCE METRICS:")
-            execution.add_log(
-                "INFO", f"  Max Drawdown: {performance_metrics.get('max_drawdown', 0):.2f}%"
-            )
-            execution.add_log(
-                "INFO", f"  Average Win: ${performance_metrics.get('average_win', 0):,.2f}"
-            )
-            execution.add_log(
-                "INFO", f"  Average Loss: ${performance_metrics.get('average_loss', 0):,.2f}"
-            )
-            if performance_metrics.get("sharpe_ratio") is not None:
-                execution.add_log(
-                    "INFO", f"  Sharpe Ratio: {performance_metrics.get('sharpe_ratio'):.3f}"
-                )
-            if performance_metrics.get("profit_factor") is not None:
-                execution.add_log(
-                    "INFO", f"  Profit Factor: {performance_metrics.get('profit_factor'):.3f}"
-                )
-
-            # Trade details
-            if len(trade_log) > 0:
+            execution.add_log("INFO", "TRADE LOG:")
+            execution.add_log("INFO", "-" * 60)
+            for i, trade in enumerate(trade_log[:10], 1):  # Show first 10 trades
+                execution.add_log("INFO", f"Trade #{i}:")
+                execution.add_log("INFO", f"  Direction: {trade.direction}")
+                execution.add_log("INFO", f"  Instrument: {trade.instrument}")
+                execution.add_log("INFO", f"  Units: {trade.units}")
+                execution.add_log("INFO", f"  Entry Price: {trade.entry_price:.5f}")
+                execution.add_log("INFO", f"  Exit Price: {trade.exit_price:.5f}")
+                pnl_sign = "+" if trade.pnl >= 0 else ""
+                execution.add_log("INFO", f"  P&L: {pnl_sign}${trade.pnl:,.2f}")
+                execution.add_log("INFO", f"  Entry Time: {trade.entry_time.isoformat()}")
+                execution.add_log("INFO", f"  Exit Time: {trade.exit_time.isoformat()}")
                 execution.add_log("INFO", "")
-                execution.add_log("INFO", "TRADE LOG:")
-                execution.add_log("INFO", "-" * 60)
-                for i, trade in enumerate(trade_log[:10], 1):  # Show first 10 trades
-                    execution.add_log("INFO", f"Trade #{i}:")
-                    execution.add_log("INFO", f"  Direction: {trade.direction}")
-                    execution.add_log("INFO", f"  Instrument: {trade.instrument}")
-                    execution.add_log("INFO", f"  Units: {trade.units}")
-                    execution.add_log("INFO", f"  Entry Price: {trade.entry_price:.5f}")
-                    execution.add_log("INFO", f"  Exit Price: {trade.exit_price:.5f}")
-                    pnl_sign = "+" if trade.pnl >= 0 else ""
-                    execution.add_log("INFO", f"  P&L: {pnl_sign}${trade.pnl:,.2f}")
-                    execution.add_log("INFO", f"  Entry Time: {trade.entry_time.isoformat()}")
-                    execution.add_log("INFO", f"  Exit Time: {trade.exit_time.isoformat()}")
-                    execution.add_log("INFO", "")
 
-                if len(trade_log) > 10:
-                    execution.add_log("INFO", f"... and {len(trade_log) - 10} more trades")
-                    execution.add_log("INFO", "")
+            if len(trade_log) > 10:
+                execution.add_log("INFO", f"... and {len(trade_log) - 10} more trades")
+                execution.add_log("INFO", "")
 
-            execution.add_log("INFO", "=" * 60)
+        execution.add_log("INFO", "=" * 60)
 
-            logger.info(
-                "Backtest completed: %d trades, final balance: %s",
-                len(trade_log),
-                engine.balance,
+        logger.info(
+            "Backtest completed: %d trades, final balance: %s",
+            len(trade_log),
+            engine.balance,
+        )
+
+        # Create ExecutionMetrics
+        with transaction.atomic():
+            metrics = _create_execution_metrics(
+                execution, performance_metrics, equity_curve, trade_log
             )
 
-            # Create ExecutionMetrics
-            with transaction.atomic():
-                metrics = _create_execution_metrics(
-                    execution, performance_metrics, equity_curve, trade_log
-                )
+        # Use StateSynchronizer to transition to completed state
+        state_synchronizer.transition_to_completed(task, execution)
 
-                # Mark execution as completed
-                execution.mark_completed()
+        logger.info(
+            "Backtest task %d execution #%d completed successfully",
+            task_id,
+            execution_number,
+        )
 
-                # Update task status
-                task.status = TaskStatus.COMPLETED
-                task.save(update_fields=["status", "updated_at"])
+        # Release lock
+        lock_manager.release_lock("backtest", task_id)
 
-                # Send WebSocket notification
-                send_task_status_notification(
-                    user_id=task.user.id,
-                    task_id=task.id,
-                    task_name=task.name,
-                    task_type="backtest",
-                    status=TaskStatus.COMPLETED,
-                    execution_id=execution.id,
-                )
+        return {
+            "success": True,
+            "task_id": task_id,
+            "execution_id": execution.id,
+            "metrics": metrics.get_trade_summary(),
+            "error": None,
+        }
 
-            logger.info(
-                "Backtest task %d execution #%d completed successfully",
-                task_id,
-                execution_number,
-            )
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"Backtest execution failed: {str(e)}"
+        logger.error(
+            "Error executing backtest task %d: %s",
+            task_id,
+            error_msg,
+            exc_info=True,
+        )
 
-            return {
-                "success": True,
-                "task_id": task_id,
-                "execution_id": execution.id,
-                "metrics": metrics.get_trade_summary(),
-                "error": None,
-            }
+        # Mark execution as failed
+        if execution:
+            backtest_logger.log_error(f"Execution failed: {str(e)}")
+            execution.add_log("ERROR", f"Execution failed: {str(e)}")
 
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            error_msg = f"Backtest execution failed: {str(e)}"
-            logger.error(
-                "Error executing backtest task %d: %s",
-                task_id,
-                error_msg,
-                exc_info=True,
-            )
-
-            # Mark execution as failed
-            if execution:
-                execution.add_log("ERROR", f"Execution failed: {str(e)}")
-                execution.mark_failed(e)
-
-            # Update task status
+            # Use StateSynchronizer to transition to failed state
             if task:
-                task.status = TaskStatus.FAILED
-                task.save(update_fields=["status", "updated_at"])
+                state_synchronizer.transition_to_failed(task, execution, error_msg)
 
-                # Send WebSocket notification
-                send_task_status_notification(
-                    user_id=task.user.id,
-                    task_id=task.id,
-                    task_name=task.name,
-                    task_type="backtest",
-                    status=TaskStatus.FAILED,
-                    execution_id=execution.id if execution else None,
-                    error_message=error_msg,
-                )
+        # Release lock
+        lock_manager.release_lock("backtest", task_id)
 
-            return {
-                "success": False,
-                "task_id": task_id,
-                "execution_id": execution.id if execution else None,
-                "error": error_msg,
-            }
+        return {
+            "success": False,
+            "task_id": task_id,
+            "execution_id": execution.id if execution else None,
+            "error": error_msg,
+        }
 
 
 # pylint: disable=too-many-return-statements,too-many-statements

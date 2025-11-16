@@ -64,6 +64,7 @@ export interface ExecutionSummary {
   id: number;
   execution_number: number;
   status: TaskStatus;
+  progress: number;
   started_at: string;
   completed_at?: string;
   total_return?: string;

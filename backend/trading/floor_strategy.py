@@ -263,6 +263,8 @@ class FloorStrategy(BaseStrategy):
         self._logged_inactive_instruments: set[str] = set()
         self._price_history: dict[str, list[dict[str, Any]]] = {}
         self._no_signal_log_count = 0
+        self._tick_count = 0
+        self._state_save_interval = self.get_config_value("state_save_interval", 1000)
 
         # Load state from database if exists
         self._load_state()
@@ -361,8 +363,10 @@ class FloorStrategy(BaseStrategy):
         # Check if we need to create a new layer
         self._check_new_layer_creation()
 
-        # Save state after processing
-        self._save_state()
+        # Save state periodically (not on every tick to avoid performance issues)
+        self._tick_count += 1
+        if self._tick_count % self._state_save_interval == 0:
+            self._save_state()
 
         return orders
 
@@ -861,6 +865,8 @@ class FloorStrategy(BaseStrategy):
                                 "retracement_count": layer.retracement_count,
                             },
                         )
+                        # Save state immediately when creating new layer
+                        self._save_state()
 
     def _get_layer_config(self, layer_num: int) -> dict[str, Any]:
         """
@@ -953,10 +959,9 @@ class FloorStrategy(BaseStrategy):
                 # Update layer's position list if needed
                 if position not in layer.positions:
                     layer.add_position(position, position.is_first_lot)
+                    # Save state immediately when position is added (important event)
+                    self._save_state()
                 break
-
-        # Save state after position update
-        self._save_state()
 
     def validate_config(self, config: dict[str, Any]) -> bool:
         """
@@ -1026,6 +1031,15 @@ class FloorStrategy(BaseStrategy):
             )
 
         return True
+
+    def finalize(self) -> None:
+        """
+        Finalize strategy execution and save final state.
+
+        This method should be called at the end of backtest or trading session
+        to ensure all state is persisted.
+        """
+        self._save_state()
 
 
 # Configuration schema for Floor Strategy

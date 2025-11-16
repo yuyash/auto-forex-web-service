@@ -15,6 +15,7 @@ from .backtest_task_views import (  # noqa: E501
     BacktestTaskListCreateView,
     BacktestTaskRerunView,
     BacktestTaskStartView,
+    BacktestTaskStatusView,
     BacktestTaskStopView,
 )
 from .candle_views import CandleDataView
@@ -116,6 +117,11 @@ urlpatterns = [
         "backtest-tasks/<int:task_id>/rerun/",
         BacktestTaskRerunView.as_view(),
         name="backtest_task_rerun",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/status/",
+        BacktestTaskStatusView.as_view(),
+        name="backtest_task_status",
     ),
     path(
         "backtest-tasks/<int:task_id>/executions/",

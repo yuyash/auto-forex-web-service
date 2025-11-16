@@ -32,6 +32,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import LanguageSelector from '../common/LanguageSelector';
 import NotificationCenter from '../admin/NotificationCenter';
 import Typography from '@mui/material/Typography';
+import WebSocketConnectionStatus from '../common/WebSocketConnectionStatus';
+import { useWebSocketConnection } from '../../hooks/useWebSocketConnection';
 
 interface AppHeaderProps {
   onMenuClick?: () => void;
@@ -46,6 +48,16 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
   const [userMenuAnchorEl, setUserMenuAnchorEl] = useState<null | HTMLElement>(
     null
   );
+
+  // Get auth token for WebSocket connection
+  const token = localStorage.getItem('token');
+
+  // Track WebSocket connection state
+  const { connectionState, reconnectAttempts, maxReconnectAttempts } =
+    useWebSocketConnection({
+      token,
+      enabled: !!user, // Only connect when user is authenticated
+    });
 
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setUserMenuAnchorEl(event.currentTarget);
@@ -178,6 +190,15 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
             flexShrink: 0,
           }}
         >
+          {/* WebSocket Connection Status */}
+          {user && (
+            <WebSocketConnectionStatus
+              connectionState={connectionState}
+              reconnectAttempts={reconnectAttempts}
+              maxReconnectAttempts={maxReconnectAttempts}
+            />
+          )}
+
           {/* Language Selector */}
           <LanguageSelector
             buttonSize="small"

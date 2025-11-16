@@ -19,12 +19,8 @@ import {
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
-  PlayArrow,
-  Stop as StopIcon,
-  Refresh as RefreshIcon,
   ContentCopy as ContentCopyIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
   MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import {
@@ -41,6 +37,9 @@ import {
 import { useTaskStatusWebSocket } from '../hooks/useTaskStatusWebSocket';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
+import { TaskActionButtons } from '../components/tasks/actions/TaskActionButtons';
+import { TaskProgressBar } from '../components/tasks/display/TaskProgressBar';
+import { LogPanel } from '../components/tasks/display/LogPanel';
 import { TaskOverviewTab } from '../components/backtest/detail/TaskOverviewTab';
 import { TaskResultsTab } from '../components/backtest/detail/TaskResultsTab';
 import { TaskExecutionsTab } from '../components/backtest/detail/TaskExecutionsTab';
@@ -88,6 +87,8 @@ export default function BacktestTaskDetailPage() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const { data: task, isLoading, error, refetch } = useBacktestTask(taskId);
   const { strategies } = useStrategies();
@@ -114,7 +115,12 @@ export default function BacktestTaskDetailPage() {
     equity_curve: Array<{ timestamp: string; balance: number }>;
   } | null>(null);
 
-  // Listen to WebSocket updates for this task
+  // Fetch latest status from backend before rendering (Requirement 3.6)
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  // Listen to WebSocket updates for this task (Requirements 3.3, 3.4)
   useTaskStatusWebSocket({
     onStatusUpdate: (update) => {
       // Refetch task data when this specific task's status changes
@@ -123,6 +129,14 @@ export default function BacktestTaskDetailPage() {
           '[BacktestTaskDetail] Status update received, refetching task data'
         );
         refetch();
+        setIsTransitioning(false);
+      }
+    },
+    onProgressUpdate: (update) => {
+      // Update progress when progress updates are received
+      if (update.task_id === taskId) {
+        console.log('[BacktestTaskDetail] Progress update:', update.progress);
+        setProgress(update.progress);
       }
     },
     onIntermediateResults: (results) => {
@@ -133,6 +147,7 @@ export default function BacktestTaskDetailPage() {
           results
         );
         setLiveResults(results);
+        setProgress(results.progress);
       }
     },
   });
@@ -185,31 +200,39 @@ export default function BacktestTaskDetailPage() {
 
   const handleStart = async () => {
     try {
+      setIsTransitioning(true); // Optimistic update (Requirement 3.1)
+      setProgress(0); // Reset progress when starting
       await startTask.mutate(taskId);
       await refetch(); // Force immediate refetch to show updated status
       handleMenuClose();
     } catch {
+      setIsTransitioning(false);
       // Error handled by mutation hook
     }
   };
 
   const handleStop = async () => {
     try {
+      setIsTransitioning(true); // Optimistic update (Requirement 3.1)
       await stopTask.mutate(taskId);
       await refetch(); // Force immediate refetch to show updated status
       handleMenuClose();
     } catch {
+      setIsTransitioning(false);
       // Error handled by mutation hook
     }
   };
 
   const handleRerun = async () => {
     try {
+      setIsTransitioning(true); // Optimistic update (Requirement 3.1)
+      setProgress(0); // Reset progress when rerunning
       await rerunTask.mutate(taskId);
       // Force immediate refetch after mutation completes
       await refetch();
       handleMenuClose();
     } catch {
+      setIsTransitioning(false);
       // Error handled by mutation hook
     }
   };
@@ -239,10 +262,12 @@ export default function BacktestTaskDetailPage() {
 
   const handleDeleteConfirm = async () => {
     try {
+      setIsTransitioning(true);
       await deleteTask.mutate(taskId);
       invalidateBacktestTasksCache(); // Refresh task list
       navigate('/backtest-tasks');
     } catch {
+      setIsTransitioning(false);
       // Error handled by mutation hook
     }
   };
@@ -329,36 +354,15 @@ export default function BacktestTaskDetailPage() {
             </IconButton>
           ) : (
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {canStart && (
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<PlayArrow />}
-                  onClick={handleStart}
-                  disabled={startTask.isLoading}
-                >
-                  Start
-                </Button>
-              )}
-              {canStop && (
-                <Button
-                  variant="contained"
-                  color="error"
-                  startIcon={<StopIcon />}
-                  onClick={handleStop}
-                  disabled={stopTask.isLoading}
-                >
-                  Stop
-                </Button>
-              )}
-              <Button
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                onClick={handleRerun}
-                disabled={rerunTask.isLoading}
-              >
-                Rerun
-              </Button>
+              {/* Use TaskActionButtons component (Requirement 4.5) */}
+              <TaskActionButtons
+                status={task.status}
+                onStart={handleStart}
+                onStop={handleStop}
+                onRerun={handleRerun}
+                onDelete={handleDelete}
+                loading={isTransitioning}
+              />
               <Button
                 variant="outlined"
                 startIcon={<ContentCopyIcon />}
@@ -373,16 +377,6 @@ export default function BacktestTaskDetailPage() {
                   onClick={handleEdit}
                 >
                   Edit
-                </Button>
-              )}
-              {canDelete && (
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<DeleteIcon />}
-                  onClick={handleDelete}
-                >
-                  Delete
                 </Button>
               )}
             </Box>
@@ -405,6 +399,30 @@ export default function BacktestTaskDetailPage() {
             </MenuItem>
           )}
         </Menu>
+      </Paper>
+
+      {/* Progress Bar (Requirement 5.4) */}
+      {task.status === TaskStatus.RUNNING && (
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <TaskProgressBar
+            status={task.status}
+            progress={progress}
+            showPercentage={true}
+            size="medium"
+          />
+        </Paper>
+      )}
+
+      {/* Log Panel - Always visible with prominent placement (Requirement 6.8) */}
+      <Paper sx={{ mb: 3, height: 500 }}>
+        <LogPanel
+          taskType="backtest"
+          taskId={taskId}
+          maxEntries={1000}
+          autoScroll={true}
+          showTimestamp={true}
+          height={450}
+        />
       </Paper>
 
       {/* Tabs */}

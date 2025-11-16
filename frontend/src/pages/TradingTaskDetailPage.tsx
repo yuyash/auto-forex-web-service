@@ -20,14 +20,10 @@ import {
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
-  PlayArrow,
-  Stop as StopIcon,
   Pause as PauseIcon,
   PlayCircleOutline as ResumeIcon,
-  Refresh as RefreshIcon,
   ContentCopy as ContentCopyIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
   MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import { useTradingTask } from '../hooks/useTradingTasks';
@@ -43,6 +39,9 @@ import {
 import { useTaskStatusWebSocket } from '../hooks/useTaskStatusWebSocket';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
+import { TaskActionButtons } from '../components/tasks/actions/TaskActionButtons';
+import { TaskProgressBar } from '../components/tasks/display/TaskProgressBar';
+import { LogPanel } from '../components/tasks/display/LogPanel';
 import { CopyTaskDialog } from '../components/tasks/actions/CopyTaskDialog';
 import { DeleteTaskDialog } from '../components/tasks/actions/DeleteTaskDialog';
 import { ConfirmDialog } from '../components/tasks/actions/ConfirmDialog';
@@ -92,11 +91,18 @@ export default function TradingTaskDetailPage() {
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [emergencyStopDialogOpen, setEmergencyStopDialogOpen] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
   const { strategies } = useStrategies();
 
-  // Listen to WebSocket updates for this task
+  // Fetch latest status from backend before rendering (Requirement 3.6)
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  // Listen to WebSocket updates for this task (Requirements 3.3, 3.4)
   useTaskStatusWebSocket({
     onStatusUpdate: (update) => {
       // Refetch task data when this specific task's status changes
@@ -105,6 +111,14 @@ export default function TradingTaskDetailPage() {
           '[TradingTaskDetail] Status update received, refetching task data'
         );
         refetch();
+        setIsTransitioning(false);
+      }
+    },
+    onProgressUpdate: (update) => {
+      // Update progress when progress updates are received
+      if (update.task_id === taskId) {
+        console.log('[TradingTaskDetail] Progress update:', update.progress);
+        setProgress(update.progress);
       }
     },
   });
@@ -156,41 +170,51 @@ export default function TradingTaskDetailPage() {
 
   const handleStart = async () => {
     try {
+      setIsTransitioning(true); // Optimistic update (Requirement 3.1)
+      setProgress(0); // Reset progress when starting
       await startTask.mutate(taskId);
       await refetch(); // Force immediate refetch to show updated status
       handleMenuClose();
     } catch {
+      setIsTransitioning(false);
       // Error handled by mutation hook
     }
   };
 
   const handlePause = async () => {
     try {
+      setIsTransitioning(true); // Optimistic update (Requirement 3.1)
       await pauseTask.mutate(taskId);
       await refetch(); // Force immediate refetch to show updated status
       handleMenuClose();
     } catch {
+      setIsTransitioning(false);
       // Error handled by mutation hook
     }
   };
 
   const handleResume = async () => {
     try {
+      setIsTransitioning(true); // Optimistic update (Requirement 3.1)
       await resumeTask.mutate(taskId);
       await refetch(); // Force immediate refetch to show updated status
       handleMenuClose();
     } catch {
+      setIsTransitioning(false);
       // Error handled by mutation hook
     }
   };
 
   const handleRerun = async () => {
     try {
+      setIsTransitioning(true); // Optimistic update (Requirement 3.1)
+      setProgress(0); // Reset progress when rerunning
       await rerunTask.mutate(taskId);
       // Force immediate refetch after mutation completes
       await refetch();
       handleMenuClose();
     } catch {
+      setIsTransitioning(false);
       // Error handled by mutation hook
     }
   };
@@ -219,9 +243,11 @@ export default function TradingTaskDetailPage() {
 
   const handleDeleteConfirm = async () => {
     try {
+      setIsTransitioning(true);
       await deleteTask.mutate(taskId);
       navigate('/trading-tasks');
     } catch {
+      setIsTransitioning(false);
       // Error handled by mutation hook
     }
   };
@@ -232,10 +258,12 @@ export default function TradingTaskDetailPage() {
 
   const handleEmergencyStopConfirm = async () => {
     try {
+      setIsTransitioning(true);
       await stopTask.mutate(taskId);
       await refetch(); // Force immediate refetch to show updated status
       setEmergencyStopDialogOpen(false);
     } catch {
+      setIsTransitioning(false);
       // Error handled by mutation hook
     }
   };
@@ -350,24 +378,24 @@ export default function TradingTaskDetailPage() {
             </IconButton>
           ) : (
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {canStart && (
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<PlayArrow />}
-                  onClick={handleStart}
-                  disabled={startTask.isLoading}
-                >
-                  Start
-                </Button>
-              )}
+              {/* Use TaskActionButtons component (Requirement 4.5) */}
+              <TaskActionButtons
+                status={task.status}
+                onStart={handleStart}
+                onStop={handleEmergencyStop}
+                onRerun={handleRerun}
+                onDelete={handleDelete}
+                loading={isTransitioning}
+              />
+              {/* Trading-specific pause/resume buttons */}
               {canPause && (
                 <Button
                   variant="contained"
                   color="warning"
                   startIcon={<PauseIcon />}
                   onClick={handlePause}
-                  disabled={pauseTask.isLoading}
+                  disabled={isTransitioning}
+                  size="small"
                 >
                   Pause
                 </Button>
@@ -378,33 +406,17 @@ export default function TradingTaskDetailPage() {
                   color="primary"
                   startIcon={<ResumeIcon />}
                   onClick={handleResume}
-                  disabled={resumeTask.isLoading}
+                  disabled={isTransitioning}
+                  size="small"
                 >
                   Resume
                 </Button>
               )}
-              {canStop && (
-                <Button
-                  variant="contained"
-                  color="error"
-                  startIcon={<StopIcon />}
-                  onClick={handleEmergencyStop}
-                >
-                  Emergency Stop
-                </Button>
-              )}
-              <Button
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                onClick={handleRerun}
-                disabled={rerunTask.isLoading}
-              >
-                Rerun
-              </Button>
               <Button
                 variant="outlined"
                 startIcon={<ContentCopyIcon />}
                 onClick={handleCopy}
+                size="small"
               >
                 Copy
               </Button>
@@ -413,18 +425,9 @@ export default function TradingTaskDetailPage() {
                   variant="outlined"
                   startIcon={<EditIcon />}
                   onClick={handleEdit}
+                  size="small"
                 >
                   Edit
-                </Button>
-              )}
-              {canDelete && (
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<DeleteIcon />}
-                  onClick={handleDelete}
-                >
-                  Delete
                 </Button>
               )}
             </Box>
@@ -451,6 +454,30 @@ export default function TradingTaskDetailPage() {
             </MenuItem>
           )}
         </Menu>
+      </Paper>
+
+      {/* Progress Bar (Requirement 5.4) */}
+      {task.status === TaskStatus.RUNNING && (
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <TaskProgressBar
+            status={task.status}
+            progress={progress}
+            showPercentage={true}
+            size="medium"
+          />
+        </Paper>
+      )}
+
+      {/* Log Panel - Always visible with prominent placement (Requirement 6.8) */}
+      <Paper sx={{ mb: 3, height: 500 }}>
+        <LogPanel
+          taskType="trading"
+          taskId={taskId}
+          maxEntries={1000}
+          autoScroll={true}
+          showTimestamp={true}
+          height={450}
+        />
       </Paper>
 
       {/* Tabs */}

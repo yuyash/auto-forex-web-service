@@ -1,6 +1,6 @@
 import React, { useState, useCallback, type ReactNode } from 'react';
-import { Snackbar, Alert, type AlertColor } from '@mui/material';
-import { ToastContext } from './ToastContext';
+import { Snackbar, Alert, Button, type AlertColor } from '@mui/material';
+import { ToastContext, type ToastAction } from './ToastContext';
 import { getAriaLive } from '../../utils/ariaUtils';
 
 interface ToastMessage {
@@ -8,6 +8,7 @@ interface ToastMessage {
   message: string;
   severity: AlertColor;
   duration?: number;
+  action?: ToastAction;
 }
 
 interface ToastProviderProps {
@@ -27,11 +28,15 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
     (
       message: string,
       severity: AlertColor = 'info',
-      duration: number = defaultDuration
+      duration: number = defaultDuration,
+      action?: ToastAction
     ) => {
       const id = `toast-${Date.now()}-${Math.random()}`;
       setToasts((prev) => {
-        const newToasts = [...prev, { id, message, severity, duration }];
+        const newToasts = [
+          ...prev,
+          { id, message, severity, duration, action },
+        ];
         // Limit the number of toasts displayed
         return newToasts.slice(-maxToasts);
       });
@@ -47,9 +52,9 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
   );
 
   const showError = useCallback(
-    (message: string, duration: number = 8000) => {
+    (message: string, duration: number = 8000, action?: ToastAction) => {
       // Errors stay longer by default
-      showToast(message, 'error', duration);
+      showToast(message, 'error', duration, action);
     },
     [showToast]
   );
@@ -102,6 +107,20 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
               minWidth: 300,
               maxWidth: 500,
             }}
+            action={
+              toast.action ? (
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => {
+                    toast.action!.onClick();
+                    handleClose(toast.id);
+                  }}
+                >
+                  {toast.action.label}
+                </Button>
+              ) : undefined
+            }
           >
             {toast.message}
           </Alert>

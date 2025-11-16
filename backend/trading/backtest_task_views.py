@@ -125,10 +125,16 @@ class BacktestTaskDetailView(RetrieveUpdateDestroyAPIView):
         """
         Delete backtest task.
 
-        Prevents deletion if task is running.
+        Prevents deletion if task is running. Ensures all related executions
+        are deleted via cascade.
+
+        Requirements: 2.4, 2.5, 7.2
         """
+        # Check if task is running
         if instance.status == TaskStatus.RUNNING:
-            raise ValidationError("Cannot delete a running task. Stop it first.")
+            raise ValidationError("Cannot delete running task. Stop it first.")
+
+        # Delete task (related executions will be deleted via cascade)
         instance.delete()
 
 
@@ -245,7 +251,7 @@ class BacktestTaskStopView(APIView):
 
     POST: Stop the backtest execution
 
-    Requirements: 4.3, 6.3, 8.3
+    Requirements: 2.1, 2.3, 3.1, 3.2, 4.3, 6.3, 8.3
     """
 
     permission_classes = [IsAuthenticated]
@@ -254,7 +260,11 @@ class BacktestTaskStopView(APIView):
         """
         Stop backtest task execution.
 
-        Transitions task to stopped state and marks current execution as stopped.
+        Sets cancellation flag via TaskLockManager, performs optimistic status update,
+        and broadcasts WebSocket notification. Returns immediately without waiting
+        for task to stop.
+
+        Requirements: 2.1, 2.3, 3.1, 3.2
         """
         # Get the task
         try:
@@ -265,20 +275,48 @@ class BacktestTaskStopView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Stop the task
-        try:
-            task.stop()
-        except ValueError as e:
+        # Check if task is running
+        if task.status != TaskStatus.RUNNING:
             return Response(
-                {"error": str(e)},
-                status=status.HTTP_409_CONFLICT,
+                {"error": "Task is not running"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # TODO: Cancel the Celery task (will be implemented in task 6.2)
-        # This would require storing the Celery task ID in TaskExecution
+        # Set cancellation flag via TaskLockManager
+        from .services.task_lock_manager import TaskLockManager
 
+        lock_manager = TaskLockManager()
+        lock_manager.set_cancellation_flag("backtest", task_id)
+
+        # Optimistic status update
+        task.status = TaskStatus.STOPPED
+        task.save(update_fields=["status", "updated_at"])
+
+        # Get latest execution for notification
+        latest_execution = task.get_latest_execution()
+        execution_id = latest_execution.id if latest_execution else None
+
+        # Broadcast WebSocket notification
+        from .services.notifications import send_task_status_notification
+
+        # User is authenticated, so user.id is guaranteed to be not None
+        assert request.user.id is not None
+        send_task_status_notification(
+            user_id=request.user.id,
+            task_id=task.id,
+            task_name=task.name,
+            task_type="backtest",
+            status=TaskStatus.STOPPED,
+            execution_id=execution_id,
+        )
+
+        # Return immediate response
         return Response(
-            {"message": "Backtest task stopped successfully"},
+            {
+                "id": task.id,
+                "status": task.status,
+                "message": "Task stop initiated",
+            },
             status=status.HTTP_200_OK,
         )
 
@@ -340,6 +378,69 @@ class BacktestTaskRerunView(APIView):
             },
             status=status.HTTP_202_ACCEPTED,
         )
+
+
+class BacktestTaskStatusView(APIView):
+    """
+    Get current status of a backtest task.
+
+    GET: Return current status, progress, and execution details
+
+    Requirements: 3.1, 3.6
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, task_id: int) -> Response:
+        """
+        Get current task status and execution details.
+
+        Used by frontend for polling fallback when WebSocket connection fails.
+        Returns current status, progress percentage, and latest execution details.
+
+        Requirements: 3.1, 3.6
+        """
+        # Get the task
+        try:
+            task = BacktestTask.objects.get(id=task_id, user=request.user.id)
+        except BacktestTask.DoesNotExist:
+            return Response(
+                {"error": "Backtest task not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Get latest execution
+        latest_execution = task.get_latest_execution()
+
+        # Build response data
+        response_data = {
+            "id": task.id,
+            "name": task.name,
+            "status": task.status,
+            "updated_at": task.updated_at.isoformat(),
+        }
+
+        # Add execution details if available
+        if latest_execution:
+            response_data["execution"] = {
+                "id": latest_execution.id,
+                "execution_number": latest_execution.execution_number,
+                "status": latest_execution.status,
+                "progress": latest_execution.progress,
+                "started_at": (
+                    latest_execution.started_at.isoformat() if latest_execution.started_at else None
+                ),
+                "completed_at": (
+                    latest_execution.completed_at.isoformat()
+                    if latest_execution.completed_at
+                    else None
+                ),
+                "error_message": latest_execution.error_message,
+            }
+        else:
+            response_data["execution"] = None
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class BacktestTaskExecutionsView(APIView):

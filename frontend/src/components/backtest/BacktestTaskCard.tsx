@@ -8,21 +8,24 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  Collapse,
+  Button,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import {
-  PlayArrow as PlayIcon,
-  Stop as StopIcon,
-  Refresh as RefreshIcon,
   Visibility as ViewIcon,
   MoreVert as MoreVertIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import type { BacktestTask } from '../../types/backtestTask';
 import { TaskStatus } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
-import { ProgressIndicator } from '../tasks/display/ProgressIndicator';
+import { TaskProgressBar } from '../tasks/display/TaskProgressBar';
 import { MetricCard } from '../tasks/display/MetricCard';
+import { LogPanel } from '../tasks/display/LogPanel';
+import { TaskActionButtons } from '../tasks/actions/TaskActionButtons';
 import BacktestTaskActions from './BacktestTaskActions';
 import {
   useStartBacktestTask,
@@ -34,6 +37,7 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import { useToast } from '../common';
 
 interface BacktestTaskCardProps {
   task: BacktestTask;
@@ -41,10 +45,12 @@ interface BacktestTaskCardProps {
 
 export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
   const navigate = useNavigate();
+  const { showError } = useToast();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
   );
+  const [logPanelExpanded, setLogPanelExpanded] = useState(false);
 
   const startTask = useStartBacktestTask();
   const stopTask = useStopBacktestTask();
@@ -93,6 +99,14 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
       console.error('Failed to start task:', error);
       // Revert optimistic update on error
       setOptimisticStatus(null);
+
+      // Show error notification with retry option
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to start task';
+      showError(errorMessage, {
+        label: 'Retry',
+        onClick: handleStart,
+      });
     }
   };
 
@@ -105,6 +119,11 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
       console.error('Failed to stop task:', error);
       // Revert optimistic update on error
       setOptimisticStatus(null);
+
+      // Show error notification
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to stop task';
+      showError(errorMessage);
     }
   };
 
@@ -117,6 +136,14 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
       console.error('Failed to rerun task:', error);
       // Revert optimistic update on error
       setOptimisticStatus(null);
+
+      // Show error notification with retry option
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to rerun task';
+      showError(errorMessage, {
+        label: 'Retry',
+        onClick: handleRerun,
+      });
     }
   };
 
@@ -141,12 +168,15 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
   // Calculate progress for running tasks (mock - would come from backend)
   const progress = displayStatus === TaskStatus.RUNNING ? 50 : 0; // Mock progress
 
+  // Determine if action buttons are loading
+  const isLoading =
+    startTask.isLoading || stopTask.isLoading || rerunTask.isLoading;
+
   return (
     <Card
       sx={{
         '&:hover': {
           boxShadow: 4,
-          cursor: 'pointer',
         },
         transition: 'box-shadow 0.3s',
       }}
@@ -160,7 +190,10 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
             gap: 1,
           }}
         >
-          <Box sx={{ flex: 1, minWidth: 0 }} onClick={handleView}>
+          <Box
+            sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+            onClick={handleView}
+          >
             <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>
               {currentTask.name}
             </Typography>
@@ -195,44 +228,6 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
               flexShrink: 0,
             }}
           >
-            {displayStatus === TaskStatus.CREATED && (
-              <Tooltip title="Start">
-                <IconButton
-                  color="primary"
-                  onClick={handleStart}
-                  disabled={startTask.isLoading}
-                  size="small"
-                >
-                  <PlayIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-            {displayStatus === TaskStatus.RUNNING && (
-              <Tooltip title="Stop">
-                <IconButton
-                  color="error"
-                  onClick={handleStop}
-                  disabled={stopTask.isLoading}
-                  size="small"
-                >
-                  <StopIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-            {(displayStatus === TaskStatus.COMPLETED ||
-              displayStatus === TaskStatus.FAILED ||
-              displayStatus === TaskStatus.STOPPED) && (
-              <Tooltip title="Rerun">
-                <IconButton
-                  color="primary"
-                  onClick={handleRerun}
-                  disabled={rerunTask.isLoading}
-                  size="small"
-                >
-                  <RefreshIcon />
-                </IconButton>
-              </Tooltip>
-            )}
             <Tooltip title="View Details">
               <IconButton color="primary" onClick={handleView} size="small">
                 <ViewIcon />
@@ -244,10 +239,25 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
           </Box>
         </Box>
 
-        {/* Progress bar for running tasks */}
+        {/* Action buttons using shared component */}
+        <Box sx={{ mb: 2 }}>
+          <TaskActionButtons
+            status={displayStatus}
+            onStart={handleStart}
+            onStop={handleStop}
+            onRerun={handleRerun}
+            loading={isLoading}
+          />
+        </Box>
+
+        {/* Progress bar for running tasks using shared component */}
         {displayStatus === TaskStatus.RUNNING && (
           <Box sx={{ mb: 2 }}>
-            <ProgressIndicator value={progress} label="Progress" />
+            <TaskProgressBar
+              status={displayStatus}
+              progress={progress}
+              showPercentage={true}
+            />
           </Box>
         )}
 
@@ -297,11 +307,35 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
               borderRadius: 1,
             }}
           >
-            <Typography variant="body2" color="error.dark">
+            <Typography variant="body2" color="error.dark" fontWeight="bold">
               Task execution failed
             </Typography>
+            {currentTask.latest_execution?.error_message && (
+              <Typography variant="body2" color="error.dark" sx={{ mt: 1 }}>
+                {currentTask.latest_execution.error_message}
+              </Typography>
+            )}
           </Box>
         )}
+
+        {/* Log Panel - Collapsed by default, expandable */}
+        <Box sx={{ mt: 2 }}>
+          <Button
+            onClick={() => setLogPanelExpanded(!logPanelExpanded)}
+            endIcon={logPanelExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            size="small"
+            sx={{ mb: 1 }}
+          >
+            {logPanelExpanded ? 'Hide' : 'Show'} Execution Logs
+          </Button>
+          <Collapse in={logPanelExpanded}>
+            <LogPanel
+              taskType="backtest"
+              taskId={currentTask.id}
+              height={300}
+            />
+          </Collapse>
+        </Box>
 
         {/* Footer with metadata */}
         <Box

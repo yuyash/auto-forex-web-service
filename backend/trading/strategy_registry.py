@@ -7,9 +7,10 @@ allowing dynamic strategy registration, lookup, and configuration schema retriev
 Requirements: 5.1
 """
 
-from typing import Any, Type
+from typing import TYPE_CHECKING, Any, Type
 
-from .base_strategy import BaseStrategy
+if TYPE_CHECKING:
+    from .base_strategy import BaseStrategy
 
 
 class StrategyRegistry:
@@ -25,7 +26,7 @@ class StrategyRegistry:
     """
 
     _instance: "StrategyRegistry | None" = None
-    _strategies: dict[str, Type[BaseStrategy]] = {}
+    _strategies: dict[str, Type["BaseStrategy"]] = {}
     _config_schemas: dict[str, dict[str, Any]] = {}
 
     def __new__(cls) -> "StrategyRegistry":
@@ -42,7 +43,7 @@ class StrategyRegistry:
     def register(
         self,
         name: str,
-        strategy_class: Type[BaseStrategy],
+        strategy_class: Type["BaseStrategy"],
         config_schema: dict[str, Any] | None = None,
         display_name: str | None = None,
     ) -> None:
@@ -61,6 +62,9 @@ class StrategyRegistry:
 
         Requirements: 5.1
         """
+        # Import BaseStrategy locally for runtime check
+        from .base_strategy import BaseStrategy  # pylint: disable=import-outside-toplevel
+
         if not issubclass(strategy_class, BaseStrategy):
             raise TypeError(
                 f"Strategy class {strategy_class.__name__} must inherit from BaseStrategy"
@@ -99,7 +103,7 @@ class StrategyRegistry:
         del self._strategies[name]
         del self._config_schemas[name]
 
-    def get_strategy_class(self, name: str) -> Type[BaseStrategy]:
+    def get_strategy_class(self, name: str) -> Type["BaseStrategy"]:
         """
         Get a strategy class by name.
 
@@ -203,7 +207,7 @@ class StrategyRegistry:
         self._config_schemas.clear()
 
     @staticmethod
-    def _generate_default_schema(strategy_class: Type[BaseStrategy]) -> dict[str, Any]:
+    def _generate_default_schema(strategy_class: Type["BaseStrategy"]) -> dict[str, Any]:
         """
         Generate a default configuration schema for a strategy class.
 
@@ -274,7 +278,7 @@ def register_strategy(
     Requirements: 5.1
     """
 
-    def decorator(strategy_class: Type[BaseStrategy]) -> Type[BaseStrategy]:
+    def decorator(strategy_class: Type["BaseStrategy"]) -> Type["BaseStrategy"]:
         """
         Inner decorator function that performs the registration.
 

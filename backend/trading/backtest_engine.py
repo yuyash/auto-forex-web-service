@@ -337,6 +337,13 @@ class BacktestEngine:
             raise
 
         finally:
+            # Finalize strategy to save final state
+            if self.strategy and hasattr(self.strategy, "finalize"):
+                try:
+                    self.strategy.finalize()
+                except Exception as e:
+                    logger.warning(f"Failed to finalize strategy: {e}")
+
             # Stop resource monitoring
             if self.resource_monitor:
                 self.resource_monitor.stop()
@@ -456,6 +463,13 @@ class BacktestEngine:
             raise
 
         finally:
+            # Finalize strategy to save final state
+            if self.strategy and hasattr(self.strategy, "finalize"):
+                try:
+                    self.strategy.finalize()
+                except Exception as e:
+                    logger.warning(f"Failed to finalize strategy: {e}")
+
             # Stop resource monitoring
             if self.resource_monitor:
                 self.resource_monitor.stop()

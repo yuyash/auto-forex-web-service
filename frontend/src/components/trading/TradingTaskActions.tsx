@@ -28,6 +28,7 @@ import {
   useResumeTradingTask,
   useStopTradingTask,
 } from '../../hooks/useTradingTaskMutations';
+import { useToast } from '../common';
 
 interface TradingTaskActionsProps {
   task: TradingTask;
@@ -41,6 +42,7 @@ export default function TradingTaskActions({
   onClose,
 }: TradingTaskActionsProps) {
   const navigate = useNavigate();
+  const { showError } = useToast();
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pauseDialogOpen, setPauseDialogOpen] = useState(false);
@@ -69,10 +71,22 @@ export default function TradingTaskActions({
       setCopyDialogOpen(false);
     } catch (error) {
       console.error('Failed to copy task:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to copy task';
+      showError(errorMessage);
     }
   };
 
   const handleDeleteClick = () => {
+    // Check if task is running or paused before opening dialog
+    if (
+      task.status === TaskStatus.RUNNING ||
+      task.status === TaskStatus.PAUSED
+    ) {
+      showError('Cannot delete running or paused task. Stop it first.');
+      onClose();
+      return;
+    }
     onClose();
     setDeleteDialogOpen(true);
   };
@@ -84,6 +98,20 @@ export default function TradingTaskActions({
       navigate('/trading-tasks');
     } catch (error) {
       console.error('Failed to delete task:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to delete task';
+
+      // Check if error is about running task
+      if (
+        errorMessage.includes('running') ||
+        errorMessage.includes('paused') ||
+        errorMessage.includes('409')
+      ) {
+        showError('Cannot delete running or paused task. Stop it first.');
+      } else {
+        showError(errorMessage);
+      }
+      setDeleteDialogOpen(false);
     }
   };
 
@@ -98,6 +126,10 @@ export default function TradingTaskActions({
       setPauseDialogOpen(false);
     } catch (error) {
       console.error('Failed to pause task:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to pause task';
+      showError(errorMessage);
+      setPauseDialogOpen(false);
     }
   };
 
@@ -112,6 +144,10 @@ export default function TradingTaskActions({
       setResumeDialogOpen(false);
     } catch (error) {
       console.error('Failed to resume task:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to resume task';
+      showError(errorMessage);
+      setResumeDialogOpen(false);
     }
   };
 
@@ -126,6 +162,10 @@ export default function TradingTaskActions({
       setStopDialogOpen(false);
     } catch (error) {
       console.error('Failed to stop task:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to stop task';
+      showError(errorMessage);
+      setStopDialogOpen(false);
     }
   };
 

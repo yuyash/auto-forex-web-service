@@ -9,6 +9,8 @@ import {
   IconButton,
   Tooltip,
   Alert,
+  Collapse,
+  Button,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import {
@@ -19,12 +21,15 @@ import {
   Visibility as ViewIcon,
   MoreVert as MoreVertIcon,
   Warning as WarningIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import type { TradingTask } from '../../types/tradingTask';
 import { TaskStatus } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { MetricCard } from '../tasks/display/MetricCard';
+import { LogPanel } from '../tasks/display/LogPanel';
 import TradingTaskActions from './TradingTaskActions';
 import {
   useStartTradingTask,
@@ -49,6 +54,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
   );
+  const [logPanelExpanded, setLogPanelExpanded] = useState(false);
   const toast = useToast();
   const prevTaskRef = useRef<TradingTask>(task);
 
@@ -142,6 +148,14 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
       console.error('Failed to start task:', error);
       // Revert optimistic update on error
       setOptimisticStatus(null);
+
+      // Show error notification with retry option
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to start task';
+      toast.showError(errorMessage, undefined, {
+        label: 'Retry',
+        onClick: handleStart,
+      });
     }
   };
 
@@ -154,6 +168,11 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
       console.error('Failed to stop task:', error);
       // Revert optimistic update on error
       setOptimisticStatus(null);
+
+      // Show error notification
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to stop task';
+      toast.showError(errorMessage);
     }
   };
 
@@ -166,6 +185,14 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
       console.error('Failed to pause task:', error);
       // Revert optimistic update on error
       setOptimisticStatus(null);
+
+      // Show error notification with retry option
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to pause task';
+      toast.showError(errorMessage, undefined, {
+        label: 'Retry',
+        onClick: handlePause,
+      });
     }
   };
 
@@ -178,6 +205,14 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
       console.error('Failed to resume task:', error);
       // Revert optimistic update on error
       setOptimisticStatus(null);
+
+      // Show error notification with retry option
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to resume task';
+      toast.showError(errorMessage, undefined, {
+        label: 'Retry',
+        onClick: handleResume,
+      });
     }
   };
 
@@ -202,7 +237,6 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
       sx={{
         '&:hover': {
           boxShadow: 4,
-          cursor: 'pointer',
         },
         transition: 'box-shadow 0.3s',
         border:
@@ -230,7 +264,10 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
             gap: 1,
           }}
         >
-          <Box sx={{ flex: 1, minWidth: 0 }} onClick={handleView}>
+          <Box
+            sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+            onClick={handleView}
+          >
             <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>
               {currentTask.name}
             </Typography>
@@ -288,78 +325,6 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
               flexShrink: 0,
             }}
           >
-            {displayStatus === TaskStatus.CREATED && (
-              <Tooltip title="Start">
-                <IconButton
-                  color="primary"
-                  onClick={handleStart}
-                  disabled={startTask.isLoading}
-                  size="small"
-                >
-                  <PlayIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-            {displayStatus === TaskStatus.RUNNING && (
-              <>
-                <Tooltip title="Pause">
-                  <IconButton
-                    color="warning"
-                    onClick={handlePause}
-                    disabled={pauseTask.isLoading}
-                    size="small"
-                  >
-                    <PauseIcon />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Stop">
-                  <IconButton
-                    color="error"
-                    onClick={handleStop}
-                    disabled={stopTask.isLoading}
-                    size="small"
-                  >
-                    <StopIcon />
-                  </IconButton>
-                </Tooltip>
-              </>
-            )}
-            {displayStatus === TaskStatus.PAUSED && (
-              <>
-                <Tooltip title="Resume">
-                  <IconButton
-                    color="primary"
-                    onClick={handleResume}
-                    disabled={resumeTask.isLoading}
-                    size="small"
-                  >
-                    <ResumeIcon />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Stop">
-                  <IconButton
-                    color="error"
-                    onClick={handleStop}
-                    disabled={stopTask.isLoading}
-                    size="small"
-                  >
-                    <StopIcon />
-                  </IconButton>
-                </Tooltip>
-              </>
-            )}
-            {displayStatus === TaskStatus.STOPPED && (
-              <Tooltip title="Start">
-                <IconButton
-                  color="primary"
-                  onClick={handleStart}
-                  disabled={startTask.isLoading}
-                  size="small"
-                >
-                  <PlayIcon />
-                </IconButton>
-              </Tooltip>
-            )}
             <Tooltip title="View Details">
               <IconButton color="primary" onClick={handleView} size="small">
                 <ViewIcon />
@@ -369,6 +334,82 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
               <MoreVertIcon />
             </IconButton>
           </Box>
+        </Box>
+
+        {/* Action buttons - Trading tasks have different button logic */}
+        <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
+          {displayStatus === TaskStatus.CREATED && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<PlayIcon />}
+              onClick={handleStart}
+              disabled={startTask.isLoading}
+              size="small"
+            >
+              Start
+            </Button>
+          )}
+          {displayStatus === TaskStatus.RUNNING && (
+            <>
+              <Button
+                variant="contained"
+                color="warning"
+                startIcon={<PauseIcon />}
+                onClick={handlePause}
+                disabled={pauseTask.isLoading}
+                size="small"
+              >
+                Pause
+              </Button>
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={<StopIcon />}
+                onClick={handleStop}
+                disabled={stopTask.isLoading}
+                size="small"
+              >
+                Stop
+              </Button>
+            </>
+          )}
+          {displayStatus === TaskStatus.PAUSED && (
+            <>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<ResumeIcon />}
+                onClick={handleResume}
+                disabled={resumeTask.isLoading}
+                size="small"
+              >
+                Resume
+              </Button>
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={<StopIcon />}
+                onClick={handleStop}
+                disabled={stopTask.isLoading}
+                size="small"
+              >
+                Stop
+              </Button>
+            </>
+          )}
+          {displayStatus === TaskStatus.STOPPED && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<PlayIcon />}
+              onClick={handleStart}
+              disabled={startTask.isLoading}
+              size="small"
+            >
+              Start
+            </Button>
+          )}
         </Box>
 
         {/* Live Metrics for Running/Paused Tasks */}
@@ -446,11 +487,31 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
               borderRadius: 1,
             }}
           >
-            <Typography variant="body2" color="error.dark">
+            <Typography variant="body2" color="error.dark" fontWeight="bold">
               Task execution failed
             </Typography>
+            {currentTask.latest_execution?.error_message && (
+              <Typography variant="body2" color="error.dark" sx={{ mt: 1 }}>
+                {currentTask.latest_execution.error_message}
+              </Typography>
+            )}
           </Box>
         )}
+
+        {/* Log Panel - Collapsed by default, expandable */}
+        <Box sx={{ mt: 2 }}>
+          <Button
+            onClick={() => setLogPanelExpanded(!logPanelExpanded)}
+            endIcon={logPanelExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            size="small"
+            sx={{ mb: 1 }}
+          >
+            {logPanelExpanded ? 'Hide' : 'Show'} Execution Logs
+          </Button>
+          <Collapse in={logPanelExpanded}>
+            <LogPanel taskType="trading" taskId={currentTask.id} height={300} />
+          </Collapse>
+        </Box>
 
         {/* Footer with metadata */}
         <Box
