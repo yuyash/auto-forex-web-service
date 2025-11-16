@@ -369,11 +369,15 @@ class TestTaskStatusConsumer:
         )
 
         # Should not receive any message (timeout expected)
-        with pytest.raises(Exception, match=""):  # TimeoutError or similar
+        import asyncio
+        import contextlib
+
+        with pytest.raises(asyncio.TimeoutError):
             await communicator.receive_json_from(timeout=1)
 
-        # Disconnect
-        await communicator.disconnect()
+        # Disconnect (may raise CancelledError during cleanup, which is expected)
+        with contextlib.suppress(asyncio.CancelledError):
+            await communicator.disconnect()
 
     async def test_ping_pong(self, user, application):
         """
@@ -488,10 +492,15 @@ class TestTaskStatusConsumer:
         assert connected
 
         # Should not receive the old message (timeout expected)
-        with pytest.raises(Exception, match=""):  # TimeoutError or similar
+        import asyncio
+        import contextlib
+
+        with pytest.raises(asyncio.TimeoutError):
             await new_communicator.receive_json_from(timeout=1)
 
-        await new_communicator.disconnect()
+        # Disconnect (may raise CancelledError during cleanup, which is expected)
+        with contextlib.suppress(asyncio.CancelledError):
+            await new_communicator.disconnect()
 
     async def test_multiple_log_entries(self, user, backtest_task, application):
         """

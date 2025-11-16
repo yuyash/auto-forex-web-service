@@ -22,7 +22,6 @@ interface UseWebSocketConnectionReturn {
   connectionState: ConnectionState;
   reconnectAttempts: number;
   maxReconnectAttempts: number;
-  ws: TaskStatusWebSocket | null;
 }
 
 /**

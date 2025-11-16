@@ -62,6 +62,21 @@ const STATUS_CONFIG: Record<
 export const StatusBadge: React.FC<StatusBadgeProps> = React.memo(
   ({ status, size = 'small', variant = 'filled', showIcon = true }) => {
     const config = STATUS_CONFIG[status];
+
+    // Safety check for invalid status
+    if (!config) {
+      console.warn(`Invalid status received: ${status}`);
+      return (
+        <Chip
+          label="Unknown"
+          color="default"
+          size={size}
+          variant={variant}
+          role="status"
+        />
+      );
+    }
+
     const Icon = config.icon;
 
     return (

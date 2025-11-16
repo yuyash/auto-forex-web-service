@@ -404,7 +404,7 @@ class TestTransactionAtomicity:
         task_execution.save()
 
         # Attempt transition (should raise exception)
-        with pytest.raises(Exception, match="Simulated error"):
+        with pytest.raises(Exception, match="Notification service unavailable"):
             state_synchronizer.transition_to_running(backtest_task, task_execution)
 
         # Verify states were rolled back

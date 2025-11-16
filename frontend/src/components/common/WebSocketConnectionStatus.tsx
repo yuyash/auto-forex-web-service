@@ -59,7 +59,7 @@ export const WebSocketConnectionStatus = ({
       default:
         return {
           label: 'Unknown',
-          icon: null,
+          icon: undefined,
           color: 'default' as const,
           tooltip: 'Connection status unknown',
         };

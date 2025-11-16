@@ -374,18 +374,16 @@ class TestLogAndBroadcast:
         )
 
         # Verify WebSocket notification was called
-        mock_notification.assert_called_once_with(
-            task_type="backtest",
-            task_id=123,
-            execution_id=456,
-            execution_number=1,
-            log_entry={
-                "timestamp": mock_notification.call_args[1]["log_entry"]["timestamp"],
-                "level": "INFO",
-                "message": "Test message",
-                "metadata": {"key": "value"},
-            },
-        )
+        mock_notification.assert_called_once()
+        call_kwargs = mock_notification.call_args[1]
+        assert call_kwargs["task_type"] == "backtest"
+        assert call_kwargs["task_id"] == 123
+        assert call_kwargs["execution_id"] == 456
+        assert call_kwargs["execution_number"] == 1
+        assert call_kwargs["log_entry"]["level"] == "INFO"
+        assert call_kwargs["log_entry"]["message"] == "Test message"
+        assert call_kwargs["log_entry"]["metadata"] == {"key": "value"}
+        assert "timestamp" in call_kwargs["log_entry"]
 
     def test_includes_timestamp(self, backtest_logger, mock_notification):
         """Test that log entries include timestamp."""

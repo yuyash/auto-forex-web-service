@@ -103,7 +103,7 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
       // Show error notification with retry option
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to start task';
-      showError(errorMessage, {
+      showError(errorMessage, 8000, {
         label: 'Retry',
         onClick: handleStart,
       });
@@ -140,7 +140,7 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
       // Show error notification with retry option
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to rerun task';
-      showError(errorMessage, {
+      showError(errorMessage, 8000, {
         label: 'Retry',
         onClick: handleRerun,
       });

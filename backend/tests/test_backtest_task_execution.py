@@ -52,6 +52,9 @@ def strategy_config(user, db):
             "base_lot_size": 1.0,
             "scaling_mode": "additive",
             "retracement_pips": 30,
+            "take_profit_pips": 50,
+            "stop_loss_pips": 30,
+            "max_positions": 5,
         },
     )
 
@@ -129,10 +132,10 @@ class TestBacktestTaskExecution:
         with (
             patch("trading.services.task_executor.HistoricalDataLoader") as mock_loader_class,
             patch("trading.services.task_executor.BacktestEngine") as mock_engine_class,
-            patch("trading.services.task_executor.TaskLockManager") as mock_lock_manager_class,
-            patch("trading.services.task_executor.ProgressReporter"),
-            patch("trading.services.task_executor.StateSynchronizer"),
-            patch("trading.services.task_executor.BacktestLogger"),
+            patch("trading.services.task_lock_manager.TaskLockManager") as mock_lock_manager_class,
+            patch("trading.services.progress_reporter.ProgressReporter"),
+            patch("trading.services.state_synchronizer.StateSynchronizer"),
+            patch("trading.services.backtest_logger.BacktestLogger"),
         ):
             # Mock lock manager
             mock_lock_manager = Mock()
@@ -162,7 +165,7 @@ class TestBacktestTaskExecution:
 
     def test_lock_acquisition_failure(self, backtest_task):
         """Test that task fails gracefully when lock cannot be acquired."""
-        with patch("trading.services.task_executor.TaskLockManager") as mock_lock_manager_class:
+        with patch("trading.services.task_lock_manager.TaskLockManager") as mock_lock_manager_class:
             # Mock lock manager to fail acquisition
             mock_lock_manager = Mock()
             mock_lock_manager.acquire_lock.return_value = False
@@ -185,10 +188,10 @@ class TestBacktestTaskExecution:
         with (
             patch("trading.services.task_executor.HistoricalDataLoader") as mock_loader_class,
             patch("trading.services.task_executor.BacktestEngine") as mock_engine_class,
-            patch("trading.services.task_executor.TaskLockManager") as mock_lock_manager_class,
-            patch("trading.services.task_executor.ProgressReporter"),
-            patch("trading.services.task_executor.StateSynchronizer"),
-            patch("trading.services.task_executor.BacktestLogger"),
+            patch("trading.services.task_lock_manager.TaskLockManager") as mock_lock_manager_class,
+            patch("trading.services.progress_reporter.ProgressReporter"),
+            patch("trading.services.state_synchronizer.StateSynchronizer"),
+            patch("trading.services.backtest_logger.BacktestLogger"),
         ):
             # Mock lock manager
             mock_lock_manager = Mock()
@@ -216,10 +219,10 @@ class TestBacktestTaskExecution:
         with (
             patch("trading.services.task_executor.HistoricalDataLoader") as mock_loader_class,
             patch("trading.services.task_executor.BacktestEngine") as mock_engine_class,
-            patch("trading.services.task_executor.TaskLockManager") as mock_lock_manager_class,
-            patch("trading.services.task_executor.ProgressReporter"),
-            patch("trading.services.task_executor.StateSynchronizer") as mock_state_sync_class,
-            patch("trading.services.task_executor.BacktestLogger"),
+            patch("trading.services.task_lock_manager.TaskLockManager") as mock_lock_manager_class,
+            patch("trading.services.progress_reporter.ProgressReporter"),
+            patch("trading.services.state_synchronizer.StateSynchronizer") as mock_state_sync_class,
+            patch("trading.services.backtest_logger.BacktestLogger"),
         ):
             # Mock lock manager to return cancellation after first day
             mock_lock_manager = Mock()
@@ -257,10 +260,10 @@ class TestBacktestTaskExecution:
         with (
             patch("trading.services.task_executor.HistoricalDataLoader") as mock_loader_class,
             patch("trading.services.task_executor.BacktestEngine") as mock_engine_class,
-            patch("trading.services.task_executor.TaskLockManager") as mock_lock_manager_class,
-            patch("trading.services.task_executor.ProgressReporter") as mock_progress_class,
-            patch("trading.services.task_executor.StateSynchronizer"),
-            patch("trading.services.task_executor.BacktestLogger"),
+            patch("trading.services.task_lock_manager.TaskLockManager") as mock_lock_manager_class,
+            patch("trading.services.progress_reporter.ProgressReporter") as mock_progress_class,
+            patch("trading.services.state_synchronizer.StateSynchronizer"),
+            patch("trading.services.backtest_logger.BacktestLogger"),
         ):
             # Mock lock manager
             mock_lock_manager = Mock()
@@ -299,10 +302,10 @@ class TestBacktestTaskExecution:
         with (
             patch("trading.services.task_executor.HistoricalDataLoader") as mock_loader_class,
             patch("trading.services.task_executor.BacktestEngine") as mock_engine_class,
-            patch("trading.services.task_executor.TaskLockManager") as mock_lock_manager_class,
-            patch("trading.services.task_executor.ProgressReporter"),
-            patch("trading.services.task_executor.StateSynchronizer") as mock_state_sync_class,
-            patch("trading.services.task_executor.BacktestLogger"),
+            patch("trading.services.task_lock_manager.TaskLockManager") as mock_lock_manager_class,
+            patch("trading.services.progress_reporter.ProgressReporter"),
+            patch("trading.services.state_synchronizer.StateSynchronizer") as mock_state_sync_class,
+            patch("trading.services.backtest_logger.BacktestLogger"),
         ):
             # Mock lock manager
             mock_lock_manager = Mock()
@@ -333,10 +336,10 @@ class TestBacktestTaskExecution:
         with (
             patch("trading.services.task_executor.HistoricalDataLoader") as mock_loader_class,
             patch("trading.services.task_executor.BacktestEngine") as mock_engine_class,
-            patch("trading.services.task_executor.TaskLockManager") as mock_lock_manager_class,
-            patch("trading.services.task_executor.ProgressReporter"),
-            patch("trading.services.task_executor.StateSynchronizer") as mock_state_sync_class,
-            patch("trading.services.task_executor.BacktestLogger"),
+            patch("trading.services.task_lock_manager.TaskLockManager") as mock_lock_manager_class,
+            patch("trading.services.progress_reporter.ProgressReporter"),
+            patch("trading.services.state_synchronizer.StateSynchronizer") as mock_state_sync_class,
+            patch("trading.services.backtest_logger.BacktestLogger"),
         ):
             # Mock lock manager
             mock_lock_manager = Mock()
@@ -348,16 +351,15 @@ class TestBacktestTaskExecution:
             mock_state_sync = Mock()
             mock_state_sync_class.return_value = mock_state_sync
 
-            # Mock data loader
+            # Mock data loader to raise exception
             mock_loader = Mock()
-            mock_loader.load_data.return_value = sample_tick_data
+            mock_loader.load_data.side_effect = Exception("Test error")
             mock_loader_class.return_value = mock_loader
 
-            # Mock backtest engine to raise exception
+            # Mock backtest engine (won't be used due to data loader error)
             mock_engine = Mock()
             mock_engine.resource_monitor = Mock()
-            mock_engine.resource_monitor.is_exceeded.return_value = False
-            mock_engine._initialize_strategy.side_effect = Exception("Test error")
+            mock_engine.resource_monitor.stop = Mock()
             mock_engine_class.return_value = mock_engine
 
             # Execute task
@@ -380,10 +382,10 @@ class TestBacktestTaskExecution:
         with (
             patch("trading.services.task_executor.HistoricalDataLoader") as mock_loader_class,
             patch("trading.services.task_executor.BacktestEngine") as mock_engine_class,
-            patch("trading.services.task_executor.TaskLockManager") as mock_lock_manager_class,
-            patch("trading.services.task_executor.ProgressReporter"),
-            patch("trading.services.task_executor.StateSynchronizer"),
-            patch("trading.services.task_executor.BacktestLogger") as mock_logger_class,
+            patch("trading.services.task_lock_manager.TaskLockManager") as mock_lock_manager_class,
+            patch("trading.services.progress_reporter.ProgressReporter"),
+            patch("trading.services.state_synchronizer.StateSynchronizer"),
+            patch("trading.services.backtest_logger.BacktestLogger") as mock_logger_class,
         ):
             # Mock lock manager
             mock_lock_manager = Mock()

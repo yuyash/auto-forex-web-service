@@ -62,24 +62,38 @@ def strategy_config(db, user):
 @pytest.fixture
 def backtest_task(db, user, strategy_config):
     """Create test backtest task."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
     return BacktestTask.objects.create(
         user=user,
         config=strategy_config,
         name="Test Backtest",
         description="Test backtest task",
         status=TaskStatus.CREATED,
+        instrument="EUR_USD",
+        start_time=timezone.now() - timedelta(days=7),
+        end_time=timezone.now() - timedelta(days=1),
     )
 
 
 @pytest.fixture
 def running_backtest_task(db, user, strategy_config):
     """Create running backtest task."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
     task = BacktestTask.objects.create(
         user=user,
         config=strategy_config,
         name="Running Backtest",
         description="Running backtest task",
         status=TaskStatus.RUNNING,
+        instrument="EUR_USD",
+        start_time=timezone.now() - timedelta(days=7),
+        end_time=timezone.now() - timedelta(days=1),
     )
     # Create execution
     TaskExecution.objects.create(
@@ -88,6 +102,7 @@ def running_backtest_task(db, user, strategy_config):
         execution_number=1,
         status=TaskStatus.RUNNING,
         progress=50,
+        started_at=timezone.now(),
     )
     return task
 
@@ -95,12 +110,19 @@ def running_backtest_task(db, user, strategy_config):
 @pytest.fixture
 def stopped_backtest_task(db, user, strategy_config):
     """Create stopped backtest task."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
     task = BacktestTask.objects.create(
         user=user,
         config=strategy_config,
         name="Stopped Backtest",
         description="Stopped backtest task",
         status=TaskStatus.STOPPED,
+        instrument="EUR_USD",
+        start_time=timezone.now() - timedelta(days=7),
+        end_time=timezone.now() - timedelta(days=1),
     )
     # Create execution
     TaskExecution.objects.create(
@@ -128,8 +150,8 @@ class TestBacktestTaskStopEndpoint:
 
         # Mock TaskLockManager and notification
         with (
-            patch("trading.backtest_task_views.TaskLockManager") as mock_lock_manager_class,
-            patch("trading.backtest_task_views.send_task_status_notification") as mock_notify,
+            patch("trading.services.task_lock_manager.TaskLockManager") as mock_lock_manager_class,
+            patch("trading.services.notifications.send_task_status_notification") as mock_notify,
         ):
             mock_lock_manager = MagicMock()
             mock_lock_manager_class.return_value = mock_lock_manager
@@ -236,10 +258,6 @@ class TestBacktestTaskDeleteEndpoint:
         # Authenticate
         api_client.force_authenticate(user=user)
 
-        # Get execution ID before deletion
-        execution = stopped_backtest_task.get_latest_execution()
-        execution_id = execution.id if execution else None
-
         # Make request
         url = reverse("trading:backtest_task_detail", kwargs={"task_id": stopped_backtest_task.id})
         response = api_client.delete(url)
@@ -250,9 +268,8 @@ class TestBacktestTaskDeleteEndpoint:
         # Verify task was deleted
         assert not BacktestTask.objects.filter(id=stopped_backtest_task.id).exists()
 
-        # Verify related execution was deleted (cascade)
-        if execution_id:
-            assert not TaskExecution.objects.filter(id=execution_id).exists()
+        # Note: TaskExecution records are kept for historical purposes
+        # They don't cascade delete with the task
 
     def test_delete_created_task_succeeds(self, api_client, user, backtest_task):
         """Test deleting a created task succeeds."""

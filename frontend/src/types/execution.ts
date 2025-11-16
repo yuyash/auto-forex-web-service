@@ -67,6 +67,7 @@ export interface ExecutionSummary {
   progress: number;
   started_at: string;
   completed_at?: string;
+  error_message?: string;
   total_return?: string;
   total_pnl?: string;
   total_trades?: number;
