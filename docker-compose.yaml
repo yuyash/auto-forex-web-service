@@ -174,7 +174,7 @@ services:
       - ./config:/app/config
       - ./logs:/app/logs
       - ${HOME}/.aws:/root/.aws:ro
-    command: celery -A trading_system worker -l info --concurrency=4
+    command: celery -A trading_system worker -l info --concurrency=8 --max-tasks-per-child=10
     restart: unless-stopped
     networks:
       - forex_network

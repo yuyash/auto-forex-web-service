@@ -14,8 +14,13 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Checkbox,
+  FormControlLabel,
+  Tooltip,
+  IconButton,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
+import { Refresh as RefreshIcon } from '@mui/icons-material';
 import {
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
@@ -154,7 +159,10 @@ export function TaskExecutionsTab({
   const [selectedExecution, setSelectedExecution] =
     useState<TaskExecution | null>(null);
   const [liveLogs, setLiveLogs] = useState<ExecutionLog[]>([]);
+  const [autoScroll, setAutoScroll] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const logsContainerRef = useRef<HTMLDivElement>(null);
+  const isUserScrollingRef = useRef(false);
 
   const {
     data: executionsData,
@@ -189,10 +197,18 @@ export function TaskExecutionsTab({
   }, [taskStatus, refetchExecutions]);
 
   // Connect to WebSocket for live logs when an execution is selected and running
-  // Only connect if we have a valid execution ID
+  // Only connect if we have a valid execution ID and the execution is actually running
   const shouldConnectToLogs =
     selectedExecution?.status === TaskStatus.RUNNING &&
-    selectedExecution?.id !== undefined;
+    selectedExecution?.id !== undefined &&
+    selectedExecution.id > 0;
+
+  // Debug logging
+  console.log('[TaskExecutionsTab] WebSocket connection status:', {
+    selectedExecutionId: selectedExecution?.id,
+    selectedExecutionStatus: selectedExecution?.status,
+    shouldConnect: shouldConnectToLogs,
+  });
 
   useTaskLogsWebSocket({
     taskType: taskType === TaskType.BACKTEST ? 'backtest' : 'trading',
@@ -209,12 +225,35 @@ export function TaskExecutionsTab({
   // Track the last known log count to avoid infinite loops
   const lastLogCountRef = useRef<number>(0);
 
+  // Combine stored logs with live logs
+  const allLogs = selectedExecution
+    ? selectedExecution.status === TaskStatus.RUNNING
+      ? [...(selectedExecution.logs || []), ...liveLogs]
+      : selectedExecution.logs || []
+    : [];
+
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
-    if (liveLogs.length > 0) {
-      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (autoScroll && !isUserScrollingRef.current && logsContainerRef.current) {
+      logsContainerRef.current.scrollTop =
+        logsContainerRef.current.scrollHeight;
     }
-  }, [liveLogs]);
+  }, [allLogs.length, autoScroll]);
+
+  // Detect user scrolling to temporarily disable auto-scroll
+  const handleScroll = () => {
+    if (!logsContainerRef.current) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = logsContainerRef.current;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+
+    // If user scrolls away from bottom, mark as user scrolling
+    if (!isAtBottom && autoScroll) {
+      isUserScrollingRef.current = true;
+    } else if (isAtBottom) {
+      isUserScrollingRef.current = false;
+    }
+  };
 
   // Reset live logs when selection changes (using execution ID as key)
   const executionId = selectedExecution?.id;
@@ -243,13 +282,6 @@ export function TaskExecutionsTab({
       }
     }
   }, [executions, selectedExecution?.id]);
-
-  // Combine stored logs with live logs
-  const allLogs = selectedExecution
-    ? selectedExecution.status === TaskStatus.RUNNING
-      ? [...(selectedExecution.logs || []), ...liveLogs]
-      : selectedExecution.logs || []
-    : [];
 
   if (isLoading) {
     return (
@@ -332,36 +364,93 @@ export function TaskExecutionsTab({
                     alignItems: 'center',
                   }}
                 >
-                  <Typography variant="h6">
-                    Execution #{selectedExecution.execution_number} Logs
-                    {selectedExecution.status === TaskStatus.RUNNING &&
-                      liveLogs.length > 0 && (
-                        <Typography
-                          component="span"
-                          variant="caption"
-                          sx={{ ml: 1, color: 'success.main' }}
-                        >
-                          • Live
-                        </Typography>
-                      )}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {allLogs.length}{' '}
-                    {allLogs.length === 1 ? 'entry' : 'entries'}
-                  </Typography>
-                </Box>
-                <Box
-                  sx={{ mt: 1, display: 'flex', gap: 1, alignItems: 'center' }}
-                >
-                  <StatusBadge status={selectedExecution.status} size="small" />
-                  <Typography variant="caption" color="text.secondary">
-                    Started:{' '}
-                    {new Date(selectedExecution.started_at).toLocaleString()}
-                  </Typography>
+                  <Box>
+                    <Typography variant="h6">
+                      Execution #{selectedExecution.execution_number} Logs
+                      {selectedExecution.status === TaskStatus.RUNNING &&
+                        liveLogs.length > 0 && (
+                          <Typography
+                            component="span"
+                            variant="caption"
+                            sx={{ ml: 1, color: 'success.main' }}
+                          >
+                            • Live
+                          </Typography>
+                        )}
+                    </Typography>
+                    <Box
+                      sx={{
+                        mt: 0.5,
+                        display: 'flex',
+                        gap: 1,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <StatusBadge
+                        status={selectedExecution.status}
+                        size="small"
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        Started:{' '}
+                        {new Date(
+                          selectedExecution.started_at
+                        ).toLocaleString()}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={autoScroll}
+                          onChange={(e) => {
+                            setAutoScroll(e.target.checked);
+                            isUserScrollingRef.current = false;
+                          }}
+                          size="small"
+                        />
+                      }
+                      label="Auto-scroll"
+                      sx={{ mr: 0 }}
+                    />
+                    <Tooltip title="Refresh logs">
+                      <IconButton
+                        size="small"
+                        onClick={() => refetchExecutions()}
+                        aria-label="Refresh logs"
+                      >
+                        <RefreshIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Typography variant="caption" color="text.secondary">
+                      {allLogs.length}{' '}
+                      {allLogs.length === 1 ? 'entry' : 'entries'}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
 
-              <Box sx={{ flex: 1, overflow: 'auto' }}>
+              <Box
+                ref={logsContainerRef}
+                onScroll={handleScroll}
+                sx={{
+                  flex: 1,
+                  overflow: 'auto',
+                  '&::-webkit-scrollbar': {
+                    width: '8px',
+                  },
+                  '&::-webkit-scrollbar-track': {
+                    bgcolor: 'background.paper',
+                  },
+                  '&::-webkit-scrollbar-thumb': {
+                    bgcolor: 'action.disabled',
+                    borderRadius: '4px',
+                    '&:hover': {
+                      bgcolor: 'action.active',
+                    },
+                  },
+                }}
+              >
                 {allLogs.length > 0 ? (
                   <TableContainer>
                     <Table size="small" stickyHeader>

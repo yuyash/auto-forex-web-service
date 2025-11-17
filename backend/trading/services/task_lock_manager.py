@@ -101,6 +101,7 @@ class TaskLockManager:
         """
         lock_key = self._get_lock_key(task_type, task_id)
         heartbeat_key = self._get_heartbeat_key(task_type, task_id)
+        cancel_key = self._get_cancellation_key(task_type, task_id)
 
         try:
             # Get current timestamp
@@ -118,6 +119,9 @@ class TaskLockManager:
             lock_acquired = self.cache.add(lock_key, lock_data, timeout=self.LOCK_TIMEOUT)
 
             if lock_acquired:
+                # Clear any stale cancellation flag from previous runs
+                self.cache.delete(cancel_key)
+
                 # Set initial heartbeat
                 self.cache.set(
                     heartbeat_key,

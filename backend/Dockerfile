@@ -12,12 +12,18 @@ ENV PYTHONUNBUFFERED=1 \
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies and performance monitoring tools
 RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
     libpq-dev \
     curl \
+    procps \
+    htop \
+    strace \
+    lsof \
+    iotop \
+    sysstat \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for dependency management
@@ -28,6 +34,9 @@ COPY pyproject.toml ./
 
 # Install Python dependencies using uv
 RUN uv pip install --system -r pyproject.toml
+
+# Install Python profiling tools
+RUN pip install py-spy memory-profiler
 
 # Copy project files
 COPY . .

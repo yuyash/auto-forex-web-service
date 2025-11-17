@@ -1,0 +1,305 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backtest: Floor Strategy (Athena)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/manage.py",
+      "args": [
+        "run_backtest",
+        "--instrument",
+        "EUR_USD",
+        "--start-date",
+        "2025-11-10",
+        "--end-date",
+        "2025-11-11",
+        "--data-source",
+        "athena",
+        "--athena-database",
+        "forex_hist_data_db",
+        "--athena-table",
+        "quotes",
+        "--athena-bucket",
+        "aws-athena-query-results-789121567207-us-west-2",
+        "--config-name",
+        "Test1",
+        "--aws-profile",
+        "auto-forex",
+        "--aws-role",
+        "arn:aws:iam::789121567207:role/auto-forex-execution-role",
+        "--aws-region",
+        "us-west-2"
+      ],
+      "django": true,
+      "justMyCode": false,
+      "console": "internalConsole",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "trading_system.settings"
+      }
+    },
+    {
+      "name": "Backtest: Use Existing Config by ID",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/manage.py",
+      "args": [
+        "run_backtest",
+        "--config-id",
+        "1",
+        "--instrument",
+        "EUR_USD",
+        "--start-date",
+        "2025-11-10",
+        "--end-date",
+        "2025-11-11",
+        "--data-source",
+        "athena"
+      ],
+      "django": true,
+      "justMyCode": false,
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "trading_system.settings"
+      }
+    },
+    {
+      "name": "Backtest: PostgreSQL Data Source",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/manage.py",
+      "args": [
+        "run_backtest",
+        "--strategy-type",
+        "floor",
+        "--instrument",
+        "EUR_USD",
+        "--start-date",
+        "2025-11-10",
+        "--end-date",
+        "2025-11-11",
+        "--data-source",
+        "postgresql"
+      ],
+      "django": true,
+      "justMyCode": false,
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "trading_system.settings"
+      }
+    },
+    {
+      "name": "Backtest: Custom Athena Settings",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/manage.py",
+      "args": [
+        "run_backtest",
+        "--strategy-type",
+        "floor",
+        "--instrument",
+        "EUR_USD",
+        "--start-date",
+        "2025-11-10",
+        "--end-date",
+        "2025-11-11",
+        "--data-source",
+        "athena",
+        "--athena-database",
+        "forex_hist_data_db",
+        "--athena-table",
+        "quotes",
+        "--athena-bucket",
+        "your-athena-results-bucket"
+      ],
+      "django": true,
+      "justMyCode": false,
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "trading_system.settings"
+      }
+    },
+    {
+      "name": "Backtest: With AWS Profile",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/manage.py",
+      "args": [
+        "run_backtest",
+        "--strategy-type",
+        "floor",
+        "--instrument",
+        "EUR_USD",
+        "--start-date",
+        "2025-11-10",
+        "--end-date",
+        "2025-11-11",
+        "--data-source",
+        "athena",
+        "--aws-profile",
+        "default",
+        "--aws-region",
+        "us-east-1"
+      ],
+      "django": true,
+      "justMyCode": false,
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "trading_system.settings"
+      }
+    },
+    {
+      "name": "Backtest: With AWS Role",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/manage.py",
+      "args": [
+        "run_backtest",
+        "--strategy-type",
+        "floor",
+        "--instrument",
+        "EUR_USD",
+        "--start-date",
+        "2025-11-10",
+        "--end-date",
+        "2025-11-11",
+        "--data-source",
+        "athena",
+        "--aws-role",
+        "arn:aws:iam::123456789012:role/YourRoleName",
+        "--aws-region",
+        "us-east-1"
+      ],
+      "django": true,
+      "justMyCode": false,
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "trading_system.settings"
+      }
+    },
+    {
+      "name": "Backtest: Full Custom Configuration",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/manage.py",
+      "args": [
+        "run_backtest",
+        "--strategy-type",
+        "floor",
+        "--instrument",
+        "EUR_USD",
+        "--start-date",
+        "2025-11-10",
+        "--end-date",
+        "2025-11-11",
+        "--data-source",
+        "athena",
+        "--initial-balance",
+        "50000",
+        "--commission",
+        "2.5",
+        "--cpu-limit",
+        "2",
+        "--memory-limit",
+        "4096",
+        "--aws-profile",
+        "default",
+        "--aws-region",
+        "us-east-1",
+        "--athena-database",
+        "forex_hist_data_db",
+        "--athena-table",
+        "quotes",
+        "--athena-bucket",
+        "your-athena-results-bucket",
+        "--params",
+        "{\"position_size\": 5000}"
+      ],
+      "django": true,
+      "justMyCode": false,
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "trading_system.settings"
+      }
+    },
+    {
+      "name": "Python: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Python: Backtest Engine Debug",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["backend/tests/test_backtest_task_execution.py", "-v", "-s"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Debug: Standalone Backtest (Mock Data)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/debug_backtest.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "trading_system.settings"
+      }
+    },
+    {
+      "name": "Debug: Standalone Backtest (PostgreSQL)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/debug_backtest.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "trading_system.settings",
+        "USE_POSTGRES": "true"
+      }
+    },
+    {
+      "name": "Debug: Standalone Backtest (Athena)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/debug_backtest.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "trading_system.settings",
+        "USE_ATHENA": "true",
+        "AWS_PROFILE": "default",
+        "AWS_DEFAULT_REGION": "us-east-1"
+      }
+    },
+    {
+      "name": "Debug: Standalone Backtest (Athena + Role)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/debug_backtest.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "trading_system.settings",
+        "USE_ATHENA": "true",
+        "AWS_ROLE_ARN": "arn:aws:iam::123456789012:role/YourBacktestRole",
+        "AWS_DEFAULT_REGION": "us-east-1"
+      }
+    }
+  ]
+}

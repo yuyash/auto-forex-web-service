@@ -1098,19 +1098,21 @@ class TaskLogsConsumer(AsyncWebsocketConsumer):
 
 class TaskStatusConsumer(AsyncWebsocketConsumer):
     """
-    WebSocket consumer for streaming task status updates and logs to users.
+    WebSocket consumer for streaming task status updates to users.
 
     This consumer:
     - Accepts WebSocket connections from authenticated users
     - Subscribes to task status updates for the user's tasks
-    - Subscribes to execution log updates for the user's tasks
     - Broadcasts status changes (completed, failed, stopped) to connected clients
-    - Broadcasts real-time execution logs to connected clients
+    - Broadcasts progress updates and intermediate results to connected clients
     - Handles connection lifecycle (connect, disconnect, receive)
+
+    Note: Execution logs are NOT sent through this consumer to avoid duplication.
+    Use TaskLogsConsumer for real-time log streaming.
 
     URL Pattern: ws://host/ws/tasks/status/
 
-    Requirements: 3.3, 3.4, 3.5, 6.7
+    Requirements: 3.3, 3.4, 3.5
     """
 
     def __init__(self, *args: Any, **kwargs: Any):
@@ -1296,6 +1298,9 @@ class TaskStatusConsumer(AsyncWebsocketConsumer):
     async def execution_log(self, event: Dict[str, Any]) -> None:
         """
         Handle execution log events from the channel layer.
+
+        DEPRECATED: This handler is no longer used as logs are only sent to TaskLogsConsumer
+        to avoid duplication. Kept for backward compatibility but will not receive events.
 
         This method is called when a new log entry is generated during task execution.
         It verifies task ownership before forwarding the log to the WebSocket client.

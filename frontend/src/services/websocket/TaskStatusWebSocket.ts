@@ -41,6 +41,8 @@ export class TaskStatusWebSocket {
   private callbacks: Set<MessageCallback> = new Set();
   private token: string | null = null;
   private isManualDisconnect = false;
+  private heartbeatIntervalId: ReturnType<typeof setInterval> | null = null;
+  private readonly heartbeatInterval = 30000; // Send ping every 30 seconds
 
   /**
    * Connect to the WebSocket server with authentication token
@@ -95,6 +97,9 @@ export class TaskStatusWebSocket {
       this.reconnectTimeoutId = null;
     }
 
+    // Stop heartbeat
+    this.stopHeartbeat();
+
     // Close WebSocket connection
     if (this.ws) {
       this.ws.close(1000, 'Manual disconnect');
@@ -145,6 +150,9 @@ export class TaskStatusWebSocket {
 
     this.reconnectAttempts = 0;
     this.reconnectDelay = 3000; // Reset delay to initial value
+
+    // Start heartbeat to keep connection alive
+    this.startHeartbeat();
   }
 
   /**
@@ -203,6 +211,9 @@ export class TaskStatusWebSocket {
 
     this.ws = null;
 
+    // Stop heartbeat
+    this.stopHeartbeat();
+
     // Don't reconnect if it was a manual disconnect or normal closure
     if (this.isManualDisconnect || event.code === 1000) {
       console.log(
@@ -259,5 +270,38 @@ export class TaskStatusWebSocket {
 
     console.log('[TaskStatusWebSocket] Attempting to reconnect...');
     this.connect(this.token);
+  }
+
+  /**
+   * Start sending periodic ping messages to keep connection alive
+   */
+  private startHeartbeat(): void {
+    // Clear any existing heartbeat
+    this.stopHeartbeat();
+
+    // Send ping every 30 seconds
+    this.heartbeatIntervalId = setInterval(() => {
+      if (this.isConnected()) {
+        try {
+          this.ws?.send(JSON.stringify({ type: 'ping' }));
+          console.log('[TaskStatusWebSocket] Heartbeat ping sent');
+        } catch (error) {
+          console.error(
+            '[TaskStatusWebSocket] Failed to send heartbeat:',
+            error
+          );
+        }
+      }
+    }, this.heartbeatInterval);
+  }
+
+  /**
+   * Stop sending heartbeat messages
+   */
+  private stopHeartbeat(): void {
+    if (this.heartbeatIntervalId) {
+      clearInterval(this.heartbeatIntervalId);
+      this.heartbeatIntervalId = null;
+    }
   }
 }

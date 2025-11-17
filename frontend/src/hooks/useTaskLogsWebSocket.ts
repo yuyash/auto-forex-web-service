@@ -40,12 +40,20 @@ export function useTaskLogsWebSocket(options: UseTaskLogsWebSocketOptions) {
 
   const connect = useCallback(() => {
     if (!isAuthenticated || !token || !enabled || !taskId || taskId <= 0) {
+      console.log('[TaskLogs WS] Connection skipped:', {
+        isAuthenticated,
+        hasToken: !!token,
+        enabled,
+        taskId,
+      });
       return;
     }
 
     // Close existing connection if any
     if (wsRef.current) {
-      wsRef.current.close();
+      console.log('[TaskLogs WS] Closing existing connection');
+      wsRef.current.close(1000, 'Reconnecting');
+      wsRef.current = null;
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -113,16 +121,29 @@ export function useTaskLogsWebSocket(options: UseTaskLogsWebSocketOptions) {
 
   useEffect(() => {
     if (enabled) {
+      console.log('[TaskLogs WS] Enabled, connecting...');
       connect();
+    } else {
+      console.log('[TaskLogs WS] Disabled, cleaning up...');
+      // Clean up when disabled
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (wsRef.current) {
+        wsRef.current.close(1000, 'Disabled');
+        wsRef.current = null;
+      }
     }
 
-    // Cleanup on unmount or when disabled
+    // Cleanup on unmount
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
       if (wsRef.current) {
-        wsRef.current.close(1000, 'Component unmounted or disabled');
+        wsRef.current.close(1000, 'Component unmounted');
+        wsRef.current = null;
       }
     };
   }, [connect, enabled]);

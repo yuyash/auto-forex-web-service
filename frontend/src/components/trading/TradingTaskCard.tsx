@@ -9,7 +9,6 @@ import {
   IconButton,
   Tooltip,
   Alert,
-  Collapse,
   Button,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
@@ -21,15 +20,12 @@ import {
   Visibility as ViewIcon,
   MoreVert as MoreVertIcon,
   Warning as WarningIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import type { TradingTask } from '../../types/tradingTask';
 import { TaskStatus } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { MetricCard } from '../tasks/display/MetricCard';
-import { LogPanel } from '../tasks/display/LogPanel';
 import TradingTaskActions from './TradingTaskActions';
 import {
   useStartTradingTask,
@@ -54,7 +50,6 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
   );
-  const [logPanelExpanded, setLogPanelExpanded] = useState(false);
   const toast = useToast();
   const prevTaskRef = useRef<TradingTask>(task);
 
@@ -497,21 +492,6 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
             )}
           </Box>
         )}
-
-        {/* Log Panel - Collapsed by default, expandable */}
-        <Box sx={{ mt: 2 }}>
-          <Button
-            onClick={() => setLogPanelExpanded(!logPanelExpanded)}
-            endIcon={logPanelExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            size="small"
-            sx={{ mb: 1 }}
-          >
-            {logPanelExpanded ? 'Hide' : 'Show'} Execution Logs
-          </Button>
-          <Collapse in={logPanelExpanded}>
-            <LogPanel taskType="trading" taskId={currentTask.id} height={300} />
-          </Collapse>
-        </Box>
 
         {/* Footer with metadata */}
         <Box

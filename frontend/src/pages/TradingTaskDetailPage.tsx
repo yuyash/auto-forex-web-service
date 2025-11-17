@@ -41,7 +41,6 @@ import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
 import { TaskActionButtons } from '../components/tasks/actions/TaskActionButtons';
 import { TaskProgressBar } from '../components/tasks/display/TaskProgressBar';
-import { LogPanel } from '../components/tasks/display/LogPanel';
 import { CopyTaskDialog } from '../components/tasks/actions/CopyTaskDialog';
 import { DeleteTaskDialog } from '../components/tasks/actions/DeleteTaskDialog';
 import { ConfirmDialog } from '../components/tasks/actions/ConfirmDialog';
@@ -86,7 +85,7 @@ export default function TradingTaskDetailPage() {
   const navigate = useNavigate();
   const taskId = parseInt(id || '0', 10);
 
-  const [tabValue, setTabValue] = useState(0);
+  const [tabValue, setTabValue] = useState(2); // Default to Executions tab (index 2)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -467,18 +466,6 @@ export default function TradingTaskDetailPage() {
           />
         </Paper>
       )}
-
-      {/* Log Panel - Always visible with prominent placement (Requirement 6.8) */}
-      <Paper sx={{ mb: 3, height: 500 }}>
-        <LogPanel
-          taskType="trading"
-          taskId={taskId}
-          maxEntries={1000}
-          autoScroll={true}
-          showTimestamp={true}
-          height={450}
-        />
-      </Paper>
 
       {/* Tabs */}
       <Paper sx={{ mb: 3 }}>

@@ -143,6 +143,8 @@ export function useTaskStatusWebSocket(
           onIntermediateResults?.(results);
         } else if (message.type === 'pong') {
           // Ignore pong responses
+        } else if (message.type === 'execution_log') {
+          // Ignore execution logs (handled by dedicated logs WebSocket)
         } else {
           console.warn('[TaskStatus WS] Unknown message type:', message.type);
         }

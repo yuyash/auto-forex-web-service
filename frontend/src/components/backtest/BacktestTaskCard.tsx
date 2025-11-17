@@ -8,15 +8,11 @@ import {
   Chip,
   IconButton,
   Tooltip,
-  Collapse,
-  Button,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import {
   Visibility as ViewIcon,
   MoreVert as MoreVertIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import type { BacktestTask } from '../../types/backtestTask';
@@ -24,7 +20,6 @@ import { TaskStatus } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskProgressBar } from '../tasks/display/TaskProgressBar';
 import { MetricCard } from '../tasks/display/MetricCard';
-import { LogPanel } from '../tasks/display/LogPanel';
 import { TaskActionButtons } from '../tasks/actions/TaskActionButtons';
 import BacktestTaskActions from './BacktestTaskActions';
 import {
@@ -50,7 +45,6 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
   );
-  const [logPanelExpanded, setLogPanelExpanded] = useState(false);
 
   const startTask = useStartBacktestTask();
   const stopTask = useStopBacktestTask();
@@ -317,25 +311,6 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
             )}
           </Box>
         )}
-
-        {/* Log Panel - Collapsed by default, expandable */}
-        <Box sx={{ mt: 2 }}>
-          <Button
-            onClick={() => setLogPanelExpanded(!logPanelExpanded)}
-            endIcon={logPanelExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            size="small"
-            sx={{ mb: 1 }}
-          >
-            {logPanelExpanded ? 'Hide' : 'Show'} Execution Logs
-          </Button>
-          <Collapse in={logPanelExpanded}>
-            <LogPanel
-              taskType="backtest"
-              taskId={currentTask.id}
-              height={300}
-            />
-          </Collapse>
-        </Box>
 
         {/* Footer with metadata */}
         <Box

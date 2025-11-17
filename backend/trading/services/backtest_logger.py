@@ -48,6 +48,19 @@ class BacktestLogger:
         self.user_id = user_id
         self.logger = logging.getLogger(f"backtest.{task_id}")
 
+        # Disable propagation to prevent duplicate logs from parent loggers
+        # This ensures each log message is only emitted once
+        self.logger.propagate = False
+
+        # Ensure logger has at least one handler to prevent "No handlers" warning
+        # The handler is only for backend logging; WebSocket streaming is separate
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(
+                logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            )
+            self.logger.addHandler(handler)
+
     def log_execution_start(self, total_days: int, date_range: str) -> None:
         """
         Log backtest execution start with date range.
@@ -283,7 +296,7 @@ class BacktestLogger:
                 execution_id=self.execution_id,
                 execution_number=self.execution_number,
                 log_entry=log_entry,
-                user_id=self.user_id,
+                _user_id=self.user_id,
             )
 
         except Exception as e:  # pylint: disable=broad-exception-caught

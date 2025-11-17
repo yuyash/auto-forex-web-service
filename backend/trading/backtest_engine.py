@@ -264,6 +264,7 @@ class BacktestEngine:
         self.resource_monitor: ResourceMonitor | None = None
         self.terminated = False
         self.progress_callback: Any = None  # Optional callback for progress updates
+        self._tick_counter = 0  # Performance: O(1) counter instead of len() calls
 
     def run(
         self, tick_data: list[TickDataPoint]
@@ -300,7 +301,7 @@ class BacktestEngine:
 
             # Process each tick
             total_ticks = len(tick_data)
-            for i, tick in enumerate(tick_data):
+            for tick in tick_data:
                 # Check if resource limit exceeded
                 if self.resource_monitor and self.resource_monitor.is_exceeded():
                     self.terminated = True
@@ -309,12 +310,12 @@ class BacktestEngine:
                         f"({self.config.memory_limit / 1024 / 1024:.0f}MB)"
                     )
 
-                # Process tick
+                # Process tick (increments _tick_counter internally)
                 self._process_tick(tick)
 
-                # Log and report progress every 10%
-                if total_ticks > 0 and i % max(1, total_ticks // 10) == 0:
-                    progress = int((i / total_ticks) * 100)
+                # Log and report progress every 10k ticks (O(1) check)
+                if self._tick_counter % 10000 == 0:
+                    progress = int((self._tick_counter / total_ticks) * 100)
                     logger.info(f"Backtest progress: {progress}%")
                     if self.progress_callback:
                         self.progress_callback(progress)  # pylint: disable=not-callable
@@ -527,6 +528,9 @@ class BacktestEngine:
         Args:
             tick: Tick data point
         """
+        # Increment tick counter (O(1) operation)
+        self._tick_counter += 1
+
         # Update positions with current price
         self._update_positions(tick)
 
@@ -543,8 +547,8 @@ class BacktestEngine:
             for order in orders:
                 self._execute_order(order, tick)
 
-        # Record equity periodically (every 100 ticks)
-        if len(self.equity_curve) == 0 or len(self.equity_curve) % 100 == 0:
+        # Record equity periodically (every 100 ticks) - O(1) check instead of len()
+        if self._tick_counter % 100 == 0:
             self._record_equity(tick.timestamp)
 
     def _update_positions(self, tick: TickDataPoint) -> None:

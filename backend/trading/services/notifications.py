@@ -86,13 +86,14 @@ def send_execution_log_notification(
     execution_id: int,
     execution_number: int,
     log_entry: dict[str, Any],
-    user_id: int | None = None,
+    _user_id: int | None = None,
 ) -> None:
     """
     Send log entry via WebSocket to connected clients.
 
-    This function sends logs to both the task-specific logs group (for TaskLogsConsumer)
-    and the user's task status group (for TaskStatusConsumer with ownership verification).
+    This function sends logs only to the task-specific logs group (for TaskLogsConsumer).
+    Logs are NOT sent to TaskStatusConsumer to avoid duplication when both consumers
+    are connected simultaneously.
 
     Args:
         task_type: Type of task (backtest or trading)
@@ -100,7 +101,7 @@ def send_execution_log_notification(
         execution_id: Execution ID
         execution_number: Execution number
         log_entry: Log entry dictionary with timestamp, level, and message
-        user_id: Optional user ID for sending to task status group
+        _user_id: Optional user ID (unused, kept for backward compatibility)
 
     Requirements: 6.7
     """
@@ -118,6 +119,8 @@ def send_execution_log_notification(
         }
 
         # Send to task-specific logs group (for TaskLogsConsumer)
+        # Only send to this group to avoid duplication when both
+        # TaskLogsConsumer and TaskStatusConsumer are connected
         task_logs_group = f"task_logs_{task_type}_{task_id}"
         async_to_sync(channel_layer.group_send)(
             task_logs_group,
@@ -126,18 +129,6 @@ def send_execution_log_notification(
                 "data": log_data,
             },
         )
-
-        # Also send to user's task status group (for TaskStatusConsumer)
-        # This allows the TaskStatusConsumer to receive logs with ownership verification
-        if user_id:
-            status_group = f"task_status_user_{user_id}"
-            async_to_sync(channel_layer.group_send)(
-                status_group,
-                {
-                    "type": "execution_log",
-                    "data": log_data,
-                },
-            )
     except Exception:  # nosec B110  # pylint: disable=broad-exception-caught
         # Don't fail the execution if WebSocket notification fails
         pass
