@@ -19,8 +19,3 @@ export { default as GlobalKeyboardShortcuts } from './GlobalKeyboardShortcuts';
 export { VirtualizedList } from './VirtualizedList';
 export { VirtualizedTable } from './VirtualizedTable';
 export type { VirtualizedTableColumn } from './VirtualizedTable';
-export {
-  default as WebSocketConnectionStatus,
-  ConnectionState,
-} from './WebSocketConnectionStatus';
-export type { WebSocketConnectionStatusProps } from './WebSocketConnectionStatus';

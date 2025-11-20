@@ -16,7 +16,6 @@ import { useAccessibility } from './hooks/useAccessibility';
 import { ToastProvider } from './components/common';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { QueryProvider } from './providers/QueryProvider';
-import { TaskStatusListener } from './components/tasks/TaskStatusListener';
 
 // Lazy load page components for code splitting
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -211,7 +210,6 @@ function ThemedApp() {
       <QueryProvider>
         <ToastProvider>
           <AuthProvider>
-            <TaskStatusListener />
             <BrowserRouter>
               <AppRoutes />
             </BrowserRouter>
