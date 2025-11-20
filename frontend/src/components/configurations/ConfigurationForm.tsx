@@ -41,6 +41,7 @@ const configurationSchema = z.object({
 type ConfigurationFormData = z.infer<typeof configurationSchema>;
 
 interface ConfigurationFormProps {
+  mode?: 'create' | 'edit';
   initialData?: Partial<ConfigurationFormData>;
   onSubmit: (data: StrategyConfigCreateData) => Promise<void>;
   onCancel: () => void;
@@ -279,11 +280,13 @@ const getDefaultParameters = (strategyType: string): StrategyConfig => {
 };
 
 const ConfigurationForm = ({
+  mode = 'create',
   initialData,
   onSubmit,
   onCancel,
   isLoading = false,
 }: ConfigurationFormProps) => {
+  const isEditMode = mode === 'edit';
   const initialStrategyType = initialData?.strategy_type || '';
   const initialParameters = useMemo<StrategyConfig>(() => {
     const defaults = initialStrategyType
@@ -405,7 +408,10 @@ const ConfigurationForm = ({
     });
   };
 
-  const steps = ['Basic Information', 'Strategy Type', 'Parameters', 'Review'];
+  // Different steps for create vs edit mode
+  const steps = isEditMode
+    ? ['Parameters', 'Review']
+    : ['Basic Information', 'Strategy Type', 'Parameters', 'Review'];
 
   const selectedStrategy = STRATEGY_TYPES.find(
     (s) => s.value === selectedStrategyType
@@ -461,8 +467,8 @@ const ConfigurationForm = ({
       </Stepper>
 
       <form onSubmit={handleSubmit(onFormSubmit)}>
-        {/* Step 1: Basic Information */}
-        {activeStep === 0 && (
+        {/* Step 1: Basic Information (Create mode only) */}
+        {!isEditMode && activeStep === 0 && (
           <Box>
             <Typography variant="h6" gutterBottom>
               Basic Information
@@ -504,8 +510,8 @@ const ConfigurationForm = ({
           </Box>
         )}
 
-        {/* Step 2: Strategy Type */}
-        {activeStep === 1 && (
+        {/* Step 2: Strategy Type (Create mode only) */}
+        {!isEditMode && activeStep === 1 && (
           <Box>
             <Typography variant="h6" gutterBottom>
               Select Strategy Type
@@ -568,8 +574,9 @@ const ConfigurationForm = ({
           </Box>
         )}
 
-        {/* Step 3: Parameters */}
-        {activeStep === 2 && (
+        {/* Step 3: Parameters (Create mode) or Step 1: Parameters (Edit mode) */}
+        {((isEditMode && activeStep === 0) ||
+          (!isEditMode && activeStep === 2)) && (
           <Box>
             <Typography variant="h6" gutterBottom>
               Configure Parameters
@@ -619,8 +626,9 @@ const ConfigurationForm = ({
           </Box>
         )}
 
-        {/* Step 4: Review */}
-        {activeStep === 3 && (
+        {/* Step 4: Review (Create mode) or Step 2: Review (Edit mode) */}
+        {((isEditMode && activeStep === 1) ||
+          (!isEditMode && activeStep === 3)) && (
           <Box>
             <Typography variant="h6" gutterBottom>
               Review Configuration
@@ -631,44 +639,72 @@ const ConfigurationForm = ({
 
             <Card variant="outlined" sx={{ mb: 2 }}>
               <CardContent>
-                <Typography
-                  variant="subtitle2"
-                  color="text.secondary"
-                  gutterBottom
-                >
-                  Name
-                </Typography>
-                <Typography variant="body1" sx={{ mb: 2 }}>
-                  {watch('name')}
-                </Typography>
-
-                {watch('description') && (
+                {!isEditMode && (
                   <>
                     <Typography
                       variant="subtitle2"
                       color="text.secondary"
                       gutterBottom
                     >
-                      Description
+                      Name
                     </Typography>
                     <Typography variant="body1" sx={{ mb: 2 }}>
-                      {watch('description')}
+                      {watch('name')}
                     </Typography>
+
+                    {watch('description') && (
+                      <>
+                        <Typography
+                          variant="subtitle2"
+                          color="text.secondary"
+                          gutterBottom
+                        >
+                          Description
+                        </Typography>
+                        <Typography variant="body1" sx={{ mb: 2 }}>
+                          {watch('description')}
+                        </Typography>
+                      </>
+                    )}
+
+                    <Typography
+                      variant="subtitle2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      Strategy Type
+                    </Typography>
+                    <Typography variant="body1" sx={{ mb: 2 }}>
+                      {selectedStrategy?.label}
+                    </Typography>
+
+                    <Divider sx={{ my: 2 }} />
                   </>
                 )}
 
-                <Typography
-                  variant="subtitle2"
-                  color="text.secondary"
-                  gutterBottom
-                >
-                  Strategy Type
-                </Typography>
-                <Typography variant="body1" sx={{ mb: 2 }}>
-                  {selectedStrategy?.label}
-                </Typography>
+                {isEditMode && (
+                  <>
+                    <Typography
+                      variant="subtitle2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      Configuration
+                    </Typography>
+                    <Typography variant="body1" sx={{ mb: 1 }}>
+                      {watch('name')}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mb: 2 }}
+                    >
+                      {selectedStrategy?.label}
+                    </Typography>
 
-                <Divider sx={{ my: 2 }} />
+                    <Divider sx={{ my: 2 }} />
+                  </>
+                )}
 
                 <Typography
                   variant="subtitle2"

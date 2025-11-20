@@ -230,7 +230,7 @@ interface UseConfigurationResult {
  */
 export function useConfiguration(id?: number): UseConfigurationResult {
   const [data, setData] = useState<StrategyConfig | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start as true to prevent premature redirects
   const [error, setError] = useState<Error | null>(null);
   const isMountedRef = useRef(true);
   const requestIdRef = useRef(0);

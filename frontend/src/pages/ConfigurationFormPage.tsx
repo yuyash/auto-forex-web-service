@@ -162,6 +162,7 @@ const ConfigurationFormPage = () => {
       <Paper elevation={2} sx={{ p: 4 }}>
         {isEditMode && configuration ? (
           <ConfigurationForm
+            mode="edit"
             initialData={{
               name: configuration.name,
               strategy_type: configuration.strategy_type,
@@ -172,8 +173,6 @@ const ConfigurationFormPage = () => {
               await updateConfiguration({
                 id: configuration.id,
                 data: {
-                  name: data.name,
-                  description: data.description,
                   parameters: data.parameters,
                 },
               });
@@ -184,6 +183,7 @@ const ConfigurationFormPage = () => {
           />
         ) : (
           <ConfigurationForm
+            mode="create"
             onSubmit={handleSubmit}
             onCancel={handleCancel}
             isLoading={isCreating}

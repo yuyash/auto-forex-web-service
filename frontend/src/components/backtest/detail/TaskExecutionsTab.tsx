@@ -27,7 +27,6 @@ import {
   PlayArrow as PlayArrowIcon,
 } from '@mui/icons-material';
 import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
-import { useTaskLogsWebSocket } from '../../../hooks/useTaskLogsWebSocket';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
 import { ErrorDisplay } from '../../tasks/display/ErrorDisplay';
 import { TaskStatus, TaskType } from '../../../types/common';
@@ -199,31 +198,8 @@ export function TaskExecutionsTab({
     }
   }, [taskStatus, refetchExecutions]);
 
-  // Connect to WebSocket for live logs when an execution is selected and running
-  // Only connect if we have a valid execution ID and the execution is actually running
-  const shouldConnectToLogs =
-    selectedExecution?.status === TaskStatus.RUNNING &&
-    selectedExecution?.id !== undefined &&
-    selectedExecution.id > 0;
-
-  // Debug logging
-  console.log('[TaskExecutionsTab] WebSocket connection status:', {
-    selectedExecutionId: selectedExecution?.id,
-    selectedExecutionStatus: selectedExecution?.status,
-    shouldConnect: shouldConnectToLogs,
-  });
-
-  useTaskLogsWebSocket({
-    taskType: taskType === TaskType.BACKTEST ? 'backtest' : 'trading',
-    taskId,
-    enabled: shouldConnectToLogs,
-    onLog: (update) => {
-      // Only add logs for the selected execution
-      if (selectedExecution && update.execution_id === selectedExecution.id) {
-        setLiveLogs((prev) => [...prev, update.log]);
-      }
-    },
-  });
+  // Note: WebSocket log streaming has been removed.
+  // Logs are now fetched via HTTP API and stored in the database.
 
   // Track the last known log count to avoid infinite loops
   const lastLogCountRef = useRef<number>(0);

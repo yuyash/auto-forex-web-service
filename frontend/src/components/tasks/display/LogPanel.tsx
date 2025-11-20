@@ -9,7 +9,6 @@ import {
   Tooltip,
 } from '@mui/material';
 import { Clear } from '@mui/icons-material';
-import { useTaskLogsWebSocket } from '../../../hooks/useTaskLogsWebSocket';
 
 interface LogEntry {
   timestamp: string;
@@ -42,8 +41,6 @@ export interface LogPanelProps {
  * Requirements: 6.7, 6.8, 6.9, 6.10
  */
 export const LogPanel: React.FC<LogPanelProps> = ({
-  taskType,
-  taskId,
   maxEntries = 1000,
   autoScroll: initialAutoScroll = true,
   showTimestamp = true,
@@ -54,39 +51,8 @@ export const LogPanel: React.FC<LogPanelProps> = ({
   const logContainerRef = useRef<HTMLDivElement>(null);
   const isUserScrollingRef = useRef(false);
 
-  // Handle incoming log messages from WebSocket
-  const handleLog = useCallback(
-    (update: {
-      execution_id: number;
-      task_id: number;
-      task_type: string;
-      execution_number: number;
-      log: LogEntry;
-    }) => {
-      // Filter logs by task_id to show only relevant logs
-      if (update.task_id !== taskId) {
-        return;
-      }
-
-      setLogs((prevLogs) => {
-        const newLogs = [...prevLogs, update.log];
-        // Maintain last maxEntries log entries in memory
-        if (newLogs.length > maxEntries) {
-          return newLogs.slice(newLogs.length - maxEntries);
-        }
-        return newLogs;
-      });
-    },
-    [taskId, maxEntries]
-  );
-
-  // Connect to WebSocket for log streaming
-  useTaskLogsWebSocket({
-    taskType,
-    taskId,
-    onLog: handleLog,
-    enabled: taskId > 0,
-  });
+  // Note: WebSocket log streaming has been removed.
+  // Logs are now fetched via HTTP API and stored in the database.
 
   // Auto-scroll to latest log entry when new logs arrive
   useEffect(() => {

@@ -319,20 +319,15 @@ class TestBacktestTaskStatusEndpoint:
         url = reverse("trading:backtest_task_status", kwargs={"task_id": running_backtest_task.id})
         response = api_client.get(url)
 
-        # Verify response
+        # Verify response matches TaskStatusResponse interface
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["id"] == running_backtest_task.id
-        assert response.data["name"] == running_backtest_task.name
+        assert response.data["task_id"] == running_backtest_task.id
+        assert response.data["task_type"] == "backtest"
         assert response.data["status"] == TaskStatus.RUNNING
-        assert "updated_at" in response.data
-
-        # Verify execution details
-        assert response.data["execution"] is not None
-        assert response.data["execution"]["id"] == execution.id
-        assert response.data["execution"]["execution_number"] == 1
-        assert response.data["execution"]["status"] == TaskStatus.RUNNING
-        assert response.data["execution"]["progress"] == 50
-        assert response.data["execution"]["started_at"] is not None
+        assert response.data["progress"] == execution.progress
+        assert response.data["started_at"] is not None
+        assert response.data["completed_at"] is None
+        assert response.data["error_message"] is None
 
     def test_get_status_without_execution(self, api_client, user, backtest_task):
         """
@@ -347,15 +342,15 @@ class TestBacktestTaskStatusEndpoint:
         url = reverse("trading:backtest_task_status", kwargs={"task_id": backtest_task.id})
         response = api_client.get(url)
 
-        # Verify response
+        # Verify response matches TaskStatusResponse interface
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["id"] == backtest_task.id
-        assert response.data["name"] == backtest_task.name
+        assert response.data["task_id"] == backtest_task.id
+        assert response.data["task_type"] == "backtest"
         assert response.data["status"] == TaskStatus.CREATED
-        assert "updated_at" in response.data
-
-        # Verify no execution details
-        assert response.data["execution"] is None
+        assert response.data["progress"] == 0
+        assert response.data["started_at"] is None
+        assert response.data["completed_at"] is None
+        assert response.data["error_message"] is None
 
     def test_get_status_nonexistent_task_fails(self, api_client, user):
         """Test getting status for nonexistent task returns 404."""

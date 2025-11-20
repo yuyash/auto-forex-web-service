@@ -412,19 +412,10 @@ class BacktestTaskStatusView(APIView):
         # Get latest execution
         latest_execution = task.get_latest_execution()
 
-        # Build response data
-        response_data = {
-            "id": task.id,
-            "name": task.name,
-            "status": task.status,
-            "updated_at": task.updated_at.isoformat(),
-        }
-
-        # Add execution details if available
+        # Build execution details
+        execution_data = None
         if latest_execution:
-            response_data["execution"] = {
-                "id": latest_execution.id,
-                "execution_number": latest_execution.execution_number,
+            execution_data = {
                 "status": latest_execution.status,
                 "progress": latest_execution.progress,
                 "started_at": (
@@ -435,10 +426,28 @@ class BacktestTaskStatusView(APIView):
                     if latest_execution.completed_at
                     else None
                 ),
-                "error_message": latest_execution.error_message,
+                "error_message": latest_execution.error_message or None,
             }
-        else:
-            response_data["execution"] = None
+
+        # Build response data
+        response_data = {
+            "task_id": task.id,
+            "task_type": "backtest",
+            "status": task.status,
+            "progress": latest_execution.progress if latest_execution else 0,
+            "started_at": (
+                latest_execution.started_at.isoformat()
+                if latest_execution and latest_execution.started_at
+                else None
+            ),
+            "completed_at": (
+                latest_execution.completed_at.isoformat()
+                if latest_execution and latest_execution.completed_at
+                else None
+            ),
+            "error_message": (latest_execution.error_message or None) if latest_execution else None,
+            "execution": execution_data,
+        }
 
         return Response(response_data, status=status.HTTP_200_OK)
 

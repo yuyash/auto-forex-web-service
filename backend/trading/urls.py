@@ -41,6 +41,7 @@ from .trading_task_views import (  # noqa: E501
     TradingTaskRerunView,
     TradingTaskResumeView,
     TradingTaskStartView,
+    TradingTaskStatusView,
     TradingTaskStopView,
 )
 from .views import TickDataListView
@@ -175,6 +176,11 @@ urlpatterns = [
         "trading-tasks/<int:task_id>/rerun/",
         TradingTaskRerunView.as_view(),
         name="trading_task_rerun",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/status/",
+        TradingTaskStatusView.as_view(),
+        name="trading_task_status",
     ),
     path(
         "trading-tasks/<int:task_id>/executions/",

@@ -600,3 +600,75 @@ class TradingTaskLogsView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class TradingTaskStatusView(APIView):
+    """
+    Get current trading task status and execution details.
+
+    GET: Return current status, progress, and execution information
+
+    Requirements: 3.1, 3.6
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, task_id: int) -> Response:
+        """
+        Get current task status and execution details.
+
+        Used by frontend for polling fallback when WebSocket connection fails.
+        Returns current status, progress percentage, and latest execution details.
+
+        Requirements: 3.1, 3.6
+        """
+        # Get the task
+        try:
+            task = TradingTask.objects.get(id=task_id, user=request.user.id)
+        except TradingTask.DoesNotExist:
+            return Response(
+                {"error": "Trading task not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Get latest execution
+        latest_execution = task.get_latest_execution()
+
+        # Build execution details
+        execution_data = None
+        if latest_execution:
+            execution_data = {
+                "status": latest_execution.status,
+                "progress": latest_execution.progress,
+                "started_at": (
+                    latest_execution.started_at.isoformat() if latest_execution.started_at else None
+                ),
+                "completed_at": (
+                    latest_execution.completed_at.isoformat()
+                    if latest_execution.completed_at
+                    else None
+                ),
+                "error_message": latest_execution.error_message or None,
+            }
+
+        # Build response data matching TaskStatusResponse interface
+        response_data = {
+            "task_id": task.id,
+            "task_type": "trading",
+            "status": task.status,
+            "progress": latest_execution.progress if latest_execution else 0,
+            "started_at": (
+                latest_execution.started_at.isoformat()
+                if latest_execution and latest_execution.started_at
+                else None
+            ),
+            "completed_at": (
+                latest_execution.completed_at.isoformat()
+                if latest_execution and latest_execution.completed_at
+                else None
+            ),
+            "error_message": (latest_execution.error_message or None) if latest_execution else None,
+            "execution": execution_data,
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
