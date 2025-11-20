@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Chip, Stack } from '@mui/material';
+import { Box, Chip, Stack, Tooltip } from '@mui/material';
 import {
   Circle as CircleIcon,
   TrendingUp as TrendingUpIcon,
@@ -16,6 +16,7 @@ interface StrategyStatus {
 interface OandaHealthStatus {
   healthy: boolean;
   message: string;
+  lastChecked?: Date;
 }
 
 const AppFooter = () => {
@@ -80,11 +81,13 @@ const AppFooter = () => {
           setOandaHealth({
             healthy: data.healthy,
             message: data.message,
+            lastChecked: new Date(),
           });
         } else {
           setOandaHealth({
             healthy: false,
             message: 'Failed to check OANDA health',
+            lastChecked: new Date(),
           });
         }
       } catch (error) {
@@ -92,6 +95,7 @@ const AppFooter = () => {
         setOandaHealth({
           healthy: false,
           message: 'Health check failed',
+          lastChecked: new Date(),
         });
       }
     };
@@ -106,8 +110,28 @@ const AppFooter = () => {
   }, [token]);
 
   // Derive connection status from OANDA health
-  const derivedConnectionStatus: 'connected' | 'disconnected' =
-    oandaHealth?.healthy ? 'connected' : 'disconnected';
+  const derivedConnectionStatus: 'connected' | 'disconnected' | 'checking' =
+    oandaHealth === null
+      ? 'checking'
+      : oandaHealth.healthy
+        ? 'connected'
+        : 'disconnected';
+
+  // Format last checked time for tooltip
+  const formatLastChecked = (date?: Date): string => {
+    if (!date) return 'Never';
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  };
+
+  // Build tooltip text for connection status
+  const connectionTooltip = oandaHealth
+    ? `${oandaHealth.message}\nLast checked: ${formatLastChecked(oandaHealth.lastChecked)}`
+    : 'Checking connection...';
 
   // Strategy status - currently not tracking active strategies
   // TODO: Implement by checking for running trading tasks
@@ -135,21 +159,31 @@ const AppFooter = () => {
         flexWrap="wrap"
       >
         {/* Connection Status */}
-        <Chip
-          icon={<CircleIcon />}
-          label={
-            derivedConnectionStatus === 'connected'
-              ? t('status.connected')
-              : t('status.disconnected')
-          }
-          color={derivedConnectionStatus === 'connected' ? 'success' : 'error'}
-          size="small"
-          sx={{
-            '& .MuiChip-icon': {
-              fontSize: '0.75rem',
-            },
-          }}
-        />
+        <Tooltip title={connectionTooltip} arrow>
+          <Chip
+            icon={<CircleIcon />}
+            label={
+              derivedConnectionStatus === 'connected'
+                ? t('status.connected')
+                : derivedConnectionStatus === 'checking'
+                  ? 'Checking...'
+                  : t('status.disconnected')
+            }
+            color={
+              derivedConnectionStatus === 'connected'
+                ? 'success'
+                : derivedConnectionStatus === 'checking'
+                  ? 'default'
+                  : 'error'
+            }
+            size="small"
+            sx={{
+              '& .MuiChip-icon': {
+                fontSize: '0.75rem',
+              },
+            }}
+          />
+        </Tooltip>
 
         {/* Strategy Status */}
         <Chip
