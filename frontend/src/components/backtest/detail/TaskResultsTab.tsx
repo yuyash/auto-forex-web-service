@@ -11,6 +11,7 @@ import Grid from '@mui/material/Grid';
 import { Download as DownloadIcon } from '@mui/icons-material';
 import { MetricsGrid } from '../../tasks/charts/MetricsGrid';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
+import { OHLCChart, type Trade as ChartTrade } from '../OHLCChart';
 import type { BacktestTask } from '../../../types/backtestTask';
 import { TaskStatus, TaskType } from '../../../types/common';
 import type { Trade } from '../../../types/execution';
@@ -198,6 +199,31 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
 
         <MetricsGrid metrics={metrics} />
       </Paper>
+
+      {/* OHLC Chart with Trading Events */}
+      {metrics.trade_log && metrics.trade_log.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 3 }}>
+            Price Chart with Trading Events
+          </Typography>
+
+          <OHLCChart
+            instrument={task.instrument}
+            startDate={task.start_date}
+            endDate={task.end_date}
+            trades={metrics.trade_log.map(
+              (trade: Trade): ChartTrade => ({
+                timestamp: trade.entry_time,
+                action: trade.direction === 'long' ? 'buy' : 'sell',
+                price: trade.entry_price,
+                units: Math.abs(trade.units),
+                pnl: trade.pnl,
+              })
+            )}
+            height={500}
+          />
+        </Paper>
+      )}
 
       {/* Trade Statistics */}
       {stats && (
