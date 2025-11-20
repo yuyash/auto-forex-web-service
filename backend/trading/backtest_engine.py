@@ -7,11 +7,14 @@ on historical data with resource monitoring and limits.
 Requirements: 12.2, 12.3
 """
 
+# pylint: disable=too-many-lines
+
 import logging
 import os
 import resource
 import threading
 import time
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -68,6 +71,9 @@ class BacktestPosition:
         entry_time: Entry timestamp
         stop_loss: Stop loss price (optional)
         take_profit: Take profit price (optional)
+        layer_number: Layer number for multi-layer strategies (optional)
+        is_first_lot: Whether this is the first lot in a layer (optional)
+        position_id: Unique position identifier (optional)
     """
 
     instrument: str
@@ -77,6 +83,10 @@ class BacktestPosition:
     entry_time: datetime
     stop_loss: Decimal | None = None
     take_profit: Decimal | None = None
+    layer_number: int | None = None
+    is_first_lot: bool = False
+    position_id: str | None = None
+    current_price: Decimal | None = None  # For strategy compatibility
 
     def calculate_pnl(self, current_price: Decimal) -> Decimal:
         """
@@ -109,6 +119,8 @@ class BacktestTrade:
         duration: Trade duration in seconds
         pnl: Profit/loss for the trade
         reason: Reason for closing (e.g., 'take_profit', 'stop_loss', 'manual')
+        pip_diff: Price difference in pips
+        reason_display: Human-friendly reason description
     """
 
     instrument: str
@@ -121,6 +133,8 @@ class BacktestTrade:
     duration: float
     pnl: float
     reason: str
+    pip_diff: float = 0.0
+    reason_display: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -135,6 +149,8 @@ class BacktestTrade:
             "duration": self.duration,
             "pnl": self.pnl,
             "reason": self.reason,
+            "pip_diff": self.pip_diff,
+            "reason_display": self.reason_display,
         }
 
 
@@ -266,7 +282,16 @@ class BacktestEngine:
         self.progress_callback: Any = None  # Optional callback for progress updates
         self._tick_counter = 0  # Performance: O(1) counter instead of len() calls
 
-    def run(
+        # Performance profiling - sample every N ticks to reduce overhead
+        self.enable_profiling = os.environ.get("BACKTEST_PROFILING", "false").lower() == "true"
+        self.profiling_sample_interval = 1000  # Profile every 1000th tick
+        self.profiling_data: dict[str, dict[str, float]] = defaultdict(
+            lambda: {"total_time": 0.0, "call_count": 0}
+        )
+        self._exit_check_early_returns = 0
+        self._exit_check_full_runs = 0
+
+    def run(  # pylint: disable=too-many-locals
         self, tick_data: list[TickDataPoint]
     ) -> tuple[list[BacktestTrade], list[EquityPoint], dict[str, Any]]:
         """
@@ -301,6 +326,10 @@ class BacktestEngine:
 
             # Process each tick
             total_ticks = len(tick_data)
+            start_time = time.time()
+
+            logger.info(f"Processing {total_ticks} ticks...")
+
             for tick in tick_data:
                 # Check if resource limit exceeded
                 if self.resource_monitor and self.resource_monitor.is_exceeded():
@@ -316,7 +345,21 @@ class BacktestEngine:
                 # Log and report progress every 10k ticks (O(1) check)
                 if self._tick_counter % 10000 == 0:
                     progress = int((self._tick_counter / total_ticks) * 100)
-                    logger.info(f"Backtest progress: {progress}%")
+                    current_time = time.time()
+                    elapsed = current_time - start_time
+                    ticks_per_sec = self._tick_counter / elapsed if elapsed > 0 else 0
+                    eta_seconds = (
+                        (total_ticks - self._tick_counter) / ticks_per_sec
+                        if ticks_per_sec > 0
+                        else 0
+                    )
+
+                    logger.info(
+                        f"Backtest progress: {progress}% | "
+                        f"Ticks/sec: {ticks_per_sec:.0f} | "
+                        f"ETA: {eta_seconds:.0f}s"
+                    )
+
                     if self.progress_callback:
                         self.progress_callback(progress)  # pylint: disable=not-callable
 
@@ -326,10 +369,43 @@ class BacktestEngine:
             # Calculate performance metrics
             performance_metrics = self.calculate_performance_metrics()
 
+            # Log timing summary
+            total_time = time.time() - start_time
+            ticks_per_sec = total_ticks / total_time if total_time > 0 else 0
+
             logger.info(
                 f"Backtest completed: {len(self.trade_log)} trades, "
                 f"final balance: {self.balance}"
             )
+            logger.info(
+                f"Performance: {total_ticks} ticks in {total_time:.2f}s "
+                f"({ticks_per_sec:.0f} ticks/sec)"
+            )
+
+            # Log detailed profiling if enabled
+            if self.enable_profiling and self.profiling_data:
+                logger.info("=== Profiling Breakdown (Sampled) ===")
+                logger.info(f"  Sample interval: every {self.profiling_sample_interval} ticks")
+                sorted_items = sorted(
+                    self.profiling_data.items(), key=lambda x: x[1]["total_time"], reverse=True
+                )
+                for operation, stats in sorted_items:
+                    avg_time = (
+                        stats["total_time"] / stats["call_count"] if stats["call_count"] > 0 else 0
+                    )
+                    # Note: percentages are based on sampled ticks only
+                    logger.info(
+                        f"  {operation}: "
+                        f"{stats['call_count']} samples | "
+                        f"{avg_time*1000:.3f}ms avg | "
+                        f"{stats['total_time']:.3f}s total"
+                    )
+                exit_stats = (
+                    f"  check_exit_conditions stats: "
+                    f"early_returns={self._exit_check_early_returns}, "
+                    f"full_runs={self._exit_check_full_runs}"
+                )
+                logger.info(exit_stats)
 
             return self.trade_log, self.equity_curve, performance_metrics
 
@@ -387,8 +463,6 @@ class BacktestEngine:
                 self._record_equity(tick_data[0].timestamp)
 
             # Group ticks by day
-            from collections import defaultdict
-
             ticks_by_day = defaultdict(list)
             for tick in tick_data:
                 day_key = tick.timestamp.date()
@@ -488,6 +562,12 @@ class BacktestEngine:
         strategy_config["instrument"] = self.config.instrument
 
         self.strategy = strategy_class(strategy_config)
+
+        # Mark strategy as being in backtest mode to disable database logging
+        # This prevents severe performance degradation from thousands of DB writes
+        # pylint: disable=protected-access
+        self.strategy._is_backtest = True  # type: ignore[attr-defined]
+
         logger.info(
             f"Strategy initialized: {self.config.strategy_type} for {self.config.instrument}"
         )
@@ -531,6 +611,14 @@ class BacktestEngine:
         # Increment tick counter (O(1) operation)
         self._tick_counter += 1
 
+        # Use profiled version periodically to reduce overhead
+        if self.enable_profiling and self._tick_counter % self.profiling_sample_interval == 0:
+            self._process_tick_profiled(tick)
+        else:
+            self._process_tick_fast(tick)
+
+    def _process_tick_fast(self, tick: TickDataPoint) -> None:
+        """Fast path without profiling overhead."""
         # Update positions with current price
         self._update_positions(tick)
 
@@ -551,6 +639,52 @@ class BacktestEngine:
         if self._tick_counter % 100 == 0:
             self._record_equity(tick.timestamp)
 
+    def _process_tick_profiled(self, tick: TickDataPoint) -> None:
+        """Profiled path - only called periodically."""
+        # Update positions with current price
+        t0 = time.perf_counter()
+        self._update_positions(tick)
+        self._record_profiling("update_positions", time.perf_counter() - t0)
+
+        # Check stop loss and take profit
+        t0 = time.perf_counter()
+        self._check_exit_conditions(tick)
+        self._record_profiling("check_exit_conditions", time.perf_counter() - t0)
+
+        # Call strategy on_tick
+        if self.strategy:
+            # Convert TickDataPoint to TickData-compatible wrapper for strategy
+            t0 = time.perf_counter()
+            tick_data_obj = tick.to_tick_data()
+            self._record_profiling("tick_conversion", time.perf_counter() - t0)
+
+            t0 = time.perf_counter()
+            orders = self.strategy.on_tick(tick_data_obj)  # type: ignore[arg-type]
+            self._record_profiling("strategy_on_tick", time.perf_counter() - t0)
+
+            # Execute orders
+            t0 = time.perf_counter()
+            for order in orders:
+                self._execute_order(order, tick)
+            self._record_profiling("execute_orders", time.perf_counter() - t0)
+
+        # Record equity periodically (every 100 ticks) - O(1) check instead of len()
+        if self._tick_counter % 100 == 0:
+            t0 = time.perf_counter()
+            self._record_equity(tick.timestamp)
+            self._record_profiling("record_equity", time.perf_counter() - t0)
+
+    def _record_profiling(self, operation: str, elapsed_time: float) -> None:
+        """
+        Record profiling data for an operation.
+
+        Args:
+            operation: Name of the operation
+            elapsed_time: Time taken in seconds
+        """
+        self.profiling_data[operation]["total_time"] += elapsed_time
+        self.profiling_data[operation]["call_count"] += 1
+
     def _update_positions(self, tick: TickDataPoint) -> None:
         """
         Update positions with current price.
@@ -558,10 +692,9 @@ class BacktestEngine:
         Args:
             tick: Tick data point
         """
-        for position in self.positions:
-            if position.instrument == tick.instrument:
-                # Update unrealized P&L (not stored, just calculated)
-                pass
+        # Optimization: Don't update current_price here - it's expensive with many positions
+        # The strategy can calculate it on-demand when needed
+        # This method exists for future extensions
 
     def _check_exit_conditions(self, tick: TickDataPoint) -> None:
         """
@@ -570,27 +703,46 @@ class BacktestEngine:
         Args:
             tick: Tick data point
         """
+        # Early return if no positions to check
+        if not self.positions:
+            self._exit_check_early_returns += 1
+            return
+
+        self._exit_check_full_runs += 1
         positions_to_close = []
 
+        # Cache tick instrument for faster comparison
+        tick_instrument = tick.instrument
+        tick_bid = tick.bid
+        tick_ask = tick.ask
+
         for position in self.positions:
-            if position.instrument != tick.instrument:
+            if position.instrument != tick_instrument:
                 continue
 
-            current_price = tick.bid if position.direction == "long" else tick.ask
+            # Skip if no exit conditions set
+            if not position.stop_loss and not position.take_profit:
+                continue
+
+            is_long = position.direction == "long"
+            current_price = tick_ask if is_long else tick_bid
 
             # Check stop loss
-            if position.stop_loss and (
-                (position.direction == "long" and current_price <= position.stop_loss)
-                or (position.direction == "short" and current_price >= position.stop_loss)
-            ):
-                positions_to_close.append((position, current_price, "stop_loss"))
+            if position.stop_loss:
+                sl_hit = (is_long and current_price <= position.stop_loss) or (
+                    not is_long and current_price >= position.stop_loss
+                )
+                if sl_hit:
+                    positions_to_close.append((position, current_price, "stop_loss"))
+                    continue  # Skip take profit check if stop loss hit
 
             # Check take profit
-            if position.take_profit and (
-                (position.direction == "long" and current_price >= position.take_profit)
-                or (position.direction == "short" and current_price <= position.take_profit)
-            ):
-                positions_to_close.append((position, current_price, "take_profit"))
+            if position.take_profit:
+                tp_hit = (is_long and current_price >= position.take_profit) or (
+                    not is_long and current_price <= position.take_profit
+                )
+                if tp_hit:
+                    positions_to_close.append((position, current_price, "take_profit"))
 
         # Close positions
         for position, exit_price, reason in positions_to_close:
@@ -599,6 +751,9 @@ class BacktestEngine:
     def _execute_order(self, order: Any, tick: TickDataPoint) -> None:
         """
         Execute order with commission (bid/ask spread already in tick data).
+
+        Handles position netting: if order direction is opposite to existing position,
+        close the position instead of opening a new one.
 
         Args:
             order: Order model instance
@@ -610,26 +765,79 @@ class BacktestEngine:
         else:
             execution_price = tick.bid
 
-        # Create position
-        position = BacktestPosition(
-            instrument=order.instrument,
-            direction=order.direction,
-            units=Decimal(str(order.units)),
-            entry_price=execution_price,
-            entry_time=tick.timestamp,
-            stop_loss=Decimal(str(order.stop_loss)) if order.stop_loss else None,
-            take_profit=Decimal(str(order.take_profit)) if order.take_profit else None,
-        )
+        # Check if this order closes an existing position (opposite direction)
+        # Find matching position with opposite direction and same instrument
+        opposite_direction = "short" if order.direction == "long" else "long"
+        matching_position = None
 
-        self.positions.append(position)
+        for position in self.positions:
+            if (
+                position.instrument == order.instrument
+                and position.direction == opposite_direction
+                and position.units == Decimal(str(order.units))
+            ):
+                matching_position = position
+                break
 
-        # Apply commission
+        if matching_position:
+            # This is a close order - close the matching position
+            self._close_position(
+                matching_position, execution_price, tick.timestamp, reason="strategy_close"
+            )
+
+            # Notify strategy that position was closed
+            if self.strategy and hasattr(self.strategy, "on_position_closed"):
+                self.strategy.on_position_closed(matching_position)
+
+            logger.debug(
+                f"Position closed: {matching_position.direction} {matching_position.units} "
+                f"{matching_position.instrument} @ {execution_price}"
+            )
+        else:
+            # This is an open order - create new position
+            position_id = f"backtest_{order.instrument}_{tick.timestamp.timestamp()}_{id(order)}"
+            position = BacktestPosition(
+                instrument=order.instrument,
+                direction=order.direction,
+                units=Decimal(str(order.units)),
+                entry_price=execution_price,
+                entry_time=tick.timestamp,
+                stop_loss=Decimal(str(order.stop_loss)) if order.stop_loss else None,
+                take_profit=Decimal(str(order.take_profit)) if order.take_profit else None,
+                layer_number=getattr(order, "layer_number", None),
+                is_first_lot=getattr(order, "is_first_lot", False),
+                position_id=position_id,
+            )
+
+            self.positions.append(position)
+
+            # Notify strategy of position creation
+            if self.strategy and hasattr(self.strategy, "on_position_update"):
+                layer_msg = (
+                    "Calling strategy.on_position_update for position with "
+                    f"layer={position.layer_number}"
+                )
+                logger.debug(layer_msg)
+                self.strategy.on_position_update(position)  # type: ignore[arg-type]
+            else:
+                has_method = (
+                    hasattr(self.strategy, "on_position_update") if self.strategy else False
+                )
+                callback_msg = (
+                    f"Strategy callback not available: "
+                    f"strategy={self.strategy is not None}, "
+                    f"has_method={has_method}"
+                )
+                logger.debug(callback_msg)
+
+            order_msg = (
+                f"Order executed: {order.direction} {order.units} "
+                f"{order.instrument} @ {execution_price}"
+            )
+            logger.debug(order_msg)
+
+        # Apply commission (for both open and close)
         self.balance -= self.config.commission_per_trade
-
-        logger.debug(
-            f"Order executed: {order.direction} {order.units} "
-            f"{order.instrument} @ {execution_price}"
-        )
 
     def _close_position(
         self,
@@ -656,6 +864,24 @@ class BacktestEngine:
         # Update balance
         self.balance += pnl
 
+        # Calculate pip difference
+        pip_size = Decimal("0.01") if "JPY" in position.instrument else Decimal("0.0001")
+        price_diff = exit_price - position.entry_price
+        if position.direction == "short":
+            price_diff = -price_diff  # Invert for short positions
+        pip_diff = float(price_diff / pip_size)
+
+        # Create human-friendly reason
+        reason_map = {
+            "take_profit": "Take Profit Hit",
+            "stop_loss": "Stop Loss Hit",
+            "strategy_close": "Strategy Close",
+            "manual": "Manual Close",
+            "volatility_lock": "Volatility Lock",
+            "margin_protection": "Margin Protection",
+        }
+        reason_display = reason_map.get(reason, reason.replace("_", " ").title())
+
         # Record trade
         trade = BacktestTrade(
             instrument=position.instrument,
@@ -668,13 +894,18 @@ class BacktestEngine:
             duration=(exit_time - position.entry_time).total_seconds(),
             pnl=float(pnl),
             reason=reason,
+            pip_diff=pip_diff,
+            reason_display=reason_display,
         )
         self.trade_log.append(trade)
 
         # Remove position
         self.positions.remove(position)
 
-        logger.debug(f"Position closed: {position.instrument} P&L: {pnl} ({reason})")
+        logger.debug(
+            f"Position closed: {position.instrument} P&L: {pnl} "
+            f"({pip_diff:+.1f} pips, {reason_display})"
+        )
 
     def _record_equity(self, timestamp: datetime) -> None:
         """

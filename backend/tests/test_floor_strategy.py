@@ -470,8 +470,17 @@ class TestFloorStrategy:
             layer_number=1,
         )
 
-        # Price moved 25 pips in favor
-        should_tp = floor_strategy._should_take_profit(position, Decimal("1.1025"))
+        # Create tick data with price moved 25 pips in favor
+        tick_data = TickData(
+            instrument="EUR_USD",
+            timestamp=timezone.now(),
+            bid=Decimal("1.1025"),  # Long closes at bid
+            ask=Decimal("1.1027"),
+            mid=Decimal("1.1026"),
+            spread=Decimal("0.0002"),
+        )
+
+        should_tp = floor_strategy._should_take_profit(position, tick_data)
 
         assert should_tp is True
 
@@ -491,8 +500,17 @@ class TestFloorStrategy:
             layer_number=1,
         )
 
-        # Price moved 25 pips in favor
-        should_tp = floor_strategy._should_take_profit(position, Decimal("1.0975"))
+        # Create tick data with price moved 25 pips in favor
+        tick_data = TickData(
+            instrument="EUR_USD",
+            timestamp=timezone.now(),
+            bid=Decimal("1.0973"),
+            ask=Decimal("1.0975"),  # Short closes at ask
+            mid=Decimal("1.0974"),
+            spread=Decimal("0.0002"),
+        )
+
+        should_tp = floor_strategy._should_take_profit(position, tick_data)
 
         assert should_tp is True
 
@@ -512,8 +530,17 @@ class TestFloorStrategy:
             layer_number=1,
         )
 
-        # Price moved only 10 pips
-        should_tp = floor_strategy._should_take_profit(position, Decimal("1.1010"))
+        # Create tick data with price moved only 10 pips
+        tick_data = TickData(
+            instrument="EUR_USD",
+            timestamp=timezone.now(),
+            bid=Decimal("1.1010"),  # Long closes at bid
+            ask=Decimal("1.1012"),
+            mid=Decimal("1.1011"),
+            spread=Decimal("0.0002"),
+        )
+
+        should_tp = floor_strategy._should_take_profit(position, tick_data)
 
         assert should_tp is False
 

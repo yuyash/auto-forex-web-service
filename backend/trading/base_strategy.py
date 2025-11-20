@@ -280,14 +280,21 @@ class BaseStrategy(ABC):
             description: Human-readable description of the event
             details: Optional dictionary with additional event details
         """
+        # Skip database logging during backtests to avoid performance degradation
+        # Backtests can generate thousands of events, causing severe slowdown
+        if not self.account:
+            return
+
+        # Check if we're in backtest mode by looking for backtest-specific attributes
+        # In backtest mode, we skip database writes entirely
+        if hasattr(self, "_is_backtest") and self._is_backtest:
+            return
+
         # pylint: disable=import-outside-toplevel
         from .event_models import Event
 
         if details is None:
             details = {}
-
-        if not self.account:
-            return
 
         Event.objects.create(
             category="trading",

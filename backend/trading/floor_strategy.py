@@ -13,6 +13,7 @@ Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
 
 # pylint: disable=too-many-lines
 
+import logging
 from decimal import Decimal
 from typing import Any
 
@@ -20,6 +21,8 @@ from .base_strategy import BaseStrategy
 from .models import Order, Position
 from .strategy_registry import register_strategy
 from .tick_data_models import TickData
+
+logger = logging.getLogger(__name__)
 
 
 class LayerManager:
@@ -135,6 +138,11 @@ class Layer:
         self.last_entry_price: Decimal | None = None
         self.current_lot_size = Decimal(str(config.get("base_lot_size", 1.0)))
         self.is_active = True
+        self.peak_price: Decimal | None = None  # Track peak price for retracement detection
+        self.has_scaled_at_current_level = False  # Prevent multiple scales at same level
+        self.has_pending_initial_entry = False  # Track if initial entry order is pending
+        self.last_scale_tick_id: str | None = None  # Track last scaling tick (unique ID)
+        self.last_initial_entry_tick_id: str | None = None  # Track last initial entry tick
 
     def add_position(self, position: Position, is_first_lot: bool = False) -> None:
         """
@@ -147,7 +155,12 @@ class Layer:
         self.positions.append(position)
         if is_first_lot:
             self.first_lot_position = position
+            self.has_pending_initial_entry = False  # Clear pending flag
+            # Initialize peak price for first position
+            self.peak_price = position.entry_price
         self.last_entry_price = position.entry_price
+        # DO NOT reset has_scaled_at_current_level here!
+        # It should only be reset when we see a new peak price
 
     def increment_retracement_count(self) -> None:
         """Increment the retracement count for this layer."""
@@ -265,6 +278,7 @@ class FloorStrategy(BaseStrategy):
         self._no_signal_log_count = 0
         self._tick_count = 0
         self._state_save_interval = self.get_config_value("state_save_interval", 1000)
+        self._last_processed_tick_id: str | None = None  # Track last processed tick globally
 
         # Load state from database if exists
         self._load_state()
@@ -321,6 +335,14 @@ class FloorStrategy(BaseStrategy):
 
         Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
         """
+        # CRITICAL: Prevent processing the same tick multiple times
+        # This can happen if orders are executed synchronously and trigger callbacks
+        tick_id = f"{tick_data.timestamp.timestamp()}_{tick_data.mid}"
+        if self._last_processed_tick_id == tick_id:
+            logger.debug(f"Skipping duplicate tick processing: {tick_id}")
+            return []
+        self._last_processed_tick_id = tick_id
+
         orders: list[Order] = []
 
         # Check if instrument is active for this strategy
@@ -429,10 +451,10 @@ class FloorStrategy(BaseStrategy):
         )
         if should_log:
             lookback = self.entry_signal_lookback_ticks
-            msg = f"Analyzing momentum: {pip_movement:.1f} pips " f"over {lookback} ticks"
+            momentum_msg = f"Analyzing momentum: {pip_movement:.1f} pips over {lookback} ticks"
             self.log_strategy_event(
                 "entry_signal_check",
-                msg,
+                momentum_msg,
                 {
                     "instrument": tick_data.instrument,
                     "pip_movement": str(pip_movement),
@@ -453,10 +475,10 @@ class FloorStrategy(BaseStrategy):
             reason = f"Downward momentum: {pip_movement:.1f} pips"
 
         lookback = self.entry_signal_lookback_ticks
-        msg = f"{direction.upper()} entry: {pip_movement:.1f} pips " f"over {lookback} ticks"
+        entry_msg = f"{direction.upper()} entry: {pip_movement:.1f} pips " f"over {lookback} ticks"
         self.log_strategy_event(
             "entry_signal_triggered",
-            msg,
+            entry_msg,
             {
                 "direction": direction,
                 "pip_movement": str(pip_movement),
@@ -482,10 +504,15 @@ class FloorStrategy(BaseStrategy):
         """
         orders: list[Order] = []
 
-        # If no positions in layer, create initial entry
-        if not layer.positions:
+        # If no positions in layer, create initial entry (only once)
+        if not layer.positions and not layer.has_pending_initial_entry:
+            logger.debug(
+                f"Layer {layer.layer_number} has no positions (count={len(layer.positions)}), "
+                f"creating initial entry at {tick_data.timestamp}"
+            )
             order = self._create_initial_entry_order(layer, tick_data)
             if order:
+                layer.has_pending_initial_entry = True  # Mark as pending
                 self.log_strategy_event(
                     "order_created",
                     f"Created order for layer {layer.layer_number}",
@@ -499,20 +526,103 @@ class FloorStrategy(BaseStrategy):
                 orders.append(order)
             return orders
 
-        # Check for take-profit
+        if not layer.positions:
+            # Waiting for pending order to execute
+            logger.debug(f"Layer {layer.layer_number} waiting for pending initial entry to execute")
+            return orders
+
+        logger.debug(
+            f"Layer {layer.layer_number} has {len(layer.positions)} positions, "
+            f"checking for Step 2 / scaling / TP"
+        )
+
+        # Check for take-profit on ALL positions (including initial lot)
         tp_orders = self._check_take_profit(layer, tick_data)
         if tp_orders:
             orders.extend(tp_orders)
             return orders
 
-        # Check for retracement and scaling
-        if layer.last_entry_price and self.scaling_engine.should_scale(
-            layer.last_entry_price, tick_data.mid, self.retracement_pips
-        ):
-            scale_order = self._create_scale_order(layer, tick_data)
-            if scale_order:
-                orders.append(scale_order)
-                layer.increment_retracement_count()
+        # STEP 3+: Track peak price and check for retracement to scale in
+        # Retracement means: price moved in our favor, then moved AGAINST us
+        if layer.last_entry_price and layer.peak_price is not None and layer.positions:
+            direction = layer.positions[0].direction
+
+            # CRITICAL: Use bid/ask prices, not mid, to match position entry prices
+            # Long positions use ASK (buy price), Short positions use BID (sell price)
+            current_price = tick_data.ask if direction == "long" else tick_data.bid
+
+            # Log current state for debugging (only first few times)
+            if layer.retracement_count < 3:
+                logger.debug(
+                    f"Layer {layer.layer_number}: peak={layer.peak_price}, "
+                    f"current={current_price}, direction={direction}, "
+                    f"has_scaled={layer.has_scaled_at_current_level}"
+                )
+
+            # Update peak price based on direction (most favorable price seen)
+            should_update_peak = (direction == "long" and current_price > layer.peak_price) or (
+                direction == "short" and current_price < layer.peak_price
+            )
+            if should_update_peak:
+                layer.peak_price = current_price
+                layer.has_scaled_at_current_level = False  # Reset flag at new peak
+
+            # Check if price has RETRACED from peak (moved against us)
+            # Prevent scaling multiple times in the same tick
+            tick_id = f"{tick_data.timestamp.timestamp()}_{current_price}"
+            if not layer.has_scaled_at_current_level and layer.last_scale_tick_id != tick_id:
+                # Calculate retracement: how far price moved AGAINST us from peak
+                # IMPORTANT: We need SIGNED difference, not absolute value from calculate_pips
+                # JPY pairs: 1 pip = 0.01, other pairs: 1 pip = 0.0001
+                pip_size = Decimal("0.01") if "JPY" in tick_data.instrument else Decimal("0.0001")
+
+                if direction == "long":
+                    # Long: retracement is when price drops from peak (negative movement)
+                    # We want positive pips when price drops, so: peak - current
+                    retracement_pips = (layer.peak_price - current_price) / pip_size
+                else:  # short
+                    # Short: retracement is when price rises from peak (positive movement)
+                    # We want positive pips when price rises, so: current - peak
+                    retracement_pips = (current_price - layer.peak_price) / pip_size
+
+                # Safety check: Only scale if retracement is positive (price moved against us)
+                # and meets the threshold
+                if retracement_pips > 0 and retracement_pips >= self.retracement_pips:
+                    retracement_msg = (
+                        f"[RETRACEMENT DETECTED] Layer {layer.layer_number} | "
+                        f"{direction.upper()} position | "
+                        f"Price moved from peak {layer.peak_price} to {current_price} | "
+                        f"Retracement: {retracement_pips:.1f} pips "
+                        f"(Threshold: {self.retracement_pips} pips) | "
+                        f"Preparing to scale-in"
+                    )
+                    logger.info(retracement_msg)
+
+                    # Log the retracement details
+                    retracement_detail = (
+                        f"Retracement: {retracement_pips:.1f} pips "
+                        f"from peak {layer.peak_price} to {current_price}"
+                    )
+                    self.log_strategy_event(
+                        "retracement_detected",
+                        retracement_detail,
+                        {
+                            "layer": layer.layer_number,
+                            "direction": direction,
+                            "peak_price": str(layer.peak_price),
+                            "current_price": str(current_price),
+                            "retracement_pips": str(retracement_pips),
+                            "threshold_pips": str(self.retracement_pips),
+                            "event_type": "retracement",
+                        },
+                    )
+                    # Price has retraced enough from peak - scale in
+                    scale_order = self._create_scale_order(layer, tick_data)
+                    if scale_order:
+                        orders.append(scale_order)
+                        layer.increment_retracement_count()
+                        layer.has_scaled_at_current_level = True  # Prevent multiple scales
+                        layer.last_scale_tick_id = tick_id  # Track tick ID
 
         return orders
 
@@ -551,6 +661,28 @@ class FloorStrategy(BaseStrategy):
 
         direction = entry_signal["direction"]
 
+        # IMPORTANT: Only create initial entry if layer truly has no positions
+        # This prevents creating opposite direction positions
+        if layer.positions:
+            logger.warning(
+                f"Layer {layer.layer_number} already has {len(layer.positions)} positions, "
+                f"skipping initial entry"
+            )
+            return None
+
+        # Prevent creating multiple initial entries in the same tick
+        # Use a unique tick ID (timestamp + price) to handle sub-second ticks
+        tick_id = f"{tick_data.timestamp.timestamp()}_{tick_data.mid}"
+        if layer.last_initial_entry_tick_id == tick_id:
+            logger.warning(
+                f"Layer {layer.layer_number} already created initial entry for tick {tick_id}, "
+                f"skipping duplicate"
+            )
+            return None
+
+        # Use bid/ask for order price
+        order_price = tick_data.ask if direction == "long" else tick_data.bid
+
         order = Order(
             account=self.account,
             strategy=self.strategy,
@@ -561,17 +693,35 @@ class FloorStrategy(BaseStrategy):
             units=self.base_lot_size,
             price=tick_data.mid,
         )
+        # Add layer metadata for backtest engine
+        order.layer_number = layer.layer_number  # type: ignore[attr-defined]
+        order.is_first_lot = True  # type: ignore[attr-defined]
 
+        # Mark tick ID to prevent duplicates
+        layer.last_initial_entry_tick_id = tick_id
+
+        initial_entry_msg = (
+            f"[INITIAL ENTRY] Layer {layer.layer_number} | "
+            f"Opening {direction.upper()} position | "
+            f"Size: {self.base_lot_size} units @ {order_price} | "
+            f"Signal: {entry_signal.get('reason', 'N/A')}"
+        )
+        logger.info(initial_entry_msg)
+
+        entry_log_msg = (
+            f"Initial entry: {direction.upper()} {self.base_lot_size} units " f"@ {order_price}"
+        )
         self.log_strategy_event(
             "initial_entry",
-            f"Created initial entry order for layer {layer.layer_number}",
+            entry_log_msg,
             {
                 "layer": layer.layer_number,
                 "instrument": tick_data.instrument,
                 "direction": direction,
                 "units": str(self.base_lot_size),
-                "price": str(tick_data.mid),
+                "price": str(order_price),
                 "signal": entry_signal.get("reason", ""),
+                "event_type": "position_open",
             },
         )
 
@@ -579,7 +729,8 @@ class FloorStrategy(BaseStrategy):
 
     def _create_scale_order(self, layer: Layer, tick_data: TickData) -> Order | None:
         """
-        Create scaling order for a layer.
+        Create scaling order for a layer (Step 3+: retracement scaling).
+        These positions will be checked for 25-pip take-profit by _check_take_profit().
 
         Args:
             layer: Layer to scale
@@ -597,10 +748,10 @@ class FloorStrategy(BaseStrategy):
 
         direction = layer.positions[0].direction
 
-        # Calculate take-profit price
-        take_profit_price = self._calculate_take_profit_price(
-            tick_data.mid, direction, self.take_profit_pips
-        )
+        # NOTE: We do NOT set take_profit on the order
+        # The strategy's _check_take_profit() method will handle closing at 25 pips
+        # Use bid/ask for order price
+        order_price = tick_data.ask if direction == "long" else tick_data.bid
 
         order = Order(
             account=self.account,
@@ -611,20 +762,37 @@ class FloorStrategy(BaseStrategy):
             direction=direction,
             units=next_lot_size,
             price=tick_data.mid,
-            take_profit=take_profit_price,
+            # take_profit=None - let strategy handle it
         )
+        # Add layer metadata for backtest engine
+        order.layer_number = layer.layer_number  # type: ignore[attr-defined]
+        order.is_first_lot = False  # type: ignore[attr-defined]
 
+        scale_in_msg = (
+            f"[SCALE-IN] Layer {layer.layer_number} | "
+            f"Adding {direction.upper()} position | "
+            f"Size: {next_lot_size} units @ {order_price} | "
+            f"Peak: {layer.peak_price} | "
+            f"Retracement #{layer.retracement_count + 1}"
+        )
+        logger.info(scale_in_msg)
+
+        scale_log_msg = (
+            f"Scale-in: {direction.upper()} {next_lot_size} units @ {order_price} "
+            f"(Retracement #{layer.retracement_count + 1})"
+        )
         self.log_strategy_event(
             "scale_in",
-            f"Created scale-in order for layer {layer.layer_number}",
+            scale_log_msg,
             {
                 "layer": layer.layer_number,
                 "instrument": tick_data.instrument,
                 "direction": direction,
                 "units": str(next_lot_size),
-                "price": str(tick_data.mid),
-                "take_profit": str(take_profit_price),
+                "price": str(order_price),
+                "peak_price": str(layer.peak_price),
                 "retracement_count": layer.retracement_count,
+                "event_type": "position_open",
             },
         )
 
@@ -632,7 +800,7 @@ class FloorStrategy(BaseStrategy):
 
     def _check_take_profit(self, layer: Layer, tick_data: TickData) -> list[Order]:
         """
-        Check if take-profit should be triggered for a layer.
+        Check if take-profit should be triggered for all positions.
 
         Args:
             layer: Layer to check
@@ -644,24 +812,47 @@ class FloorStrategy(BaseStrategy):
         orders: list[Order] = []
 
         for position in layer.positions:
-            if self._should_take_profit(position, tick_data.mid):
-                close_order = self._create_close_order(position, tick_data)
+            if self._should_take_profit(position, tick_data):
+                # Log before creating order
+                current_price = tick_data.bid if position.direction == "long" else tick_data.ask
+                pip_movement = self.calculate_pips(
+                    position.entry_price, current_price, position.instrument
+                )
+
+                is_first_lot = position == layer.first_lot_position
+                position_type = "INITIAL" if is_first_lot else "SCALED"
+
+                tp_msg = (
+                    f"[TAKE PROFIT] Layer {layer.layer_number} | "
+                    f"Closing {position_type} {position.direction.upper()} position | "
+                    f"Size: {position.units} units | "
+                    f"Entry: {position.entry_price} → Exit: {current_price} | "
+                    f"Profit: +{pip_movement:.1f} pips "
+                    f"(Target: {self.take_profit_pips} pips)"
+                )
+                logger.info(tp_msg)
+
+                close_order = self._create_close_order(position, tick_data, reason="strategy_close")
                 if close_order:
                     orders.append(close_order)
 
         return orders
 
-    def _should_take_profit(self, position: Position, current_price: Decimal) -> bool:
+    def _should_take_profit(self, position: Position, tick_data: TickData) -> bool:
         """
         Check if position should take profit.
 
         Args:
             position: Position to check
-            current_price: Current market price
+            tick_data: Current tick data
 
         Returns:
             True if should take profit
         """
+        # Use bid/ask prices consistently
+        # Long closes at BID (sell price), Short closes at ASK (buy price)
+        current_price = tick_data.bid if position.direction == "long" else tick_data.ask
+
         pip_movement = self.calculate_pips(position.entry_price, current_price, position.instrument)
 
         if position.direction == "long":
@@ -669,13 +860,16 @@ class FloorStrategy(BaseStrategy):
         # short
         return current_price < position.entry_price and pip_movement >= self.take_profit_pips
 
-    def _create_close_order(self, position: Position, tick_data: TickData) -> Order | None:
+    def _create_close_order(
+        self, position: Position, tick_data: TickData, reason: str = "take_profit"
+    ) -> Order | None:
         """
         Create order to close a position.
 
         Args:
             position: Position to close
             tick_data: Current tick data
+            reason: Reason for closing (initial_profit, take_profit, etc.)
 
         Returns:
             Close order or None
@@ -693,16 +887,45 @@ class FloorStrategy(BaseStrategy):
             units=position.units,
             price=tick_data.mid,
         )
+        # Add layer metadata for backtest engine
+        order.layer_number = getattr(position, "layer_number", None)  # type: ignore[attr-defined]
+        order.is_first_lot = False  # type: ignore[attr-defined]
 
+        # Calculate pip difference for logging
+        pip_size = Decimal("0.01") if "JPY" in position.instrument else Decimal("0.0001")
+        price_diff = tick_data.mid - position.entry_price
+        if position.direction == "short":
+            price_diff = -price_diff
+        pip_diff = float(price_diff / pip_size)
+
+        # Human-friendly reason
+        reason_map = {
+            "strategy_close": "Take Profit",
+            "take_profit": "Take Profit",
+            "stop_loss": "Stop Loss",
+            "volatility_lock": "Volatility Lock",
+            "margin_protection": "Margin Protection",
+        }
+        reason_display = reason_map.get(reason, reason.replace("_", " ").title())
+
+        close_msg = (
+            f"Closing position: {position.direction.upper()} {position.units} units | "
+            f"{pip_diff:+.1f} pips | {reason_display}"
+        )
         self.log_strategy_event(
-            "take_profit",
-            f"Created take-profit close order for position {position.position_id}",
+            reason,
+            close_msg,
             {
                 "position_id": position.position_id,
                 "instrument": position.instrument,
+                "direction": position.direction,
                 "entry_price": str(position.entry_price),
                 "exit_price": str(tick_data.mid),
                 "units": str(position.units),
+                "pip_diff": pip_diff,
+                "reason": reason,
+                "reason_display": reason_display,
+                "event_type": "position_close",
             },
         )
 
@@ -829,6 +1052,9 @@ class FloorStrategy(BaseStrategy):
             units=first_lot.units,
             price=first_lot.current_price,
         )
+        # Add layer metadata for backtest engine
+        order.layer_number = getattr(first_lot, "layer_number", None)  # type: ignore[attr-defined]
+        order.is_first_lot = False  # type: ignore[attr-defined]
 
         orders.append(order)
 
@@ -953,13 +1179,55 @@ class FloorStrategy(BaseStrategy):
 
         Requirements: 13.1
         """
+        update_msg = (
+            f"on_position_update called: layer={position.layer_number}, "
+            f"is_first={position.is_first_lot}"
+        )
+        logger.debug(update_msg)
         # Find the layer this position belongs to
         for layer in self.layer_manager.layers:
             if position.layer_number == layer.layer_number:
                 # Update layer's position list if needed
                 if position not in layer.positions:
+                    new_count = len(layer.positions) + 1
+                    add_msg = (
+                        f"Adding position to layer {layer.layer_number}, "
+                        f"now has {new_count} positions"
+                    )
+                    logger.debug(add_msg)
                     layer.add_position(position, position.is_first_lot)
                     # Save state immediately when position is added (important event)
+                    self._save_state()
+                else:
+                    logger.debug(f"Position already in layer {layer.layer_number}")
+                break
+
+    def on_position_closed(self, position: Position) -> None:
+        """
+        Handle position closures - remove position from layer.
+
+        Args:
+            position: Position that was closed
+        """
+        logger.debug(
+            f"on_position_closed called: layer={position.layer_number}, "
+            f"position_id={position.position_id}"
+        )
+        # Find the layer this position belongs to and remove it
+        for layer in self.layer_manager.layers:
+            if position.layer_number == layer.layer_number:
+                if position in layer.positions:
+                    layer.positions.remove(position)
+                    remove_msg = (
+                        f"Removed position from layer {layer.layer_number}, "
+                        f"now has {len(layer.positions)} positions"
+                    )
+                    logger.debug(remove_msg)
+                    # Clear first_lot_position if this was it
+                    if layer.first_lot_position == position:
+                        layer.first_lot_position = None
+                        logger.debug(f"Cleared first_lot_position for layer {layer.layer_number}")
+                    # Save state immediately when position is removed
                     self._save_state()
                 break
 
@@ -992,12 +1260,17 @@ class FloorStrategy(BaseStrategy):
         # Validate scaling mode
         scaling_mode = config.get("scaling_mode")
         if scaling_mode not in ["additive", "multiplicative"]:
-            raise ValueError(
-                f"Invalid scaling_mode: {scaling_mode}. Must be 'additive' or 'multiplicative'"
+            error_msg = (
+                f"Invalid scaling_mode: {scaling_mode}. " f"Must be 'additive' or 'multiplicative'"
             )
+            raise ValueError(error_msg)
 
         # Validate numeric values
-        numeric_keys = ["base_lot_size", "retracement_pips", "take_profit_pips"]
+        numeric_keys = [
+            "base_lot_size",
+            "retracement_pips",
+            "take_profit_pips",
+        ]
         for key in numeric_keys:
             value = config.get(key)
             if value is not None:
@@ -1018,17 +1291,19 @@ class FloorStrategy(BaseStrategy):
         valid_progressions = ["equal", "additive", "exponential", "inverse"]
         retracement_progression = config.get("retracement_trigger_progression", "additive")
         if retracement_progression not in valid_progressions:
-            raise ValueError(
+            error_msg = (
                 f"Invalid retracement_trigger_progression: {retracement_progression}. "
                 f"Must be one of {valid_progressions}"
             )
+            raise ValueError(error_msg)
 
         lot_progression = config.get("lot_size_progression", "additive")
         if lot_progression not in valid_progressions:
-            raise ValueError(
+            error_msg = (
                 f"Invalid lot_size_progression: {lot_progression}. "
                 f"Must be one of {valid_progressions}"
             )
+            raise ValueError(error_msg)
 
         return True
 
@@ -1083,7 +1358,7 @@ FLOOR_STRATEGY_CONFIG_SCHEMA = {
         "take_profit_pips": {
             "type": "number",
             "title": "Take Profit Pips",
-            "description": "Number of pips profit to trigger position close",
+            "description": "Number of pips profit to trigger position close for all positions",
             "default": 25,
             "minimum": 1,
         },
