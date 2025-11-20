@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   createChart,
-  IChartApi,
-  ISeriesApi,
-  CandlestickData,
-  Time,
+  CandlestickSeries,
+  createSeriesMarkers,
+  type IChartApi,
+  type ISeriesApi,
+  type CandlestickData,
+  type Time,
+  type SeriesMarker,
 } from 'lightweight-charts';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
 import { calculateGranularity } from '../../utils/granularityCalculator';
@@ -126,7 +129,7 @@ export function OHLCChart({
     chartRef.current = chart;
 
     // Add candlestick series
-    const candlestickSeries = chart.addCandlestickSeries({
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#26a69a',
       downColor: '#ef5350',
       borderVisible: false,
@@ -167,23 +170,20 @@ export function OHLCChart({
   useEffect(() => {
     if (!candlestickSeriesRef.current || trades.length === 0) return;
 
-    const markers = trades.map((trade) => {
+    const markers: SeriesMarker<Time>[] = trades.map((trade) => {
       const timestamp = new Date(trade.timestamp).getTime() / 1000;
 
       return {
         time: timestamp as Time,
-        position: (trade.action === 'buy' ? 'belowBar' : 'aboveBar') as
-          | 'belowBar'
-          | 'aboveBar',
+        position: trade.action === 'buy' ? 'belowBar' : 'aboveBar',
         color: trade.action === 'buy' ? '#26a69a' : '#ef5350',
-        shape: (trade.action === 'buy' ? 'arrowUp' : 'arrowDown') as
-          | 'arrowUp'
-          | 'arrowDown',
+        shape: trade.action === 'buy' ? 'arrowUp' : 'arrowDown',
         text: `${trade.action.toUpperCase()} ${Math.abs(trade.units)} @ ${trade.price.toFixed(5)}`,
       };
     });
 
-    candlestickSeriesRef.current.setMarkers(markers);
+    // Use the new plugin API for markers
+    createSeriesMarkers(candlestickSeriesRef.current, markers);
   }, [trades]);
 
   if (loading) {

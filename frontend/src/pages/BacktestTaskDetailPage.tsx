@@ -103,7 +103,7 @@ export default function BacktestTaskDetailPage() {
   const currentProgress = polledStatus?.progress || progress;
 
   // Refetch when status changes
-  const prevStatusRef = useRef<string | undefined>();
+  const prevStatusRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (polledStatus) {
       console.log('[BacktestTaskDetail] Polled status update:', polledStatus);
@@ -400,7 +400,7 @@ export default function BacktestTaskDetailPage() {
         </Tabs>
 
         <TabPanel value={tabValue} index={0}>
-          <TaskOverviewTab task={task} liveResults={liveResults} />
+          <TaskOverviewTab task={task} />
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>

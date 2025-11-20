@@ -209,8 +209,8 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
 
           <OHLCChart
             instrument={task.instrument}
-            startDate={task.start_date}
-            endDate={task.end_date}
+            startDate={task.start_time}
+            endDate={task.end_time}
             trades={metrics.trade_log.map(
               (trade: Trade): ChartTrade => ({
                 timestamp: trade.entry_time,

@@ -79,7 +79,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
   const currentStatus = polledStatus?.status || task.status;
 
   // Clear optimistic status when actual status matches (derived state pattern)
-  const displayStatus =
+  const displayStatus: TaskStatus =
     optimisticStatus && currentStatus !== optimisticStatus
       ? optimisticStatus
       : currentStatus;

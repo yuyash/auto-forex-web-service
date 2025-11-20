@@ -68,7 +68,7 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
   const currentStatus = polledStatus?.status || task.status;
 
   // Clear optimistic status when actual status matches (derived state pattern)
-  const displayStatus =
+  const displayStatus: TaskStatus =
     optimisticStatus && currentStatus !== optimisticStatus
       ? optimisticStatus
       : currentStatus;

@@ -11,27 +11,47 @@ vi.mock('../../services/api/client', () => ({
 }));
 
 // Mock lightweight-charts
-const mockSetData = vi.fn();
-const mockSetMarkers = vi.fn();
-const mockFitContent = vi.fn();
-const mockApplyOptions = vi.fn();
-const mockRemove = vi.fn();
-const mockAddCandlestickSeries = vi.fn(() => ({
-  setData: mockSetData,
-  setMarkers: mockSetMarkers,
-}));
-const mockTimeScale = vi.fn(() => ({
-  fitContent: mockFitContent,
-}));
-
-vi.mock('lightweight-charts', () => ({
-  createChart: vi.fn(() => ({
-    addCandlestickSeries: mockAddCandlestickSeries,
+vi.mock('lightweight-charts', () => {
+  // Create mock functions inside the factory
+  const mockSetData = vi.fn();
+  const mockSetMarkers = vi.fn();
+  const mockFitContent = vi.fn();
+  const mockApplyOptions = vi.fn();
+  const mockRemove = vi.fn();
+  const mockAddSeries = vi.fn(() => ({
+    setData: mockSetData,
+    setMarkers: mockSetMarkers,
+  }));
+  const mockTimeScale = vi.fn(() => ({
+    fitContent: mockFitContent,
+  }));
+  const mockCreateSeriesMarkers = vi.fn();
+  const mockCreateChart = vi.fn(() => ({
+    addSeries: mockAddSeries,
     timeScale: mockTimeScale,
     applyOptions: mockApplyOptions,
     remove: mockRemove,
-  })),
-}));
+  }));
+
+  // Store mocks globally for test access
+  (globalThis as unknown as { __chartMocks: ChartMocks }).__chartMocks = {
+    mockSetData,
+    mockSetMarkers,
+    mockFitContent,
+    mockApplyOptions,
+    mockRemove,
+    mockAddSeries,
+    mockTimeScale,
+    mockCreateSeriesMarkers,
+    mockCreateChart,
+  };
+
+  return {
+    createChart: mockCreateChart,
+    CandlestickSeries: 'CandlestickSeries',
+    createSeriesMarkers: mockCreateSeriesMarkers,
+  };
+});
 
 // Mock granularity calculator
 vi.mock('../../utils/granularityCalculator', () => ({
@@ -39,6 +59,27 @@ vi.mock('../../utils/granularityCalculator', () => ({
 }));
 
 import { apiClient } from '../../services/api/client';
+
+// Define type for chart mocks
+interface ChartMocks {
+  mockSetData: ReturnType<typeof vi.fn>;
+  mockSetMarkers: ReturnType<typeof vi.fn>;
+  mockFitContent: ReturnType<typeof vi.fn>;
+  mockApplyOptions: ReturnType<typeof vi.fn>;
+  mockRemove: ReturnType<typeof vi.fn>;
+  mockAddSeries: ReturnType<typeof vi.fn>;
+  mockTimeScale: ReturnType<typeof vi.fn>;
+  mockCreateSeriesMarkers: ReturnType<typeof vi.fn>;
+  mockCreateChart: ReturnType<typeof vi.fn>;
+}
+
+// Extend globalThis to include our mocks
+declare global {
+  var __chartMocks: ChartMocks;
+}
+
+// Get mocks from global
+const getMocks = (): ChartMocks => globalThis.__chartMocks;
 
 describe('OHLCChart', () => {
   const mockCandles: OHLCData[] = [
@@ -73,6 +114,15 @@ describe('OHLCChart', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Clear chart mocks
+    const mocks = getMocks();
+    if (mocks) {
+      Object.values(mocks).forEach((mock) => {
+        if (typeof mock.mockClear === 'function') {
+          mock.mockClear();
+        }
+      });
+    }
     (apiClient.get as ReturnType<typeof vi.fn>).mockResolvedValue({
       instrument: 'EUR_USD',
       granularity: 'H1',
@@ -104,7 +154,7 @@ describe('OHLCChart', () => {
       });
 
       await waitFor(() => {
-        expect(mockSetData).toHaveBeenCalled();
+        expect(getMocks().mockSetData).toHaveBeenCalled();
       });
     });
 
@@ -167,7 +217,7 @@ describe('OHLCChart', () => {
       render(<OHLCChart {...defaultProps} />);
 
       await waitFor(() => {
-        expect(mockSetData).toHaveBeenCalledWith([
+        expect(getMocks().mockSetData).toHaveBeenCalledWith([
           { time: 1000, open: 1.1, high: 1.2, low: 1.0, close: 1.15 },
           { time: 2000, open: 1.15, high: 1.25, low: 1.1, close: 1.2 },
           { time: 3000, open: 1.2, high: 1.3, low: 1.15, close: 1.25 },
@@ -190,10 +240,10 @@ describe('OHLCChart', () => {
       render(<OHLCChart {...defaultProps} trades={[buyTrade]} />);
 
       await waitFor(() => {
-        expect(mockSetMarkers).toHaveBeenCalled();
+        expect(getMocks().mockSetMarkers).toHaveBeenCalled();
       });
 
-      const markers = mockSetMarkers.mock.calls[0][0];
+      const markers = getMocks().mockSetMarkers.mock.calls[0][0];
       expect(markers).toHaveLength(1);
       expect(markers[0]).toMatchObject({
         position: 'belowBar',
@@ -216,10 +266,10 @@ describe('OHLCChart', () => {
       render(<OHLCChart {...defaultProps} trades={[sellTrade]} />);
 
       await waitFor(() => {
-        expect(mockSetMarkers).toHaveBeenCalled();
+        expect(getMocks().mockSetMarkers).toHaveBeenCalled();
       });
 
-      const markers = mockSetMarkers.mock.calls[0][0];
+      const markers = getMocks().mockSetMarkers.mock.calls[0][0];
       expect(markers).toHaveLength(1);
       expect(markers[0]).toMatchObject({
         position: 'aboveBar',
@@ -235,10 +285,10 @@ describe('OHLCChart', () => {
       render(<OHLCChart {...defaultProps} trades={mockTrades} />);
 
       await waitFor(() => {
-        expect(mockSetMarkers).toHaveBeenCalled();
+        expect(getMocks().mockSetMarkers).toHaveBeenCalled();
       });
 
-      const markers = mockSetMarkers.mock.calls[0][0];
+      const markers = getMocks().mockSetMarkers.mock.calls[0][0];
       expect(markers).toHaveLength(2);
     });
 
@@ -246,11 +296,11 @@ describe('OHLCChart', () => {
       render(<OHLCChart {...defaultProps} trades={[]} />);
 
       await waitFor(() => {
-        expect(mockSetData).toHaveBeenCalled();
+        expect(getMocks().mockSetData).toHaveBeenCalled();
       });
 
       // Markers should not be set for empty trades
-      expect(mockSetMarkers).not.toHaveBeenCalled();
+      expect(getMocks().mockSetMarkers).not.toHaveBeenCalled();
     });
 
     it.skip('should convert timestamp to correct time format', async () => {
@@ -264,10 +314,10 @@ describe('OHLCChart', () => {
       render(<OHLCChart {...defaultProps} trades={[trade]} />);
 
       await waitFor(() => {
-        expect(mockSetMarkers).toHaveBeenCalled();
+        expect(getMocks().mockSetMarkers).toHaveBeenCalled();
       });
 
-      const markers = mockSetMarkers.mock.calls[0][0];
+      const markers = getMocks().mockSetMarkers.mock.calls[0][0];
       const expectedTime = new Date('2025-01-01T10:00:00Z').getTime() / 1000;
       expect(markers[0].time).toBe(expectedTime);
     });
@@ -278,7 +328,7 @@ describe('OHLCChart', () => {
       render(<OHLCChart {...defaultProps} height={600} />);
 
       await waitFor(() => {
-        expect(mockSetData).toHaveBeenCalled();
+        expect(getMocks().mockSetData).toHaveBeenCalled();
       });
 
       // Chart should be created with custom height
@@ -289,7 +339,7 @@ describe('OHLCChart', () => {
       render(<OHLCChart {...defaultProps} />);
 
       await waitFor(() => {
-        expect(mockSetData).toHaveBeenCalled();
+        expect(getMocks().mockSetData).toHaveBeenCalled();
       });
 
       // Chart should be created with default height (500)
@@ -329,12 +379,12 @@ describe('OHLCChart', () => {
       const { unmount } = render(<OHLCChart {...defaultProps} />);
 
       await waitFor(() => {
-        expect(mockSetData).toHaveBeenCalled();
+        expect(getMocks().mockSetData).toHaveBeenCalled();
       });
 
       unmount();
 
-      expect(mockRemove).toHaveBeenCalled();
+      expect(getMocks().mockRemove).toHaveBeenCalled();
     });
   });
 });

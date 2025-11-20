@@ -30,8 +30,10 @@ describe('AppLayout', () => {
     // Check content
     expect(screen.getByText('Test Content')).toBeInTheDocument();
 
-    // Check footer status chips exist
-    expect(screen.getByText(/connected|disconnected/i)).toBeInTheDocument();
+    // Check footer status chips exist (checking for connection status or "Checking...")
+    expect(
+      screen.getByText(/connected|disconnected|checking/i)
+    ).toBeInTheDocument();
 
     // Check that skip links are present for accessibility
     expect(screen.getByText('Skip to main content')).toBeInTheDocument();

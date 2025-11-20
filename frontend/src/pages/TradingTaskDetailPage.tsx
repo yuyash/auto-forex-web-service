@@ -107,7 +107,7 @@ export default function TradingTaskDetailPage() {
   const currentProgress = polledStatus?.progress || progress;
 
   // Refetch when status changes
-  const prevStatusRef = useRef<string | undefined>();
+  const prevStatusRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (polledStatus) {
       console.log('[TradingTaskDetail] Polled status update:', polledStatus);

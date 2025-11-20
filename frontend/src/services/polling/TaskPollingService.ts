@@ -1,20 +1,11 @@
 // Task Polling Service - HTTP polling for task status, details, and logs
 
 import { apiClient } from '../api/client';
-import type {
-  BacktestTask,
-  TradingTask,
-  TaskExecution,
-  ExecutionLog,
-} from '../../types';
+import type { BacktestTask, TradingTask, ExecutionLog } from '../../types';
+import type { ExecutionSummary } from '../../types/execution';
+import { TaskStatus } from '../../types/common';
 
 export type TaskType = 'backtest' | 'trading';
-export type TaskStatus =
-  | 'pending'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'stopped';
 
 export interface TaskStatusResponse {
   task_id: number;
@@ -28,7 +19,7 @@ export interface TaskStatusResponse {
 
 export interface TaskDetailsResponse {
   task: BacktestTask | TradingTask;
-  current_execution: TaskExecution | null;
+  current_execution: ExecutionSummary | null;
 }
 
 export interface TaskLogsResponse {
@@ -220,8 +211,8 @@ export class TaskPollingService {
     const task = await apiClient.get<BacktestTask | TradingTask>(endpoint);
 
     // Extract current execution from task
-    const current_execution =
-      'latest_execution' in task ? task.latest_execution : null;
+    const current_execution: ExecutionSummary | null =
+      'latest_execution' in task ? (task.latest_execution ?? null) : null;
 
     return {
       task,
@@ -278,7 +269,9 @@ export class TaskPollingService {
    */
   private isTerminalStatus(status: TaskStatus): boolean {
     return (
-      status === 'completed' || status === 'failed' || status === 'stopped'
+      status === TaskStatus.COMPLETED ||
+      status === TaskStatus.FAILED ||
+      status === TaskStatus.STOPPED
     );
   }
 

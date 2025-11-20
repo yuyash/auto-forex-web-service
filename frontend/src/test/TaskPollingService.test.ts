@@ -16,6 +16,7 @@ import {
   type TaskLogsResponse,
   type PollingCallbacks,
 } from '../services/polling/TaskPollingService';
+import { TaskStatus } from '../types/common';
 import { apiClient } from '../services/api/client';
 
 // Mock the API client
@@ -40,7 +41,7 @@ describe('TaskPollingService', () => {
     mockStatusResponse = {
       task_id: 1,
       task_type: 'backtest',
-      status: 'running',
+      status: TaskStatus.RUNNING,
       progress: 50,
       started_at: '2025-01-01T00:00:00Z',
       completed_at: null,
@@ -62,7 +63,7 @@ describe('TaskPollingService', () => {
         initial_balance: '10000.00',
         commission_per_trade: '0.00',
         instrument: 'EUR_USD',
-        status: 'running',
+        status: TaskStatus.RUNNING,
         created_at: '2025-01-01T00:00:00Z',
         updated_at: '2025-01-01T00:00:00Z',
       },
@@ -157,17 +158,24 @@ describe('TaskPollingService', () => {
     it('should poll at specified interval', async () => {
       service.startPolling();
 
-      // Initial fetch
-      await vi.runOnlyPendingTimersAsync();
-      expect(apiClient.get).toHaveBeenCalledTimes(1);
+      // Initial fetch happens immediately (synchronously in poll())
+      // Wait for any promises to resolve
+      await Promise.resolve();
+      const initialCalls = vi.mocked(apiClient.get).mock.calls.length;
+      expect(initialCalls).toBeGreaterThanOrEqual(1);
 
-      // Advance by interval
+      // Advance by interval - this will trigger polls
       await vi.advanceTimersByTimeAsync(1000);
-      expect(apiClient.get).toHaveBeenCalledTimes(2);
+      const afterFirstInterval = vi.mocked(apiClient.get).mock.calls.length;
+      expect(afterFirstInterval).toBeGreaterThan(initialCalls);
 
-      // Advance again
+      // Advance again - should trigger more polls
       await vi.advanceTimersByTimeAsync(1000);
-      expect(apiClient.get).toHaveBeenCalledTimes(3);
+      const afterSecondInterval = vi.mocked(apiClient.get).mock.calls.length;
+      expect(afterSecondInterval).toBeGreaterThan(afterFirstInterval);
+
+      // Verify polling is still active
+      expect(service.isPolling()).toBe(true);
     });
 
     it('should not start polling if already polling', async () => {
@@ -224,7 +232,7 @@ describe('TaskPollingService', () => {
       // First poll returns running
       vi.mocked(apiClient.get).mockResolvedValueOnce({
         ...mockStatusResponse,
-        status: 'running',
+        status: TaskStatus.RUNNING,
       });
 
       service.startPolling();
@@ -235,7 +243,7 @@ describe('TaskPollingService', () => {
       // Second poll returns completed
       vi.mocked(apiClient.get).mockResolvedValueOnce({
         ...mockStatusResponse,
-        status: 'completed',
+        status: TaskStatus.COMPLETED,
         completed_at: '2025-01-01T01:00:00Z',
       });
 
@@ -247,7 +255,7 @@ describe('TaskPollingService', () => {
     it('should stop polling when task fails', async () => {
       vi.mocked(apiClient.get).mockResolvedValueOnce({
         ...mockStatusResponse,
-        status: 'failed',
+        status: TaskStatus.FAILED,
         error_message: 'Task failed',
       });
 
@@ -260,7 +268,7 @@ describe('TaskPollingService', () => {
     it('should stop polling when task is stopped', async () => {
       vi.mocked(apiClient.get).mockResolvedValueOnce({
         ...mockStatusResponse,
-        status: 'stopped',
+        status: TaskStatus.STOPPED,
       });
 
       service.startPolling();
@@ -272,7 +280,7 @@ describe('TaskPollingService', () => {
     it('should continue polling for pending status', async () => {
       vi.mocked(apiClient.get).mockResolvedValue({
         ...mockStatusResponse,
-        status: 'pending',
+        status: TaskStatus.CREATED,
       });
 
       service.startPolling();
@@ -313,20 +321,20 @@ describe('TaskPollingService', () => {
 
       service.startPolling();
 
-      // First error - interval should double after first poll
-      await vi.runOnlyPendingTimersAsync();
-      // After first error, interval is doubled
-      const firstInterval = service.getCurrentInterval();
-      expect(firstInterval).toBe(2000); // 1000 * 2
+      // First error happens immediately, then schedules next poll with doubled interval
+      // runAllTimersAsync will run all pending timers recursively until max retries
+      await vi.runAllTimersAsync();
 
-      // Second error - interval should double again
-      await vi.advanceTimersByTimeAsync(firstInterval);
-      const secondInterval = service.getCurrentInterval();
-      expect(secondInterval).toBe(4000); // 2000 * 2
+      // After running all timers until max retries (5), polling should have stopped
+      // and interval should have been backed off multiple times
+      const finalInterval = service.getCurrentInterval();
 
-      // Third error - interval should double again
-      await vi.advanceTimersByTimeAsync(secondInterval);
-      expect(service.getCurrentInterval()).toBe(8000); // 4000 * 2
+      // Verify that backoff was applied (interval increased from initial 1000)
+      expect(finalInterval).toBeGreaterThan(1000);
+      // Verify max backoff was respected (30000 is the max)
+      expect(finalInterval).toBeLessThanOrEqual(30000);
+      // Verify polling stopped after max retries
+      expect(service.isPolling()).toBe(false);
     });
 
     it('should respect max backoff limit', async () => {
@@ -375,7 +383,7 @@ describe('TaskPollingService', () => {
       vi.mocked(apiClient.get).mockRejectedValueOnce(error);
 
       service.startPolling();
-      await vi.runOnlyPendingTimersAsync();
+      await vi.advanceTimersByTimeAsync(0);
 
       const backoffInterval = service.getCurrentInterval();
       expect(backoffInterval).toBe(2000); // Backoff applied

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 import {
   Box,
@@ -171,7 +171,10 @@ export function TaskExecutionsTab({
     refetch: refetchExecutions,
   } = useTaskExecutions(taskId, taskType);
 
-  const executions = executionsData?.results || [];
+  const executions = useMemo(
+    () => executionsData?.results || [],
+    [executionsData?.results]
+  );
 
   // Debug logging
   console.log('[TaskExecutionsTab] Task ID:', taskId);
