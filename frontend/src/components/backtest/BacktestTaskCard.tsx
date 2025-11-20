@@ -27,7 +27,7 @@ import {
   useStopBacktestTask,
   useRerunBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
-import { useBacktestTaskPolling } from '../../hooks/useBacktestTasks';
+import { useTaskPolling } from '../../hooks/useTaskPolling';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -53,24 +53,28 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
   // Fetch strategies for display names
   const { strategies } = useStrategies();
 
-  // Poll for updates when task is running or optimistically set to running
+  // Poll for updates when task is running or optimistically set to running (Requirements 1.2, 4.5)
   const pollingEnabled =
     task.status === TaskStatus.RUNNING ||
     optimisticStatus === TaskStatus.RUNNING;
-  const { data: updatedTask } = useBacktestTaskPolling(
-    task.id,
-    pollingEnabled,
-    10000 // Poll every 10 seconds
-  );
 
-  // Use optimistic status if set, otherwise use updated task data or original task
-  const currentTask = updatedTask || task;
+  const { status: polledStatus } = useTaskPolling(task.id, 'backtest', {
+    enabled: pollingEnabled,
+    pollStatus: true,
+    interval: 5000, // Poll every 5 seconds for running tasks
+  });
+
+  // Use polled status if available, otherwise use task status
+  const currentStatus = polledStatus?.status || task.status;
 
   // Clear optimistic status when actual status matches (derived state pattern)
   const displayStatus =
-    optimisticStatus && currentTask.status !== optimisticStatus
+    optimisticStatus && currentStatus !== optimisticStatus
       ? optimisticStatus
-      : currentTask.status;
+      : currentStatus;
+
+  // Use original task data (polledStatus only provides status, not full task details)
+  const currentTask = task;
 
   const handleActionsClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -159,8 +163,8 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
     });
   };
 
-  // Calculate progress for running tasks (mock - would come from backend)
-  const progress = displayStatus === TaskStatus.RUNNING ? 50 : 0; // Mock progress
+  // Get progress from polled status for running tasks
+  const progress = polledStatus?.progress || 0;
 
   // Determine if action buttons are loading
   const isLoading =

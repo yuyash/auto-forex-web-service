@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -34,7 +34,7 @@ import {
   useDeleteBacktestTask,
   useRerunBacktestTask,
 } from '../hooks/useBacktestTaskMutations';
-import { useTaskStatusWebSocket } from '../hooks/useTaskStatusWebSocket';
+import { useTaskPolling } from '../hooks/useTaskPolling';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
 import { TaskActionButtons } from '../components/tasks/actions/TaskActionButtons';
@@ -91,65 +91,38 @@ export default function BacktestTaskDetailPage() {
 
   const { data: task, isLoading, error, refetch } = useBacktestTask(taskId);
   const { strategies } = useStrategies();
-  const [liveResults, setLiveResults] = useState<{
-    day_date: string;
-    progress: number;
-    days_processed: number;
-    total_days: number;
-    balance: number;
-    total_trades: number;
-    metrics: {
-      total_return?: number;
-      total_pnl?: number;
-      win_rate?: number;
-      winning_trades?: number;
-      losing_trades?: number;
-      max_drawdown?: number;
-      sharpe_ratio?: number;
-      profit_factor?: number;
-      average_win?: number;
-      average_loss?: number;
-      [key: string]: string | number | undefined;
-    };
-    equity_curve: Array<{ timestamp: string; balance: number }>;
-  } | null>(null);
 
-  // Fetch latest status from backend before rendering (Requirement 3.6)
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  // Listen to WebSocket updates for this task (Requirements 3.3, 3.4)
-  useTaskStatusWebSocket({
-    onStatusUpdate: (update) => {
-      // Refetch task data when this specific task's status changes
-      if (update.task_id === taskId && update.task_type === 'backtest') {
-        console.log(
-          '[BacktestTaskDetail] Status update received, refetching task data'
-        );
-        refetch();
-        setIsTransitioning(false);
-      }
-    },
-    onProgressUpdate: (update) => {
-      // Update progress when progress updates are received
-      if (update.task_id === taskId) {
-        console.log('[BacktestTaskDetail] Progress update:', update.progress);
-        setProgress(update.progress);
-      }
-    },
-    onIntermediateResults: (results) => {
-      // Update live results when intermediate results are received
-      if (results.task_id === taskId) {
-        console.log(
-          '[BacktestTaskDetail] Intermediate results received:',
-          results
-        );
-        setLiveResults(results);
-        setProgress(results.progress);
-      }
-    },
+  // Use HTTP polling for task status updates (Requirements 1.2, 1.3, 4.3, 4.4)
+  const { status: polledStatus } = useTaskPolling(taskId, 'backtest', {
+    enabled: !!taskId,
+    pollStatus: true,
+    interval: 3000, // Poll every 3 seconds for active tasks
   });
+
+  // Use polled progress directly (no local state needed)
+  const currentProgress = polledStatus?.progress || progress;
+
+  // Refetch when status changes
+  const prevStatusRef = useRef<string | undefined>();
+  useEffect(() => {
+    if (polledStatus) {
+      console.log('[BacktestTaskDetail] Polled status update:', polledStatus);
+
+      if (
+        task &&
+        prevStatusRef.current &&
+        polledStatus.status !== prevStatusRef.current
+      ) {
+        console.log(
+          '[BacktestTaskDetail] Status changed, refetching task data'
+        );
+        refetch().then(() => {
+          setIsTransitioning(false);
+        });
+      }
+      prevStatusRef.current = polledStatus.status;
+    }
+  }, [polledStatus, task, refetch]);
 
   // Refetch task data after mutations complete
   useEffect(() => {
@@ -405,7 +378,7 @@ export default function BacktestTaskDetailPage() {
         <Paper sx={{ p: 2, mb: 3 }}>
           <TaskProgressBar
             status={task.status}
-            progress={progress}
+            progress={currentProgress}
             showPercentage={true}
             size="medium"
           />

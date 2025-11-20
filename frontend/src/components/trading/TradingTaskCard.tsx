@@ -33,7 +33,7 @@ import {
   usePauseTradingTask,
   useResumeTradingTask,
 } from '../../hooks/useTradingTaskMutations';
-import { useTradingTaskPolling } from '../../hooks/useTradingTasks';
+import { useTaskPolling } from '../../hooks/useTaskPolling';
 import { useToast } from '../common';
 import {
   useStrategies,
@@ -61,26 +61,30 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
   // Fetch strategies for display names
   const { strategies } = useStrategies();
 
-  // Poll for updates when task is running or paused (more frequent for live trading)
+  // Poll for updates when task is running or paused (more frequent for live trading) (Requirements 1.2, 4.5)
   const pollingEnabled =
     task.status === TaskStatus.RUNNING ||
     task.status === TaskStatus.PAUSED ||
     optimisticStatus === TaskStatus.RUNNING ||
     optimisticStatus === TaskStatus.PAUSED;
-  const { data: updatedTask } = useTradingTaskPolling(
-    task.id,
-    pollingEnabled,
-    5000 // Poll every 5 seconds for live trading
-  );
 
-  // Use optimistic status if set, otherwise use updated task data or original task
-  const currentTask = updatedTask || task;
+  const { status: polledStatus } = useTaskPolling(task.id, 'trading', {
+    enabled: pollingEnabled,
+    pollStatus: true,
+    interval: 3000, // Poll every 3 seconds for live trading (more frequent)
+  });
+
+  // Use polled status if available, otherwise use task status
+  const currentStatus = polledStatus?.status || task.status;
 
   // Clear optimistic status when actual status matches (derived state pattern)
   const displayStatus =
-    optimisticStatus && currentTask.status !== optimisticStatus
+    optimisticStatus && currentStatus !== optimisticStatus
       ? optimisticStatus
-      : currentTask.status;
+      : currentStatus;
+
+  // Use original task data (polledStatus only provides status, not full task details)
+  const currentTask = task;
 
   // Show toast notifications for status changes and trades
   useEffect(() => {
