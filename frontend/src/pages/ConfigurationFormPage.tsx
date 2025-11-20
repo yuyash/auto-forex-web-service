@@ -10,7 +10,6 @@ import {
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Breadcrumbs } from '../components/common';
 import ConfigurationForm from '../components/configurations/ConfigurationForm';
-import ParametersForm from '../components/configurations/ParametersForm';
 import { useConfiguration } from '../hooks/useConfigurations';
 import { useConfigurationMutations } from '../hooks/useConfigurationMutations';
 import type { StrategyConfigCreateData } from '../types/configuration';
@@ -93,50 +92,6 @@ const ConfigurationFormPage = () => {
     }
   };
 
-  const handleParametersSubmit = async (
-    parameters: Record<string, unknown>
-  ) => {
-    if (!configuration) return;
-
-    setErrorMessage(null);
-    try {
-      await updateConfiguration({
-        id: configuration.id,
-        data: { parameters },
-      });
-      navigate('/configurations');
-    } catch (err: unknown) {
-      console.error('Failed to update parameters:', err);
-
-      const error = err as {
-        data?: {
-          parameters?: string | Record<string, unknown>;
-          error?: string;
-          detail?: string;
-        };
-        message?: string;
-      };
-
-      if (error.data) {
-        if (error.data.parameters) {
-          setErrorMessage(
-            typeof error.data.parameters === 'string'
-              ? error.data.parameters
-              : 'Invalid parameters'
-          );
-        } else if (error.data.error) {
-          setErrorMessage(error.data.error);
-        } else if (error.data.detail) {
-          setErrorMessage(error.data.detail);
-        } else {
-          setErrorMessage(error.message || 'Failed to update parameters');
-        }
-      } else {
-        setErrorMessage(error.message || 'Failed to update parameters');
-      }
-    }
-  };
-
   const handleCancel = () => {
     navigate('/configurations');
   };
@@ -206,11 +161,24 @@ const ConfigurationFormPage = () => {
 
       <Paper elevation={2} sx={{ p: 4 }}>
         {isEditMode && configuration ? (
-          <ParametersForm
-            strategyType={configuration.strategy_type}
-            strategyName={configuration.name}
-            initialParameters={configuration.parameters}
-            onSubmit={handleParametersSubmit}
+          <ConfigurationForm
+            initialData={{
+              name: configuration.name,
+              strategy_type: configuration.strategy_type,
+              description: configuration.description,
+              parameters: configuration.parameters,
+            }}
+            onSubmit={async (data) => {
+              await updateConfiguration({
+                id: configuration.id,
+                data: {
+                  name: data.name,
+                  description: data.description,
+                  parameters: data.parameters,
+                },
+              });
+              navigate('/configurations');
+            }}
             onCancel={handleCancel}
             isLoading={isUpdating}
           />

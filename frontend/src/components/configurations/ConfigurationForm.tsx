@@ -519,7 +519,11 @@ const ConfigurationForm = ({
               render={({ field }) => (
                 <FormControl fullWidth error={!!errors.strategy_type}>
                   <InputLabel>Strategy Type</InputLabel>
-                  <Select {...field} label="Strategy Type">
+                  <Select
+                    {...field}
+                    label="Strategy Type"
+                    disabled={!!initialData?.strategy_type}
+                  >
                     {STRATEGY_TYPES.map((strategy) => (
                       <MenuItem key={strategy.value} value={strategy.value}>
                         <Box>
@@ -536,6 +540,15 @@ const ConfigurationForm = ({
                   {errors.strategy_type && (
                     <Typography variant="caption" color="error" sx={{ mt: 1 }}>
                       {errors.strategy_type.message}
+                    </Typography>
+                  )}
+                  {initialData?.strategy_type && (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mt: 1, display: 'block' }}
+                    >
+                      Strategy type cannot be changed after creation
                     </Typography>
                   )}
                 </FormControl>

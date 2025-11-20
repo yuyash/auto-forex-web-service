@@ -481,3 +481,135 @@ class BacktestTaskExecutionsView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class BacktestTaskLogsView(APIView):
+    """
+    Get logs for a backtest task with pagination and filtering.
+
+    GET: Return paginated log entries from TaskExecution.logs JSONField
+
+    Requirements: 1.4, 6.4, 6.5
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _build_pagination_url(
+        self,
+        task_id: int,
+        offset: int,
+        limit: int,
+        execution_id: str | None,
+        level: str | None,
+    ) -> str:
+        """Build pagination URL with query parameters."""
+        url = f"/api/backtest-tasks/{task_id}/logs/?offset={offset}&limit={limit}"
+        if execution_id:
+            url += f"&execution_id={execution_id}"
+        if level:
+            url += f"&level={level}"
+        return url
+
+    def _collect_logs(
+        self, executions_query: QuerySet, level: str | None
+    ) -> list[dict[str, str | int | None]]:
+        """Collect and filter logs from executions."""
+        all_logs = []
+        for execution in executions_query:
+            logs = execution.logs if isinstance(execution.logs, list) else []
+            for log_entry in logs:
+                if level and log_entry.get("level") != level:
+                    continue
+
+                all_logs.append(
+                    {
+                        "timestamp": log_entry.get("timestamp"),
+                        "level": log_entry.get("level"),
+                        "message": log_entry.get("message"),
+                        "execution_id": execution.id,
+                        "execution_number": execution.execution_number,
+                    }
+                )
+        return all_logs
+
+    def get(self, request: Request, task_id: int) -> Response:
+        """
+        Get task logs with pagination and filtering.
+
+        Query parameters:
+        - execution_id: Filter logs for specific execution (optional)
+        - level: Filter by log level (INFO, WARNING, ERROR, DEBUG) (optional)
+        - limit: Number of logs to return (default: 100, max: 1000)
+        - offset: Pagination offset (default: 0)
+
+        Returns:
+            Paginated log entries with execution_number included
+        """
+        # Verify task exists and user has access
+        try:
+            BacktestTask.objects.get(id=task_id, user=request.user.id)
+        except BacktestTask.DoesNotExist:
+            return Response(
+                {"error": "Backtest task not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Get and validate query parameters
+        execution_id = request.query_params.get("execution_id")
+        level = request.query_params.get("level")
+        try:
+            limit = min(int(request.query_params.get("limit", 100)), 1000)
+            offset = int(request.query_params.get("offset", 0))
+        except ValueError:
+            return Response(
+                {"error": "Invalid limit or offset value"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Import and query executions
+        from .execution_models import TaskExecution
+
+        executions_query = TaskExecution.objects.filter(
+            task_type="backtest",
+            task_id=task_id,
+        ).order_by("execution_number")
+
+        if execution_id:
+            try:
+                executions_query = executions_query.filter(id=int(execution_id))
+            except ValueError:
+                return Response(
+                    {"error": "Invalid execution_id"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Collect, filter, and sort logs
+        all_logs = self._collect_logs(executions_query, level)
+        all_logs.sort(key=lambda x: str(x.get("timestamp") or ""), reverse=True)
+
+        # Paginate results
+        total_count = len(all_logs)
+        paginated_logs = all_logs[offset : offset + limit]
+
+        # Build pagination URLs
+        next_url = (
+            self._build_pagination_url(task_id, offset + limit, limit, execution_id, level)
+            if offset + limit < total_count
+            else None
+        )
+        previous_url = (
+            self._build_pagination_url(task_id, max(0, offset - limit), limit, execution_id, level)
+            if offset > 0
+            else None
+        )
+
+        # Return paginated response
+        return Response(
+            {
+                "count": total_count,
+                "next": next_url,
+                "previous": previous_url,
+                "results": paginated_logs,
+            },
+            status=status.HTTP_200_OK,
+        )

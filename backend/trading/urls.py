@@ -13,6 +13,7 @@ from .backtest_task_views import (  # noqa: E501
     BacktestTaskDetailView,
     BacktestTaskExecutionsView,
     BacktestTaskListCreateView,
+    BacktestTaskLogsView,
     BacktestTaskRerunView,
     BacktestTaskStartView,
     BacktestTaskStatusView,
@@ -35,6 +36,7 @@ from .trading_task_views import (  # noqa: E501
     TradingTaskDetailView,
     TradingTaskExecutionsView,
     TradingTaskListCreateView,
+    TradingTaskLogsView,
     TradingTaskPauseView,
     TradingTaskRerunView,
     TradingTaskResumeView,
@@ -128,6 +130,11 @@ urlpatterns = [
         BacktestTaskExecutionsView.as_view(),
         name="backtest_task_executions",
     ),
+    path(
+        "backtest-tasks/<int:task_id>/logs/",
+        BacktestTaskLogsView.as_view(),
+        name="backtest_task_logs",
+    ),
     # TradingTask endpoints (new task-based API)
     path(
         "trading-tasks/",
@@ -173,6 +180,11 @@ urlpatterns = [
         "trading-tasks/<int:task_id>/executions/",
         TradingTaskExecutionsView.as_view(),
         name="trading_task_executions",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/logs/",
+        TradingTaskLogsView.as_view(),
+        name="trading_task_logs",
     ),
     # Strategy comparison endpoints
     path("strategies/compare/", StrategyCompareView.as_view(), name="strategy_compare"),

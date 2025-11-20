@@ -34,7 +34,8 @@
     "pre-commit *",
     "mypy *",
     "flake8 *",
-    "pylint *"
+    "pylint *",
+    "pytest *"
   ],
   "editor.rulers": [100, 120],
   "editor.tabSize": 4,
