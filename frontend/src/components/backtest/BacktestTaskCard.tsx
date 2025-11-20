@@ -18,7 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import type { BacktestTask } from '../../types/backtestTask';
 import { TaskStatus } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
-import { TaskProgressBar } from '../tasks/display/TaskProgressBar';
+import { TaskProgress } from '../tasks/TaskProgress';
 import { MetricCard } from '../tasks/display/MetricCard';
 import { TaskActionButtons } from '../tasks/actions/TaskActionButtons';
 import BacktestTaskActions from './BacktestTaskActions';
@@ -248,12 +248,13 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
           />
         </Box>
 
-        {/* Progress bar for running tasks using shared component */}
+        {/* Progress bar for running tasks using TaskProgress component in compact mode (Requirement 3.2) */}
         {displayStatus === TaskStatus.RUNNING && (
           <Box sx={{ mb: 2 }}>
-            <TaskProgressBar
+            <TaskProgress
               status={displayStatus}
               progress={progress}
+              compact={true}
               showPercentage={true}
             />
           </Box>

@@ -40,7 +40,7 @@ import { useTaskPolling } from '../hooks/useTaskPolling';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
 import { TaskActionButtons } from '../components/tasks/actions/TaskActionButtons';
-import { TaskProgressBar } from '../components/tasks/display/TaskProgressBar';
+import { TaskProgress } from '../components/tasks/TaskProgress';
 import { CopyTaskDialog } from '../components/tasks/actions/CopyTaskDialog';
 import { DeleteTaskDialog } from '../components/tasks/actions/DeleteTaskDialog';
 import { ConfirmDialog } from '../components/tasks/actions/ConfirmDialog';
@@ -459,14 +459,14 @@ export default function TradingTaskDetailPage() {
         </Menu>
       </Paper>
 
-      {/* Progress Bar (Requirement 5.4) */}
+      {/* Progress Bar in full-width mode for detail page (Requirement 3.3) */}
       {task.status === TaskStatus.RUNNING && (
         <Paper sx={{ p: 2, mb: 3 }}>
-          <TaskProgressBar
+          <TaskProgress
             status={task.status}
             progress={currentProgress}
+            compact={false}
             showPercentage={true}
-            size="medium"
           />
         </Paper>
       )}

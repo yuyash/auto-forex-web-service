@@ -38,7 +38,7 @@ import { useTaskPolling } from '../hooks/useTaskPolling';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
 import { TaskActionButtons } from '../components/tasks/actions/TaskActionButtons';
-import { TaskProgressBar } from '../components/tasks/display/TaskProgressBar';
+import { TaskProgress } from '../components/tasks/TaskProgress';
 import { TaskOverviewTab } from '../components/backtest/detail/TaskOverviewTab';
 import { TaskResultsTab } from '../components/backtest/detail/TaskResultsTab';
 import { TaskExecutionsTab } from '../components/backtest/detail/TaskExecutionsTab';
@@ -373,14 +373,14 @@ export default function BacktestTaskDetailPage() {
         </Menu>
       </Paper>
 
-      {/* Progress Bar (Requirement 5.4) */}
+      {/* Progress Bar in full-width mode for detail page (Requirement 3.3) */}
       {task.status === TaskStatus.RUNNING && (
         <Paper sx={{ p: 2, mb: 3 }}>
-          <TaskProgressBar
+          <TaskProgress
             status={task.status}
             progress={currentProgress}
+            compact={false}
             showPercentage={true}
-            size="medium"
           />
         </Paper>
       )}
