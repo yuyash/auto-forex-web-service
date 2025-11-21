@@ -7,8 +7,9 @@ FROM node:20-alpine AS builder
 # Set work directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files and npm config
 COPY package*.json ./
+COPY .npmrc ./
 
 # Install dependencies
 RUN npm ci

@@ -5,15 +5,10 @@
  * Targets 50-500 data points for optimal visualization.
  */
 
-export type OandaGranularity =
-  | 'M1'
-  | 'M5'
-  | 'M15'
-  | 'M30'
-  | 'H1'
-  | 'H4'
-  | 'D'
-  | 'W';
+import type { OandaGranularity } from '../types/oanda';
+
+// Re-export for convenience
+export type { OandaGranularity };
 
 interface GranularityConfig {
   granularity: OandaGranularity;

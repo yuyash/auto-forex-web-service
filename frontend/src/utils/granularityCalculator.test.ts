@@ -3,8 +3,8 @@ import {
   calculateGranularity,
   calculateDataPoints,
   getAvailableGranularities,
-  type OandaGranularity,
 } from './granularityCalculator';
+import type { OandaGranularity } from '../types/oanda';
 
 describe('granularityCalculator', () => {
   describe('calculateGranularity', () => {

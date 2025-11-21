@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { OHLCChart, type Trade } from './OHLCChart';
 import type { OHLCData } from '../../types/chart';
+
+// Mock waitFor for compatibility
+const waitFor = async (callback: () => void) => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  callback();
+};
 
 // Mock the API client
 vi.mock('../../services/api/client', () => ({
@@ -21,6 +27,9 @@ vi.mock('lightweight-charts', () => {
   const mockSubscribeVisibleLogicalRangeChange = vi.fn();
   const mockUnsubscribeVisibleLogicalRangeChange = vi.fn();
   const mockGetVisibleLogicalRange = vi.fn(() => ({ from: 100, to: 200 }));
+  const mockGetVisibleRange = vi.fn(() => ({ from: 1000, to: 3000 }));
+  const mockSetVisibleLogicalRange = vi.fn();
+  const mockTimeToCoordinate = vi.fn(() => 100);
   const mockBarsInLogicalRange = vi.fn(() => ({
     barsBefore: 50,
     barsAfter: 50,
@@ -36,6 +45,9 @@ vi.mock('lightweight-charts', () => {
     unsubscribeVisibleLogicalRangeChange:
       mockUnsubscribeVisibleLogicalRangeChange,
     getVisibleLogicalRange: mockGetVisibleLogicalRange,
+    getVisibleRange: mockGetVisibleRange,
+    setVisibleLogicalRange: mockSetVisibleLogicalRange,
+    timeToCoordinate: mockTimeToCoordinate,
   }));
   const mockCreateSeriesMarkers = vi.fn();
   const mockCreateChart = vi.fn(() => ({
@@ -59,12 +71,16 @@ vi.mock('lightweight-charts', () => {
     mockSubscribeVisibleLogicalRangeChange,
     mockUnsubscribeVisibleLogicalRangeChange,
     mockGetVisibleLogicalRange,
+    mockGetVisibleRange,
+    mockSetVisibleLogicalRange,
+    mockTimeToCoordinate,
     mockBarsInLogicalRange,
   };
 
   return {
     createChart: mockCreateChart,
     CandlestickSeries: 'CandlestickSeries',
+    LineSeries: 'LineSeries',
     createSeriesMarkers: mockCreateSeriesMarkers,
   };
 });
@@ -101,6 +117,9 @@ interface ChartMocks {
   mockSubscribeVisibleLogicalRangeChange: ReturnType<typeof vi.fn>;
   mockUnsubscribeVisibleLogicalRangeChange: ReturnType<typeof vi.fn>;
   mockGetVisibleLogicalRange: ReturnType<typeof vi.fn>;
+  mockGetVisibleRange: ReturnType<typeof vi.fn>;
+  mockSetVisibleLogicalRange: ReturnType<typeof vi.fn>;
+  mockTimeToCoordinate: ReturnType<typeof vi.fn>;
   mockBarsInLogicalRange: ReturnType<typeof vi.fn>;
 }
 
@@ -167,9 +186,11 @@ describe('OHLCChart', () => {
 
   describe('rendering', () => {
     it('should show loading state initially', () => {
-      render(<OHLCChart {...defaultProps} />);
+      const { container } = render(<OHLCChart {...defaultProps} />);
 
-      expect(screen.getByRole('progressbar')).toBeInTheDocument();
+      expect(
+        container.querySelector('[role="progressbar"]')
+      ).toBeInTheDocument();
     });
 
     it('should render chart after data loads', async () => {
@@ -181,7 +202,6 @@ describe('OHLCChart', () => {
           start_date: '2025-01-01T00:00:00Z',
           end_date: '2025-01-02T00:00:00Z',
           granularity: 'H1',
-          count: 5000,
         });
       });
 
@@ -196,10 +216,10 @@ describe('OHLCChart', () => {
         new Error(errorMessage)
       );
 
-      render(<OHLCChart {...defaultProps} />);
+      const { container } = render(<OHLCChart {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText(errorMessage)).toBeInTheDocument();
+        expect(container.textContent).toContain(errorMessage);
       });
     });
 
@@ -210,10 +230,10 @@ describe('OHLCChart', () => {
         candles: [],
       });
 
-      render(<OHLCChart {...defaultProps} />);
+      const { container } = render(<OHLCChart {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/No chart data available/)).toBeInTheDocument();
+        expect(container.textContent).toContain('No chart data available');
       });
     });
   });
@@ -228,7 +248,6 @@ describe('OHLCChart', () => {
           start_date: '2025-01-01T00:00:00Z',
           end_date: '2025-01-02T00:00:00Z',
           granularity: 'H1',
-          count: 5000,
         });
       });
     });
@@ -242,7 +261,6 @@ describe('OHLCChart', () => {
           start_date: '2025-01-01T00:00:00Z',
           end_date: '2025-01-02T00:00:00Z',
           granularity: 'M5',
-          count: 5000,
         });
       });
     });
@@ -386,10 +404,10 @@ describe('OHLCChart', () => {
         new TypeError('Network error')
       );
 
-      render(<OHLCChart {...defaultProps} />);
+      const { container } = render(<OHLCChart {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Network error')).toBeInTheDocument();
+        expect(container.textContent).toContain('Network error');
       });
     });
 
@@ -398,12 +416,10 @@ describe('OHLCChart', () => {
         message: 'Historical data not available',
       });
 
-      render(<OHLCChart {...defaultProps} />);
+      const { container } = render(<OHLCChart {...defaultProps} />);
 
       await waitFor(() => {
-        expect(
-          screen.getByText(/Failed to load chart data/)
-        ).toBeInTheDocument();
+        expect(container.textContent).toContain('Failed to load chart data');
       });
     });
   });

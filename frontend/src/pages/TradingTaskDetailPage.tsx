@@ -60,15 +60,18 @@ interface TabPanelProps {
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
 
+  if (value !== index) {
+    return null;
+  }
+
   return (
     <div
       role="tabpanel"
-      hidden={value !== index}
       id={`task-tabpanel-${index}`}
       aria-labelledby={`task-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
+      <Box sx={{ py: 3 }}>{children}</Box>
     </div>
   );
 }

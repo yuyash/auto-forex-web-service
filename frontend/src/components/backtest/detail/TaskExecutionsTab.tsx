@@ -175,14 +175,6 @@ export function TaskExecutionsTab({
     [executionsData?.results]
   );
 
-  // Debug logging
-  console.log('[TaskExecutionsTab] Task ID:', taskId);
-  console.log('[TaskExecutionsTab] Task Type:', taskType);
-  console.log('[TaskExecutionsTab] Executions Data:', executionsData);
-  console.log('[TaskExecutionsTab] Executions:', executions);
-  console.log('[TaskExecutionsTab] Loading:', isLoading);
-  console.log('[TaskExecutionsTab] Error:', error);
-
   // Auto-select the most recent execution (only when executions first load)
   useEffect(() => {
     if (executions.length > 0 && !selectedExecution) {

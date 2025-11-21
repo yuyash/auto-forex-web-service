@@ -6,7 +6,7 @@ import {
   type ISeriesApi,
   type CandlestickData,
   type Time,
-  type SeriesMarker,
+  type Logical,
 } from 'lightweight-charts';
 import {
   Box,
@@ -21,7 +21,6 @@ import {
 } from '@mui/material';
 import {
   calculateGranularity,
-  calculateDataPoints,
   getAvailableGranularities,
   type OandaGranularity,
 } from '../../utils/granularityCalculator';
@@ -67,7 +66,12 @@ export function OHLCChart({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [allData, setAllData] = useState<CandlestickData[]>([]);
+  const [verticalLines, setVerticalLines] = useState<{
+    start: number | null;
+    end: number | null;
+  }>({ start: null, end: null });
   const isInitialLoadRef = useRef(true);
+  const allowScrollLoadRef = useRef(false);
 
   // Calculate default granularity to show entire range
   const defaultGranularity = calculateGranularity(
@@ -83,13 +87,6 @@ export function OHLCChart({
 
   const granularity = selectedGranularity;
 
-  // Calculate expected number of candles
-  const expectedCandles = calculateDataPoints(
-    new Date(startDate),
-    new Date(endDate),
-    selectedGranularity
-  );
-
   const handleGranularityChange = (event: SelectChangeEvent<string>) => {
     setSelectedGranularity(event.target.value as OandaGranularity);
   };
@@ -102,13 +99,12 @@ export function OHLCChart({
         setError(null);
         isInitialLoadRef.current = true;
 
-        // Fetch more candles initially (5000 max from API)
+        // Fetch candles for the exact date range (no count limit)
         const response = await apiClient.get<CandlesResponse>('/candles', {
           instrument,
           start_date: startDate,
           end_date: endDate,
           granularity,
-          count: 5000,
         });
 
         // Transform OHLC data to lightweight-charts format
@@ -272,6 +268,15 @@ export function OHLCChart({
         borderColor: '#cccccc',
         timeVisible: true,
         secondsVisible: false,
+        rightOffset: 0,
+        lockVisibleTimeRangeOnResize: true,
+        shiftVisibleRangeOnNewBar: false,
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: false,
       },
     });
 
@@ -291,71 +296,113 @@ export function OHLCChart({
     // Set data
     candlestickSeries.setData(allData);
 
-    // Add trade markers immediately after setting data
-    if (trades.length > 0) {
-      console.log('[OHLCChart] Processing trades for markers:', {
-        tradesCount: trades.length,
-        firstTrade: trades[0],
-        candleTimeRange: {
-          first: allData[0]?.time,
-          last: allData[allData.length - 1]?.time,
-        },
-      });
+    // Trade markers temporarily disabled
+    // TODO: Re-enable when lightweight-charts marker API is fixed
 
-      const markers: SeriesMarker<Time>[] = trades.map((trade) => {
-        const timestamp = new Date(trade.timestamp).getTime() / 1000;
+    // Set visible range to backtest period with buffer on initial load
+    const startTime = new Date(startDate).getTime() / 1000;
+    const endTime = new Date(endDate).getTime() / 1000;
 
-        return {
-          time: timestamp as Time,
-          position: trade.action === 'buy' ? 'belowBar' : 'aboveBar',
-          color: trade.action === 'buy' ? '#26a69a' : '#ef5350',
-          shape: trade.action === 'buy' ? 'arrowUp' : 'arrowDown',
-          text: `${trade.action.toUpperCase()} ${Math.abs(trade.units)} @ ${trade.price.toFixed(5)}`,
-        };
-      });
-
-      console.log('[OHLCChart] Setting markers on new chart:', {
-        markersCount: markers.length,
-        firstMarker: markers[0],
-        lastMarker: markers[markers.length - 1],
-      });
-
-      // Set markers on the candlestick series
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (candlestickSeries as any).setMarkers(markers);
-        console.log('[OHLCChart] ✓ Markers set successfully');
-      } catch (err) {
-        console.error('[OHLCChart] ✗ Failed to set markers:', err);
-      }
-    }
-
-    // Fit content on initial load
     if (isInitialLoadRef.current) {
-      chart.timeScale().fitContent();
+      // Add 10% buffer on each side so vertical lines are visible
+      const timeRange = endTime - startTime;
+      const buffer = timeRange * 0.1;
+
+      const minTime = startTime - buffer;
+      const maxTime = endTime + buffer;
+
+      // Use setVisibleLogicalRange instead of setVisibleRange
+      // Find the logical indices for the time range
+      const minIndex = allData.findIndex((d) => (d.time as number) >= minTime);
+      const maxIndex = allData.findIndex((d) => (d.time as number) >= maxTime);
+
+      if (minIndex !== -1 && maxIndex !== -1) {
+        chart.timeScale().setVisibleLogicalRange({
+          from: Math.max(0, minIndex) as Logical,
+          to: Math.min(allData.length - 1, maxIndex) as Logical,
+        });
+      }
+
       isInitialLoadRef.current = false;
+
+      // Enable scroll loading after a delay to prevent auto-load on mount
+      setTimeout(() => {
+        allowScrollLoadRef.current = true;
+      }, 1000);
     }
 
-    // Subscribe to visible range changes for infinite scrolling
+    // Update vertical line positions
+    const chartTimeScale = chart.timeScale();
+
+    const updateVerticalLines = () => {
+      const startTime = new Date(startDate).getTime() / 1000;
+      const endTime = new Date(endDate).getTime() / 1000;
+
+      // Try using timeToCoordinate first
+      let startX: number | null = chartTimeScale.timeToCoordinate(
+        startTime as Time
+      );
+      let endX: number | null = chartTimeScale.timeToCoordinate(
+        endTime as Time
+      );
+
+      // If that fails, manually calculate based on visible range
+      if (startX === null || endX === null) {
+        const visibleRange = chartTimeScale.getVisibleRange();
+        if (visibleRange && chartContainerRef.current) {
+          const chartWidth = chartContainerRef.current.clientWidth;
+          const timeRange =
+            (visibleRange.to as number) - (visibleRange.from as number);
+
+          if (startX === null) {
+            const startOffset = startTime - (visibleRange.from as number);
+            startX = Math.round((startOffset / timeRange) * chartWidth);
+          }
+
+          if (endX === null) {
+            const endOffset = endTime - (visibleRange.from as number);
+            endX = Math.round((endOffset / timeRange) * chartWidth);
+          }
+        }
+      }
+
+      console.log('[OHLCChart] Vertical lines calculated:', { startX, endX });
+
+      // Only update if we have valid coordinates
+      if (startX !== null && endX !== null) {
+        setVerticalLines({ start: startX, end: endX });
+      }
+    };
+
+    // Delay initial update to ensure chart is fully rendered
+    setTimeout(updateVerticalLines, 200);
+
+    // Update on scroll/zoom
+    chartTimeScale.subscribeVisibleLogicalRangeChange(updateVerticalLines);
+
+    // Prevent scrolling beyond data range
     const timeScale = chart.timeScale();
     const handleVisibleRangeChange = () => {
       const logicalRange = timeScale.getVisibleLogicalRange();
       if (!logicalRange) return;
 
-      const barsInfo = candlestickSeries.barsInLogicalRange(logicalRange);
-      if (!barsInfo) return;
+      // Clamp the visible range to prevent scrolling beyond data
+      let needsAdjustment = false;
+      let newFrom = logicalRange.from;
+      let newTo = logicalRange.to;
 
-      // Load older data when scrolling near the left edge
-      if (logicalRange.from < 50) {
-        console.log('[OHLCChart] Near left edge, loading older data');
-        loadOlderData();
+      if ((logicalRange.from as number) < 0) {
+        newFrom = 0 as Logical;
+        needsAdjustment = true;
       }
 
-      // Load newer data when scrolling near the right edge
-      const totalBars = allData.length;
-      if (logicalRange.to > totalBars - 50) {
-        console.log('[OHLCChart] Near right edge, loading newer data');
-        loadNewerData();
+      if ((logicalRange.to as number) > allData.length) {
+        newTo = allData.length as Logical;
+        needsAdjustment = true;
+      }
+
+      if (needsAdjustment) {
+        timeScale.setVisibleLogicalRange({ from: newFrom, to: newTo });
       }
     };
 
@@ -381,7 +428,15 @@ export function OHLCChart({
         chartRef.current = null;
       }
     };
-  }, [allData, height, trades, loadOlderData, loadNewerData]);
+  }, [
+    allData,
+    height,
+    trades,
+    loadOlderData,
+    loadNewerData,
+    startDate,
+    endDate,
+  ]);
 
   // Update chart data when allData changes (for infinite scroll)
   useEffect(() => {
@@ -389,26 +444,8 @@ export function OHLCChart({
 
     candlestickSeriesRef.current.setData(allData);
 
-    // Re-apply markers after data update
-    if (trades.length > 0) {
-      const markers: SeriesMarker<Time>[] = trades.map((trade) => {
-        const timestamp = new Date(trade.timestamp).getTime() / 1000;
-        return {
-          time: timestamp as Time,
-          position: trade.action === 'buy' ? 'belowBar' : 'aboveBar',
-          color: trade.action === 'buy' ? '#26a69a' : '#ef5350',
-          shape: trade.action === 'buy' ? 'arrowUp' : 'arrowDown',
-          text: `${trade.action.toUpperCase()} ${Math.abs(trade.units)} @ ${trade.price.toFixed(5)}`,
-        };
-      });
-
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (candlestickSeriesRef.current as any).setMarkers(markers);
-      } catch (err) {
-        console.error('[OHLCChart] Failed to update markers:', err);
-      }
-    }
+    // Trade markers temporarily disabled
+    // TODO: Re-enable when lightweight-charts marker API is fixed
   }, [allData, trades]);
 
   if (loading) {
@@ -449,43 +486,8 @@ export function OHLCChart({
 
   return (
     <Box>
-      {/* Controls and Info */}
-      <Box
-        sx={{
-          mb: 2,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 2,
-        }}
-      >
-        <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-          <Typography variant="body2" color="text.secondary">
-            {trades.length > 0
-              ? `${trades.length} trade${trades.length !== 1 ? 's' : ''} marked`
-              : 'No trades'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {allData.length} / {expectedCandles} candles
-            {loadingMore && ' (loading...)'}
-            {!loadingMore && allData.length < expectedCandles && (
-              <Typography
-                component="span"
-                variant="body2"
-                color="info.main"
-                sx={{ ml: 1 }}
-              >
-                (scroll to load more)
-              </Typography>
-            )}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {new Date(startDate).toLocaleDateString()} -{' '}
-            {new Date(endDate).toLocaleDateString()}
-          </Typography>
-        </Box>
-
+      {/* Granularity Control */}
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
         <FormControl size="small" sx={{ minWidth: 120 }}>
           <InputLabel id="granularity-select-label">Granularity</InputLabel>
           <Select
@@ -504,8 +506,80 @@ export function OHLCChart({
         </FormControl>
       </Box>
 
-      {/* Chart Container */}
-      <Box ref={chartContainerRef} sx={{ position: 'relative' }} />
+      {/* Chart Container with Vertical Lines */}
+      <Box ref={chartContainerRef} sx={{ position: 'relative' }}>
+        {/* Vertical line overlays for backtest start/end */}
+        {verticalLines.start !== null && (
+          <>
+            <Box
+              sx={{
+                position: 'absolute',
+                left: `${verticalLines.start}px`,
+                top: 0,
+                bottom: 0,
+                width: '2px',
+                borderLeft: '2px dashed #666',
+                pointerEvents: 'none',
+                zIndex: 1,
+              }}
+            />
+            <Box
+              sx={{
+                position: 'absolute',
+                left: `${verticalLines.start + 5}px`,
+                top: '10px',
+                bgcolor: 'rgba(255, 255, 255, 0.9)',
+                px: 1,
+                py: 0.5,
+                borderRadius: 1,
+                border: '1px solid #666',
+                pointerEvents: 'none',
+                zIndex: 2,
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                color: '#666',
+              }}
+            >
+              Start: {new Date(startDate).toLocaleString()}
+            </Box>
+          </>
+        )}
+        {verticalLines.end !== null && (
+          <>
+            <Box
+              sx={{
+                position: 'absolute',
+                left: `${verticalLines.end}px`,
+                top: 0,
+                bottom: 0,
+                width: '2px',
+                borderLeft: '2px dashed #666',
+                pointerEvents: 'none',
+                zIndex: 1,
+              }}
+            />
+            <Box
+              sx={{
+                position: 'absolute',
+                left: `${verticalLines.end - 180}px`,
+                top: '10px',
+                bgcolor: 'rgba(255, 255, 255, 0.9)',
+                px: 1,
+                py: 0.5,
+                borderRadius: 1,
+                border: '1px solid #666',
+                pointerEvents: 'none',
+                zIndex: 2,
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                color: '#666',
+              }}
+            >
+              End: {new Date(endDate).toLocaleString()}
+            </Box>
+          </>
+        )}
+      </Box>
     </Box>
   );
 }

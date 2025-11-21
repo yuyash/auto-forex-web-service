@@ -47,6 +47,7 @@ const TradingTaskDetailPage = lazy(
   () => import('./pages/TradingTaskDetailPage')
 );
 const CreateOrderPage = lazy(() => import('./pages/CreateOrderPage'));
+const ChartPOCPage = lazy(() => import('./pages/ChartPOCPage'));
 
 // Loading fallback component
 function PageLoadingFallback() {
@@ -190,6 +191,7 @@ function AppRoutes() {
             />
             <Route path="/admin/whitelist" element={<AdminWhitelistPage />} />
             <Route path="/admin/users" element={<UserManagementPage />} />
+            <Route path="/chart-poc" element={<ChartPOCPage />} />
           </Route>
         </Route>
 
