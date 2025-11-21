@@ -72,14 +72,10 @@ export function calculateGranularity(
     return 'M1';
   }
 
-  // Calculate ideal minutes per candle to achieve target data points
-  const idealMinutesPerCandle = durationMinutes / targetDataPoints;
-
-  // Find the granularity that gets closest to our target
+  // Find the granularity that gets closest to our target data points
+  // Prioritize getting close to target count over matching ideal minutes per candle
   let bestGranularity = GRANULARITIES[0];
-  let bestDifference = Math.abs(
-    idealMinutesPerCandle - bestGranularity.minutesPerCandle
-  );
+  let bestDataPointsDiff = Infinity;
 
   for (const config of GRANULARITIES) {
     const dataPoints = durationMinutes / config.minutesPerCandle;
@@ -89,22 +85,18 @@ export function calculateGranularity(
       continue;
     }
 
-    const difference = Math.abs(
-      idealMinutesPerCandle - config.minutesPerCandle
-    );
+    // Calculate how close this is to our target data points
+    const dataPointsDiff = Math.abs(dataPoints - targetDataPoints);
 
-    if (difference < bestDifference) {
-      bestDifference = difference;
+    if (dataPointsDiff < bestDataPointsDiff) {
+      bestDataPointsDiff = dataPointsDiff;
       bestGranularity = config;
     }
   }
 
-  // Fallback: if no granularity fits within range, choose the one closest to target
-  if (
-    bestDifference ===
-    Math.abs(idealMinutesPerCandle - GRANULARITIES[0].minutesPerCandle)
-  ) {
-    // Find granularity that gives closest to target data points
+  // If no granularity fits within range, choose the one closest to target
+  if (bestDataPointsDiff === Infinity) {
+    // Find granularity that gives closest to target data points (ignoring min/max)
     let closestToTarget = GRANULARITIES[0];
     let closestDiff = Math.abs(
       durationMinutes / GRANULARITIES[0].minutesPerCandle - targetDataPoints

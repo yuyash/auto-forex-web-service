@@ -18,12 +18,24 @@ vi.mock('lightweight-charts', () => {
   const mockFitContent = vi.fn();
   const mockApplyOptions = vi.fn();
   const mockRemove = vi.fn();
+  const mockSubscribeVisibleLogicalRangeChange = vi.fn();
+  const mockUnsubscribeVisibleLogicalRangeChange = vi.fn();
+  const mockGetVisibleLogicalRange = vi.fn(() => ({ from: 100, to: 200 }));
+  const mockBarsInLogicalRange = vi.fn(() => ({
+    barsBefore: 50,
+    barsAfter: 50,
+  }));
   const mockAddSeries = vi.fn(() => ({
     setData: mockSetData,
     setMarkers: mockSetMarkers,
+    barsInLogicalRange: mockBarsInLogicalRange,
   }));
   const mockTimeScale = vi.fn(() => ({
     fitContent: mockFitContent,
+    subscribeVisibleLogicalRangeChange: mockSubscribeVisibleLogicalRangeChange,
+    unsubscribeVisibleLogicalRangeChange:
+      mockUnsubscribeVisibleLogicalRangeChange,
+    getVisibleLogicalRange: mockGetVisibleLogicalRange,
   }));
   const mockCreateSeriesMarkers = vi.fn();
   const mockCreateChart = vi.fn(() => ({
@@ -44,6 +56,10 @@ vi.mock('lightweight-charts', () => {
     mockTimeScale,
     mockCreateSeriesMarkers,
     mockCreateChart,
+    mockSubscribeVisibleLogicalRangeChange,
+    mockUnsubscribeVisibleLogicalRangeChange,
+    mockGetVisibleLogicalRange,
+    mockBarsInLogicalRange,
   };
 
   return {
@@ -56,6 +72,17 @@ vi.mock('lightweight-charts', () => {
 // Mock granularity calculator
 vi.mock('../../utils/granularityCalculator', () => ({
   calculateGranularity: vi.fn(() => 'H1'),
+  calculateDataPoints: vi.fn(() => 100),
+  getAvailableGranularities: vi.fn(() => [
+    'M1',
+    'M5',
+    'M15',
+    'M30',
+    'H1',
+    'H4',
+    'D',
+    'W',
+  ]),
 }));
 
 import { apiClient } from '../../services/api/client';
@@ -71,6 +98,10 @@ interface ChartMocks {
   mockTimeScale: ReturnType<typeof vi.fn>;
   mockCreateSeriesMarkers: ReturnType<typeof vi.fn>;
   mockCreateChart: ReturnType<typeof vi.fn>;
+  mockSubscribeVisibleLogicalRangeChange: ReturnType<typeof vi.fn>;
+  mockUnsubscribeVisibleLogicalRangeChange: ReturnType<typeof vi.fn>;
+  mockGetVisibleLogicalRange: ReturnType<typeof vi.fn>;
+  mockBarsInLogicalRange: ReturnType<typeof vi.fn>;
 }
 
 // Extend globalThis to include our mocks
@@ -150,6 +181,7 @@ describe('OHLCChart', () => {
           start_date: '2025-01-01T00:00:00Z',
           end_date: '2025-01-02T00:00:00Z',
           granularity: 'H1',
+          count: 5000,
         });
       });
 
@@ -196,6 +228,7 @@ describe('OHLCChart', () => {
           start_date: '2025-01-01T00:00:00Z',
           end_date: '2025-01-02T00:00:00Z',
           granularity: 'H1',
+          count: 5000,
         });
       });
     });
@@ -209,6 +242,7 @@ describe('OHLCChart', () => {
           start_date: '2025-01-01T00:00:00Z',
           end_date: '2025-01-02T00:00:00Z',
           granularity: 'M5',
+          count: 5000,
         });
       });
     });
