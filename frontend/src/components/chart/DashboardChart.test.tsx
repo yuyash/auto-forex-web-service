@@ -311,28 +311,8 @@ describe('DashboardChart', () => {
       });
     });
 
-    it.skip('should call onGranularityChange callback', async () => {
-      const user = userEvent.setup({ delay: null });
-      const onGranularityChange = vi.fn();
-      render(
-        <DashboardChart
-          {...defaultProps}
-          onGranularityChange={onGranularityChange}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
-      });
-
-      // Change granularity
-      const granularitySelect = screen.getByLabelText(/granularity/i);
-      await user.click(granularitySelect);
-      const option = screen.getByRole('option', { name: 'M15' });
-      await user.click(option);
-
-      expect(onGranularityChange).toHaveBeenCalledWith('M15');
-    });
+    // Note: Granularity change is now handled by ChartControls component in parent
+    // This test is no longer applicable to DashboardChart
   });
 
   describe.skip('Scroll-based data loading', () => {

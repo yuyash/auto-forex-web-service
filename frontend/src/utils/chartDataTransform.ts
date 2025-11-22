@@ -71,14 +71,24 @@ export interface FrontendTrade {
  * @returns Array of candles in chart format
  */
 export function transformCandles(apiCandles: APICandle[]): ChartCandle[] {
-  return apiCandles.map((candle) => ({
-    date: new Date(candle.time * 1000), // Convert Unix timestamp to Date
-    open: candle.open,
-    high: candle.high,
-    low: candle.low,
-    close: candle.close,
-    volume: candle.volume,
-  }));
+  return apiCandles
+    .map((candle) => {
+      // Validate timestamp
+      if (!candle.time || candle.time <= 0) {
+        console.error('Invalid candle timestamp:', candle);
+        return null;
+      }
+
+      return {
+        date: new Date(candle.time * 1000), // Convert Unix timestamp to Date
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+        volume: candle.volume,
+      };
+    })
+    .filter((candle): candle is ChartCandle => candle !== null);
 }
 
 /**

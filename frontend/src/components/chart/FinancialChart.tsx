@@ -55,6 +55,7 @@ import type {
 } from '../../utils/chartMarkers';
 import { buyPath, sellPath, doubleCirclePath } from '../../utils/chartMarkers';
 import { CHART_CONFIG } from '../../config/chartConfig';
+import { useResizeObserver } from '../../hooks/useResizeObserver';
 
 /**
  * OHLC Data interface for chart rendering
@@ -76,7 +77,7 @@ export interface FinancialChartProps {
   data: OHLCData[];
 
   // Dimensions
-  width?: number;
+  width?: number; // Optional fixed width, if not provided will be responsive
   height?: number;
 
   // Overlays
@@ -88,6 +89,7 @@ export interface FinancialChartProps {
   onVisibleRangeChange?: (range: { from: Date; to: Date }) => void;
   onLoadMore?: (direction: 'older' | 'newer') => void;
   onMarkerClick?: (marker: ChartMarker) => void;
+  onResetView?: () => void;
 
   // Configuration
   initialVisibleRange?: { from: Date; to: Date };
@@ -110,7 +112,7 @@ export interface FinancialChartProps {
  */
 export const FinancialChart: React.FC<FinancialChartProps> = ({
   data,
-  width = 900,
+  width: fixedWidth,
   height = 500,
   verticalLines = [],
   horizontalLines = [],
@@ -118,6 +120,7 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
   onVisibleRangeChange,
   onLoadMore,
   onMarkerClick,
+  onResetView,
   initialVisibleRange,
   enablePan = true, // Note: Pan is always enabled in react-financial-charts
   enableZoom = true, // Note: Zoom is always enabled in react-financial-charts
@@ -130,6 +133,16 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
   loading = false,
   error = null,
 }) => {
+  // Container ref for responsive width
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { width: containerWidth } = useResizeObserver(containerRef);
+
+  // Use fixed width if provided, otherwise use container width
+  // Subtract border (2px), margins, and add buffer to prevent overflow
+  // Using a more conservative subtraction to account for all spacing
+  const width =
+    fixedWidth || (containerWidth > 0 ? Math.floor(containerWidth - 10) : 0);
+
   // State for marker visibility toggles
   const [showBuySellMarkers, setShowBuySellMarkers] = useState(true);
   const [showStartEndMarkers, setShowStartEndMarkers] = useState(true);
@@ -197,7 +210,8 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
   const handleResetView = useCallback(() => {
     setResetKey((prev) => prev + 1);
     loadMoreTriggeredRef.current = { older: false, newer: false };
-  }, []);
+    onResetView?.();
+  }, [onResetView]);
 
   // Monitor visible range changes and trigger load more callbacks
   useEffect(() => {
@@ -268,19 +282,82 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
   }, [markers, showBuySellMarkers, showStartEndMarkers]);
 
   // Format time for axis based on timezone
+  // Note: react-financial-charts passes the index to tickFormat, not the date
+  // Calculate visible time range in milliseconds
+  const getVisibleTimeRange = useCallback(() => {
+    if (!chartData || chartData.length < 2) return 0;
+
+    // Get first and last visible dates
+    const firstDate = chartData[0]?.date;
+    const lastDate = chartData[chartData.length - 1]?.date;
+
+    if (!firstDate || !lastDate) return 0;
+
+    return lastDate.getTime() - firstDate.getTime();
+  }, [chartData]);
+
+  // We need to look up the actual date from the data array
   const formatTime = useCallback(
-    (date: Date) => {
+    (index: number) => {
       try {
-        if (timezone && timezone !== 'UTC') {
-          return formatInTimeZone(date, timezone, 'yyyy-MM-dd');
+        // Get the actual data point from the index
+        const dataPoint = chartData?.[index];
+        if (!dataPoint || !dataPoint.date) {
+          return '';
         }
-        return timeFormat('%Y-%m-%d')(date);
+
+        const date = dataPoint.date;
+
+        // Validate date
+        if (!(date instanceof Date) || isNaN(date.getTime())) {
+          console.error('Invalid date at index', index, ':', date);
+          return '';
+        }
+
+        // Calculate visible time range
+        const visibleRange = getVisibleTimeRange();
+        const oneHour = 60 * 60 * 1000;
+        const oneDay = 24 * oneHour;
+        const oneWeek = 7 * oneDay;
+        const oneMonth = 30 * oneDay;
+
+        // Choose format based on visible time range
+        let format: string;
+
+        if (visibleRange <= oneDay) {
+          // Less than 1 day: show time only (HH:mm)
+          format = 'HH:mm';
+        } else if (visibleRange <= oneWeek) {
+          // 1 day to 1 week: show date and time (MMM dd HH:mm)
+          format = 'MMM dd HH:mm';
+        } else if (visibleRange <= oneMonth) {
+          // 1 week to 1 month: show date with abbreviated month (MMM dd)
+          format = 'MMM dd';
+        } else {
+          // More than 1 month: show date with year (yyyy-MM-dd)
+          format = 'yyyy-MM-dd';
+        }
+
+        if (timezone && timezone !== 'UTC') {
+          return formatInTimeZone(date, timezone, format);
+        }
+
+        // Convert format to d3-time-format syntax
+        const d3Format = format
+          .replace('yyyy', '%Y')
+          .replace('MMM', '%b')
+          .replace('MM', '%m')
+          .replace('dd', '%d')
+          .replace('HH', '%H')
+          .replace('mm', '%M');
+
+        return timeFormat(d3Format)(date);
       } catch (err) {
-        console.error('Error formatting time:', err);
-        return timeFormat('%Y-%m-%d')(date);
+        console.error('Error formatting time at index', index, ':', err);
+        return '';
       }
     },
-    [timezone]
+    [timezone, chartData, getVisibleTimeRange]
   );
 
   // Validate date range
@@ -308,7 +385,9 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
   if (loading) {
     return (
       <Box
+        ref={containerRef}
         sx={{
+          width: '100%',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
@@ -325,7 +404,7 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
   // Show error message
   if (error || dateRangeError) {
     return (
-      <Box sx={{ p: 2 }}>
+      <Box ref={containerRef} sx={{ width: '100%', p: 2 }}>
         <Alert severity="error">{error || dateRangeError}</Alert>
       </Box>
     );
@@ -334,10 +413,30 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
   // Guard against empty data
   if (!chartData || chartData.length === 0) {
     return (
-      <Box sx={{ p: 3, textAlign: 'center' }}>
+      <Box ref={containerRef} sx={{ width: '100%', p: 3, textAlign: 'center' }}>
         <Typography color="text.secondary">
           No data available for this period
         </Typography>
+      </Box>
+    );
+  }
+
+  // Wait for width measurement if no fixed width provided
+  if (!width || width === 0) {
+    return (
+      <Box
+        ref={containerRef}
+        sx={{
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: height,
+          border: '1px solid #e0e0e0',
+          borderRadius: 1,
+        }}
+      >
+        <CircularProgress />
       </Box>
     );
   }
@@ -361,7 +460,20 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
     try {
       return (
         <Box
-          sx={{ border: '1px solid #e0e0e0', borderRadius: 1 }}
+          sx={{
+            border: '1px solid #e0e0e0',
+            borderRadius: 1,
+            overflow: 'visible',
+            width: '100%',
+            maxWidth: '100%',
+            '& .react-financial-charts': {
+              maxWidth: '100%',
+              overflow: 'visible',
+            },
+            '& canvas': {
+              maxWidth: '100%',
+            },
+          }}
           key={resetKey}
         >
           <ChartCanvas
@@ -568,7 +680,15 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
   };
 
   return (
-    <Box>
+    <Box
+      ref={containerRef}
+      sx={{
+        width: '100%',
+        maxWidth: '100%',
+        overflow: 'visible',
+        boxSizing: 'border-box',
+      }}
+    >
       {/* Control buttons */}
       {(showResetButton || enableMarkerToggle) && (
         <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>

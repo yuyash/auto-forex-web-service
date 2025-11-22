@@ -59,6 +59,9 @@ const DashboardPage = () => {
   // Chart refresh trigger - increment to force chart to fetch new data
   const [chartRefreshTrigger, setChartRefreshTrigger] = useState<number>(0);
 
+  // Chart reset handler
+  const [chartResetTrigger, setChartResetTrigger] = useState<number>(0);
+
   // OANDA account state - using shared hook with caching
   const {
     accounts: oandaAccounts,
@@ -229,6 +232,11 @@ const DashboardPage = () => {
     setChartRefreshTrigger((prev) => prev + 1);
   }, [fetchPositions, fetchStrategyEvents]);
 
+  // Handle chart reset view
+  const handleChartResetView = useCallback(() => {
+    setChartResetTrigger((prev) => prev + 1);
+  }, []);
+
   // Filter positions for current instrument
   const currentPositions = positions.filter((p) => p.instrument === instrument);
 
@@ -329,19 +337,20 @@ const DashboardPage = () => {
         <Box
           sx={{
             display: 'flex',
-            flexDirection: { xs: 'column', sm: 'row' },
-            alignItems: { xs: 'stretch', sm: 'center' },
+            flexDirection: 'row',
+            alignItems: 'center',
             gap: 2,
+            flexWrap: 'wrap',
           }}
         >
-          <Box sx={{ flex: 1 }}>
-            <ChartControls
-              instrument={instrument}
-              granularity={granularity}
-              onInstrumentChange={handleInstrumentChange}
-              onGranularityChange={handleGranularityChange}
-            />
-          </Box>
+          <ChartControls
+            instrument={instrument}
+            granularity={granularity}
+            onInstrumentChange={handleInstrumentChange}
+            onGranularityChange={handleGranularityChange}
+            onResetView={handleChartResetView}
+            showResetButton={hasOandaAccount}
+          />
 
           {/* Manual Refresh Button */}
           <Tooltip title="Refresh chart data">
@@ -350,7 +359,6 @@ const DashboardPage = () => {
               disabled={!hasOandaAccount}
               color="primary"
               size="small"
-              sx={{ alignSelf: { xs: 'flex-end', sm: 'center' } }}
             >
               <RefreshIcon />
             </IconButton>
@@ -359,9 +367,8 @@ const DashboardPage = () => {
 
         <Box
           sx={{
-            height: { xs: 300, sm: 400, md: 500 },
+            width: '100%',
             position: 'relative',
-            overflow: 'hidden',
           }}
         >
           {!hasOandaAccount ? (
@@ -382,16 +389,14 @@ const DashboardPage = () => {
             </Box>
           ) : (
             <DashboardChart
-              key={chartRefreshTrigger}
+              key={`${chartRefreshTrigger}-${chartResetTrigger}`}
               instrument={instrument}
               granularity={granularity}
               height={500}
               timezone={timezone}
               autoRefresh={autoRefreshEnabled}
               refreshInterval={refreshInterval * 1000}
-              onGranularityChange={(g) =>
-                handleGranularityChange(g as Granularity)
-              }
+              onResetView={handleChartResetView}
             />
           )}
         </Box>

@@ -9,12 +9,27 @@
  * - Timezone formatting
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { FinancialChart } from './FinancialChart';
 import type { OHLCData } from './FinancialChart';
 import type { ChartMarker } from '../../utils/chartMarkers';
 import * as fc from 'fast-check';
+
+// Mock getBoundingClientRect to return a width for responsive charts
+beforeEach(() => {
+  Element.prototype.getBoundingClientRect = vi.fn(() => ({
+    width: 900,
+    height: 500,
+    top: 0,
+    left: 0,
+    bottom: 500,
+    right: 900,
+    x: 0,
+    y: 0,
+    toJSON: () => {},
+  }));
+});
 
 // Sample OHLC data for testing
 const generateSampleData = (count: number = 10): OHLCData[] => {

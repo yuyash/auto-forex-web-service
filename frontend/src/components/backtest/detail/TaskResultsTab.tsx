@@ -332,13 +332,13 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
       <Divider sx={{ my: 3 }} />
 
       {/* Trade Log */}
-      <Paper ref={tradeLogRef} sx={{ p: 3 }}>
+      <Box ref={tradeLogRef}>
         <Box
           sx={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            mb: 3,
+            mb: 2,
           }}
         >
           <Typography variant="h6">Trade Log</Typography>
@@ -358,7 +358,7 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
           showExport={false}
           selectedTradeIndex={selectedTradeIndex}
         />
-      </Paper>
+      </Box>
     </Box>
   );
 }

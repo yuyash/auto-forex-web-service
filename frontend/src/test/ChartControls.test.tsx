@@ -19,6 +19,42 @@ describe('ChartControls', () => {
     expect(screen.getByLabelText(/timeframe/i)).toBeInTheDocument();
   });
 
+  it('does not render reset button by default', () => {
+    render(<ChartControls {...defaultProps} />);
+
+    expect(screen.queryByText(/reset view/i)).not.toBeInTheDocument();
+  });
+
+  it('renders reset button when showResetButton is true', () => {
+    render(
+      <ChartControls
+        {...defaultProps}
+        showResetButton={true}
+        onResetView={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/reset view/i)).toBeInTheDocument();
+  });
+
+  it('calls onResetView when reset button is clicked', async () => {
+    const user = userEvent.setup();
+    const onResetView = vi.fn();
+
+    render(
+      <ChartControls
+        {...defaultProps}
+        showResetButton={true}
+        onResetView={onResetView}
+      />
+    );
+
+    const resetButton = screen.getByText(/reset view/i);
+    await user.click(resetButton);
+
+    expect(onResetView).toHaveBeenCalledTimes(1);
+  });
+
   it('displays current instrument value', () => {
     render(<ChartControls {...defaultProps} />);
 

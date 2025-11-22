@@ -14,27 +14,11 @@
  * - Scrolls to latest data when new candles arrive
  */
 
-import React, {
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-  useRef,
-} from 'react';
-import {
-  Box,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Switch,
-  FormControlLabel,
-  type SelectChangeEvent,
-} from '@mui/material';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Box } from '@mui/material';
 import { FinancialChart } from './FinancialChart';
 import type { OHLCData } from './FinancialChart';
 import { transformCandles } from '../../utils/chartDataTransform';
-import { getAvailableGranularities } from '../../config/chartConfig';
 import type { OandaGranularity } from '../../types/oanda';
 import { CHART_CONFIG } from '../../config/chartConfig';
 import { useAuth } from '../../contexts/AuthContext';
@@ -49,7 +33,7 @@ export interface DashboardChartProps {
   timezone?: string; // IANA timezone from global settings
   autoRefresh?: boolean;
   refreshInterval?: number;
-  onGranularityChange?: (granularity: string) => void;
+  onResetView?: () => void;
 }
 
 /**
@@ -63,7 +47,7 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({
   autoRefresh: propAutoRefresh = CHART_CONFIG.DEFAULT_AUTO_REFRESH_ENABLED,
   refreshInterval:
     propRefreshInterval = CHART_CONFIG.DEFAULT_AUTO_REFRESH_INTERVAL,
-  onGranularityChange,
+  onResetView,
 }) => {
   // Auth context for API token
   const { token } = useAuth();
@@ -72,16 +56,12 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({
   const [candles, setCandles] = useState<OHLCData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentGranularity, setCurrentGranularity] =
-    useState<OandaGranularity>((propGranularity as OandaGranularity) || 'H1');
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(propAutoRefresh);
-  const [refreshInterval, setRefreshInterval] = useState(propRefreshInterval);
+  const currentGranularity = (propGranularity as OandaGranularity) || 'H1';
+  const autoRefreshEnabled = propAutoRefresh;
+  const refreshInterval = propRefreshInterval;
 
   // Ref for auto-refresh timer
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Available granularities for selector
-  const availableGranularities = useMemo(() => getAvailableGranularities(), []);
 
   // Fetch candles with exponential backoff retry logic
   const fetchCandles = useCallback(async () => {
@@ -168,36 +148,6 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({
     fetchCandles();
   }, [fetchCandles]);
 
-  // Handle granularity change
-  const handleGranularityChange = useCallback(
-    (event: SelectChangeEvent<string>) => {
-      const newGranularity = event.target.value as OandaGranularity;
-      setCurrentGranularity(newGranularity);
-
-      // Notify parent component
-      if (onGranularityChange) {
-        onGranularityChange(newGranularity);
-      }
-    },
-    [onGranularityChange]
-  );
-
-  // Handle auto-refresh toggle
-  const handleAutoRefreshToggle = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      setAutoRefreshEnabled(event.target.checked);
-    },
-    []
-  );
-
-  // Handle refresh interval change
-  const handleRefreshIntervalChange = useCallback(
-    (event: SelectChangeEvent<number>) => {
-      setRefreshInterval(event.target.value as number);
-    },
-    []
-  );
-
   // Set up auto-refresh timer
   useEffect(() => {
     // Clear existing timer
@@ -282,63 +232,7 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({
   );
 
   return (
-    <Box>
-      {/* Controls */}
-      <Box
-        sx={{
-          mb: 2,
-          display: 'flex',
-          gap: 2,
-          flexWrap: 'wrap',
-          alignItems: 'center',
-        }}
-      >
-        {/* Granularity selector */}
-        <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel>Granularity</InputLabel>
-          <Select
-            value={currentGranularity}
-            label="Granularity"
-            onChange={handleGranularityChange}
-          >
-            {availableGranularities.map((gran) => (
-              <MenuItem key={gran} value={gran}>
-                {gran}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        {/* Auto-refresh toggle */}
-        <FormControlLabel
-          control={
-            <Switch
-              checked={autoRefreshEnabled}
-              onChange={handleAutoRefreshToggle}
-            />
-          }
-          label="Auto-refresh"
-        />
-
-        {/* Refresh interval selector */}
-        {autoRefreshEnabled && (
-          <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Interval</InputLabel>
-            <Select
-              value={refreshInterval}
-              label="Interval"
-              onChange={handleRefreshIntervalChange}
-            >
-              {CHART_CONFIG.AUTO_REFRESH_INTERVALS.map((interval) => (
-                <MenuItem key={interval.value} value={interval.value}>
-                  {interval.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        )}
-      </Box>
-
+    <Box sx={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
       {/* Chart */}
       <FinancialChart
         data={candles}
@@ -347,11 +241,12 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({
         loading={loading}
         error={error}
         onLoadMore={handleLoadMore}
-        showResetButton={true}
+        showResetButton={false} // Reset button now in ChartControls
         enableMarkerToggle={false} // No markers for dashboard chart
         showGrid={true}
         showCrosshair={true}
         showOHLCTooltip={true}
+        onResetView={onResetView}
       />
     </Box>
   );

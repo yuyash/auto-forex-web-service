@@ -1,4 +1,11 @@
-import { Box, FormControl, InputLabel, MenuItem, Select } from '@mui/material';
+import {
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Button,
+} from '@mui/material';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import type { SelectChangeEvent } from '@mui/material';
 import type { Granularity } from '../../types/chart';
 
@@ -7,6 +14,8 @@ interface ChartControlsProps {
   granularity: Granularity;
   onInstrumentChange: (instrument: string) => void;
   onGranularityChange: (granularity: Granularity) => void;
+  onResetView?: () => void;
+  showResetButton?: boolean;
 }
 
 // Common currency pairs for forex trading
@@ -58,6 +67,8 @@ const ChartControls = ({
   granularity,
   onInstrumentChange,
   onGranularityChange,
+  onResetView,
+  showResetButton = false,
 }: ChartControlsProps) => {
   const handleInstrumentChange = (event: SelectChangeEvent<string>) => {
     onInstrumentChange(event.target.value);
@@ -68,17 +79,9 @@ const ChartControls = ({
   };
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: { xs: 'column', sm: 'row' },
-        gap: 2,
-        mb: 2,
-        alignItems: { xs: 'stretch', sm: 'center' },
-      }}
-    >
+    <>
       {/* Currency Pair Selector */}
-      <FormControl sx={{ minWidth: { xs: '100%', sm: 150 } }} size="small">
+      <FormControl sx={{ minWidth: 150, height: 40 }} size="small">
         <InputLabel id="instrument-label">Currency Pair</InputLabel>
         <Select
           labelId="instrument-label"
@@ -86,6 +89,7 @@ const ChartControls = ({
           value={instrument}
           label="Currency Pair"
           onChange={handleInstrumentChange}
+          sx={{ height: 40 }}
         >
           {CURRENCY_PAIRS.map((pair) => (
             <MenuItem key={pair} value={pair}>
@@ -96,7 +100,7 @@ const ChartControls = ({
       </FormControl>
 
       {/* Granularity Selector */}
-      <FormControl sx={{ minWidth: { xs: '100%', sm: 150 } }} size="small">
+      <FormControl sx={{ minWidth: 150, height: 40 }} size="small">
         <InputLabel id="granularity-label">Timeframe</InputLabel>
         <Select
           labelId="granularity-label"
@@ -104,6 +108,7 @@ const ChartControls = ({
           value={granularity}
           label="Timeframe"
           onChange={handleGranularityChange}
+          sx={{ height: 40 }}
         >
           {GRANULARITIES.map((gran) => (
             <MenuItem key={gran.value} value={gran.value}>
@@ -112,7 +117,20 @@ const ChartControls = ({
           ))}
         </Select>
       </FormControl>
-    </Box>
+
+      {/* Reset View Button */}
+      {showResetButton && onResetView && (
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={onResetView}
+          startIcon={<RestartAltIcon />}
+          sx={{ height: 40 }}
+        >
+          Reset View
+        </Button>
+      )}
+    </>
   );
 };
 
