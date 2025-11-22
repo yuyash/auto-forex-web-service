@@ -16,8 +16,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskResultsTab } from './TaskResultsTab';
-import { TaskStatus } from '../../../types/common';
+import { TaskStatus, TaskType, DataSource } from '../../../types/common';
 import type { BacktestTask } from '../../../types/backtestTask';
+import type { TaskExecution } from '../../../types/execution';
 import type { Trade } from '../../../types/execution';
 import { AuthProvider } from '../../../contexts/AuthContext';
 import { BrowserRouter } from 'react-router-dom';
@@ -83,35 +84,47 @@ const mockTrades: Trade[] = [
 
 const mockTask: BacktestTask = {
   id: 1,
+  user_id: 1,
+  config_id: 1,
+  config_name: 'Test Config',
+  strategy_type: 'TestStrategy',
   name: 'Test Backtest',
-  instrument: 'EUR_USD',
-  granularity: 'H1',
+  description: 'Test Description',
+  data_source: DataSource.POSTGRESQL,
   start_time: '2024-01-01T00:00:00Z',
   end_time: '2024-01-02T00:00:00Z',
+  initial_balance: '10000.00',
+  commission_per_trade: '0.00',
+  instrument: 'EUR_USD',
   status: TaskStatus.COMPLETED,
-  strategy_name: 'TestStrategy',
-  strategy_config: {},
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
-  user: 1,
 };
 
-const mockMetrics = {
-  total_pnl: 20,
-  total_trades: 2,
-  winning_trades: 2,
-  losing_trades: 0,
-  win_rate: 100,
-  trade_log: mockTrades,
-};
-
-const mockExecution = {
+const mockExecution: TaskExecution = {
   id: 1,
-  task: 1,
+  task_type: TaskType.BACKTEST,
+  task_id: 1,
+  execution_number: 1,
   status: TaskStatus.COMPLETED,
+  progress: 100,
   started_at: '2024-01-01T00:00:00Z',
   completed_at: '2024-01-02T00:00:00Z',
-  metrics: mockMetrics,
+  created_at: '2024-01-01T00:00:00Z',
+  metrics: {
+    id: 1,
+    execution_id: 1,
+    total_return: '1.002',
+    total_pnl: '20.00',
+    total_trades: 2,
+    winning_trades: 2,
+    losing_trades: 0,
+    win_rate: '1.00',
+    max_drawdown: '0.00',
+    equity_curve: [],
+    trade_log: mockTrades,
+    created_at: '2024-01-01T00:00:00Z',
+  },
 };
 
 const renderWithProviders = (component: React.ReactElement) => {
@@ -126,8 +139,10 @@ describe('TaskResultsTab Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useTaskExecutions).mockReturnValue({
-      data: { results: [mockExecution] },
+      data: { results: [mockExecution], count: 1, next: null, previous: null },
       isLoading: false,
+      error: null,
+      refetch: vi.fn(),
     });
 
     // Mock scrollIntoView
@@ -181,8 +196,10 @@ describe('TaskResultsTab Integration', () => {
 
   it('shows loading state', () => {
     vi.mocked(useTaskExecutions).mockReturnValue({
-      data: null,
+      data: undefined,
       isLoading: true,
+      error: null,
+      refetch: vi.fn(),
     });
 
     renderWithProviders(<TaskResultsTab task={mockTask} />);
@@ -219,8 +236,13 @@ describe('TaskResultsTab Integration', () => {
             error_message: 'Test error',
           },
         ],
+        count: 1,
+        next: null,
+        previous: null,
       },
       isLoading: false,
+      error: null,
+      refetch: vi.fn(),
     });
 
     renderWithProviders(<TaskResultsTab task={failedTask} />);
@@ -232,9 +254,14 @@ describe('TaskResultsTab Integration', () => {
   it('shows warning when no metrics available', () => {
     vi.mocked(useTaskExecutions).mockReturnValue({
       data: {
-        results: [{ ...mockExecution, metrics: null }],
+        results: [{ ...mockExecution, metrics: undefined }],
+        count: 1,
+        next: null,
+        previous: null,
       },
       isLoading: false,
+      error: null,
+      refetch: vi.fn(),
     });
 
     renderWithProviders(<TaskResultsTab task={mockTask} />);

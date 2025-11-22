@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import {
   Box,
@@ -15,6 +15,8 @@ import {
 import Grid from '@mui/material/Grid';
 import { MetricCard } from '../../tasks/display/MetricCard';
 import { EquityCurveChart } from '../../tasks/charts/EquityCurveChart';
+import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
+import { TradingTaskChartNew } from '../TradingTaskChartNew';
 import type { TradingTask } from '../../../types/tradingTask';
 import { TaskStatus, TaskType } from '../../../types/common';
 import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
@@ -34,6 +36,12 @@ type DateRange = 'all' | '1d' | '1w' | '1m' | '3m';
 export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
   const [dateRange, setDateRange] = useState<DateRange>('all');
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [selectedTradeIndex, setSelectedTradeIndex] = useState<number | null>(
+    null
+  );
+
+  // Ref for trade log table to scroll to selected trade
+  const tradeLogTableRef = useRef<HTMLDivElement>(null);
 
   // Fetch latest execution with full metrics
   const { data: executionsData, isLoading: executionsLoading } =
@@ -57,6 +65,19 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
 
   const handleDateRangeChange = (event: SelectChangeEvent<DateRange>) => {
     setDateRange(event.target.value as DateRange);
+  };
+
+  // Handle trade click from chart - scroll to trade in table
+  const handleTradeClick = (tradeIndex: number) => {
+    setSelectedTradeIndex(tradeIndex);
+
+    // Scroll to trade log table
+    if (tradeLogTableRef.current) {
+      tradeLogTableRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+    }
   };
 
   // Check if task has execution with metrics
@@ -252,6 +273,40 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
 
         <EquityCurveChart data={getFilteredEquityCurve()} height={400} />
       </Paper>
+
+      {/* OHLC Chart with Trade Markers */}
+      <Paper sx={{ p: 3, mt: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          Price Chart with Trade Markers
+        </Typography>
+
+        <TradingTaskChartNew
+          instrument={task.config_name.split(' - ')[0] || 'EUR_USD'} // Extract instrument from config name
+          startDate={latestExecution?.started_at || task.created_at}
+          stopDate={
+            task.status === TaskStatus.STOPPED ||
+            task.status === TaskStatus.COMPLETED
+              ? latestExecution?.completed_at
+              : undefined
+          }
+          trades={metrics?.trade_log || []}
+          strategyLayers={[]} // TODO: Add strategy layers if available
+          height={500}
+          timezone="UTC"
+          autoRefresh={task.status === TaskStatus.RUNNING}
+          refreshInterval={60000} // 60 seconds
+          onTradeClick={handleTradeClick}
+        />
+      </Paper>
+
+      {/* Trade Log Table */}
+      <Box ref={tradeLogTableRef} sx={{ mt: 3 }}>
+        <TradeLogTable
+          trades={metrics?.trade_log || []}
+          title="Trade Log"
+          selectedTradeIndex={selectedTradeIndex}
+        />
+      </Box>
 
       {/* Trade Statistics */}
       <Paper sx={{ p: 3, mt: 3 }}>

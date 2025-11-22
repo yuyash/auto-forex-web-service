@@ -389,7 +389,9 @@ const DashboardPage = () => {
               timezone={timezone}
               autoRefresh={autoRefreshEnabled}
               refreshInterval={refreshInterval * 1000}
-              onGranularityChange={handleGranularityChange}
+              onGranularityChange={(g) =>
+                handleGranularityChange(g as Granularity)
+              }
             />
           )}
         </Box>

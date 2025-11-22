@@ -68,7 +68,12 @@ vi.mock('../components/chart/ChartControls', () => ({
     granularity,
     onInstrumentChange,
     onGranularityChange,
-  }: unknown) => (
+  }: {
+    instrument: string;
+    granularity: string;
+    onInstrumentChange: (instrument: string) => void;
+    onGranularityChange: (granularity: string) => void;
+  }) => (
     <div data-testid="chart-controls">
       <select
         data-testid="instrument-selector"
@@ -114,7 +119,7 @@ vi.mock('../hooks/useChartPreferences', () => ({
 
 // Mock fetch
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch;
 
 describe('DashboardPage Integration', () => {
   const mockUser = {
