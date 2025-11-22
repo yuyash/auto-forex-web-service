@@ -141,7 +141,7 @@ const AppFooter = () => {
     <Box
       component="footer"
       sx={{
-        py: 1.5,
+        py: 0.75,
         px: 2,
         mt: 'auto',
         backgroundColor: (theme) =>
@@ -153,7 +153,7 @@ const AppFooter = () => {
     >
       <Stack
         direction="row"
-        spacing={3}
+        spacing={2}
         alignItems="center"
         justifyContent="space-between"
         flexWrap="wrap"

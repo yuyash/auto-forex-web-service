@@ -89,7 +89,7 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
       position="fixed"
       sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}
     >
-      <Toolbar>
+      <Toolbar sx={{ minHeight: 'auto !important', py: 0.5 }}>
         {/* Menu button for tablet only (not mobile) */}
         {isTablet && (
           <IconButton
@@ -118,7 +118,7 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
             src="/logo.svg"
             alt="Logo"
             style={{
-              height: '40px',
+              height: '20px',
               width: 'auto',
             }}
           />
