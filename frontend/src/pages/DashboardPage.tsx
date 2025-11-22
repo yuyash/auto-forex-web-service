@@ -27,38 +27,37 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useOandaAccounts } from '../hooks/useOandaAccounts';
 import { useChartPreferences } from '../hooks/useChartPreferences';
-import { OHLCChart } from '../components/chart';
+import { DashboardChartNew } from '../components/chart/DashboardChartNew';
 import { Breadcrumbs } from '../components/common';
 import ChartControls from '../components/chart/ChartControls';
 import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
 import RecentBacktestsWidget from '../components/dashboard/RecentBacktestsWidget';
 import QuickActionsWidget from '../components/dashboard/QuickActionsWidget';
-import type {
-  Granularity,
-  OHLCData,
-  Position,
-  Order,
-  StrategyEvent,
-} from '../types/chart';
+import type { Granularity, Position, StrategyEvent } from '../types/chart';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 
 const DashboardPage = () => {
   const { t } = useTranslation('dashboard');
-  const { token } = useAuth();
+  const { token, user } = useAuth();
 
   // Chart preferences with localStorage persistence
   const { preferences, updatePreference } = useChartPreferences();
   const { instrument, granularity, autoRefreshEnabled, refreshInterval } =
     preferences;
 
+  // Get timezone from user settings, default to UTC
+  const timezone = user?.timezone || 'UTC';
+
   // Data state
   const [positions, setPositions] = useState<Position[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
   const [strategyEvents, setStrategyEvents] = useState<StrategyEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Chart refresh trigger - increment to force chart to fetch new data
+  const [chartRefreshTrigger, setChartRefreshTrigger] = useState<number>(0);
 
   // OANDA account state - using shared hook with caching
   const {
@@ -91,113 +90,6 @@ const DashboardPage = () => {
     accountId: oandaAccountId,
   });
 
-  // Chart API reference for programmatic control
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const chartApiRef = useRef<any>(null);
-
-  // Chart refresh trigger - increment to force chart to fetch new data
-  const [chartRefreshTrigger, setChartRefreshTrigger] = useState<number>(0);
-
-  /**
-   * Simple fetchCandles function that makes API calls
-   * Returns OHLCData[] or throws error
-   *
-   * @param before - Unix timestamp to fetch older data (candles ending before this time)
-   * @param after - Unix timestamp to fetch newer data (candles starting after this time)
-   */
-  const fetchCandles = useCallback(
-    async (
-      inst: string,
-      gran: string,
-      count: number,
-      before?: number,
-      after?: number
-    ): Promise<OHLCData[]> => {
-      const params = {
-        instrument: inst,
-        granularity: gran,
-        count,
-        before,
-        after,
-      };
-
-      console.log('[DashboardPage] Fetching candles', params);
-
-      try {
-        let url = `/api/candles?instrument=${inst}&granularity=${gran}&count=${count}`;
-        if (before) {
-          url += `&before=${before}`;
-        }
-        if (after) {
-          url += `&after=${after}`;
-        }
-
-        console.log('[DashboardPage] API request URL:', url);
-
-        const response = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        console.log('[DashboardPage] API response status:', response.status);
-
-        // Check for rate limiting
-        if (
-          response.status === 429 ||
-          response.headers.get('X-Rate-Limited') === 'true'
-        ) {
-          console.warn('[DashboardPage] Rate limited, returning empty array');
-          return [];
-        }
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('[DashboardPage] API error response', {
-            status: response.status,
-            statusText: response.statusText,
-            body: errorText,
-          });
-          throw new Error(
-            `Failed to fetch candles: ${response.status} ${response.statusText}`
-          );
-        }
-
-        const data = await response.json();
-        const candles = data.candles || [];
-
-        console.log('[DashboardPage] Candles fetched successfully', {
-          count: candles.length,
-          firstCandle:
-            candles.length > 0
-              ? {
-                  time: candles[0].time,
-                  date: new Date(candles[0].time * 1000).toISOString(),
-                }
-              : null,
-          lastCandle:
-            candles.length > 0
-              ? {
-                  time: candles[candles.length - 1].time,
-                  date: new Date(
-                    candles[candles.length - 1].time * 1000
-                  ).toISOString(),
-                }
-              : null,
-        });
-
-        return candles;
-      } catch (err) {
-        console.error('[DashboardPage] Error fetching candles', {
-          error: err instanceof Error ? err.message : String(err),
-          params,
-        });
-        throw err;
-      }
-    },
-    [token]
-  );
-
   // Fetch positions
   const fetchPositions = useCallback(async () => {
     if (!token) return;
@@ -220,31 +112,6 @@ const DashboardPage = () => {
       }
     } catch (err) {
       console.error('Error fetching positions:', err);
-    }
-  }, [token]);
-
-  // Fetch orders
-  const fetchOrders = useCallback(async () => {
-    if (!token) return;
-    try {
-      const response = await fetch('/api/orders', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (
-        handleAuthErrorStatus(response.status, {
-          context: 'dashboard:orders',
-        })
-      ) {
-        return;
-      }
-      if (response.ok) {
-        const data = await response.json();
-        setOrders(data.orders || []);
-      }
-    } catch (err) {
-      console.error('Error fetching orders:', err);
     }
   }, [token]);
 
@@ -284,11 +151,7 @@ const DashboardPage = () => {
       setError(null);
 
       try {
-        await Promise.all([
-          fetchPositions(),
-          fetchOrders(),
-          fetchStrategyEvents(),
-        ]);
+        await Promise.all([fetchPositions(), fetchStrategyEvents()]);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to load dashboard data'
@@ -299,9 +162,10 @@ const DashboardPage = () => {
     };
 
     loadData();
-  }, [fetchPositions, fetchOrders, fetchStrategyEvents]);
+  }, [fetchPositions, fetchStrategyEvents]);
 
-  // Auto-refresh effect for positions, orders, events, and chart data
+  // Auto-refresh effect for positions, orders, and events
+  // Note: Chart handles its own auto-refresh internally
   useEffect(() => {
     // Clear existing timer
     if (refreshTimerRef.current) {
@@ -315,10 +179,7 @@ const DashboardPage = () => {
         // Fetch sequentially to avoid overwhelming the browser
         try {
           await fetchPositions();
-          await fetchOrders();
           await fetchStrategyEvents();
-          // Trigger chart to fetch new data
-          setChartRefreshTrigger((prev) => prev + 1);
         } catch (err) {
           console.error('Auto-refresh error:', err);
         }
@@ -335,7 +196,6 @@ const DashboardPage = () => {
     autoRefreshEnabled,
     refreshInterval,
     fetchPositions,
-    fetchOrders,
     fetchStrategyEvents,
   ]);
 
@@ -364,18 +224,13 @@ const DashboardPage = () => {
   // Handle manual refresh - reload data without remounting
   const handleManualRefresh = useCallback(() => {
     fetchPositions();
-    fetchOrders();
     fetchStrategyEvents();
-    // Trigger chart to fetch new data
+    // Trigger chart refresh by incrementing key
     setChartRefreshTrigger((prev) => prev + 1);
-  }, [fetchPositions, fetchOrders, fetchStrategyEvents]);
+  }, [fetchPositions, fetchStrategyEvents]);
 
-  // Filter positions and orders for current instrument
+  // Filter positions for current instrument
   const currentPositions = positions.filter((p) => p.instrument === instrument);
-  const currentOrders = orders.filter((o) => o.instrument === instrument);
-  const currentStrategyEvents = strategyEvents.filter(
-    (e) => !e.instrument || e.instrument === instrument
-  );
 
   return (
     <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
@@ -526,20 +381,15 @@ const DashboardPage = () => {
               </Typography>
             </Box>
           ) : (
-            <OHLCChart
+            <DashboardChartNew
+              key={chartRefreshTrigger}
               instrument={instrument}
               granularity={granularity}
-              fetchCandles={fetchCandles}
-              positions={currentPositions}
-              orders={currentOrders}
-              strategyEvents={currentStrategyEvents}
-              autoRefresh={hasOandaAccount && !!oandaAccountId}
-              refreshInterval={60000}
-              accountId={oandaAccountId}
-              refreshTrigger={chartRefreshTrigger}
-              onChartReady={(chartApi) => {
-                chartApiRef.current = chartApi;
-              }}
+              height={500}
+              timezone={timezone}
+              autoRefresh={autoRefreshEnabled}
+              refreshInterval={refreshInterval * 1000}
+              onGranularityChange={handleGranularityChange}
             />
           )}
         </Box>
