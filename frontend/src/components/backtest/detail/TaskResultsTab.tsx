@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   Box,
   Paper,
@@ -11,7 +12,7 @@ import Grid from '@mui/material/Grid';
 import { Download as DownloadIcon } from '@mui/icons-material';
 import { MetricsGrid } from '../../tasks/charts/MetricsGrid';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
-import { OHLCChart, type Trade as ChartTrade } from '../OHLCChart';
+import { BacktestChartNew } from '../BacktestChartNew';
 import type { BacktestTask } from '../../../types/backtestTask';
 import { TaskStatus, TaskType } from '../../../types/common';
 import type { Trade } from '../../../types/execution';
@@ -31,6 +32,32 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
 
   // Check if task has completed execution with metrics
   const hasMetrics = task.status === TaskStatus.COMPLETED && metrics;
+
+  // State for selected trade index (for chart-to-table interaction)
+  const [selectedTradeIndex, setSelectedTradeIndex] = React.useState<
+    number | null
+  >(null);
+
+  // Ref for trade log table to enable scrolling
+  const tradeLogRef = React.useRef<HTMLDivElement>(null);
+
+  // Handle trade click from chart
+  const handleTradeClick = React.useCallback((tradeIndex: number) => {
+    setSelectedTradeIndex(tradeIndex);
+
+    // Scroll to trade log table
+    if (tradeLogRef.current) {
+      tradeLogRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+    }
+
+    // Clear selection after 3 seconds
+    setTimeout(() => {
+      setSelectedTradeIndex(null);
+    }, 3000);
+  }, []);
 
   const handleExportCSV = () => {
     if (!metrics?.trade_log) return;
@@ -207,20 +234,14 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
             Price Chart with Trading Events
           </Typography>
 
-          <OHLCChart
+          <BacktestChartNew
             instrument={task.instrument}
             startDate={task.start_time}
             endDate={task.end_time}
-            trades={metrics.trade_log.map(
-              (trade: Trade): ChartTrade => ({
-                timestamp: trade.entry_time,
-                action: trade.direction === 'long' ? 'buy' : 'sell',
-                price: trade.entry_price,
-                units: Math.abs(trade.units),
-                pnl: trade.pnl,
-              })
-            )}
+            trades={metrics.trade_log}
+            timezone="UTC"
             height={500}
+            onTradeClick={handleTradeClick}
           />
         </Paper>
       )}
@@ -311,7 +332,7 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
       <Divider sx={{ my: 3 }} />
 
       {/* Trade Log */}
-      <Paper sx={{ p: 3 }}>
+      <Paper ref={tradeLogRef} sx={{ p: 3 }}>
         <Box
           sx={{
             display: 'flex',
@@ -332,7 +353,11 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
           </Button>
         </Box>
 
-        <TradeLogTable trades={metrics.trade_log} showExport={false} />
+        <TradeLogTable
+          trades={metrics.trade_log}
+          showExport={false}
+          selectedTradeIndex={selectedTradeIndex}
+        />
       </Paper>
     </Box>
   );

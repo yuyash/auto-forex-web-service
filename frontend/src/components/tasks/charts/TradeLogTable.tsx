@@ -39,6 +39,7 @@ interface TradeLogTableProps {
   showExport?: boolean;
   onExport?: () => void;
   defaultRowsPerPage?: number;
+  selectedTradeIndex?: number | null; // Index of selected trade for highlighting
 }
 
 type SortField = 'entry_time' | 'exit_time' | 'instrument' | 'pnl' | 'duration';
@@ -50,6 +51,7 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
   showExport = true,
   onExport,
   defaultRowsPerPage = 10,
+  selectedTradeIndex = null,
 }) => {
   const [page, setPage] = React.useState(0);
   const [rowsPerPage, setRowsPerPage] = React.useState(defaultRowsPerPage);
@@ -68,7 +70,7 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
     );
   }, [trades, searchTerm]);
 
-  // Sort trades - disable React Compiler for this memo
+  // Sort trades
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const sortedTrades = React.useMemo(() => {
     return [...filteredTrades].sort((a, b) => {
@@ -105,6 +107,23 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
       return 0;
     });
   }, [filteredTrades, sortField, sortOrder]);
+
+  // Scroll to selected trade when it changes
+  React.useEffect(() => {
+    if (selectedTradeIndex !== null) {
+      // Find the page containing the selected trade
+      const selectedTradeInSorted = sortedTrades.findIndex(
+        (_, idx) => idx === selectedTradeIndex
+      );
+
+      if (selectedTradeInSorted !== -1) {
+        const targetPage = Math.floor(selectedTradeInSorted / rowsPerPage);
+        if (targetPage !== page) {
+          setPage(targetPage);
+        }
+      }
+    }
+  }, [selectedTradeIndex, sortedTrades, rowsPerPage, page]);
 
   // Paginate trades
   const paginatedTrades = React.useMemo(() => {
@@ -323,40 +342,54 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
             </TableRow>
           </TableHead>
           <TableBody>
-            {paginatedTrades.map((trade, index) => (
-              <TableRow key={index} hover>
-                <TableCell>{formatDateTime(trade.entry_time)}</TableCell>
-                <TableCell>{formatDateTime(trade.exit_time)}</TableCell>
-                <TableCell>{trade.instrument}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={trade.direction.toUpperCase()}
-                    size="small"
-                    color={trade.direction === 'long' ? 'success' : 'error'}
-                    variant="outlined"
-                  />
-                </TableCell>
-                <TableCell align="right">
-                  {trade.units.toLocaleString()}
-                </TableCell>
-                <TableCell align="right">
-                  {trade.entry_price.toFixed(5)}
-                </TableCell>
-                <TableCell align="right">
-                  {trade.exit_price.toFixed(5)}
-                </TableCell>
-                <TableCell
-                  align="right"
+            {paginatedTrades.map((trade, paginatedIndex) => {
+              // Calculate the actual index in the original trades array
+              const actualIndex = sortedTrades.findIndex((t) => t === trade);
+              const isSelected = selectedTradeIndex === actualIndex;
+
+              return (
+                <TableRow
+                  key={paginatedIndex}
+                  hover
+                  selected={isSelected}
                   sx={{
-                    fontWeight: 600,
-                    color: trade.pnl >= 0 ? 'success.main' : 'error.main',
+                    backgroundColor: isSelected ? 'action.selected' : 'inherit',
+                    transition: 'background-color 0.3s ease',
                   }}
                 >
-                  {formatCurrency(trade.pnl)}
-                </TableCell>
-                <TableCell align="right">{formatDuration(trade)}</TableCell>
-              </TableRow>
-            ))}
+                  <TableCell>{formatDateTime(trade.entry_time)}</TableCell>
+                  <TableCell>{formatDateTime(trade.exit_time)}</TableCell>
+                  <TableCell>{trade.instrument}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={trade.direction.toUpperCase()}
+                      size="small"
+                      color={trade.direction === 'long' ? 'success' : 'error'}
+                      variant="outlined"
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    {trade.units.toLocaleString()}
+                  </TableCell>
+                  <TableCell align="right">
+                    {trade.entry_price.toFixed(5)}
+                  </TableCell>
+                  <TableCell align="right">
+                    {trade.exit_price.toFixed(5)}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      fontWeight: 600,
+                      color: trade.pnl >= 0 ? 'success.main' : 'error.main',
+                    }}
+                  >
+                    {formatCurrency(trade.pnl)}
+                  </TableCell>
+                  <TableCell align="right">{formatDuration(trade)}</TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>
