@@ -81,18 +81,20 @@ const ChartControls = ({
   return (
     <>
       {/* Currency Pair Selector */}
-      <FormControl sx={{ minWidth: 150, height: 40 }} size="small">
-        <InputLabel id="instrument-label">Currency Pair</InputLabel>
+      <FormControl sx={{ minWidth: 140, height: 32 }} size="small">
+        <InputLabel id="instrument-label" sx={{ fontSize: '0.85rem' }}>
+          Currency Pair
+        </InputLabel>
         <Select
           labelId="instrument-label"
           id="instrument-select"
           value={instrument}
           label="Currency Pair"
           onChange={handleInstrumentChange}
-          sx={{ height: 40 }}
+          sx={{ height: 32, fontSize: '0.85rem' }}
         >
           {CURRENCY_PAIRS.map((pair) => (
-            <MenuItem key={pair} value={pair}>
+            <MenuItem key={pair} value={pair} sx={{ fontSize: '0.85rem' }}>
               {pair.replace('_', '/')}
             </MenuItem>
           ))}
@@ -100,18 +102,24 @@ const ChartControls = ({
       </FormControl>
 
       {/* Granularity Selector */}
-      <FormControl sx={{ minWidth: 150, height: 40 }} size="small">
-        <InputLabel id="granularity-label">Timeframe</InputLabel>
+      <FormControl sx={{ minWidth: 120, height: 32 }} size="small">
+        <InputLabel id="granularity-label" sx={{ fontSize: '0.85rem' }}>
+          Timeframe
+        </InputLabel>
         <Select
           labelId="granularity-label"
           id="granularity-select"
           value={granularity}
           label="Timeframe"
           onChange={handleGranularityChange}
-          sx={{ height: 40 }}
+          sx={{ height: 32, fontSize: '0.85rem' }}
         >
           {GRANULARITIES.map((gran) => (
-            <MenuItem key={gran.value} value={gran.value}>
+            <MenuItem
+              key={gran.value}
+              value={gran.value}
+              sx={{ fontSize: '0.85rem' }}
+            >
               {gran.label}
             </MenuItem>
           ))}
@@ -124,8 +132,8 @@ const ChartControls = ({
           variant="outlined"
           size="small"
           onClick={onResetView}
-          startIcon={<RestartAltIcon />}
-          sx={{ height: 40 }}
+          startIcon={<RestartAltIcon sx={{ fontSize: '1rem' }} />}
+          sx={{ height: 32, fontSize: '0.85rem', px: 1.5 }}
         >
           Reset View
         </Button>

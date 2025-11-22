@@ -341,6 +341,7 @@ const DashboardPage = () => {
             alignItems: 'center',
             gap: 2,
             flexWrap: 'wrap',
+            mb: 3,
           }}
         >
           <ChartControls
