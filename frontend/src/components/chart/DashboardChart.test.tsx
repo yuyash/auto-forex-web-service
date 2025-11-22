@@ -14,7 +14,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { DashboardChartNew } from './DashboardChartNew';
+import { DashboardChart } from './DashboardChart';
 
 // Mock the AuthContext
 vi.mock('../../contexts/AuthContext', () => ({
@@ -63,7 +63,7 @@ vi.mock('./FinancialChart', () => ({
   },
 }));
 
-describe('DashboardChartNew', () => {
+describe('DashboardChart', () => {
   const defaultProps = {
     instrument: 'EUR_USD',
     granularity: 'H1',
@@ -117,7 +117,7 @@ describe('DashboardChartNew', () => {
 
   describe('Initial data fetching', () => {
     it('should fetch candles on mount', async () => {
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalledWith(
@@ -132,13 +132,13 @@ describe('DashboardChartNew', () => {
     });
 
     it('should display loading state initially', () => {
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       expect(screen.getByTestId('chart-loading')).toBeInTheDocument();
     });
 
     it('should display chart with data after loading', async () => {
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -148,7 +148,7 @@ describe('DashboardChartNew', () => {
     });
 
     it('should use DEFAULT_FETCH_COUNT for initial fetch', async () => {
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalledWith(
@@ -163,7 +163,7 @@ describe('DashboardChartNew', () => {
     it('should enable auto-refresh by default', async () => {
       vi.useFakeTimers();
 
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -185,7 +185,7 @@ describe('DashboardChartNew', () => {
     it('should respect custom refresh interval', async () => {
       vi.useFakeTimers();
 
-      render(<DashboardChartNew {...defaultProps} refreshInterval={30000} />);
+      render(<DashboardChart {...defaultProps} refreshInterval={30000} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -206,7 +206,7 @@ describe('DashboardChartNew', () => {
     it('should disable auto-refresh when prop is false', async () => {
       vi.useFakeTimers();
 
-      render(<DashboardChartNew {...defaultProps} autoRefresh={false} />);
+      render(<DashboardChart {...defaultProps} autoRefresh={false} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -227,7 +227,7 @@ describe('DashboardChartNew', () => {
       vi.useFakeTimers();
       const user = userEvent.setup({ delay: null });
 
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -261,7 +261,7 @@ describe('DashboardChartNew', () => {
       vi.useFakeTimers();
       const user = userEvent.setup({ delay: null });
 
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -289,7 +289,7 @@ describe('DashboardChartNew', () => {
   describe('Granularity changes', () => {
     it.skip('should refetch data when granularity changes', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -315,7 +315,7 @@ describe('DashboardChartNew', () => {
       const user = userEvent.setup({ delay: null });
       const onGranularityChange = vi.fn();
       render(
-        <DashboardChartNew
+        <DashboardChart
           {...defaultProps}
           onGranularityChange={onGranularityChange}
         />
@@ -338,7 +338,7 @@ describe('DashboardChartNew', () => {
   describe.skip('Scroll-based data loading', () => {
     it('should load older data when scrolling left', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(
         () => {
@@ -385,7 +385,7 @@ describe('DashboardChartNew', () => {
 
     it('should load newer data when scrolling right', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(
         () => {
@@ -432,7 +432,7 @@ describe('DashboardChartNew', () => {
 
     it('should use SCROLL_LOAD_COUNT for scroll loading', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(
         () => {
@@ -461,13 +461,13 @@ describe('DashboardChartNew', () => {
 
   describe('Loading states', () => {
     it('should show loading indicator during initial fetch', () => {
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       expect(screen.getByTestId('chart-loading')).toBeInTheDocument();
     });
 
     it.skip('should hide loading indicator after data loads', async () => {
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(
         () => {
@@ -482,7 +482,7 @@ describe('DashboardChartNew', () => {
     it('should display error message on fetch failure', async () => {
       fetchMock.mockRejectedValueOnce(new Error('Network error'));
 
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(
         () => {
@@ -504,7 +504,7 @@ describe('DashboardChartNew', () => {
         statusText: 'Too Many Requests',
       });
 
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(
         () => {
@@ -541,7 +541,7 @@ describe('DashboardChartNew', () => {
           }),
         });
 
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       // Wait for retries to complete
       await waitFor(
@@ -563,7 +563,7 @@ describe('DashboardChartNew', () => {
         statusText: 'Not Found',
       });
 
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(
         () => {
@@ -579,7 +579,7 @@ describe('DashboardChartNew', () => {
 
   describe.skip('No markers displayed', () => {
     it('should not display any markers', async () => {
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(
         () => {
@@ -592,7 +592,7 @@ describe('DashboardChartNew', () => {
     });
 
     it('should not pass markers prop to FinancialChart', async () => {
-      render(<DashboardChartNew {...defaultProps} />);
+      render(<DashboardChart {...defaultProps} />);
 
       await waitFor(
         () => {
@@ -628,7 +628,7 @@ describe('DashboardChartNew', () => {
       const user = userEvent.setup({ delay: null });
 
       // Test scrolling left (older data)
-      const { unmount } = render(<DashboardChartNew {...defaultProps} />);
+      const { unmount } = render(<DashboardChart {...defaultProps} />);
 
       await waitFor(
         () => {

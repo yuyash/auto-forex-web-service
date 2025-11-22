@@ -1,7 +1,7 @@
 /**
  * DashboardPage Integration Tests
  *
- * Tests the integration of DashboardChartNew component with the Dashboard page.
+ * Tests the integration of DashboardChart component with the Dashboard page.
  * Verifies:
  * - Chart renders correctly
  * - Granularity selector works
@@ -17,8 +17,8 @@ import DashboardPage from './DashboardPage';
 import { AuthProvider } from '../contexts/AuthContext';
 
 // Mock the chart component
-vi.mock('../components/chart/DashboardChartNew', () => ({
-  DashboardChartNew: vi.fn(
+vi.mock('../components/chart/DashboardChart', () => ({
+  DashboardChart: vi.fn(
     ({
       instrument,
       granularity,

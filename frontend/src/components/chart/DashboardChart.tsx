@@ -55,7 +55,7 @@ export interface DashboardChartProps {
 /**
  * DashboardChart Component
  */
-export const DashboardChartNew: React.FC<DashboardChartProps> = ({
+export const DashboardChart: React.FC<DashboardChartProps> = ({
   instrument,
   granularity: propGranularity,
   height = CHART_CONFIG.DEFAULT_HEIGHT,
@@ -357,4 +357,4 @@ export const DashboardChartNew: React.FC<DashboardChartProps> = ({
   );
 };
 
-export default DashboardChartNew;
+export default DashboardChart;

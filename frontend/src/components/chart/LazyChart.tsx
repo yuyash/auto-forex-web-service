@@ -3,7 +3,9 @@ import { lazy, Suspense, type ComponentType } from 'react';
 import { Box, Skeleton } from '@mui/material';
 
 // Lazy load chart components
-const OHLCChart = lazy(() => import('./OHLCChart'));
+const FinancialChart = lazy(() =>
+  import('./FinancialChart').then((m) => ({ default: m.FinancialChart }))
+);
 
 // Chart loading fallback
 function ChartLoadingFallback() {
@@ -51,8 +53,8 @@ export function LazyChartWrapper({
 
 // Pre-configured lazy chart components
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const LazyOHLCChart = (props: any) => (
-  <LazyChartWrapper component={OHLCChart} {...props} />
+export const LazyFinancialChart = (props: any) => (
+  <LazyChartWrapper component={FinancialChart} {...props} />
 );
 
 export default LazyChartWrapper;

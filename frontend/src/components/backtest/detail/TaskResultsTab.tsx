@@ -12,7 +12,7 @@ import Grid from '@mui/material/Grid';
 import { Download as DownloadIcon } from '@mui/icons-material';
 import { MetricsGrid } from '../../tasks/charts/MetricsGrid';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
-import { BacktestChartNew } from '../BacktestChartNew';
+import { BacktestChart } from '../BacktestChart';
 import type { BacktestTask } from '../../../types/backtestTask';
 import { TaskStatus, TaskType } from '../../../types/common';
 import type { Trade } from '../../../types/execution';
@@ -234,7 +234,7 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
             Price Chart with Trading Events
           </Typography>
 
-          <BacktestChartNew
+          <BacktestChart
             instrument={task.instrument}
             startDate={task.start_time}
             endDate={task.end_time}

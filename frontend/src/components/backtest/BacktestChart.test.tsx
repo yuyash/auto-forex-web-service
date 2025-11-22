@@ -16,7 +16,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BacktestChartNew } from './BacktestChartNew';
+import { BacktestChart } from './BacktestChart';
 import type { Trade } from '../../types/execution';
 import type { StrategyLayer } from '../../utils/chartMarkers';
 
@@ -78,7 +78,7 @@ vi.mock('../chart/FinancialChart', () => ({
   },
 }));
 
-describe('BacktestChartNew', () => {
+describe('BacktestChart', () => {
   const mockTrades: Trade[] = [
     {
       entry_time: '2024-01-15T10:00:00Z',
@@ -160,7 +160,7 @@ describe('BacktestChartNew', () => {
 
   describe('Initial data fetching', () => {
     it('should fetch candles on mount', async () => {
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalled();
@@ -173,12 +173,12 @@ describe('BacktestChartNew', () => {
     });
 
     it('should display loading state initially', () => {
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
       expect(screen.getByTestId('chart-loading')).toBeInTheDocument();
     });
 
     it('should display chart after data loads', async () => {
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -188,7 +188,7 @@ describe('BacktestChartNew', () => {
     });
 
     it('should calculate buffered range correctly', async () => {
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalled();
@@ -203,7 +203,7 @@ describe('BacktestChartNew', () => {
 
   describe('Markers and overlays', () => {
     it('should render trade markers', async () => {
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -214,7 +214,7 @@ describe('BacktestChartNew', () => {
     });
 
     it('should render start and end vertical lines', async () => {
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -226,10 +226,7 @@ describe('BacktestChartNew', () => {
 
     it('should render strategy layers as horizontal lines', async () => {
       render(
-        <BacktestChartNew
-          {...defaultProps}
-          strategyLayers={mockStrategyLayers}
-        />
+        <BacktestChart {...defaultProps} strategyLayers={mockStrategyLayers} />
       );
 
       await waitFor(() => {
@@ -247,7 +244,7 @@ describe('BacktestChartNew', () => {
       };
 
       render(
-        <BacktestChartNew {...defaultProps} initialPosition={initialPosition} />
+        <BacktestChart {...defaultProps} initialPosition={initialPosition} />
       );
 
       await waitFor(() => {
@@ -261,7 +258,7 @@ describe('BacktestChartNew', () => {
 
   describe('Granularity changes', () => {
     it('should display granularity selector', async () => {
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByRole('combobox')).toBeInTheDocument();
@@ -270,7 +267,7 @@ describe('BacktestChartNew', () => {
 
     it('should refetch data when granularity changes', async () => {
       const user = userEvent.setup();
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -302,7 +299,7 @@ describe('BacktestChartNew', () => {
       const user = userEvent.setup();
 
       render(
-        <BacktestChartNew
+        <BacktestChart
           {...defaultProps}
           onGranularityChange={onGranularityChange}
         />
@@ -336,7 +333,7 @@ describe('BacktestChartNew', () => {
     it('should display error when fetch fails', async () => {
       fetchMock.mockRejectedValueOnce(new Error('Network error'));
 
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('chart-error')).toBeInTheDocument();
@@ -356,7 +353,7 @@ describe('BacktestChartNew', () => {
         headers: new Headers({ 'X-Rate-Limited': 'true' }),
       });
 
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
 
       // Wait for retries to complete (1s + 2s + 4s = 7s total)
       await waitFor(
@@ -398,7 +395,7 @@ describe('BacktestChartNew', () => {
           }),
         });
 
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
 
       await waitFor(
         () => {
@@ -419,9 +416,7 @@ describe('BacktestChartNew', () => {
       const onTradeClick = vi.fn();
       const user = userEvent.setup();
 
-      render(
-        <BacktestChartNew {...defaultProps} onTradeClick={onTradeClick} />
-      );
+      render(<BacktestChart {...defaultProps} onTradeClick={onTradeClick} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -437,7 +432,7 @@ describe('BacktestChartNew', () => {
     it('should not error when onTradeClick is not provided', async () => {
       const user = userEvent.setup();
 
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -454,12 +449,12 @@ describe('BacktestChartNew', () => {
 
   describe('Loading states', () => {
     it('should show loading indicator while fetching', () => {
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
       expect(screen.getByTestId('chart-loading')).toBeInTheDocument();
     });
 
     it('should hide loading indicator after data loads', async () => {
-      render(<BacktestChartNew {...defaultProps} />);
+      render(<BacktestChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.queryByTestId('chart-loading')).not.toBeInTheDocument();

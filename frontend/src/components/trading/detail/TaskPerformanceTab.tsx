@@ -16,7 +16,7 @@ import Grid from '@mui/material/Grid';
 import { MetricCard } from '../../tasks/display/MetricCard';
 import { EquityCurveChart } from '../../tasks/charts/EquityCurveChart';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
-import { TradingTaskChartNew } from '../TradingTaskChartNew';
+import { TradingTaskChart } from '../TradingTaskChart';
 import type { TradingTask } from '../../../types/tradingTask';
 import { TaskStatus, TaskType } from '../../../types/common';
 import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
@@ -280,7 +280,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           Price Chart with Trade Markers
         </Typography>
 
-        <TradingTaskChartNew
+        <TradingTaskChart
           instrument={task.config_name.split(' - ')[0] || 'EUR_USD'} // Extract instrument from config name
           startDate={latestExecution?.started_at || task.created_at}
           stopDate={

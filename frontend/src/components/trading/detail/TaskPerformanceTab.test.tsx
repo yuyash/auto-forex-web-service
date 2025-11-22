@@ -1,7 +1,7 @@
 /**
  * TaskPerformanceTab Integration Tests
  *
- * Tests the integration of TradingTaskChartNew with TaskPerformanceTab:
+ * Tests the integration of TradingTaskChart with TaskPerformanceTab:
  * - Chart renders with task data
  * - Start vertical line appears
  * - Stop vertical line appears (when stopped)
@@ -23,8 +23,8 @@ import type { TaskExecution } from '../../../types/execution';
 
 // Mock dependencies
 vi.mock('../../../hooks/useTaskExecutions');
-vi.mock('../TradingTaskChartNew', () => ({
-  TradingTaskChartNew: vi.fn(({ onTradeClick }) => (
+vi.mock('../TradingTaskChart', () => ({
+  TradingTaskChart: vi.fn(({ onTradeClick }) => (
     <div data-testid="trading-task-chart">
       <button
         data-testid="trade-marker-0"
@@ -61,7 +61,7 @@ vi.mock('../../tasks/display/MetricCard', () => ({
 
 // Import mocked modules
 import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
-import { TradingTaskChartNew } from '../TradingTaskChartNew';
+import { TradingTaskChart } from '../TradingTaskChart';
 
 describe('TaskPerformanceTab Integration Tests', () => {
   // Mock scrollIntoView
@@ -162,8 +162,8 @@ describe('TaskPerformanceTab Integration Tests', () => {
       expect(screen.getByTestId('trading-task-chart')).toBeInTheDocument();
     });
 
-    // Verify TradingTaskChartNew was called with correct props
-    const chartCall = vi.mocked(TradingTaskChartNew).mock.calls[0][0];
+    // Verify TradingTaskChart was called with correct props
+    const chartCall = vi.mocked(TradingTaskChart).mock.calls[0][0];
     expect(chartCall).toMatchObject({
       instrument: 'EUR_USD',
       startDate: mockExecution.started_at,
@@ -183,7 +183,7 @@ describe('TaskPerformanceTab Integration Tests', () => {
     });
 
     // Verify chart was called with startDate
-    const chartCall = vi.mocked(TradingTaskChartNew).mock.calls[0][0];
+    const chartCall = vi.mocked(TradingTaskChart).mock.calls[0][0];
     expect(chartCall.startDate).toBe(mockExecution.started_at);
   });
 
@@ -218,7 +218,7 @@ describe('TaskPerformanceTab Integration Tests', () => {
     });
 
     // Verify chart was called with stopDate
-    const chartCall = vi.mocked(TradingTaskChartNew).mock.calls[0][0];
+    const chartCall = vi.mocked(TradingTaskChart).mock.calls[0][0];
     expect(chartCall.stopDate).toBe(stoppedExecution.completed_at);
     expect(chartCall.autoRefresh).toBe(false); // Stopped task has auto-refresh disabled
   });
@@ -231,7 +231,7 @@ describe('TaskPerformanceTab Integration Tests', () => {
     });
 
     // Verify chart was called with trades
-    const chartCall = vi.mocked(TradingTaskChartNew).mock.calls[0][0];
+    const chartCall = vi.mocked(TradingTaskChart).mock.calls[0][0];
     expect(chartCall.trades).toEqual(mockExecution.metrics?.trade_log);
   });
 
@@ -243,7 +243,7 @@ describe('TaskPerformanceTab Integration Tests', () => {
     });
 
     // Verify auto-refresh is enabled
-    const chartCall = vi.mocked(TradingTaskChartNew).mock.calls[0][0];
+    const chartCall = vi.mocked(TradingTaskChart).mock.calls[0][0];
     expect(chartCall.autoRefresh).toBe(true);
     expect(chartCall.refreshInterval).toBe(60000);
   });
@@ -261,7 +261,7 @@ describe('TaskPerformanceTab Integration Tests', () => {
     });
 
     // Verify auto-refresh is disabled
-    const chartCall = vi.mocked(TradingTaskChartNew).mock.calls[0][0];
+    const chartCall = vi.mocked(TradingTaskChart).mock.calls[0][0];
     expect(chartCall.autoRefresh).toBe(false);
   });
 
@@ -309,7 +309,7 @@ describe('TaskPerformanceTab Integration Tests', () => {
     });
 
     // Verify timezone is passed
-    const chartCall = vi.mocked(TradingTaskChartNew).mock.calls[0][0];
+    const chartCall = vi.mocked(TradingTaskChart).mock.calls[0][0];
     expect(chartCall.timezone).toBe('UTC');
   });
 

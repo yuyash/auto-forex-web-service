@@ -30,11 +30,11 @@ A full-stack web application for managing algorithmic forex trading operations a
 
 ### Frontend
 
-- React 18
+- React 19
 - TypeScript
 - Vite
 - Material-UI
-- Lightweight Charts
+- react-financial-charts (with d3 integration)
 - react-i18next
 
 ### Infrastructure
@@ -324,5 +324,9 @@ For issues, questions, or contributions, please open an issue on GitHub.
 ## Acknowledgments
 
 - OANDA for providing the v20 API
-- TradingView for Lightweight Charts library
+- react-financial-charts for the charting library
 - Django and React communities
+
+## Chart Library Migration
+
+The application has been migrated from TradingView's lightweight-charts to react-financial-charts for improved React integration and better overlay positioning. See [frontend/CHARTS.md](frontend/CHARTS.md) for detailed chart documentation.

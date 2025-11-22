@@ -1,23 +1,30 @@
 /**
- * BacktestChart Component
+ * TradingTaskChart Component
  *
- * Specialized chart for backtest results with start/end markers and trade visualization.
+ * Specialized chart for live trading tasks with real-time updates.
  * Displays OHLC candlestick chart with:
- * - Start and end vertical lines marking backtest boundaries
+ * - Start vertical line marking task start
+ * - Stop vertical line (if task is stopped)
  * - Trade markers (buy/sell) at execution points
  * - Strategy layer horizontal lines (if provided)
- * - Initial position marker (if provided)
  * - Granularity controls
+ * - Auto-refresh controls
  * - Marker visibility toggles
  *
  * Features:
- * - Automatic granularity calculation based on backtest duration
- * - Buffered range (2-3 candles before/after backtest period)
- * - No auto-refresh (backtest data is historical and immutable)
+ * - Auto-refresh enabled by default (60s interval, configurable)
+ * - Scrolls to latest data when new candles arrive
+ * - Updates markers when new trades occur
  * - Trade click handler for chart-to-table interaction
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from 'react';
 import {
   Box,
   FormControl,
@@ -25,6 +32,8 @@ import {
   Select,
   MenuItem,
   Typography,
+  Switch,
+  FormControlLabel,
   type SelectChangeEvent,
 } from '@mui/material';
 import { FinancialChart } from '../chart/FinancialChart';
@@ -42,10 +51,7 @@ import {
   createVerticalLine,
   createHorizontalLine,
 } from '../../utils/chartMarkers';
-import {
-  transformCandles,
-  calculateBufferedRange,
-} from '../../utils/chartDataTransform';
+import { transformCandles } from '../../utils/chartDataTransform';
 import {
   calculateGranularity,
   getAvailableGranularities,
@@ -56,43 +62,38 @@ import { CHART_CONFIG } from '../../config/chartConfig';
 import { useAuth } from '../../contexts/AuthContext';
 
 /**
- * Initial Position interface
+ * TradingTaskChart Props
  */
-export interface InitialPosition {
-  capital: number;
-  timestamp: string;
-}
-
-/**
- * BacktestChart Props
- */
-export interface BacktestChartProps {
+export interface TradingTaskChartProps {
   instrument: string;
   startDate: string; // ISO 8601
-  endDate: string; // ISO 8601
+  stopDate?: string; // ISO 8601, optional (null if still running)
   trades: Trade[];
-  initialPosition?: InitialPosition;
   strategyLayers?: StrategyLayer[];
   granularity?: string;
   height?: number;
   timezone?: string; // IANA timezone from global settings
+  autoRefresh?: boolean;
+  refreshInterval?: number;
   onGranularityChange?: (granularity: string) => void;
   onTradeClick?: (tradeIndex: number) => void; // Called when user clicks a trade marker
 }
 
 /**
- * BacktestChart Component
+ * TradingTaskChart Component
  */
-export const BacktestChartNew: React.FC<BacktestChartProps> = ({
+export const TradingTaskChart: React.FC<TradingTaskChartProps> = ({
   instrument,
   startDate,
-  endDate,
+  stopDate,
   trades,
-  initialPosition,
   strategyLayers = [],
   granularity: propGranularity,
   height = CHART_CONFIG.DEFAULT_HEIGHT,
   timezone = 'UTC',
+  autoRefresh: propAutoRefresh = CHART_CONFIG.DEFAULT_AUTO_REFRESH_ENABLED,
+  refreshInterval:
+    propRefreshInterval = CHART_CONFIG.DEFAULT_AUTO_REFRESH_INTERVAL,
   onGranularityChange,
   onTradeClick,
 }) => {
@@ -105,18 +106,23 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [currentGranularity, setCurrentGranularity] =
     useState<OandaGranularity>((propGranularity as OandaGranularity) || 'H1');
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(propAutoRefresh);
+  const [refreshInterval, setRefreshInterval] = useState(propRefreshInterval);
 
-  // Calculate initial granularity based on backtest duration
+  // Ref for auto-refresh timer
+  const refreshTimerRef = useRef<number | null>(null);
+
+  // Calculate initial granularity based on task duration
   const calculatedGranularity = useMemo(() => {
     try {
       const start = new Date(startDate);
-      const end = new Date(endDate);
+      const end = stopDate ? new Date(stopDate) : new Date();
       return calculateGranularity(start, end);
     } catch (err) {
       console.error('Error calculating granularity:', err);
       return 'H1' as OandaGranularity;
     }
-  }, [startDate, endDate]);
+  }, [startDate, stopDate]);
 
   // Use prop granularity if provided, otherwise use calculated
   useEffect(() => {
@@ -132,21 +138,10 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
 
   // Parse dates
   const parsedStartDate = useMemo(() => new Date(startDate), [startDate]);
-  const parsedEndDate = useMemo(() => new Date(endDate), [endDate]);
-
-  // Calculate buffered range
-  const bufferedRange = useMemo(() => {
-    try {
-      return calculateBufferedRange(
-        parsedStartDate,
-        parsedEndDate,
-        currentGranularity
-      );
-    } catch (err) {
-      console.error('Error calculating buffered range:', err);
-      return { from: parsedStartDate, to: parsedEndDate };
-    }
-  }, [parsedStartDate, parsedEndDate, currentGranularity]);
+  const parsedStopDate = useMemo(
+    () => (stopDate ? new Date(stopDate) : null),
+    [stopDate]
+  );
 
   // Fetch candles with exponential backoff retry logic
   const fetchCandles = useCallback(async () => {
@@ -161,11 +156,11 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
 
     const attemptFetch = async (attempt: number): Promise<void> => {
       try {
-        // Build API URL with buffered range
-        const fromTimestamp = Math.floor(bufferedRange.from.getTime() / 1000);
-        const toTimestamp = Math.floor(bufferedRange.to.getTime() / 1000);
+        // Build API URL - fetch from start time to current time
+        const fromTimestamp = Math.floor(parsedStartDate.getTime() / 1000);
+        const toTimestamp = Math.floor(Date.now() / 1000);
 
-        const url = `/api/candles?instrument=${instrument}&granularity=${currentGranularity}&from=${fromTimestamp}&to=${toTimestamp}`;
+        const url = `/api/candles?instrument=${instrument}&granularity=${currentGranularity}&from=${fromTimestamp}&to=${toTimestamp}&count=${CHART_CONFIG.DEFAULT_FETCH_COUNT}`;
 
         const response = await fetch(url, {
           headers: {
@@ -183,12 +178,14 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
 
         // Check for other errors
         if (!response.ok) {
-          // Don't retry on client errors (400, 401, 403, 404)
+          const error = new Error(
+            `HTTP ${response.status}: ${response.statusText}`
+          );
+          // Mark client errors as non-retryable
           if (response.status >= 400 && response.status < 500) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            (error as Error & { retryable?: boolean }).retryable = false;
           }
-          // Retry on server errors (500+)
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          throw error;
         }
 
         const data = await response.json();
@@ -201,10 +198,16 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
         const errorMessage =
           err instanceof Error ? err.message : 'Failed to fetch candles';
 
+        // Check if error is explicitly marked as non-retryable
+        const isNonRetryable =
+          err instanceof Error &&
+          (err as Error & { retryable?: boolean }).retryable === false;
+
         // Check if we should retry
         const isRateLimited = errorMessage.includes('Rate limited');
         const isServerError = errorMessage.includes('HTTP 5');
         const shouldRetry =
+          !isNonRetryable &&
           (isServerError || isRateLimited) &&
           attempt < CHART_CONFIG.MAX_RETRY_ATTEMPTS;
 
@@ -230,12 +233,36 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [token, instrument, bufferedRange, currentGranularity]);
+  }, [token, instrument, parsedStartDate, currentGranularity]);
 
   // Fetch candles on mount and when dependencies change
   useEffect(() => {
     fetchCandles();
   }, [fetchCandles]);
+
+  // Set up auto-refresh timer
+  useEffect(() => {
+    // Clear existing timer
+    if (refreshTimerRef.current) {
+      clearInterval(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+
+    // Set up new timer if auto-refresh is enabled
+    if (autoRefreshEnabled) {
+      refreshTimerRef.current = setInterval(() => {
+        fetchCandles();
+      }, refreshInterval);
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (refreshTimerRef.current) {
+        clearInterval(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [autoRefreshEnabled, refreshInterval, fetchCandles]);
 
   // Handle granularity change
   const handleGranularityChange = useCallback(
@@ -249,6 +276,22 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
       }
     },
     [onGranularityChange]
+  );
+
+  // Handle auto-refresh toggle
+  const handleAutoRefreshToggle = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      setAutoRefreshEnabled(event.target.checked);
+    },
+    []
+  );
+
+  // Handle refresh interval change
+  const handleRefreshIntervalChange = useCallback(
+    (event: SelectChangeEvent<number>) => {
+      setRefreshInterval(event.target.value as number);
+    },
+    []
   );
 
   // Convert trades to chart markers with cyan/orange colors
@@ -275,22 +318,27 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
       return [];
     }
 
-    // Find candles closest to start and end dates
+    // Find candle closest to start date
     const startCandle =
       candles.find((c) => c.date >= parsedStartDate) || candles[0];
-    const endCandle =
-      candles.reverse().find((c) => c.date <= parsedEndDate) ||
-      candles[candles.length - 1];
+
+    // Find candle closest to stop date (if stopped)
+    let stopCandle = null;
+    if (parsedStopDate) {
+      stopCandle =
+        candles.reverse().find((c) => c.date <= parsedStopDate) ||
+        candles[candles.length - 1];
+    }
 
     return createStartEndMarkers(
       parsedStartDate,
-      parsedEndDate,
+      parsedStopDate,
       startCandle.high,
-      endCandle.high
+      stopCandle?.high
     );
-  }, [parsedStartDate, parsedEndDate, candles]);
+  }, [parsedStartDate, parsedStopDate, candles]);
 
-  // Create vertical lines for start and end
+  // Create vertical lines for start and stop
   const verticalLines = useMemo<VerticalLine[]>(() => {
     const lines: VerticalLine[] = [];
 
@@ -305,19 +353,21 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
       )
     );
 
-    // End line
-    lines.push(
-      createVerticalLine(
-        parsedEndDate,
-        'END',
-        '#757575', // Gray
-        2,
-        '5,5' // Dashed
-      )
-    );
+    // Stop line (if task is stopped)
+    if (parsedStopDate) {
+      lines.push(
+        createVerticalLine(
+          parsedStopDate,
+          'STOP',
+          '#757575', // Gray
+          2,
+          '5,5' // Dashed
+        )
+      );
+    }
 
     return lines;
-  }, [parsedStartDate, parsedEndDate]);
+  }, [parsedStartDate, parsedStopDate]);
 
   // Create horizontal lines for strategy layers
   const horizontalLines = useMemo<HorizontalLine[]>(() => {
@@ -336,36 +386,10 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
     );
   }, [strategyLayers]);
 
-  // Create initial position marker if provided
-  const initialPositionMarker = useMemo<ChartMarker | null>(() => {
-    if (!initialPosition || !candles || candles.length === 0) {
-      return null;
-    }
-
-    const positionDate = new Date(initialPosition.timestamp);
-    const nearestCandle =
-      candles.find((c) => c.date >= positionDate) || candles[0];
-
-    return {
-      id: 'initial-position',
-      date: positionDate,
-      price: nearestCandle.high,
-      type: 'initial_entry',
-      color: '#2196f3', // Blue
-      shape: 'doubleCircle',
-      label: 'INITIAL',
-      tooltip: `Initial Capital: $${initialPosition.capital.toFixed(2)}`,
-    };
-  }, [initialPosition, candles]);
-
   // Combine all markers
   const allMarkers = useMemo(() => {
-    const markers = [...tradeMarkers, ...startEndMarkers];
-    if (initialPositionMarker) {
-      markers.push(initialPositionMarker);
-    }
-    return markers;
-  }, [tradeMarkers, startEndMarkers, initialPositionMarker]);
+    return [...tradeMarkers, ...startEndMarkers];
+  }, [tradeMarkers, startEndMarkers]);
 
   // Handle marker click - map marker clicks to trade indices
   const handleMarkerClick = useCallback(
@@ -388,8 +412,17 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
 
   return (
     <Box>
-      {/* Granularity Selector */}
-      <Box sx={{ mb: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
+      {/* Controls */}
+      <Box
+        sx={{
+          mb: 2,
+          display: 'flex',
+          gap: 2,
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}
+      >
+        {/* Granularity Selector */}
         <FormControl size="small" sx={{ minWidth: 120 }}>
           <InputLabel>Granularity</InputLabel>
           <Select
@@ -404,9 +437,42 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
             ))}
           </Select>
         </FormControl>
+
+        {/* Auto-refresh Toggle */}
+        <FormControlLabel
+          control={
+            <Switch
+              checked={autoRefreshEnabled}
+              onChange={handleAutoRefreshToggle}
+              size="small"
+            />
+          }
+          label="Auto-refresh"
+        />
+
+        {/* Refresh Interval Selector */}
+        {autoRefreshEnabled && (
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>Interval</InputLabel>
+            <Select
+              value={refreshInterval}
+              label="Interval"
+              onChange={handleRefreshIntervalChange}
+            >
+              {CHART_CONFIG.AUTO_REFRESH_INTERVALS.map((interval) => (
+                <MenuItem key={interval.value} value={interval.value}>
+                  {interval.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+
+        {/* Task Info */}
         <Typography variant="body2" color="text.secondary">
-          Backtest: {parsedStartDate.toLocaleDateString()} -{' '}
-          {parsedEndDate.toLocaleDateString()}
+          Started: {parsedStartDate.toLocaleDateString()}
+          {parsedStopDate &&
+            ` | Stopped: ${parsedStopDate.toLocaleDateString()}`}
         </Typography>
       </Box>
 
@@ -418,7 +484,6 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
         verticalLines={verticalLines}
         horizontalLines={horizontalLines}
         onMarkerClick={handleMarkerClick}
-        initialVisibleRange={bufferedRange}
         timezone={timezone}
         showResetButton={true}
         enableMarkerToggle={true}
@@ -432,4 +497,4 @@ export const BacktestChartNew: React.FC<BacktestChartProps> = ({
   );
 };
 
-export default BacktestChartNew;
+export default TradingTaskChart;

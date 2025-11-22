@@ -18,7 +18,9 @@ The frontend is built with:
 - `@emotion/react` & `@emotion/styled` - Styling for Material-UI
 - `react-router-dom` - Client-side routing
 - `react-i18next` & `i18next` - Internationalization (English/Japanese)
-- `lightweight-charts` - Charting library for OHLC candlestick charts
+- `react-financial-charts` - React-based charting library for OHLC candlestick charts with d3 integration
+- `d3-scale` & `d3-time-format` - D3 utilities for chart scales and time formatting
+- `date-fns-tz` - Timezone support for chart time displays
 
 ### Testing Dependencies
 

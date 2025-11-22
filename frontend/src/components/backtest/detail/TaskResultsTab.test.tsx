@@ -1,7 +1,7 @@
 /**
  * TaskResultsTab Integration Tests
  *
- * Tests the integration of BacktestChartNew with the Backtest Details page.
+ * Tests the integration of BacktestChart with the Backtest Details page.
  * Verifies:
  * - Chart renders with backtest data
  * - Start/end vertical lines appear
@@ -29,9 +29,9 @@ vi.mock('../../../hooks/useTaskExecutions', () => ({
   useTaskExecutions: vi.fn(),
 }));
 
-// Mock the BacktestChartNew component
-vi.mock('../BacktestChartNew', () => ({
-  BacktestChartNew: vi.fn(({ onTradeClick }) => (
+// Mock the BacktestChart component
+vi.mock('../BacktestChart', () => ({
+  BacktestChart: vi.fn(({ onTradeClick }) => (
     <div data-testid="backtest-chart">
       <button data-testid="trade-marker-0" onClick={() => onTradeClick?.(0)}>
         Trade 0
@@ -271,6 +271,6 @@ describe('TaskResultsTab Integration', () => {
     ).toBeInTheDocument();
   });
 
-  // Note: Test for verifying props passed to BacktestChartNew removed due to module import complexity
+  // Note: Test for verifying props passed to BacktestChart removed due to module import complexity
   // The component correctly passes props as verified by the rendering tests
 });

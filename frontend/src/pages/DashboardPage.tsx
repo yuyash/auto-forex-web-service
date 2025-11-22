@@ -27,7 +27,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useOandaAccounts } from '../hooks/useOandaAccounts';
 import { useChartPreferences } from '../hooks/useChartPreferences';
-import { DashboardChartNew } from '../components/chart/DashboardChartNew';
+import { DashboardChart } from '../components/chart/DashboardChart';
 import { Breadcrumbs } from '../components/common';
 import ChartControls from '../components/chart/ChartControls';
 import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
@@ -381,7 +381,7 @@ const DashboardPage = () => {
               </Typography>
             </Box>
           ) : (
-            <DashboardChartNew
+            <DashboardChart
               key={chartRefreshTrigger}
               instrument={instrument}
               granularity={granularity}

@@ -16,7 +16,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TradingTaskChartNew } from './TradingTaskChartNew';
+import { TradingTaskChart } from './TradingTaskChart';
 import type { Trade } from '../../types/execution';
 import type { StrategyLayer } from '../../utils/chartMarkers';
 
@@ -78,7 +78,7 @@ vi.mock('../chart/FinancialChart', () => ({
   },
 }));
 
-describe('TradingTaskChartNew', () => {
+describe('TradingTaskChart', () => {
   const mockTrades: Trade[] = [
     {
       entry_time: '2024-01-15T10:00:00Z',
@@ -159,7 +159,7 @@ describe('TradingTaskChartNew', () => {
 
   describe('Initial data fetching', () => {
     it('should fetch candles on mount', async () => {
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalled();
@@ -172,12 +172,12 @@ describe('TradingTaskChartNew', () => {
     });
 
     it('should display loading state initially', () => {
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
       expect(screen.getByTestId('chart-loading')).toBeInTheDocument();
     });
 
     it('should display chart after data loads', async () => {
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -187,7 +187,7 @@ describe('TradingTaskChartNew', () => {
     });
 
     it('should fetch from start time to current time', async () => {
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalled();
@@ -201,7 +201,7 @@ describe('TradingTaskChartNew', () => {
 
   describe('Start vertical line rendering', () => {
     it('should render start vertical line', async () => {
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -212,7 +212,7 @@ describe('TradingTaskChartNew', () => {
     });
 
     it('should display start date in UI', async () => {
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByText(/Started:/)).toBeInTheDocument();
@@ -223,10 +223,7 @@ describe('TradingTaskChartNew', () => {
   describe('Stop vertical line rendering', () => {
     it('should render stop vertical line when task is stopped', async () => {
       render(
-        <TradingTaskChartNew
-          {...defaultProps}
-          stopDate="2024-01-15T17:00:00Z"
-        />
+        <TradingTaskChart {...defaultProps} stopDate="2024-01-15T17:00:00Z" />
       );
 
       await waitFor(() => {
@@ -239,10 +236,7 @@ describe('TradingTaskChartNew', () => {
 
     it('should display stop date in UI when stopped', async () => {
       render(
-        <TradingTaskChartNew
-          {...defaultProps}
-          stopDate="2024-01-15T17:00:00Z"
-        />
+        <TradingTaskChart {...defaultProps} stopDate="2024-01-15T17:00:00Z" />
       );
 
       await waitFor(() => {
@@ -251,7 +245,7 @@ describe('TradingTaskChartNew', () => {
     });
 
     it('should not render stop line when task is running', async () => {
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -264,7 +258,7 @@ describe('TradingTaskChartNew', () => {
 
   describe('Trade marker rendering', () => {
     it('should render trade markers', async () => {
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -275,7 +269,7 @@ describe('TradingTaskChartNew', () => {
     });
 
     it('should render buy and sell markers', async () => {
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('marker-trade-0')).toBeInTheDocument();
@@ -284,7 +278,7 @@ describe('TradingTaskChartNew', () => {
     });
 
     it('should handle empty trades array', async () => {
-      render(<TradingTaskChartNew {...defaultProps} trades={[]} />);
+      render(<TradingTaskChart {...defaultProps} trades={[]} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();
@@ -297,7 +291,7 @@ describe('TradingTaskChartNew', () => {
 
   describe('Auto-refresh functionality', () => {
     it('should enable auto-refresh by default', async () => {
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(
@@ -307,7 +301,7 @@ describe('TradingTaskChartNew', () => {
     });
 
     it('should respect autoRefresh prop', async () => {
-      render(<TradingTaskChartNew {...defaultProps} autoRefresh={false} />);
+      render(<TradingTaskChart {...defaultProps} autoRefresh={false} />);
 
       await waitFor(() => {
         expect(
@@ -337,7 +331,7 @@ describe('TradingTaskChartNew', () => {
 
   describe('Granularity changes', () => {
     it('should display granularity selector', async () => {
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
 
       await waitFor(() => {
         const granularityTexts = screen.getAllByText(/granularity/i);
@@ -347,7 +341,7 @@ describe('TradingTaskChartNew', () => {
 
     it('should refetch data when granularity changes', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<TradingTaskChartNew {...defaultProps} autoRefresh={false} />);
+      render(<TradingTaskChart {...defaultProps} autoRefresh={false} />);
 
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalled();
@@ -375,7 +369,7 @@ describe('TradingTaskChartNew', () => {
       const user = userEvent.setup({ delay: null });
       const onGranularityChange = vi.fn();
       render(
-        <TradingTaskChartNew
+        <TradingTaskChart
           {...defaultProps}
           onGranularityChange={onGranularityChange}
           autoRefresh={false}
@@ -402,12 +396,12 @@ describe('TradingTaskChartNew', () => {
 
   describe('Loading states', () => {
     it('should show loading indicator while fetching', () => {
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
       expect(screen.getByTestId('chart-loading')).toBeInTheDocument();
     });
 
     it('should hide loading indicator after data loads', async () => {
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.queryByTestId('chart-loading')).not.toBeInTheDocument();
@@ -419,7 +413,7 @@ describe('TradingTaskChartNew', () => {
     it('should display error message on fetch failure', async () => {
       fetchMock.mockRejectedValueOnce(new Error('Network error'));
 
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('chart-error')).toBeInTheDocument();
@@ -436,7 +430,7 @@ describe('TradingTaskChartNew', () => {
       });
 
       render(
-        <TradingTaskChartNew
+        <TradingTaskChart
           {...defaultProps}
           autoRefresh={false}
           granularity="H1"
@@ -462,7 +456,7 @@ describe('TradingTaskChartNew', () => {
       });
 
       render(
-        <TradingTaskChartNew
+        <TradingTaskChart
           {...defaultProps}
           autoRefresh={false}
           granularity="H1"
@@ -483,7 +477,7 @@ describe('TradingTaskChartNew', () => {
       const user = userEvent.setup({ delay: null });
       const onTradeClick = vi.fn();
       render(
-        <TradingTaskChartNew {...defaultProps} onTradeClick={onTradeClick} />
+        <TradingTaskChart {...defaultProps} onTradeClick={onTradeClick} />
       );
 
       await waitFor(() => {
@@ -500,7 +494,7 @@ describe('TradingTaskChartNew', () => {
       const user = userEvent.setup({ delay: null });
       const onTradeClick = vi.fn();
       render(
-        <TradingTaskChartNew {...defaultProps} onTradeClick={onTradeClick} />
+        <TradingTaskChart {...defaultProps} onTradeClick={onTradeClick} />
       );
 
       await waitFor(() => {
@@ -515,7 +509,7 @@ describe('TradingTaskChartNew', () => {
 
     it('should not error when onTradeClick is not provided', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<TradingTaskChartNew {...defaultProps} />);
+      render(<TradingTaskChart {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('marker-trade-0')).toBeInTheDocument();
@@ -529,7 +523,7 @@ describe('TradingTaskChartNew', () => {
   describe('Strategy layers', () => {
     it('should render strategy layer horizontal lines', async () => {
       render(
-        <TradingTaskChartNew
+        <TradingTaskChart
           {...defaultProps}
           strategyLayers={mockStrategyLayers}
         />
@@ -543,7 +537,7 @@ describe('TradingTaskChartNew', () => {
     });
 
     it('should handle empty strategy layers', async () => {
-      render(<TradingTaskChartNew {...defaultProps} strategyLayers={[]} />);
+      render(<TradingTaskChart {...defaultProps} strategyLayers={[]} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();

@@ -13,20 +13,20 @@ import {
   Tooltip,
   Alert,
   Chip,
-  Button,
+  // Button, // TODO: Uncomment when comparison modal is reimplemented
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import DeleteIcon from '@mui/icons-material/Delete';
-import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
+// import CompareArrowsIcon from '@mui/icons-material/CompareArrows'; // TODO: Uncomment when comparison modal is reimplemented
 import type { Backtest, BacktestResult } from '../../types/backtest';
-import BacktestComparisonModal from './BacktestComparisonModal';
+// import BacktestComparisonModal from './BacktestComparisonModal'; // TODO: Reimplement with react-financial-charts
 
 interface BacktestHistoryPanelProps {
   backtests: Backtest[];
   onViewBacktest: (backtestId: number) => void;
   onDeleteBacktest: (backtestId: number) => void;
-  onFetchResult: (backtestId: number) => Promise<BacktestResult>;
+  onFetchResult?: (backtestId: number) => Promise<BacktestResult>; // Optional until comparison modal is reimplemented
   loading?: boolean;
 }
 
@@ -34,12 +34,12 @@ const BacktestHistoryPanel = ({
   backtests,
   onViewBacktest,
   onDeleteBacktest,
-  onFetchResult,
+  // onFetchResult, // TODO: Uncomment when comparison modal is reimplemented
   loading = false,
 }: BacktestHistoryPanelProps) => {
   const { t } = useTranslation(['backtest', 'common']);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [comparisonModalOpen, setComparisonModalOpen] = useState(false);
+  // const [comparisonModalOpen, setComparisonModalOpen] = useState(false); // TODO: Uncomment when comparison modal is reimplemented
 
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -117,9 +117,9 @@ const BacktestHistoryPanel = ({
     );
   }
 
-  const completedBacktests = backtests.filter(
-    (bt) => bt.status === 'completed'
-  );
+  // const completedBacktests = backtests.filter(
+  //   (bt) => bt.status === 'completed'
+  // ); // TODO: Uncomment when comparison modal is reimplemented
 
   return (
     <Box>
@@ -134,14 +134,15 @@ const BacktestHistoryPanel = ({
         <Typography variant="h6">
           {t('backtest:history.title', 'Backtest History')}
         </Typography>
-        <Button
+        {/* TODO: Reimplement comparison feature with react-financial-charts */}
+        {/* <Button
           variant="outlined"
           startIcon={<CompareArrowsIcon />}
           onClick={() => setComparisonModalOpen(true)}
           disabled={completedBacktests.length < 2}
         >
           {t('backtest:history.compareBacktests', 'Compare Backtests')}
-        </Button>
+        </Button> */}
       </Box>
 
       <TableContainer component={Paper}>
@@ -249,12 +250,13 @@ const BacktestHistoryPanel = ({
         </Table>
       </TableContainer>
 
-      <BacktestComparisonModal
+      {/* TODO: Reimplement BacktestComparisonModal with react-financial-charts */}
+      {/* <BacktestComparisonModal
         open={comparisonModalOpen}
         onClose={() => setComparisonModalOpen(false)}
         backtests={backtests}
         onFetchResult={onFetchResult}
-      />
+      /> */}
     </Box>
   );
 };
