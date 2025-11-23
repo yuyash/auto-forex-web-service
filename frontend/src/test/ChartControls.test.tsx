@@ -1,8 +1,52 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ChartControls from '../components/chart/ChartControls';
 import type { Granularity } from '../types/chart';
+
+// Mock the useMarketConfig hooks
+vi.mock('../hooks/useMarketConfig', () => ({
+  useSupportedInstruments: () => ({
+    instruments: [
+      'EUR_USD',
+      'GBP_USD',
+      'USD_JPY',
+      'USD_CHF',
+      'AUD_USD',
+      'USD_CAD',
+      'NZD_USD',
+    ],
+    isLoading: false,
+    error: null,
+  }),
+  useSupportedGranularities: () => ({
+    granularities: [
+      { value: 'S5', label: '5 Seconds' },
+      { value: 'S10', label: '10 Seconds' },
+      { value: 'S15', label: '15 Seconds' },
+      { value: 'S30', label: '30 Seconds' },
+      { value: 'M1', label: '1 Minute' },
+      { value: 'M2', label: '2 Minutes' },
+      { value: 'M4', label: '4 Minutes' },
+      { value: 'M5', label: '5 Minutes' },
+      { value: 'M10', label: '10 Minutes' },
+      { value: 'M15', label: '15 Minutes' },
+      { value: 'M30', label: '30 Minutes' },
+      { value: 'H1', label: '1 Hour' },
+      { value: 'H2', label: '2 Hours' },
+      { value: 'H3', label: '3 Hours' },
+      { value: 'H4', label: '4 Hours' },
+      { value: 'H6', label: '6 Hours' },
+      { value: 'H8', label: '8 Hours' },
+      { value: 'H12', label: '12 Hours' },
+      { value: 'D', label: 'Daily' },
+      { value: 'W', label: 'Weekly' },
+      { value: 'M', label: 'Monthly' },
+    ],
+    isLoading: false,
+    error: null,
+  }),
+}));
 
 describe('ChartControls', () => {
   const defaultProps = {
@@ -11,6 +55,10 @@ describe('ChartControls', () => {
     onInstrumentChange: vi.fn(),
     onGranularityChange: vi.fn(),
   };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   it('renders all control selectors', () => {
     render(<ChartControls {...defaultProps} />);
@@ -22,7 +70,7 @@ describe('ChartControls', () => {
   it('does not render reset button by default', () => {
     render(<ChartControls {...defaultProps} />);
 
-    expect(screen.queryByText(/reset view/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^reset$/i)).not.toBeInTheDocument();
   });
 
   it('renders reset button when showResetButton is true', () => {
@@ -34,7 +82,7 @@ describe('ChartControls', () => {
       />
     );
 
-    expect(screen.getByText(/reset view/i)).toBeInTheDocument();
+    expect(screen.getByText(/^reset$/i)).toBeInTheDocument();
   });
 
   it('calls onResetView when reset button is clicked', async () => {
@@ -49,7 +97,7 @@ describe('ChartControls', () => {
       />
     );
 
-    const resetButton = screen.getByText(/reset view/i);
+    const resetButton = screen.getByText(/^reset$/i);
     await user.click(resetButton);
 
     expect(onResetView).toHaveBeenCalledTimes(1);

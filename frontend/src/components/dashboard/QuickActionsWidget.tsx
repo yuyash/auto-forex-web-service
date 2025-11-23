@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Paper, Typography, Box, Button, Stack } from '@mui/material';
+import { Paper, Typography, Button, Stack } from '@mui/material';
 import {
   Tune as ConfigIcon,
   Assessment as BacktestIcon,
@@ -61,19 +61,6 @@ const QuickActionsWidget = () => {
           </Button>
         ))}
       </Stack>
-
-      <Box sx={{ mt: 3 }}>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          Getting Started
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          1. Create a strategy configuration
-          <br />
-          2. Create a backtest or trading task
-          <br />
-          3. Start the task and monitor results
-        </Typography>
-      </Box>
     </Paper>
   );
 };

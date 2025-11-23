@@ -16,13 +16,7 @@
  * - Scroll-based data loading callbacks
  */
 
-import React, {
-  useState,
-  useMemo,
-  useCallback,
-  useEffect,
-  useRef,
-} from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { Chart, ChartCanvas } from 'react-financial-charts';
 import { CandlestickSeries } from '@react-financial-charts/series';
 import { XAxis, YAxis } from '@react-financial-charts/axes';
@@ -54,7 +48,6 @@ import type {
   HorizontalLine,
 } from '../../utils/chartMarkers';
 import { buyPath, sellPath, doubleCirclePath } from '../../utils/chartMarkers';
-import { CHART_CONFIG } from '../../config/chartConfig';
 import { useResizeObserver } from '../../hooks/useResizeObserver';
 
 /**
@@ -86,10 +79,9 @@ export interface FinancialChartProps {
   markers?: ChartMarker[];
 
   // Interactions
-  onVisibleRangeChange?: (range: { from: Date; to: Date }) => void;
-  onLoadMore?: (direction: 'older' | 'newer') => void;
   onMarkerClick?: (marker: ChartMarker) => void;
   onResetView?: () => void;
+  onUpdateView?: () => void;
 
   // Configuration
   initialVisibleRange?: { from: Date; to: Date };
@@ -101,6 +93,7 @@ export interface FinancialChartProps {
   showResetButton?: boolean;
   enableMarkerToggle?: boolean;
   timezone?: string; // IANA timezone (e.g., 'America/New_York', 'UTC')
+  latestPrice?: number | null; // Latest mid price to display on right Y-axis
 
   // Loading and error states
   loading?: boolean;
@@ -117,19 +110,19 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
   verticalLines = [],
   horizontalLines = [],
   markers = [],
-  onVisibleRangeChange,
-  onLoadMore,
   onMarkerClick,
   onResetView,
+  onUpdateView,
   initialVisibleRange,
-  enablePan = true, // Note: Pan is always enabled in react-financial-charts
-  enableZoom = true, // Note: Zoom is always enabled in react-financial-charts
+  enablePan = true,
+  enableZoom = true,
   showGrid = true,
   showCrosshair = true,
   showOHLCTooltip = true,
   showResetButton = true,
   enableMarkerToggle = true,
   timezone = 'UTC',
+  latestPrice = null,
   loading = false,
   error = null,
 }) => {
@@ -147,24 +140,11 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
   const [showBuySellMarkers, setShowBuySellMarkers] = useState(true);
   const [showStartEndMarkers, setShowStartEndMarkers] = useState(true);
   const [resetKey, setResetKey] = useState(0);
-  // Note: Visible range tracking is reserved for future implementation
-  // react-financial-charts doesn't provide direct callbacks for range changes
-  const [currentVisibleRange, setCurrentVisibleRange] = useState<{
-    from: Date;
-    to: Date;
-  } | null>(null);
 
-  // Suppress unused variable warnings - these are part of the public API
-  // and will be used when visible range tracking is implemented
+  // Suppress unused variable warnings
   void enablePan;
   void enableZoom;
-  void setCurrentVisibleRange;
-
-  // Ref to track if we've already triggered load more
-  const loadMoreTriggeredRef = useRef<{ older: boolean; newer: boolean }>({
-    older: false,
-    newer: false,
-  });
+  void onUpdateView;
 
   // Configure the scale
   const xScaleProvider =
@@ -209,60 +189,8 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
   // Handle reset view
   const handleResetView = useCallback(() => {
     setResetKey((prev) => prev + 1);
-    loadMoreTriggeredRef.current = { older: false, newer: false };
     onResetView?.();
   }, [onResetView]);
-
-  // Monitor visible range changes and trigger load more callbacks
-  useEffect(() => {
-    if (
-      !currentVisibleRange ||
-      !onLoadMore ||
-      !chartData ||
-      chartData.length === 0
-    ) {
-      return;
-    }
-
-    const threshold = CHART_CONFIG.SCROLL_LOAD_THRESHOLD;
-    const firstDataDate = chartData[0].date;
-    const lastDataDate = chartData[chartData.length - 1].date;
-
-    // Calculate time difference for threshold
-    const totalDuration = lastDataDate.getTime() - firstDataDate.getTime();
-    const thresholdDuration = (totalDuration / chartData.length) * threshold;
-
-    // Check if we're near the left edge (older data)
-    const nearLeftEdge =
-      currentVisibleRange.from.getTime() - firstDataDate.getTime() <
-      thresholdDuration;
-
-    // Check if we're near the right edge (newer data)
-    const nearRightEdge =
-      lastDataDate.getTime() - currentVisibleRange.to.getTime() <
-      thresholdDuration;
-
-    if (nearLeftEdge && !loadMoreTriggeredRef.current.older) {
-      loadMoreTriggeredRef.current.older = true;
-      onLoadMore('older');
-    } else if (!nearLeftEdge) {
-      loadMoreTriggeredRef.current.older = false;
-    }
-
-    if (nearRightEdge && !loadMoreTriggeredRef.current.newer) {
-      loadMoreTriggeredRef.current.newer = true;
-      onLoadMore('newer');
-    } else if (!nearRightEdge) {
-      loadMoreTriggeredRef.current.newer = false;
-    }
-  }, [currentVisibleRange, onLoadMore, chartData]);
-
-  // Notify parent of visible range changes
-  useEffect(() => {
-    if (currentVisibleRange && onVisibleRangeChange) {
-      onVisibleRangeChange(currentVisibleRange);
-    }
-  }, [currentVisibleRange, onVisibleRangeChange]);
 
   // Filter markers based on visibility toggles
   const visibleMarkers = useMemo(() => {
@@ -502,6 +430,17 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                 showGridLines={showGrid}
                 gridLinesStrokeStyle="#e0e0e0"
               />
+
+              {/* Right Y-axis for latest price */}
+              {latestPrice !== null && (
+                <YAxis
+                  axisAt="right"
+                  orient="right"
+                  ticks={0}
+                  tickStrokeStyle="transparent"
+                  showGridLines={false}
+                />
+              )}
 
               {/* Candlestick series */}
               <CandlestickSeries />

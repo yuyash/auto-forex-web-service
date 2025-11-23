@@ -107,7 +107,7 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
       <MuiBreadcrumbs
         separator={<NavigateNextIcon fontSize="small" />}
         aria-label="breadcrumb"
-        sx={{ mb: 2 }}
+        sx={{ mb: 1 }}
       >
         {breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1;
@@ -251,7 +251,7 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
     <MuiBreadcrumbs
       separator={<NavigateNextIcon fontSize="small" />}
       aria-label="breadcrumb"
-      sx={{ mb: 2 }}
+      sx={{ mb: 1 }}
     >
       {breadcrumbs.map((crumb, index) => {
         const isLast = index === breadcrumbs.length - 1;

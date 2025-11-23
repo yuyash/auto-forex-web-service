@@ -62,7 +62,7 @@ const AppLayout = () => {
               flexGrow: 1,
               display: 'flex',
               flexDirection: 'column',
-              marginTop: '64px', // Space for AppBar
+              marginTop: '32px', // Space for AppBar
               marginBottom: isMobile ? '112px' : 0, // Space for footer + bottom nav on mobile
               width: showSidebar ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%',
               '&:focus': {

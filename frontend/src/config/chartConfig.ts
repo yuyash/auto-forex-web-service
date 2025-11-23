@@ -13,7 +13,7 @@ export const CHART_CONFIG = {
   DEFAULT_GRANULARITY: 'H1' as OandaGranularity,
 
   // Data fetching
-  DEFAULT_FETCH_COUNT: 500, // Number of candles to fetch initially
+  DEFAULT_FETCH_COUNT: 100, // Number of candles to fetch initially
   SCROLL_LOAD_COUNT: 500, // Number of candles to load when scrolling
   MAX_FETCH_COUNT: 5000, // Maximum candles per API request
 

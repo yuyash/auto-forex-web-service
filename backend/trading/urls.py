@@ -22,6 +22,11 @@ from .backtest_task_views import (  # noqa: E501
 from .candle_views import CandleDataView
 from .event_views import EventDetailView, EventExportView, EventListView
 from .health_views import health_check, oanda_health_check, simple_health_check
+from .market_config_views import (
+    ClearMarketConfigCacheView,
+    SupportedGranularitiesView,
+    SupportedInstrumentsView,
+)
 from .order_views import OrderDetailView, OrderListCreateView
 from .position_views import PositionCloseView, PositionDetailView, PositionListView
 from .strategy_comparison_views import StrategyCompareResultsView, StrategyCompareView
@@ -53,6 +58,14 @@ urlpatterns = [
     path("health/", health_check, name="health_check"),
     path("health/simple/", simple_health_check, name="simple_health_check"),
     path("health/oanda/", oanda_health_check, name="oanda_health_check"),
+    # Market configuration endpoints (public)
+    path("instruments/", SupportedInstrumentsView.as_view(), name="supported_instruments"),
+    path("granularities/", SupportedGranularitiesView.as_view(), name="supported_granularities"),
+    path(
+        "market-config/clear-cache/",
+        ClearMarketConfigCacheView.as_view(),
+        name="clear_market_config_cache",
+    ),
     # Candle data endpoints
     path("candles/", CandleDataView.as_view(), name="candle_data"),
     # Strategy list endpoint

@@ -281,31 +281,6 @@ describe('FinancialChart', () => {
       // with react-financial-charts internals
       expect(onMarkerClick).not.toHaveBeenCalled();
     });
-
-    it('should accept onLoadMore callback', () => {
-      const data = generateSampleData(10);
-      const onLoadMore = vi.fn();
-
-      render(<FinancialChart data={data} onLoadMore={onLoadMore} />);
-
-      // Callback is set up but not triggered in initial render
-      expect(onLoadMore).not.toHaveBeenCalled();
-    });
-
-    it('should accept onVisibleRangeChange callback', () => {
-      const data = generateSampleData(10);
-      const onVisibleRangeChange = vi.fn();
-
-      render(
-        <FinancialChart
-          data={data}
-          onVisibleRangeChange={onVisibleRangeChange}
-        />
-      );
-
-      // Callback is set up but not triggered in initial render
-      expect(onVisibleRangeChange).not.toHaveBeenCalled();
-    });
   });
 
   describe('Configuration', () => {
@@ -895,36 +870,6 @@ describe('FinancialChart', () => {
 
       expect(container).toBeInTheDocument();
       // Note: react-financial-charts doesn't support disabling zoom
-    });
-  });
-
-  describe('Load More Callbacks', () => {
-    it('should accept onLoadMore callback for older data', () => {
-      const data = generateSampleData(10);
-      const onLoadMore = vi.fn();
-
-      render(<FinancialChart data={data} onLoadMore={onLoadMore} />);
-
-      // Callback is set up but not triggered in initial render
-      expect(onLoadMore).not.toHaveBeenCalled();
-    });
-
-    it('should accept onLoadMore callback for newer data', () => {
-      const data = generateSampleData(10);
-      const onLoadMore = vi.fn();
-
-      render(<FinancialChart data={data} onLoadMore={onLoadMore} />);
-
-      // Callback is set up but not triggered in initial render
-      expect(onLoadMore).not.toHaveBeenCalled();
-    });
-
-    it('should not call onLoadMore when not provided', () => {
-      const data = generateSampleData(10);
-      const { container } = render(<FinancialChart data={data} />);
-
-      expect(container).toBeInTheDocument();
-      // Should render without errors even without onLoadMore
     });
   });
 

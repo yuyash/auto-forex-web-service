@@ -4,10 +4,16 @@ import {
   MenuItem,
   Select,
   Button,
+  CircularProgress,
 } from '@mui/material';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import UpdateIcon from '@mui/icons-material/Update';
 import type { SelectChangeEvent } from '@mui/material';
 import type { Granularity } from '../../types/chart';
+import {
+  useSupportedInstruments,
+  useSupportedGranularities,
+} from '../../hooks/useMarketConfig';
 
 interface ChartControlsProps {
   instrument: string;
@@ -15,52 +21,10 @@ interface ChartControlsProps {
   onInstrumentChange: (instrument: string) => void;
   onGranularityChange: (granularity: Granularity) => void;
   onResetView?: () => void;
+  onUpdateView?: () => void;
   showResetButton?: boolean;
+  showUpdateButton?: boolean;
 }
-
-// Common currency pairs for forex trading
-const CURRENCY_PAIRS = [
-  'EUR_USD',
-  'GBP_USD',
-  'USD_JPY',
-  'USD_CHF',
-  'AUD_USD',
-  'USD_CAD',
-  'NZD_USD',
-  'EUR_GBP',
-  'EUR_JPY',
-  'GBP_JPY',
-  'EUR_CHF',
-  'AUD_JPY',
-  'GBP_CHF',
-  'EUR_AUD',
-  'EUR_CAD',
-];
-
-// OANDA granularities
-const GRANULARITIES: { value: Granularity; label: string }[] = [
-  { value: 'S5', label: '5 Seconds' },
-  { value: 'S10', label: '10 Seconds' },
-  { value: 'S15', label: '15 Seconds' },
-  { value: 'S30', label: '30 Seconds' },
-  { value: 'M1', label: '1 Minute' },
-  { value: 'M2', label: '2 Minutes' },
-  { value: 'M4', label: '4 Minutes' },
-  { value: 'M5', label: '5 Minutes' },
-  { value: 'M10', label: '10 Minutes' },
-  { value: 'M15', label: '15 Minutes' },
-  { value: 'M30', label: '30 Minutes' },
-  { value: 'H1', label: '1 Hour' },
-  { value: 'H2', label: '2 Hours' },
-  { value: 'H3', label: '3 Hours' },
-  { value: 'H4', label: '4 Hours' },
-  { value: 'H6', label: '6 Hours' },
-  { value: 'H8', label: '8 Hours' },
-  { value: 'H12', label: '12 Hours' },
-  { value: 'D', label: 'Daily' },
-  { value: 'W', label: 'Weekly' },
-  { value: 'M', label: 'Monthly' },
-];
 
 const ChartControls = ({
   instrument,
@@ -68,8 +32,15 @@ const ChartControls = ({
   onInstrumentChange,
   onGranularityChange,
   onResetView,
+  onUpdateView,
   showResetButton = false,
+  showUpdateButton = false,
 }: ChartControlsProps) => {
+  // Fetch supported instruments and granularities from backend
+  const { instruments: currencyPairs, isLoading: instrumentsLoading } =
+    useSupportedInstruments();
+  const { granularities, isLoading: granularitiesLoading } =
+    useSupportedGranularities();
   const handleInstrumentChange = (event: SelectChangeEvent<string>) => {
     onInstrumentChange(event.target.value);
   };
@@ -91,9 +62,15 @@ const ChartControls = ({
           value={instrument}
           label="Currency Pair"
           onChange={handleInstrumentChange}
+          disabled={instrumentsLoading}
           sx={{ height: 32, fontSize: '0.85rem' }}
+          startAdornment={
+            instrumentsLoading ? (
+              <CircularProgress size={16} sx={{ ml: 1 }} />
+            ) : null
+          }
         >
-          {CURRENCY_PAIRS.map((pair) => (
+          {currencyPairs.map((pair) => (
             <MenuItem key={pair} value={pair} sx={{ fontSize: '0.85rem' }}>
               {pair.replace('_', '/')}
             </MenuItem>
@@ -112,9 +89,15 @@ const ChartControls = ({
           value={granularity}
           label="Timeframe"
           onChange={handleGranularityChange}
+          disabled={granularitiesLoading}
           sx={{ height: 32, fontSize: '0.85rem' }}
+          startAdornment={
+            granularitiesLoading ? (
+              <CircularProgress size={16} sx={{ ml: 1 }} />
+            ) : null
+          }
         >
-          {GRANULARITIES.map((gran) => (
+          {granularities.map((gran) => (
             <MenuItem
               key={gran.value}
               value={gran.value}
@@ -135,7 +118,20 @@ const ChartControls = ({
           startIcon={<RestartAltIcon sx={{ fontSize: '1rem' }} />}
           sx={{ height: 32, fontSize: '0.85rem', px: 1.5 }}
         >
-          Reset View
+          Reset
+        </Button>
+      )}
+
+      {/* Update View Button */}
+      {showUpdateButton && onUpdateView && (
+        <Button
+          variant="contained"
+          size="small"
+          onClick={onUpdateView}
+          startIcon={<UpdateIcon sx={{ fontSize: '1rem' }} />}
+          sx={{ height: 32, fontSize: '0.85rem', px: 1.5 }}
+        >
+          Update
         </Button>
       )}
     </>

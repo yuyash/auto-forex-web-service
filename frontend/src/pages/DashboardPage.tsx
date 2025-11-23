@@ -1,27 +1,19 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 import {
   Container,
   Typography,
   Box,
   Paper,
-  Card,
-  CardContent,
-  Chip,
   Alert,
-  CircularProgress,
-  Stack,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   Switch,
   FormControlLabel,
-  IconButton,
-  Tooltip,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import type { SelectChangeEvent } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -33,12 +25,11 @@ import ChartControls from '../components/chart/ChartControls';
 import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
 import RecentBacktestsWidget from '../components/dashboard/RecentBacktestsWidget';
 import QuickActionsWidget from '../components/dashboard/QuickActionsWidget';
-import type { Granularity, Position, StrategyEvent } from '../types/chart';
-import { handleAuthErrorStatus } from '../utils/authEvents';
+import type { Granularity } from '../types/chart';
 
 const DashboardPage = () => {
   const { t } = useTranslation('dashboard');
-  const { token, user } = useAuth();
+  const { user } = useAuth();
 
   // Chart preferences with localStorage persistence
   const { preferences, updatePreference } = useChartPreferences();
@@ -49,15 +40,7 @@ const DashboardPage = () => {
   const timezone = user?.timezone || 'UTC';
 
   // Data state
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [strategyEvents, setStrategyEvents] = useState<StrategyEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Chart refresh trigger - increment to force chart to fetch new data
-  const [chartRefreshTrigger, setChartRefreshTrigger] = useState<number>(0);
+  const [error] = useState<string | null>(null);
 
   // Chart reset handler
   const [chartResetTrigger, setChartResetTrigger] = useState<number>(0);
@@ -93,115 +76,6 @@ const DashboardPage = () => {
     accountId: oandaAccountId,
   });
 
-  // Fetch positions
-  const fetchPositions = useCallback(async () => {
-    if (!token) return;
-    try {
-      const response = await fetch('/api/positions', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (
-        handleAuthErrorStatus(response.status, {
-          context: 'dashboard:positions',
-        })
-      ) {
-        return;
-      }
-      if (response.ok) {
-        const data = await response.json();
-        setPositions(data.positions || []);
-      }
-    } catch (err) {
-      console.error('Error fetching positions:', err);
-    }
-  }, [token]);
-
-  // Fetch strategy events
-  const fetchStrategyEvents = useCallback(async () => {
-    if (!token) return;
-    try {
-      const response = await fetch('/api/events?limit=10', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (
-        handleAuthErrorStatus(response.status, {
-          context: 'dashboard:events',
-        })
-      ) {
-        return;
-      }
-      if (response.ok) {
-        const data = await response.json();
-        setStrategyEvents(data.events || []);
-      } else if (response.status === 403) {
-        // User doesn't have permission to view events (not an admin)
-        // This is expected for non-admin users, so just set empty array
-        setStrategyEvents([]);
-      }
-    } catch (err) {
-      console.error('Error fetching strategy events:', err);
-    }
-  }, [token]);
-
-  // Initial data load
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        await Promise.all([fetchPositions(), fetchStrategyEvents()]);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Failed to load dashboard data'
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, [fetchPositions, fetchStrategyEvents]);
-
-  // Auto-refresh effect for positions, orders, and events
-  // Note: Chart handles its own auto-refresh internally
-  useEffect(() => {
-    // Clear existing timer
-    if (refreshTimerRef.current) {
-      clearInterval(refreshTimerRef.current);
-      refreshTimerRef.current = null;
-    }
-
-    // Set up new timer if auto-refresh is enabled
-    if (autoRefreshEnabled && refreshInterval > 0) {
-      refreshTimerRef.current = setInterval(async () => {
-        // Fetch sequentially to avoid overwhelming the browser
-        try {
-          await fetchPositions();
-          await fetchStrategyEvents();
-        } catch (err) {
-          console.error('Auto-refresh error:', err);
-        }
-      }, refreshInterval * 1000);
-    }
-
-    return () => {
-      if (refreshTimerRef.current) {
-        clearInterval(refreshTimerRef.current);
-        refreshTimerRef.current = null;
-      }
-    };
-  }, [
-    autoRefreshEnabled,
-    refreshInterval,
-    fetchPositions,
-    fetchStrategyEvents,
-  ]);
-
   // Handle refresh interval change
   const handleRefreshIntervalChange = (event: SelectChangeEvent<number>) => {
     updatePreference('refreshInterval', Number(event.target.value));
@@ -224,33 +98,19 @@ const DashboardPage = () => {
     updatePreference('granularity', newGranularity);
   };
 
-  // Handle manual refresh - reload data without remounting
-  const handleManualRefresh = useCallback(() => {
-    fetchPositions();
-    fetchStrategyEvents();
-    // Trigger chart refresh by incrementing key
-    setChartRefreshTrigger((prev) => prev + 1);
-  }, [fetchPositions, fetchStrategyEvents]);
-
   // Handle chart reset view
   const handleChartResetView = useCallback(() => {
     setChartResetTrigger((prev) => prev + 1);
   }, []);
 
-  // Filter positions for current instrument
-  const currentPositions = positions.filter((p) => p.instrument === instrument);
+  // Handle chart update view
+  const handleChartUpdateView = useCallback(() => {
+    setChartResetTrigger((prev) => prev + 1);
+  }, []);
 
   return (
     <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
       <Breadcrumbs />
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          {t('title')}
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          {t('welcome')}
-        </Typography>
-      </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
@@ -285,9 +145,6 @@ const DashboardPage = () => {
         >
           <Box>
             <Typography variant="h6">Market Chart</Typography>
-            <Typography variant="caption" color="text.secondary">
-              Settings are automatically saved
-            </Typography>
           </Box>
 
           {/* Auto-refresh controls */}
@@ -309,11 +166,16 @@ const DashboardPage = () => {
                 />
               }
               label="Auto-refresh"
+              sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
             />
 
             <FormControl
               size="small"
-              sx={{ minWidth: { xs: '100%', sm: 120 } }}
+              sx={{
+                minWidth: { xs: '100%', sm: 120 },
+                '& .MuiInputLabel-root': { fontSize: '0.875rem' },
+                '& .MuiSelect-select': { fontSize: '0.875rem' },
+              }}
             >
               <InputLabel id="refresh-interval-label">Interval</InputLabel>
               <Select
@@ -324,11 +186,21 @@ const DashboardPage = () => {
                 onChange={handleRefreshIntervalChange}
                 disabled={!autoRefreshEnabled}
               >
-                <MenuItem value={10}>10 seconds</MenuItem>
-                <MenuItem value={30}>30 seconds</MenuItem>
-                <MenuItem value={60}>1 minute</MenuItem>
-                <MenuItem value={120}>2 minutes</MenuItem>
-                <MenuItem value={300}>5 minutes</MenuItem>
+                <MenuItem value={10} sx={{ fontSize: '0.875rem' }}>
+                  10 seconds
+                </MenuItem>
+                <MenuItem value={30} sx={{ fontSize: '0.875rem' }}>
+                  30 seconds
+                </MenuItem>
+                <MenuItem value={60} sx={{ fontSize: '0.875rem' }}>
+                  1 minute
+                </MenuItem>
+                <MenuItem value={120} sx={{ fontSize: '0.875rem' }}>
+                  2 minutes
+                </MenuItem>
+                <MenuItem value={300} sx={{ fontSize: '0.875rem' }}>
+                  5 minutes
+                </MenuItem>
               </Select>
             </FormControl>
           </Box>
@@ -341,7 +213,7 @@ const DashboardPage = () => {
             alignItems: 'center',
             gap: 2,
             flexWrap: 'wrap',
-            mb: 3,
+            mb: 1.25,
           }}
         >
           <ChartControls
@@ -350,20 +222,10 @@ const DashboardPage = () => {
             onInstrumentChange={handleInstrumentChange}
             onGranularityChange={handleGranularityChange}
             onResetView={handleChartResetView}
+            onUpdateView={handleChartUpdateView}
             showResetButton={hasOandaAccount}
+            showUpdateButton={hasOandaAccount}
           />
-
-          {/* Manual Refresh Button */}
-          <Tooltip title="Refresh chart data">
-            <IconButton
-              onClick={handleManualRefresh}
-              disabled={!hasOandaAccount}
-              color="primary"
-              size="small"
-            >
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
         </Box>
 
         <Box
@@ -390,7 +252,7 @@ const DashboardPage = () => {
             </Box>
           ) : (
             <DashboardChart
-              key={`${chartRefreshTrigger}-${chartResetTrigger}`}
+              key={chartResetTrigger}
               instrument={instrument}
               granularity={granularity}
               height={500}
@@ -398,192 +260,11 @@ const DashboardPage = () => {
               autoRefresh={autoRefreshEnabled}
               refreshInterval={refreshInterval * 1000}
               onResetView={handleChartResetView}
+              onUpdateView={handleChartUpdateView}
             />
           )}
         </Box>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: 'block', mt: 1 }}
-        >
-          Tip: Scroll left/right on the chart to load more historical data. Data
-          is cached for faster navigation.
-        </Typography>
       </Paper>
-
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-          gap: 3,
-        }}
-      >
-        {/* Open Positions */}
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Open Positions ({currentPositions.length})
-          </Typography>
-
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-              <CircularProgress size={32} />
-            </Box>
-          ) : currentPositions.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-              No open positions for {instrument.replace('_', '/')}
-            </Typography>
-          ) : (
-            <Stack spacing={2}>
-              {currentPositions.map((position) => (
-                <Card key={position.position_id} variant="outlined">
-                  <CardContent>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        mb: 1,
-                      }}
-                    >
-                      <Typography variant="subtitle2">
-                        {position.instrument.replace('_', '/')}
-                      </Typography>
-                      <Chip
-                        label={position.direction.toUpperCase()}
-                        color={
-                          position.direction === 'long' ? 'success' : 'error'
-                        }
-                        size="small"
-                      />
-                    </Box>
-                    <Box
-                      sx={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 1fr',
-                        gap: 1,
-                      }}
-                    >
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          Entry Price
-                        </Typography>
-                        <Typography variant="body2">
-                          {position.entry_price.toFixed(5)}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          Current Price
-                        </Typography>
-                        <Typography variant="body2">
-                          {position.current_price.toFixed(5)}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          Units
-                        </Typography>
-                        <Typography variant="body2">
-                          {position.units}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          P&L
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color={
-                            position.unrealized_pnl >= 0
-                              ? 'success.main'
-                              : 'error.main'
-                          }
-                        >
-                          {position.unrealized_pnl >= 0 ? '+' : ''}
-                          {position.unrealized_pnl.toFixed(2)}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </CardContent>
-                </Card>
-              ))}
-            </Stack>
-          )}
-        </Paper>
-
-        {/* Strategy Events */}
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Recent Strategy Events
-          </Typography>
-
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-              <CircularProgress size={32} />
-            </Box>
-          ) : strategyEvents.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-              No recent strategy events
-            </Typography>
-          ) : (
-            <Stack spacing={2}>
-              {strategyEvents.map((event) => (
-                <Card key={event.id} variant="outlined">
-                  <CardContent>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        mb: 1,
-                      }}
-                    >
-                      <Typography variant="subtitle2">
-                        {event.strategy_name}
-                      </Typography>
-                      <Chip
-                        label={event.event_type}
-                        size="small"
-                        color={
-                          event.event_type === 'SIGNAL'
-                            ? 'primary'
-                            : event.event_type === 'ERROR'
-                              ? 'error'
-                              : 'default'
-                        }
-                      />
-                    </Box>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ mb: 1 }}
-                    >
-                      {event.message}
-                    </Typography>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      {event.instrument && (
-                        <Typography variant="caption" color="text.secondary">
-                          {event.instrument.replace('_', '/')}
-                        </Typography>
-                      )}
-                      <Typography variant="caption" color="text.secondary">
-                        {new Date(event.timestamp).toLocaleString()}
-                      </Typography>
-                    </Box>
-                  </CardContent>
-                </Card>
-              ))}
-            </Stack>
-          )}
-        </Paper>
-      </Box>
     </Container>
   );
 };
