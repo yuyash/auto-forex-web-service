@@ -17,7 +17,11 @@
  */
 
 import React, { useState, useMemo, useCallback, useRef } from 'react';
-import { Chart, ChartCanvas } from 'react-financial-charts';
+import {
+  Chart,
+  ChartCanvas,
+  GenericChartComponent,
+} from 'react-financial-charts';
 import { CandlestickSeries } from '@react-financial-charts/series';
 import { XAxis, YAxis } from '@react-financial-charts/axes';
 import { discontinuousTimeScaleProviderBuilder } from '@react-financial-charts/scales';
@@ -94,6 +98,7 @@ export interface FinancialChartProps {
   enableMarkerToggle?: boolean;
   timezone?: string; // IANA timezone (e.g., 'America/New_York', 'UTC')
   latestPrice?: number | null; // Latest mid price to display on right Y-axis
+  showDataGaps?: boolean; // Show visual indicators for missing data periods
 
   // Loading and error states
   loading?: boolean;
@@ -123,6 +128,7 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
   enableMarkerToggle = true,
   timezone = 'UTC',
   latestPrice = null,
+  showDataGaps = false,
   loading = false,
   error = null,
 }) => {
@@ -209,9 +215,150 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
     });
   }, [markers, showBuySellMarkers, showStartEndMarkers]);
 
-  // Format time for axis based on timezone
+  // Detect data gaps - periods where data is missing
+  const dataGaps = useMemo(() => {
+    if (
+      !showDataGaps ||
+      !chartData ||
+      chartData.length < 2 ||
+      !initialVisibleRange
+    ) {
+      return [];
+    }
+
+    const gaps: Array<{
+      start: Date;
+      end: Date;
+      type: 'start' | 'middle' | 'end';
+    }> = [];
+
+    // Calculate expected interval based on first few candles (used for all gap detection)
+    let avgInterval = 3600000; // Default 1 hour in milliseconds
+    if (chartData.length >= 3) {
+      const interval1 =
+        chartData[1].date.getTime() - chartData[0].date.getTime();
+      const interval2 =
+        chartData[2].date.getTime() - chartData[1].date.getTime();
+      avgInterval = (interval1 + interval2) / 2;
+    }
+
+    if (import.meta.env.DEV) {
+      console.log('[DataGaps] Detection parameters:', {
+        avgInterval: avgInterval / 1000 / 60, // minutes
+        candleCount: chartData.length,
+        requestedRange: {
+          from: initialVisibleRange.from.toISOString(),
+          to: initialVisibleRange.to.toISOString(),
+        },
+        actualRange: {
+          from: chartData[0].date.toISOString(),
+          to: chartData[chartData.length - 1].date.toISOString(),
+        },
+      });
+    }
+
+    // Check for gap at the beginning (before first candle)
+    const requestedStart = initialVisibleRange.from;
+    const firstCandle = chartData[0].date;
+    const timeDiffStart = firstCandle.getTime() - requestedStart.getTime();
+
+    // For start gaps, use 2x threshold to avoid flagging small timing differences
+    // This is more lenient because market data often starts slightly after requested time
+    if (timeDiffStart > avgInterval * 2) {
+      if (import.meta.env.DEV) {
+        console.log('[DataGaps] ✓ Gap at start detected:', {
+          requestedStart: requestedStart.toISOString(),
+          firstCandle: firstCandle.toISOString(),
+          timeDiff: (timeDiffStart / 1000 / 60 / 60).toFixed(1) + ' hours',
+          threshold: ((avgInterval * 2) / 1000 / 60 / 60).toFixed(1) + ' hours',
+        });
+      }
+      gaps.push({
+        start: requestedStart,
+        end: firstCandle,
+        type: 'start',
+      });
+    }
+
+    // Check for gap at the end (after last candle)
+    const requestedEnd = initialVisibleRange.to;
+    const lastCandle = chartData[chartData.length - 1].date;
+    const timeDiffEnd = requestedEnd.getTime() - lastCandle.getTime();
+
+    // For end gaps, use a lower threshold (0.5x) to show when backtest ends before next candle
+    // This helps visualize that there's no data after the last candle until the requested end time
+    if (timeDiffEnd > avgInterval * 0.5) {
+      if (import.meta.env.DEV) {
+        console.log('[DataGaps] ✓ Gap at end detected:', {
+          lastCandle: lastCandle.toISOString(),
+          requestedEnd: requestedEnd.toISOString(),
+          timeDiff: (timeDiffEnd / 1000 / 60 / 60).toFixed(1) + ' hours',
+          threshold:
+            ((avgInterval * 0.5) / 1000 / 60 / 60).toFixed(1) + ' hours',
+        });
+      }
+      gaps.push({
+        start: lastCandle,
+        end: requestedEnd,
+        type: 'end',
+      });
+    }
+
+    // Check for gaps between candles (large time jumps - weekends, holidays, etc.)
+    // Use 1.5x threshold for middle gaps to catch weekend closures
+    const gapThreshold = avgInterval * 1.5;
+
+    if (import.meta.env.DEV) {
+      console.log(
+        '[DataGaps] Scanning for middle gaps (threshold: ' +
+          (gapThreshold / 1000 / 60 / 60).toFixed(1) +
+          ' hours)...'
+      );
+    }
+
+    for (let i = 0; i < chartData.length - 1; i++) {
+      const current = chartData[i].date;
+      const next = chartData[i + 1].date;
+      const timeDiff = next.getTime() - current.getTime();
+
+      if (timeDiff > gapThreshold) {
+        if (import.meta.env.DEV) {
+          console.log('[DataGaps] ✓ Gap in middle detected:', {
+            index: i,
+            from: current.toISOString(),
+            to: next.toISOString(),
+            duration: (timeDiff / 1000 / 60 / 60).toFixed(1) + ' hours',
+          });
+        }
+        gaps.push({
+          start: current,
+          end: next,
+          type: 'middle',
+        });
+      }
+    }
+
+    if (import.meta.env.DEV) {
+      console.log('[DataGaps] ========================================');
+      console.log('[DataGaps] Total gaps found:', gaps.length);
+      gaps.forEach((gap, i) => {
+        const duration =
+          (gap.end.getTime() - gap.start.getTime()) / 1000 / 60 / 60;
+        console.log(
+          `[DataGaps] Gap ${i + 1}: ${gap.type} - ${duration.toFixed(1)} hours`
+        );
+        console.log(`  From: ${gap.start.toISOString()}`);
+        console.log(`  To:   ${gap.end.toISOString()}`);
+      });
+      console.log('[DataGaps] ========================================');
+    }
+
+    return gaps;
+  }, [chartData, showDataGaps, initialVisibleRange]);
+
+  // Format time for axis based on timezone and data density
   // Note: react-financial-charts passes the index to tickFormat, not the date
-  // Calculate visible time range in milliseconds
+  // Calculate visible time range and data density
   const getVisibleTimeRange = useCallback(() => {
     if (!chartData || chartData.length < 2) return 0;
 
@@ -223,6 +370,106 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
 
     return lastDate.getTime() - firstDate.getTime();
   }, [chartData]);
+
+  // Determine optimal format based on data range and density
+  const getOptimalFormat = useCallback(() => {
+    if (!chartData || chartData.length < 2) return 'MMM dd';
+
+    const visibleRange = getVisibleTimeRange();
+    const dataPointCount = chartData.length;
+
+    const oneMinute = 60 * 1000;
+    const oneHour = 60 * oneMinute;
+    const oneDay = 24 * oneHour;
+    const oneWeek = 7 * oneDay;
+    const oneMonth = 30 * oneDay;
+
+    // Calculate average time between data points (granularity)
+    const avgInterval =
+      dataPointCount > 1 ? visibleRange / (dataPointCount - 1) : visibleRange;
+
+    // Key insight: If granularity is less than a day, always show time
+    const isIntradayData = avgInterval < oneDay;
+
+    // Determine format based on both range and granularity
+    if (visibleRange <= oneDay) {
+      // Single day view: show only time
+      return 'HH:mm';
+    } else if (visibleRange <= 3 * oneDay) {
+      // 1-3 days: show date and time
+      return 'MM-dd HH:mm';
+    } else if (visibleRange <= oneWeek) {
+      // Up to 1 week
+      if (isIntradayData) {
+        // Intraday data: show date and time
+        return 'MM-dd HH:mm';
+      } else {
+        // Daily or less frequent: just date
+        return 'MMM dd';
+      }
+    } else if (visibleRange <= oneMonth) {
+      // 1 week to 1 month
+      if (isIntradayData) {
+        // Intraday data: show date and time
+        return 'MM-dd HH:mm';
+      } else {
+        // Daily data: just date
+        return 'MMM dd';
+      }
+    } else if (visibleRange <= 6 * oneMonth) {
+      // 1-6 months
+      if (isIntradayData) {
+        // Intraday data: show date and time
+        return 'MM-dd HH:mm';
+      } else {
+        // Daily data: month and day
+        return 'MMM dd';
+      }
+    } else if (visibleRange <= 365 * oneDay) {
+      // 6 months to 1 year
+      if (isIntradayData) {
+        // Intraday data: show date and time
+        return 'yyyy-MM-dd HH:mm';
+      } else {
+        // Daily data: month and year
+        return 'MMM yyyy';
+      }
+    } else {
+      // More than 1 year
+      if (isIntradayData) {
+        // Intraday data: show date and time
+        return 'yyyy-MM-dd HH:mm';
+      } else {
+        // Daily data: year-month-day
+        return 'yyyy-MM-dd';
+      }
+    }
+  }, [chartData, getVisibleTimeRange]);
+
+  // Calculate optimal number of ticks based on chart width
+  // Aim for one tick every 80-120 pixels for good readability
+  const calculateOptimalTicks = useCallback((chartWidth: number) => {
+    const minTickSpacing = 80; // Minimum pixels between ticks
+    const maxTicks = Math.floor(chartWidth / minTickSpacing);
+
+    // Round to nice numbers: 3, 6, 9, 12, 15, 18, 21, 24, etc.
+    const niceNumbers = [3, 6, 9, 12, 15, 18, 21, 24, 30];
+
+    // Find the largest nice number that doesn't exceed maxTicks
+    for (let i = niceNumbers.length - 1; i >= 0; i--) {
+      if (niceNumbers[i] <= maxTicks) {
+        return niceNumbers[i];
+      }
+    }
+
+    // Fallback to maxTicks if it's smaller than our smallest nice number
+    return Math.max(3, maxTicks);
+  }, []);
+
+  // Calculate ticks based on current width
+  const optimalTicks = useMemo(() => {
+    return calculateOptimalTicks(width);
+  }, [width, calculateOptimalTicks]);
 
   // We need to look up the actual date from the data array
   const formatTime = useCallback(
@@ -242,30 +489,83 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
           return '';
         }
 
-        // Calculate visible time range
+        // Get optimal format
+        const format = getOptimalFormat();
+
+        // Check if this is intraday data
         const visibleRange = getVisibleTimeRange();
-        const oneHour = 60 * 60 * 1000;
-        const oneDay = 24 * oneHour;
-        const oneWeek = 7 * oneDay;
-        const oneMonth = 30 * oneDay;
+        const dataPointCount = chartData.length;
+        const avgInterval =
+          dataPointCount > 1
+            ? visibleRange / (dataPointCount - 1)
+            : visibleRange;
+        const oneDay = 24 * 60 * 60 * 1000;
+        const isIntradayData = avgInterval < oneDay;
 
-        // Choose format based on visible time range
-        let format: string;
+        // For intraday data, show date only at day boundaries (midnight or first tick of day)
+        if (isIntradayData && visibleRange > oneDay) {
+          const hours = date.getHours();
+          const minutes = date.getMinutes();
 
-        if (visibleRange <= oneDay) {
-          // Less than 1 day: show time only (HH:mm)
-          format = 'HH:mm';
-        } else if (visibleRange <= oneWeek) {
-          // 1 day to 1 week: show date and time (MMM dd HH:mm)
-          format = 'MMM dd HH:mm';
-        } else if (visibleRange <= oneMonth) {
-          // 1 week to 1 month: show date with abbreviated month (MMM dd)
-          format = 'MMM dd';
-        } else {
-          // More than 1 month: show date with year (yyyy-MM-dd)
-          format = 'yyyy-MM-dd';
+          // Check if this is the first data point
+          const isFirstPoint = index === 0;
+
+          // Check if this is a day boundary (00:00)
+          const isDayBoundary = hours === 0 && minutes === 0;
+
+          // For hourly or less granularity (1 hour or less), only show date at 00:00
+          // For minute granularity, also show date when day changes (even if not at 00:00)
+          const oneHour = 60 * 60 * 1000;
+          const isHourlyOrLess = avgInterval <= oneHour;
+
+          let showDate = false;
+
+          if (isFirstPoint) {
+            // Always show date on first point
+            showDate = true;
+          } else if (isDayBoundary) {
+            // Always show date at midnight (00:00)
+            showDate = true;
+          } else if (!isHourlyOrLess && index > 0 && chartData[index - 1]) {
+            // For minute granularity, also show date when day changes
+            const prevDate = chartData[index - 1].date;
+            const isDayChange =
+              date.getDate() !== prevDate.getDate() ||
+              date.getMonth() !== prevDate.getMonth() ||
+              date.getFullYear() !== prevDate.getFullYear();
+            showDate = isDayChange;
+          }
+
+          // Show date + time if needed
+          if (showDate) {
+            // Use 'MMM d' format (e.g., 'Nov 7') for short ranges, 'yyyy MMM d' for long ranges
+            const dateFormat =
+              visibleRange > 180 * oneDay ? 'yyyy MMM d' : 'MMM d';
+            const timeStr =
+              timezone && timezone !== 'UTC'
+                ? formatInTimeZone(date, timezone, 'HH:mm')
+                : timeFormat('%H:%M')(date);
+            const dateStr =
+              timezone && timezone !== 'UTC'
+                ? formatInTimeZone(date, timezone, dateFormat)
+                : timeFormat(
+                    dateFormat
+                      .replace('yyyy', '%Y')
+                      .replace('MMM', '%b')
+                      .replace('d', '%-d')
+                  )(date);
+
+            return `${dateStr} ${timeStr}`;
+          }
+
+          // Otherwise, show only time
+          if (timezone && timezone !== 'UTC') {
+            return formatInTimeZone(date, timezone, 'HH:mm');
+          }
+          return timeFormat('%H:%M')(date);
         }
 
+        // For daily+ data or single-day view, use the standard format
         if (timezone && timezone !== 'UTC') {
           return formatInTimeZone(date, timezone, format);
         }
@@ -285,7 +585,7 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
         return '';
       }
     },
-    [timezone, chartData, getVisibleTimeRange]
+    [timezone, chartData, getOptimalFormat, getVisibleTimeRange]
   );
 
   // Validate date range
@@ -423,6 +723,7 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                 showGridLines={showGrid}
                 gridLinesStrokeStyle="#e0e0e0"
                 tickFormat={formatTime}
+                ticks={optimalTicks}
               />
               <YAxis
                 ticks={10}
@@ -439,6 +740,191 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                   ticks={0}
                   tickStrokeStyle="transparent"
                   showGridLines={false}
+                />
+              )}
+
+              {/* Data gap shading overlay */}
+              {dataGaps.length > 0 && (
+                <GenericChartComponent
+                  drawOn={['pan', 'mousemove', 'zoom']}
+                  canvasDraw={(
+                    ctx: CanvasRenderingContext2D,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    moreProps: any
+                  ) => {
+                    const {
+                      xScale,
+                      chartConfig,
+                      xAccessor: morePropsXAccessor,
+                      plotData,
+                    } = moreProps;
+                    const yScale = chartConfig.yScale;
+                    const yRange = yScale.range();
+                    const yMin = Math.min(...yRange);
+                    const yMax = Math.max(...yRange);
+                    const height = yMax - yMin;
+
+                    dataGaps.forEach((gap, index) => {
+                      let x1, x2;
+
+                      // Handle different gap types with appropriate positioning
+                      if (gap.type === 'start') {
+                        // Gap before first candle: from left edge to first candle
+                        const firstDataPoint = plotData[0];
+                        x1 = xScale.range()[0]; // Left edge of chart
+                        x2 = xScale(morePropsXAccessor(firstDataPoint));
+                      } else if (gap.type === 'end') {
+                        // Gap after last candle: from last candle to right edge
+                        const lastDataPoint = plotData[plotData.length - 1];
+                        x1 = xScale(morePropsXAccessor(lastDataPoint));
+                        x2 = xScale.range()[1]; // Right edge of chart
+                      } else {
+                        // Middle gap: between two candles
+                        // Find the candles before and after the gap
+                        const startIndex = plotData.findIndex(
+                          (d: OHLCData) => d.date >= gap.start
+                        );
+                        const endIndex = plotData.findIndex(
+                          (d: OHLCData) => d.date >= gap.end
+                        );
+
+                        if (startIndex === -1 || endIndex === -1) {
+                          if (import.meta.env.DEV) {
+                            console.log(
+                              'Cannot find gap boundaries in plotData:',
+                              { gap, startIndex, endIndex }
+                            );
+                          }
+                          return;
+                        }
+
+                        // Position from the candle before the gap to the candle after
+                        x1 = xScale(
+                          morePropsXAccessor(
+                            plotData[startIndex === 0 ? 0 : startIndex - 1]
+                          )
+                        );
+                        x2 = xScale(morePropsXAccessor(plotData[endIndex]));
+                      }
+
+                      // Skip if coordinates are invalid
+                      if (
+                        isNaN(x1) ||
+                        isNaN(x2) ||
+                        x1 === undefined ||
+                        x2 === undefined
+                      ) {
+                        if (import.meta.env.DEV) {
+                          console.log('Invalid gap coordinates:', {
+                            x1,
+                            x2,
+                            gap,
+                          });
+                        }
+                        return;
+                      }
+
+                      const width = Math.abs(x2 - x1);
+                      const x = Math.min(x1, x2);
+
+                      if (import.meta.env.DEV) {
+                        console.log('Rendering gap on canvas:', {
+                          index,
+                          gap,
+                          x,
+                          width,
+                          x1,
+                          x2,
+                          yMin,
+                          height,
+                        });
+                      }
+
+                      // Skip if width is too small to render meaningfully (less than 5 pixels)
+                      if (width < 5) {
+                        if (import.meta.env.DEV) {
+                          console.log('Skipping gap - too narrow:', { width });
+                        }
+                        return;
+                      }
+
+                      // Draw semi-transparent orange rectangle
+                      ctx.fillStyle = 'rgba(255, 152, 0, 0.2)';
+                      ctx.fillRect(x, yMin, width, height);
+
+                      // Draw dashed border
+                      ctx.strokeStyle = '#ff9800';
+                      ctx.lineWidth = 2;
+                      ctx.setLineDash([8, 4]);
+                      ctx.strokeRect(x, yMin, width, height);
+                      ctx.setLineDash([]);
+
+                      // Draw diagonal stripes (only if gap is wide enough)
+                      if (width > 20) {
+                        ctx.save();
+                        ctx.strokeStyle = 'rgba(255, 152, 0, 0.4)';
+                        ctx.lineWidth = 2;
+                        const stripeSpacing = 15;
+
+                        // Clip to the gap rectangle to prevent stripes from extending beyond
+                        ctx.beginPath();
+                        ctx.rect(x, yMin, width, height);
+                        ctx.clip();
+
+                        // Draw diagonal stripes from top-left to bottom-right
+                        for (
+                          let offset = -height;
+                          offset < width + height;
+                          offset += stripeSpacing
+                        ) {
+                          ctx.beginPath();
+                          ctx.moveTo(x + offset, yMin);
+                          ctx.lineTo(x + offset + height, yMin + height);
+                          ctx.stroke();
+                        }
+
+                        ctx.restore();
+                      }
+
+                      // Draw warning triangle
+                      const centerX = x + width / 2;
+                      const centerY = yMin + 30;
+
+                      ctx.fillStyle = '#ff9800';
+                      ctx.strokeStyle = '#e65100';
+                      ctx.lineWidth = 1.5;
+                      ctx.beginPath();
+                      ctx.moveTo(centerX - 12, centerY - 8);
+                      ctx.lineTo(centerX, centerY - 20);
+                      ctx.lineTo(centerX + 12, centerY - 8);
+                      ctx.closePath();
+                      ctx.fill();
+                      ctx.stroke();
+
+                      // Draw exclamation mark
+                      ctx.fillStyle = 'white';
+                      ctx.font = 'bold 12px sans-serif';
+                      ctx.textAlign = 'center';
+                      ctx.textBaseline = 'middle';
+                      ctx.fillText('!', centerX, centerY - 14);
+
+                      // Draw "Missing Data" text
+                      ctx.fillStyle = '#e65100';
+                      ctx.font = 'bold 12px sans-serif';
+                      ctx.fillText('Missing Data', centerX, centerY + 8);
+
+                      // Draw gap type
+                      ctx.fillStyle = '#666';
+                      ctx.font = '10px sans-serif';
+                      const typeText =
+                        gap.type === 'start'
+                          ? '(Before Start)'
+                          : gap.type === 'end'
+                            ? '(After End)'
+                            : '(Data Gap)';
+                      ctx.fillText(typeText, centerX, centerY + 22);
+                    });
+                  }}
                 />
               )}
 
@@ -628,6 +1114,30 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
         boxSizing: 'border-box',
       }}
     >
+      {/* Data gaps info banner */}
+      {showDataGaps && dataGaps.length > 0 && (
+        <Alert
+          severity="warning"
+          sx={{
+            mb: 2,
+            backgroundColor: 'rgba(255, 152, 0, 0.1)',
+            border: '1px solid #ff9800',
+            '& .MuiAlert-icon': {
+              color: '#ff9800',
+            },
+          }}
+        >
+          <Typography variant="body2" fontWeight="bold" sx={{ mb: 0.5 }}>
+            {dataGaps.length} Data Gap{dataGaps.length > 1 ? 's' : ''} Detected
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'block' }}>
+            Orange striped areas indicate periods where no market data is
+            available from OANDA. This may occur during weekends, holidays, or
+            market closures.
+          </Typography>
+        </Alert>
+      )}
+
       {/* Control buttons */}
       {(showResetButton || enableMarkerToggle) && (
         <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>

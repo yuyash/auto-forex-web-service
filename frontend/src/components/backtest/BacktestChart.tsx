@@ -1,265 +1,185 @@
 /**
  * BacktestChart Component
  *
- * Specialized chart for backtest results with start/end markers and trade visualization.
- * Displays OHLC candlestick chart with:
- * - Start and end vertical lines marking backtest boundaries
- * - Trade markers (buy/sell) at execution points
- * - Strategy layer horizontal lines (if provided)
- * - Initial position marker (if provided)
- * - Granularity controls
- * - Marker visibility toggles
- *
- * Features:
- * - Automatic granularity calculation based on backtest duration
- * - Buffered range (2-3 candles before/after backtest period)
- * - No auto-refresh (backtest data is historical and immutable)
- * - Trade click handler for chart-to-table interaction
+ * Chart for backtest results - uses the same implementation as DashboardChart
+ * with trade markers overlaid.
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Typography,
+  Button,
+  CircularProgress,
   type SelectChangeEvent,
 } from '@mui/material';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { FinancialChart } from '../chart/FinancialChart';
 import type { OHLCData } from '../chart/FinancialChart';
 import type {
   ChartMarker,
-  VerticalLine,
-  HorizontalLine,
   Trade as ChartTrade,
-  StrategyLayer,
 } from '../../utils/chartMarkers';
-import {
-  createTradeMarkers,
-  createStartEndMarkers,
-  createVerticalLine,
-  createHorizontalLine,
-} from '../../utils/chartMarkers';
-import {
-  transformCandles,
-  calculateBufferedRange,
-} from '../../utils/chartDataTransform';
-import {
-  calculateGranularity,
-  getAvailableGranularities,
-} from '../../utils/granularityCalculator';
+import { createTradeMarkers } from '../../utils/chartMarkers';
+import { transformCandles } from '../../utils/chartDataTransform';
 import type { OandaGranularity } from '../../types/oanda';
 import type { Trade } from '../../types/execution';
-import { CHART_CONFIG } from '../../config/chartConfig';
 import { useAuth } from '../../contexts/AuthContext';
-
-/**
- * Initial Position interface
- */
-export interface InitialPosition {
-  capital: number;
-  timestamp: string;
-}
+import { useSupportedGranularities } from '../../hooks/useMarketConfig';
 
 /**
  * BacktestChart Props
  */
 export interface BacktestChartProps {
   instrument: string;
-  startDate: string; // ISO 8601
-  endDate: string; // ISO 8601
+  startDate: string; // ISO 8601 - backtest period start
+  endDate: string; // ISO 8601 - backtest period end
   trades: Trade[];
-  initialPosition?: InitialPosition;
-  strategyLayers?: StrategyLayer[];
-  granularity?: string;
   height?: number;
-  timezone?: string; // IANA timezone from global settings
-  onGranularityChange?: (granularity: string) => void;
-  onTradeClick?: (tradeIndex: number) => void; // Called when user clicks a trade marker
+  timezone?: string;
+  onTradeClick?: (tradeIndex: number) => void;
 }
 
 /**
  * BacktestChart Component
  */
 export const BacktestChart: React.FC<BacktestChartProps> = ({
-  instrument,
+  instrument: propInstrument,
   startDate,
   endDate,
   trades,
-  initialPosition,
-  strategyLayers = [],
-  granularity: propGranularity,
-  height = CHART_CONFIG.DEFAULT_HEIGHT,
+  height = 500,
   timezone = 'UTC',
-  onGranularityChange,
   onTradeClick,
 }) => {
-  // Auth context for API token
   const { token } = useAuth();
 
-  // State
+  // Fetch supported granularities
+  const { granularities, isLoading: granularitiesLoading } =
+    useSupportedGranularities();
+
+  // State - use prop instrument (from strategy config), allow granularity changes
+  const instrument = propInstrument;
+  // Default to H1 for backtest charts to avoid exceeding OANDA's 5000 candle limit
+  const [granularity, setGranularity] = useState<OandaGranularity>('H1');
   const [candles, setCandles] = useState<OHLCData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentGranularity, setCurrentGranularity] =
-    useState<OandaGranularity>((propGranularity as OandaGranularity) || 'H1');
+  const [latestPrice, setLatestPrice] = useState<number | null>(null);
+  const [initialVisibleRange, setInitialVisibleRange] = useState<{
+    from: Date;
+    to: Date;
+  } | null>(null);
 
-  // Calculate initial granularity based on backtest duration
-  const calculatedGranularity = useMemo(() => {
-    try {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      return calculateGranularity(start, end);
-    } catch (err) {
-      console.error('Error calculating granularity:', err);
-      return 'H1' as OandaGranularity;
-    }
-  }, [startDate, endDate]);
-
-  // Use prop granularity if provided, otherwise use calculated
-  useEffect(() => {
-    if (propGranularity) {
-      setCurrentGranularity(propGranularity as OandaGranularity);
-    } else {
-      setCurrentGranularity(calculatedGranularity);
-    }
-  }, [propGranularity, calculatedGranularity]);
-
-  // Available granularities for selector
-  const availableGranularities = useMemo(() => getAvailableGranularities(), []);
-
-  // Parse dates
-  const parsedStartDate = useMemo(() => new Date(startDate), [startDate]);
-  const parsedEndDate = useMemo(() => new Date(endDate), [endDate]);
-
-  // Calculate buffered range
-  const bufferedRange = useMemo(() => {
-    try {
-      return calculateBufferedRange(
-        parsedStartDate,
-        parsedEndDate,
-        currentGranularity
-      );
-    } catch (err) {
-      console.error('Error calculating buffered range:', err);
-      return { from: parsedStartDate, to: parsedEndDate };
-    }
-  }, [parsedStartDate, parsedEndDate, currentGranularity]);
-
-  // Fetch candles with exponential backoff retry logic
-  const fetchCandles = useCallback(async () => {
+  // Fetch candles within backtest period
+  const fetchAllCandles = useCallback(async () => {
     if (!token) {
       setError('Authentication token not available');
       setLoading(false);
       return;
     }
 
+    if (import.meta.env.DEV) {
+      console.log('[BacktestChart] Fetching candles for backtest period');
+    }
     setLoading(true);
     setError(null);
 
-    const attemptFetch = async (attempt: number): Promise<void> => {
-      try {
-        // Build API URL with buffered range
-        const fromTimestamp = Math.floor(bufferedRange.from.getTime() / 1000);
-        const toTimestamp = Math.floor(bufferedRange.to.getTime() / 1000);
-
-        const url = `/api/candles?instrument=${instrument}&granularity=${currentGranularity}&from=${fromTimestamp}&to=${toTimestamp}`;
-
-        const response = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        // Check for rate limiting
-        if (
-          response.status === 429 ||
-          response.headers.get('X-Rate-Limited') === 'true'
-        ) {
-          throw new Error('Rate limited by API. Please wait before retrying.');
-        }
-
-        // Check for other errors
-        if (!response.ok) {
-          // Don't retry on client errors (400, 401, 403, 404)
-          if (response.status >= 400 && response.status < 500) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-          // Retry on server errors (500+)
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        const apiCandles = data.candles || [];
-
-        // Transform API candles to chart format
-        const transformedCandles = transformCandles(apiCandles);
-        setCandles(transformedCandles);
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : 'Failed to fetch candles';
-
-        // Check if we should retry
-        const isRateLimited = errorMessage.includes('Rate limited');
-        const isServerError = errorMessage.includes('HTTP 5');
-        const shouldRetry =
-          (isServerError || isRateLimited) &&
-          attempt < CHART_CONFIG.MAX_RETRY_ATTEMPTS;
-
-        if (shouldRetry) {
-          const delay = CHART_CONFIG.RETRY_DELAYS[attempt];
-          console.warn(
-            `Attempt ${attempt + 1} failed, retrying in ${delay}ms...`,
-            errorMessage
-          );
-
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          return attemptFetch(attempt + 1);
-        } else {
-          // Max retries exceeded or non-retryable error
-          setError(errorMessage);
-          console.error('Error fetching candles:', err);
-        }
-      }
-    };
-
     try {
-      await attemptFetch(0);
-    } finally {
+      // Convert to RFC3339 format for OANDA API
+      const fromTime = new Date(startDate).toISOString();
+      const toTime = new Date(endDate).toISOString();
+
+      if (import.meta.env.DEV) {
+        console.log('[BacktestChart] Request params', {
+          startDate,
+          endDate,
+          fromTime,
+          toTime,
+        });
+      }
+
+      const url = `/api/candles?instrument=${instrument}&granularity=${granularity}&from_time=${encodeURIComponent(fromTime)}&to_time=${encodeURIComponent(toTime)}`;
+
+      if (import.meta.env.DEV) {
+        console.log('[BacktestChart] Fetching URL:', url);
+      }
+
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const transformedCandles = transformCandles(data.candles || []);
+
+      if (import.meta.env.DEV) {
+        console.log('[BacktestChart] Loaded candles', {
+          count: transformedCandles.length,
+          firstDate: transformedCandles[0]?.date.toISOString(),
+          lastDate:
+            transformedCandles[
+              transformedCandles.length - 1
+            ]?.date.toISOString(),
+          backtestPeriod: `${startDate} to ${endDate}`,
+        });
+      }
+
+      setCandles(transformedCandles);
+
+      // Set latest price from the most recent candle
+      if (transformedCandles.length > 0) {
+        const latest = transformedCandles[transformedCandles.length - 1];
+        setLatestPrice((latest.high + latest.low) / 2);
+      }
+
+      // Set initial visible range to the REQUESTED backtest period
+      // This allows gap detection to work by comparing requested vs actual data
+      setInitialVisibleRange({
+        from: new Date(startDate),
+        to: new Date(endDate),
+      });
+
+      setLoading(false);
+    } catch (err) {
+      console.error('[BacktestChart] Error fetching candles:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch candles');
       setLoading(false);
     }
-  }, [token, instrument, bufferedRange, currentGranularity]);
+  }, [token, instrument, granularity, startDate, endDate]);
 
-  // Fetch candles on mount and when dependencies change
+  // Handle reset view
+  const handleResetView = useCallback(() => {
+    if (import.meta.env.DEV) {
+      console.log('[BacktestChart] Reset view');
+    }
+    fetchAllCandles();
+  }, [fetchAllCandles]);
+
+  // Initial data fetch
   useEffect(() => {
-    fetchCandles();
-  }, [fetchCandles]);
+    fetchAllCandles();
+  }, [instrument, granularity, fetchAllCandles]);
 
   // Handle granularity change
-  const handleGranularityChange = useCallback(
-    (event: SelectChangeEvent<OandaGranularity>) => {
-      const newGranularity = event.target.value as OandaGranularity;
-      setCurrentGranularity(newGranularity);
+  const handleGranularityChange = (event: SelectChangeEvent<string>) => {
+    setGranularity(event.target.value as OandaGranularity);
+  };
 
-      // Notify parent component
-      if (onGranularityChange) {
-        onGranularityChange(newGranularity);
-      }
-    },
-    [onGranularityChange]
-  );
-
-  // Convert trades to chart markers with cyan/orange colors
+  // Convert trades to chart markers
   const tradeMarkers = useMemo<ChartMarker[]>(() => {
     if (!trades || trades.length === 0) {
       return [];
     }
 
-    // Convert Trade format to ChartTrade format
     const chartTrades: ChartTrade[] = trades.map((trade) => ({
-      timestamp: trade.entry_time, // Use entry_time as the marker timestamp
+      timestamp: trade.entry_time,
       action: trade.direction === 'long' ? 'buy' : 'sell',
       price: trade.entry_price,
       units: trade.units,
@@ -269,113 +189,13 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
     return createTradeMarkers(chartTrades);
   }, [trades]);
 
-  // Create start/end markers with gray double circles
-  const startEndMarkers = useMemo<ChartMarker[]>(() => {
-    if (!candles || candles.length === 0) {
-      return [];
-    }
-
-    // Find candles closest to start and end dates
-    const startCandle =
-      candles.find((c) => c.date >= parsedStartDate) || candles[0];
-    const endCandle =
-      candles.reverse().find((c) => c.date <= parsedEndDate) ||
-      candles[candles.length - 1];
-
-    return createStartEndMarkers(
-      parsedStartDate,
-      parsedEndDate,
-      startCandle.high,
-      endCandle.high
-    );
-  }, [parsedStartDate, parsedEndDate, candles]);
-
-  // Create vertical lines for start and end
-  const verticalLines = useMemo<VerticalLine[]>(() => {
-    const lines: VerticalLine[] = [];
-
-    // Start line
-    lines.push(
-      createVerticalLine(
-        parsedStartDate,
-        'START',
-        '#757575', // Gray
-        2,
-        '5,5' // Dashed
-      )
-    );
-
-    // End line
-    lines.push(
-      createVerticalLine(
-        parsedEndDate,
-        'END',
-        '#757575', // Gray
-        2,
-        '5,5' // Dashed
-      )
-    );
-
-    return lines;
-  }, [parsedStartDate, parsedEndDate]);
-
-  // Create horizontal lines for strategy layers
-  const horizontalLines = useMemo<HorizontalLine[]>(() => {
-    if (!strategyLayers || strategyLayers.length === 0) {
-      return [];
-    }
-
-    return strategyLayers.map((layer) =>
-      createHorizontalLine(
-        layer.price,
-        layer.label,
-        layer.color || '#9c27b0', // Purple default
-        1,
-        '5,5' // Dashed
-      )
-    );
-  }, [strategyLayers]);
-
-  // Create initial position marker if provided
-  const initialPositionMarker = useMemo<ChartMarker | null>(() => {
-    if (!initialPosition || !candles || candles.length === 0) {
-      return null;
-    }
-
-    const positionDate = new Date(initialPosition.timestamp);
-    const nearestCandle =
-      candles.find((c) => c.date >= positionDate) || candles[0];
-
-    return {
-      id: 'initial-position',
-      date: positionDate,
-      price: nearestCandle.high,
-      type: 'initial_entry',
-      color: '#2196f3', // Blue
-      shape: 'doubleCircle',
-      label: 'INITIAL',
-      tooltip: `Initial Capital: $${initialPosition.capital.toFixed(2)}`,
-    };
-  }, [initialPosition, candles]);
-
-  // Combine all markers
-  const allMarkers = useMemo(() => {
-    const markers = [...tradeMarkers, ...startEndMarkers];
-    if (initialPositionMarker) {
-      markers.push(initialPositionMarker);
-    }
-    return markers;
-  }, [tradeMarkers, startEndMarkers, initialPositionMarker]);
-
-  // Handle marker click - map marker clicks to trade indices
+  // Handle marker click
   const handleMarkerClick = useCallback(
     (marker: ChartMarker) => {
       if (!onTradeClick) {
         return;
       }
 
-      // Extract trade index from marker ID
-      // Trade markers have IDs like "trade-0", "trade-1", etc.
       if (marker.id && marker.id.startsWith('trade-')) {
         const tradeIndex = parseInt(marker.id.replace('trade-', ''), 10);
         if (!isNaN(tradeIndex)) {
@@ -387,46 +207,78 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
   );
 
   return (
-    <Box>
-      {/* Granularity Selector */}
-      <Box sx={{ mb: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
-        <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel>Granularity</InputLabel>
+    <Box sx={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+      {/* Controls - Timeframe and Reset only */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 2,
+          flexWrap: 'wrap',
+          mb: 2,
+        }}
+      >
+        {/* Granularity Selector */}
+        <FormControl sx={{ minWidth: 120, height: 32 }} size="small">
+          <InputLabel id="granularity-label" sx={{ fontSize: '0.85rem' }}>
+            Timeframe
+          </InputLabel>
           <Select
-            value={currentGranularity}
-            label="Granularity"
+            labelId="granularity-label"
+            value={granularity}
+            label="Timeframe"
             onChange={handleGranularityChange}
+            disabled={granularitiesLoading}
+            sx={{ height: 32, fontSize: '0.85rem' }}
+            startAdornment={
+              granularitiesLoading ? (
+                <CircularProgress size={16} sx={{ ml: 1 }} />
+              ) : null
+            }
           >
-            {availableGranularities.map((gran) => (
-              <MenuItem key={gran} value={gran}>
-                {gran}
+            {granularities.map((gran) => (
+              <MenuItem
+                key={gran.value}
+                value={gran.value}
+                sx={{ fontSize: '0.85rem' }}
+              >
+                {gran.label}
               </MenuItem>
             ))}
           </Select>
         </FormControl>
-        <Typography variant="body2" color="text.secondary">
-          Backtest: {parsedStartDate.toLocaleDateString()} -{' '}
-          {parsedEndDate.toLocaleDateString()}
-        </Typography>
+
+        {/* Reset View Button */}
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={handleResetView}
+          startIcon={<RestartAltIcon sx={{ fontSize: '1rem' }} />}
+          sx={{ height: 32, fontSize: '0.85rem', px: 1.5 }}
+        >
+          Reset
+        </Button>
       </Box>
 
       {/* Chart */}
       <FinancialChart
         data={candles}
         height={height}
-        markers={allMarkers}
-        verticalLines={verticalLines}
-        horizontalLines={horizontalLines}
-        onMarkerClick={handleMarkerClick}
-        initialVisibleRange={bufferedRange}
         timezone={timezone}
-        showResetButton={true}
-        enableMarkerToggle={true}
-        showOHLCTooltip={true}
-        showGrid={true}
-        showCrosshair={true}
         loading={loading}
         error={error}
+        initialVisibleRange={initialVisibleRange || undefined}
+        showResetButton={false}
+        enableMarkerToggle={false}
+        showGrid={true}
+        showCrosshair={true}
+        showOHLCTooltip={true}
+        showDataGaps={true}
+        latestPrice={latestPrice}
+        markers={tradeMarkers}
+        onMarkerClick={handleMarkerClick}
+        onResetView={handleResetView}
       />
     </Box>
   );

@@ -216,8 +216,22 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
 
   const stats = getTradeStatistics();
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
   return (
     <Box sx={{ px: 3 }}>
+      {/* Backtest Period */}
+      <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
+        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+          Backtest Period
+        </Typography>
+        <Typography variant="body1">
+          {formatDate(task.start_time)} → {formatDate(task.end_time)}
+        </Typography>
+      </Paper>
+
       {/* Performance Metrics */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 3 }}>

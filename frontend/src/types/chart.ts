@@ -16,10 +16,6 @@ export interface TickData {
 }
 
 export type Granularity =
-  | 'S5'
-  | 'S10'
-  | 'S15'
-  | 'S30'
   | 'M1'
   | 'M2'
   | 'M4'

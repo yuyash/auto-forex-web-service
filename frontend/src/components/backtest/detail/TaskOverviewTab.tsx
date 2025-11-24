@@ -76,6 +76,10 @@ export function TaskOverviewTab({ task, liveResults }: TaskOverviewTabProps) {
     setDateRange(event.target.value as DateRange);
   };
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
   // Check if task has completed execution with metrics
   const hasMetrics = task.status === TaskStatus.COMPLETED && metrics;
 
@@ -344,6 +348,16 @@ export function TaskOverviewTab({ task, liveResults }: TaskOverviewTabProps) {
 
   return (
     <Box sx={{ px: 3 }}>
+      {/* Backtest Period */}
+      <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
+        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+          Backtest Period
+        </Typography>
+        <Typography variant="body1">
+          {formatDate(task.start_time)} → {formatDate(task.end_time)}
+        </Typography>
+      </Paper>
+
       {/* Key Metrics Grid */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>

@@ -29,9 +29,8 @@ export const useSupportedInstruments = () => {
     const fetchInstruments = async () => {
       try {
         setIsLoading(true);
-        const response = await apiClient.get<InstrumentsResponse>(
-          '/api/trading/instruments/'
-        );
+        const response =
+          await apiClient.get<InstrumentsResponse>('/instruments/');
         setInstruments(response.instruments);
         setError(null);
       } catch (err) {
@@ -78,20 +77,19 @@ export const useSupportedGranularities = () => {
     const fetchGranularities = async () => {
       try {
         setIsLoading(true);
-        const response = await apiClient.get<GranularitiesResponse>(
-          '/api/trading/granularities/'
+        const response =
+          await apiClient.get<GranularitiesResponse>('/granularities/');
+        // Filter out second-based granularities (S5, S10, S15, S30)
+        const filteredGranularities = response.granularities.filter(
+          (g) => !g.value.startsWith('S')
         );
-        setGranularities(response.granularities);
+        setGranularities(filteredGranularities);
         setError(null);
       } catch (err) {
         console.error('Failed to fetch granularities:', err);
         setError('Failed to load timeframes');
         // Fallback to default list
         setGranularities([
-          { value: 'S5', label: '5 Seconds' },
-          { value: 'S10', label: '10 Seconds' },
-          { value: 'S15', label: '15 Seconds' },
-          { value: 'S30', label: '30 Seconds' },
           { value: 'M1', label: '1 Minute' },
           { value: 'M2', label: '2 Minutes' },
           { value: 'M4', label: '4 Minutes' },

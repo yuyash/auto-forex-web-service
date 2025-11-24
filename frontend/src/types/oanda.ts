@@ -10,10 +10,6 @@
  * Represents the time interval for each candlestick.
  */
 export type OandaGranularity =
-  | 'S5' // 5 seconds
-  | 'S10' // 10 seconds
-  | 'S15' // 15 seconds
-  | 'S30' // 30 seconds
   | 'M1' // 1 minute
   | 'M5' // 5 minutes
   | 'M15' // 15 minutes

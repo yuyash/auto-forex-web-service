@@ -21,10 +21,6 @@ vi.mock('../hooks/useMarketConfig', () => ({
   }),
   useSupportedGranularities: () => ({
     granularities: [
-      { value: 'S5', label: '5 Seconds' },
-      { value: 'S10', label: '10 Seconds' },
-      { value: 'S15', label: '15 Seconds' },
-      { value: 'S30', label: '30 Seconds' },
       { value: 'M1', label: '1 Minute' },
       { value: 'M2', label: '2 Minutes' },
       { value: 'M4', label: '4 Minutes' },
@@ -164,12 +160,12 @@ describe('ChartControls', () => {
     const granularitySelect = screen.getByLabelText(/timeframe/i);
     await user.click(granularitySelect);
 
-    // Check for some key granularities
-    expect(
-      screen.getByRole('option', { name: /^5 Seconds$/i })
-    ).toBeInTheDocument();
+    // Check for some key granularities (excluding second-based ones that were removed)
     expect(
       screen.getByRole('option', { name: /^1 Minute$/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: /^5 Minutes$/i })
     ).toBeInTheDocument();
     expect(
       screen.getByRole('option', { name: /^1 Hour$/i })

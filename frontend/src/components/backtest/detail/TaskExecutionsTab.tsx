@@ -36,6 +36,10 @@ interface TaskExecutionsTabProps {
   taskId: number;
   taskType?: TaskType;
   taskStatus?: TaskStatus;
+  task?: {
+    start_time: string;
+    end_time: string;
+  };
 }
 
 interface ExecutionItemProps {
@@ -154,6 +158,7 @@ export function TaskExecutionsTab({
   taskId,
   taskType = TaskType.BACKTEST,
   taskStatus,
+  task,
 }: TaskExecutionsTabProps) {
   const [selectedExecution, setSelectedExecution] =
     useState<TaskExecution | null>(null);
@@ -287,8 +292,24 @@ export function TaskExecutionsTab({
     );
   }
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
   return (
     <Box sx={{ px: 3 }}>
+      {/* Backtest Period */}
+      {task && (
+        <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
+          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+            Backtest Period
+          </Typography>
+          <Typography variant="body1">
+            {formatDate(task.start_time)} → {formatDate(task.end_time)}
+          </Typography>
+        </Paper>
+      )}
+
       <Grid container spacing={3}>
         {/* Execution List */}
         <Grid size={{ xs: 12, md: 4 }}>
