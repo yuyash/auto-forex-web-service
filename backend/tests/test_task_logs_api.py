@@ -86,7 +86,7 @@ def backtest_task_with_logs(db, user, strategy_config):
     # Create execution with logs
     execution = TaskExecution.objects.create(
         task_type=TaskType.BACKTEST,
-        task_id=task.id,
+        task_id=task.pk,
         execution_number=1,
         status=TaskStatus.COMPLETED,
         logs=[
@@ -152,7 +152,7 @@ def trading_task_with_logs(db, user, strategy_config, oanda_account):
     # Create execution with logs
     execution = TaskExecution.objects.create(
         task_type=TaskType.TRADING,
-        task_id=task.id,
+        task_id=task.pk,
         execution_number=1,
         status=TaskStatus.COMPLETED,
         logs=[
@@ -181,7 +181,7 @@ class TestBacktestTaskLogsAPI:
         task, execution = backtest_task_with_logs
         api_client.force_authenticate(user=user)
 
-        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -194,7 +194,7 @@ class TestBacktestTaskLogsAPI:
         task, execution = backtest_task_with_logs
         api_client.force_authenticate(user=user)
 
-        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(url, {"limit": 2, "offset": 0})
 
         assert response.status_code == status.HTTP_200_OK
@@ -208,7 +208,7 @@ class TestBacktestTaskLogsAPI:
         task, execution = backtest_task_with_logs
         api_client.force_authenticate(user=user)
 
-        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(url, {"level": "ERROR"})
 
         assert response.status_code == status.HTTP_200_OK
@@ -220,12 +220,12 @@ class TestBacktestTaskLogsAPI:
         task, execution = backtest_task_with_logs
         api_client.force_authenticate(user=user)
 
-        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
-        response = api_client.get(url, {"execution_id": execution.id})
+        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
+        response = api_client.get(url, {"execution_id": execution.pk})
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 5
-        assert all(log["execution_id"] == execution.id for log in response.data["results"])
+        assert all(log["execution_id"] == execution.pk for log in response.data["results"])
 
     def test_get_logs_empty_results(self, api_client, user, strategy_config):
         """Test logs retrieval with no logs."""
@@ -240,7 +240,7 @@ class TestBacktestTaskLogsAPI:
         )
         api_client.force_authenticate(user=user)
 
-        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -251,7 +251,7 @@ class TestBacktestTaskLogsAPI:
         """Test logs retrieval without authentication."""
         task, execution = backtest_task_with_logs
 
-        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -261,7 +261,7 @@ class TestBacktestTaskLogsAPI:
         task, execution = backtest_task_with_logs
         api_client.force_authenticate(user=other_user)
 
-        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -271,7 +271,7 @@ class TestBacktestTaskLogsAPI:
         task, execution = backtest_task_with_logs
         api_client.force_authenticate(user=user)
 
-        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(url, {"limit": "invalid"})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -281,7 +281,7 @@ class TestBacktestTaskLogsAPI:
         task, execution = backtest_task_with_logs
         api_client.force_authenticate(user=user)
 
-        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(url, {"execution_id": "invalid"})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -296,7 +296,7 @@ class TestTradingTaskLogsAPI:
         task, execution = trading_task_with_logs
         api_client.force_authenticate(user=user)
 
-        url = reverse("trading:trading_task_logs", kwargs={"task_id": task.id})
+        url = reverse("trading:trading_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -308,7 +308,7 @@ class TestTradingTaskLogsAPI:
         task, execution = trading_task_with_logs
         api_client.force_authenticate(user=user)
 
-        url = reverse("trading:trading_task_logs", kwargs={"task_id": task.id})
+        url = reverse("trading:trading_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(url, {"limit": 1, "offset": 0})
 
         assert response.status_code == status.HTTP_200_OK
@@ -320,7 +320,7 @@ class TestTradingTaskLogsAPI:
         """Test logs retrieval without authentication."""
         task, execution = trading_task_with_logs
 
-        url = reverse("trading:trading_task_logs", kwargs={"task_id": task.id})
+        url = reverse("trading:trading_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -330,7 +330,7 @@ class TestTradingTaskLogsAPI:
         task, execution = trading_task_with_logs
         api_client.force_authenticate(user=other_user)
 
-        url = reverse("trading:trading_task_logs", kwargs={"task_id": task.id})
+        url = reverse("trading:trading_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_404_NOT_FOUND

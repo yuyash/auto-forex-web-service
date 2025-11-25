@@ -37,6 +37,7 @@ dev = [
     "flake8-pyproject>=1.2.0",
     "mypy>=1.11.0",
     "pylint>=3.3.0",
+    "pylint-django>=2.6.0",
     "django-stubs>=5.1.0",
     "djangorestframework-stubs>=3.15.0",
     "pre-commit>=4.0.0",
@@ -167,6 +168,8 @@ exclude_lines = [
 ignore = ["migrations", "tests"]
 ignore-patterns = ["test_.*?.py"]
 extension-pkg-allow-list = ["psutil", "redis"]
+load-plugins = ["pylint_django"]
+django-settings-module = "trading_system.settings"
 
 [tool.pylint.messages_control]
 disable = [

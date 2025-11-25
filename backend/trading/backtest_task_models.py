@@ -19,6 +19,26 @@ from .enums import DataSource, TaskStatus, TaskType
 User = get_user_model()
 
 
+class BacktestTaskManager(models.Manager["BacktestTask"]):
+    """Custom manager for BacktestTask model."""
+
+    def for_user(self, user: Any) -> models.QuerySet["BacktestTask"]:
+        """Get backtest tasks for a specific user."""
+        return self.filter(user=user)
+
+    def running(self) -> models.QuerySet["BacktestTask"]:
+        """Get all running backtest tasks."""
+        return self.filter(status=TaskStatus.RUNNING)
+
+    def completed(self) -> models.QuerySet["BacktestTask"]:
+        """Get all completed backtest tasks."""
+        return self.filter(status=TaskStatus.COMPLETED)
+
+    def by_config(self, config: Any) -> models.QuerySet["BacktestTask"]:
+        """Get backtest tasks using a specific strategy configuration."""
+        return self.filter(config=config)
+
+
 class BacktestTask(models.Model):
     """
     Persistent backtesting task with reusable configuration.
@@ -29,6 +49,8 @@ class BacktestTask(models.Model):
 
     Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 4.1, 4.2, 4.3, 4.4, 4.5
     """
+
+    objects = BacktestTaskManager()
 
     user = models.ForeignKey(
         User,
@@ -169,7 +191,7 @@ class BacktestTask(models.Model):
 
         send_task_status_notification(
             user_id=self.user.id,
-            task_id=self.id,
+            task_id=self.pk,
             task_name=self.name,
             task_type="backtest",
             status=TaskStatus.STOPPED,
@@ -246,7 +268,7 @@ class BacktestTask(models.Model):
         return (
             TaskExecution.objects.filter(
                 task_type=TaskType.BACKTEST,
-                task_id=self.id,
+                task_id=self.pk,
             )
             .order_by("-execution_number")
             .first()
@@ -264,7 +286,7 @@ class BacktestTask(models.Model):
 
         return TaskExecution.objects.filter(
             task_type=TaskType.BACKTEST,
-            task_id=self.id,
+            task_id=self.pk,
         ).order_by("-execution_number")
 
     def validate_configuration(self) -> tuple[bool, str | None]:

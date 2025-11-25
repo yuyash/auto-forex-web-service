@@ -64,7 +64,7 @@ class BacktestTaskListCreateView(ListCreateAPIView):
         - search: Search in name or description
         - ordering: Sort field (e.g., '-created_at', 'name')
         """
-        queryset = BacktestTask.objects.filter(user=self.request.user.id).select_related(
+        queryset = BacktestTask.objects.filter(user=self.request.user.pk).select_related(
             "config", "user"
         )
 
@@ -117,7 +117,7 @@ class BacktestTaskDetailView(RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self) -> QuerySet:
         """Get backtest tasks for the authenticated user."""
-        return BacktestTask.objects.filter(user=self.request.user.id).select_related(
+        return BacktestTask.objects.filter(user=self.request.user.pk).select_related(
             "config", "user"
         )
 
@@ -158,7 +158,7 @@ class BacktestTaskCopyView(APIView):
         """
         # Get the task
         try:
-            task = BacktestTask.objects.get(id=task_id, user=request.user.id)
+            task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
         except BacktestTask.DoesNotExist:
             return Response(
                 {"error": "Backtest task not found"},
@@ -206,7 +206,7 @@ class BacktestTaskStartView(APIView):
         """
         # Get the task
         try:
-            task = BacktestTask.objects.get(id=task_id, user=request.user.id)
+            task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
         except BacktestTask.DoesNotExist:
             return Response(
                 {"error": "Backtest task not found"},
@@ -233,13 +233,13 @@ class BacktestTaskStartView(APIView):
         # Queue the backtest task for execution
         from .tasks import run_backtest_task_v2
 
-        run_backtest_task_v2.delay(task.id)
+        run_backtest_task_v2.delay(task.pk)
 
         # Return success response
         return Response(
             {
                 "message": "Backtest task started successfully",
-                "task_id": task.id,
+                "task_id": task.pk,
             },
             status=status.HTTP_202_ACCEPTED,
         )
@@ -268,7 +268,7 @@ class BacktestTaskStopView(APIView):
         """
         # Get the task
         try:
-            task = BacktestTask.objects.get(id=task_id, user=request.user.id)
+            task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
         except BacktestTask.DoesNotExist:
             return Response(
                 {"error": "Backtest task not found"},
@@ -294,16 +294,16 @@ class BacktestTaskStopView(APIView):
 
         # Get latest execution for notification
         latest_execution = task.get_latest_execution()
-        execution_id = latest_execution.id if latest_execution else None
+        execution_id = latest_execution.pk if latest_execution else None
 
         # Broadcast WebSocket notification
         from .services.notifications import send_task_status_notification
 
-        # User is authenticated, so user.id is guaranteed to be not None
-        assert request.user.id is not None
+        # User is authenticated, so user.pk is guaranteed to be not None
+        assert request.user.pk is not None
         send_task_status_notification(
-            user_id=request.user.id,
-            task_id=task.id,
+            user_id=request.user.pk,
+            task_id=task.pk,
             task_name=task.name,
             task_type="backtest",
             status=TaskStatus.STOPPED,
@@ -313,7 +313,7 @@ class BacktestTaskStopView(APIView):
         # Return immediate response
         return Response(
             {
-                "id": task.id,
+                "id": task.pk,
                 "status": task.status,
                 "message": "Task stop initiated",
             },
@@ -341,7 +341,7 @@ class BacktestTaskRerunView(APIView):
         """
         # Get the task
         try:
-            task = BacktestTask.objects.get(id=task_id, user=request.user.id)
+            task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
         except BacktestTask.DoesNotExist:
             return Response(
                 {"error": "Backtest task not found"},
@@ -368,13 +368,13 @@ class BacktestTaskRerunView(APIView):
         # Queue the backtest task for execution
         from .tasks import run_backtest_task_v2
 
-        run_backtest_task_v2.delay(task.id)
+        run_backtest_task_v2.delay(task.pk)
 
         # Return success response
         return Response(
             {
                 "message": "Backtest task rerun started successfully",
-                "task_id": task.id,
+                "task_id": task.pk,
             },
             status=status.HTTP_202_ACCEPTED,
         )
@@ -402,7 +402,7 @@ class BacktestTaskStatusView(APIView):
         """
         # Get the task
         try:
-            task = BacktestTask.objects.get(id=task_id, user=request.user.id)
+            task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
         except BacktestTask.DoesNotExist:
             return Response(
                 {"error": "Backtest task not found"},
@@ -431,7 +431,7 @@ class BacktestTaskStatusView(APIView):
 
         # Build response data
         response_data = {
-            "task_id": task.id,
+            "task_id": task.pk,
             "task_type": "backtest",
             "status": task.status,
             "progress": latest_execution.progress if latest_execution else 0,
@@ -471,7 +471,7 @@ class BacktestTaskExecutionsView(APIView):
         """
         # Get the task
         try:
-            task = BacktestTask.objects.get(id=task_id, user=request.user.id)
+            task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
         except BacktestTask.DoesNotExist:
             return Response(
                 {"error": "Backtest task not found"},
@@ -535,7 +535,7 @@ class BacktestTaskLogsView(APIView):
                         "timestamp": log_entry.get("timestamp"),
                         "level": log_entry.get("level"),
                         "message": log_entry.get("message"),
-                        "execution_id": execution.id,
+                        "execution_id": execution.pk,
                         "execution_number": execution.execution_number,
                     }
                 )
@@ -556,7 +556,7 @@ class BacktestTaskLogsView(APIView):
         """
         # Verify task exists and user has access
         try:
-            BacktestTask.objects.get(id=task_id, user=request.user.id)
+            BacktestTask.objects.get(id=task_id, user=request.user.pk)
         except BacktestTask.DoesNotExist:
             return Response(
                 {"error": "Backtest task not found"},

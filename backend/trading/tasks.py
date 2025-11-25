@@ -746,14 +746,14 @@ def collect_tick_data_for_default_account(
         task_ids = []
         for instrument in instruments:
             result = start_market_data_stream.delay(
-                account_id=default_account.id, instrument=instrument
+                account_id=default_account.pk, instrument=instrument
             )
-            task_ids.append(result.id)
+            task_ids.append(result.pk)
             logger.info(
                 "Started tick data stream for %s on account %s (task: %s)",
                 instrument,
                 default_account.account_id,
-                result.id,
+                result.pk,
             )
 
         logger.info(
@@ -764,7 +764,7 @@ def collect_tick_data_for_default_account(
 
         return {
             "success": True,
-            "account_id": default_account.id,
+            "account_id": default_account.pk,
             "instruments": instruments,
             "task_ids": task_ids,
             "error": None,
@@ -1216,14 +1216,14 @@ def _broadcast_to_strategy_executors(account: OandaAccount, tick: TickData) -> N
                 if orders:
                     logger.info(
                         "Strategy %s generated %d orders for %s",
-                        strategy.id,
+                        strategy.pk,
                         len(orders),
                         tick.instrument,
                     )
 
             except Exception as e:  # pylint: disable=broad-exception-caught
                 logger.error(
-                    "Error processing tick for strategy %s: %s", strategy.id, e, exc_info=True
+                    "Error processing tick for strategy %s: %s", strategy.pk, e, exc_info=True
                 )
 
     except Exception as e:  # pylint: disable=broad-exception-caught
@@ -1568,7 +1568,7 @@ def stop_trading_task_v2(task_id: int) -> Dict[str, Any]:
 
         if result["success"]:
             # Stop market data streaming for the account
-            stop_market_data_stream.delay(task.oanda_account.id)
+            stop_market_data_stream.delay(task.oanda_account.pk)
             logger.info(
                 "Stopped market data streaming for account %s",
                 task.oanda_account.account_id,
@@ -1715,12 +1715,12 @@ def cleanup_stale_locks_task() -> Dict[str, Any]:
                 # Check if lock is stale
                 was_stale = lock_manager.cleanup_stale_lock(
                     task_type="backtest",
-                    task_id=task.id,
+                    task_id=task.pk,
                 )
 
                 if was_stale:
                     cleaned_count += 1
-                    failed_tasks.append(task.id)
+                    failed_tasks.append(task.pk)
 
                     # Update task status to failed
                     task.status = TaskStatus.FAILED
@@ -1740,19 +1740,19 @@ def cleanup_stale_locks_task() -> Dict[str, Any]:
 
                     logger.warning(
                         "Cleaned up stale lock for task %d and marked as failed",
-                        task.id,
+                        task.pk,
                     )
 
                     # Send WebSocket notification
                     from trading.services.notifications import send_task_status_notification
 
                     send_task_status_notification(
-                        user_id=task.user.id,
-                        task_id=task.id,
+                        user_id=task.user.pk,
+                        task_id=task.pk,
                         task_name=task.name,
                         task_type="backtest",
                         status=TaskStatus.FAILED,
-                        execution_id=latest_execution.id if latest_execution else None,
+                        execution_id=latest_execution.pk if latest_execution else None,
                         error_message=(
                             "Task terminated due to stale lock (no heartbeat for >5 minutes)"
                         ),
@@ -1761,7 +1761,7 @@ def cleanup_stale_locks_task() -> Dict[str, Any]:
             except Exception as task_error:  # pylint: disable=broad-exception-caught
                 logger.error(
                     "Error checking stale lock for task %d: %s",
-                    task.id,
+                    task.pk,
                     task_error,
                     exc_info=True,
                 )

@@ -62,7 +62,7 @@ class Command(BaseCommand):
 
         # Build export data
         export_data = {
-            "backtest_id": backtest.id,
+            "backtest_id": backtest.pk,
             "strategy_type": backtest.strategy_type,
             "instrument": backtest.instrument,
             "start_date": backtest.start_date.isoformat(),

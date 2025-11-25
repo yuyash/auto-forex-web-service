@@ -54,8 +54,8 @@ class PnLCalculator:
         Calculate realized P&L for a position at exit price in USD.
 
         For USD/JPY:
-        - 1 lot = 1,000 USD
-        - P&L in JPY = price_diff × units × 1000
+        - units field = number of units (e.g., 10000 = 10,000 units)
+        - P&L in JPY = price_diff × units
         - P&L in USD = P&L_JPY / exit_price
 
         Args:
@@ -72,9 +72,8 @@ class PnLCalculator:
         if position.direction == "short":
             price_diff = -price_diff
 
-        # Convert lot size to base currency amount (1 lot = 1,000 units)
-        base_currency_amount = position.units * Decimal("1000")
-        realized_pnl = price_diff * base_currency_amount
+        # Calculate P&L using units directly (not lot size)
+        realized_pnl = price_diff * position.units
 
         # For JPY pairs, convert from JPY to USD
         if "JPY" in position.instrument:

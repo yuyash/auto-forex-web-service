@@ -65,7 +65,7 @@ class TradingTaskListCreateView(ListCreateAPIView):
         - search: Search in name or description
         - ordering: Sort field (e.g., '-created_at', 'name')
         """
-        queryset = TradingTask.objects.filter(user=self.request.user.id).select_related(
+        queryset = TradingTask.objects.filter(user=self.request.user.pk).select_related(
             "config", "oanda_account", "user"
         )
 
@@ -123,7 +123,7 @@ class TradingTaskDetailView(RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self) -> QuerySet:
         """Get trading tasks for the authenticated user."""
-        return TradingTask.objects.filter(user=self.request.user.id).select_related(
+        return TradingTask.objects.filter(user=self.request.user.pk).select_related(
             "config", "oanda_account", "user"
         )
 
@@ -158,7 +158,7 @@ class TradingTaskCopyView(APIView):
         """
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.id)
+            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
         except TradingTask.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
@@ -207,7 +207,7 @@ class TradingTaskStartView(APIView):
         """
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.id)
+            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
         except TradingTask.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
@@ -233,13 +233,13 @@ class TradingTaskStartView(APIView):
 
         # TODO: Queue the trading task for execution (will be implemented in task 6.3)
         # from .tasks import run_trading_task
-        # run_trading_task.delay(task.id)
+        # run_trading_task.delay(task.pk)
 
         # Return success response
         return Response(
             {
                 "message": "Trading task started successfully",
-                "task_id": task.id,
+                "task_id": task.pk,
             },
             status=status.HTTP_202_ACCEPTED,
         )
@@ -264,7 +264,7 @@ class TradingTaskStopView(APIView):
         """
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.id)
+            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
         except TradingTask.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
@@ -309,7 +309,7 @@ class TradingTaskPauseView(APIView):
         """
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.id)
+            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
         except TradingTask.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
@@ -350,7 +350,7 @@ class TradingTaskResumeView(APIView):
         """
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.id)
+            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
         except TradingTask.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
@@ -392,7 +392,7 @@ class TradingTaskRerunView(APIView):
         """
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.id)
+            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
         except TradingTask.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
@@ -418,13 +418,13 @@ class TradingTaskRerunView(APIView):
 
         # TODO: Queue the trading task for execution (will be implemented in task 6.3)
         # from .tasks import run_trading_task
-        # run_trading_task.delay(task.id)
+        # run_trading_task.delay(task.pk)
 
         # Return success response
         return Response(
             {
                 "message": "Trading task rerun started successfully",
-                "task_id": task.id,
+                "task_id": task.pk,
             },
             status=status.HTTP_202_ACCEPTED,
         )
@@ -449,7 +449,7 @@ class TradingTaskExecutionsView(APIView):
         """
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.id)
+            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
         except TradingTask.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
@@ -513,7 +513,7 @@ class TradingTaskLogsView(APIView):
                         "timestamp": log_entry.get("timestamp"),
                         "level": log_entry.get("level"),
                         "message": log_entry.get("message"),
-                        "execution_id": execution.id,
+                        "execution_id": execution.pk,
                         "execution_number": execution.execution_number,
                     }
                 )
@@ -534,7 +534,7 @@ class TradingTaskLogsView(APIView):
         """
         # Verify task exists and user has access
         try:
-            TradingTask.objects.get(id=task_id, user=request.user.id)
+            TradingTask.objects.get(id=task_id, user=request.user.pk)
         except TradingTask.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
@@ -624,7 +624,7 @@ class TradingTaskStatusView(APIView):
         """
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.id)
+            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
         except TradingTask.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
@@ -653,7 +653,7 @@ class TradingTaskStatusView(APIView):
 
         # Build response data matching TaskStatusResponse interface
         response_data = {
-            "task_id": task.id,
+            "task_id": task.pk,
             "task_type": "trading",
             "status": task.status,
             "progress": latest_execution.progress if latest_execution else 0,

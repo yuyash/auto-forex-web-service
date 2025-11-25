@@ -58,8 +58,8 @@ class StateSynchronizer:
         try:
             logger.info(
                 "Transitioning task %d (execution %d) to RUNNING state",
-                task.id,
-                execution.id,
+                task.pk,
+                execution.pk,
             )
 
             # Update task status
@@ -74,24 +74,24 @@ class StateSynchronizer:
 
             # Broadcast notification
             send_task_status_notification(
-                user_id=task.user.id,
-                task_id=task.id,
+                user_id=task.user.pk,
+                task_id=task.pk,
                 task_name=task.name,
                 task_type=self.task_type,
                 status=TaskStatus.RUNNING,
-                execution_id=execution.id,
+                execution_id=execution.pk,
             )
 
             logger.info(
                 "Task %d transitioned to RUNNING (execution %d)",
-                task.id,
-                execution.id,
+                task.pk,
+                execution.pk,
             )
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error(
                 "Failed to transition task %d to RUNNING: %s",
-                task.id,
+                task.pk,
                 e,
                 exc_info=True,
             )
@@ -115,8 +115,8 @@ class StateSynchronizer:
         try:
             logger.info(
                 "Transitioning task %d (execution %d) to STOPPED state",
-                task.id,
-                execution.id,
+                task.pk,
+                execution.pk,
             )
 
             # Update task status
@@ -130,24 +130,24 @@ class StateSynchronizer:
 
             # Broadcast notification
             send_task_status_notification(
-                user_id=task.user.id,
-                task_id=task.id,
+                user_id=task.user.pk,
+                task_id=task.pk,
                 task_name=task.name,
                 task_type=self.task_type,
                 status=TaskStatus.STOPPED,
-                execution_id=execution.id,
+                execution_id=execution.pk,
             )
 
             logger.info(
                 "Task %d transitioned to STOPPED (execution %d)",
-                task.id,
-                execution.id,
+                task.pk,
+                execution.pk,
             )
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error(
                 "Failed to transition task %d to STOPPED: %s",
-                task.id,
+                task.pk,
                 e,
                 exc_info=True,
             )
@@ -170,8 +170,8 @@ class StateSynchronizer:
         try:
             logger.info(
                 "Transitioning task %d (execution %d) to COMPLETED state",
-                task.id,
-                execution.id,
+                task.pk,
+                execution.pk,
             )
 
             # Update task status
@@ -186,24 +186,24 @@ class StateSynchronizer:
 
             # Broadcast notification
             send_task_status_notification(
-                user_id=task.user.id,
-                task_id=task.id,
+                user_id=task.user.pk,
+                task_id=task.pk,
                 task_name=task.name,
                 task_type=self.task_type,
                 status=TaskStatus.COMPLETED,
-                execution_id=execution.id,
+                execution_id=execution.pk,
             )
 
             logger.info(
                 "Task %d transitioned to COMPLETED (execution %d)",
-                task.id,
-                execution.id,
+                task.pk,
+                execution.pk,
             )
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error(
                 "Failed to transition task %d to COMPLETED: %s",
-                task.id,
+                task.pk,
                 e,
                 exc_info=True,
             )
@@ -230,8 +230,8 @@ class StateSynchronizer:
         try:
             logger.error(
                 "Transitioning task %d (execution %d) to FAILED state: %s",
-                task.id,
-                execution.id,
+                task.pk,
+                execution.pk,
                 error,
             )
 
@@ -247,25 +247,25 @@ class StateSynchronizer:
 
             # Broadcast notification with error message
             send_task_status_notification(
-                user_id=task.user.id,
-                task_id=task.id,
+                user_id=task.user.pk,
+                task_id=task.pk,
                 task_name=task.name,
                 task_type=self.task_type,
                 status=TaskStatus.FAILED,
-                execution_id=execution.id,
+                execution_id=execution.pk,
                 error_message=error,
             )
 
             logger.info(
                 "Task %d transitioned to FAILED (execution %d)",
-                task.id,
-                execution.id,
+                task.pk,
+                execution.pk,
             )
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error(
                 "Failed to transition task %d to FAILED: %s",
-                task.id,
+                task.pk,
                 e,
                 exc_info=True,
             )

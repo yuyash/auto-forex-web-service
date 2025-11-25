@@ -20,6 +20,30 @@ from .enums import TaskStatus, TaskType
 User = get_user_model()
 
 
+class TradingTaskManager(models.Manager["TradingTask"]):
+    """Custom manager for TradingTask model."""
+
+    def for_user(self, user: Any) -> models.QuerySet["TradingTask"]:
+        """Get trading tasks for a specific user."""
+        return self.filter(user=user)
+
+    def active(self) -> models.QuerySet["TradingTask"]:
+        """Get all active (running or paused) trading tasks."""
+        return self.filter(status__in=[TaskStatus.RUNNING, TaskStatus.PAUSED])
+
+    def running(self) -> models.QuerySet["TradingTask"]:
+        """Get all running trading tasks."""
+        return self.filter(status=TaskStatus.RUNNING)
+
+    def for_account(self, account: Any) -> models.QuerySet["TradingTask"]:
+        """Get trading tasks for a specific OANDA account."""
+        return self.filter(oanda_account=account)
+
+    def by_config(self, config: Any) -> models.QuerySet["TradingTask"]:
+        """Get trading tasks using a specific strategy configuration."""
+        return self.filter(config=config)
+
+
 class TradingTask(models.Model):
     """
     Persistent live trading task with reusable configuration.
@@ -32,6 +56,8 @@ class TradingTask(models.Model):
 
     Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 4.1, 4.2, 4.3, 4.4, 4.5
     """
+
+    objects = TradingTaskManager()
 
     user = models.ForeignKey(
         User,
@@ -127,7 +153,7 @@ class TradingTask(models.Model):
         other_running_tasks = TradingTask.objects.filter(
             oanda_account=self.oanda_account,
             status=TaskStatus.RUNNING,
-        ).exclude(id=self.id)
+        ).exclude(id=self.pk)
 
         if other_running_tasks.exists():
             other_task = other_running_tasks.first()
@@ -168,12 +194,12 @@ class TradingTask(models.Model):
         from trading.services.notifications import send_task_status_notification
 
         send_task_status_notification(
-            user_id=self.user.id,
-            task_id=self.id,
+            user_id=self.user.pk,
+            task_id=self.pk,
             task_name=self.name,
             task_type="trading",
             status=TaskStatus.STOPPED,
-            execution_id=latest_execution.id if latest_execution else None,
+            execution_id=latest_execution.pk if latest_execution else None,
         )
 
     def pause(self) -> None:
@@ -203,12 +229,12 @@ class TradingTask(models.Model):
         from trading.services.notifications import send_task_status_notification
 
         send_task_status_notification(
-            user_id=self.user.id,
-            task_id=self.id,
+            user_id=self.user.pk,
+            task_id=self.pk,
             task_name=self.name,
             task_type="trading",
             status=TaskStatus.PAUSED,
-            execution_id=latest_execution.id if latest_execution else None,
+            execution_id=latest_execution.pk if latest_execution else None,
         )
 
     def resume(self) -> None:
@@ -227,7 +253,7 @@ class TradingTask(models.Model):
         other_running_tasks = TradingTask.objects.filter(
             oanda_account=self.oanda_account,
             status=TaskStatus.RUNNING,
-        ).exclude(id=self.id)
+        ).exclude(id=self.pk)
 
         if other_running_tasks.exists():
             other_task = other_running_tasks.first()
@@ -251,12 +277,12 @@ class TradingTask(models.Model):
         from trading.services.notifications import send_task_status_notification
 
         send_task_status_notification(
-            user_id=self.user.id,
-            task_id=self.id,
+            user_id=self.user.pk,
+            task_id=self.pk,
             task_name=self.name,
             task_type="trading",
             status=TaskStatus.RUNNING,
-            execution_id=latest_execution.id if latest_execution else None,
+            execution_id=latest_execution.pk if latest_execution else None,
         )
 
     def rerun(self) -> None:
@@ -279,7 +305,7 @@ class TradingTask(models.Model):
         other_running_tasks = TradingTask.objects.filter(
             oanda_account=self.oanda_account,
             status=TaskStatus.RUNNING,
-        ).exclude(id=self.id)
+        ).exclude(id=self.pk)
 
         if other_running_tasks.exists():
             other_task = other_running_tasks.first()
@@ -340,7 +366,7 @@ class TradingTask(models.Model):
         return (
             TaskExecution.objects.filter(
                 task_type=TaskType.TRADING,
-                task_id=self.id,
+                task_id=self.pk,
             )
             .order_by("-execution_number")
             .first()
@@ -358,7 +384,7 @@ class TradingTask(models.Model):
 
         return TaskExecution.objects.filter(
             task_type=TaskType.TRADING,
-            task_id=self.id,
+            task_id=self.pk,
         ).order_by("-execution_number")
 
     def validate_configuration(self) -> tuple[bool, str | None]:
@@ -374,7 +400,7 @@ class TradingTask(models.Model):
             Tuple of (is_valid, error_message)
         """
         # Validate account ownership
-        if self.oanda_account.user_id != self.user_id:
+        if self.oanda_account.user != self.user:
             return False, "Account does not belong to the user"
 
         # Validate account is active

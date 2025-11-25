@@ -76,7 +76,7 @@ function createMarkerFromEvent(
   return {
     id: `event-${index}`,
     date: roundedDate,
-    price: parseFloat(price),
+    price: parseFloat(String(price)),
     type: markerConfig.type,
     color: markerConfig.color,
     shape: markerConfig.shape,
@@ -195,7 +195,7 @@ function formatTooltip(event: BacktestStrategyEvent): string {
 
   // Add relevant details
   if (event.details.price) {
-    lines.push(`Price: ${parseFloat(event.details.price).toFixed(5)}`);
+    lines.push(`Price: ${parseFloat(String(event.details.price)).toFixed(5)}`);
   }
   if (event.details.layer_number !== undefined) {
     lines.push(`Layer: ${event.details.layer_number}`);

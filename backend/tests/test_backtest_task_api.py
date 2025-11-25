@@ -98,7 +98,7 @@ def running_backtest_task(db, user, strategy_config):
     # Create execution
     TaskExecution.objects.create(
         task_type=TaskType.BACKTEST,
-        task_id=task.id,
+        task_id=task.pk,
         execution_number=1,
         status=TaskStatus.RUNNING,
         progress=50,
@@ -127,7 +127,7 @@ def stopped_backtest_task(db, user, strategy_config):
     # Create execution
     TaskExecution.objects.create(
         task_type=TaskType.BACKTEST,
-        task_id=task.id,
+        task_id=task.pk,
         execution_number=1,
         status=TaskStatus.STOPPED,
         progress=30,
@@ -158,26 +158,26 @@ class TestBacktestTaskStopEndpoint:
 
             # Make request
             url = reverse(
-                "trading:backtest_task_stop", kwargs={"task_id": running_backtest_task.id}
+                "trading:backtest_task_stop", kwargs={"task_id": running_backtest_task.pk}
             )
             response = api_client.post(url)
 
             # Verify response
             assert response.status_code == status.HTTP_200_OK
-            assert response.data["id"] == running_backtest_task.id
+            assert response.data["id"] == running_backtest_task.pk
             assert response.data["status"] == TaskStatus.STOPPED
             assert response.data["message"] == "Task stop initiated"
 
             # Verify cancellation flag was set
             mock_lock_manager.set_cancellation_flag.assert_called_once_with(
-                "backtest", running_backtest_task.id
+                "backtest", running_backtest_task.pk
             )
 
             # Verify notification was sent
             mock_notify.assert_called_once()
             call_kwargs = mock_notify.call_args[1]
-            assert call_kwargs["user_id"] == user.id
-            assert call_kwargs["task_id"] == running_backtest_task.id
+            assert call_kwargs["user_id"] == user.pk
+            assert call_kwargs["task_id"] == running_backtest_task.pk
             assert call_kwargs["status"] == TaskStatus.STOPPED
 
             # Verify task status was updated
@@ -194,7 +194,7 @@ class TestBacktestTaskStopEndpoint:
         api_client.force_authenticate(user=user)
 
         # Make request
-        url = reverse("trading:backtest_task_stop", kwargs={"task_id": backtest_task.id})
+        url = reverse("trading:backtest_task_stop", kwargs={"task_id": backtest_task.pk})
         response = api_client.post(url)
 
         # Verify response
@@ -217,7 +217,7 @@ class TestBacktestTaskStopEndpoint:
     def test_stop_task_unauthenticated(self, api_client, running_backtest_task):
         """Test stopping a task without authentication fails."""
         # Make request without authentication
-        url = reverse("trading:backtest_task_stop", kwargs={"task_id": running_backtest_task.id})
+        url = reverse("trading:backtest_task_stop", kwargs={"task_id": running_backtest_task.pk})
         response = api_client.post(url)
 
         # Verify response
@@ -238,7 +238,7 @@ class TestBacktestTaskDeleteEndpoint:
         api_client.force_authenticate(user=user)
 
         # Make request
-        url = reverse("trading:backtest_task_detail", kwargs={"task_id": running_backtest_task.id})
+        url = reverse("trading:backtest_task_detail", kwargs={"task_id": running_backtest_task.pk})
         response = api_client.delete(url)
 
         # Verify response
@@ -247,7 +247,7 @@ class TestBacktestTaskDeleteEndpoint:
         assert "running" in response.data[0].lower()
 
         # Verify task was not deleted
-        assert BacktestTask.objects.filter(id=running_backtest_task.id).exists()
+        assert BacktestTask.objects.filter(id=running_backtest_task.pk).exists()
 
     def test_delete_stopped_task_succeeds(self, api_client, user, stopped_backtest_task):
         """
@@ -259,14 +259,14 @@ class TestBacktestTaskDeleteEndpoint:
         api_client.force_authenticate(user=user)
 
         # Make request
-        url = reverse("trading:backtest_task_detail", kwargs={"task_id": stopped_backtest_task.id})
+        url = reverse("trading:backtest_task_detail", kwargs={"task_id": stopped_backtest_task.pk})
         response = api_client.delete(url)
 
         # Verify response
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
         # Verify task was deleted
-        assert not BacktestTask.objects.filter(id=stopped_backtest_task.id).exists()
+        assert not BacktestTask.objects.filter(id=stopped_backtest_task.pk).exists()
 
         # Note: TaskExecution records are kept for historical purposes
         # They don't cascade delete with the task
@@ -277,14 +277,14 @@ class TestBacktestTaskDeleteEndpoint:
         api_client.force_authenticate(user=user)
 
         # Make request
-        url = reverse("trading:backtest_task_detail", kwargs={"task_id": backtest_task.id})
+        url = reverse("trading:backtest_task_detail", kwargs={"task_id": backtest_task.pk})
         response = api_client.delete(url)
 
         # Verify response
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
         # Verify task was deleted
-        assert not BacktestTask.objects.filter(id=backtest_task.id).exists()
+        assert not BacktestTask.objects.filter(id=backtest_task.pk).exists()
 
     def test_delete_nonexistent_task_fails(self, api_client, user):
         """Test deleting a nonexistent task returns 404."""
@@ -316,12 +316,12 @@ class TestBacktestTaskStatusEndpoint:
         execution = running_backtest_task.get_latest_execution()
 
         # Make request
-        url = reverse("trading:backtest_task_status", kwargs={"task_id": running_backtest_task.id})
+        url = reverse("trading:backtest_task_status", kwargs={"task_id": running_backtest_task.pk})
         response = api_client.get(url)
 
         # Verify response matches TaskStatusResponse interface
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["task_id"] == running_backtest_task.id
+        assert response.data["task_id"] == running_backtest_task.pk
         assert response.data["task_type"] == "backtest"
         assert response.data["status"] == TaskStatus.RUNNING
         assert response.data["progress"] == execution.progress
@@ -339,12 +339,12 @@ class TestBacktestTaskStatusEndpoint:
         api_client.force_authenticate(user=user)
 
         # Make request
-        url = reverse("trading:backtest_task_status", kwargs={"task_id": backtest_task.id})
+        url = reverse("trading:backtest_task_status", kwargs={"task_id": backtest_task.pk})
         response = api_client.get(url)
 
         # Verify response matches TaskStatusResponse interface
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["task_id"] == backtest_task.id
+        assert response.data["task_id"] == backtest_task.pk
         assert response.data["task_type"] == "backtest"
         assert response.data["status"] == TaskStatus.CREATED
         assert response.data["progress"] == 0
@@ -368,7 +368,7 @@ class TestBacktestTaskStatusEndpoint:
     def test_get_status_unauthenticated(self, api_client, backtest_task):
         """Test getting status without authentication fails."""
         # Make request without authentication
-        url = reverse("trading:backtest_task_status", kwargs={"task_id": backtest_task.id})
+        url = reverse("trading:backtest_task_status", kwargs={"task_id": backtest_task.pk})
         response = api_client.get(url)
 
         # Verify response
@@ -387,7 +387,7 @@ class TestBacktestTaskStatusEndpoint:
         api_client.force_authenticate(user=other_user)
 
         # Make request for first user's task
-        url = reverse("trading:backtest_task_status", kwargs={"task_id": backtest_task.id})
+        url = reverse("trading:backtest_task_status", kwargs={"task_id": backtest_task.pk})
         response = api_client.get(url)
 
         # Verify response

@@ -9,6 +9,7 @@ Requirements: 12.1, 12.4
 """
 
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.db import models
@@ -16,7 +17,38 @@ from django.utils import timezone
 
 from .enums import DataSource, TaskStatus
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractUser as User
+else:
+    User = get_user_model()
+
+
+class BacktestManager(models.Manager["Backtest"]):
+    """Custom manager for Backtest model."""
+
+    def for_user(self, user: User) -> models.QuerySet["Backtest"]:
+        """Get backtests for a specific user."""
+        return self.filter(user=user)
+
+    def running(self) -> models.QuerySet["Backtest"]:
+        """Get all running backtests."""
+        return self.filter(status=TaskStatus.RUNNING)
+
+    def completed(self) -> models.QuerySet["Backtest"]:
+        """Get all completed backtests."""
+        return self.filter(status=TaskStatus.COMPLETED)
+
+    def failed(self) -> models.QuerySet["Backtest"]:
+        """Get all failed backtests."""
+        return self.filter(status=TaskStatus.FAILED)
+
+    def by_strategy_type(self, strategy_type: str) -> models.QuerySet["Backtest"]:
+        """Get backtests by strategy type."""
+        return self.filter(strategy_type=strategy_type)
+
+    def by_instrument(self, instrument: str) -> models.QuerySet["Backtest"]:
+        """Get backtests for a specific instrument."""
+        return self.filter(instrument=instrument)
 
 
 class Backtest(models.Model):
@@ -28,6 +60,8 @@ class Backtest(models.Model):
 
     Requirements: 12.1, 12.4
     """
+
+    objects = BacktestManager()
 
     user = models.ForeignKey(
         User,
@@ -545,12 +579,30 @@ class BacktestResult(models.Model):  # pylint: disable=too-many-instance-attribu
             self.sharpe_ratio = None
 
 
+class StrategyComparisonManager(models.Manager["StrategyComparison"]):
+    """Custom manager for StrategyComparison model."""
+
+    def for_user(self, user: User) -> models.QuerySet["StrategyComparison"]:
+        """Get strategy comparisons for a specific user."""
+        return self.filter(user=user)
+
+    def completed(self) -> models.QuerySet["StrategyComparison"]:
+        """Get all completed comparisons."""
+        return self.filter(status=TaskStatus.COMPLETED)
+
+    def running(self) -> models.QuerySet["StrategyComparison"]:
+        """Get all running comparisons."""
+        return self.filter(status=TaskStatus.RUNNING)
+
+
 class StrategyComparison(models.Model):
     """
     Model to store strategy comparison requests and results.
 
     Requirements: 5.1, 5.3, 12.4
     """
+
+    objects = StrategyComparisonManager()
 
     user = models.ForeignKey(
         User,
@@ -603,4 +655,4 @@ class StrategyComparison(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
-        return f"Comparison {self.id} - {self.status}"
+        return f"Comparison {self.pk} - {self.status}"

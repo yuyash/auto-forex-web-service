@@ -131,7 +131,7 @@ class TestLogPersistenceProperties:
         # Create execution with generated logs
         execution = TaskExecution.objects.create(
             task_type=TaskType.BACKTEST,
-            task_id=task.id,
+            task_id=task.pk,
             execution_number=1,
             status=TaskStatus.RUNNING,
             progress=50,
@@ -151,7 +151,7 @@ class TestLogPersistenceProperties:
             assert stored_log["level"] in ["INFO", "WARNING", "ERROR", "DEBUG"]
 
         # Retrieve logs via API
-        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(logs_url)
 
         # Verify API response
@@ -216,7 +216,7 @@ class TestLogPersistenceProperties:
         # Create execution with first batch of logs
         execution = TaskExecution.objects.create(
             task_type=TaskType.BACKTEST,
-            task_id=task.id,
+            task_id=task.pk,
             execution_number=1,
             status=TaskStatus.RUNNING,
             progress=25,
@@ -239,7 +239,7 @@ class TestLogPersistenceProperties:
         assert len(execution.logs) == total_logs
 
         # Retrieve logs via API
-        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(logs_url)
 
         # Verify all logs are retrievable
@@ -286,7 +286,7 @@ class TestLogPersistenceProperties:
         # Create execution with logs
         execution = TaskExecution.objects.create(
             task_type=TaskType.BACKTEST,
-            task_id=task.id,
+            task_id=task.pk,
             execution_number=1,
             status=TaskStatus.RUNNING,
             progress=50,
@@ -304,7 +304,7 @@ class TestLogPersistenceProperties:
         task.save()
 
         # Verify logs are still accessible after completion
-        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(logs_url)
 
         assert response.status_code == 200
@@ -374,7 +374,7 @@ class TestLogPersistenceProperties:
         # Create execution with mixed log levels
         TaskExecution.objects.create(
             task_type=TaskType.BACKTEST,
-            task_id=task.id,
+            task_id=task.pk,
             execution_number=1,
             status=TaskStatus.RUNNING,
             progress=50,
@@ -382,7 +382,7 @@ class TestLogPersistenceProperties:
             logs=all_logs,
         )
 
-        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
 
         # Test filtering by INFO level
         response = api_client.get(logs_url, {"level": "INFO"})

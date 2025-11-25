@@ -33,10 +33,34 @@ vi.mock('../../../hooks/useTaskExecutions', () => ({
 vi.mock('../BacktestChart', () => ({
   BacktestChart: vi.fn(({ onTradeClick }) => (
     <div data-testid="backtest-chart">
-      <button data-testid="trade-marker-0" onClick={() => onTradeClick?.(0)}>
+      <button
+        data-testid="trade-marker-0"
+        onClick={() =>
+          onTradeClick?.({
+            id: 'trade-0',
+            time: new Date('2024-01-01T10:00:00Z'),
+            position: 'belowBar',
+            color: '#2196f3',
+            shape: 'circle',
+            text: 'Trade 0',
+          })
+        }
+      >
         Trade 0
       </button>
-      <button data-testid="trade-marker-1" onClick={() => onTradeClick?.(1)}>
+      <button
+        data-testid="trade-marker-1"
+        onClick={() =>
+          onTradeClick?.({
+            id: 'trade-1',
+            time: new Date('2024-01-01T12:00:00Z'),
+            position: 'belowBar',
+            color: '#2196f3',
+            shape: 'circle',
+            text: 'Trade 1',
+          })
+        }
+      >
         Trade 1
       </button>
     </div>

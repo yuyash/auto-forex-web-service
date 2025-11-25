@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BacktestChart } from './BacktestChart';
+import type { BacktestStrategyEvent } from '../../types/execution';
 
 // Mock dependencies
 vi.mock('../../contexts/AuthContext', () => ({
@@ -81,7 +82,30 @@ describe('BacktestChart', () => {
     });
 
     it('should render trade markers', async () => {
-      render(<BacktestChart {...defaultProps} />);
+      const strategyEvents: BacktestStrategyEvent[] = [
+        {
+          timestamp: '2024-01-15T10:30:00Z',
+          event_type: 'initial_entry',
+          description: 'Initial entry',
+          details: {
+            price: 1.101,
+            units: 1000,
+          },
+        },
+        {
+          timestamp: '2024-01-15T12:00:00Z',
+          event_type: 'strategy_close',
+          description: 'Strategy close',
+          details: {
+            exit_price: 1.105,
+            units: 1000,
+          },
+        },
+      ];
+
+      render(
+        <BacktestChart {...defaultProps} strategyEvents={strategyEvents} />
+      );
 
       await waitFor(() => {
         expect(screen.getByTestId('financial-chart')).toBeInTheDocument();

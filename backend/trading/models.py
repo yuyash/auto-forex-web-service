@@ -22,19 +22,14 @@ from django.utils import timezone
 from accounts.models import OandaAccount
 
 # Import backtest models to make them discoverable by Django
-# pylint: disable=unused-import
-from .backtest_models import Backtest, BacktestResult  # noqa: F401
-from .backtest_task_models import BacktestTask  # noqa: F401
 from .enums import TaskStatus
-from .event_models import Event, Notification  # noqa: F401
-from .execution_models import ExecutionMetrics, TaskExecution  # noqa: F401
-from .tick_data_models import TickData  # noqa: F401
-from .trading_task_models import TradingTask  # noqa: F401
 
 User = get_user_model()
 
 
-class StrategyConfigManager(models.Manager["StrategyConfig"]):
+class StrategyConfigManager(
+    models.Manager["StrategyConfig"]
+):  # pylint: disable=too-few-public-methods
     """Custom manager for StrategyConfig model."""
 
     def create_for_user(self, user: Any, **kwargs: Any) -> "StrategyConfig":
@@ -95,7 +90,7 @@ class StrategyConfig(models.Model):
         help_text="Timestamp when the configuration was last updated",
     )
 
-    class Meta:
+    class Meta:  # pylint: disable=too-few-public-methods,missing-class-docstring
         db_table = "strategy_configs"
         verbose_name = "Strategy Configuration"
         verbose_name_plural = "Strategy Configurations"
@@ -121,7 +116,7 @@ class StrategyConfig(models.Model):
         Returns:
             Tuple of (is_valid, error_message)
         """
-        from .strategy_registry import registry
+        from .strategy_registry import registry  # pylint: disable=import-outside-toplevel
 
         try:
             # Check if strategy type exists
@@ -149,7 +144,7 @@ class StrategyConfig(models.Model):
                     return False, f"Required parameter '{field}' is missing"
 
             # Type validation for provided parameters
-            # pylint: disable=unsupported-membership-test
+            # pylint: disable=unsupported-membership-test,no-member
             for param_name, param_value in self.parameters.items():
                 if param_name in properties:
                     prop_schema = properties[param_name]
@@ -164,7 +159,7 @@ class StrategyConfig(models.Model):
 
             return True, None
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             return False, f"Validation error: {str(e)}"
 
     @staticmethod
@@ -203,11 +198,12 @@ class StrategyConfig(models.Model):
         """
         # Check BacktestTask references
         # Import here to avoid circular dependency
+        # pylint: disable=import-outside-toplevel
         from .backtest_models import Backtest as BacktestModel
         from .trading_task_models import TradingTask as TradingTaskModel
 
         active_backtests = BacktestModel.objects.filter(
-            config=self.id, status__in=[TaskStatus.CREATED, TaskStatus.RUNNING]
+            config=self.pk, status__in=[TaskStatus.CREATED, TaskStatus.RUNNING]
         ).exists()
 
         if active_backtests:
@@ -215,7 +211,7 @@ class StrategyConfig(models.Model):
 
         # Check TradingTask references
         active_trading_tasks = TradingTaskModel.objects.filter(
-            config=self.id,
+            config=self.pk,
             status__in=[TaskStatus.CREATED, TaskStatus.RUNNING, TaskStatus.PAUSED],
         ).exists()
 
@@ -232,12 +228,13 @@ class StrategyConfig(models.Model):
             Dictionary with 'backtest_tasks' and 'trading_tasks' lists
         """
         # Import here to avoid circular dependency
+        # pylint: disable=import-outside-toplevel
         from .backtest_models import Backtest as BacktestModel
         from .trading_task_models import TradingTask as TradingTaskModel
 
-        backtest_tasks = list(BacktestModel.objects.filter(config=self.id).order_by("-created_at"))
+        backtest_tasks = list(BacktestModel.objects.filter(config=self.pk).order_by("-created_at"))
         trading_tasks = list(
-            TradingTaskModel.objects.filter(config=self.id).order_by("-created_at")
+            TradingTaskModel.objects.filter(config=self.pk).order_by("-created_at")
         )
 
         return {
@@ -246,12 +243,30 @@ class StrategyConfig(models.Model):
         }
 
 
+class StrategyManager(models.Manager["Strategy"]):
+    """Custom manager for Strategy model."""
+
+    def active(self) -> models.QuerySet["Strategy"]:
+        """Get all active strategies."""
+        return self.filter(status=TaskStatus.RUNNING, is_active=True)
+
+    def for_account(self, account: Any) -> models.QuerySet["Strategy"]:
+        """Get strategies for a specific account."""
+        return self.filter(account=account)
+
+    def by_type(self, strategy_type: str) -> models.QuerySet["Strategy"]:
+        """Get strategies by type."""
+        return self.filter(strategy_type=strategy_type)
+
+
 class Strategy(models.Model):
     """
     Trading strategy configuration.
 
     Requirements: 5.1, 5.2
     """
+
+    objects = StrategyManager()
 
     account = models.ForeignKey(
         OandaAccount,
@@ -302,7 +317,7 @@ class Strategy(models.Model):
         help_text="Timestamp when the strategy was last updated",
     )
 
-    class Meta:
+    class Meta:  # pylint: disable=too-few-public-methods,missing-class-docstring
         db_table = "strategies"
         verbose_name = "Strategy"
         verbose_name_plural = "Strategies"
@@ -316,7 +331,8 @@ class Strategy(models.Model):
 
     def __str__(self) -> str:
         status = "Active" if self.is_active else "Inactive"
-        return f"{self.strategy_type} - {self.account.account_id} ({status})"
+        account_id = self.account.account_id
+        return f"{self.strategy_type} - {account_id} ({status})"
 
     def start(self) -> None:
         """Start the strategy."""
@@ -371,12 +387,22 @@ class Strategy(models.Model):
         return str(self.config.get("position_diff_pattern", "increment"))
 
 
+class StrategyStateManager(models.Manager["StrategyState"]):
+    """Custom manager for StrategyState model."""
+
+    def for_strategy(self, strategy: Any) -> "StrategyState | None":
+        """Get state for a specific strategy."""
+        return self.filter(strategy=strategy).first()
+
+
 class StrategyState(models.Model):
     """
     Runtime state for active strategy.
 
     Requirements: 5.1, 5.2
     """
+
+    objects = StrategyStateManager()
 
     strategy = models.OneToOneField(
         Strategy,
@@ -413,7 +439,7 @@ class StrategyState(models.Model):
         help_text="Timestamp when the state was last updated",
     )
 
-    class Meta:
+    class Meta:  # pylint: disable=too-few-public-methods,missing-class-docstring
         db_table = "strategy_states"
         verbose_name = "Strategy State"
         verbose_name_plural = "Strategy States"
@@ -448,12 +474,38 @@ class StrategyState(models.Model):
         self.save(update_fields=["atr_values", "updated_at"])
 
 
+class OrderManager(models.Manager["Order"]):
+    """Custom manager for Order model."""
+
+    def pending(self) -> models.QuerySet["Order"]:
+        """Get all pending orders."""
+        return self.filter(status="pending")
+
+    def filled(self) -> models.QuerySet["Order"]:
+        """Get all filled orders."""
+        return self.filter(status="filled")
+
+    def for_account(self, account: Any) -> models.QuerySet["Order"]:
+        """Get orders for a specific account."""
+        return self.filter(account=account)
+
+    def for_strategy(self, strategy: Any) -> models.QuerySet["Order"]:
+        """Get orders for a specific strategy."""
+        return self.filter(strategy=strategy)
+
+    def by_instrument(self, instrument: str) -> models.QuerySet["Order"]:
+        """Get orders for a specific instrument."""
+        return self.filter(instrument=instrument)
+
+
 class Order(models.Model):
     """
     Trading order.
 
     Requirements: 8.1, 8.2
     """
+
+    objects = OrderManager()
 
     ORDER_TYPE_CHOICES = [
         ("market", "Market"),
@@ -551,7 +603,7 @@ class Order(models.Model):
         help_text="Timestamp when the order was created",
     )
 
-    class Meta:
+    class Meta:  # pylint: disable=too-few-public-methods,missing-class-docstring
         db_table = "orders"
         verbose_name = "Order"
         verbose_name_plural = "Orders"
@@ -586,12 +638,42 @@ class Order(models.Model):
         self.save(update_fields=["status"])
 
 
+class PositionManager(models.Manager["Position"]):
+    """Custom manager for Position model."""
+
+    def open(self) -> models.QuerySet["Position"]:
+        """Get all open positions."""
+        return self.filter(closed_at__isnull=True)
+
+    def closed(self) -> models.QuerySet["Position"]:
+        """Get all closed positions."""
+        return self.filter(closed_at__isnull=False)
+
+    def for_account(self, account: Any) -> models.QuerySet["Position"]:
+        """Get positions for a specific account."""
+        return self.filter(account=account)
+
+    def for_strategy(self, strategy: Any) -> models.QuerySet["Position"]:
+        """Get positions for a specific strategy."""
+        return self.filter(strategy=strategy)
+
+    def by_instrument(self, instrument: str) -> models.QuerySet["Position"]:
+        """Get positions for a specific instrument."""
+        return self.filter(instrument=instrument)
+
+    def by_layer(self, layer_number: int) -> models.QuerySet["Position"]:
+        """Get positions for a specific layer."""
+        return self.filter(layer_number=layer_number)
+
+
 class Position(models.Model):
     """
     Open trading position.
 
     Requirements: 9.1, 9.2
     """
+
+    objects = PositionManager()
 
     DIRECTION_CHOICES = [
         ("long", "Long"),
@@ -673,7 +755,7 @@ class Position(models.Model):
         help_text="Realized profit/loss (when closed)",
     )
 
-    class Meta:
+    class Meta:  # pylint: disable=too-few-public-methods,missing-class-docstring
         db_table = "positions"
         verbose_name = "Position"
         verbose_name_plural = "Positions"
@@ -697,9 +779,8 @@ class Position(models.Model):
         Calculate unrealized P&L based on current price in USD.
 
         For USD/JPY:
-        - 1 lot = 1,000 USD
-        - units field = lot size (e.g., 1.0 = 1 lot)
-        - P&L in JPY = price_diff × units × 1000
+        - units field = number of units (e.g., 10000 = 10,000 units)
+        - P&L in JPY = price_diff × units
         - P&L in USD = P&L_JPY / current_price
 
         Args:
@@ -714,9 +795,8 @@ class Position(models.Model):
         if self.direction == "short":
             price_diff = -price_diff
 
-        # Convert lot size to base currency amount (1 lot = 1,000 units)
-        base_currency_amount = self.units * Decimal("1000")
-        self.unrealized_pnl = price_diff * base_currency_amount
+        # Calculate P&L using units directly (not lot size)
+        self.unrealized_pnl = price_diff * self.units
 
         # For JPY pairs, convert from JPY to USD
         if "JPY" in str(self.instrument):
@@ -739,8 +819,8 @@ class Position(models.Model):
         Close the position and calculate realized P&L in USD.
 
         For USD/JPY:
-        - 1 lot = 1,000 USD
-        - P&L in JPY = price_diff × units × 1000
+        - units field = number of units (e.g., 10000 = 10,000 units)
+        - P&L in JPY = price_diff × units
         - P&L in USD = P&L_JPY / exit_price
 
         Args:
@@ -754,9 +834,8 @@ class Position(models.Model):
         if self.direction == "short":
             price_diff = -price_diff
 
-        # Convert lot size to base currency amount (1 lot = 1,000 units)
-        base_currency_amount = self.units * Decimal("1000")
-        self.realized_pnl = price_diff * base_currency_amount
+        # Calculate P&L using units directly (not lot size)
+        self.realized_pnl = price_diff * self.units
 
         # For JPY pairs, convert from JPY to USD
         if "JPY" in str(self.instrument):
@@ -768,12 +847,42 @@ class Position(models.Model):
         return self.realized_pnl
 
 
+class TradeManager(models.Manager["Trade"]):
+    """Custom manager for Trade model."""
+
+    def for_account(self, account: Any) -> models.QuerySet["Trade"]:
+        """Get trades for a specific account."""
+        return self.filter(account=account)
+
+    def for_strategy(self, strategy: Any) -> models.QuerySet["Trade"]:
+        """Get trades for a specific strategy."""
+        return self.filter(strategy=strategy)
+
+    def by_instrument(self, instrument: str) -> models.QuerySet["Trade"]:
+        """Get trades for a specific instrument."""
+        return self.filter(instrument=instrument)
+
+    def profitable(self) -> models.QuerySet["Trade"]:
+        """Get all profitable trades."""
+        return self.filter(pnl__gt=0)
+
+    def losing(self) -> models.QuerySet["Trade"]:
+        """Get all losing trades."""
+        return self.filter(pnl__lt=0)
+
+    def in_date_range(self, start_date: Any, end_date: Any) -> models.QuerySet["Trade"]:
+        """Get trades within a date range."""
+        return self.filter(closed_at__gte=start_date, closed_at__lte=end_date)
+
+
 class Trade(models.Model):
     """
     Completed trade record.
 
     Requirements: 18.1
     """
+
+    objects = TradeManager()
 
     DIRECTION_CHOICES = [
         ("long", "Long"),
@@ -840,7 +949,7 @@ class Trade(models.Model):
         help_text="Timestamp when the trade record was created",
     )
 
-    class Meta:
+    class Meta:  # pylint: disable=too-few-public-methods,missing-class-docstring
         db_table = "trades"
         verbose_name = "Trade"
         verbose_name_plural = "Trades"

@@ -75,7 +75,7 @@ def task_execution(db, backtest_task):
     """Create a test task execution."""
     return TaskExecution.objects.create(
         task_type="backtest",
-        task_id=backtest_task.id,
+        task_id=backtest_task.pk,
         execution_number=1,
         status=TaskStatus.RUNNING,
         started_at=timezone.now() - timedelta(minutes=10),
@@ -106,16 +106,16 @@ class TestStaleLockDetection:
         # Acquire lock
         lock_manager.acquire_lock(
             task_type="backtest",
-            task_id=backtest_task.id,
-            execution_id=task_execution.id,
+            task_id=backtest_task.pk,
+            execution_id=task_execution.pk,
         )
 
         # Manually set old heartbeat (simulate stale lock)
-        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.id)
+        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.pk)
         old_time = timezone.now() - timedelta(seconds=400)  # 6+ minutes ago
         cache.set(
             heartbeat_key,
-            {"last_beat": old_time.isoformat(), "execution_id": task_execution.id},
+            {"last_beat": old_time.isoformat(), "execution_id": task_execution.pk},
             timeout=lock_manager.LOCK_TIMEOUT,
         )
 
@@ -126,10 +126,10 @@ class TestStaleLockDetection:
         # Verify cleanup was successful
         assert result["success"] is True
         assert result["cleaned_count"] == 1
-        assert backtest_task.id in result["failed_tasks"]
+        assert backtest_task.pk in result["failed_tasks"]
 
         # Verify lock was released
-        lock_key = lock_manager._get_lock_key("backtest", backtest_task.id)
+        lock_key = lock_manager._get_lock_key("backtest", backtest_task.pk)
         lock_data = cache.get(lock_key)
         assert lock_data is None
 
@@ -138,12 +138,12 @@ class TestStaleLockDetection:
         # Acquire lock
         lock_manager.acquire_lock(
             task_type="backtest",
-            task_id=backtest_task.id,
-            execution_id=task_execution.id,
+            task_id=backtest_task.pk,
+            execution_id=task_execution.pk,
         )
 
         # Remove heartbeat (simulate missing heartbeat)
-        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.id)
+        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.pk)
         cache.delete(heartbeat_key)
 
         # Run cleanup task
@@ -153,19 +153,19 @@ class TestStaleLockDetection:
         # Verify cleanup was successful
         assert result["success"] is True
         assert result["cleaned_count"] == 1
-        assert backtest_task.id in result["failed_tasks"]
+        assert backtest_task.pk in result["failed_tasks"]
 
     def test_no_cleanup_for_fresh_lock(self, backtest_task, task_execution, lock_manager):
         """Test that fresh lock with recent heartbeat is not cleaned up."""
         # Acquire lock
         lock_manager.acquire_lock(
             task_type="backtest",
-            task_id=backtest_task.id,
-            execution_id=task_execution.id,
+            task_id=backtest_task.pk,
+            execution_id=task_execution.pk,
         )
 
         # Update heartbeat to ensure it's fresh
-        lock_manager.update_heartbeat(task_type="backtest", task_id=backtest_task.id)
+        lock_manager.update_heartbeat(task_type="backtest", task_id=backtest_task.pk)
 
         # Run cleanup task
         with patch("trading.services.notifications.send_task_status_notification"):
@@ -177,7 +177,7 @@ class TestStaleLockDetection:
         assert len(result["failed_tasks"]) == 0
 
         # Verify lock still exists
-        lock_key = lock_manager._get_lock_key("backtest", backtest_task.id)
+        lock_key = lock_manager._get_lock_key("backtest", backtest_task.pk)
         lock_data = cache.get(lock_key)
         assert lock_data is not None
 
@@ -190,16 +190,16 @@ class TestAutomaticLockRelease:
         # Acquire lock
         lock_manager.acquire_lock(
             task_type="backtest",
-            task_id=backtest_task.id,
-            execution_id=task_execution.id,
+            task_id=backtest_task.pk,
+            execution_id=task_execution.pk,
         )
 
         # Make lock stale
-        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.id)
+        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.pk)
         old_time = timezone.now() - timedelta(seconds=400)
         cache.set(
             heartbeat_key,
-            {"last_beat": old_time.isoformat(), "execution_id": task_execution.id},
+            {"last_beat": old_time.isoformat(), "execution_id": task_execution.pk},
             timeout=lock_manager.LOCK_TIMEOUT,
         )
 
@@ -208,14 +208,14 @@ class TestAutomaticLockRelease:
             cleanup_stale_locks_task()
 
         # Verify lock was released
-        lock_key = lock_manager._get_lock_key("backtest", backtest_task.id)
+        lock_key = lock_manager._get_lock_key("backtest", backtest_task.pk)
         assert cache.get(lock_key) is None
 
         # Verify heartbeat was removed
         assert cache.get(heartbeat_key) is None
 
         # Verify cancellation flag was removed
-        cancel_key = lock_manager._get_cancellation_key("backtest", backtest_task.id)
+        cancel_key = lock_manager._get_cancellation_key("backtest", backtest_task.pk)
         assert cache.get(cancel_key) is None
 
     def test_multiple_stale_locks_released(self, user, strategy_config, lock_manager):
@@ -238,7 +238,7 @@ class TestAutomaticLockRelease:
             # Create execution
             execution = TaskExecution.objects.create(
                 task_type="backtest",
-                task_id=task.id,
+                task_id=task.pk,
                 execution_number=1,
                 status=TaskStatus.RUNNING,
                 started_at=timezone.now() - timedelta(minutes=10),
@@ -247,15 +247,15 @@ class TestAutomaticLockRelease:
             # Acquire lock and make it stale
             lock_manager.acquire_lock(
                 task_type="backtest",
-                task_id=task.id,
-                execution_id=execution.id,
+                task_id=task.pk,
+                execution_id=execution.pk,
             )
 
-            heartbeat_key = lock_manager._get_heartbeat_key("backtest", task.id)
+            heartbeat_key = lock_manager._get_heartbeat_key("backtest", task.pk)
             old_time = timezone.now() - timedelta(seconds=400)
             cache.set(
                 heartbeat_key,
-                {"last_beat": old_time.isoformat(), "execution_id": execution.id},
+                {"last_beat": old_time.isoformat(), "execution_id": execution.pk},
                 timeout=lock_manager.LOCK_TIMEOUT,
             )
 
@@ -270,7 +270,7 @@ class TestAutomaticLockRelease:
 
         # Verify all locks were released
         for task in tasks:
-            lock_key = lock_manager._get_lock_key("backtest", task.id)
+            lock_key = lock_manager._get_lock_key("backtest", task.pk)
             assert cache.get(lock_key) is None
 
 
@@ -282,15 +282,15 @@ class TestTaskStatusUpdate:
         # Acquire lock and make it stale
         lock_manager.acquire_lock(
             task_type="backtest",
-            task_id=backtest_task.id,
-            execution_id=task_execution.id,
+            task_id=backtest_task.pk,
+            execution_id=task_execution.pk,
         )
 
-        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.id)
+        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.pk)
         old_time = timezone.now() - timedelta(seconds=400)
         cache.set(
             heartbeat_key,
-            {"last_beat": old_time.isoformat(), "execution_id": task_execution.id},
+            {"last_beat": old_time.isoformat(), "execution_id": task_execution.pk},
             timeout=lock_manager.LOCK_TIMEOUT,
         )
 
@@ -313,15 +313,15 @@ class TestTaskStatusUpdate:
         # Acquire lock and make it stale
         lock_manager.acquire_lock(
             task_type="backtest",
-            task_id=backtest_task.id,
-            execution_id=task_execution.id,
+            task_id=backtest_task.pk,
+            execution_id=task_execution.pk,
         )
 
-        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.id)
+        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.pk)
         old_time = timezone.now() - timedelta(seconds=400)
         cache.set(
             heartbeat_key,
-            {"last_beat": old_time.isoformat(), "execution_id": task_execution.id},
+            {"last_beat": old_time.isoformat(), "execution_id": task_execution.pk},
             timeout=lock_manager.LOCK_TIMEOUT,
         )
 
@@ -332,12 +332,12 @@ class TestTaskStatusUpdate:
             # Verify notification was sent
             assert mock_notify.called
             call_args = mock_notify.call_args[1]
-            assert call_args["user_id"] == backtest_task.user.id
-            assert call_args["task_id"] == backtest_task.id
+            assert call_args["user_id"] == backtest_task.user.pk
+            assert call_args["task_id"] == backtest_task.pk
             assert call_args["task_name"] == backtest_task.name
             assert call_args["task_type"] == "backtest"
             assert call_args["status"] == TaskStatus.FAILED
-            assert call_args["execution_id"] == task_execution.id
+            assert call_args["execution_id"] == task_execution.pk
             assert "stale lock" in call_args["error_message"].lower()
 
 
@@ -360,12 +360,12 @@ class TestCleanupWithNoStaleLocks:
         # Acquire lock with fresh heartbeat
         lock_manager.acquire_lock(
             task_type="backtest",
-            task_id=backtest_task.id,
-            execution_id=task_execution.id,
+            task_id=backtest_task.pk,
+            execution_id=task_execution.pk,
         )
 
         # Update heartbeat to ensure it's fresh
-        lock_manager.update_heartbeat(task_type="backtest", task_id=backtest_task.id)
+        lock_manager.update_heartbeat(task_type="backtest", task_id=backtest_task.pk)
 
         # Run cleanup task
         with patch("trading.services.notifications.send_task_status_notification"):
@@ -435,7 +435,7 @@ class TestErrorHandling:
         # Create executions
         execution1 = TaskExecution.objects.create(
             task_type="backtest",
-            task_id=task1.id,
+            task_id=task1.pk,
             execution_number=1,
             status=TaskStatus.RUNNING,
             started_at=timezone.now() - timedelta(minutes=10),
@@ -443,7 +443,7 @@ class TestErrorHandling:
 
         execution2 = TaskExecution.objects.create(
             task_type="backtest",
-            task_id=task2.id,
+            task_id=task2.pk,
             execution_number=1,
             status=TaskStatus.RUNNING,
             started_at=timezone.now() - timedelta(minutes=10),
@@ -453,15 +453,15 @@ class TestErrorHandling:
         for task, execution in [(task1, execution1), (task2, execution2)]:
             lock_manager.acquire_lock(
                 task_type="backtest",
-                task_id=task.id,
-                execution_id=execution.id,
+                task_id=task.pk,
+                execution_id=execution.pk,
             )
 
-            heartbeat_key = lock_manager._get_heartbeat_key("backtest", task.id)
+            heartbeat_key = lock_manager._get_heartbeat_key("backtest", task.pk)
             old_time = timezone.now() - timedelta(seconds=400)
             cache.set(
                 heartbeat_key,
-                {"last_beat": old_time.isoformat(), "execution_id": execution.id},
+                {"last_beat": old_time.isoformat(), "execution_id": execution.pk},
                 timeout=lock_manager.LOCK_TIMEOUT,
             )
 
@@ -469,7 +469,7 @@ class TestErrorHandling:
         original_get_latest = BacktestTask.get_latest_execution
 
         def mock_get_latest(self):
-            if self.id == task1.id:
+            if self.pk == task1.pk:
                 raise Exception("Simulated error")
             return original_get_latest(self)
 

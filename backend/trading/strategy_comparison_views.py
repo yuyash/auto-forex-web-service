@@ -202,7 +202,7 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
             comparison.save()
 
             # Load historical data
-            logger.info("Loading historical data for comparison %s", comparison.id)
+            logger.info("Loading historical data for comparison %s", comparison.pk)
             data_loader = HistoricalDataLoader()
             # Load data for the first instrument (simplified for now)
             tick_data = data_loader.load_data(
@@ -231,7 +231,7 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
             strategy_results = executor.execute_strategies(tick_data)
 
             # Generate comparison report
-            logger.info("Generating comparison report for comparison %s", comparison.id)
+            logger.info("Generating comparison report for comparison %s", comparison.pk)
             comparison_engine = StrategyComparisonEngine(strategy_results)
             comparison_report = comparison_engine.generate_comparison_report()
 
@@ -243,10 +243,10 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
 
             logger.info(
                 "Strategy comparison completed: %s",
-                comparison.id,
+                comparison.pk,
                 extra={
-                    "user_id": request.user.id,
-                    "comparison_id": comparison.id,
+                    "user_id": request.user.pk,
+                    "comparison_id": comparison.pk,
                     "total_strategies": len(strategy_configs),
                     "successful": comparison_report["successful_strategies"],
                 },
@@ -254,7 +254,7 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
 
             return Response(
                 {
-                    "id": comparison.id,
+                    "id": comparison.pk,
                     "status": comparison.status,
                     "message": "Comparison completed successfully",
                     "total_strategies": len(strategy_configs),
@@ -272,7 +272,7 @@ class StrategyCompareView(APIView):  # pylint: disable=too-many-instance-attribu
 
             return Response(
                 {
-                    "id": comparison.id,
+                    "id": comparison.pk,
                     "status": "failed",
                     "error": str(e),
                 },
@@ -326,7 +326,7 @@ class StrategyCompareResultsView(APIView):
         if comparison.status != "completed":
             return Response(
                 {
-                    "id": comparison.id,
+                    "id": comparison.pk,
                     "status": comparison.status,
                     "error_message": comparison.error_message,
                     "message": "Comparison is not completed yet",
@@ -336,16 +336,16 @@ class StrategyCompareResultsView(APIView):
 
         logger.info(
             "Strategy comparison results retrieved: %s",
-            comparison.id,
+            comparison.pk,
             extra={
-                "user_id": request.user.id,
-                "comparison_id": comparison.id,
+                "user_id": request.user.pk,
+                "comparison_id": comparison.pk,
             },
         )
 
         return Response(
             {
-                "id": comparison.id,
+                "id": comparison.pk,
                 "status": comparison.status,
                 "strategy_configs": comparison.strategy_configs,
                 "instrument": comparison.instrument,

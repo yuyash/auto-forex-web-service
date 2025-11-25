@@ -94,7 +94,7 @@ class TestPollingIntegration:
         # Step 2: Start the task (simulate task execution starting)
         execution = TaskExecution.objects.create(
             task_type=TaskType.BACKTEST,
-            task_id=task.id,
+            task_id=task.pk,
             execution_number=1,
             status=TaskStatus.RUNNING,
             progress=0,
@@ -111,7 +111,7 @@ class TestPollingIntegration:
         task.save()
 
         # Step 3: Poll status endpoint (first poll - task just started)
-        status_url = reverse("trading:backtest_task_status", kwargs={"task_id": task.id})
+        status_url = reverse("trading:backtest_task_status", kwargs={"task_id": task.pk})
         response = api_client.get(status_url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -209,7 +209,7 @@ class TestPollingIntegration:
 
         execution = TaskExecution.objects.create(
             task_type=TaskType.BACKTEST,
-            task_id=task.id,
+            task_id=task.pk,
             execution_number=1,
             status=TaskStatus.RUNNING,
             progress=30,
@@ -234,7 +234,7 @@ class TestPollingIntegration:
         )
 
         # Poll logs endpoint
-        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(logs_url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -297,14 +297,14 @@ class TestPollingIntegration:
 
         execution = TaskExecution.objects.create(
             task_type=TaskType.BACKTEST,
-            task_id=task.id,
+            task_id=task.pk,
             execution_number=1,
             status=TaskStatus.RUNNING,
             progress=0,
             started_at=timezone.now(),
         )
 
-        status_url = reverse("trading:backtest_task_status", kwargs={"task_id": task.id})
+        status_url = reverse("trading:backtest_task_status", kwargs={"task_id": task.pk})
 
         # Test progress at 0%
         response = api_client.get(status_url)
@@ -367,7 +367,7 @@ class TestPollingIntegration:
 
         execution = TaskExecution.objects.create(
             task_type=TaskType.BACKTEST,
-            task_id=task.id,
+            task_id=task.pk,
             execution_number=1,
             status=TaskStatus.RUNNING,
             progress=45,
@@ -381,7 +381,7 @@ class TestPollingIntegration:
             ],
         )
 
-        status_url = reverse("trading:backtest_task_status", kwargs={"task_id": task.id})
+        status_url = reverse("trading:backtest_task_status", kwargs={"task_id": task.pk})
 
         # Poll while running
         response = api_client.get(status_url)
@@ -415,7 +415,7 @@ class TestPollingIntegration:
         assert response.data["status"] != TaskStatus.RUNNING
 
         # Verify error log is retrievable
-        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
         response = api_client.get(logs_url)
         assert response.status_code == status.HTTP_200_OK
         assert any(log["level"] == "ERROR" for log in response.data["results"])
@@ -454,7 +454,7 @@ class TestPollingIntegration:
 
         TaskExecution.objects.create(
             task_type=TaskType.BACKTEST,
-            task_id=task.id,
+            task_id=task.pk,
             execution_number=1,
             status=TaskStatus.RUNNING,
             progress=50,
@@ -462,7 +462,7 @@ class TestPollingIntegration:
             logs=logs,
         )
 
-        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.id})
+        logs_url = reverse("trading:backtest_task_logs", kwargs={"task_id": task.pk})
 
         # Get first page (default limit is 100)
         response = api_client.get(logs_url)

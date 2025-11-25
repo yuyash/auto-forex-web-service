@@ -357,16 +357,16 @@ def execute_backtest_task(
         # Initialize services
         state_synchronizer = StateSynchronizer()
         backtest_logger = BacktestLogger(
-            task_id=task.id,
-            execution_id=execution.id,
+            task_id=task.pk,
+            execution_id=execution.pk,
             execution_number=execution.execution_number,
-            user_id=task.user.id,
+            user_id=task.user.pk,
         )
 
         # Calculate total days for progress tracking
         total_days = (task.end_time.date() - task.start_time.date()).days + 1
         progress_reporter = ProgressReporter(
-            task_id=task.id, execution_id=execution.id, user_id=task.user.id, total_days=total_days
+            task_id=task.pk, execution_id=execution.pk, user_id=task.user.pk, total_days=total_days
         )
 
         logger.info(
@@ -478,7 +478,7 @@ def execute_backtest_task(
                 return {
                     "success": False,
                     "task_id": task_id,
-                    "execution_id": execution.id,
+                    "execution_id": execution.pk,
                     "error": "Task cancelled by user",
                 }
 
@@ -509,7 +509,7 @@ def execute_backtest_task(
                 return {
                     "success": False,
                     "task_id": task_id,
-                    "execution_id": execution.id,
+                    "execution_id": execution.pk,
                     "error": load_error,
                 }
 
@@ -546,7 +546,7 @@ def execute_backtest_task(
                         return {
                             "success": False,
                             "task_id": task_id,
-                            "execution_id": execution.id,
+                            "execution_id": execution.pk,
                             "error": "Task cancelled by user",
                         }
 
@@ -622,7 +622,7 @@ def execute_backtest_task(
                 }
 
                 # Update progress via execution model
-                execution.update_progress(progress, user_id=task.user.id)
+                execution.update_progress(progress, user_id=task.user.pk)
 
                 # Log progress
                 execution.add_log(
@@ -639,8 +639,8 @@ def execute_backtest_task(
                 try:
                     send_backtest_intermediate_results(
                         task_id=task_id,
-                        execution_id=execution.id,
-                        user_id=task.user.id,
+                        execution_id=execution.pk,
+                        user_id=task.user.pk,
                         intermediate_results=intermediate_results,
                     )
                 except Exception as e:  # pylint: disable=broad-exception-caught
@@ -780,7 +780,7 @@ def execute_backtest_task(
         return {
             "success": True,
             "task_id": task_id,
-            "execution_id": execution.id,
+            "execution_id": execution.pk,
             "metrics": metrics.get_trade_summary(),
             "error": None,
         }
@@ -809,7 +809,7 @@ def execute_backtest_task(
         return {
             "success": False,
             "task_id": task_id,
-            "execution_id": execution.id if execution else None,
+            "execution_id": execution.pk if execution else None,
             "error": error_msg,
         }
 
@@ -984,7 +984,7 @@ def execute_trading_task(
             return {
                 "success": False,
                 "task_id": task_id,
-                "execution_id": execution.id,
+                "execution_id": execution.pk,
                 "error": error_msg,
             }
 
@@ -1002,7 +1002,7 @@ def execute_trading_task(
         return {
             "success": True,
             "task_id": task_id,
-            "execution_id": execution.id,
+            "execution_id": execution.pk,
             "account_id": task.oanda_account.account_id,
             "instrument": instrument,
             "error": None,
@@ -1029,7 +1029,7 @@ def execute_trading_task(
         return {
             "success": False,
             "task_id": task_id,
-            "execution_id": execution.id if execution else None,
+            "execution_id": execution.pk if execution else None,
             "error": error_msg,
         }
 
@@ -1079,7 +1079,7 @@ def stop_trading_task_execution(task_id: int) -> dict[str, Any]:
             return {
                 "success": False,
                 "task_id": task_id,
-                "execution_id": execution.id if execution else None,
+                "execution_id": execution.pk if execution else None,
                 "error": error_msg,
             }
 
@@ -1109,7 +1109,7 @@ def stop_trading_task_execution(task_id: int) -> dict[str, Any]:
         return {
             "success": True,
             "task_id": task_id,
-            "execution_id": execution.id,
+            "execution_id": execution.pk,
             "error": None,
         }
 
@@ -1164,7 +1164,7 @@ def pause_trading_task_execution(task_id: int) -> dict[str, Any]:
         return {
             "success": True,
             "task_id": task_id,
-            "execution_id": execution.id,
+            "execution_id": execution.pk,
             "error": None,
         }
 
@@ -1212,7 +1212,7 @@ def resume_trading_task_execution(task_id: int) -> dict[str, Any]:
         return {
             "success": True,
             "task_id": task_id,
-            "execution_id": execution.id,
+            "execution_id": execution.pk,
             "error": None,
         }
 

@@ -17,6 +17,26 @@ from django.utils import timezone
 from .enums import TaskStatus, TaskType
 
 
+class TaskExecutionManager(models.Manager["TaskExecution"]):
+    """Custom manager for TaskExecution model."""
+
+    def for_task(self, task_type: str, task_id: int) -> models.QuerySet["TaskExecution"]:
+        """Get all executions for a specific task."""
+        return self.filter(task_type=task_type, task_id=task_id)
+
+    def running(self) -> models.QuerySet["TaskExecution"]:
+        """Get all running executions."""
+        return self.filter(status=TaskStatus.RUNNING)
+
+    def completed(self) -> models.QuerySet["TaskExecution"]:
+        """Get all completed executions."""
+        return self.filter(status=TaskStatus.COMPLETED)
+
+    def failed(self) -> models.QuerySet["TaskExecution"]:
+        """Get all failed executions."""
+        return self.filter(status=TaskStatus.FAILED)
+
+
 class TaskExecution(models.Model):
     """
     Track individual execution runs of tasks.
@@ -26,6 +46,8 @@ class TaskExecution(models.Model):
 
     Requirements: 4.3, 4.6, 4.8, 7.3, 7.4, 7.5
     """
+
+    objects = TaskExecutionManager()
 
     task_type = models.CharField(
         max_length=20,
@@ -127,7 +149,7 @@ class TaskExecution(models.Model):
             send_execution_progress_notification(
                 task_type=self.task_type,
                 task_id=self.task_id,
-                execution_id=self.id,
+                execution_id=self.pk,
                 progress=self.progress,
                 user_id=user_id,
             )
@@ -156,7 +178,7 @@ class TaskExecution(models.Model):
         send_execution_log_notification(
             task_type=self.task_type,
             task_id=self.task_id,
-            execution_id=self.id,
+            execution_id=self.pk,
             execution_number=self.execution_number,
             log_entry=log_entry,
         )
@@ -210,9 +232,18 @@ class TaskExecution(models.Model):
             ExecutionMetrics instance if exists, None otherwise
         """
         try:
-            return self.metrics
+            # Access the related ExecutionMetrics via the reverse relation
+            return ExecutionMetrics.objects.get(execution=self)
         except ExecutionMetrics.DoesNotExist:
             return None
+
+
+class ExecutionMetricsManager(models.Manager["ExecutionMetrics"]):
+    """Custom manager for ExecutionMetrics model."""
+
+    def for_execution(self, execution: Any) -> "ExecutionMetrics | None":
+        """Get metrics for a specific execution."""
+        return self.filter(execution=execution).first()
 
 
 class ExecutionMetrics(models.Model):
@@ -224,6 +255,8 @@ class ExecutionMetrics(models.Model):
 
     Requirements: 7.1, 7.2, 7.6, 7.7
     """
+
+    objects = ExecutionMetricsManager()
 
     execution = models.OneToOneField(
         TaskExecution,

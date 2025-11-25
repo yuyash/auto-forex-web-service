@@ -1396,8 +1396,11 @@ class OandaAccountDetailView(APIView):
             )
 
         # Check if account has associated tasks
-        backtest_tasks_count = account.backtest_tasks.count()
-        trading_tasks_count = account.trading_tasks.count()
+        from trading.backtest_task_models import BacktestTask
+        from trading.trading_task_models import TradingTask
+
+        backtest_tasks_count = BacktestTask.objects.filter(oanda_account=account).count()
+        trading_tasks_count = TradingTask.objects.filter(oanda_account=account).count()
 
         if backtest_tasks_count > 0 or trading_tasks_count > 0:
             error_parts = ["Cannot delete this OANDA account because it has associated tasks."]
