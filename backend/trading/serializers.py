@@ -11,11 +11,13 @@ Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 12.1
 from decimal import Decimal
 
 from rest_framework import serializers
+from rest_framework.request import Request
 
 from .backtest_models import Backtest, BacktestResult
 from .event_models import Event
 from .execution_models import ExecutionMetrics, TaskExecution
 from .models import Order, Position, Strategy, StrategyConfig, StrategyState
+from .strategy_registry import registry
 from .tick_data_models import TickData
 
 
@@ -31,7 +33,7 @@ class TickDataSerializer(serializers.ModelSerializer):
     account_id = serializers.IntegerField(source="account.id", read_only=True)
     account_name = serializers.CharField(source="account.account_id", read_only=True)
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = TickData
         fields = [
             "id",
@@ -57,7 +59,7 @@ class TickDataCSVSerializer(serializers.ModelSerializer):
     Requirements: 7.1, 7.2, 12.1
     """
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = TickData
         fields = [
             "timestamp",
@@ -80,7 +82,7 @@ class StrategyConfigDetailSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     is_in_use = serializers.SerializerMethodField()
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = StrategyConfig
         fields = [
             "id",
@@ -110,7 +112,7 @@ class StrategyConfigListSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     is_in_use = serializers.SerializerMethodField()
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = StrategyConfig
         fields = [
             "id",
@@ -138,7 +140,7 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
     Requirements: 1.1, 1.2, 8.7
     """
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = StrategyConfig
         fields = [
             "name",
@@ -149,8 +151,6 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
 
     def validate_strategy_type(self, value: str) -> str:
         """Validate strategy type exists in registry."""
-        from .strategy_registry import registry
-
         if not registry.is_registered(value):
             available = ", ".join(registry.list_strategies())
             raise serializers.ValidationError(
@@ -184,9 +184,10 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict) -> StrategyConfig:
         """Create strategy configuration with user from context."""
-        user = self.context["request"].user
-        validated_data["user"] = user
-        return StrategyConfig.objects.create(**validated_data)
+        request: Request = self.context["request"]
+        user = request.user
+        # Type narrowing: request.user is authenticated in view
+        return StrategyConfig.objects.create_for_user(user, **validated_data)
 
     def update(self, instance: StrategyConfig, validated_data: dict) -> StrategyConfig:
         """Update strategy configuration."""
@@ -241,7 +242,7 @@ class StrategyStateSerializer(serializers.ModelSerializer):
     Requirements: 5.1, 5.2
     """
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = StrategyState
         fields = [
             "current_layer",
@@ -279,7 +280,7 @@ class StrategySerializer(serializers.ModelSerializer):
         help_text="Position differentiation pattern",
     )
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = Strategy
         fields = [
             "id",
@@ -398,7 +399,7 @@ class OrderSerializer(serializers.ModelSerializer):
     account_name = serializers.CharField(source="account.account_id", read_only=True)
     strategy_id = serializers.IntegerField(source="strategy.id", read_only=True, allow_null=True)
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = Order
         fields = [
             "id",
@@ -514,7 +515,7 @@ class PositionSerializer(serializers.ModelSerializer):
         source="strategy.strategy_type", read_only=True, allow_null=True
     )
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = Position
         fields = [
             "id",
@@ -550,7 +551,7 @@ class EventSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True, allow_null=True)
     account_id = serializers.CharField(source="account.account_id", read_only=True, allow_null=True)
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = Event
         fields = [
             "id",
@@ -575,7 +576,7 @@ class BacktestResultSerializer(serializers.ModelSerializer):
     Requirements: 12.4
     """
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = BacktestResult
         fields = [
             "id",
@@ -614,7 +615,7 @@ class BacktestSerializer(serializers.ModelSerializer):
     is_running = serializers.BooleanField(read_only=True)
     is_completed = serializers.BooleanField(read_only=True)
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = Backtest
         fields = [
             "id",
@@ -643,6 +644,7 @@ class BacktestSerializer(serializers.ModelSerializer):
             "final_balance",
             "equity_curve",
             "trade_log",
+            "strategy_events",
             "duration",
             "is_running",
             "is_completed",
@@ -666,6 +668,7 @@ class BacktestSerializer(serializers.ModelSerializer):
             "final_balance",
             "equity_curve",
             "trade_log",
+            "strategy_events",
             "duration",
             "is_running",
             "is_completed",
@@ -684,7 +687,7 @@ class BacktestListSerializer(serializers.ModelSerializer):
     is_running = serializers.BooleanField(read_only=True)
     is_completed = serializers.BooleanField(read_only=True)
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = Backtest
         fields = [
             "id",
@@ -818,7 +821,7 @@ class ExecutionMetricsSerializer(serializers.ModelSerializer):
 
     trade_summary = serializers.SerializerMethodField()
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = ExecutionMetrics
         fields = [
             "id",
@@ -836,6 +839,7 @@ class ExecutionMetricsSerializer(serializers.ModelSerializer):
             "average_loss",
             "equity_curve",
             "trade_log",
+            "strategy_events",
             "trade_summary",
             "created_at",
         ]
@@ -859,7 +863,7 @@ class TaskExecutionSerializer(serializers.ModelSerializer):
     duration = serializers.SerializerMethodField()
     metrics = ExecutionMetricsSerializer(read_only=True, allow_null=True)
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = TaskExecution
         fields = [
             "id",
@@ -895,7 +899,7 @@ class TaskExecutionDetailSerializer(serializers.ModelSerializer):
     metrics = ExecutionMetricsSerializer(read_only=True, allow_null=True)
     has_metrics = serializers.SerializerMethodField()
 
-    class Meta:
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = TaskExecution
         fields = [
             "id",

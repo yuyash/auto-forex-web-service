@@ -14,19 +14,17 @@ import {
   MenuItem,
   Button,
   CircularProgress,
+  Typography,
   type SelectChangeEvent,
 } from '@mui/material';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { FinancialChart } from '../chart/FinancialChart';
 import type { OHLCData } from '../chart/FinancialChart';
-import type {
-  ChartMarker,
-  Trade as ChartTrade,
-} from '../../utils/chartMarkers';
-import { createTradeMarkers } from '../../utils/chartMarkers';
+import type { ChartMarker } from '../../utils/chartMarkers';
+import { createFloorStrategyMarkers } from '../../utils/floorStrategyMarkers';
 import { transformCandles } from '../../utils/chartDataTransform';
 import type { OandaGranularity } from '../../types/oanda';
-import type { Trade } from '../../types/execution';
+import type { BacktestStrategyEvent } from '../../types/execution';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSupportedGranularities } from '../../hooks/useMarketConfig';
 
@@ -37,10 +35,10 @@ export interface BacktestChartProps {
   instrument: string;
   startDate: string; // ISO 8601 - backtest period start
   endDate: string; // ISO 8601 - backtest period end
-  trades: Trade[];
+  strategyEvents?: BacktestStrategyEvent[];
   height?: number;
   timezone?: string;
-  onTradeClick?: (tradeIndex: number) => void;
+  onTradeClick?: (marker: ChartMarker) => void;
 }
 
 /**
@@ -50,7 +48,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
   instrument: propInstrument,
   startDate,
   endDate,
-  trades,
+  strategyEvents,
   height = 500,
   timezone = 'UTC',
   onTradeClick,
@@ -172,22 +170,22 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
     setGranularity(event.target.value as OandaGranularity);
   };
 
-  // Convert trades to chart markers
+  // Convert trades and events to chart markers
   const tradeMarkers = useMemo<ChartMarker[]>(() => {
-    if (!trades || trades.length === 0) {
-      return [];
+    const markers: ChartMarker[] = [];
+
+    console.log('[BacktestChart] Candles:', candles);
+
+    // Add strategy event markers only (no trade markers to avoid overlap)
+    if (strategyEvents && strategyEvents.length > 0) {
+      const eventMarkers = createFloorStrategyMarkers(strategyEvents);
+      markers.push(...eventMarkers);
     }
 
-    const chartTrades: ChartTrade[] = trades.map((trade) => ({
-      timestamp: trade.entry_time,
-      action: trade.direction === 'long' ? 'buy' : 'sell',
-      price: trade.entry_price,
-      units: trade.units,
-      pnl: trade.pnl,
-    }));
+    console.log('[BacktestChart] Filtered markers:', markers);
 
-    return createTradeMarkers(chartTrades);
-  }, [trades]);
+    return markers;
+  }, [strategyEvents, candles]);
 
   // Handle marker click
   const handleMarkerClick = useCallback(
@@ -196,12 +194,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
         return;
       }
 
-      if (marker.id && marker.id.startsWith('trade-')) {
-        const tradeIndex = parseInt(marker.id.replace('trade-', ''), 10);
-        if (!isNaN(tradeIndex)) {
-          onTradeClick(tradeIndex);
-        }
-      }
+      onTradeClick(marker);
     },
     [onTradeClick]
   );
@@ -259,6 +252,137 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
         >
           Reset
         </Button>
+      </Box>
+
+      {/* Chart Legend */}
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 3,
+          mb: 2,
+          p: 1.5,
+          bgcolor: 'grey.50',
+          borderRadius: 1,
+          border: '1px solid',
+          borderColor: 'grey.300',
+          flexWrap: 'wrap',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            sx={{
+              width: 10,
+              height: 10,
+              borderRadius: '50%',
+              border: '2px solid #757575',
+              bgcolor: 'transparent',
+            }}
+          />
+          <Typography variant="caption" sx={{ fontWeight: 500 }}>
+            Start/End
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: '#2196f3',
+            }}
+          />
+          <Typography variant="caption" sx={{ fontWeight: 500 }}>
+            Initial Entry
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            sx={{
+              width: 0,
+              height: 0,
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderBottom: '10px solid #00bcd4',
+            }}
+          />
+          <Typography variant="caption" sx={{ fontWeight: 500 }}>
+            Scale-in
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            sx={{
+              width: 0,
+              height: 0,
+              borderLeft: '5px solid transparent',
+              borderRight: '5px solid transparent',
+              borderTop: '8px solid #757575',
+            }}
+          />
+          <Typography variant="caption" sx={{ fontWeight: 500 }}>
+            Close
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            sx={{
+              width: 0,
+              height: 0,
+              borderLeft: '5px solid transparent',
+              borderRight: '5px solid transparent',
+              borderTop: '8px solid #4caf50',
+            }}
+          />
+          <Typography variant="caption" sx={{ fontWeight: 500 }}>
+            Take Profit
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: '#9c27b0',
+            }}
+          />
+          <Typography variant="caption" sx={{ fontWeight: 500 }}>
+            New Layer
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: '#ff5722',
+            }}
+          />
+          <Typography variant="caption" sx={{ fontWeight: 500 }}>
+            Volatility Lock
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: '#e91e63',
+            }}
+          />
+          <Typography variant="caption" sx={{ fontWeight: 500 }}>
+            Margin Protection
+          </Typography>
+        </Box>
+        <Box sx={{ flex: 1 }} />
+        <Typography
+          variant="caption"
+          sx={{ color: 'text.secondary', fontStyle: 'italic' }}
+        >
+          Hover over candles and markers for details
+        </Typography>
       </Box>
 
       {/* Chart */}

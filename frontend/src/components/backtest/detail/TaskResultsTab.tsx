@@ -13,10 +13,12 @@ import { Download as DownloadIcon } from '@mui/icons-material';
 import { MetricsGrid } from '../../tasks/charts/MetricsGrid';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
 import { BacktestChart } from '../BacktestChart';
+import { FloorLayerLog } from '../FloorLayerLog';
 import type { BacktestTask } from '../../../types/backtestTask';
 import { TaskStatus, TaskType } from '../../../types/common';
 import type { Trade } from '../../../types/execution';
 import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
+import type { ChartMarker } from '../../../utils/chartMarkers';
 
 interface TaskResultsTabProps {
   task: BacktestTask;
@@ -33,6 +35,9 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
   // Check if task has completed execution with metrics
   const hasMetrics = task.status === TaskStatus.COMPLETED && metrics;
 
+  // Debug logging for strategy events (ALWAYS LOG)
+  React.useEffect(() => {}, [metrics]);
+
   // State for selected trade index (for chart-to-table interaction)
   const [selectedTradeIndex, setSelectedTradeIndex] = React.useState<
     number | null
@@ -41,22 +46,34 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
   // Ref for trade log table to enable scrolling
   const tradeLogRef = React.useRef<HTMLDivElement>(null);
 
-  // Handle trade click from chart
-  const handleTradeClick = React.useCallback((tradeIndex: number) => {
-    setSelectedTradeIndex(tradeIndex);
+  // Handle marker click from chart
+  const handleMarkerClick = React.useCallback((marker: ChartMarker) => {
+    if (marker.id && marker.id.startsWith('event-')) {
+      // Strategy event marker clicked - scroll to event
+      const element = document.getElementById(marker.id);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } else if (marker.id && marker.id.startsWith('trade-')) {
+      // Trade marker clicked
+      const tradeIndex = parseInt(marker.id.replace('trade-', ''), 10);
+      if (!isNaN(tradeIndex)) {
+        setSelectedTradeIndex(tradeIndex);
 
-    // Scroll to trade log table
-    if (tradeLogRef.current) {
-      tradeLogRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-      });
+        // Scroll to trade log table
+        if (tradeLogRef.current) {
+          tradeLogRef.current.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest',
+          });
+        }
+
+        // Clear selection after 3 seconds
+        setTimeout(() => {
+          setSelectedTradeIndex(null);
+        }, 3000);
+      }
     }
-
-    // Clear selection after 3 seconds
-    setTimeout(() => {
-      setSelectedTradeIndex(null);
-    }, 3000);
   }, []);
 
   const handleExportCSV = () => {
@@ -252,10 +269,10 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
             instrument={task.instrument}
             startDate={task.start_time}
             endDate={task.end_time}
-            trades={metrics.trade_log}
+            strategyEvents={metrics.strategy_events}
             timezone="UTC"
             height={500}
-            onTradeClick={handleTradeClick}
+            onTradeClick={handleMarkerClick}
           />
         </Paper>
       )}
@@ -342,6 +359,24 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
           </Grid>
         </Paper>
       )}
+
+      {/* Floor Strategy Layer Log */}
+      {task.strategy_type === 'floor' &&
+        metrics.trade_log &&
+        metrics.trade_log.length > 0 && (
+          <>
+            {import.meta.env.DEV &&
+              console.log('[TaskResultsTab] Rendering FloorLayerLog', {
+                strategy_type: task.strategy_type,
+                trade_count: metrics.trade_log.length,
+                first_trade: metrics.trade_log[0],
+              })}
+            <FloorLayerLog
+              trades={metrics.trade_log}
+              selectedTradeIndex={selectedTradeIndex}
+            />
+          </>
+        )}
 
       <Divider sx={{ my: 3 }} />
 

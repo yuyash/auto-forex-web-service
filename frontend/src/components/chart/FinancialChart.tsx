@@ -200,7 +200,7 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
 
   // Filter markers based on visibility toggles
   const visibleMarkers = useMemo(() => {
-    return markers.filter((marker) => {
+    const filtered = markers.filter((marker) => {
       if (
         marker.type === 'buy' ||
         marker.type === 'sell' ||
@@ -213,6 +213,16 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
       }
       return true; // Show other marker types by default
     });
+
+    console.log('[FinancialChart] Marker visibility:', {
+      total_markers: markers.length,
+      visible_markers: filtered.length,
+      showBuySellMarkers,
+      showStartEndMarkers,
+      marker_types: markers.map((m) => m.type),
+    });
+
+    return filtered;
   }, [markers, showBuySellMarkers, showStartEndMarkers]);
 
   // Detect data gaps - periods where data is missing
@@ -931,16 +941,67 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
               {/* Candlestick series */}
               <CandlestickSeries />
 
-              {/* OHLC Tooltip */}
+              {/* OHLC Tooltip with enhanced information */}
               {showOHLCTooltip && (
-                <OHLCTooltip
-                  origin={[0, 0]}
-                  textFill={(d: OHLCData) =>
-                    d.close > d.open ? '#26a69a' : '#ef5350'
-                  }
-                  labelFill="#666"
-                  fontSize={12}
-                />
+                <>
+                  <OHLCTooltip
+                    origin={[0, 0]}
+                    textFill={(d: OHLCData) =>
+                      d.close > d.open ? '#26a69a' : '#ef5350'
+                    }
+                    labelFill="#666"
+                    fontSize={12}
+                    ohlcFormat={(n: number | { valueOf(): number }) => {
+                      const value = typeof n === 'number' ? n : n.valueOf();
+                      return value.toFixed(5);
+                    }}
+                    displayTexts={{
+                      o: 'O: ',
+                      h: 'H: ',
+                      l: 'L: ',
+                      c: 'C: ',
+                      na: 'N/A',
+                    }}
+                  />
+                  <GenericChartComponent
+                    drawOn={['mousemove', 'pan']}
+                    canvasDraw={(
+                      ctx: CanvasRenderingContext2D,
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      moreProps: any
+                    ) => {
+                      const { currentItem } = moreProps;
+                      if (!currentItem) return;
+
+                      const candle = currentItem as OHLCData;
+
+                      // Format timestamp
+                      const timestamp =
+                        timezone && timezone !== 'UTC'
+                          ? formatInTimeZone(
+                              candle.date,
+                              timezone,
+                              'yyyy-MM-dd HH:mm:ss'
+                            )
+                          : candle.date.toLocaleString('en-US', {
+                              timeZone: 'UTC',
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                            });
+
+                      // Draw timestamp above OHLC values
+                      ctx.fillStyle = '#666';
+                      ctx.font = '12px sans-serif';
+                      ctx.textAlign = 'left';
+                      ctx.textBaseline = 'top';
+                      ctx.fillText(timestamp, 5, 5);
+                    }}
+                  />
+                </>
               )}
 
               {/* Mouse coordinates */}
@@ -988,7 +1049,7 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                 />
               ))}
 
-              {/* Custom markers */}
+              {/* Custom markers with enhanced tooltips */}
               {visibleMarkers.map((marker, idx) => {
                 const markerPath = getMarkerPath(marker.shape);
                 const isStartEnd =
@@ -997,7 +1058,7 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
 
                 return (
                   <React.Fragment key={`marker-group-${marker.id || idx}`}>
-                    {/* Marker shape */}
+                    {/* Marker shape with hover effect */}
                     <Annotate
                       with={SvgPathAnnotation}
                       when={(d: OHLCData) =>
@@ -1008,8 +1069,9 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                         pathWidth: isStartEnd ? 10 : 20,
                         pathHeight: 10,
                         fill: marker.color,
-                        stroke: isStartEnd ? marker.color : undefined,
-                        strokeWidth: isStartEnd ? 1 : undefined,
+                        stroke: isStartEnd ? marker.color : '#000',
+                        strokeWidth: isStartEnd ? 1 : 0.5,
+                        opacity: 0.9,
                         y: ({
                           yScale,
                           datum,
@@ -1031,6 +1093,9 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                         onClick: onMarkerClick
                           ? () => onMarkerClick(marker)
                           : undefined,
+                        style: {
+                          cursor: onMarkerClick ? 'pointer' : 'default',
+                        },
                       }}
                     />
                     {/* Marker label */}

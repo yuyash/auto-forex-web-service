@@ -1328,7 +1328,11 @@ FLOOR_STRATEGY_CONFIG_SCHEMA = {
         "base_lot_size": {
             "type": "number",
             "title": "Base Lot Size",
-            "description": ("Initial lot size for first entry (e.g., 1.0 = 1000 units)"),
+            "description": (
+                "Initial lot size for first entry. "
+                "1 lot = 1,000 units of base currency. "
+                "For USD/JPY: 1.0 = 1,000 USD"
+            ),
             "default": 1.0,
             "minimum": 0.01,
         },

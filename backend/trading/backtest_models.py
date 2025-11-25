@@ -165,6 +165,10 @@ class Backtest(models.Model):
         default=list,
         help_text="Trade log data",
     )
+    strategy_events = models.JSONField(
+        default=list,
+        help_text="Strategy events log (for floor strategy markers and debugging)",
+    )
 
     class Meta:
         db_table = "backtests"

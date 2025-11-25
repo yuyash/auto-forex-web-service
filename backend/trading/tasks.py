@@ -935,6 +935,7 @@ def _update_backtest_success(
     backtest.final_balance = float(engine.balance)
     backtest.equity_curve = equity_curve
     backtest.trade_log = trade_log
+    backtest.strategy_events = metrics.get("strategy_events", [])
     backtest.completed_at = timezone.now()
     backtest.save()
 

@@ -8,6 +8,7 @@ Requirements: 5.1, 5.3
 """
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -26,6 +27,11 @@ class BaseStrategy(ABC):
 
     Requirements: 5.1, 5.3
     """
+
+    # Dynamic attributes set by backtest engine
+    _current_tick_time: datetime
+    _backtest_events: list[dict[str, Any]]
+    _is_backtest: bool
 
     def __init__(self, strategy: Strategy | dict) -> None:
         """
@@ -280,21 +286,36 @@ class BaseStrategy(ABC):
             description: Human-readable description of the event
             details: Optional dictionary with additional event details
         """
-        # Skip database logging during backtests to avoid performance degradation
-        # Backtests can generate thousands of events, causing severe slowdown
-        if not self.account:
+        if details is None:
+            details = {}
+
+        # Check if we're in backtest mode
+        if hasattr(self, "_is_backtest") and self._is_backtest:
+            # In backtest mode, collect events in memory instead of database
+            if not hasattr(self, "_backtest_events"):
+                # pylint: disable=attribute-defined-outside-init
+                self._backtest_events = []
+
+            # Store event with timestamp from current tick if available
+            event_data = {
+                "event_type": event_type,
+                "description": description,
+                "details": details,
+            }
+
+            # Try to get timestamp from current tick context
+            if hasattr(self, "_current_tick_time"):
+                event_data["timestamp"] = self._current_tick_time.isoformat()
+
+            self._backtest_events.append(event_data)
             return
 
-        # Check if we're in backtest mode by looking for backtest-specific attributes
-        # In backtest mode, we skip database writes entirely
-        if hasattr(self, "_is_backtest") and self._is_backtest:
+        # Skip database logging if no account
+        if not self.account:
             return
 
         # pylint: disable=import-outside-toplevel
         from .event_models import Event
-
-        if details is None:
-            details = {}
 
         Event.objects.create(
             category="trading",

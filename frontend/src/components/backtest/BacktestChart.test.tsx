@@ -7,7 +7,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BacktestChart } from './BacktestChart';
-import type { Trade } from '../../types/execution';
 
 // Mock dependencies
 vi.mock('../../contexts/AuthContext', () => ({
@@ -44,34 +43,10 @@ vi.mock('../chart/FinancialChart', () => ({
 globalThis.fetch = vi.fn();
 
 describe('BacktestChart', () => {
-  const mockTrades: Trade[] = [
-    {
-      entry_time: '2024-01-15T10:00:00Z',
-      exit_time: '2024-01-15T11:00:00Z',
-      instrument: 'EUR_USD',
-      direction: 'long',
-      units: 1000,
-      entry_price: 1.1,
-      exit_price: 1.11,
-      pnl: 100,
-    },
-    {
-      entry_time: '2024-01-15T12:00:00Z',
-      exit_time: '2024-01-15T13:00:00Z',
-      instrument: 'EUR_USD',
-      direction: 'short',
-      units: 1000,
-      entry_price: 1.11,
-      exit_price: 1.1,
-      pnl: 100,
-    },
-  ];
-
   const defaultProps = {
     instrument: 'EUR_USD',
     startDate: '2024-01-15T10:00:00Z',
     endDate: '2024-01-15T14:00:00Z',
-    trades: mockTrades,
   };
 
   beforeEach(() => {

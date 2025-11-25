@@ -51,13 +51,15 @@ describe('createTradeMarkers', () => {
     expect(markers).toHaveLength(1);
     expect(markers[0].id).toBe('trade-0');
     expect(markers[0].date).toEqual(new Date('2024-01-01T10:00:00Z'));
-    expect(markers[0].price).toBe(1.1 - 0.3); // Buy positioned below
+    expect(markers[0].price).toBe(1.1 - 0.0001); // Buy positioned below with small offset
     expect(markers[0].type).toBe('buy');
     expect(markers[0].color).toBe('#00bcd4'); // Cyan
     expect(markers[0].shape).toBe('triangleUp');
     expect(markers[0].label).toBe('BUY');
-    expect(markers[0].tooltip).toContain('BUY 1000 @ 1.10000');
-    expect(markers[0].tooltip).toContain('P&L: +50.00');
+    expect(markers[0].tooltip).toContain('BUY Order');
+    expect(markers[0].tooltip).toContain('Price: 1.10000');
+    expect(markers[0].tooltip).toContain('Units: 1000');
+    expect(markers[0].tooltip).toContain('P&L: +$50.00');
   });
 
   it('should create sell markers with correct properties', () => {
@@ -76,13 +78,15 @@ describe('createTradeMarkers', () => {
     expect(markers).toHaveLength(1);
     expect(markers[0].id).toBe('trade-0');
     expect(markers[0].date).toEqual(new Date('2024-01-01T11:00:00Z'));
-    expect(markers[0].price).toBe(1.15 + 0.3); // Sell positioned above
+    expect(markers[0].price).toBe(1.15 + 0.0001); // Sell positioned above with small offset
     expect(markers[0].type).toBe('sell');
     expect(markers[0].color).toBe('#ff9800'); // Orange
     expect(markers[0].shape).toBe('triangleDown');
     expect(markers[0].label).toBe('SELL');
-    expect(markers[0].tooltip).toContain('SELL 500 @ 1.15000');
-    expect(markers[0].tooltip).toContain('P&L: -25.00');
+    expect(markers[0].tooltip).toContain('SELL Order');
+    expect(markers[0].tooltip).toContain('Price: 1.15000');
+    expect(markers[0].tooltip).toContain('Units: 500');
+    expect(markers[0].tooltip).toContain('P&L: -$25.00');
   });
 
   it('should handle trades without pnl', () => {

@@ -40,7 +40,15 @@ export interface ExecutionMetrics {
   average_loss?: string;
   equity_curve: EquityPoint[];
   trade_log: Trade[];
+  strategy_events?: BacktestStrategyEvent[];
   created_at: string;
+}
+
+export interface BacktestStrategyEvent {
+  event_type: string;
+  description: string;
+  details: Record<string, string | number | boolean | null>;
+  timestamp?: string;
 }
 
 export interface EquityPoint {
@@ -58,6 +66,10 @@ export interface Trade {
   exit_price: number;
   pnl: number;
   duration?: string;
+  // Floor strategy specific fields
+  layer_number?: number;
+  is_first_lot?: boolean;
+  retracement_count?: number;
 }
 
 export interface ExecutionSummary {

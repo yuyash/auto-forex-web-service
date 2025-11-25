@@ -7,7 +7,7 @@ on historical data with resource monitoring and limits.
 Requirements: 12.2, 12.3
 """
 
-# pylint: disable=too-many-lines
+# pylint: disable=too-many-lines,protected-access
 
 import logging
 import os
@@ -90,17 +90,42 @@ class BacktestPosition:
 
     def calculate_pnl(self, current_price: Decimal) -> Decimal:
         """
-        Calculate unrealized P&L.
+        Calculate unrealized P&L in account currency (USD).
+
+        For USD/JPY:
+        - Buying/selling USD, quoted in JPY per USD
+        - 1 lot = 1,000 USD (not 100,000)
+        - units field represents lot size (e.g., 1.0 = 1 lot = 1,000 USD)
+        - P&L in JPY = price_diff (JPY) × units (lots) × 1000 (USD per lot)
+        - P&L in USD = P&L_JPY / current_price
+
+        For other pairs (e.g., EUR/USD):
+        - Price is quoted in USD per EUR
+        - P&L in USD = price_diff × units × 1000
 
         Args:
             current_price: Current market price
 
         Returns:
-            Unrealized P&L
+            Unrealized P&L in USD
         """
+        # Calculate price difference based on direction
         if self.direction == "long":
-            return (current_price - self.entry_price) * self.units
-        return (self.entry_price - current_price) * self.units
+            price_diff = current_price - self.entry_price
+        else:
+            price_diff = self.entry_price - current_price
+
+        # Calculate P&L
+        # units represents lot size (1.0 = 1 lot = 1,000 base currency units)
+        base_currency_amount = self.units * Decimal("1000")
+        pnl = price_diff * base_currency_amount
+
+        # For JPY pairs, P&L is in JPY and needs conversion to USD
+        # USD/JPY: price is JPY per USD, so divide by exchange rate
+        if "JPY" in self.instrument:
+            pnl = pnl / current_price
+
+        return pnl
 
 
 @dataclass
@@ -121,6 +146,9 @@ class BacktestTrade:
         reason: Reason for closing (e.g., 'take_profit', 'stop_loss', 'manual')
         pip_diff: Price difference in pips
         reason_display: Human-friendly reason description
+        layer_number: Layer number for multi-layer strategies (optional)
+        is_first_lot: Whether this was the first lot in a layer (optional)
+        retracement_count: Number of retracements at time of entry (optional, floor strategy)
     """
 
     instrument: str
@@ -135,10 +163,13 @@ class BacktestTrade:
     reason: str
     pip_diff: float = 0.0
     reason_display: str = ""
+    layer_number: int | None = None
+    is_first_lot: bool = False
+    retracement_count: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return {
+        result = {
             "instrument": self.instrument,
             "direction": self.direction,
             "units": self.units,
@@ -152,6 +183,14 @@ class BacktestTrade:
             "pip_diff": self.pip_diff,
             "reason_display": self.reason_display,
         }
+        # Add floor/layer information if available
+        if self.layer_number is not None:
+            result["layer_number"] = self.layer_number
+        if self.is_first_lot:
+            result["is_first_lot"] = self.is_first_lot
+        if self.retracement_count is not None:
+            result["retracement_count"] = self.retracement_count
+        return result
 
 
 @dataclass
@@ -291,7 +330,7 @@ class BacktestEngine:
         self._exit_check_early_returns = 0
         self._exit_check_full_runs = 0
 
-    def run(  # pylint: disable=too-many-locals
+    def run(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         self, tick_data: list[TickDataPoint]
     ) -> tuple[list[BacktestTrade], list[EquityPoint], dict[str, Any]]:
         """
@@ -323,6 +362,23 @@ class BacktestEngine:
 
             # Record initial equity
             self._record_equity(tick_data[0].timestamp if tick_data else datetime.now())
+
+            # Log start strategy event
+            if self.strategy and tick_data:
+                first_tick = tick_data[0]
+                self.strategy._current_tick_time = first_tick.timestamp
+                self.strategy.log_strategy_event(
+                    "start_strategy",
+                    f"Backtest started for {self.config.instrument}",
+                    {
+                        "instrument": self.config.instrument,
+                        "start_date": self.config.start_date.isoformat(),
+                        "end_date": self.config.end_date.isoformat(),
+                        "initial_balance": str(self.config.initial_balance),
+                        "price": str(first_tick.mid),
+                        "event_type": "backtest_start",
+                    },
+                )
 
             # Process each tick
             total_ticks = len(tick_data)
@@ -365,6 +421,22 @@ class BacktestEngine:
 
             # Record final equity
             self._record_equity(tick_data[-1].timestamp if tick_data else datetime.now())
+
+            # Log end strategy event
+            if self.strategy and tick_data:
+                last_tick = tick_data[-1]
+                self.strategy._current_tick_time = last_tick.timestamp
+                self.strategy.log_strategy_event(
+                    "end_strategy",
+                    f"Backtest completed for {self.config.instrument}",
+                    {
+                        "instrument": self.config.instrument,
+                        "final_balance": str(self.balance),
+                        "total_trades": len(self.trade_log),
+                        "price": str(last_tick.mid),
+                        "event_type": "backtest_end",
+                    },
+                )
 
             # Calculate performance metrics
             performance_metrics = self.calculate_performance_metrics()
@@ -426,7 +498,7 @@ class BacktestEngine:
                 self.resource_monitor.stop()
                 self._log_resource_usage()
 
-    def run_incremental(  # pylint: disable=too-many-locals
+    def run_incremental(  # pylint: disable=too-many-locals,too-many-branches
         self, tick_data: list[TickDataPoint], day_complete_callback: Any = None
     ) -> tuple[list[BacktestTrade], list[EquityPoint], dict[str, Any]]:
         """
@@ -461,6 +533,23 @@ class BacktestEngine:
             # Record initial equity
             if tick_data:
                 self._record_equity(tick_data[0].timestamp)
+
+            # Log start strategy event
+            if self.strategy and tick_data:
+                first_tick = tick_data[0]
+                self.strategy._current_tick_time = first_tick.timestamp
+                self.strategy.log_strategy_event(
+                    "start_strategy",
+                    f"Backtest started for {self.config.instrument}",
+                    {
+                        "instrument": self.config.instrument,
+                        "start_date": self.config.start_date.isoformat(),
+                        "end_date": self.config.end_date.isoformat(),
+                        "initial_balance": str(self.config.initial_balance),
+                        "price": str(first_tick.mid),
+                        "event_type": "backtest_start",
+                    },
+                )
 
             # Group ticks by day
             ticks_by_day = defaultdict(list)
@@ -523,6 +612,22 @@ class BacktestEngine:
                     }
                     day_complete_callback(day_date, intermediate_results)
 
+            # Log end strategy event
+            if self.strategy and tick_data:
+                last_tick = tick_data[-1]
+                self.strategy._current_tick_time = last_tick.timestamp
+                self.strategy.log_strategy_event(
+                    "end_strategy",
+                    f"Backtest completed for {self.config.instrument}",
+                    {
+                        "instrument": self.config.instrument,
+                        "final_balance": str(self.balance),
+                        "total_trades": len(self.trade_log),
+                        "price": str(last_tick.mid),
+                        "event_type": "backtest_end",
+                    },
+                )
+
             # Calculate final performance metrics
             performance_metrics = self.calculate_performance_metrics()
 
@@ -566,7 +671,7 @@ class BacktestEngine:
         # Mark strategy as being in backtest mode to disable database logging
         # This prevents severe performance degradation from thousands of DB writes
         # pylint: disable=protected-access
-        self.strategy._is_backtest = True  # type: ignore[attr-defined]
+        self.strategy._is_backtest = True
 
         logger.info(
             f"Strategy initialized: {self.config.strategy_type} for {self.config.instrument}"
@@ -627,6 +732,9 @@ class BacktestEngine:
 
         # Call strategy on_tick
         if self.strategy:
+            # Set current tick time for event logging
+            self.strategy._current_tick_time = tick.timestamp
+
             # Convert TickDataPoint to TickData-compatible wrapper for strategy
             tick_data_obj = tick.to_tick_data()
             orders = self.strategy.on_tick(tick_data_obj)  # type: ignore[arg-type]
@@ -653,6 +761,9 @@ class BacktestEngine:
 
         # Call strategy on_tick
         if self.strategy:
+            # Set current tick time for event logging
+            self.strategy._current_tick_time = tick.timestamp
+
             # Convert TickDataPoint to TickData-compatible wrapper for strategy
             t0 = time.perf_counter()
             tick_data_obj = tick.to_tick_data()
@@ -883,6 +994,15 @@ class BacktestEngine:
         reason_display = reason_map.get(reason, reason.replace("_", " ").title())
 
         # Record trade
+        # Get retracement count from strategy if available (floor strategy)
+        retracement_count = None
+        if self.strategy and hasattr(self.strategy, "layer_manager"):
+            # Find the layer this position belongs to
+            for layer in self.strategy.layer_manager.layers:
+                if position.layer_number == layer.layer_number:
+                    retracement_count = layer.retracement_count
+                    break
+
         trade = BacktestTrade(
             instrument=position.instrument,
             direction=position.direction,
@@ -896,6 +1016,9 @@ class BacktestEngine:
             reason=reason,
             pip_diff=pip_diff,
             reason_display=reason_display,
+            layer_number=position.layer_number,
+            is_first_lot=position.is_first_lot,
+            retracement_count=retracement_count,
         )
         self.trade_log.append(trade)
 
@@ -1033,6 +1156,13 @@ class BacktestEngine:
             f"Win Rate={metrics['win_rate']:.2f}%, "
             f"Sharpe={sharpe_str}"
         )
+
+        # Add strategy events if available (for floor strategy markers)
+        if self.strategy and hasattr(self.strategy, "_backtest_events"):
+            # pylint: disable=protected-access
+            metrics["strategy_events"] = self.strategy._backtest_events
+        else:
+            metrics["strategy_events"] = []
 
         return metrics
 

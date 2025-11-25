@@ -301,6 +301,10 @@ class ExecutionMetrics(models.Model):
         default=list,
         help_text="Array of trade details",
     )
+    strategy_events = models.JSONField(
+        default=list,
+        help_text="Strategy events log (for floor strategy markers and debugging)",
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         help_text="Record creation timestamp",

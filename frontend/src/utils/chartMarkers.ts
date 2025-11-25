@@ -23,6 +23,7 @@ export interface ChartMarker {
   shape?: 'triangleUp' | 'triangleDown' | 'doubleCircle';
   label?: string;
   tooltip?: string;
+  eventData?: Record<string, unknown>; // Store full event data for click handling
   strategyEvent?: StrategyEvent;
 }
 
@@ -124,23 +125,40 @@ export function doubleCirclePath(): string {
 export function createTradeMarkers(trades: Trade[]): ChartMarker[] {
   return trades.map((trade, index) => {
     const isBuy = trade.action === 'buy';
-    const priceOffset = isBuy ? -0.3 : 0.3; // Position near candle
+    const priceOffset = isBuy ? -0.0001 : 0.0001; // Small offset for positioning
+
+    // Format timestamp for tooltip
+    const timestamp = new Date(trade.timestamp).toLocaleString();
+
+    // Build detailed tooltip
+    const tooltipLines = [
+      `${isBuy ? 'BUY' : 'SELL'} Order`,
+      `Time: ${timestamp}`,
+      `Price: ${trade.price.toFixed(5)}`,
+      `Units: ${Math.abs(trade.units)}`,
+    ];
+
+    if (trade.pnl !== undefined) {
+      const sign = trade.pnl >= 0 ? '+' : '-';
+      const amount = Math.abs(trade.pnl).toFixed(2);
+      tooltipLines.push(`P&L: ${sign}$${amount}`);
+    }
+
+    // Round timestamp to nearest hour to align with H1 candles
+    // This ensures markers appear on the chart even if trade times don't exactly match candle times
+    const tradeDate = new Date(trade.timestamp);
+    const roundedDate = new Date(tradeDate);
+    roundedDate.setMinutes(0, 0, 0); // Round down to the hour
 
     return {
       id: `trade-${index}`,
-      date: new Date(trade.timestamp),
+      date: roundedDate,
       price: trade.price + priceOffset,
       type: trade.action,
       color: isBuy ? '#00bcd4' : '#ff9800', // Cyan for buy, Orange for sell
       shape: isBuy ? 'triangleUp' : 'triangleDown',
-      label: trade.action.toUpperCase(),
-      tooltip: `${trade.action.toUpperCase()} ${Math.abs(
-        trade.units
-      )} @ ${trade.price.toFixed(5)}${
-        trade.pnl !== undefined
-          ? ` | P&L: ${trade.pnl >= 0 ? '+' : ''}${trade.pnl.toFixed(2)}`
-          : ''
-      }`,
+      label: isBuy ? 'BUY' : 'SELL',
+      tooltip: tooltipLines.join('\n'),
     };
   });
 }

@@ -34,6 +34,23 @@ from .trading_task_models import TradingTask  # noqa: F401
 User = get_user_model()
 
 
+class StrategyConfigManager(models.Manager["StrategyConfig"]):
+    """Custom manager for StrategyConfig model."""
+
+    def create_for_user(self, user: Any, **kwargs: Any) -> "StrategyConfig":
+        """
+        Create strategy configuration for a user.
+
+        Args:
+            user: User who owns the configuration
+            **kwargs: Configuration fields (name, strategy_type, parameters, description)
+
+        Returns:
+            Created StrategyConfig instance
+        """
+        return self.create(user=user, **kwargs)
+
+
 class StrategyConfig(models.Model):
     """
     Reusable strategy configuration.
@@ -43,6 +60,8 @@ class StrategyConfig(models.Model):
 
     Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7
     """
+
+    objects = StrategyConfigManager()
 
     user = models.ForeignKey(
         User,
@@ -675,13 +694,19 @@ class Position(models.Model):
 
     def calculate_unrealized_pnl(self, current_price: Decimal) -> Decimal:
         """
-        Calculate unrealized P&L based on current price.
+        Calculate unrealized P&L based on current price in USD.
+
+        For USD/JPY:
+        - 1 lot = 1,000 USD
+        - units field = lot size (e.g., 1.0 = 1 lot)
+        - P&L in JPY = price_diff × units × 1000
+        - P&L in USD = P&L_JPY / current_price
 
         Args:
             current_price: Current market price
 
         Returns:
-            Unrealized P&L
+            Unrealized P&L in USD
         """
         self.current_price = current_price
         price_diff = current_price - self.entry_price
@@ -689,7 +714,14 @@ class Position(models.Model):
         if self.direction == "short":
             price_diff = -price_diff
 
-        self.unrealized_pnl = price_diff * self.units
+        # Convert lot size to base currency amount (1 lot = 1,000 units)
+        base_currency_amount = self.units * Decimal("1000")
+        self.unrealized_pnl = price_diff * base_currency_amount
+
+        # For JPY pairs, convert from JPY to USD
+        if "JPY" in str(self.instrument):
+            self.unrealized_pnl = self.unrealized_pnl / current_price
+
         return self.unrealized_pnl
 
     def update_price(self, current_price: Decimal) -> None:
@@ -704,20 +736,32 @@ class Position(models.Model):
 
     def close(self, exit_price: Decimal) -> Decimal:
         """
-        Close the position and calculate realized P&L.
+        Close the position and calculate realized P&L in USD.
+
+        For USD/JPY:
+        - 1 lot = 1,000 USD
+        - P&L in JPY = price_diff × units × 1000
+        - P&L in USD = P&L_JPY / exit_price
 
         Args:
             exit_price: Exit price for the position
 
         Returns:
-            Realized P&L
+            Realized P&L in USD
         """
         price_diff = exit_price - self.entry_price
 
         if self.direction == "short":
             price_diff = -price_diff
 
-        self.realized_pnl = price_diff * self.units
+        # Convert lot size to base currency amount (1 lot = 1,000 units)
+        base_currency_amount = self.units * Decimal("1000")
+        self.realized_pnl = price_diff * base_currency_amount
+
+        # For JPY pairs, convert from JPY to USD
+        if "JPY" in str(self.instrument):
+            self.realized_pnl = self.realized_pnl / exit_price
+
         self.closed_at = timezone.now()
         self.current_price = exit_price
         self.save(update_fields=["realized_pnl", "closed_at", "current_price"])

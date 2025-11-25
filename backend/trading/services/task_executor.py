@@ -165,6 +165,7 @@ def _create_execution_metrics(
         average_loss=Decimal(str(performance_metrics.get("average_loss", 0))),
         equity_curve=equity_curve_dicts,
         trade_log=trade_log_dicts,
+        strategy_events=performance_metrics.get("strategy_events", []),
     )
 
 

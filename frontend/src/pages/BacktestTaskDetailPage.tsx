@@ -38,7 +38,6 @@ import { useTaskPolling } from '../hooks/useTaskPolling';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
 import { TaskActionButtons } from '../components/tasks/actions/TaskActionButtons';
-import { TaskProgress } from '../components/tasks/TaskProgress';
 import { TaskOverviewTab } from '../components/backtest/detail/TaskOverviewTab';
 import { TaskResultsTab } from '../components/backtest/detail/TaskResultsTab';
 import { TaskExecutionsTab } from '../components/backtest/detail/TaskExecutionsTab';
@@ -106,9 +105,6 @@ export default function BacktestTaskDetailPage() {
     interval: 3000, // Poll every 3 seconds for active tasks
   });
 
-  // Use polled progress directly (no local state needed)
-  const currentProgress = polledStatus?.progress || progress;
-
   // Refetch when status changes
   const prevStatusRef = useRef<string | undefined>(undefined);
   useEffect(() => {
@@ -121,7 +117,11 @@ export default function BacktestTaskDetailPage() {
         polledStatus.status !== prevStatusRef.current
       ) {
         console.log(
-          '[BacktestTaskDetail] Status changed, refetching task data'
+          '[BacktestTaskDetail] Status changed from',
+          prevStatusRef.current,
+          'to',
+          polledStatus.status,
+          '- refetching task data'
         );
         refetch().then(() => {
           setIsTransitioning(false);
@@ -130,6 +130,16 @@ export default function BacktestTaskDetailPage() {
       prevStatusRef.current = polledStatus.status;
     }
   }, [polledStatus, task, refetch]);
+
+  // Also refetch when task transitions to RUNNING (new execution started)
+  useEffect(() => {
+    if (task && task.status === TaskStatus.RUNNING && progress === 100) {
+      console.log(
+        '[BacktestTaskDetail] Task is RUNNING but progress is 100%, refetching'
+      );
+      refetch();
+    }
+  }, [task, progress, refetch]);
 
   // Refetch task data after mutations complete
   useEffect(() => {
@@ -379,18 +389,6 @@ export default function BacktestTaskDetailPage() {
           )}
         </Menu>
       </Paper>
-
-      {/* Progress Bar in full-width mode for detail page (Requirement 3.3) */}
-      {task.status === TaskStatus.RUNNING && (
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <TaskProgress
-            status={task.status}
-            progress={currentProgress}
-            compact={false}
-            showPercentage={true}
-          />
-        </Paper>
-      )}
 
       {/* Tabs */}
       <Paper sx={{ mb: 3 }}>
