@@ -314,6 +314,93 @@ class TestLayer:
         layer.reset_retracement_count()
         assert layer.retracement_count == 0
 
+    def test_reset_unit_size(self):
+        """
+        Test resetting unit size to base_lot_size.
+        Requirements: 7.1, 7.3, 7.4
+        """
+        config = {"base_lot_size": 2.5}
+        layer = Layer(layer_number=1, config=config)
+
+        # Initial state should be base_lot_size
+        assert layer.current_lot_size == Decimal("2.5")
+        assert layer.base_lot_size == Decimal("2.5")
+
+        # Simulate scaling
+        layer.current_lot_size = Decimal("5.0")
+        assert layer.current_lot_size == Decimal("5.0")
+
+        # Reset should restore to base_lot_size
+        layer.reset_unit_size()
+        assert layer.current_lot_size == Decimal("2.5")
+
+    def test_unit_size_reset_on_initial_entry(self):
+        """
+        Test that unit size resets to base_lot_size on initial entry.
+        Requirements: 7.1, 7.4
+        """
+        config = {"base_lot_size": 1.0}
+        layer = Layer(layer_number=1, config=config)
+
+        # Initial state
+        assert layer.current_lot_size == Decimal("1.0")
+
+        # Simulate first cycle with scaling
+        layer.current_lot_size = Decimal("2.0")
+        layer.current_lot_size = Decimal("3.0")
+        assert layer.current_lot_size == Decimal("3.0")
+
+        # Simulate initial entry for new cycle - should reset
+        layer.reset_unit_size()
+        assert layer.current_lot_size == Decimal("1.0")
+
+    def test_unit_size_uses_scaled_size_on_retracement(self):
+        """
+        Test that retracement uses scaled size.
+        Requirements: 7.2
+        """
+        config = {"base_lot_size": 1.0}
+        layer = Layer(layer_number=1, config=config)
+
+        # Initial entry uses base_lot_size
+        assert layer.current_lot_size == Decimal("1.0")
+
+        # First retracement scales up
+        layer.current_lot_size = Decimal("2.0")
+        assert layer.current_lot_size == Decimal("2.0")
+
+        # Second retracement scales up further
+        layer.current_lot_size = Decimal("3.0")
+        assert layer.current_lot_size == Decimal("3.0")
+
+    def test_unit_size_multiple_cycles_reset_correctly(self):
+        """
+        Test that multiple cycles reset unit size correctly.
+        Requirements: 7.1, 7.2, 7.3, 7.4
+        """
+        config = {"base_lot_size": 1.5}
+        layer = Layer(layer_number=1, config=config)
+
+        # Cycle 1: Initial entry
+        assert layer.current_lot_size == Decimal("1.5")
+
+        # Cycle 1: Scale up
+        layer.current_lot_size = Decimal("3.0")
+        layer.current_lot_size = Decimal("4.5")
+        assert layer.current_lot_size == Decimal("4.5")
+
+        # Cycle 2: Reset for new initial entry
+        layer.reset_unit_size()
+        assert layer.current_lot_size == Decimal("1.5")
+
+        # Cycle 2: Scale up differently
+        layer.current_lot_size = Decimal("2.5")
+        assert layer.current_lot_size == Decimal("2.5")
+
+        # Cycle 3: Reset again
+        layer.reset_unit_size()
+        assert layer.current_lot_size == Decimal("1.5")
+
     def test_retracement_increment_on_scale_in(self):
         """
         Test that retracement counter increments on scale-in.
@@ -1317,3 +1404,118 @@ class TestFloorStrategyRetracementReset:
         assert (
             layer.retracement_count == num_retracements
         ), f"Final retracement count should be {num_retracements}"
+
+    @given(
+        base_lot_size=st.floats(min_value=0.01, max_value=10.0),
+        scaling_mode=st.sampled_from(["additive", "multiplicative"]),
+        scaling_amount=st.floats(min_value=0.1, max_value=5.0),
+        num_retracements=st.integers(min_value=0, max_value=10),
+        num_cycles=st.integers(min_value=1, max_value=5),
+    )
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_unit_size_resets_on_initial_entry(
+        self,
+        user,
+        oanda_account,
+        strategy_config,
+        base_lot_size,
+        scaling_mode,
+        scaling_amount,
+        num_retracements,
+        num_cycles,
+    ):
+        """
+        Property 9: Unit size resets on initial entry.
+
+        For any scaling scenario, the unit size should reset to base_lot_size
+        on every initial entry, regardless of previous scaling.
+
+        Feature: floor-strategy-enhancements, Property 9
+        Validates: Requirements 7.1, 7.3, 7.4
+        """
+        # Create strategy with specific scaling configuration
+        config = strategy_config.copy()
+        config["instrument"] = "EUR_USD"
+        config["base_lot_size"] = base_lot_size
+        config["scaling_mode"] = scaling_mode
+        config["scaling_amount"] = scaling_amount
+        config["entry_signal_lookback_ticks"] = 5  # Reduce for faster testing
+
+        strategy_obj = Strategy.objects.create(
+            account=oanda_account,
+            strategy_type="floor",
+            is_active=True,
+            config=config,
+            instrument="EUR_USD",
+        )
+
+        floor_strategy = FloorStrategy(config)
+        floor_strategy.account = oanda_account
+        floor_strategy.strategy = strategy_obj
+
+        # Get the first layer
+        layer = floor_strategy.layer_manager.layers[0]
+
+        # Verify initial state
+        assert layer.current_lot_size == Decimal(
+            str(base_lot_size)
+        ), "Initial lot size should equal base_lot_size"
+
+        # Simulate multiple cycles
+        for cycle in range(num_cycles):
+            # Feed enough ticks to trigger entry signal
+            base_price = Decimal("1.1000") + Decimal(str(cycle * 0.01))
+            for i in range(10):
+                tick = TickData(
+                    instrument="EUR_USD",
+                    timestamp=timezone.now() + timedelta(seconds=cycle * 100 + i),
+                    bid=base_price + Decimal(str(i * 0.0001)),
+                    ask=base_price + Decimal(str(i * 0.0001)) + Decimal("0.0002"),
+                    mid=base_price + Decimal(str(i * 0.0001)) + Decimal("0.0001"),
+                )
+                floor_strategy.on_tick(tick)
+
+            # After initial entry, lot size should be base_lot_size
+            if layer.positions:
+                assert layer.current_lot_size == Decimal(
+                    str(base_lot_size)
+                ), f"Cycle {cycle}: Lot size should be {base_lot_size} after initial entry"
+
+                # Simulate retracements with scaling
+                for _ in range(num_retracements):
+                    # Calculate next lot size using scaling engine
+                    next_lot_size = floor_strategy.scaling_engine.calculate_next_lot_size(
+                        layer.current_lot_size
+                    )
+                    layer.current_lot_size = next_lot_size
+
+                # Verify lot size has changed from base (if we had retracements)
+                if num_retracements > 0:
+                    assert layer.current_lot_size != Decimal(str(base_lot_size)), (
+                        f"Cycle {cycle}: Lot size should have changed "
+                        f"after {num_retracements} retracements"
+                    )
+
+                # Close all positions to prepare for next cycle
+                layer.positions.clear()
+                layer.first_lot_position = None
+                layer.has_pending_initial_entry = False
+
+        # Final verification: After all cycles, if we create another initial entry,
+        # lot size should reset to base_lot_size
+        if layer.positions:
+            layer.positions.clear()
+            layer.first_lot_position = None
+            layer.has_pending_initial_entry = False
+
+        # Reset lot size explicitly (simulating what _create_initial_entry_order does)
+        layer.reset_unit_size()
+
+        # Verify reset
+        assert layer.current_lot_size == Decimal(
+            str(base_lot_size)
+        ), "Final cycle: Lot size should reset to base_lot_size"

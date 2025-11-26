@@ -136,7 +136,9 @@ class Layer:
         self.first_lot_position: Position | None = None
         self.retracement_count = 0
         self.last_entry_price: Decimal | None = None
-        self.current_lot_size = Decimal(str(config.get("base_lot_size", 1.0)))
+        # Store base_lot_size from config for resetting (Requirements 7.1, 7.3, 7.4)
+        self.base_lot_size = Decimal(str(config.get("base_lot_size", 1.0)))
+        self.current_lot_size = self.base_lot_size
         self.is_active = True
         self.peak_price: Decimal | None = None  # Track peak price for retracement detection
         self.has_scaled_at_current_level = False  # Prevent multiple scales at same level
@@ -169,6 +171,14 @@ class Layer:
     def reset_retracement_count(self) -> None:
         """Reset the retracement count to zero for a new initial entry."""
         self.retracement_count = 0
+
+    def reset_unit_size(self) -> None:
+        """
+        Reset the unit size to base_lot_size for a new initial entry.
+
+        Requirements: 7.1, 7.3, 7.4
+        """
+        self.current_lot_size = self.base_lot_size
 
     def should_create_new_layer(self) -> bool:
         """
@@ -687,6 +697,9 @@ class FloorStrategy(BaseStrategy):
 
         # Reset retracement counter for new initial entry (Requirements 6.1, 6.3, 6.4)
         layer.reset_retracement_count()
+
+        # Reset unit size to base_lot_size for new initial entry (Requirements 7.1, 7.4)
+        layer.reset_unit_size()
 
         # Use bid/ask for order price
         order_price = tick_data.ask if direction == "long" else tick_data.bid
