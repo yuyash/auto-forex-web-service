@@ -330,14 +330,15 @@ class BacktestEngine:
         self._exit_check_early_returns = 0
         self._exit_check_full_runs = 0
 
-    def run(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
-        self, tick_data: list[TickDataPoint]
+    def run(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-lines
+        self, tick_data: list[TickDataPoint], backtest: Any = None
     ) -> tuple[list[BacktestTrade], list[EquityPoint], dict[str, Any]]:
         """
         Run backtest on historical tick data.
 
         Args:
             tick_data: List of historical tick data points
+            backtest: Optional Backtest model instance for configuration (e.g., sell_at_completion)
 
         Returns:
             Tuple of (trade_log, equity_curve, performance_metrics)
@@ -422,6 +423,11 @@ class BacktestEngine:
             # Record final equity
             self._record_equity(tick_data[-1].timestamp if tick_data else datetime.now())
 
+            # Finalize backtest - close positions if configured
+            if backtest and tick_data:
+                final_tick = tick_data[-1]
+                self.finalize_backtest(backtest, final_tick)
+
             # Log end strategy event
             if self.strategy and tick_data:
                 last_tick = tick_data[-1]
@@ -498,8 +504,11 @@ class BacktestEngine:
                 self.resource_monitor.stop()
                 self._log_resource_usage()
 
-    def run_incremental(  # pylint: disable=too-many-locals,too-many-branches
-        self, tick_data: list[TickDataPoint], day_complete_callback: Any = None
+    def run_incremental(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+        self,
+        tick_data: list[TickDataPoint],
+        day_complete_callback: Any = None,
+        backtest: Any = None,
     ) -> tuple[list[BacktestTrade], list[EquityPoint], dict[str, Any]]:
         """
         Run backtest incrementally, calling callback after each day with intermediate results.
@@ -508,6 +517,7 @@ class BacktestEngine:
             tick_data: List of historical tick data points
             day_complete_callback: Optional callback(day_date, intermediate_results)
                 called after each day
+            backtest: Optional Backtest model instance for configuration (e.g., sell_at_completion)
 
         Returns:
             Tuple of (trade_log, equity_curve, performance_metrics)
@@ -611,6 +621,11 @@ class BacktestEngine:
                         "equity_curve": equity_points,
                     }
                     day_complete_callback(day_date, intermediate_results)
+
+            # Finalize backtest - close positions if configured
+            if backtest and tick_data:
+                final_tick = tick_data[-1]
+                self.finalize_backtest(backtest, final_tick)
 
             # Log end strategy event
             if self.strategy and tick_data:
@@ -1272,3 +1287,92 @@ class BacktestEngine:
             return sharpe_ratio
 
         return None
+
+    def finalize_backtest(self, backtest: Any, final_tick: TickDataPoint) -> None:
+        """
+        Finalize backtest execution and optionally close all positions.
+
+        This method is called at the end of backtest execution to:
+        1. Check the backtest.sell_at_completion flag
+        2. If True, close all open positions at final market price
+        3. Log close events with event_type='close'
+
+        Args:
+            backtest: Backtest model instance with sell_at_completion flag
+            final_tick: Final tick data for closing prices
+
+        Requirements: 9.2, 9.4
+        """
+        # Check if we should close positions at completion
+        if not hasattr(backtest, "sell_at_completion") or not backtest.sell_at_completion:
+            logger.info("Backtest finalized without closing positions (sell_at_completion=False)")
+            return
+
+        # Close all open positions
+        if self.positions:
+            logger.info(
+                f"Closing {len(self.positions)} open positions at backtest completion "
+                f"(sell_at_completion=True)"
+            )
+            closed_orders = self._close_all_positions(final_tick)
+            logger.info(f"Closed {len(closed_orders)} positions at backtest completion")
+        else:
+            logger.info("No open positions to close at backtest completion")
+
+    def _close_all_positions(self, tick_data: TickDataPoint) -> list[BacktestPosition]:
+        """
+        Close all open positions at current market price.
+
+        This helper method generates close orders for all open positions
+        and executes them at the provided tick price.
+
+        Args:
+            tick_data: Current tick data for closing prices
+
+        Returns:
+            List of closed positions
+
+        Requirements: 9.2, 9.4
+        """
+        closed_positions = []
+
+        # Create a copy of positions list to avoid modification during iteration
+        positions_to_close = list(self.positions)
+
+        for position in positions_to_close:
+            # Determine exit price based on position direction
+            # For long positions, we sell at bid price
+            # For short positions, we buy at ask price
+            if position.direction == "long":
+                exit_price = tick_data.bid
+            else:
+                exit_price = tick_data.ask
+
+            # Close the position with reason 'close'
+            self._close_position(
+                position=position,
+                exit_price=exit_price,
+                exit_time=tick_data.timestamp,
+                reason="close",
+            )
+
+            closed_positions.append(position)
+
+            # Log close event to strategy if available
+            if self.strategy:
+                self.strategy.log_strategy_event(
+                    "position_closed",
+                    f"Position closed at backtest completion: {position.direction} "
+                    f"{position.units} {position.instrument}",
+                    {
+                        "instrument": position.instrument,
+                        "direction": position.direction,
+                        "units": str(position.units),
+                        "entry_price": str(position.entry_price),
+                        "exit_price": str(exit_price),
+                        "event_type": "close",
+                        "reason": "backtest_completion",
+                    },
+                )
+
+        return closed_positions
