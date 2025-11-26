@@ -166,6 +166,10 @@ class Layer:
         """Increment the retracement count for this layer."""
         self.retracement_count += 1
 
+    def reset_retracement_count(self) -> None:
+        """Reset the retracement count to zero for a new initial entry."""
+        self.retracement_count = 0
+
     def should_create_new_layer(self) -> bool:
         """
         Check if a new layer should be created based on retracement count.
@@ -680,6 +684,9 @@ class FloorStrategy(BaseStrategy):
                 f"skipping duplicate"
             )
             return None
+
+        # Reset retracement counter for new initial entry (Requirements 6.1, 6.3, 6.4)
+        layer.reset_retracement_count()
 
         # Use bid/ask for order price
         order_price = tick_data.ask if direction == "long" else tick_data.bid

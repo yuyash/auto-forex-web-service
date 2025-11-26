@@ -282,6 +282,95 @@ class TestLayer:
 
         assert layer.should_create_new_layer() is True
 
+    def test_reset_retracement_count(self):
+        """Test resetting retracement count to zero."""
+        config = {"base_lot_size": 1.0}
+        layer = Layer(layer_number=1, config=config)
+
+        # Increment retracement count
+        layer.increment_retracement_count()
+        layer.increment_retracement_count()
+        layer.increment_retracement_count()
+        assert layer.retracement_count == 3
+
+        # Reset should set it back to 0
+        layer.reset_retracement_count()
+        assert layer.retracement_count == 0
+
+    def test_retracement_reset_on_initial_entry(self):
+        """
+        Test that retracement counter resets to 0 on initial entry.
+        Requirements: 6.1, 6.3, 6.4
+        """
+        config = {"base_lot_size": 1.0}
+        layer = Layer(layer_number=1, config=config)
+
+        # Simulate first cycle with retracements
+        layer.increment_retracement_count()
+        layer.increment_retracement_count()
+        assert layer.retracement_count == 2
+
+        # Simulate initial entry for new cycle - should reset
+        layer.reset_retracement_count()
+        assert layer.retracement_count == 0
+
+    def test_retracement_increment_on_scale_in(self):
+        """
+        Test that retracement counter increments on scale-in.
+        Requirements: 6.2
+        """
+        config = {"base_lot_size": 1.0}
+        layer = Layer(layer_number=1, config=config)
+
+        # Start at 0
+        assert layer.retracement_count == 0
+
+        # First retracement
+        layer.increment_retracement_count()
+        assert layer.retracement_count == 1
+
+        # Second retracement
+        layer.increment_retracement_count()
+        assert layer.retracement_count == 2
+
+        # Third retracement
+        layer.increment_retracement_count()
+        assert layer.retracement_count == 3
+
+    def test_multiple_cycles_reset_correctly(self):
+        """
+        Test that retracement counter resets correctly across multiple cycles.
+        Requirements: 6.1, 6.2, 6.3, 6.4
+        """
+        config = {"base_lot_size": 1.0}
+        layer = Layer(layer_number=1, config=config)
+
+        # Cycle 1: Initial entry + 3 retracements
+        layer.reset_retracement_count()
+        assert layer.retracement_count == 0
+        layer.increment_retracement_count()
+        layer.increment_retracement_count()
+        layer.increment_retracement_count()
+        assert layer.retracement_count == 3
+
+        # Cycle 2: Initial entry + 2 retracements
+        layer.reset_retracement_count()
+        assert layer.retracement_count == 0
+        layer.increment_retracement_count()
+        layer.increment_retracement_count()
+        assert layer.retracement_count == 2
+
+        # Cycle 3: Initial entry + 5 retracements
+        layer.reset_retracement_count()
+        assert layer.retracement_count == 0
+        for _ in range(5):
+            layer.increment_retracement_count()
+        assert layer.retracement_count == 5
+
+        # Final cycle: Initial entry should reset again
+        layer.reset_retracement_count()
+        assert layer.retracement_count == 0
+
 
 class TestScalingEngine:
     """Test ScalingEngine functionality."""
@@ -1071,3 +1160,160 @@ class TestFloorStrategyEventLogging:
         assert "exit_price" in mp_event["details"]
         assert "pnl" in mp_event["details"]
         assert "timestamp" in mp_event["details"]
+
+
+@pytest.mark.django_db
+class TestFloorStrategyRetracementReset:
+    """Property-based tests for Floor Strategy retracement reset logic."""
+
+    @given(
+        num_cycles=st.integers(min_value=1, max_value=5),
+        retracements_per_cycle=st.lists(
+            st.integers(min_value=0, max_value=10), min_size=1, max_size=5
+        ),
+    )
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_retracement_resets_on_initial_entry(
+        self, user, oanda_account, strategy_config, num_cycles, retracements_per_cycle
+    ):
+        """
+        Property 7: Retracement resets on initial entry.
+
+        For any number of position cycles, the retracement counter should reset to 0
+        on every initial entry, regardless of previous cycles.
+
+        Feature: floor-strategy-enhancements, Property 7
+        Validates: Requirements 6.1, 6.3, 6.4
+        """
+        # Create strategy
+        config = strategy_config.copy()
+        config["instrument"] = "EUR_USD"
+        config["entry_signal_lookback_ticks"] = 5  # Reduce for faster testing
+
+        strategy_obj = Strategy.objects.create(
+            account=oanda_account,
+            strategy_type="floor",
+            is_active=True,
+            config=config,
+            instrument="EUR_USD",
+        )
+
+        floor_strategy = FloorStrategy(config)
+        floor_strategy.account = oanda_account
+        floor_strategy.strategy = strategy_obj
+
+        # Get the first layer
+        layer = floor_strategy.layer_manager.layers[0]
+
+        # Simulate multiple cycles
+        for cycle in range(num_cycles):
+            # Feed enough ticks to trigger entry signal
+            base_price = Decimal("1.1000") + Decimal(str(cycle * 0.01))
+            for i in range(10):
+                tick = TickData(
+                    instrument="EUR_USD",
+                    timestamp=timezone.now() + timedelta(seconds=i),
+                    bid=base_price + Decimal(str(i * 0.0001)),
+                    ask=base_price + Decimal(str(i * 0.0001)) + Decimal("0.0002"),
+                    mid=base_price + Decimal(str(i * 0.0001)) + Decimal("0.0001"),
+                )
+                floor_strategy.on_tick(tick)
+
+            # After initial entry, retracement should be 0
+            if layer.positions:
+                assert (
+                    layer.retracement_count == 0
+                ), f"Cycle {cycle}: Retracement should be 0 after initial entry"
+
+                # Simulate retracements for this cycle
+                num_retracements = retracements_per_cycle[cycle % len(retracements_per_cycle)]
+                for retr_idx in range(num_retracements):
+                    # Manually increment retracement (simulating scale-in)
+                    layer.increment_retracement_count()
+                    assert layer.retracement_count == retr_idx + 1
+
+                # Close all positions to prepare for next cycle
+                layer.positions.clear()
+                layer.first_lot_position = None
+                layer.has_pending_initial_entry = False
+
+        # Final verification: After all cycles, if we create another initial entry,
+        # retracement should still be 0
+        if layer.positions:
+            layer.positions.clear()
+            layer.first_lot_position = None
+            layer.has_pending_initial_entry = False
+
+        # Feed ticks for final entry
+        for i in range(10):
+            tick = TickData(
+                instrument="EUR_USD",
+                timestamp=timezone.now() + timedelta(seconds=100 + i),
+                bid=Decimal("1.2000") + Decimal(str(i * 0.0001)),
+                ask=Decimal("1.2000") + Decimal(str(i * 0.0001)) + Decimal("0.0002"),
+                mid=Decimal("1.2000") + Decimal(str(i * 0.0001)) + Decimal("0.0001"),
+            )
+            floor_strategy.on_tick(tick)
+
+        if layer.positions:
+            assert layer.retracement_count == 0, "Final cycle: Retracement should be 0"
+
+    @given(
+        num_retracements=st.integers(min_value=1, max_value=20),
+    )
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_retracement_increments_on_retracement_entry(
+        self, user, oanda_account, strategy_config, num_retracements
+    ):
+        """
+        Property 8: Retracement increments on retracement entry.
+
+        For any number of retracement entries, the retracement counter should
+        increment by 1 each time.
+
+        Feature: floor-strategy-enhancements, Property 8
+        Validates: Requirements 6.2
+        """
+        # Create strategy
+        config = strategy_config.copy()
+        config["instrument"] = "EUR_USD"
+
+        strategy_obj = Strategy.objects.create(
+            account=oanda_account,
+            strategy_type="floor",
+            is_active=True,
+            config=config,
+            instrument="EUR_USD",
+        )
+
+        floor_strategy = FloorStrategy(config)
+        floor_strategy.account = oanda_account
+        floor_strategy.strategy = strategy_obj
+
+        # Get the first layer
+        layer = floor_strategy.layer_manager.layers[0]
+
+        # Start with retracement count at 0
+        initial_count = layer.retracement_count
+        assert initial_count == 0, "Initial retracement count should be 0"
+
+        # Increment retracement multiple times
+        for i in range(num_retracements):
+            expected_count = initial_count + i + 1
+            layer.increment_retracement_count()
+            assert (
+                layer.retracement_count == expected_count
+            ), f"After {i+1} increments, retracement should be {expected_count}"
+
+        # Final verification
+        assert (
+            layer.retracement_count == num_retracements
+        ), f"Final retracement count should be {num_retracements}"
