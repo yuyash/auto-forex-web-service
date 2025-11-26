@@ -19,10 +19,10 @@ import {
   TableSortLabel,
   Chip,
 } from '@mui/material';
-import type { Trade } from '../../types/execution';
+import type { Trade, StrategyEvent } from '../../types/execution';
 
 type SortField =
-  | 'entry_time'
+  | 'timestamp'
   | 'units'
   | 'entry_price'
   | 'exit_price'
@@ -30,23 +30,88 @@ type SortField =
   | 'retracement_count';
 type SortOrder = 'asc' | 'desc';
 
+// Combined event type that can be either a trade or a strategy event
+interface CombinedEvent {
+  type: 'trade' | 'event';
+  timestamp: string;
+  layer_number: number;
+  event_type: string;
+  direction?: 'long' | 'short';
+  units?: number;
+  entry_price?: number;
+  exit_price?: number;
+  pnl?: number;
+  retracement_count?: number;
+  is_first_lot?: boolean;
+  tradeIndex?: number; // For highlighting selected trade
+}
+
 interface FloorLayerLogProps {
   trades: Trade[];
+  strategyEvents?: StrategyEvent[];
   selectedTradeIndex?: number | null;
 }
 
 export function FloorLayerLog({
   trades,
+  strategyEvents = [],
   selectedTradeIndex,
 }: FloorLayerLogProps) {
-  // Sorting state - default sort by entry_time ascending
-  const [sortField, setSortField] = useState<SortField>('entry_time');
+  // Sorting state - default sort by timestamp ascending
+  const [sortField, setSortField] = useState<SortField>('timestamp');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
 
   // Filter trades that have floor strategy data
   const floorTrades = trades.filter(
     (trade) => trade.layer_number !== undefined
   );
+
+  // Merge trades and strategy events into combined events
+  const combinedEvents = useMemo(() => {
+    const events: CombinedEvent[] = [];
+
+    // Add trades as events
+    floorTrades.forEach((trade) => {
+      const tradeIndex = trades.findIndex((t) => t === trade);
+      events.push({
+        type: 'trade',
+        timestamp: trade.entry_time,
+        layer_number: trade.layer_number || 1,
+        event_type: trade.is_first_lot ? 'initial' : 'retracement',
+        direction: trade.direction,
+        units: trade.units,
+        entry_price: trade.entry_price,
+        exit_price: trade.exit_price,
+        pnl: trade.pnl,
+        retracement_count: trade.retracement_count,
+        is_first_lot: trade.is_first_lot,
+        tradeIndex,
+      });
+    });
+
+    // Add strategy events
+    strategyEvents.forEach((event) => {
+      events.push({
+        type: 'event',
+        timestamp: event.timestamp,
+        layer_number: event.layer_number,
+        event_type: event.event_type,
+        direction: event.direction,
+        units: event.units,
+        entry_price: event.entry_price,
+        exit_price: event.exit_price,
+        pnl: event.pnl,
+        retracement_count: event.retracement_count,
+      });
+    });
+
+    // Sort by timestamp
+    return events.sort((a, b) => {
+      const timeA = new Date(a.timestamp).getTime();
+      const timeB = new Date(b.timestamp).getTime();
+      return timeA - timeB;
+    });
+  }, [floorTrades, strategyEvents, trades]);
 
   // Handle sort request
   const handleSort = (field: SortField) => {
@@ -55,34 +120,34 @@ export function FloorLayerLog({
     setSortField(field);
   };
 
-  // Group trades by layer with sorting applied
-  const tradesByLayer = useMemo(() => {
+  // Group events by layer with sorting applied
+  const eventsByLayer = useMemo(() => {
     // Sort function
-    const sortTradesInLayer = (tradesToSort: Trade[]) => {
-      return [...tradesToSort].sort((a, b) => {
+    const sortEventsInLayer = (eventsToSort: CombinedEvent[]) => {
+      return [...eventsToSort].sort((a, b) => {
         let aValue: number | string = 0;
         let bValue: number | string = 0;
 
         switch (sortField) {
-          case 'entry_time':
-            aValue = new Date(a.entry_time).getTime();
-            bValue = new Date(b.entry_time).getTime();
+          case 'timestamp':
+            aValue = new Date(a.timestamp).getTime();
+            bValue = new Date(b.timestamp).getTime();
             break;
           case 'units':
-            aValue = a.units;
-            bValue = b.units;
+            aValue = a.units ?? -1;
+            bValue = b.units ?? -1;
             break;
           case 'entry_price':
-            aValue = a.entry_price;
-            bValue = b.entry_price;
+            aValue = a.entry_price ?? -1;
+            bValue = b.entry_price ?? -1;
             break;
           case 'exit_price':
-            aValue = a.exit_price;
-            bValue = b.exit_price;
+            aValue = a.exit_price ?? -1;
+            bValue = b.exit_price ?? -1;
             break;
           case 'pnl':
-            aValue = a.pnl;
-            bValue = b.pnl;
+            aValue = a.pnl ?? -1;
+            bValue = b.pnl ?? -1;
             break;
           case 'retracement_count':
             aValue = a.retracement_count ?? -1;
@@ -100,35 +165,37 @@ export function FloorLayerLog({
       });
     };
 
-    const grouped = floorTrades.reduce(
-      (acc, trade) => {
-        const layer = trade.layer_number || 1;
+    const grouped = combinedEvents.reduce(
+      (acc, event) => {
+        const layer = event.layer_number || 1;
         if (!acc[layer]) {
           acc[layer] = [];
         }
-        acc[layer].push(trade);
+        acc[layer].push(event);
         return acc;
       },
-      {} as Record<number, Trade[]>
+      {} as Record<number, CombinedEvent[]>
     );
 
-    // Sort trades within each layer
+    // Sort events within each layer
     Object.keys(grouped).forEach((layerKey) => {
-      grouped[Number(layerKey)] = sortTradesInLayer(grouped[Number(layerKey)]);
+      grouped[Number(layerKey)] = sortEventsInLayer(grouped[Number(layerKey)]);
     });
 
     return grouped;
-  }, [floorTrades, sortField, sortOrder]);
+  }, [combinedEvents, sortField, sortOrder]);
 
   if (import.meta.env.DEV) {
     console.log('[FloorLayerLog] Rendering', {
       total_trades: trades.length,
       floor_trades: floorTrades.length,
+      strategy_events: strategyEvents.length,
+      combined_events: combinedEvents.length,
       sample_trade: trades[0],
     });
   }
 
-  if (floorTrades.length === 0) {
+  if (combinedEvents.length === 0) {
     // Show a message if no floor data is available
     return (
       <Paper sx={{ p: 3, mb: 3 }}>
@@ -158,6 +225,36 @@ export function FloorLayerLog({
     return price.toFixed(5);
   };
 
+  // Helper to determine if event type is a close event
+  const isCloseEvent = (eventType: string) => {
+    return [
+      'close',
+      'take_profit',
+      'volatility_lock',
+      'margin_protection',
+    ].includes(eventType);
+  };
+
+  // Helper to get event type display properties
+  const getEventTypeDisplay = (eventType: string) => {
+    const displays: Record<
+      string,
+      {
+        label: string;
+        color: 'info' | 'default' | 'error' | 'success' | 'warning';
+      }
+    > = {
+      initial: { label: 'Initial', color: 'info' },
+      retracement: { label: 'Retracement', color: 'default' },
+      layer: { label: 'Layer', color: 'default' },
+      close: { label: 'Close', color: 'error' },
+      take_profit: { label: 'Take Profit', color: 'success' },
+      volatility_lock: { label: 'Volatility Lock', color: 'warning' },
+      margin_protection: { label: 'Margin Protection', color: 'error' },
+    };
+    return displays[eventType] || { label: eventType, color: 'default' };
+  };
+
   return (
     <Paper sx={{ p: 3, mb: 3 }}>
       <Typography variant="h6" sx={{ mb: 2 }}>
@@ -170,11 +267,11 @@ export function FloorLayerLog({
         retraces, creating multiple layers.
       </Typography>
 
-      {Object.keys(tradesByLayer)
+      {Object.keys(eventsByLayer)
         .sort((a, b) => Number(a) - Number(b))
         .map((layerKey) => {
           const layer = Number(layerKey);
-          const layerTrades = tradesByLayer[layer];
+          const layerEvents = eventsByLayer[layer];
 
           return (
             <Box key={layer} sx={{ mb: 4 }}>
@@ -190,7 +287,7 @@ export function FloorLayerLog({
                   Layer {layer}
                 </Typography>
                 <Chip
-                  label={`${layerTrades.length} trades`}
+                  label={`${layerEvents.length} events`}
                   size="small"
                   color="primary"
                   variant="outlined"
@@ -201,16 +298,16 @@ export function FloorLayerLog({
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Type</TableCell>
+                      <TableCell>Event Type</TableCell>
                       <TableCell>
                         <TableSortLabel
-                          active={sortField === 'entry_time'}
+                          active={sortField === 'timestamp'}
                           direction={
-                            sortField === 'entry_time' ? sortOrder : 'asc'
+                            sortField === 'timestamp' ? sortOrder : 'asc'
                           }
-                          onClick={() => handleSort('entry_time')}
+                          onClick={() => handleSort('timestamp')}
                         >
-                          Entry Time
+                          Time
                         </TableSortLabel>
                       </TableCell>
                       <TableCell>Direction</TableCell>
@@ -270,21 +367,29 @@ export function FloorLayerLog({
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {/* All trades sorted together */}
-                    {layerTrades.map((trade, idx) => {
-                      // Find the index of this trade in the original trades array
-                      const tradeIndex = trades.findIndex((t) => t === trade);
-                      const isSelected = selectedTradeIndex === tradeIndex;
-                      const isFirstLot = trade.is_first_lot;
+                    {/* All events sorted together */}
+                    {layerEvents.map((event, idx) => {
+                      const isSelected =
+                        event.tradeIndex !== undefined &&
+                        selectedTradeIndex === event.tradeIndex;
+                      const isInitial = event.event_type === 'initial';
+                      const isClose = isCloseEvent(event.event_type);
+                      const eventDisplay = getEventTypeDisplay(
+                        event.event_type
+                      );
 
                       return (
                         <TableRow
-                          key={`trade-${idx}`}
-                          id={`trade-${tradeIndex}`}
+                          key={`event-${idx}`}
+                          id={
+                            event.tradeIndex !== undefined
+                              ? `trade-${event.tradeIndex}`
+                              : undefined
+                          }
                           sx={{
                             bgcolor: isSelected
                               ? 'primary.light'
-                              : isFirstLot
+                              : isInitial
                                 ? 'action.hover'
                                 : undefined,
                             transition: 'background-color 0.3s',
@@ -292,47 +397,65 @@ export function FloorLayerLog({
                         >
                           <TableCell>
                             <Chip
-                              label={isFirstLot ? 'Initial' : 'Retracement'}
+                              label={eventDisplay.label}
                               size="small"
-                              color={isFirstLot ? 'info' : 'default'}
+                              color={eventDisplay.color}
                               sx={
-                                isFirstLot ? { fontWeight: 'bold' } : undefined
+                                isInitial ? { fontWeight: 'bold' } : undefined
                               }
                             />
                           </TableCell>
-                          <TableCell>{formatDate(trade.entry_time)}</TableCell>
+                          <TableCell>{formatDate(event.timestamp)}</TableCell>
                           <TableCell>
-                            <Chip
-                              label={trade.direction.toUpperCase()}
-                              size="small"
-                              color={
-                                trade.direction === 'long'
-                                  ? 'success'
-                                  : 'warning'
-                              }
-                            />
+                            {event.direction ? (
+                              <Chip
+                                label={event.direction.toUpperCase()}
+                                size="small"
+                                color={
+                                  event.direction === 'long'
+                                    ? 'success'
+                                    : 'warning'
+                                }
+                              />
+                            ) : (
+                              '-'
+                            )}
                           </TableCell>
-                          <TableCell align="right">{trade.units}</TableCell>
                           <TableCell align="right">
-                            {formatPrice(trade.entry_price)}
+                            {event.units !== undefined ? event.units : '-'}
                           </TableCell>
                           <TableCell align="right">
-                            {formatPrice(trade.exit_price)}
+                            {event.entry_price !== undefined
+                              ? formatPrice(event.entry_price)
+                              : '-'}
+                          </TableCell>
+                          <TableCell align="right">
+                            {isClose && event.exit_price !== undefined
+                              ? formatPrice(event.exit_price)
+                              : '-'}
                           </TableCell>
                           <TableCell
                             align="right"
                             sx={{
                               color:
-                                trade.pnl >= 0 ? 'success.main' : 'error.main',
-                              fontWeight: 'bold',
+                                event.pnl !== undefined && event.pnl >= 0
+                                  ? 'success.main'
+                                  : event.pnl !== undefined
+                                    ? 'error.main'
+                                    : undefined,
+                              fontWeight:
+                                event.pnl !== undefined ? 'bold' : undefined,
                             }}
                           >
-                            ${trade.pnl.toFixed(2)}
+                            {isClose && event.pnl !== undefined
+                              ? `$${event.pnl.toFixed(2)}`
+                              : '-'}
                           </TableCell>
                           <TableCell align="right">
-                            {trade.retracement_count !== undefined
-                              ? trade.retracement_count
-                              : '-'}
+                            {event.retracement_count !== undefined &&
+                            event.retracement_count > 0
+                              ? event.retracement_count
+                              : ''}
                           </TableCell>
                         </TableRow>
                       );
@@ -348,14 +471,17 @@ export function FloorLayerLog({
                         sx={{
                           fontWeight: 'bold',
                           color:
-                            layerTrades.reduce((sum, t) => sum + t.pnl, 0) >= 0
+                            layerEvents
+                              .filter((e) => e.pnl !== undefined)
+                              .reduce((sum, e) => sum + (e.pnl || 0), 0) >= 0
                               ? 'success.main'
                               : 'error.main',
                         }}
                       >
                         $
-                        {layerTrades
-                          .reduce((sum, t) => sum + t.pnl, 0)
+                        {layerEvents
+                          .filter((e) => e.pnl !== undefined)
+                          .reduce((sum, e) => sum + (e.pnl || 0), 0)
                           .toFixed(2)}
                       </TableCell>
                       <TableCell />
