@@ -626,6 +626,7 @@ class BacktestSerializer(serializers.ModelSerializer):
             "end_date",
             "initial_balance",
             "commission_per_trade",
+            "sell_at_completion",
             "status",
             "progress",
             "error_message",
@@ -696,6 +697,7 @@ class BacktestListSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "initial_balance",
+            "sell_at_completion",
             "status",
             "progress",
             "total_trades",
@@ -753,6 +755,11 @@ class BacktestCreateSerializer(serializers.Serializer):  # pylint: disable=abstr
         decimal_places=2,
         default=Decimal("0"),
         help_text="Commission to apply per trade (default: 0, bid/ask spread already in tick data)",
+    )
+    sell_at_completion = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="Close all positions at backtest completion (default: False)",
     )
     memory_limit_mb = serializers.DecimalField(
         required=False,

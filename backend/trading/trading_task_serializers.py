@@ -46,6 +46,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "account_type",
             "name",
             "description",
+            "sell_on_stop",
             "status",
             "latest_execution",
             "created_at",
@@ -109,6 +110,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "account_type",
             "name",
             "description",
+            "sell_on_stop",
             "status",
             "created_at",
             "updated_at",
@@ -132,7 +134,16 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "oanda_account",
             "name",
             "description",
+            "sell_on_stop",
         ]
+        # Make fields optional for partial updates (PATCH)
+        extra_kwargs = {
+            "config": {"required": False},
+            "oanda_account": {"required": False},
+            "name": {"required": False},
+            "description": {"required": False},
+            "sell_on_stop": {"required": False},
+        }
 
     def validate_config(self, value: StrategyConfig) -> StrategyConfig:
         """Validate that config belongs to the user."""
