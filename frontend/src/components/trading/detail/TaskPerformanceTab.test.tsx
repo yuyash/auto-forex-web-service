@@ -81,6 +81,7 @@ describe('TaskPerformanceTab Integration Tests', () => {
     name: 'Test Trading Task',
     description: 'Test task description',
     status: TaskStatus.RUNNING,
+    sell_on_stop: false,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
   };

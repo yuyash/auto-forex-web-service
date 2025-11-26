@@ -51,6 +51,27 @@ export interface BacktestStrategyEvent {
   timestamp?: string;
 }
 
+export interface StrategyEvent {
+  event_type:
+    | 'initial'
+    | 'retracement'
+    | 'layer'
+    | 'close'
+    | 'take_profit'
+    | 'volatility_lock'
+    | 'margin_protection';
+  timestamp: string;
+  layer_number: number;
+  retracement_count: number;
+  direction?: 'long' | 'short';
+  units?: number;
+  entry_price?: number;
+  exit_price?: number;
+  pnl?: number;
+  message?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface EquityPoint {
   timestamp: string;
   balance: number;

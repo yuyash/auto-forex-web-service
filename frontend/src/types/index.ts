@@ -38,6 +38,9 @@ export * from './backtestTask';
 export * from './tradingTask';
 export * from './execution';
 
+// Export StrategyEvent explicitly for clarity
+export type { StrategyEvent } from './execution';
+
 // Re-export the primary versions of conflicting types
 export type { User, SystemSettings } from './auth';
 export type { Order } from './order';

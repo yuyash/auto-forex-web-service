@@ -121,6 +121,7 @@ const mockTask: BacktestTask = {
   commission_per_trade: '0.00',
   instrument: 'EUR_USD',
   status: TaskStatus.COMPLETED,
+  sell_at_completion: false,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
 };

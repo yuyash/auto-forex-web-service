@@ -17,6 +17,7 @@ export interface BacktestTask {
   commission_per_trade: string;
   instrument: string;
   status: TaskStatus;
+  sell_at_completion: boolean;
   latest_execution?: ExecutionSummary;
   created_at: string;
   updated_at: string;
@@ -32,6 +33,7 @@ export interface BacktestTaskCreateData {
   initial_balance: number | string;
   commission_per_trade?: number | string;
   instrument: string;
+  sell_at_completion?: boolean;
 }
 
 // Form data type - matches the validation schema (after transformation)
@@ -45,6 +47,7 @@ export interface BacktestTaskFormData {
   initial_balance: number;
   commission_per_trade?: number;
   instrument: string;
+  sell_at_completion?: boolean;
 }
 
 export interface BacktestTaskUpdateData {
@@ -57,6 +60,7 @@ export interface BacktestTaskUpdateData {
   initial_balance?: number | string;
   commission_per_trade?: number | string;
   instrument?: string;
+  sell_at_completion?: boolean;
 }
 
 export interface BacktestTaskListParams {

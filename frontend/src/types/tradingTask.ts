@@ -14,6 +14,7 @@ export interface TradingTask {
   name: string;
   description: string;
   status: TaskStatus;
+  sell_on_stop: boolean;
   latest_execution?: ExecutionSummary;
   created_at: string;
   updated_at: string;
@@ -24,6 +25,7 @@ export interface TradingTaskCreateData {
   account_id: number;
   name: string;
   description?: string;
+  sell_on_stop?: boolean;
 }
 
 export interface TradingTaskUpdateData {
@@ -31,6 +33,7 @@ export interface TradingTaskUpdateData {
   name?: string;
   description?: string;
   account_id?: number;
+  sell_on_stop?: boolean;
 }
 
 export interface TradingTaskListParams {
