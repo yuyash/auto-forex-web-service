@@ -226,6 +226,49 @@ class TestBacktestModel:
         backtest.complete()
         assert backtest.is_completed
 
+    def test_backtest_sell_at_completion_default(self, user):
+        """Test sell_at_completion field defaults to False."""
+        backtest = Backtest.objects.create(
+            user=user,
+            strategy_type="floor",
+            start_date=timezone.now(),
+            end_date=timezone.now(),
+        )
+
+        assert backtest.sell_at_completion is False
+
+    def test_backtest_sell_at_completion_save_and_retrieve(self, user):
+        """Test sell_at_completion field can be saved and retrieved."""
+        # Test with True
+        backtest_true = Backtest.objects.create(
+            user=user,
+            strategy_type="floor",
+            start_date=timezone.now(),
+            end_date=timezone.now(),
+            sell_at_completion=True,
+        )
+
+        assert backtest_true.sell_at_completion is True
+
+        # Retrieve from database
+        retrieved_true = Backtest.objects.get(pk=backtest_true.pk)
+        assert retrieved_true.sell_at_completion is True
+
+        # Test with False (explicit)
+        backtest_false = Backtest.objects.create(
+            user=user,
+            strategy_type="floor",
+            start_date=timezone.now(),
+            end_date=timezone.now(),
+            sell_at_completion=False,
+        )
+
+        assert backtest_false.sell_at_completion is False
+
+        # Retrieve from database
+        retrieved_false = Backtest.objects.get(pk=backtest_false.pk)
+        assert retrieved_false.sell_at_completion is False
+
 
 @pytest.mark.django_db
 class TestBacktestResultModel:

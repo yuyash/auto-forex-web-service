@@ -203,6 +203,10 @@ class Backtest(models.Model):
         default=list,
         help_text="Strategy events log (for floor strategy markers and debugging)",
     )
+    sell_at_completion = models.BooleanField(
+        default=False,
+        help_text="Close all positions at backtest completion",
+    )
 
     class Meta:
         db_table = "backtests"

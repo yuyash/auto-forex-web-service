@@ -613,3 +613,97 @@ class TestTradeModel:
 
         duration = trade.duration
         assert "2.5h" in duration or "2.5" in duration
+
+
+@pytest.mark.django_db
+class TestTradingTaskModel:
+    """Test TradingTask model functionality."""
+
+    def test_trading_task_sell_on_stop_default(self) -> None:
+        """Test sell_on_stop field defaults to False."""
+        from trading.models import StrategyConfig
+        from trading.trading_task_models import TradingTask
+
+        user = User.objects.create_user(
+            email="test@example.com",
+            username="testuser",
+            password="testpass123",
+        )
+        account = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+        )
+        account.set_api_token("test_token_12345")
+        account.save()
+
+        config = StrategyConfig.objects.create(
+            user=user,
+            name="Test Config",
+            strategy_type="floor",
+            parameters={"lot_size": 1.0},
+        )
+
+        trading_task = TradingTask.objects.create(
+            user=user,
+            config=config,
+            oanda_account=account,
+            name="Test Task",
+        )
+
+        assert trading_task.sell_on_stop is False
+
+    def test_trading_task_sell_on_stop_save_and_retrieve(self) -> None:
+        """Test sell_on_stop field can be saved and retrieved."""
+        from trading.models import StrategyConfig
+        from trading.trading_task_models import TradingTask
+
+        user = User.objects.create_user(
+            email="test@example.com",
+            username="testuser",
+            password="testpass123",
+        )
+        account = OandaAccount.objects.create(
+            user=user,
+            account_id="001-001-1234567-001",
+            api_type="practice",
+        )
+        account.set_api_token("test_token_12345")
+        account.save()
+
+        config = StrategyConfig.objects.create(
+            user=user,
+            name="Test Config",
+            strategy_type="floor",
+            parameters={"lot_size": 1.0},
+        )
+
+        # Test with True
+        task_true = TradingTask.objects.create(
+            user=user,
+            config=config,
+            oanda_account=account,
+            name="Test Task True",
+            sell_on_stop=True,
+        )
+
+        assert task_true.sell_on_stop is True
+
+        # Retrieve from database
+        retrieved_true = TradingTask.objects.get(pk=task_true.pk)
+        assert retrieved_true.sell_on_stop is True
+
+        # Test with False (explicit)
+        task_false = TradingTask.objects.create(
+            user=user,
+            config=config,
+            oanda_account=account,
+            name="Test Task False",
+            sell_on_stop=False,
+        )
+
+        assert task_false.sell_on_stop is False
+
+        # Retrieve from database
+        retrieved_false = TradingTask.objects.get(pk=task_false.pk)
+        assert retrieved_false.sell_on_stop is False

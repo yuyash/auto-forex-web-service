@@ -98,7 +98,7 @@ describe('StrategyConfigForm', () => {
     );
 
     expect(screen.getByLabelText(/Base Lot Size/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Retracement Mode/i)[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/Scaling Mode/i)[0]).toBeInTheDocument();
     expect(screen.getByLabelText(/Retracement Pips/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Max Layers/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Take Profit Pips/i)).toBeInTheDocument();

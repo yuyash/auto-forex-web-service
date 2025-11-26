@@ -101,6 +101,10 @@ class TradingTask(models.Model):
         auto_now=True,
         help_text="Timestamp when the task was last updated",
     )
+    sell_on_stop = models.BooleanField(
+        default=False,
+        help_text="Close all positions when task is stopped",
+    )
 
     class Meta:
         db_table = "trading_tasks"
