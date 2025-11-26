@@ -10,6 +10,8 @@ import {
   Paper,
   TextField,
   Alert,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
@@ -60,6 +62,7 @@ interface ReviewContentProps {
     initial_balance: number;
     commission_per_trade: number;
     instrument: string;
+    sell_at_completion?: boolean;
   };
 }
 
@@ -73,6 +76,7 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
     initial_balance,
     commission_per_trade,
     instrument,
+    sell_at_completion,
   } = formValues;
 
   return (
@@ -154,6 +158,15 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
           }).format(Number(commission_per_trade))}
         </Typography>
       </Grid>
+
+      <Grid size={{ xs: 12 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          Close Positions at Completion
+        </Typography>
+        <Typography variant="body1">
+          {sell_at_completion ? 'Yes' : 'No'}
+        </Typography>
+      </Grid>
     </Grid>
   );
 }
@@ -196,6 +209,7 @@ export default function BacktestTaskForm({
       initial_balance: 10000,
       commission_per_trade: 0,
       instrument: 'USD_JPY',
+      sell_at_completion: false,
     },
   });
 
@@ -302,6 +316,7 @@ export default function BacktestTaskForm({
       initial_balance: completeData.initial_balance,
       commission_per_trade: completeData.commission_per_trade,
       instrument: completeData.instrument,
+      sell_at_completion: completeData.sell_at_completion,
     };
 
     try {
@@ -544,6 +559,41 @@ export default function BacktestTaskForm({
                   )}
                 />
               </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Controller
+                  name="sell_at_completion"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={field.value || false}
+                          onChange={(e) => field.onChange(e.target.checked)}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1">
+                            Close all positions at backtest completion
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: 0.5 }}
+                          >
+                            When enabled, all open positions will be
+                            automatically closed at the final market price when
+                            the backtest finishes. This provides realistic P&L
+                            calculations. When disabled, positions remain open
+                            for analysis.
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  )}
+                />
+              </Grid>
             </Grid>
           </Box>
         );
@@ -560,6 +610,7 @@ export default function BacktestTaskForm({
           initial_balance: formData.initial_balance as number,
           commission_per_trade: formData.commission_per_trade as number,
           instrument: formData.instrument as string,
+          sell_at_completion: formData.sell_at_completion as boolean,
         };
 
         // Field name mapping for user-friendly error messages

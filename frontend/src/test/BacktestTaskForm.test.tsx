@@ -850,4 +850,282 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       });
     });
   });
+
+  describe('sell_at_completion checkbox', () => {
+    it('should render the sell_at_completion checkbox in step 2', async () => {
+      renderForm();
+
+      // Navigate to step 2
+      const configSelect = screen
+        .getByText('Select Configuration')
+        .closest('div')
+        ?.querySelector('[role="combobox"]');
+      fireEvent.mouseDown(configSelect!);
+      const config1Option = await screen.findByText('Test Config 1');
+      fireEvent.click(config1Option);
+
+      const nameInput = screen.getByLabelText(/Task Name/i);
+      fireEvent.change(nameInput, { target: { value: 'Test Task' } });
+
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Backtest Parameters')).toBeInTheDocument();
+      });
+
+      // Verify checkbox is rendered
+      const checkbox = screen.getByRole('checkbox', {
+        name: /Close all positions at backtest completion/i,
+      });
+      expect(checkbox).toBeInTheDocument();
+    });
+
+    it('should have default value of false for sell_at_completion', async () => {
+      renderForm();
+
+      // Navigate to step 2
+      const configSelect = screen
+        .getByText('Select Configuration')
+        .closest('div')
+        ?.querySelector('[role="combobox"]');
+      fireEvent.mouseDown(configSelect!);
+      const config1Option = await screen.findByText('Test Config 1');
+      fireEvent.click(config1Option);
+
+      const nameInput = screen.getByLabelText(/Task Name/i);
+      fireEvent.change(nameInput, { target: { value: 'Test Task' } });
+
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Backtest Parameters')).toBeInTheDocument();
+      });
+
+      // Verify checkbox is unchecked by default
+      const checkbox = screen.getByRole('checkbox', {
+        name: /Close all positions at backtest completion/i,
+      }) as HTMLInputElement;
+      expect(checkbox.checked).toBe(false);
+    });
+
+    it('should update form state when checkbox is toggled', async () => {
+      renderForm();
+
+      // Navigate to step 2
+      const configSelect = screen
+        .getByText('Select Configuration')
+        .closest('div')
+        ?.querySelector('[role="combobox"]');
+      fireEvent.mouseDown(configSelect!);
+      const config1Option = await screen.findByText('Test Config 1');
+      fireEvent.click(config1Option);
+
+      const nameInput = screen.getByLabelText(/Task Name/i);
+      fireEvent.change(nameInput, { target: { value: 'Test Task' } });
+
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Backtest Parameters')).toBeInTheDocument();
+      });
+
+      // Toggle checkbox
+      const checkbox = screen.getByRole('checkbox', {
+        name: /Close all positions at backtest completion/i,
+      }) as HTMLInputElement;
+      fireEvent.click(checkbox);
+
+      // Verify checkbox is now checked
+      expect(checkbox.checked).toBe(true);
+
+      // Toggle back
+      fireEvent.click(checkbox);
+      expect(checkbox.checked).toBe(false);
+    });
+
+    it('should include sell_at_completion in form submission', async () => {
+      mockCreateMutate.mockResolvedValue({});
+
+      renderForm();
+
+      // Fill step 1
+      const configSelect = screen
+        .getByText('Select Configuration')
+        .closest('div')
+        ?.querySelector('[role="combobox"]');
+      fireEvent.mouseDown(configSelect!);
+      const config1Option = await screen.findByText('Test Config 1');
+      fireEvent.click(config1Option);
+
+      const nameInput = screen.getByLabelText(/Task Name/i);
+      fireEvent.change(nameInput, { target: { value: 'Test Task' } });
+
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Backtest Parameters')).toBeInTheDocument();
+      });
+
+      // Fill step 2 and check the checkbox
+      const postgresqlRadio = screen.getByRole('radio', {
+        name: /PostgreSQL/i,
+      });
+      fireEvent.click(postgresqlRadio);
+
+      const balanceInput = screen.getByLabelText(/Initial Balance/i);
+      fireEvent.change(balanceInput, { target: { value: '10000' } });
+
+      const instrumentSelect = screen.getByLabelText(/Instrument/i);
+      fireEvent.mouseDown(instrumentSelect);
+      const instrumentOption = await screen.findByText('USD_JPY');
+      fireEvent.click(instrumentOption);
+
+      const checkbox = screen.getByRole('checkbox', {
+        name: /Close all positions at backtest completion/i,
+      });
+      fireEvent.click(checkbox);
+
+      // Navigate to review
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Review & Submit')).toBeInTheDocument();
+      });
+
+      // Submit the form
+      const createButton = screen.getByRole('button', {
+        name: /Create Task/i,
+      });
+      fireEvent.click(createButton);
+
+      // Verify API was called with sell_at_completion: true
+      await waitFor(() => {
+        expect(mockCreateMutate).toHaveBeenCalledWith(
+          expect.objectContaining({
+            sell_at_completion: true,
+          })
+        );
+      });
+    });
+
+    it('should display sell_at_completion value in review step', async () => {
+      renderForm();
+
+      // Fill step 1
+      const configSelect = screen
+        .getByText('Select Configuration')
+        .closest('div')
+        ?.querySelector('[role="combobox"]');
+      fireEvent.mouseDown(configSelect!);
+      const config1Option = await screen.findByText('Test Config 1');
+      fireEvent.click(config1Option);
+
+      const nameInput = screen.getByLabelText(/Task Name/i);
+      fireEvent.change(nameInput, { target: { value: 'Test Task' } });
+
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Backtest Parameters')).toBeInTheDocument();
+      });
+
+      // Fill step 2 and check the checkbox
+      const postgresqlRadio = screen.getByRole('radio', {
+        name: /PostgreSQL/i,
+      });
+      fireEvent.click(postgresqlRadio);
+
+      const balanceInput = screen.getByLabelText(/Initial Balance/i);
+      fireEvent.change(balanceInput, { target: { value: '10000' } });
+
+      const instrumentSelect = screen.getByLabelText(/Instrument/i);
+      fireEvent.mouseDown(instrumentSelect);
+      const instrumentOption = await screen.findByText('USD_JPY');
+      fireEvent.click(instrumentOption);
+
+      const checkbox = screen.getByRole('checkbox', {
+        name: /Close all positions at backtest completion/i,
+      });
+      fireEvent.click(checkbox);
+
+      // Navigate to review
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Review & Submit')).toBeInTheDocument();
+      });
+
+      // Verify the value is displayed in review
+      expect(
+        screen.getByText('Close Positions at Completion')
+      ).toBeInTheDocument();
+      // Find the "Yes" text that appears after the label
+      const reviewSection = screen.getByText(
+        'Close Positions at Completion'
+      ).parentElement;
+      expect(reviewSection).toHaveTextContent('Yes');
+    });
+
+    it('should persist sell_at_completion value when navigating back and forth', async () => {
+      renderForm();
+
+      // Fill step 1
+      const configSelect = screen
+        .getByText('Select Configuration')
+        .closest('div')
+        ?.querySelector('[role="combobox"]');
+      fireEvent.mouseDown(configSelect!);
+      const config1Option = await screen.findByText('Test Config 1');
+      fireEvent.click(config1Option);
+
+      const nameInput = screen.getByLabelText(/Task Name/i);
+      fireEvent.change(nameInput, { target: { value: 'Test Task' } });
+
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Backtest Parameters')).toBeInTheDocument();
+      });
+
+      // Check the checkbox
+      const checkbox = screen.getByRole('checkbox', {
+        name: /Close all positions at backtest completion/i,
+      }) as HTMLInputElement;
+      fireEvent.click(checkbox);
+      expect(checkbox.checked).toBe(true);
+
+      // Navigate to review
+      const postgresqlRadio = screen.getByRole('radio', {
+        name: /PostgreSQL/i,
+      });
+      fireEvent.click(postgresqlRadio);
+
+      const balanceInput = screen.getByLabelText(/Initial Balance/i);
+      fireEvent.change(balanceInput, { target: { value: '10000' } });
+
+      const instrumentSelect = screen.getByLabelText(/Instrument/i);
+      fireEvent.mouseDown(instrumentSelect);
+      const instrumentOption = await screen.findByText('USD_JPY');
+      fireEvent.click(instrumentOption);
+
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Review & Submit')).toBeInTheDocument();
+      });
+
+      // Navigate back to step 2
+      fireEvent.click(screen.getByRole('button', { name: /Back/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Backtest Parameters')).toBeInTheDocument();
+      });
+
+      // Verify checkbox is still checked
+      const checkboxAfterBack = screen.getByRole('checkbox', {
+        name: /Close all positions at backtest completion/i,
+      }) as HTMLInputElement;
+      expect(checkboxAfterBack.checked).toBe(true);
+    });
+  });
 });

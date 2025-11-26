@@ -25,7 +25,7 @@ export const backtestTaskSchema = z
       .min(1, 'Name is required')
       .max(255, 'Name must be less than 255 characters'),
     description: z.string().optional(),
-    data_source: z.nativeEnum(DataSource),
+    data_source: z.enum(DataSource),
     start_time: z.string().min(1, 'Start date is required'),
     end_time: z.string().min(1, 'End date is required'),
     initial_balance: z.coerce
@@ -40,6 +40,7 @@ export const backtestTaskSchema = z
       .nonnegative('Commission cannot be negative')
       .optional(),
     instrument: z.string().min(1, 'Instrument is required'),
+    sell_at_completion: z.boolean().optional().default(false),
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
@@ -141,6 +142,7 @@ export type BacktestTaskSchemaOutput = {
   initial_balance: number;
   commission_per_trade?: number;
   instrument: string;
+  sell_at_completion?: boolean;
 };
 export type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
 export type CopyTaskFormData = z.infer<typeof copyTaskSchema>;

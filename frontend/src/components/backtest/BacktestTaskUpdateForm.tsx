@@ -7,6 +7,8 @@ import {
   Paper,
   TextField,
   Alert,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
@@ -53,6 +55,7 @@ const backtestTaskUpdateSchema = z
       .nonnegative('Commission cannot be negative')
       .optional(),
     instrument: z.string().min(1, 'Instrument is required'),
+    sell_at_completion: z.boolean().optional().default(false),
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
@@ -120,6 +123,7 @@ export default function BacktestTaskUpdateForm({
           initial_balance: data.initial_balance.toString(),
           commission_per_trade: data.commission_per_trade?.toString(),
           instrument: data.instrument,
+          sell_at_completion: data.sell_at_completion,
         },
       });
 
@@ -335,6 +339,40 @@ export default function BacktestTaskUpdateForm({
                   inputProps={{ min: 0, step: 0.01 }}
                   error={!!errors.commission_per_trade}
                   helperText={errors.commission_per_trade?.message}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12 }}>
+            <Controller
+              name="sell_at_completion"
+              control={control}
+              render={({ field }) => (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={field.value || false}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body1">
+                        Close all positions at backtest completion
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 0.5 }}
+                      >
+                        When enabled, all open positions will be automatically
+                        closed at the final market price when the backtest
+                        finishes. This provides realistic P&L calculations. When
+                        disabled, positions remain open for analysis.
+                      </Typography>
+                    </Box>
+                  }
                 />
               )}
             />
