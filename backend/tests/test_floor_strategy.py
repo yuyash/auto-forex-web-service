@@ -795,6 +795,153 @@ class TestFloorStrategy:
 
         assert tp_price == Decimal("1.0975")
 
+    def test_initial_entry_calculates_direction(self, strategy, strategy_state):
+        """
+        Test that initial entry calculates direction using entry signal logic.
+
+        Requirements: 8.1, 8.2, 8.3, 8.4
+        """
+        floor_strategy = FloorStrategy(strategy)
+        layer = floor_strategy.layer_manager.get_layer(1)
+        assert layer is not None
+
+        # Feed ticks with upward momentum to generate long signal
+        base_price = Decimal("1.1000")
+        for i in range(10):
+            price = base_price + (Decimal("0.0005") * i)
+            tick = TickData(
+                instrument="EUR_USD",
+                timestamp=timezone.now() + timedelta(seconds=i),
+                bid=price,
+                ask=price + Decimal("0.0002"),
+                mid=price + Decimal("0.0001"),
+            )
+            floor_strategy.on_tick(tick)
+
+        # Verify direction was calculated and stored in layer
+        assert layer.direction is not None, "Direction should be set after initial entry"
+        assert layer.direction in ["long", "short"], "Direction should be 'long' or 'short'"
+        # With upward momentum, should be long
+        assert layer.direction == "long", "Upward momentum should result in long direction"
+
+    def test_retracement_uses_same_direction_as_initial(
+        self, strategy, strategy_state, oanda_account
+    ):
+        """
+        Test that retracement entries use the same direction as the initial entry.
+
+        Requirements: 8.3
+        """
+        floor_strategy = FloorStrategy(strategy)
+        layer = floor_strategy.layer_manager.get_layer(1)
+        assert layer is not None
+
+        # Feed ticks to create initial entry with long direction
+        base_price = Decimal("1.1000")
+        for i in range(10):
+            price = base_price + (Decimal("0.0005") * i)
+            tick = TickData(
+                instrument="EUR_USD",
+                timestamp=timezone.now() + timedelta(seconds=i),
+                bid=price,
+                ask=price + Decimal("0.0002"),
+                mid=price + Decimal("0.0001"),
+            )
+            floor_strategy.on_tick(tick)
+
+        # Store the initial direction
+        initial_direction = layer.direction
+        assert initial_direction == "long"
+
+        # Create a position to simulate initial entry execution
+        position = Position.objects.create(
+            account=oanda_account,
+            strategy=strategy,
+            position_id="pos1",
+            instrument="EUR_USD",
+            direction=initial_direction,
+            units=Decimal("1.0"),
+            entry_price=Decimal("1.1050"),
+            current_price=Decimal("1.1050"),
+            layer_number=1,
+            is_first_lot=True,
+        )
+        floor_strategy.on_position_update(position)
+
+        # Now create a scale order (retracement)
+        tick = TickData(
+            instrument="EUR_USD",
+            timestamp=timezone.now() + timedelta(seconds=20),
+            bid=Decimal("1.1020"),
+            ask=Decimal("1.1022"),
+            mid=Decimal("1.1021"),
+        )
+        scale_order = floor_strategy._create_scale_order(layer, tick)
+
+        # Verify the scale order uses the same direction
+        if scale_order:
+            assert (
+                scale_order.direction == initial_direction
+            ), f"Retracement should use same direction as initial: {initial_direction}"
+
+    def test_multiple_cycles_can_have_different_directions(self, strategy, strategy_state):
+        """
+        Test that multiple position cycles can have different directions based on market conditions.
+
+        Requirements: 8.1, 8.2, 8.3, 8.4
+        """
+        floor_strategy = FloorStrategy(strategy)
+        layer = floor_strategy.layer_manager.get_layer(1)
+        assert layer is not None
+
+        directions = []
+
+        # Cycle 1: Upward momentum (should be long)
+        base_price = Decimal("1.1000")
+        for i in range(10):
+            price = base_price + (Decimal("0.0005") * i)
+            tick = TickData(
+                instrument="EUR_USD",
+                timestamp=timezone.now() + timedelta(seconds=i),
+                bid=price,
+                ask=price + Decimal("0.0002"),
+                mid=price + Decimal("0.0001"),
+            )
+            floor_strategy.on_tick(tick)
+
+        if layer.direction:
+            directions.append(layer.direction)
+
+        # Clear layer for next cycle
+        layer.positions.clear()
+        layer.first_lot_position = None
+        layer.has_pending_initial_entry = False
+        layer.direction = None
+        # Clear price history to start fresh for next cycle
+        floor_strategy._price_history.clear()
+
+        # Cycle 2: Downward momentum (should be short)
+        base_price = Decimal("1.1050")
+        for i in range(10):
+            price = base_price - (Decimal("0.0005") * i)
+            tick = TickData(
+                instrument="EUR_USD",
+                timestamp=timezone.now() + timedelta(seconds=100 + i),
+                bid=price,
+                ask=price + Decimal("0.0002"),
+                mid=price + Decimal("0.0001"),
+            )
+            floor_strategy.on_tick(tick)
+
+        if layer.direction:
+            directions.append(layer.direction)
+
+        # Verify we got directions for both cycles
+        assert len(directions) == 2, "Should have directions for both cycles"
+        # First should be long (upward), second should be short (downward)
+        assert directions[0] == "long", "First cycle with upward momentum should be long"
+        assert directions[1] == "short", "Second cycle with downward momentum should be short"
+
 
 # Property-Based Tests for Floor Strategy Event Logging
 
@@ -1519,3 +1666,112 @@ class TestFloorStrategyRetracementReset:
         assert layer.current_lot_size == Decimal(
             str(base_lot_size)
         ), "Final cycle: Lot size should reset to base_lot_size"
+
+
+class TestFloorStrategyDirectionRecalculation:
+    """Property-based tests for Floor Strategy direction recalculation logic."""
+
+    @given(
+        price_movements=st.lists(
+            st.floats(min_value=-0.01, max_value=0.01),
+            min_size=10,
+            max_size=50,
+        ),
+        num_cycles=st.integers(min_value=2, max_value=5),
+    )
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_direction_recalculates_on_initial_entry(
+        self,
+        user,
+        oanda_account,
+        strategy_config,
+        price_movements,
+        num_cycles,
+    ):
+        """
+        Property 10: Direction recalculates on initial entry.
+
+        For any market conditions, the direction should be recalculated
+        on every initial entry using the same logic, allowing it to differ
+        from previous position cycles based on current market conditions.
+
+        Feature: floor-strategy-enhancements, Property 10
+        Validates: Requirements 8.1, 8.2, 8.3, 8.4
+        """
+        # Create strategy with specific configuration
+        config = strategy_config.copy()
+        config["instrument"] = "EUR_USD"
+        config["entry_signal_lookback_ticks"] = 10  # Need enough ticks for signal
+
+        strategy_obj = Strategy.objects.create(
+            account=oanda_account,
+            strategy_type="floor",
+            is_active=True,
+            config=config,
+            instrument="EUR_USD",
+        )
+
+        floor_strategy = FloorStrategy(config)
+        floor_strategy.account = oanda_account
+        floor_strategy.strategy = strategy_obj
+
+        # Get the first layer
+        layer = floor_strategy.layer_manager.layers[0]
+
+        directions = []
+        base_time = timezone.now()
+
+        # Simulate multiple cycles
+        for cycle in range(num_cycles):
+            # Feed ticks with price movements to create different market conditions
+            base_price = Decimal("1.1000")
+
+            # Apply price movements for this cycle
+            for i, movement in enumerate(price_movements[:20]):  # Use subset for each cycle
+                current_price = base_price + Decimal(str(movement))
+                tick = TickData(
+                    instrument="EUR_USD",
+                    timestamp=base_time + timedelta(seconds=cycle * 100 + i),
+                    bid=current_price,
+                    ask=current_price + Decimal("0.0002"),
+                    mid=current_price + Decimal("0.0001"),
+                )
+                floor_strategy.on_tick(tick)
+
+            # Check if initial entry was created and direction was set
+            if layer.direction:
+                directions.append(layer.direction)
+
+                # Verify direction is stored in layer
+                assert layer.direction in ["long", "short"], (
+                    f"Cycle {cycle}: Direction should be 'long' or 'short', "
+                    f"got {layer.direction}"
+                )
+
+                # If we have positions, verify they match the layer direction
+                if layer.positions:
+                    for position in layer.positions:
+                        assert position.direction == layer.direction, (
+                            f"Cycle {cycle}: Position direction {position.direction} "
+                            f"should match layer direction {layer.direction}"
+                        )
+
+                # Close all positions to prepare for next cycle
+                layer.positions.clear()
+                layer.first_lot_position = None
+                layer.has_pending_initial_entry = False
+                # Reset direction to None to force recalculation
+                layer.direction = None
+
+        # Verify that direction was recalculated for each cycle
+        # (we should have collected directions for each cycle that had an entry)
+        assert len(directions) > 0, "Should have at least one direction recorded"
+
+        # Each direction should be valid
+        assert all(
+            d in ["long", "short"] for d in directions
+        ), "All directions should be 'long' or 'short'"

@@ -145,6 +145,9 @@ class Layer:
         self.has_pending_initial_entry = False  # Track if initial entry order is pending
         self.last_scale_tick_id: str | None = None  # Track last scaling tick (unique ID)
         self.last_initial_entry_tick_id: str | None = None  # Track last initial entry tick
+        self.direction: str | None = (
+            None  # Store direction for retracements (Requirements 8.1, 8.2, 8.3)
+        )
 
     def add_position(self, position: Position, is_first_lot: bool = False) -> None:
         """
@@ -701,6 +704,9 @@ class FloorStrategy(BaseStrategy):
         # Reset unit size to base_lot_size for new initial entry (Requirements 7.1, 7.4)
         layer.reset_unit_size()
 
+        # Store direction in layer for subsequent retracements (Requirements 8.1, 8.2, 8.3)
+        layer.direction = direction
+
         # Use bid/ask for order price
         order_price = tick_data.ask if direction == "long" else tick_data.bid
 
@@ -765,11 +771,15 @@ class FloorStrategy(BaseStrategy):
         next_lot_size = self.scaling_engine.calculate_next_lot_size(layer.current_lot_size)
         layer.current_lot_size = next_lot_size
 
-        # Get direction from existing positions
-        if not layer.positions:
-            return None
-
-        direction = layer.positions[0].direction
+        # Get direction from layer (Requirements 8.3)
+        # Direction is set during initial entry and should not be recalculated for retracements
+        if not layer.direction:
+            # Fallback to getting from positions if direction not set
+            if not layer.positions:
+                return None
+            direction = layer.positions[0].direction
+        else:
+            direction = layer.direction
 
         # NOTE: We do NOT set take_profit on the order
         # The strategy's _check_take_profit() method will handle closing at 25 pips
