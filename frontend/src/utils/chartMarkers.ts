@@ -20,7 +20,7 @@ export interface ChartMarker {
     | 'end_strategy'
     | 'initial_entry';
   color: string;
-  shape?: 'triangleUp' | 'triangleDown' | 'doubleCircle';
+  shape?: 'triangleUp' | 'triangleDown' | 'circle' | 'doubleCircle';
   label?: string;
   tooltip?: string;
   eventData?: Record<string, unknown>; // Store full event data for click handling
@@ -103,6 +103,13 @@ export function buyPath(): string {
  */
 export function sellPath(): string {
   return 'M 0 10 L 10 0 L -10 0 Z';
+}
+
+/**
+ * Custom SVG path for circle marker
+ */
+export function circlePath(): string {
+  return 'M 0,-4 A 4,4 0 1,1 0,4 A 4,4 0 1,1 0,-4';
 }
 
 /**

@@ -271,20 +271,6 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box
             sx={{
-              width: 10,
-              height: 10,
-              borderRadius: '50%',
-              border: '2px solid #757575',
-              bgcolor: 'transparent',
-            }}
-          />
-          <Typography variant="caption" sx={{ fontWeight: 500 }}>
-            Start/End
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box
-            sx={{
               width: 8,
               height: 8,
               borderRadius: '50%',
@@ -306,7 +292,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
             }}
           />
           <Typography variant="caption" sx={{ fontWeight: 500 }}>
-            Scale-in
+            Retracement
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

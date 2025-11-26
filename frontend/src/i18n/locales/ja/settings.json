@@ -53,7 +53,7 @@
     "title": "戦略デフォルト",
     "placeholder": "デフォルトの戦略パラメータは今後のタスクで実装されます",
     "defaultLotSize": "デフォルトロットサイズ",
-    "defaultScalingMode": "デフォルトスケーリングモード",
+    "defaultScalingMode": "デフォルトリトレースメントモード",
     "defaultRetracementPips": "デフォルトリトレースメント（ピップ）",
     "defaultTakeProfitPips": "デフォルト利益確定（ピップ）",
     "defaultStopLossPips": "デフォルト損切り（ピップ）",

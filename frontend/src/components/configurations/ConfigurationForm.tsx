@@ -54,7 +54,7 @@ const STRATEGY_TYPES = [
   {
     value: 'floor',
     label: 'Floor Strategy',
-    description: 'Dynamic scaling strategy with ATR-based volatility lock',
+    description: 'Dynamic retracement strategy with ATR-based volatility lock',
   },
   {
     value: 'rsi',
@@ -92,7 +92,7 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
   type: 'object',
   title: 'Floor Strategy Configuration',
   description:
-    'Configuration for the Floor Strategy with dynamic scaling and ATR-based volatility lock.',
+    'Configuration for the Floor Strategy with dynamic retracement and ATR-based volatility lock.',
   properties: {
     base_lot_size: {
       type: 'number',
@@ -103,14 +103,14 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
     },
     scaling_mode: {
       type: 'string',
-      title: 'Scaling Mode',
-      description: 'Mode for scaling position size on retracements',
+      title: 'Retracement Mode',
+      description: 'Mode for retracement position size on retracements',
       enum: ['additive', 'multiplicative'],
       default: 'additive',
     },
     scaling_amount: {
       type: 'number',
-      title: 'Scaling Amount',
+      title: 'Retracement Amount',
       description:
         'Amount to add (additive) or multiply by (multiplicative) on each retracement',
       default: 1.0,
@@ -119,7 +119,7 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
     retracement_pips: {
       type: 'number',
       title: 'Retracement Pips',
-      description: 'Number of pips retracement required to trigger scaling',
+      description: 'Number of pips retracement required to trigger retracement',
       default: 30,
       minimum: 1,
     },

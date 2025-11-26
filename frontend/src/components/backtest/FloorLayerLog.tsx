@@ -292,7 +292,7 @@ export function FloorLayerLog({
                         >
                           <TableCell>
                             <Chip
-                              label={isFirstLot ? 'Initial' : 'Scale-in'}
+                              label={isFirstLot ? 'Initial' : 'Retracement'}
                               size="small"
                               color={isFirstLot ? 'info' : 'default'}
                               sx={

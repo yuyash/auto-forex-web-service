@@ -118,7 +118,7 @@ function getMarkerConfig(eventType: string): {
     initial_entry: {
       type: 'initial_entry',
       color: '#2196f3',
-      shape: undefined,
+      shape: 'circle',
       label: 'Entry',
     },
     order_created: {
@@ -131,7 +131,7 @@ function getMarkerConfig(eventType: string): {
       type: 'info',
       color: '#00bcd4',
       shape: 'triangleUp',
-      label: 'Scale',
+      label: 'Retr',
     },
     retracement_detected: {
       type: 'info',

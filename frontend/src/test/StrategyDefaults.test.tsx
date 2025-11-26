@@ -127,16 +127,18 @@ describe('StrategyDefaults', () => {
     expect(lotSizeInput.value).toBe('3.5');
   });
 
-  it('allows user to change scaling mode', async () => {
+  it('allows user to change retracement mode', async () => {
     const user = userEvent.setup();
 
     renderComponent();
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Default Scaling Mode')).toBeInTheDocument();
+      expect(
+        screen.getByLabelText('Default Retracement Mode')
+      ).toBeInTheDocument();
     });
 
-    const scalingModeSelect = screen.getByLabelText('Default Scaling Mode');
+    const scalingModeSelect = screen.getByLabelText('Default Retracement Mode');
     await user.click(scalingModeSelect);
 
     const multiplicativeOption = await screen.findByText('Multiplicative');

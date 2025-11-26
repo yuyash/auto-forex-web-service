@@ -10,7 +10,8 @@ const mockStrategies: Strategy[] = [
     id: 'floor',
     name: 'Floor Strategy',
     class_name: 'FloorStrategy',
-    description: 'Multi-layer scaling strategy with retracement-based entries',
+    description:
+      'Multi-layer retracement strategy with retracement-based entries',
     config_schema: {
       type: 'object',
       properties: {
@@ -118,7 +119,7 @@ describe('StrategySelector', () => {
     );
 
     expect(
-      screen.getByText(/multi-layer scaling strategy/i)
+      screen.getByText(/multi-layer retracement strategy/i)
     ).toBeInTheDocument();
   });
 

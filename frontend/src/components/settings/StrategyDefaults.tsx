@@ -154,7 +154,7 @@ const StrategyDefaults = () => {
     }
   };
 
-  // Handle scaling mode change
+  // Handle retracement mode change
   const handleScalingModeChange = (value: string) => {
     setSettings({ ...settings, default_scaling_mode: value });
   };
@@ -215,12 +215,12 @@ const StrategyDefaults = () => {
           }}
         />
 
-        {/* Default Scaling Mode */}
+        {/* Default Retracement Mode */}
         <FormControl fullWidth margin="normal">
           <InputLabel id="scaling-mode-label">
             {t(
               'settings:strategyDefaults.defaultScalingMode',
-              'Default Scaling Mode'
+              'Default Retracement Mode'
             )}
           </InputLabel>
           <Select
@@ -228,7 +228,7 @@ const StrategyDefaults = () => {
             value={settings.default_scaling_mode}
             label={t(
               'settings:strategyDefaults.defaultScalingMode',
-              'Default Scaling Mode'
+              'Default Retracement Mode'
             )}
             onChange={(e) => handleScalingModeChange(e.target.value)}
           >

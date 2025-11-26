@@ -956,7 +956,7 @@ if __name__ == "__main__":
         "scaling_mode": "additive",  # How to scale: "additive" or "multiplicative"
         "scaling_amount": 1.0,  # Amount to add (additive) or multiply by (multiplicative)
         # Entry/Exit Rules
-        "retracement_pips": 25,  # Pips retracement needed to scale-in (add more positions)
+        "retracement_pips": 25,  # Pips retracement needed to retracement (add more positions)
         "take_profit_pips": 25,  # Pips profit to close positions
         "entry_signal_lookback_ticks": 10,  # Ticks to analyze for entry direction
         # Layer Management
@@ -1009,7 +1009,7 @@ if __name__ == "__main__":
     print(f"  Base Lot Size:            {STRATEGY_CONFIG['base_lot_size']}")
     print(f"  Scaling Mode:             {STRATEGY_CONFIG['scaling_mode']}")
     retr_pips = STRATEGY_CONFIG["retracement_pips"]
-    print(f"  Retracement Pips:         {retr_pips} (to scale-in)")
+    print(f"  Retracement Pips:         {retr_pips} (to retracement)")
     tp_pips = STRATEGY_CONFIG["take_profit_pips"]
     print(f"  Take Profit Pips:         {tp_pips} (to close)")
     print(f"  Max Layers:               {STRATEGY_CONFIG['max_layers']}")

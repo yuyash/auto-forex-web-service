@@ -53,7 +53,7 @@
     "title": "Strategy Defaults",
     "placeholder": "Default strategy parameters will be implemented in a future task",
     "defaultLotSize": "Default Lot Size",
-    "defaultScalingMode": "Default Scaling Mode",
+    "defaultScalingMode": "Default Retracement Mode",
     "defaultRetracementPips": "Default Retracement (Pips)",
     "defaultTakeProfitPips": "Default Take Profit (Pips)",
     "defaultStopLossPips": "Default Stop Loss (Pips)",

@@ -51,7 +51,12 @@ import type {
   VerticalLine,
   HorizontalLine,
 } from '../../utils/chartMarkers';
-import { buyPath, sellPath, doubleCirclePath } from '../../utils/chartMarkers';
+import {
+  buyPath,
+  sellPath,
+  circlePath,
+  doubleCirclePath,
+} from '../../utils/chartMarkers';
 import { useResizeObserver } from '../../hooks/useResizeObserver';
 
 /**
@@ -686,6 +691,8 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
         return buyPath;
       case 'triangleDown':
         return sellPath;
+      case 'circle':
+        return circlePath;
       case 'doubleCircle':
         return doubleCirclePath;
       default:

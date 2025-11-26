@@ -594,7 +594,7 @@ class FloorStrategy(BaseStrategy):
                         f"Price moved from peak {layer.peak_price} to {current_price} | "
                         f"Retracement: {retracement_pips:.1f} pips "
                         f"(Threshold: {self.retracement_pips} pips) | "
-                        f"Preparing to scale-in"
+                        f"Preparing to retracement"
                     )
                     logger.info(retracement_msg)
 
@@ -769,7 +769,7 @@ class FloorStrategy(BaseStrategy):
         order.is_first_lot = False  # type: ignore[attr-defined]
 
         scale_in_msg = (
-            f"[SCALE-IN] Layer {layer.layer_number} | "
+            f"[RETRACEMENT] Layer {layer.layer_number} | "
             f"Adding {direction.upper()} position | "
             f"Size: {next_lot_size} units @ {order_price} | "
             f"Peak: {layer.peak_price} | "
@@ -778,7 +778,7 @@ class FloorStrategy(BaseStrategy):
         logger.info(scale_in_msg)
 
         scale_log_msg = (
-            f"Scale-in: {direction.upper()} {next_lot_size} units @ {order_price} "
+            f"Retracement: {direction.upper()} {next_lot_size} units @ {order_price} "
             f"(Retracement #{layer.retracement_count + 1})"
         )
         self.log_strategy_event(
