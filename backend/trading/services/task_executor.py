@@ -24,6 +24,7 @@ from trading.backtest_task_models import BacktestTask
 from trading.enums import TaskStatus, TaskType
 from trading.execution_models import ExecutionMetrics, TaskExecution
 from trading.historical_data_loader import HistoricalDataLoader
+from trading.strategy_registry import registry
 from trading.trading_task_models import TradingTask
 from trading_system.config_loader import get_config
 
@@ -1034,16 +1035,187 @@ def execute_trading_task(
         }
 
 
+def _close_all_positions_for_trading_task(task: TradingTask) -> int:
+    """
+    Close all open positions for a trading task at current market price.
+
+    This helper method generates close orders for all open positions
+    and executes them at the current market price from the latest tick data.
+
+    Args:
+        task: TradingTask instance
+
+    Returns:
+        Number of positions closed
+
+    Requirements: 10.2, 10.4
+    """
+    from trading.models import Order, Position, Strategy
+    from trading.order_executor import OrderExecutor
+    from trading.tick_data_models import TickData
+
+    closed_count = 0
+
+    try:
+        # Get the strategy instance for this task
+        try:
+            strategy = Strategy.objects.get(
+                account=task.oanda_account,
+                strategy_type=task.config.strategy_type,
+                is_active=True,
+            )
+        except Strategy.DoesNotExist:
+            logger.warning(
+                "No active strategy found for task %d, cannot close positions",
+                task.pk,
+            )
+            return 0
+
+        # Get all open positions for this strategy
+        open_positions = Position.objects.filter(
+            account=task.oanda_account,
+            strategy=strategy,
+            closed_at__isnull=True,
+        )
+
+        if not open_positions.exists():
+            logger.info("No open positions to close for task %d", task.pk)
+            return 0
+
+        logger.info(
+            "Found %d open positions to close for task %d",
+            open_positions.count(),
+            task.pk,
+        )
+
+        # Get the instrument from the task configuration
+        instrument = task.config.parameters.get("instrument")
+        if not instrument:
+            logger.error("No instrument found in task configuration")
+            return 0
+
+        # Get the latest tick data for this instrument
+        latest_tick = (
+            TickData.objects.filter(
+                instrument=instrument,
+            )
+            .order_by("-timestamp")
+            .first()
+        )
+
+        if not latest_tick:
+            # If no tick data exists, use the position's current price as fallback
+            logger.warning(
+                "No tick data found for instrument %s, using position current prices",
+                instrument,
+            )
+
+        # Create close orders for each position
+        order_executor = OrderExecutor(task.oanda_account)
+
+        for position in open_positions:
+            try:
+                # Determine exit price based on position direction
+                # For long positions, we sell at bid price
+                # For short positions, we buy at ask price
+                if latest_tick:
+                    if position.direction == "long":
+                        exit_price = latest_tick.bid
+                    else:
+                        exit_price = latest_tick.ask
+                else:
+                    # Fallback to current price if no tick data
+                    exit_price = position.current_price
+
+                # Create close order
+                close_order = Order.objects.create(
+                    account=task.oanda_account,
+                    strategy=strategy,
+                    instrument=position.instrument,
+                    direction="sell" if position.direction == "long" else "buy",
+                    units=position.units,
+                    order_type="market",
+                    status="pending",
+                    order_id=f"CLOSE-{position.pk}-{timezone.now().timestamp()}",
+                )
+
+                # Execute the close order
+                order_executor.execute_order(close_order)  # type: ignore[attr-defined]
+
+                # Close the position using the close() method
+                realized_pnl = position.close(exit_price)
+
+                closed_count += 1
+
+                logger.info(
+                    "Closed position %d: %s %s %s at %s (P&L: %s)",
+                    position.pk,
+                    position.direction,
+                    position.units,
+                    position.instrument,
+                    exit_price,
+                    realized_pnl,
+                )
+
+                # Log close event to strategy if it has the method
+                try:
+                    strategy_class = registry.get_strategy_class(strategy.strategy_type)
+                    strategy_instance = strategy_class(strategy)
+
+                    if hasattr(strategy_instance, "log_strategy_event"):
+                        strategy_instance.log_strategy_event(
+                            "position_closed",
+                            f"Position closed at task stop: {position.direction} "
+                            f"{position.units} {position.instrument}",
+                            {
+                                "instrument": position.instrument,
+                                "direction": position.direction,
+                                "units": str(position.units),
+                                "entry_price": str(position.entry_price),
+                                "exit_price": str(exit_price),
+                                "pnl": str(realized_pnl),
+                                "event_type": "close",
+                                "reason": "task_stop",
+                            },
+                        )
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    logger.warning(
+                        "Failed to log close event for position %d: %s",
+                        position.pk,
+                        str(e),
+                    )
+
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error(
+                    "Failed to close position %d: %s",
+                    position.pk,
+                    str(e),
+                    exc_info=True,
+                )
+                # Continue closing other positions
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error(
+            "Error closing positions for task %d: %s",
+            task.pk,
+            str(e),
+            exc_info=True,
+        )
+
+    return closed_count
+
+
 def stop_trading_task_execution(task_id: int) -> dict[str, Any]:
     """
     Stop a running trading task execution.
 
     This function:
     1. Finds the current execution
-    2. Stops market data streaming
-    3. Calculates final metrics
-    4. Marks execution as stopped
-    5. Releases execution lock
+    2. Closes all positions if sell_on_stop is enabled
+    3. Stops market data streaming
+    4. Calculates final metrics
+    5. Marks execution as stopped
+    6. Releases execution lock
 
     Args:
         task_id: ID of the TradingTask to stop
@@ -1055,7 +1227,7 @@ def stop_trading_task_execution(task_id: int) -> dict[str, Any]:
             - execution_id: TaskExecution ID
             - error: Error message (if failed)
 
-    Requirements: 4.3, 4.7, 4.9, 7.2, 7.3
+    Requirements: 4.3, 4.7, 4.9, 7.2, 7.3, 10.2, 10.4
     """
     try:
         # Fetch the task
@@ -1082,6 +1254,40 @@ def stop_trading_task_execution(task_id: int) -> dict[str, Any]:
                 "execution_id": execution.pk if execution else None,
                 "error": error_msg,
             }
+
+        # Close all positions if sell_on_stop is enabled
+        if task.sell_on_stop:
+            logger.info(
+                "Closing all positions for task %d (sell_on_stop=True)",
+                task_id,
+            )
+            try:
+                closed_count = _close_all_positions_for_trading_task(task)
+                logger.info(
+                    "Closed %d positions for task %d at task stop",
+                    closed_count,
+                    task_id,
+                )
+                execution.add_log(
+                    "INFO",
+                    f"Closed {closed_count} positions at task stop (sell_on_stop=True)",
+                )
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error(
+                    "Error closing positions for task %d: %s",
+                    task_id,
+                    str(e),
+                    exc_info=True,
+                )
+                execution.add_log(
+                    "ERROR",
+                    f"Failed to close positions at task stop: {str(e)}",
+                )
+        else:
+            logger.info(
+                "Preserving open positions for task %d (sell_on_stop=False)",
+                task_id,
+            )
 
         # Stop market data streaming
         # This will be handled by the stop_market_data_stream Celery task
