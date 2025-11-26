@@ -960,7 +960,7 @@ if __name__ == "__main__":
         "take_profit_pips": 25,  # Pips profit to close positions
         "entry_signal_lookback_ticks": 10,  # Ticks to analyze for entry direction
         # Layer Management
-        "max_layers": 10,  # Maximum concurrent layers (1-3, schema max 3)
+        "max_layers": 10,  # Maximum concurrent layers
         "retracement_trigger_base": 10,  # Retracements before new layer
         # How triggers progress: equal, additive, exponential, inverse
         "retracement_trigger_progression": "additive",

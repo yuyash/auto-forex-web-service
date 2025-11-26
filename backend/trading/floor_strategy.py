@@ -40,7 +40,7 @@ class LayerManager:
         Initialize the layer manager.
 
         Args:
-            max_layers: Maximum number of concurrent layers (default: 3)
+            max_layers: Maximum number of concurrent layers
         """
         self.max_layers = max_layers
         self.layers: list[Layer] = []
@@ -50,7 +50,7 @@ class LayerManager:
         Create a new layer.
 
         Args:
-            layer_number: Layer number (1-3)
+            layer_number: Layer number
             config: Layer configuration
 
         Returns:
@@ -127,7 +127,7 @@ class Layer:
         Initialize a layer.
 
         Args:
-            layer_number: Layer number (1-3)
+            layer_number: Layer number
             config: Layer configuration
         """
         self.layer_number = layer_number
@@ -1099,7 +1099,7 @@ class FloorStrategy(BaseStrategy):
         Get configuration for a specific layer using progression modes.
 
         Args:
-            layer_num: Layer number (1-3)
+            layer_num: Layer number
 
         Returns:
             Layer configuration dictionary
@@ -1144,7 +1144,7 @@ class FloorStrategy(BaseStrategy):
 
         Args:
             base_value: Base value for layer 1
-            layer_num: Layer number (1-3)
+            layer_num: Layer number
             progression_mode: Progression mode (equal, additive, exponential, inverse)
             increment: Increment value for additive/exponential modes
 
@@ -1284,8 +1284,8 @@ class FloorStrategy(BaseStrategy):
 
         # Validate max_layers
         max_layers = config.get("max_layers", 3)
-        if not isinstance(max_layers, int) or max_layers < 1 or max_layers > 3:
-            raise ValueError("max_layers must be an integer between 1 and 3")
+        if not isinstance(max_layers, int) or max_layers < 1:
+            raise ValueError("max_layers must be a positive integer")
 
         # Validate progression modes
         valid_progressions = ["equal", "additive", "exponential", "inverse"]
@@ -1369,7 +1369,7 @@ FLOOR_STRATEGY_CONFIG_SCHEMA = {
         "max_layers": {
             "type": "integer",
             "title": "Maximum Layers",
-            "description": "Maximum number of concurrent layers (1-3)",
+            "description": "Maximum number of concurrent layers",
             "default": 3,
             "minimum": 1,
             "maximum": 3,

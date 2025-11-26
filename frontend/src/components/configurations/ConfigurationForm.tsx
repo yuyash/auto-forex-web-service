@@ -133,7 +133,7 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
     max_layers: {
       type: 'integer',
       title: 'Maximum Layers',
-      description: 'Maximum number of concurrent layers (1-3)',
+      description: 'Maximum number of concurrent layers',
       default: 3,
       minimum: 1,
       maximum: 3,
