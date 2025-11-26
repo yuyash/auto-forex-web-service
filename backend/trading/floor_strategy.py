@@ -613,7 +613,8 @@ class FloorStrategy(BaseStrategy):
                             "current_price": str(current_price),
                             "retracement_pips": str(retracement_pips),
                             "threshold_pips": str(self.retracement_pips),
-                            "event_type": "retracement",
+                            "event_type": "layer",
+                            "timestamp": tick_data.timestamp.isoformat(),
                         },
                     )
                     # Price has retraced enough from peak - scale in
@@ -721,7 +722,9 @@ class FloorStrategy(BaseStrategy):
                 "units": str(self.base_lot_size),
                 "price": str(order_price),
                 "signal": entry_signal.get("reason", ""),
-                "event_type": "position_open",
+                "event_type": "initial",
+                "timestamp": tick_data.timestamp.isoformat(),
+                "retracement_count": 0,
             },
         )
 
@@ -791,8 +794,9 @@ class FloorStrategy(BaseStrategy):
                 "units": str(next_lot_size),
                 "price": str(order_price),
                 "peak_price": str(layer.peak_price),
-                "retracement_count": layer.retracement_count,
-                "event_type": "position_open",
+                "retracement_count": layer.retracement_count + 1,
+                "event_type": "retracement",
+                "timestamp": tick_data.timestamp.isoformat(),
             },
         )
 
@@ -869,52 +873,46 @@ class FloorStrategy(BaseStrategy):
         Args:
             position: Position to close
             tick_data: Current tick data
-            reason: Reason for closing (initial_profit, take_profit, etc.)
+            reason: Reason for closing (strategy_close, take_profit, volatility_lock,
+                   margin_protection, etc.)
 
         Returns:
             Close order or None
         """
-        # Reverse direction for closing
-        close_direction = "short" if position.direction == "long" else "long"
-
+        # Create close order
         order = Order(
             account=self.account,
             strategy=self.strategy,
             order_id=f"floor_close_{position.position_id}_{tick_data.timestamp.timestamp()}",
             instrument=position.instrument,
             order_type="market",
-            direction=close_direction,
+            direction="short" if position.direction == "long" else "long",
             units=position.units,
             price=tick_data.mid,
         )
-        # Add layer metadata for backtest engine
         order.layer_number = getattr(position, "layer_number", None)  # type: ignore[attr-defined]
         order.is_first_lot = False  # type: ignore[attr-defined]
 
-        # Calculate pip difference for logging
-        pip_size = Decimal("0.01") if "JPY" in position.instrument else Decimal("0.0001")
+        # Calculate pip metrics
+        is_jpy = "JPY" in position.instrument
+        pip_size = Decimal("0.01") if is_jpy else Decimal("0.0001")
         price_diff = tick_data.mid - position.entry_price
         if position.direction == "short":
             price_diff = -price_diff
         pip_diff = float(price_diff / pip_size)
 
-        # Human-friendly reason
-        reason_map = {
-            "strategy_close": "Take Profit",
-            "take_profit": "Take Profit",
-            "stop_loss": "Stop Loss",
-            "volatility_lock": "Volatility Lock",
-            "margin_protection": "Margin Protection",
-        }
-        reason_display = reason_map.get(reason, reason.replace("_", " ").title())
+        # Calculate P&L: pip_diff * units * pip_value
+        pip_value = Decimal("1000") if is_jpy else Decimal("10")
+        pnl = float(Decimal(str(pip_diff)) * position.units * pip_value)
 
-        close_msg = (
-            f"Closing position: {position.direction.upper()} {position.units} units | "
-            f"{pip_diff:+.1f} pips | {reason_display}"
-        )
+        # Get event metadata
+        event_type, reason_display = self._get_close_event_metadata(reason)
+
+        # Log close event
         self.log_strategy_event(
             reason,
-            close_msg,
+            f"Closing position: {position.direction.upper()} {position.units} units | "
+            f"{pip_diff:+.1f} pips | {reason_display}",
             {
                 "position_id": position.position_id,
                 "instrument": position.instrument,
@@ -923,13 +921,44 @@ class FloorStrategy(BaseStrategy):
                 "exit_price": str(tick_data.mid),
                 "units": str(position.units),
                 "pip_diff": pip_diff,
+                "pnl": pnl,
                 "reason": reason,
                 "reason_display": reason_display,
-                "event_type": "position_close",
+                "event_type": event_type,
+                "timestamp": tick_data.timestamp.isoformat(),
+                "layer_number": getattr(position, "layer_number", None),
             },
         )
 
         return order
+
+    def _get_close_event_metadata(self, reason: str) -> tuple[str, str]:
+        """
+        Get event_type and display name for close reason.
+
+        Args:
+            reason: Close reason
+
+        Returns:
+            Tuple of (event_type, reason_display)
+        """
+        reason_to_event_type = {
+            "strategy_close": "close",
+            "take_profit": "take_profit",
+            "stop_loss": "close",
+            "volatility_lock": "volatility_lock",
+            "margin_protection": "margin_protection",
+        }
+        reason_to_display = {
+            "strategy_close": "Take Profit",
+            "take_profit": "Take Profit",
+            "stop_loss": "Stop Loss",
+            "volatility_lock": "Volatility Lock",
+            "margin_protection": "Margin Protection",
+        }
+        event_type = reason_to_event_type.get(reason, "close")
+        reason_display = reason_to_display.get(reason, reason.replace("_", " ").title())
+        return event_type, reason_display
 
     def _calculate_take_profit_price(
         self, entry_price: Decimal, direction: str, tp_pips: Decimal
@@ -990,6 +1019,7 @@ class FloorStrategy(BaseStrategy):
             {
                 "normal_atr": str(self.normal_atr) if self.normal_atr else None,
                 "multiplier": str(self.volatility_lock_multiplier),
+                "event_type": "volatility_lock",
             },
         )
 
@@ -1066,6 +1096,7 @@ class FloorStrategy(BaseStrategy):
                 "layer": first_lot.layer_number,
                 "instrument": first_lot.instrument,
                 "units": str(first_lot.units),
+                "event_type": "margin_protection",
             },
         )
 

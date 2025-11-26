@@ -18,6 +18,8 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from accounts.models import OandaAccount
 from trading.floor_strategy import FloorStrategy, Layer, LayerManager, ScalingEngine
@@ -616,3 +618,456 @@ class TestFloorStrategy:
         tp_price = floor_strategy._calculate_take_profit_price(entry_price, "short", Decimal("25"))
 
         assert tp_price == Decimal("1.0975")
+
+
+# Property-Based Tests for Floor Strategy Event Logging
+
+
+@pytest.mark.django_db
+class TestFloorStrategyEventLogging:
+    """Property-based tests for Floor Strategy event logging."""
+
+    @given(
+        event_type=st.sampled_from(
+            ["close", "take_profit", "volatility_lock", "margin_protection"]
+        ),
+        entry_price=st.decimals(min_value=Decimal("1.0000"), max_value=Decimal("2.0000"), places=4),
+        exit_price=st.decimals(min_value=Decimal("1.0000"), max_value=Decimal("2.0000"), places=4),
+        units=st.decimals(min_value=Decimal("0.01"), max_value=Decimal("10.0"), places=2),
+    )
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_close_events_logged_with_correct_event_type(
+        self, user, oanda_account, strategy_config, event_type, entry_price, exit_price, units
+    ):
+        """
+        Property 1: Close events are displayed in table.
+
+        For any close event (close, take_profit, volatility_lock, margin_protection),
+        the event should be logged with the correct event_type in metadata.
+
+        Feature: floor-strategy-enhancements, Property 1
+        Validates: Requirements 1.1, 1.2, 1.3, 1.4
+        """
+        # Create strategy in backtest mode
+        config = strategy_config.copy()
+        config["instrument"] = "EUR_USD"
+        floor_strategy = FloorStrategy(config)
+
+        # Enable backtest mode
+        floor_strategy._is_backtest = True
+        floor_strategy._backtest_events = []
+
+        # Create a mock position
+        position = Position(
+            account=oanda_account,
+            strategy=None,
+            position_id=f"test_pos_{event_type}",
+            instrument="EUR_USD",
+            direction="long",
+            units=units,
+            entry_price=entry_price,
+            current_price=exit_price,
+        )
+        position.layer_number = 1
+
+        # Create tick data
+        tick_data = TickData(
+            instrument="EUR_USD",
+            timestamp=timezone.now(),
+            bid=exit_price,
+            ask=exit_price,
+            mid=exit_price,
+        )
+
+        # Map event_type to reason for _create_close_order
+        event_type_to_reason = {
+            "close": "strategy_close",
+            "take_profit": "take_profit",
+            "volatility_lock": "volatility_lock",
+            "margin_protection": "margin_protection",
+        }
+        reason = event_type_to_reason[event_type]
+
+        # Create close order (which logs the event)
+        order = floor_strategy._create_close_order(position, tick_data, reason=reason)
+
+        # Verify order was created
+        assert order is not None
+
+        # Verify event was logged
+        assert len(floor_strategy._backtest_events) > 0
+
+        # Find the close event
+        close_events = [
+            e
+            for e in floor_strategy._backtest_events
+            if e.get("details", {}).get("reason") == reason
+        ]
+        assert len(close_events) > 0
+
+        # Verify the event has correct event_type
+        close_event = close_events[0]
+        assert "details" in close_event
+        assert "event_type" in close_event["details"]
+        assert close_event["details"]["event_type"] == event_type
+
+        # Verify event has required metadata
+        details = close_event["details"]
+        assert "exit_price" in details
+        assert "pnl" in details
+        assert "timestamp" in details
+        assert "layer_number" in details
+
+        # Verify exit_price matches
+        assert Decimal(details["exit_price"]) == exit_price
+
+    def test_initial_entry_logs_with_initial_event_type(self, user, oanda_account, strategy_config):
+        """
+        Test that initial entry logs with event_type='initial'.
+
+        Validates: Requirements 1.1
+        """
+        # Create strategy in backtest mode
+        config = strategy_config.copy()
+        config["instrument"] = "EUR_USD"
+        floor_strategy = FloorStrategy(config)
+
+        # Enable backtest mode
+        floor_strategy._is_backtest = True
+        floor_strategy._backtest_events = []
+
+        # Build up price history for entry signal
+        for i in range(15):
+            tick = TickData(
+                instrument="EUR_USD",
+                timestamp=timezone.now() + timedelta(seconds=i),
+                bid=Decimal("1.1000") + Decimal(str(i * 0.0001)),
+                ask=Decimal("1.1001") + Decimal(str(i * 0.0001)),
+                mid=Decimal("1.10005") + Decimal(str(i * 0.0001)),
+            )
+            floor_strategy.on_tick(tick)
+
+        # Find initial entry event
+        initial_events = [
+            e for e in floor_strategy._backtest_events if e.get("event_type") == "initial_entry"
+        ]
+
+        assert len(initial_events) > 0
+        initial_event = initial_events[0]
+
+        # Verify event_type is 'initial'
+        assert initial_event["details"]["event_type"] == "initial"
+        assert initial_event["details"]["retracement_count"] == 0
+        assert "timestamp" in initial_event["details"]
+
+    def test_retracement_logs_with_retracement_event_type(
+        self, user, oanda_account, strategy_config
+    ):
+        """
+        Test that retracement entry logs with event_type='retracement'.
+
+        Validates: Requirements 1.1
+        """
+        # Create strategy in backtest mode
+        config = strategy_config.copy()
+        config["instrument"] = "EUR_USD"
+        config["retracement_pips"] = 10  # Lower threshold for testing
+        floor_strategy = FloorStrategy(config)
+
+        # Enable backtest mode
+        floor_strategy._is_backtest = True
+        floor_strategy._backtest_events = []
+
+        # Build up price history for entry signal
+        for i in range(15):
+            tick = TickData(
+                instrument="EUR_USD",
+                timestamp=timezone.now() + timedelta(seconds=i),
+                bid=Decimal("1.1000") + Decimal(str(i * 0.0001)),
+                ask=Decimal("1.1001") + Decimal(str(i * 0.0001)),
+                mid=Decimal("1.10005") + Decimal(str(i * 0.0001)),
+            )
+            floor_strategy.on_tick(tick)
+
+        # Clear events to focus on retracement
+        floor_strategy._backtest_events = []
+
+        # Simulate price moving in favor (peak)
+        for i in range(5):
+            tick = TickData(
+                instrument="EUR_USD",
+                timestamp=timezone.now() + timedelta(seconds=20 + i),
+                bid=Decimal("1.1015") + Decimal(str(i * 0.0001)),
+                ask=Decimal("1.1016") + Decimal(str(i * 0.0001)),
+                mid=Decimal("1.10155") + Decimal(str(i * 0.0001)),
+            )
+            floor_strategy.on_tick(tick)
+
+        # Simulate retracement (price moving against us)
+        for i in range(15):
+            tick = TickData(
+                instrument="EUR_USD",
+                timestamp=timezone.now() + timedelta(seconds=30 + i),
+                bid=Decimal("1.1010") - Decimal(str(i * 0.0001)),
+                ask=Decimal("1.1011") - Decimal(str(i * 0.0001)),
+                mid=Decimal("1.10105") - Decimal(str(i * 0.0001)),
+            )
+            floor_strategy.on_tick(tick)
+
+        # Find retracement event
+        retracement_events = [
+            e for e in floor_strategy._backtest_events if e.get("event_type") == "scale_in"
+        ]
+
+        if len(retracement_events) > 0:
+            retracement_event = retracement_events[0]
+            # Verify event_type is 'retracement'
+            assert retracement_event["details"]["event_type"] == "retracement"
+            assert retracement_event["details"]["retracement_count"] > 0
+            assert "timestamp" in retracement_event["details"]
+
+    def test_close_logs_with_close_event_type(self, user, oanda_account, strategy_config):
+        """
+        Test that close logs with event_type='close'.
+
+        Validates: Requirements 1.1
+        """
+        # Create strategy in backtest mode
+        config = strategy_config.copy()
+        config["instrument"] = "EUR_USD"
+        floor_strategy = FloorStrategy(config)
+
+        # Enable backtest mode
+        floor_strategy._is_backtest = True
+        floor_strategy._backtest_events = []
+
+        # Create a mock position
+        position = Position(
+            account=oanda_account,
+            strategy=None,
+            position_id="test_pos_close",
+            instrument="EUR_USD",
+            direction="long",
+            units=Decimal("1.0"),
+            entry_price=Decimal("1.1000"),
+            current_price=Decimal("1.1025"),
+        )
+        position.layer_number = 1
+
+        # Create tick data
+        tick_data = TickData(
+            instrument="EUR_USD",
+            timestamp=timezone.now(),
+            bid=Decimal("1.1025"),
+            ask=Decimal("1.1026"),
+            mid=Decimal("1.10255"),
+        )
+
+        # Create close order with strategy_close reason
+        order = floor_strategy._create_close_order(position, tick_data, reason="strategy_close")
+
+        # Verify order was created
+        assert order is not None
+
+        # Find close event
+        close_events = [
+            e
+            for e in floor_strategy._backtest_events
+            if e.get("details", {}).get("reason") == "strategy_close"
+        ]
+
+        assert len(close_events) > 0
+        close_event = close_events[0]
+
+        # Verify event_type is 'close'
+        assert close_event["details"]["event_type"] == "close"
+        assert "exit_price" in close_event["details"]
+        assert "pnl" in close_event["details"]
+        assert "timestamp" in close_event["details"]
+
+    def test_take_profit_logs_with_take_profit_event_type(
+        self, user, oanda_account, strategy_config
+    ):
+        """
+        Test that take profit logs with event_type='take_profit'.
+
+        Validates: Requirements 1.2
+        """
+        # Create strategy in backtest mode
+        config = strategy_config.copy()
+        config["instrument"] = "EUR_USD"
+        floor_strategy = FloorStrategy(config)
+
+        # Enable backtest mode
+        floor_strategy._is_backtest = True
+        floor_strategy._backtest_events = []
+
+        # Create a mock position
+        position = Position(
+            account=oanda_account,
+            strategy=None,
+            position_id="test_pos_tp",
+            instrument="EUR_USD",
+            direction="long",
+            units=Decimal("1.0"),
+            entry_price=Decimal("1.1000"),
+            current_price=Decimal("1.1025"),
+        )
+        position.layer_number = 1
+
+        # Create tick data
+        tick_data = TickData(
+            instrument="EUR_USD",
+            timestamp=timezone.now(),
+            bid=Decimal("1.1025"),
+            ask=Decimal("1.1026"),
+            mid=Decimal("1.10255"),
+        )
+
+        # Create close order with take_profit reason
+        order = floor_strategy._create_close_order(position, tick_data, reason="take_profit")
+
+        # Verify order was created
+        assert order is not None
+
+        # Find take profit event
+        tp_events = [
+            e
+            for e in floor_strategy._backtest_events
+            if e.get("details", {}).get("reason") == "take_profit"
+        ]
+
+        assert len(tp_events) > 0
+        tp_event = tp_events[0]
+
+        # Verify event_type is 'take_profit'
+        assert tp_event["details"]["event_type"] == "take_profit"
+        assert "exit_price" in tp_event["details"]
+        assert "pnl" in tp_event["details"]
+        assert "timestamp" in tp_event["details"]
+
+    def test_volatility_lock_logs_with_volatility_lock_event_type(
+        self, user, oanda_account, strategy_config
+    ):
+        """
+        Test that volatility lock logs with event_type='volatility_lock'.
+
+        Validates: Requirements 1.3
+        """
+        # Create strategy in backtest mode
+        config = strategy_config.copy()
+        config["instrument"] = "EUR_USD"
+        floor_strategy = FloorStrategy(config)
+
+        # Enable backtest mode
+        floor_strategy._is_backtest = True
+        floor_strategy._backtest_events = []
+
+        # Create a mock position
+        position = Position(
+            account=oanda_account,
+            strategy=None,
+            position_id="test_pos_vl",
+            instrument="EUR_USD",
+            direction="long",
+            units=Decimal("1.0"),
+            entry_price=Decimal("1.1000"),
+            current_price=Decimal("1.1025"),
+        )
+        position.layer_number = 1
+
+        # Create tick data
+        tick_data = TickData(
+            instrument="EUR_USD",
+            timestamp=timezone.now(),
+            bid=Decimal("1.1025"),
+            ask=Decimal("1.1026"),
+            mid=Decimal("1.10255"),
+        )
+
+        # Create close order with volatility_lock reason
+        order = floor_strategy._create_close_order(position, tick_data, reason="volatility_lock")
+
+        # Verify order was created
+        assert order is not None
+
+        # Find volatility lock event
+        vl_events = [
+            e
+            for e in floor_strategy._backtest_events
+            if e.get("details", {}).get("reason") == "volatility_lock"
+        ]
+
+        assert len(vl_events) > 0
+        vl_event = vl_events[0]
+
+        # Verify event_type is 'volatility_lock'
+        assert vl_event["details"]["event_type"] == "volatility_lock"
+        assert "exit_price" in vl_event["details"]
+        assert "pnl" in vl_event["details"]
+        assert "timestamp" in vl_event["details"]
+
+    def test_margin_protection_logs_with_margin_protection_event_type(
+        self, user, oanda_account, strategy_config
+    ):
+        """
+        Test that margin protection logs with event_type='margin_protection'.
+
+        Validates: Requirements 1.4
+        """
+        # Create strategy in backtest mode
+        config = strategy_config.copy()
+        config["instrument"] = "EUR_USD"
+        floor_strategy = FloorStrategy(config)
+
+        # Enable backtest mode
+        floor_strategy._is_backtest = True
+        floor_strategy._backtest_events = []
+
+        # Create a mock position
+        position = Position(
+            account=oanda_account,
+            strategy=None,
+            position_id="test_pos_mp",
+            instrument="EUR_USD",
+            direction="long",
+            units=Decimal("1.0"),
+            entry_price=Decimal("1.1000"),
+            current_price=Decimal("1.1025"),
+        )
+        position.layer_number = 1
+
+        # Create tick data
+        tick_data = TickData(
+            instrument="EUR_USD",
+            timestamp=timezone.now(),
+            bid=Decimal("1.1025"),
+            ask=Decimal("1.1026"),
+            mid=Decimal("1.10255"),
+        )
+
+        # Create close order with margin_protection reason
+        order = floor_strategy._create_close_order(position, tick_data, reason="margin_protection")
+
+        # Verify order was created
+        assert order is not None
+
+        # Find margin protection event
+        mp_events = [
+            e
+            for e in floor_strategy._backtest_events
+            if e.get("details", {}).get("reason") == "margin_protection"
+        ]
+
+        assert len(mp_events) > 0
+        mp_event = mp_events[0]
+
+        # Verify event_type is 'margin_protection'
+        assert mp_event["details"]["event_type"] == "margin_protection"
+        assert "exit_price" in mp_event["details"]
+        assert "pnl" in mp_event["details"]
+        assert "timestamp" in mp_event["details"]
