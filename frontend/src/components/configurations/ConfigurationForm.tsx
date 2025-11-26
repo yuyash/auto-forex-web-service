@@ -136,7 +136,6 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
       description: 'Maximum number of concurrent layers',
       default: 3,
       minimum: 1,
-      maximum: 3,
     },
     volatility_lock_multiplier: {
       type: 'number',
