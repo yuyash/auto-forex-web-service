@@ -51,6 +51,7 @@ export default function BacktestTaskFormPage() {
                 initial_balance: parseFloat(task.initial_balance),
                 commission_per_trade: parseFloat(task.commission_per_trade),
                 instrument: task.instrument,
+                sell_at_completion: task.sell_at_completion ?? false,
               }}
             />
           ) : (
