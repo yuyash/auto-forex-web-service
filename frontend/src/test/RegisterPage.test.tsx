@@ -55,7 +55,7 @@ describe('RegisterPage', () => {
   });
 
   it('validates email format', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(
       <MemoryRouter>
@@ -82,7 +82,7 @@ describe('RegisterPage', () => {
   });
 
   it('validates required fields', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(
       <MemoryRouter>
@@ -113,7 +113,7 @@ describe('RegisterPage', () => {
   });
 
   it('validates password strength requirements', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(
       <MemoryRouter>
@@ -176,7 +176,7 @@ describe('RegisterPage', () => {
   });
 
   it('validates password confirmation match', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(
       <MemoryRouter>
@@ -205,7 +205,7 @@ describe('RegisterPage', () => {
   });
 
   it('displays password strength indicator', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(
       <MemoryRouter>
@@ -240,7 +240,7 @@ describe('RegisterPage', () => {
   });
 
   it('calls register API with correct data', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     mockFetch
       .mockResolvedValueOnce({
@@ -304,7 +304,7 @@ describe('RegisterPage', () => {
   });
 
   it('shows success message and redirects to login on successful registration', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     mockFetch
       .mockResolvedValueOnce({
@@ -370,7 +370,7 @@ describe('RegisterPage', () => {
   });
 
   it('displays error message on failed registration', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     mockFetch
       .mockResolvedValueOnce({
@@ -421,7 +421,7 @@ describe('RegisterPage', () => {
   });
 
   it('shows loading state during registration', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     let resolvePromise: ((value: unknown) => void) | undefined;
     const promise = new Promise((resolve) => {
@@ -487,7 +487,7 @@ describe('RegisterPage', () => {
   });
 
   it('clears field errors when user starts typing', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(
       <MemoryRouter>
