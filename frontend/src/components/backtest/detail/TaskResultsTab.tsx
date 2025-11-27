@@ -370,9 +370,11 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
                 strategy_type: task.strategy_type,
                 trade_count: metrics.trade_log.length,
                 first_trade: metrics.trade_log[0],
+                strategy_events_count: metrics.strategy_events?.length || 0,
               })}
             <FloorLayerLog
               trades={metrics.trade_log}
+              strategyEvents={metrics.strategy_events}
               selectedTradeIndex={selectedTradeIndex}
             />
           </>

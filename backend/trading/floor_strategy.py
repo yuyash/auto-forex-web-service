@@ -248,7 +248,7 @@ class ScalingEngine:
         return pip_movement >= retracement_pips
 
 
-class FloorStrategy(BaseStrategy):
+class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attributes
     """
     Floor strategy with dynamic scaling and ATR-based volatility lock.
 
@@ -284,6 +284,32 @@ class FloorStrategy(BaseStrategy):
 
         # Entry signal configuration
         self.entry_signal_lookback_ticks = self.get_config_value("entry_signal_lookback_ticks", 10)
+
+        # Direction decision method configuration
+        # Tick-based: "momentum", "sma_crossover", "ema_crossover", "price_vs_sma", "rsi"
+        # OHLC-based: "ohlc_sma_crossover", "ohlc_ema_crossover", "ohlc_price_vs_sma"
+        self.direction_method = self.get_config_value("direction_method", "momentum")
+
+        # Moving average periods (in ticks) - for tick-based methods
+        self.sma_fast_period = self.get_config_value("sma_fast_period", 10)
+        self.sma_slow_period = self.get_config_value("sma_slow_period", 30)
+        self.ema_fast_period = self.get_config_value("ema_fast_period", 12)
+        self.ema_slow_period = self.get_config_value("ema_slow_period", 26)
+
+        # RSI configuration
+        self.rsi_period = self.get_config_value("rsi_period", 14)
+        self.rsi_overbought = self.get_config_value("rsi_overbought", 70)
+        self.rsi_oversold = self.get_config_value("rsi_oversold", 30)
+
+        # OHLC-based configuration
+        # Granularity in seconds: 3600=H1, 14400=H4, 86400=D1
+        self.ohlc_granularity = self.get_config_value("ohlc_granularity", 3600)  # Default: 1 hour
+        self.ohlc_fast_period = self.get_config_value("ohlc_fast_period", 10)  # Fast MA period
+        self.ohlc_slow_period = self.get_config_value("ohlc_slow_period", 20)  # Slow MA period
+
+        # OHLC candle storage (aggregated from ticks)
+        self._ohlc_candles: dict[str, list[dict[str, Any]]] = {}
+        self._current_candle: dict[str, dict[str, Any] | None] = {}
 
         # State
         self.is_locked = False
@@ -411,15 +437,14 @@ class FloorStrategy(BaseStrategy):
 
     def _check_entry_signal(self, tick_data: TickData) -> dict[str, Any] | None:
         """
-        Check for entry signal using simple technical analysis.
+        Check for entry signal using configurable technical analysis methods.
 
-        According to spec: "Direction (long or short) is chosen after a quick
-        technical check (trend, support/resistance, indicator)."
-
-        This implementation uses a simple price momentum check:
-        - Compare current price to price from N ticks ago
-        - If price is rising consistently, signal long
-        - If price is falling consistently, signal short
+        Supported methods (configured via direction_method):
+        - "momentum": Simple price momentum over N ticks
+        - "sma_crossover": Fast SMA crosses above/below slow SMA
+        - "ema_crossover": Fast EMA crosses above/below slow EMA
+        - "price_vs_sma": Price above/below SMA
+        - "rsi": RSI overbought/oversold levels
 
         Args:
             tick_data: Current tick data
@@ -441,72 +466,479 @@ class FloorStrategy(BaseStrategy):
             }
         )
 
-        # Keep only last 100 ticks
-        if len(instrument_history) > 100:
-            self._price_history[tick_data.instrument] = instrument_history[-100:]
+        # Keep enough history for all indicators (max of all periods + buffer)
+        max_period = max(
+            self.entry_signal_lookback_ticks,
+            self.sma_slow_period,
+            self.ema_slow_period,
+            self.rsi_period + 1,
+        )
+        history_limit = max_period + 50
+        if len(instrument_history) > history_limit:
+            self._price_history[tick_data.instrument] = instrument_history[-history_limit:]
             instrument_history = self._price_history[tick_data.instrument]
 
-        # Need at least N ticks for signal (configurable)
-        if len(instrument_history) < self.entry_signal_lookback_ticks:
+        # Get prices as list
+        prices = [p["price"] for p in instrument_history]
+
+        # Dispatch to appropriate method using dictionary lookup
+        method = self.direction_method.lower()
+
+        # Methods that require prices list
+        price_based_methods = {
+            "momentum": self._check_momentum_signal,
+            "sma_crossover": self._check_sma_crossover_signal,
+            "ema_crossover": self._check_ema_crossover_signal,
+            "price_vs_sma": self._check_price_vs_sma_signal,
+            "rsi": self._check_rsi_signal,
+        }
+
+        # Methods that only need tick_data
+        ohlc_methods = {
+            "ohlc_sma_crossover": self._check_ohlc_sma_crossover_signal,
+            "ohlc_ema_crossover": self._check_ohlc_ema_crossover_signal,
+            "ohlc_price_vs_sma": self._check_ohlc_price_vs_sma_signal,
+        }
+
+        if method in price_based_methods:
+            return price_based_methods[method](prices, tick_data)
+        if method in ohlc_methods:
+            return ohlc_methods[method](tick_data)
+        # Default to momentum
+        return self._check_momentum_signal(prices, tick_data)
+
+    def _calculate_sma(self, prices: list[Decimal], period: int) -> Decimal | None:
+        """Calculate Simple Moving Average."""
+        if len(prices) < period:
+            return None
+        return sum(prices[-period:]) / Decimal(str(period))
+
+    def _calculate_ema(self, prices: list[Decimal], period: int) -> Decimal | None:
+        """Calculate Exponential Moving Average."""
+        if len(prices) < period:
+            return None
+        multiplier = Decimal("2") / Decimal(str(period + 1))
+        ema = sum(prices[:period]) / Decimal(str(period))  # Start with SMA
+        for price in prices[period:]:
+            ema = (price - ema) * multiplier + ema
+        return ema
+
+    def _calculate_rsi(self, prices: list[Decimal], period: int) -> Decimal | None:
+        """Calculate Relative Strength Index."""
+        if len(prices) < period + 1:
             return None
 
-        # Calculate price momentum over last N ticks
-        recent_prices = [
-            p["price"] for p in instrument_history[-self.entry_signal_lookback_ticks :]
-        ]
-        oldest_price = recent_prices[0]
-        current_price = recent_prices[-1]
+        gains = []
+        losses = []
+        for i in range(1, len(prices)):
+            change = prices[i] - prices[i - 1]
+            if change > 0:
+                gains.append(change)
+                losses.append(Decimal("0"))
+            else:
+                gains.append(Decimal("0"))
+                losses.append(abs(change))
 
-        # Calculate pip movement
+        if len(gains) < period:
+            return None
+
+        avg_gain = sum(gains[-period:]) / Decimal(str(period))
+        avg_loss = sum(losses[-period:]) / Decimal(str(period))
+
+        if avg_loss == 0:
+            return Decimal("100")
+
+        rs = avg_gain / avg_loss
+        rsi = Decimal("100") - (Decimal("100") / (Decimal("1") + rs))
+        return rsi
+
+    def _check_momentum_signal(
+        self, prices: list[Decimal], tick_data: TickData
+    ) -> dict[str, Any] | None:
+        """Check for entry signal using price momentum."""
+        if len(prices) < self.entry_signal_lookback_ticks:
+            return None
+
+        oldest_price = prices[-self.entry_signal_lookback_ticks]
+        current_price = prices[-1]
         pip_movement = (current_price - oldest_price) * Decimal("10000")
 
-        # Log periodically for debugging
-        # Log at key milestones: when we first reach lookback threshold, then every 100 ticks
-        should_log = (
-            len(instrument_history) == self.entry_signal_lookback_ticks
-            or len(instrument_history) % 100 == 0
-        )
-        if should_log:
-            lookback = self.entry_signal_lookback_ticks
-            momentum_msg = f"Analyzing momentum: {pip_movement:.1f} pips over {lookback} ticks"
-            self.log_strategy_event(
-                "entry_signal_check",
-                momentum_msg,
-                {
-                    "instrument": tick_data.instrument,
-                    "pip_movement": str(pip_movement),
-                    "oldest_price": str(oldest_price),
-                    "current_price": str(current_price),
-                    "history_length": len(instrument_history),
-                    "lookback_ticks": lookback,
-                },
-            )
-
-        # Spec says: "Initial entry: Any price level is acceptable"
-        # So we ALWAYS enter, just determine direction based on momentum
         if pip_movement > 0:
             direction = "long"
-            reason = f"Upward momentum: {pip_movement:.1f} pips"
+            reason = (
+                f"Momentum: +{pip_movement:.1f} pips over {self.entry_signal_lookback_ticks} ticks"
+            )
         else:
             direction = "short"
-            reason = f"Downward momentum: {pip_movement:.1f} pips"
+            reason = (
+                f"Momentum: {pip_movement:.1f} pips over {self.entry_signal_lookback_ticks} ticks"
+            )
 
-        lookback = self.entry_signal_lookback_ticks
-        entry_msg = f"{direction.upper()} entry: {pip_movement:.1f} pips " f"over {lookback} ticks"
+        self._log_entry_signal(
+            direction, reason, tick_data, {"method": "momentum", "pip_movement": str(pip_movement)}
+        )
+        return {"direction": direction, "reason": reason}
+
+    def _check_sma_crossover_signal(
+        self, prices: list[Decimal], tick_data: TickData
+    ) -> dict[str, Any] | None:
+        """Check for entry signal using SMA crossover."""
+        fast_sma = self._calculate_sma(prices, self.sma_fast_period)
+        slow_sma = self._calculate_sma(prices, self.sma_slow_period)
+
+        if fast_sma is None or slow_sma is None:
+            return None
+
+        if fast_sma > slow_sma:
+            direction = "long"
+            reason = (
+                f"SMA Crossover: Fast({self.sma_fast_period})={fast_sma:.5f} > "
+                f"Slow({self.sma_slow_period})={slow_sma:.5f}"
+            )
+        else:
+            direction = "short"
+            reason = (
+                f"SMA Crossover: Fast({self.sma_fast_period})={fast_sma:.5f} < "
+                f"Slow({self.sma_slow_period})={slow_sma:.5f}"
+            )
+
+        self._log_entry_signal(
+            direction,
+            reason,
+            tick_data,
+            {"method": "sma_crossover", "fast_sma": str(fast_sma), "slow_sma": str(slow_sma)},
+        )
+        return {"direction": direction, "reason": reason}
+
+    def _check_ema_crossover_signal(
+        self, prices: list[Decimal], tick_data: TickData
+    ) -> dict[str, Any] | None:
+        """Check for entry signal using EMA crossover."""
+        fast_ema = self._calculate_ema(prices, self.ema_fast_period)
+        slow_ema = self._calculate_ema(prices, self.ema_slow_period)
+
+        if fast_ema is None or slow_ema is None:
+            return None
+
+        if fast_ema > slow_ema:
+            direction = "long"
+            reason = (
+                f"EMA Crossover: Fast({self.ema_fast_period})={fast_ema:.5f} > "
+                f"Slow({self.ema_slow_period})={slow_ema:.5f}"
+            )
+        else:
+            direction = "short"
+            reason = (
+                f"EMA Crossover: Fast({self.ema_fast_period})={fast_ema:.5f} < "
+                f"Slow({self.ema_slow_period})={slow_ema:.5f}"
+            )
+
+        self._log_entry_signal(
+            direction,
+            reason,
+            tick_data,
+            {"method": "ema_crossover", "fast_ema": str(fast_ema), "slow_ema": str(slow_ema)},
+        )
+        return {"direction": direction, "reason": reason}
+
+    def _check_price_vs_sma_signal(
+        self, prices: list[Decimal], tick_data: TickData
+    ) -> dict[str, Any] | None:
+        """Check for entry signal using price vs SMA."""
+        sma = self._calculate_sma(prices, self.sma_slow_period)
+
+        if sma is None:
+            return None
+
+        current_price = prices[-1]
+
+        if current_price > sma:
+            direction = "long"
+            reason = f"Price vs SMA: {current_price:.5f} > SMA({self.sma_slow_period})={sma:.5f}"
+        else:
+            direction = "short"
+            reason = f"Price vs SMA: {current_price:.5f} < SMA({self.sma_slow_period})={sma:.5f}"
+
+        self._log_entry_signal(
+            direction,
+            reason,
+            tick_data,
+            {"method": "price_vs_sma", "price": str(current_price), "sma": str(sma)},
+        )
+        return {"direction": direction, "reason": reason}
+
+    def _check_rsi_signal(
+        self, prices: list[Decimal], tick_data: TickData
+    ) -> dict[str, Any] | None:
+        """Check for entry signal using RSI."""
+        rsi = self._calculate_rsi(prices, self.rsi_period)
+
+        if rsi is None:
+            return None
+
+        # RSI strategy: go long when oversold, short when overbought
+        # If RSI is in neutral zone, use momentum as tiebreaker
+        if rsi < self.rsi_oversold:
+            direction = "long"
+            reason = f"RSI Oversold: RSI({self.rsi_period})={rsi:.1f} < {self.rsi_oversold}"
+        elif rsi > self.rsi_overbought:
+            direction = "short"
+            reason = f"RSI Overbought: RSI({self.rsi_period})={rsi:.1f} > {self.rsi_overbought}"
+        else:
+            # Neutral zone - use momentum as tiebreaker
+            if len(prices) >= 2:
+                momentum = prices[-1] - prices[-2]
+                direction = "long" if momentum > 0 else "short"
+                reason = f"RSI Neutral: RSI({self.rsi_period})={rsi:.1f}, using momentum"
+            else:
+                direction = "long"
+                reason = f"RSI Neutral: RSI({self.rsi_period})={rsi:.1f}, defaulting to long"
+
+        self._log_entry_signal(direction, reason, tick_data, {"method": "rsi", "rsi": str(rsi)})
+        return {"direction": direction, "reason": reason}
+
+    def _log_entry_signal(
+        self, direction: str, reason: str, tick_data: TickData, extra_details: dict[str, Any]
+    ) -> None:
+        """Log entry signal event."""
         self.log_strategy_event(
             "entry_signal_triggered",
-            entry_msg,
+            f"{direction.upper()} entry: {reason}",
             {
                 "direction": direction,
-                "pip_movement": str(pip_movement),
-                "lookback_ticks": lookback,
+                "reason": reason,
+                "instrument": tick_data.instrument,
+                "price": str(tick_data.mid),
+                **extra_details,
             },
         )
 
-        return {
-            "direction": direction,
-            "reason": reason,
+    # ==================== OHLC-based Direction Methods ====================
+
+    def _update_ohlc_candle(self, tick_data: TickData) -> None:
+        """
+        Update OHLC candle data from tick.
+
+        Aggregates tick data into OHLC candles based on configured granularity.
+        """
+        instrument = tick_data.instrument
+        timestamp = tick_data.timestamp.timestamp()
+        price = tick_data.mid
+
+        # Calculate candle start time based on granularity
+        candle_start = int(timestamp // self.ohlc_granularity) * self.ohlc_granularity
+
+        # Initialize storage if needed
+        if instrument not in self._ohlc_candles:
+            self._ohlc_candles[instrument] = []
+        if instrument not in self._current_candle:
+            self._current_candle[instrument] = None
+
+        current = self._current_candle[instrument]
+
+        # Check if we need to start a new candle
+        if current is None or current["time"] != candle_start:
+            # Save completed candle
+            if current is not None:
+                self._ohlc_candles[instrument].append(current)
+                # Keep only enough candles for analysis
+                max_candles = max(self.ohlc_fast_period, self.ohlc_slow_period) + 10
+                if len(self._ohlc_candles[instrument]) > max_candles:
+                    self._ohlc_candles[instrument] = self._ohlc_candles[instrument][-max_candles:]
+
+            # Start new candle
+            self._current_candle[instrument] = {
+                "time": candle_start,
+                "open": price,
+                "high": price,
+                "low": price,
+                "close": price,
+            }
+        else:
+            # Update current candle
+            current["high"] = max(current["high"], price)
+            current["low"] = min(current["low"], price)
+            current["close"] = price
+
+    def _get_ohlc_closes(self, instrument: str) -> list[Decimal]:
+        """Get list of close prices from completed OHLC candles."""
+        candles = self._ohlc_candles.get(instrument, [])
+        return [c["close"] for c in candles]
+
+    def _check_ohlc_sma_crossover_signal(self, tick_data: TickData) -> dict[str, Any] | None:
+        """
+        Check for entry signal using OHLC-based SMA crossover.
+
+        Uses completed candles (hourly/daily) for longer-term trend analysis.
+        """
+        # Update candle data
+        self._update_ohlc_candle(tick_data)
+
+        # Get close prices from completed candles
+        closes = self._get_ohlc_closes(tick_data.instrument)
+
+        # Need enough candles for slow period
+        if len(closes) < self.ohlc_slow_period:
+            return None
+
+        fast_sma = self._calculate_sma(closes, self.ohlc_fast_period)
+        slow_sma = self._calculate_sma(closes, self.ohlc_slow_period)
+
+        if fast_sma is None or slow_sma is None:
+            return None
+
+        granularity_name = self._get_granularity_name()
+
+        if fast_sma > slow_sma:
+            direction = "long"
+            reason = (
+                f"OHLC SMA Crossover ({granularity_name}): "
+                f"Fast({self.ohlc_fast_period})={fast_sma:.5f} > "
+                f"Slow({self.ohlc_slow_period})={slow_sma:.5f}"
+            )
+        else:
+            direction = "short"
+            reason = (
+                f"OHLC SMA Crossover ({granularity_name}): "
+                f"Fast({self.ohlc_fast_period})={fast_sma:.5f} < "
+                f"Slow({self.ohlc_slow_period})={slow_sma:.5f}"
+            )
+
+        self._log_entry_signal(
+            direction,
+            reason,
+            tick_data,
+            {
+                "method": "ohlc_sma_crossover",
+                "granularity": granularity_name,
+                "fast_sma": str(fast_sma),
+                "slow_sma": str(slow_sma),
+                "candles_count": len(closes),
+            },
+        )
+        return {"direction": direction, "reason": reason}
+
+    def _check_ohlc_ema_crossover_signal(self, tick_data: TickData) -> dict[str, Any] | None:
+        """
+        Check for entry signal using OHLC-based EMA crossover.
+
+        Uses completed candles (hourly/daily) for longer-term trend analysis.
+        """
+        # Update candle data
+        self._update_ohlc_candle(tick_data)
+
+        # Get close prices from completed candles
+        closes = self._get_ohlc_closes(tick_data.instrument)
+
+        # Need enough candles for slow period
+        if len(closes) < self.ohlc_slow_period:
+            return None
+
+        fast_ema = self._calculate_ema(closes, self.ohlc_fast_period)
+        slow_ema = self._calculate_ema(closes, self.ohlc_slow_period)
+
+        if fast_ema is None or slow_ema is None:
+            return None
+
+        granularity_name = self._get_granularity_name()
+
+        if fast_ema > slow_ema:
+            direction = "long"
+            reason = (
+                f"OHLC EMA Crossover ({granularity_name}): "
+                f"Fast({self.ohlc_fast_period})={fast_ema:.5f} > "
+                f"Slow({self.ohlc_slow_period})={slow_ema:.5f}"
+            )
+        else:
+            direction = "short"
+            reason = (
+                f"OHLC EMA Crossover ({granularity_name}): "
+                f"Fast({self.ohlc_fast_period})={fast_ema:.5f} < "
+                f"Slow({self.ohlc_slow_period})={slow_ema:.5f}"
+            )
+
+        self._log_entry_signal(
+            direction,
+            reason,
+            tick_data,
+            {
+                "method": "ohlc_ema_crossover",
+                "granularity": granularity_name,
+                "fast_ema": str(fast_ema),
+                "slow_ema": str(slow_ema),
+                "candles_count": len(closes),
+            },
+        )
+        return {"direction": direction, "reason": reason}
+
+    def _check_ohlc_price_vs_sma_signal(self, tick_data: TickData) -> dict[str, Any] | None:
+        """
+        Check for entry signal using current price vs OHLC-based SMA.
+
+        Compares current tick price against longer-term moving average.
+        """
+        # Update candle data
+        self._update_ohlc_candle(tick_data)
+
+        # Get close prices from completed candles
+        closes = self._get_ohlc_closes(tick_data.instrument)
+
+        # Need enough candles for slow period
+        if len(closes) < self.ohlc_slow_period:
+            return None
+
+        sma = self._calculate_sma(closes, self.ohlc_slow_period)
+
+        if sma is None:
+            return None
+
+        current_price = tick_data.mid
+        granularity_name = self._get_granularity_name()
+
+        if current_price > sma:
+            direction = "long"
+            reason = (
+                f"Price vs OHLC SMA ({granularity_name}): "
+                f"{current_price:.5f} > SMA({self.ohlc_slow_period})={sma:.5f}"
+            )
+        else:
+            direction = "short"
+            reason = (
+                f"Price vs OHLC SMA ({granularity_name}): "
+                f"{current_price:.5f} < SMA({self.ohlc_slow_period})={sma:.5f}"
+            )
+
+        self._log_entry_signal(
+            direction,
+            reason,
+            tick_data,
+            {
+                "method": "ohlc_price_vs_sma",
+                "granularity": granularity_name,
+                "price": str(current_price),
+                "sma": str(sma),
+                "candles_count": len(closes),
+            },
+        )
+        return {"direction": direction, "reason": reason}
+
+    def _get_granularity_name(self) -> str:
+        """Get human-readable name for the configured OHLC granularity."""
+        granularity_names = {
+            300: "M5",
+            900: "M15",
+            1800: "M30",
+            3600: "H1",
+            7200: "H2",
+            14400: "H4",
+            28800: "H8",
+            43200: "H12",
+            86400: "D1",
+            604800: "W1",
         }
+        return granularity_names.get(self.ohlc_granularity, f"{self.ohlc_granularity}s")
+
+    # ==================== End OHLC-based Direction Methods ====================
 
     def _process_layer(self, layer: Layer, tick_data: TickData) -> list[Order]:
         """
@@ -931,9 +1363,16 @@ class FloorStrategy(BaseStrategy):
             price_diff = -price_diff
         pip_diff = float(price_diff / pip_size)
 
-        # Calculate P&L: pip_diff * units * pip_value
-        pip_value = Decimal("1000") if is_jpy else Decimal("10")
-        pnl = float(Decimal(str(pip_diff)) * position.units * pip_value)
+        # Calculate P&L in USD (matching backtest_engine.py calculation)
+        # units represents lot size (1.0 = 1 lot = 1,000 base currency units)
+        base_currency_amount = position.units * Decimal("1000")
+        pnl_raw = price_diff * base_currency_amount
+
+        # For JPY pairs, P&L is in JPY and needs conversion to USD
+        if is_jpy:
+            pnl = float(pnl_raw / tick_data.mid)
+        else:
+            pnl = float(pnl_raw)
 
         # Get event metadata
         event_type, reason_display = self._get_close_event_metadata(reason)
@@ -1498,6 +1937,128 @@ FLOOR_STRATEGY_CONFIG_SCHEMA = {
             "default": 10,
             "minimum": 5,
             "maximum": 100,
+        },
+        "direction_method": {
+            "type": "string",
+            "title": "Direction Decision Method",
+            "description": (
+                "Technical analysis method used to determine trade direction. "
+                "Tick-based methods use raw tick data. "
+                "OHLC methods aggregate ticks into candles for longer-term analysis."
+            ),
+            "enum": [
+                "momentum",
+                "sma_crossover",
+                "ema_crossover",
+                "price_vs_sma",
+                "rsi",
+                "ohlc_sma_crossover",
+                "ohlc_ema_crossover",
+                "ohlc_price_vs_sma",
+            ],
+            "default": "momentum",
+        },
+        "ohlc_granularity": {
+            "type": "integer",
+            "title": "OHLC Candle Granularity",
+            "description": (
+                "Candle period in seconds for OHLC-based methods. "
+                "Common values: 3600 (1 hour), 14400 (4 hours), 86400 (1 day)."
+            ),
+            "enum": [300, 900, 1800, 3600, 7200, 14400, 28800, 43200, 86400, 604800],
+            "default": 3600,
+        },
+        "ohlc_fast_period": {
+            "type": "integer",
+            "title": "OHLC Fast MA Period",
+            "description": "Number of candles for fast moving average in OHLC methods.",
+            "default": 10,
+            "minimum": 2,
+            "maximum": 100,
+        },
+        "ohlc_slow_period": {
+            "type": "integer",
+            "title": "OHLC Slow MA Period",
+            "description": "Number of candles for slow moving average in OHLC methods.",
+            "default": 20,
+            "minimum": 5,
+            "maximum": 200,
+        },
+        "sma_fast_period": {
+            "type": "integer",
+            "title": "SMA Fast Period",
+            "description": (
+                "Period for fast Simple Moving Average (in ticks). "
+                "Used by sma_crossover and price_vs_sma methods."
+            ),
+            "default": 10,
+            "minimum": 2,
+            "maximum": 200,
+        },
+        "sma_slow_period": {
+            "type": "integer",
+            "title": "SMA Slow Period",
+            "description": (
+                "Period for slow Simple Moving Average (in ticks). "
+                "Used by sma_crossover and price_vs_sma methods."
+            ),
+            "default": 30,
+            "minimum": 5,
+            "maximum": 500,
+        },
+        "ema_fast_period": {
+            "type": "integer",
+            "title": "EMA Fast Period",
+            "description": (
+                "Period for fast Exponential Moving Average (in ticks). "
+                "Used by ema_crossover method."
+            ),
+            "default": 12,
+            "minimum": 2,
+            "maximum": 200,
+        },
+        "ema_slow_period": {
+            "type": "integer",
+            "title": "EMA Slow Period",
+            "description": (
+                "Period for slow Exponential Moving Average (in ticks). "
+                "Used by ema_crossover method."
+            ),
+            "default": 26,
+            "minimum": 5,
+            "maximum": 500,
+        },
+        "rsi_period": {
+            "type": "integer",
+            "title": "RSI Period",
+            "description": (
+                "Period for Relative Strength Index calculation (in ticks). " "Used by rsi method."
+            ),
+            "default": 14,
+            "minimum": 2,
+            "maximum": 100,
+        },
+        "rsi_overbought": {
+            "type": "integer",
+            "title": "RSI Overbought Level",
+            "description": (
+                "RSI level above which the market is considered overbought (triggers short). "
+                "Used by rsi method."
+            ),
+            "default": 70,
+            "minimum": 50,
+            "maximum": 100,
+        },
+        "rsi_oversold": {
+            "type": "integer",
+            "title": "RSI Oversold Level",
+            "description": (
+                "RSI level below which the market is considered oversold (triggers long). "
+                "Used by rsi method."
+            ),
+            "default": 30,
+            "minimum": 0,
+            "maximum": 50,
         },
     },
     "required": [

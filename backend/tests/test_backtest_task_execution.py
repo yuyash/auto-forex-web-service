@@ -105,6 +105,13 @@ def mock_backtest_engine():
     mock_engine.resource_monitor = Mock()
     mock_engine.resource_monitor.is_exceeded.return_value = False
     mock_engine.resource_monitor.stop = Mock()
+    mock_engine.terminated = False
+    mock_engine.config = Mock()
+    mock_engine.config.memory_limit = 2147483648
+    # Mock strategy with empty backtest events
+    mock_engine.strategy = Mock()
+    mock_engine.strategy._backtest_events = []
+    mock_engine.strategy.finalize = Mock()
     mock_engine.calculate_performance_metrics.return_value = {
         "total_trades": 0,
         "winning_trades": 0,
@@ -117,6 +124,7 @@ def mock_backtest_engine():
         "average_loss": 0.0,
         "sharpe_ratio": None,
         "profit_factor": None,
+        "strategy_events": [],
     }
     return mock_engine
 

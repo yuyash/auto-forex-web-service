@@ -117,6 +117,109 @@ def _load_backtest_data_by_day(
     return instrument_data, None
 
 
+def _log_strategy_events_to_execution(  # pylint: disable=too-many-locals
+    execution: TaskExecution,
+    engine: BacktestEngine,
+    last_event_index: int,
+) -> int:
+    """
+    Log new strategy events to execution logs.
+
+    This function captures floor strategy events (initial entry, retracement,
+    close, take profit, etc.) and adds them to the execution logs for display
+    in the frontend TaskExecutionsTab.
+
+    Args:
+        execution: TaskExecution instance to add logs to
+        engine: BacktestEngine instance with strategy
+        last_event_index: Index of last logged event (to avoid duplicates)
+
+    Returns:
+        New last_event_index after logging
+    """
+    if not engine.strategy or not hasattr(engine.strategy, "_backtest_events"):
+        return last_event_index
+
+    events = engine.strategy._backtest_events  # pylint: disable=protected-access
+
+    # Log new events since last check
+    for i in range(last_event_index, len(events)):
+        event = events[i]
+        event_type = event.get("event_type", "unknown")
+        description = event.get("description", "")
+        details = event.get("details", {})
+
+        # Format message based on event type for floor strategy
+        detail_event_type = details.get("event_type", "")
+
+        if detail_event_type == "initial":
+            # Initial entry event
+            direction = details.get("direction", "").upper()
+            units = details.get("units", "")
+            price = details.get("price", "")
+            layer = details.get("layer", 1)
+            execution.add_log(
+                "INFO",
+                f"[FLOOR] Layer {layer} Initial Entry: {direction} {units} units @ {price}",
+            )
+        elif detail_event_type == "retracement":
+            # Retracement/scale-in event
+            direction = details.get("direction", "").upper()
+            units = details.get("units", "")
+            price = details.get("price", "")
+            layer = details.get("layer", 1)
+            retracement_count = details.get("retracement_count", 0)
+            execution.add_log(
+                "INFO",
+                f"[FLOOR] Layer {layer} Retracement #{retracement_count}: "
+                f"{direction} {units} units @ {price}",
+            )
+        elif detail_event_type == "layer":
+            # Layer add event (from retracement_detected)
+            layer = details.get("layer", 1)
+            direction = details.get("direction", "").upper()
+            retracement_pips = details.get("retracement_pips", "")
+            execution.add_log(
+                "INFO",
+                f"[FLOOR] Layer {layer} Retracement Detected: "
+                f"{direction} position, {retracement_pips} pips from peak",
+            )
+        elif detail_event_type in ("close", "take_profit", "volatility_lock", "margin_protection"):
+            # Close events
+            direction = details.get("direction", "").upper()
+            units = details.get("units", "")
+            entry_price = details.get("entry_price", "")
+            exit_price = details.get("exit_price", "")
+            pnl = details.get("pnl", 0)
+            reason_display = details.get(
+                "reason_display", detail_event_type.replace("_", " ").title()
+            )
+            layer = details.get("layer_number", details.get("layer", ""))
+
+            pnl_str = f"+${pnl:.2f}" if pnl >= 0 else f"-${abs(pnl):.2f}"
+            layer_str = f"Layer {layer} " if layer else ""
+            execution.add_log(
+                "INFO",
+                f"[FLOOR] {layer_str}{reason_display}: {direction} {units} units, "
+                f"Entry: {entry_price} → Exit: {exit_price}, P&L: {pnl_str}",
+            )
+        elif event_type == "entry_signal_triggered":
+            # Entry signal event (optional - can be verbose)
+            pass  # Skip to reduce log noise
+        elif event_type in ("start_strategy", "end_strategy"):
+            # Strategy lifecycle events - already logged elsewhere
+            pass
+        elif event_type == "retracement_detected":
+            # Already handled by 'layer' event_type above
+            pass
+        else:
+            # Log other events with their description
+            if description and event_type not in ("no_entry_signal", "inactive_instrument"):
+                execution.add_log("INFO", f"[FLOOR] {description}")
+
+    return len(events)
+
+
 def _create_execution_metrics(
     execution: TaskExecution,
     performance_metrics: dict[str, Any],
@@ -384,7 +487,7 @@ def execute_backtest_task(
         execution.add_log("INFO", f"Period: {start_str} to {end_str}")
         execution.add_log("INFO", f"Strategy: {task.config.strategy_type}")
         execution.add_log("INFO", f"Instrument: {task.instrument}")
-        execution.add_log("INFO", f"Initial balance: {task.initial_balance}")
+        execution.add_log("INFO", f"Initial balance: ${task.initial_balance}")
 
         # Initialize data loader
         execution.add_log("INFO", f"Initializing data loader from {task.data_source}...")
@@ -458,6 +561,7 @@ def execute_backtest_task(
         day_index = 0
         batch_tick_count = 0
         execution_start_time = timezone.now()
+        last_strategy_event_index = 0  # Track logged strategy events to avoid duplicates
 
         while current_date.date() <= task.end_time.date():
             # Check cancellation flag at the start of each day
@@ -583,6 +687,11 @@ def execute_backtest_task(
             # Report day complete
             progress_reporter.report_day_complete(day_index, day_processing_time)
             backtest_logger.log_day_complete(day_index, total_days, day_processing_time)
+
+            # Log floor strategy events to execution logs
+            last_strategy_event_index = _log_strategy_events_to_execution(
+                execution, engine, last_strategy_event_index
+            )
 
             # Move to next day
             day_index += 1

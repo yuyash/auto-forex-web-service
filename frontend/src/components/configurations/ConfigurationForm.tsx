@@ -182,6 +182,156 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
       default: 0.5,
       minimum: 0,
     },
+    direction_method: {
+      type: 'string',
+      title: 'Direction Decision Method',
+      description:
+        'Technical analysis method to determine trade direction. Tick-based methods use raw tick data. OHLC methods aggregate ticks into candles for longer-term analysis.',
+      enum: [
+        'momentum',
+        'sma_crossover',
+        'ema_crossover',
+        'price_vs_sma',
+        'rsi',
+        'ohlc_sma_crossover',
+        'ohlc_ema_crossover',
+        'ohlc_price_vs_sma',
+      ],
+      default: 'momentum',
+    },
+    entry_signal_lookback_ticks: {
+      type: 'integer',
+      title: 'Momentum Lookback Ticks',
+      description:
+        'Number of ticks to analyze for determining entry direction based on price momentum.',
+      default: 10,
+      minimum: 5,
+      dependsOn: {
+        field: 'direction_method',
+        values: ['momentum'],
+      },
+    },
+    sma_fast_period: {
+      type: 'integer',
+      title: 'SMA Fast Period',
+      description: 'Period for fast Simple Moving Average (in ticks).',
+      default: 10,
+      minimum: 2,
+      dependsOn: {
+        field: 'direction_method',
+        values: ['sma_crossover'],
+      },
+    },
+    sma_slow_period: {
+      type: 'integer',
+      title: 'SMA Slow Period',
+      description: 'Period for slow Simple Moving Average (in ticks).',
+      default: 30,
+      minimum: 5,
+      dependsOn: {
+        field: 'direction_method',
+        values: ['sma_crossover', 'price_vs_sma'],
+      },
+    },
+    ema_fast_period: {
+      type: 'integer',
+      title: 'EMA Fast Period',
+      description: 'Period for fast Exponential Moving Average (in ticks).',
+      default: 12,
+      minimum: 2,
+      dependsOn: {
+        field: 'direction_method',
+        values: ['ema_crossover'],
+      },
+    },
+    ema_slow_period: {
+      type: 'integer',
+      title: 'EMA Slow Period',
+      description: 'Period for slow Exponential Moving Average (in ticks).',
+      default: 26,
+      minimum: 5,
+      dependsOn: {
+        field: 'direction_method',
+        values: ['ema_crossover'],
+      },
+    },
+    rsi_period: {
+      type: 'integer',
+      title: 'RSI Period',
+      description: 'Period for Relative Strength Index calculation (in ticks).',
+      default: 14,
+      minimum: 2,
+      dependsOn: {
+        field: 'direction_method',
+        values: ['rsi'],
+      },
+    },
+    rsi_overbought: {
+      type: 'integer',
+      title: 'RSI Overbought Level',
+      description:
+        'RSI level above which market is overbought (triggers short).',
+      default: 70,
+      minimum: 50,
+      dependsOn: {
+        field: 'direction_method',
+        values: ['rsi'],
+      },
+    },
+    rsi_oversold: {
+      type: 'integer',
+      title: 'RSI Oversold Level',
+      description: 'RSI level below which market is oversold (triggers long).',
+      default: 30,
+      minimum: 0,
+      dependsOn: {
+        field: 'direction_method',
+        values: ['rsi'],
+      },
+    },
+    ohlc_granularity: {
+      type: 'integer',
+      title: 'OHLC Candle Granularity',
+      description:
+        'Candle period for OHLC methods. Values: 300=M5, 900=M15, 1800=M30, 3600=H1, 14400=H4, 86400=D1.',
+      enum: [300, 900, 1800, 3600, 7200, 14400, 28800, 43200, 86400, 604800],
+      default: 3600,
+      dependsOn: {
+        field: 'direction_method',
+        values: [
+          'ohlc_sma_crossover',
+          'ohlc_ema_crossover',
+          'ohlc_price_vs_sma',
+        ],
+      },
+    },
+    ohlc_fast_period: {
+      type: 'integer',
+      title: 'OHLC Fast MA Period',
+      description:
+        'Number of candles for fast moving average in OHLC crossover methods.',
+      default: 10,
+      minimum: 2,
+      dependsOn: {
+        field: 'direction_method',
+        values: ['ohlc_sma_crossover', 'ohlc_ema_crossover'],
+      },
+    },
+    ohlc_slow_period: {
+      type: 'integer',
+      title: 'OHLC Slow MA Period',
+      description: 'Number of candles for slow moving average in OHLC methods.',
+      default: 20,
+      minimum: 5,
+      dependsOn: {
+        field: 'direction_method',
+        values: [
+          'ohlc_sma_crossover',
+          'ohlc_ema_crossover',
+          'ohlc_price_vs_sma',
+        ],
+      },
+    },
   },
   required: [
     'base_lot_size',
@@ -211,6 +361,18 @@ const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
     retracement_trigger_increment: 5,
     lot_size_progression: 'additive',
     lot_size_increment: 0.5,
+    entry_signal_lookback_ticks: 10,
+    direction_method: 'momentum',
+    sma_fast_period: 10,
+    sma_slow_period: 30,
+    ema_fast_period: 12,
+    ema_slow_period: 26,
+    rsi_period: 14,
+    rsi_overbought: 70,
+    rsi_oversold: 30,
+    ohlc_granularity: 3600,
+    ohlc_fast_period: 10,
+    ohlc_slow_period: 20,
   },
   ma_crossover: {
     fast_period: 50,
@@ -444,11 +606,20 @@ const ConfigurationForm = ({
     return String(value);
   };
 
+  // Filter parameters to only show visible ones (respecting dependsOn conditions)
+  const isParameterVisible = (key: string): boolean => {
+    if (!strategySchema) return true;
+    const fieldSchema = strategySchema.properties[key];
+    if (!fieldSchema?.dependsOn) return true;
+    const dependentValue = parameters[fieldSchema.dependsOn.field];
+    return fieldSchema.dependsOn.values.includes(String(dependentValue));
+  };
+
   const reviewParameters: Array<[string, unknown]> = strategySchema
     ? [
-        ...Object.keys(strategySchema.properties).map(
-          (key) => [key, parameters[key]] as [string, unknown]
-        ),
+        ...Object.keys(strategySchema.properties)
+          .filter(isParameterVisible)
+          .map((key) => [key, parameters[key]] as [string, unknown]),
         ...Object.entries(parameters).filter(
           ([key]) => !(key in strategySchema.properties)
         ),

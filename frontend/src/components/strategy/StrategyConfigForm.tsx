@@ -175,6 +175,41 @@ const StrategyConfigForm = ({
     if (fieldSchema.enum) {
       const isProgressionField =
         fieldName.includes('progression') || fieldName.includes('mode');
+      const isDirectionMethodField = fieldName === 'direction_method';
+      const isNumericEnum = fieldSchema.enum.every(
+        (opt) => typeof opt === 'number'
+      );
+
+      // Get description for enum option based on field type
+      const getOptionDescription = (option: string | number): string => {
+        if (isDirectionMethodField) {
+          return getDirectionMethodDescription(String(option));
+        }
+        if (isProgressionField) {
+          return getProgressionDescription(String(option));
+        }
+        return '';
+      };
+
+      // Format numeric enum values (e.g., granularity seconds to readable names)
+      const formatNumericEnumValue = (val: number): string => {
+        const granularityNames: Record<number, string> = {
+          300: 'M5 (5 minutes)',
+          900: 'M15 (15 minutes)',
+          1800: 'M30 (30 minutes)',
+          3600: 'H1 (1 hour)',
+          7200: 'H2 (2 hours)',
+          14400: 'H4 (4 hours)',
+          28800: 'H8 (8 hours)',
+          43200: 'H12 (12 hours)',
+          86400: 'D1 (1 day)',
+          604800: 'W1 (1 week)',
+        };
+        return granularityNames[val] || String(val);
+      };
+
+      const showOptionDescriptions =
+        isProgressionField || isDirectionMethodField;
 
       return (
         <FormControl
@@ -185,19 +220,35 @@ const StrategyConfigForm = ({
         >
           <InputLabel required={isRequired}>{label}</InputLabel>
           <Select
-            value={String(value)}
+            value={isNumericEnum ? Number(value) : String(value)}
             label={label}
-            onChange={(e) => handleFieldChange(fieldName, e.target.value)}
+            onChange={(e) => {
+              const newValue = isNumericEnum
+                ? Number(e.target.value)
+                : e.target.value;
+              handleFieldChange(fieldName, newValue);
+            }}
           >
-            {fieldSchema.enum.map((option: string) => (
-              <MenuItem key={option} value={option}>
+            {fieldSchema.enum.map((option) => (
+              <MenuItem key={String(option)} value={option}>
                 <Box>
                   <Typography variant="body2">
-                    {formatEnumValue(option)}
+                    {typeof option === 'number'
+                      ? formatNumericEnumValue(option)
+                      : formatEnumValue(String(option))}
                   </Typography>
-                  {isProgressionField && (
-                    <Typography variant="caption" color="text.secondary">
-                      {getProgressionDescription(option)}
+                  {showOptionDescriptions && (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{
+                        display: 'block',
+                        maxWidth: 400,
+                        whiteSpace: 'normal',
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {getOptionDescription(option)}
                     </Typography>
                   )}
                 </Box>
@@ -344,6 +395,30 @@ const StrategyConfigForm = ({
     return descriptions[mode] || '';
   };
 
+  // Get description for direction decision methods
+  const getDirectionMethodDescription = (method: string): string => {
+    const descriptions: Record<string, string> = {
+      // Tick-based methods
+      momentum:
+        'Analyzes price change over N ticks. Goes long if price increased, short if decreased. Simple and responsive to recent price action.',
+      sma_crossover:
+        'Uses two Simple Moving Averages on tick data. Goes long when fast SMA crosses above slow SMA, short when it crosses below. Good for trend following.',
+      ema_crossover:
+        'Uses two Exponential Moving Averages on tick data. Similar to SMA but gives more weight to recent prices. More responsive to price changes.',
+      price_vs_sma:
+        'Compares current price to a Simple Moving Average of ticks. Goes long when price is above SMA, short when below. Simple trend indicator.',
+      rsi: 'Uses Relative Strength Index on tick data. Goes long when RSI is oversold (below threshold), short when overbought (above threshold). Good for mean reversion.',
+      // OHLC-based methods (longer-term)
+      ohlc_sma_crossover:
+        'Uses SMA crossover on OHLC candles (hourly/daily). Better for longer-term trend following. Aggregates ticks into candles for smoother signals.',
+      ohlc_ema_crossover:
+        'Uses EMA crossover on OHLC candles (hourly/daily). Combines longer-term analysis with EMA responsiveness. Good for swing trading.',
+      ohlc_price_vs_sma:
+        'Compares current price to SMA of OHLC candle closes. Identifies if price is above/below longer-term average. Good for trend confirmation.',
+    };
+    return descriptions[method] || '';
+  };
+
   // Check if there are any validation errors
   const hasErrors = Object.keys(validationErrors).length > 0;
 
@@ -378,9 +453,20 @@ const StrategyConfigForm = ({
 
       <Stack spacing={2}>
         {Object.entries(configSchema.properties).map(
-          ([fieldName, fieldSchema]) => (
-            <Box key={fieldName}>{renderField(fieldName, fieldSchema)}</Box>
-          )
+          ([fieldName, fieldSchema]) => {
+            // Check conditional visibility
+            if (fieldSchema.dependsOn) {
+              const dependentValue = config[fieldSchema.dependsOn.field];
+              if (
+                !fieldSchema.dependsOn.values.includes(String(dependentValue))
+              ) {
+                return null; // Hide field if condition not met
+              }
+            }
+            return (
+              <Box key={fieldName}>{renderField(fieldName, fieldSchema)}</Box>
+            );
+          }
         )}
       </Stack>
 

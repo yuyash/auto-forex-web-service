@@ -22,9 +22,14 @@ export interface ConfigProperty {
   default?: unknown;
   minimum?: number;
   maximum?: number;
-  enum?: string[];
+  enum?: (string | number)[];
   items?: {
     type: string;
+  };
+  // Conditional visibility: show this field only when another field has specific values
+  dependsOn?: {
+    field: string;
+    values: string[];
   };
 }
 
