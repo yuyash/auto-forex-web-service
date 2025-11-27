@@ -56,6 +56,7 @@ export const tradingTaskSchema = z.object({
     .min(1, 'Name is required')
     .max(255, 'Name must be less than 255 characters'),
   description: z.string().optional(),
+  sell_on_stop: z.boolean().optional().default(false),
 });
 
 // Copy task validation schema
