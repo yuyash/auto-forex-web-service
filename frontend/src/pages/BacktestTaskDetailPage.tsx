@@ -88,7 +88,7 @@ export default function BacktestTaskDetailPage() {
   const navigate = useNavigate();
   const taskId = parseInt(id || '0', 10);
 
-  const [tabValue, setTabValue] = useState(2); // Default to Executions tab (index 2)
+  const [tabValue, setTabValue] = useState(0); // Default to Overview tab (index 0)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
