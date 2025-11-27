@@ -1009,70 +1009,83 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                 )
 
             # Update peak price based on direction (most favorable price seen)
-            should_update_peak = (direction == "long" and current_price > layer.peak_price) or (
+            if (direction == "long" and current_price > layer.peak_price) or (
                 direction == "short" and current_price < layer.peak_price
-            )
-            if should_update_peak:
+            ):
                 layer.peak_price = current_price
                 layer.has_scaled_at_current_level = False  # Reset flag at new peak
 
             # Check if price has RETRACED from peak (moved against us)
             # Prevent scaling multiple times in the same tick
             tick_id = f"{tick_data.timestamp.timestamp()}_{current_price}"
-            if not layer.has_scaled_at_current_level and layer.last_scale_tick_id != tick_id:
-                # Calculate retracement: how far price moved AGAINST us from peak
-                # IMPORTANT: We need SIGNED difference, not absolute value from calculate_pips
-                # JPY pairs: 1 pip = 0.01, other pairs: 1 pip = 0.0001
-                pip_size = Decimal("0.01") if "JPY" in tick_data.instrument else Decimal("0.0001")
 
-                if direction == "long":
-                    # Long: retracement is when price drops from peak (negative movement)
-                    # We want positive pips when price drops, so: peak - current
-                    retracement_pips = (layer.peak_price - current_price) / pip_size
-                else:  # short
-                    # Short: retracement is when price rises from peak (positive movement)
-                    # We want positive pips when price rises, so: current - peak
-                    retracement_pips = (current_price - layer.peak_price) / pip_size
+            # Calculate retracement: how far price moved AGAINST us from peak
+            # IMPORTANT: We need SIGNED difference, not absolute value from calculate_pips
+            # JPY pairs: 1 pip = 0.01, other pairs: 1 pip = 0.0001
+            pip_size = Decimal("0.01") if "JPY" in tick_data.instrument else Decimal("0.0001")
 
-                # Safety check: Only scale if retracement is positive (price moved against us)
-                # and meets the threshold
-                if retracement_pips > 0 and retracement_pips >= self.retracement_pips:
-                    retracement_msg = (
-                        f"[RETRACEMENT DETECTED] Layer {layer.layer_number} | "
-                        f"{direction.upper()} position | "
-                        f"Price moved from peak {layer.peak_price} to {current_price} | "
-                        f"Retracement: {retracement_pips:.1f} pips "
-                        f"(Threshold: {self.retracement_pips} pips) | "
-                        f"Preparing to retracement"
-                    )
-                    logger.info(retracement_msg)
+            if direction == "long":
+                # Long: retracement is when price drops from peak (negative movement)
+                # We want positive pips when price drops, so: peak - current
+                retracement_pips = (layer.peak_price - current_price) / pip_size
+            else:  # short
+                # Short: retracement is when price rises from peak (positive movement)
+                # We want positive pips when price rises, so: current - peak
+                retracement_pips = (current_price - layer.peak_price) / pip_size
 
-                    # Log the retracement details
-                    retracement_detail = (
-                        f"Retracement: {retracement_pips:.1f} pips "
-                        f"from peak {layer.peak_price} to {current_price}"
-                    )
-                    self.log_strategy_event(
-                        "retracement_detected",
-                        retracement_detail,
-                        {
-                            "layer": layer.layer_number,
-                            "direction": direction,
-                            "peak_price": str(layer.peak_price),
-                            "current_price": str(current_price),
-                            "retracement_pips": str(retracement_pips),
-                            "threshold_pips": str(self.retracement_pips),
-                            "event_type": "layer",
-                            "timestamp": tick_data.timestamp.isoformat(),
-                        },
-                    )
-                    # Price has retraced enough from peak - scale in
-                    scale_order = self._create_scale_order(layer, tick_data)
-                    if scale_order:
-                        orders.append(scale_order)
-                        layer.increment_retracement_count()
-                        layer.has_scaled_at_current_level = True  # Prevent multiple scales
-                        layer.last_scale_tick_id = tick_id  # Track tick ID
+            # FIX: When we've already scaled and price continues moving against us by another
+            # retracement threshold, reset the flag and update peak to allow another scale.
+            # This enables continuous scaling as price keeps moving unfavorably.
+            if layer.has_scaled_at_current_level and retracement_pips >= self.retracement_pips:
+                # Update peak to current price so next retracement is measured from here
+                layer.peak_price = current_price
+                layer.has_scaled_at_current_level = False
+
+            # Check if we should scale (either first time or after reset above)
+            # Conditions: not already scaled, different tick, positive retracement >= threshold
+            should_scale = (
+                not layer.has_scaled_at_current_level
+                and layer.last_scale_tick_id != tick_id
+                and retracement_pips > 0
+                and retracement_pips >= self.retracement_pips
+            )
+            if should_scale:
+                retracement_msg = (
+                    f"[RETRACEMENT DETECTED] Layer {layer.layer_number} | "
+                    f"{direction.upper()} position | "
+                    f"Price moved from peak {layer.peak_price} to {current_price} | "
+                    f"Retracement: {retracement_pips:.1f} pips "
+                    f"(Threshold: {self.retracement_pips} pips) | "
+                    f"Preparing to retracement"
+                )
+                logger.info(retracement_msg)
+
+                # Log the retracement details
+                retracement_detail = (
+                    f"Retracement: {retracement_pips:.1f} pips "
+                    f"from peak {layer.peak_price} to {current_price}"
+                )
+                self.log_strategy_event(
+                    "retracement_detected",
+                    retracement_detail,
+                    {
+                        "layer": layer.layer_number,
+                        "direction": direction,
+                        "peak_price": str(layer.peak_price),
+                        "current_price": str(current_price),
+                        "retracement_pips": str(retracement_pips),
+                        "threshold_pips": str(self.retracement_pips),
+                        "event_type": "layer",
+                        "timestamp": tick_data.timestamp.isoformat(),
+                    },
+                )
+                # Price has retraced enough from peak - scale in
+                scale_order = self._create_scale_order(layer, tick_data)
+                if scale_order:
+                    orders.append(scale_order)
+                    layer.increment_retracement_count()
+                    layer.has_scaled_at_current_level = True  # Prevent multiple scales
+                    layer.last_scale_tick_id = tick_id  # Track tick ID
 
         return orders
 
