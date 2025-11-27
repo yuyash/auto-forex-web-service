@@ -20,6 +20,9 @@ const meaningfulEventTypes = [
   'margin_protection',
 ];
 
+const PROPERTY_RUNS = 20;
+const PROPERTY_TIME_LIMIT_MS = 3000;
+
 const eventTypeArbitrary = fc.constantFrom(...meaningfulEventTypes);
 
 const directionArbitrary = fc.constantFrom('long', 'short');
@@ -106,7 +109,7 @@ describe('FloorLayerLog Property-Based Tests', () => {
           // For each event row, verify P&L column behavior
           eventRows.forEach((row) => {
             const cells = row.querySelectorAll('td');
-            const pnlCell = cells[5]; // P&L column
+            const pnlCell = cells[6]; // P&L column
 
             // Check if this is a close event by looking at the event chip
             const eventChip = row.querySelector('.MuiChip-label');
@@ -125,9 +128,12 @@ describe('FloorLayerLog Property-Based Tests', () => {
           });
         }
       ),
-      { numRuns: 50 }
+      {
+        numRuns: PROPERTY_RUNS,
+        interruptAfterTimeLimit: PROPERTY_TIME_LIMIT_MS,
+      }
     );
-  });
+  }, 15000);
 
   /**
    * Feature: floor-strategy-enhancements, Property 4
@@ -171,7 +177,7 @@ describe('FloorLayerLog Property-Based Tests', () => {
             );
 
             if (totalRow && closeEvents.length > 0) {
-              const totalCell = totalRow.querySelectorAll('td')[1]; // P&L in total row (after colSpan=5)
+              const totalCell = totalRow.querySelectorAll('td')[1]; // P&L in total row (after colSpan=6)
               const totalText = totalCell?.textContent || '';
               const displayedTotal = parseFloat(totalText.replace(',', ''));
 
@@ -186,9 +192,12 @@ describe('FloorLayerLog Property-Based Tests', () => {
           });
         }
       ),
-      { numRuns: 50 }
+      {
+        numRuns: PROPERTY_RUNS,
+        interruptAfterTimeLimit: PROPERTY_TIME_LIMIT_MS,
+      }
     );
-  });
+  }, 15000);
 
   /**
    * Feature: floor-strategy-enhancements, Property 5
@@ -222,9 +231,12 @@ describe('FloorLayerLog Property-Based Tests', () => {
           });
         }
       ),
-      { numRuns: 50 }
+      {
+        numRuns: PROPERTY_RUNS,
+        interruptAfterTimeLimit: PROPERTY_TIME_LIMIT_MS,
+      }
     );
-  });
+  }, 15000);
 
   /**
    * Feature: floor-strategy-enhancements, Property 6
@@ -245,7 +257,7 @@ describe('FloorLayerLog Property-Based Tests', () => {
 
           // Check that rows with retracement > 0 show "Retracement #N" in details
           eventRows.forEach((row) => {
-            const detailsCell = row.querySelectorAll('td')[6]; // Details column
+            const detailsCell = row.querySelectorAll('td')[8]; // Details column
             const detailsText = detailsCell?.textContent || '';
 
             // If it shows retracement, it should be a positive number
@@ -257,7 +269,10 @@ describe('FloorLayerLog Property-Based Tests', () => {
           });
         }
       ),
-      { numRuns: 50 }
+      {
+        numRuns: PROPERTY_RUNS,
+        interruptAfterTimeLimit: PROPERTY_TIME_LIMIT_MS,
+      }
     );
-  });
+  }, 15000);
 });

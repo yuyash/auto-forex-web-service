@@ -6,6 +6,7 @@ Auto Forex Trader Backend Configuration
 
 import os
 from pathlib import Path
+from typing import Any
 
 from celery.schedules import crontab
 from dotenv import load_dotenv
@@ -281,6 +282,32 @@ AUTH_USER_MODEL = "accounts.User"
 # Logging Configuration
 # https://docs.djangoproject.com/en/5.2/topics/logging/
 
+LOG_FILE_PATH = BASE_DIR / "logs" / "django.log"
+LOG_FILE_HANDLER: dict[str, Any] = {
+    "level": "INFO",
+    "class": "logging.NullHandler",
+}
+
+if os.getenv("DJANGO_ENABLE_FILE_LOGGING", "True") == "True":
+    try:
+        LOG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(LOG_FILE_PATH, "a", encoding="utf-8"):
+            pass
+        LOG_FILE_HANDLER = {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOG_FILE_PATH,
+            "maxBytes": 1024 * 1024 * 10,  # 10 MB
+            "backupCount": 5,
+            "formatter": "verbose",
+        }
+    except OSError:
+        # Fall back to console-only logging when file access is restricted
+        LOG_FILE_HANDLER = {
+            "level": "INFO",
+            "class": "logging.NullHandler",
+        }
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -305,14 +332,7 @@ LOGGING = {
             "class": "logging.StreamHandler",
             "formatter": "verbose",
         },
-        "file": {
-            "level": "INFO",
-            "class": "logging.handlers.RotatingFileHandler",
-            "filename": BASE_DIR / "logs" / "django.log",
-            "maxBytes": 1024 * 1024 * 10,  # 10 MB
-            "backupCount": 5,
-            "formatter": "verbose",
-        },
+        "file": LOG_FILE_HANDLER,
     },
     "root": {
         "handlers": ["console", "file"],

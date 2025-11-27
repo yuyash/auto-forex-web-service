@@ -43,6 +43,7 @@ interface DisplayEvent {
   realizedPnl?: number;
   unrealizedPnl?: number;
   retracementCount?: number;
+  maxRetracements?: number;
   isFirstLot?: boolean;
   description: string;
   tradeIndex?: number;
@@ -148,6 +149,9 @@ export function FloorLayerLog({
           ? parseFloat(String(details.unrealized_pnl))
           : undefined,
         retracementCount: details.retracement_count as number | undefined,
+        maxRetracements: details.max_retracements
+          ? parseInt(String(details.max_retracements), 10)
+          : undefined,
         isFirstLot: details.is_first_lot as boolean | undefined,
         description: event.description,
         source: 'event',
@@ -398,6 +402,7 @@ export function FloorLayerLog({
                           </TableSortLabel>
                         </TableCell>
                         <TableCell>Action</TableCell>
+                        <TableCell align="right">Retracement #</TableCell>
                         <TableCell align="right">
                           <TableSortLabel
                             active={sortField === 'units'}
@@ -496,6 +501,28 @@ export function FloorLayerLog({
                               )}
                             </TableCell>
                             <TableCell align="right">
+                              {event.retracementCount !== undefined ? (
+                                <Tooltip
+                                  title={
+                                    event.maxRetracements
+                                      ? `Max ${event.maxRetracements}`
+                                      : ''
+                                  }
+                                  placement="top"
+                                >
+                                  <Typography
+                                    component="span"
+                                    variant="body2"
+                                    sx={{ fontWeight: 'bold' }}
+                                  >
+                                    {event.retracementCount}
+                                  </Typography>
+                                </Tooltip>
+                              ) : (
+                                '-'
+                              )}
+                            </TableCell>
+                            <TableCell align="right">
                               {event.units !== undefined
                                 ? event.units.toFixed(1)
                                 : '-'}
@@ -573,7 +600,7 @@ export function FloorLayerLog({
                         );
                       })}
                       <TableRow sx={{ bgcolor: 'grey.100' }}>
-                        <TableCell colSpan={5} sx={{ fontWeight: 'bold' }}>
+                        <TableCell colSpan={6} sx={{ fontWeight: 'bold' }}>
                           Layer {layer} Total
                         </TableCell>
                         <TableCell

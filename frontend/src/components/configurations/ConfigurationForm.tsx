@@ -137,6 +137,14 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
       default: 3,
       minimum: 1,
     },
+    max_retracements_per_layer: {
+      type: 'integer',
+      title: 'Max Retracements Per Layer',
+      description:
+        'Upper bound on how many retracement scale-ins a layer can perform before it must reset or close.',
+      default: 10,
+      minimum: 1,
+    },
     volatility_lock_multiplier: {
       type: 'number',
       title: 'Volatility Lock Multiplier',
@@ -355,6 +363,7 @@ const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
     retracement_pips: 30,
     take_profit_pips: 25,
     max_layers: 3,
+    max_retracements_per_layer: 10,
     volatility_lock_multiplier: 5.0,
     retracement_trigger_base: 10,
     retracement_trigger_progression: 'additive',

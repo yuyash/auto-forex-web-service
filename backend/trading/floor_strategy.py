@@ -113,7 +113,7 @@ class LayerManager:
         self.layers = [layer for layer in self.layers if layer.layer_number != layer_number]
 
 
-class Layer:
+class Layer:  # pylint: disable=too-many-instance-attributes
     """
     Represents a single trading layer.
 
@@ -135,6 +135,7 @@ class Layer:
         self.positions: list[Position] = []
         self.first_lot_position: Position | None = None
         self.retracement_count = 0
+        self.max_retracements_per_layer = int(config.get("max_retracements_per_layer", 10))
         self.last_entry_price: Decimal | None = None
         # Store base_lot_size from config for resetting (Requirements 7.1, 7.3, 7.4)
         self.base_lot_size = Decimal(str(config.get("base_lot_size", 1.0)))
@@ -168,12 +169,23 @@ class Layer:
         # It should only be reset when we see a new peak price
 
     def increment_retracement_count(self) -> None:
-        """Increment the retracement count for this layer."""
-        self.retracement_count += 1
+        """Increment retracement count while respecting configured limit."""
+        if self.retracement_count < self.max_retracements_per_layer:
+            self.retracement_count += 1
 
     def reset_retracement_count(self) -> None:
         """Reset the retracement count to zero for a new initial entry."""
         self.retracement_count = 0
+
+    def decrement_retracement_count(self, count: int = 1) -> None:
+        """Decrease retracement count when positions close."""
+        if count < 1:
+            return
+        self.retracement_count = max(0, self.retracement_count - count)
+
+    def has_retracement_capacity(self) -> bool:
+        """Return True if the layer can scale further this cycle."""
+        return self.retracement_count < self.max_retracements_per_layer
 
     def reset_unit_size(self) -> None:
         """
@@ -278,6 +290,9 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         self.base_lot_size = Decimal(str(self.get_config_value("base_lot_size", 1.0)))
         self.retracement_pips = Decimal(str(self.get_config_value("retracement_pips", 30)))
         self.take_profit_pips = Decimal(str(self.get_config_value("take_profit_pips", 25)))
+        self.max_retracements_per_layer = int(
+            self.get_config_value("max_retracements_per_layer", 10)
+        )
         self.volatility_lock_multiplier = Decimal(
             str(self.get_config_value("volatility_lock_multiplier", 5.0))
         )
@@ -344,17 +359,27 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                 layer_config = self._get_layer_config(layer_num)
                 layer = self.layer_manager.create_layer(layer_num, layer_config)
                 if layer:
-                    layer.retracement_count = layer_state.get("retracement_count", 0)
-                    layer.current_lot_size = Decimal(
-                        str(layer_state.get("current_lot_size", self.base_lot_size))
-                    )
+                    # Retracement counters intentionally reset on restart per product spec
+                    layer.reset_retracement_count()
+
+                    # Restore persisted layer parameters when available
+                    saved_lot_raw = layer_state.get("current_lot_size")
+                    try:
+                        saved_lot = (
+                            Decimal(saved_lot_raw)
+                            if saved_lot_raw is not None
+                            else layer.base_lot_size
+                        )
+                    except (ArithmeticError, ValueError, TypeError):
+                        saved_lot = layer.base_lot_size
+                    layer.current_lot_size = saved_lot
+                    layer.is_active = layer_state.get("is_active", layer.is_active)
 
     def _save_state(self) -> None:
         """Save strategy state to database."""
         layer_states = {}
         for layer in self.layer_manager.layers:
             layer_states[str(layer.layer_number)] = {
-                "retracement_count": layer.retracement_count,
                 "current_lot_size": str(layer.current_lot_size),
                 "is_active": layer.is_active,
             }
@@ -951,143 +976,197 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         Returns:
             List of orders to execute
         """
-        orders: list[Order] = []
-
-        # If no positions in layer, create initial entry (only once)
-        if not layer.positions and not layer.has_pending_initial_entry:
-            logger.debug(
-                f"Layer {layer.layer_number} has no positions (count={len(layer.positions)}), "
-                f"creating initial entry at {tick_data.timestamp}"
-            )
-            order = self._create_initial_entry_order(layer, tick_data)
-            if order:
-                layer.has_pending_initial_entry = True  # Mark as pending
-                self.log_strategy_event(
-                    "order_created",
-                    f"Created order for layer {layer.layer_number}",
-                    {
-                        "order_id": order.order_id,
-                        "direction": order.direction,
-                        "units": str(order.units),
-                        "price": str(order.price),
-                    },
-                )
-                orders.append(order)
-            return orders
-
-        if not layer.positions:
-            # Waiting for pending order to execute
-            logger.debug(f"Layer {layer.layer_number} waiting for pending initial entry to execute")
-            return orders
+        empty_state_orders = self._handle_empty_layer(layer, tick_data)
+        if empty_state_orders is not None:
+            return empty_state_orders
 
         logger.debug(
-            f"Layer {layer.layer_number} has {len(layer.positions)} positions, "
-            f"checking for Step 2 / scaling / TP"
+            "Layer %s has %s positions, checking for Step 2 / scaling / TP",
+            layer.layer_number,
+            len(layer.positions),
         )
 
         # Check for take-profit on ALL positions (including initial lot)
         tp_orders = self._check_take_profit(layer, tick_data)
         if tp_orders:
-            orders.extend(tp_orders)
-            return orders
+            return tp_orders
 
-        # STEP 3+: Track peak price and check for retracement to scale in
-        # Retracement means: price moved in our favor, then moved AGAINST us
-        if layer.last_entry_price and layer.peak_price is not None and layer.positions:
-            direction = layer.positions[0].direction
+        return self._handle_retracement_scaling(layer, tick_data)
 
-            # CRITICAL: Use bid/ask prices, not mid, to match position entry prices
-            # Long positions use ASK (buy price), Short positions use BID (sell price)
-            current_price = tick_data.ask if direction == "long" else tick_data.bid
+    def _handle_empty_layer(self, layer: Layer, tick_data: TickData) -> list[Order] | None:
+        """Handle initial-entry creation or pending state for empty layers."""
+        if layer.positions:
+            return None
 
-            # Log current state for debugging (only first few times)
-            if layer.retracement_count < 3:
-                logger.debug(
-                    f"Layer {layer.layer_number}: peak={layer.peak_price}, "
-                    f"current={current_price}, direction={direction}, "
-                    f"has_scaled={layer.has_scaled_at_current_level}"
-                )
-
-            # Update peak price based on direction (most favorable price seen)
-            if (direction == "long" and current_price > layer.peak_price) or (
-                direction == "short" and current_price < layer.peak_price
-            ):
-                layer.peak_price = current_price
-                layer.has_scaled_at_current_level = False  # Reset flag at new peak
-
-            # Check if price has RETRACED from peak (moved against us)
-            # Prevent scaling multiple times in the same tick
-            tick_id = f"{tick_data.timestamp.timestamp()}_{current_price}"
-
-            # Calculate retracement: how far price moved AGAINST us from peak
-            # IMPORTANT: We need SIGNED difference, not absolute value from calculate_pips
-            # JPY pairs: 1 pip = 0.01, other pairs: 1 pip = 0.0001
-            pip_size = Decimal("0.01") if "JPY" in tick_data.instrument else Decimal("0.0001")
-
-            if direction == "long":
-                # Long: retracement is when price drops from peak (negative movement)
-                # We want positive pips when price drops, so: peak - current
-                retracement_pips = (layer.peak_price - current_price) / pip_size
-            else:  # short
-                # Short: retracement is when price rises from peak (positive movement)
-                # We want positive pips when price rises, so: current - peak
-                retracement_pips = (current_price - layer.peak_price) / pip_size
-
-            # FIX: When we've already scaled and price continues moving against us by another
-            # retracement threshold, reset the flag and update peak to allow another scale.
-            # This enables continuous scaling as price keeps moving unfavorably.
-            if layer.has_scaled_at_current_level and retracement_pips >= self.retracement_pips:
-                # Update peak to current price so next retracement is measured from here
-                layer.peak_price = current_price
-                layer.has_scaled_at_current_level = False
-
-            # Check if we should scale (either first time or after reset above)
-            # Conditions: not already scaled, different tick, positive retracement >= threshold
-            should_scale = (
-                not layer.has_scaled_at_current_level
-                and layer.last_scale_tick_id != tick_id
-                and retracement_pips > 0
-                and retracement_pips >= self.retracement_pips
+        if not layer.has_pending_initial_entry:
+            logger.debug(
+                "Layer %s has no positions (count=%s), creating initial entry at %s",
+                layer.layer_number,
+                len(layer.positions),
+                tick_data.timestamp,
             )
-            if should_scale:
-                retracement_msg = (
-                    f"[RETRACEMENT DETECTED] Layer {layer.layer_number} | "
-                    f"{direction.upper()} position | "
-                    f"Price moved from peak {layer.peak_price} to {current_price} | "
-                    f"Retracement: {retracement_pips:.1f} pips "
-                    f"(Threshold: {self.retracement_pips} pips) | "
-                    f"Preparing to retracement"
-                )
-                logger.info(retracement_msg)
+            order = self._create_initial_entry_order(layer, tick_data)
+            if not order:
+                return []
 
-                # Log the retracement details
-                retracement_detail = (
-                    f"Retracement: {retracement_pips:.1f} pips "
-                    f"from peak {layer.peak_price} to {current_price}"
-                )
-                self.log_strategy_event(
-                    "retracement_detected",
-                    retracement_detail,
-                    {
-                        "layer": layer.layer_number,
-                        "direction": direction,
-                        "peak_price": str(layer.peak_price),
-                        "current_price": str(current_price),
-                        "retracement_pips": str(retracement_pips),
-                        "threshold_pips": str(self.retracement_pips),
-                        "event_type": "layer",
-                        "timestamp": tick_data.timestamp.isoformat(),
-                    },
-                )
-                # Price has retraced enough from peak - scale in
-                scale_order = self._create_scale_order(layer, tick_data)
-                if scale_order:
-                    orders.append(scale_order)
-                    layer.increment_retracement_count()
-                    layer.has_scaled_at_current_level = True  # Prevent multiple scales
-                    layer.last_scale_tick_id = tick_id  # Track tick ID
+            layer.has_pending_initial_entry = True
+            self.log_strategy_event(
+                "order_created",
+                f"Created order for layer {layer.layer_number}",
+                {
+                    "order_id": order.order_id,
+                    "direction": order.direction,
+                    "units": str(order.units),
+                    "price": str(order.price),
+                    "layer": layer.layer_number,
+                    "retracement_count": layer.retracement_count,
+                    "max_retracements": layer.max_retracements_per_layer,
+                },
+            )
+            return [order]
 
-        return orders
+        logger.debug(
+            "Layer %s waiting for pending initial entry to execute",
+            layer.layer_number,
+        )
+        return []
+
+    def _handle_retracement_scaling(self, layer: Layer, tick_data: TickData) -> list[Order]:
+        """Handle retracement math and scale-in order creation."""
+        if not (layer.last_entry_price and layer.peak_price is not None and layer.positions):
+            return []
+
+        direction = layer.positions[0].direction
+
+        # CRITICAL: Use bid/ask prices, not mid, to match position entry prices
+        # Long positions use ASK (buy price), Short positions use BID (sell price)
+        current_price = tick_data.ask if direction == "long" else tick_data.bid
+
+        # Log current state for debugging (only first few times)
+        if layer.retracement_count < 3:
+            logger.debug(
+                "Layer %s: peak=%s, current=%s, direction=%s, has_scaled=%s",
+                layer.layer_number,
+                layer.peak_price,
+                current_price,
+                direction,
+                layer.has_scaled_at_current_level,
+            )
+
+        # Update peak price based on direction (most favorable price seen)
+        if (direction == "long" and current_price > layer.peak_price) or (
+            direction == "short" and current_price < layer.peak_price
+        ):
+            layer.peak_price = current_price
+            layer.has_scaled_at_current_level = False  # Reset flag at new peak
+
+        # Check if price has RETRACED from peak (moved against us)
+        # Prevent scaling multiple times in the same tick
+        tick_id = f"{tick_data.timestamp.timestamp()}_{current_price}"
+
+        # Calculate retracement: how far price moved AGAINST us from peak
+        # IMPORTANT: We need SIGNED difference, not absolute value from calculate_pips
+        # JPY pairs: 1 pip = 0.01, other pairs: 1 pip = 0.0001
+        pip_size = Decimal("0.01") if "JPY" in tick_data.instrument else Decimal("0.0001")
+
+        if direction == "long":
+            # Long: retracement is when price drops from peak (negative movement)
+            # We want positive pips when price drops, so: peak - current
+            retracement_pips = (layer.peak_price - current_price) / pip_size
+        else:  # short
+            # Short: retracement is when price rises from peak (positive movement)
+            # We want positive pips when price rises, so: current - peak
+            retracement_pips = (current_price - layer.peak_price) / pip_size
+
+        # FIX: When we've already scaled and price continues moving against us by another
+        # retracement threshold, reset the flag and update peak to allow another scale.
+        # This enables continuous scaling as price keeps moving unfavorably.
+        if layer.has_scaled_at_current_level and retracement_pips >= self.retracement_pips:
+            # Update peak to current price so next retracement is measured from here
+            layer.peak_price = current_price
+            layer.has_scaled_at_current_level = False
+
+        # Check if we should scale (either first time or after reset above)
+        # Conditions: not already scaled, different tick, positive retracement >= threshold
+        should_scale = (
+            not layer.has_scaled_at_current_level
+            and layer.last_scale_tick_id != tick_id
+            and retracement_pips > 0
+            and retracement_pips >= self.retracement_pips
+        )
+        if not should_scale:
+            return []
+
+        if not layer.has_retracement_capacity():
+            self.log_strategy_event(
+                "retracement_limit_reached",
+                (
+                    f"Layer {layer.layer_number} reached max retracements "
+                    f"({layer.max_retracements_per_layer}) — waiting for closures"
+                ),
+                {
+                    "layer": layer.layer_number,
+                    "direction": direction,
+                    "retracement_count": layer.retracement_count,
+                    "max_retracements": layer.max_retracements_per_layer,
+                    "event_type": "layer",
+                    "timestamp": tick_data.timestamp.isoformat(),
+                },
+            )
+            layer.last_scale_tick_id = tick_id
+            return []
+
+        retracement_msg = (
+            f"[RETRACEMENT DETECTED] Layer {layer.layer_number} | "
+            f"{direction.upper()} position | "
+            f"Price moved from peak {layer.peak_price} to {current_price} | "
+            f"Retracement: {retracement_pips:.1f} pips "
+            f"(Threshold: {self.retracement_pips} pips) | "
+            f"Preparing to retracement"
+        )
+        logger.info(retracement_msg)
+
+        retracement_detail = (
+            f"Retracement: {retracement_pips:.1f} pips "
+            f"from peak {layer.peak_price} to {current_price}"
+        )
+        self.log_strategy_event(
+            "retracement_detected",
+            retracement_detail,
+            {
+                "layer": layer.layer_number,
+                "direction": direction,
+                "peak_price": str(layer.peak_price),
+                "current_price": str(current_price),
+                "retracement_pips": str(retracement_pips),
+                "threshold_pips": str(self.retracement_pips),
+                "event_type": "layer",
+                "timestamp": tick_data.timestamp.isoformat(),
+                "retracement_count": layer.retracement_count,
+                "max_retracements": layer.max_retracements_per_layer,
+            },
+        )
+
+        scale_order = self._create_scale_order(layer, tick_data)
+        if not scale_order:
+            return []
+
+        layer.increment_retracement_count()
+        layer.has_scaled_at_current_level = True
+        layer.last_scale_tick_id = tick_id
+        return [scale_order]
+
+    def _sync_layer_lot_size(self, layer: Layer) -> None:
+        """Recalculate the layer's current lot size based on retracement depth."""
+        recalculated_size = layer.base_lot_size
+        if layer.retracement_count == 0:
+            layer.current_lot_size = recalculated_size
+            return
+
+        for _ in range(layer.retracement_count):
+            recalculated_size = self.scaling_engine.calculate_next_lot_size(recalculated_size)
+
+        layer.current_lot_size = recalculated_size
 
     def _create_initial_entry_order(self, layer: Layer, tick_data: TickData) -> Order | None:
         """
@@ -1117,6 +1196,8 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                         "layer": layer.layer_number,
                         "history_length": history_len,
                         "required_ticks": required,
+                        "retracement_count": layer.retracement_count,
+                        "max_retracements": layer.max_retracements_per_layer,
                     },
                 )
                 self._no_signal_log_count += 1
@@ -1128,8 +1209,9 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         # This prevents creating opposite direction positions
         if layer.positions:
             logger.warning(
-                f"Layer {layer.layer_number} already has {len(layer.positions)} positions, "
-                f"skipping initial entry"
+                "Layer %s already has %s positions, skipping initial entry",
+                layer.layer_number,
+                len(layer.positions),
             )
             return None
 
@@ -1138,8 +1220,9 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         tick_id = f"{tick_data.timestamp.timestamp()}_{tick_data.mid}"
         if layer.last_initial_entry_tick_id == tick_id:
             logger.warning(
-                f"Layer {layer.layer_number} already created initial entry for tick {tick_id}, "
-                f"skipping duplicate"
+                "Layer %s already created initial entry for tick %s, skipping duplicate",
+                layer.layer_number,
+                tick_id,
             )
             return None
 
@@ -1196,6 +1279,7 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                 "event_type": "initial",
                 "timestamp": tick_data.timestamp.isoformat(),
                 "retracement_count": 0,
+                "max_retracements": layer.max_retracements_per_layer,
             },
         )
 
@@ -1270,6 +1354,7 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                 "price": str(order_price),
                 "peak_price": str(layer.peak_price),
                 "retracement_count": layer.retracement_count + 1,
+                "max_retracements": layer.max_retracements_per_layer,
                 "event_type": "retracement",
                 "timestamp": tick_data.timestamp.isoformat(),
             },
@@ -1389,6 +1474,7 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
 
         # Get event metadata
         event_type, reason_display = self._get_close_event_metadata(reason)
+        layer = self.layer_manager.get_layer(getattr(position, "layer_number", 0))
 
         # Log close event
         self.log_strategy_event(
@@ -1409,6 +1495,8 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                 "event_type": event_type,
                 "timestamp": tick_data.timestamp.isoformat(),
                 "layer_number": getattr(position, "layer_number", None),
+                "retracement_count": layer.retracement_count if layer else None,
+                "max_retracements": layer.max_retracements_per_layer if layer else None,
             },
         )
 
@@ -1550,6 +1638,7 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
 
         # Liquidate first lot of first layer
         first_lot = first_lots[0]
+        first_lot_layer = self.layer_manager.get_layer(getattr(first_lot, "layer_number", 0))
 
         # Create close order
         close_direction = "short" if first_lot.direction == "long" else "long"
@@ -1579,6 +1668,12 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                 "instrument": first_lot.instrument,
                 "units": str(first_lot.units),
                 "event_type": "margin_protection",
+                "retracement_count": (
+                    first_lot_layer.retracement_count if first_lot_layer else None
+                ),
+                "max_retracements": (
+                    first_lot_layer.max_retracements_per_layer if first_lot_layer else None
+                ),
             },
         )
 
@@ -1602,6 +1697,7 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                                 "layer": next_layer_num,
                                 "trigger_layer": layer.layer_number,
                                 "retracement_count": layer.retracement_count,
+                                "max_retracements": new_layer.max_retracements_per_layer,
                             },
                         )
                         # Save state immediately when creating new layer
@@ -1643,6 +1739,7 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         return {
             "retracement_count_trigger": int(retracement_trigger),
             "base_lot_size": float(lot_size),
+            "max_retracements_per_layer": self.max_retracements_per_layer,
         }
 
     def _calculate_progression_value(
@@ -1712,7 +1809,7 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                     # Save state immediately when position is added (important event)
                     self._save_state()
                 else:
-                    logger.debug(f"Position already in layer {layer.layer_number}")
+                    logger.debug("Position already in layer %s", layer.layer_number)
                 break
 
     def on_position_closed(self, position: Position) -> None:
@@ -1723,8 +1820,9 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
             position: Position that was closed
         """
         logger.debug(
-            f"on_position_closed called: layer={position.layer_number}, "
-            f"position_id={position.position_id}"
+            "on_position_closed called: layer=%s, position_id=%s",
+            position.layer_number,
+            position.position_id,
         )
         # Find the layer this position belongs to and remove it
         for layer in self.layer_manager.layers:
@@ -1739,7 +1837,35 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                     # Clear first_lot_position if this was it
                     if layer.first_lot_position == position:
                         layer.first_lot_position = None
-                        logger.debug(f"Cleared first_lot_position for layer {layer.layer_number}")
+                        logger.debug(
+                            "Cleared first_lot_position for layer %s",
+                            layer.layer_number,
+                        )
+                    else:
+                        # Non-first positions correspond to retracement scaling
+                        previous_count = layer.retracement_count
+                        layer.decrement_retracement_count()
+                        if layer.retracement_count != previous_count:
+                            self._sync_layer_lot_size(layer)
+                            closed_timestamp = getattr(position, "closed_at", None)
+                            event_timestamp = (
+                                closed_timestamp.isoformat() if closed_timestamp else None
+                            )
+                            self.log_strategy_event(
+                                "retracement_released",
+                                (
+                                    f"Layer {layer.layer_number} retracement count decreased to "
+                                    f"{layer.retracement_count} after closing scaled position"
+                                ),
+                                {
+                                    "layer": layer.layer_number,
+                                    "position_id": position.position_id,
+                                    "retracement_count": layer.retracement_count,
+                                    "max_retracements": layer.max_retracements_per_layer,
+                                    "event_type": "layer",
+                                    "timestamp": event_timestamp,
+                                },
+                            )
                     # Save state immediately when position is removed
                     self._save_state()
                 break
@@ -1799,6 +1925,10 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         max_layers = config.get("max_layers", 3)
         if not isinstance(max_layers, int) or max_layers < 1:
             raise ValueError("max_layers must be a positive integer")
+
+        max_retracements = config.get("max_retracements_per_layer", 10)
+        if not isinstance(max_retracements, int) or max_retracements < 1:
+            raise ValueError("max_retracements_per_layer must be a positive integer")
 
         # Validate progression modes
         valid_progressions = ["equal", "additive", "exponential", "inverse"]
@@ -1886,6 +2016,16 @@ FLOOR_STRATEGY_CONFIG_SCHEMA = {
             "default": 3,
             "minimum": 1,
             "maximum": 3,
+        },
+        "max_retracements_per_layer": {
+            "type": "integer",
+            "title": "Max Retracements Per Layer",
+            "description": (
+                "Upper bound on how many retracement scale-ins a layer can perform before "
+                "requiring positions to close or the layer to reset"
+            ),
+            "default": 10,
+            "minimum": 1,
         },
         "volatility_lock_multiplier": {
             "type": "number",

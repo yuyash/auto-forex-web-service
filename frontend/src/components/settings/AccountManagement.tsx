@@ -84,8 +84,8 @@ const AccountManagement = () => {
       // Handle both paginated and non-paginated responses
       const accountsData = data.results || data;
       setAccounts(Array.isArray(accountsData) ? accountsData : []);
-    } catch (error) {
-      console.error('Error fetching accounts:', error);
+    } catch (caughtError) {
+      console.error('Error fetching accounts:', caughtError);
       showError(t('common:errors.fetchFailed', 'Failed to load data'));
     } finally {
       setLoading(false);
@@ -268,16 +268,44 @@ const AccountManagement = () => {
     fetchAccounts();
   };
 
-  // Format balance
-  const formatBalance = (balance: string | number, currency: string) => {
+  const DEFAULT_ACCOUNT_CURRENCY = 'USD';
+
+  const resolveCurrencyCode = (currency?: string | null) => {
+    if (!currency) {
+      return DEFAULT_ACCOUNT_CURRENCY;
+    }
+
+    const trimmed = currency.trim().toUpperCase();
+    return trimmed.length === 3 ? trimmed : DEFAULT_ACCOUNT_CURRENCY;
+  };
+
+  const formatBalance = (
+    balance: string | number | null | undefined,
+    currency?: string
+  ) => {
+    if (balance == null) {
+      return '—';
+    }
+
     const numericBalance =
-      typeof balance === 'string' ? parseFloat(balance) : balance;
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(numericBalance);
+      typeof balance === 'string' ? Number(balance) : balance;
+    if (Number.isNaN(numericBalance)) {
+      return '—';
+    }
+
+    const currencyCode = resolveCurrencyCode(currency);
+
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currencyCode,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(numericBalance);
+    } catch {
+      // Intl throws for unsupported/invalid codes; fall back to simple formatting.
+      return `${currencyCode} ${numericBalance.toFixed(2)}`;
+    }
   };
 
   if (loading) {

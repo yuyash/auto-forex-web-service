@@ -1,5 +1,19 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  afterAll,
+} from 'vitest';
+import {
+  render,
+  screen,
+  waitFor,
+  cleanup,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -10,8 +24,8 @@ import type { ToastContextType } from '../components/common/ToastContext';
 import type { Order } from '../types/order';
 
 // Mock fetch
+const originalFetch = globalThis.fetch;
 const mockFetch = vi.fn();
-globalThis.fetch = mockFetch as unknown as typeof fetch;
 
 // Mock toast context
 const mockShowSuccess = vi.fn();
@@ -84,6 +98,35 @@ const mockOrders: Order[] = [
   },
 ];
 
+const setFetchImplementation = (
+  handler: (
+    url: string,
+    init?: RequestInit
+  ) => Promise<Response> | Response | undefined
+) => {
+  mockFetch.mockImplementation(
+    (input: RequestInfo | URL, init?: RequestInit) => {
+      const urlStr =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      const result = handler(urlStr, init);
+      if (result) {
+        return result;
+      }
+
+      if (originalFetch) {
+        return originalFetch(input as RequestInfo, init);
+      }
+
+      return Promise.reject(new Error(`No mock handler for ${urlStr}`));
+    }
+  );
+};
+
 const renderWithProviders = (component: React.ReactElement) => {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -109,7 +152,6 @@ const renderWithProviders = (component: React.ReactElement) => {
 describe('OrderHistoryPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.restoreAllMocks();
     localStorage.clear();
     localStorage.setItem('token', 'test-token');
     localStorage.setItem(
@@ -117,9 +159,9 @@ describe('OrderHistoryPage', () => {
       JSON.stringify({ id: 1, email: 'test@example.com' })
     );
 
+    globalThis.fetch = mockFetch as unknown as typeof fetch;
     // Default mock for accounts API
-    mockFetch.mockImplementation((url) => {
-      const urlStr = url.toString();
+    setFetchImplementation((urlStr) => {
       if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
@@ -147,16 +189,21 @@ describe('OrderHistoryPage', () => {
           json: async () => ({ message: 'Synced successfully' }),
         } as Response);
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({}),
-      } as Response);
+      return undefined;
     });
   });
 
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  afterAll(() => {
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    } else {
+      Reflect.deleteProperty(globalThis as { fetch?: typeof fetch }, 'fetch');
+    }
   });
 
   it('renders the page title', async () => {
@@ -178,8 +225,7 @@ describe('OrderHistoryPage', () => {
   });
 
   it('fetches and displays orders', async () => {
-    mockFetch.mockImplementation((url) => {
-      const urlStr = url.toString();
+    setFetchImplementation((urlStr) => {
       if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
@@ -201,10 +247,7 @@ describe('OrderHistoryPage', () => {
           json: async () => ({ results: mockOrders }),
         } as Response);
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ results: [] }),
-      } as Response);
+      return undefined;
     });
 
     renderWithProviders(<OrderHistoryPage />);
@@ -222,8 +265,7 @@ describe('OrderHistoryPage', () => {
   });
 
   it('displays order details correctly', async () => {
-    mockFetch.mockImplementation((url) => {
-      const urlStr = url.toString();
+    setFetchImplementation((urlStr) => {
       if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
@@ -245,10 +287,7 @@ describe('OrderHistoryPage', () => {
           json: async () => ({ results: mockOrders }),
         } as Response);
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ results: [] }),
-      } as Response);
+      return undefined;
     });
 
     renderWithProviders(<OrderHistoryPage />);
@@ -271,8 +310,7 @@ describe('OrderHistoryPage', () => {
     const user = userEvent.setup();
     let filterApplied = false;
 
-    mockFetch.mockImplementation((url) => {
-      const urlStr = url.toString();
+    setFetchImplementation((urlStr) => {
       if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
@@ -303,10 +341,7 @@ describe('OrderHistoryPage', () => {
           json: async () => ({ results: mockOrders }),
         } as Response);
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ results: [] }),
-      } as Response);
+      return undefined;
     });
 
     renderWithProviders(<OrderHistoryPage />);
@@ -341,8 +376,7 @@ describe('OrderHistoryPage', () => {
     const user = userEvent.setup();
     let filterApplied = false;
 
-    mockFetch.mockImplementation((url) => {
-      const urlStr = url.toString();
+    setFetchImplementation((urlStr) => {
       if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
@@ -373,10 +407,7 @@ describe('OrderHistoryPage', () => {
           json: async () => ({ results: mockOrders }),
         } as Response);
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ results: [] }),
-      } as Response);
+      return undefined;
     });
 
     renderWithProviders(<OrderHistoryPage />);
@@ -388,12 +419,20 @@ describe('OrderHistoryPage', () => {
       { timeout: 3000 }
     );
 
-    // Open status dropdown and select FILLED
-    const statusSelect = screen.getByLabelText(/Status/i);
+    // Open status dropdown via combobox role for better reliability and select FILLED
+    const statusSelect = screen.getByRole('combobox', { name: /Status/i });
     await user.click(statusSelect);
 
-    const filledOptions = await screen.findAllByText('Filled');
-    await user.click(filledOptions[filledOptions.length - 1]); // Click the dropdown option
+    const listbox = await screen.findByRole('listbox');
+    const filledOption = within(listbox).getByRole('option', {
+      name: /Filled/i,
+    });
+    await user.click(filledOption);
+
+    // Wait for the select display value to update before applying filters
+    await waitFor(() => {
+      expect(statusSelect).toHaveTextContent(/Filled/i);
+    });
 
     // Click apply filters
     const applyButton = screen.getByRole('button', { name: /Apply Filters/i });
@@ -411,8 +450,7 @@ describe('OrderHistoryPage', () => {
     const user = userEvent.setup();
     let filterApplied = false;
 
-    mockFetch.mockImplementation((url) => {
-      const urlStr = url.toString();
+    setFetchImplementation((urlStr) => {
       if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
@@ -443,10 +481,7 @@ describe('OrderHistoryPage', () => {
           json: async () => ({ results: mockOrders }),
         } as Response);
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ results: [] }),
-      } as Response);
+      return undefined;
     });
 
     renderWithProviders(<OrderHistoryPage />);
@@ -477,8 +512,7 @@ describe('OrderHistoryPage', () => {
   it('clears all filters', async () => {
     const user = userEvent.setup();
 
-    mockFetch.mockImplementation((url) => {
-      const urlStr = url.toString();
+    setFetchImplementation((urlStr) => {
       if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
@@ -500,10 +534,7 @@ describe('OrderHistoryPage', () => {
           json: async () => ({ results: mockOrders }),
         } as Response);
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ results: [] }),
-      } as Response);
+      return undefined;
     });
 
     renderWithProviders(<OrderHistoryPage />);
@@ -553,8 +584,7 @@ describe('OrderHistoryPage', () => {
         return originalCreateElement(tagName);
       });
 
-    mockFetch.mockImplementation((url) => {
-      const urlStr = url.toString();
+    setFetchImplementation((urlStr) => {
       if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
@@ -576,10 +606,7 @@ describe('OrderHistoryPage', () => {
           json: async () => ({ results: mockOrders }),
         } as Response);
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ results: [] }),
-      } as Response);
+      return undefined;
     });
 
     renderWithProviders(<OrderHistoryPage />);
@@ -611,8 +638,7 @@ describe('OrderHistoryPage', () => {
   });
 
   it('displays error message when fetch fails', async () => {
-    mockFetch.mockImplementation((url) => {
-      const urlStr = url.toString();
+    setFetchImplementation((urlStr) => {
       if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
@@ -634,10 +660,7 @@ describe('OrderHistoryPage', () => {
           json: async () => ({}),
         } as Response);
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ results: [] }),
-      } as Response);
+      return undefined;
     });
 
     renderWithProviders(<OrderHistoryPage />);
@@ -651,8 +674,7 @@ describe('OrderHistoryPage', () => {
   });
 
   it('displays empty message when no orders', async () => {
-    mockFetch.mockImplementation((url) => {
-      const urlStr = url.toString();
+    setFetchImplementation((urlStr) => {
       if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
@@ -674,10 +696,7 @@ describe('OrderHistoryPage', () => {
           json: async () => ({ results: [] }),
         } as Response);
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ results: [] }),
-      } as Response);
+      return undefined;
     });
 
     renderWithProviders(<OrderHistoryPage />);
@@ -693,8 +712,7 @@ describe('OrderHistoryPage', () => {
   });
 
   it('disables export button when no orders', async () => {
-    mockFetch.mockImplementation((url) => {
-      const urlStr = url.toString();
+    setFetchImplementation((urlStr) => {
       if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
@@ -716,10 +734,7 @@ describe('OrderHistoryPage', () => {
           json: async () => ({ results: [] }),
         } as Response);
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ results: [] }),
-      } as Response);
+      return undefined;
     });
 
     renderWithProviders(<OrderHistoryPage />);
@@ -738,8 +753,7 @@ describe('OrderHistoryPage', () => {
   it('displays loading state while fetching', async () => {
     let resolveOrders: ((value: Response) => void) | null = null;
 
-    mockFetch.mockImplementation((url) => {
-      const urlStr = url.toString();
+    setFetchImplementation((urlStr) => {
       if (urlStr.includes('/api/system/settings/public')) {
         return Promise.resolve({
           ok: true,
@@ -760,10 +774,7 @@ describe('OrderHistoryPage', () => {
           resolveOrders = resolve;
         });
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ results: [] }),
-      } as Response);
+      return undefined;
     });
 
     renderWithProviders(<OrderHistoryPage />);

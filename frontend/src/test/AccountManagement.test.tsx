@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
@@ -9,8 +9,83 @@ import type { ToastContextType } from '../components/common/ToastContext';
 import '../i18n/config';
 
 // Mock fetch
+const originalFetch = globalThis.fetch;
 const mockFetch = vi.fn();
-globalThis.fetch = mockFetch;
+
+type FetchMatcher = {
+  method?: string;
+  url: string | RegExp;
+};
+
+type MockFetchResponse = {
+  ok: boolean;
+  status?: number;
+  json: () => Promise<unknown>;
+};
+
+type PendingFetch = {
+  matcher: FetchMatcher;
+  resolver: () => Promise<MockFetchResponse>;
+};
+
+let pendingFetches: PendingFetch[] = [];
+
+const toMethod = (method?: string) => (method ? method.toUpperCase() : 'GET');
+
+const normalizeUrl = (input: RequestInfo | URL): string => {
+  if (typeof input === 'string') {
+    return input;
+  }
+  if (input instanceof URL) {
+    return input.toString();
+  }
+  return input.url;
+};
+
+const matchesRequest = (matcher: FetchMatcher, method: string, url: string) => {
+  const methodMatches = !matcher.method || toMethod(matcher.method) === method;
+  if (!methodMatches) {
+    return false;
+  }
+  if (typeof matcher.url === 'string') {
+    return matcher.url === url;
+  }
+  return matcher.url.test(url);
+};
+
+const enqueueFetch = (
+  matcher: FetchMatcher,
+  resolver: PendingFetch['resolver']
+) => {
+  pendingFetches.push({
+    matcher: {
+      method: matcher.method ? toMethod(matcher.method) : undefined,
+      url: matcher.url,
+    },
+    resolver,
+  });
+};
+
+const jsonResponse = (
+  data: unknown,
+  { ok = true, status }: { ok?: boolean; status?: number } = {}
+): MockFetchResponse => ({
+  ok,
+  status: status ?? (ok ? 200 : 400),
+  json: async () => data,
+});
+
+const queueJsonResponse = (
+  matcher: FetchMatcher,
+  data: unknown,
+  options?: { ok?: boolean; status?: number }
+) => {
+  enqueueFetch(matcher, async () => jsonResponse(data, options));
+};
+
+const queueNetworkError = (matcher: FetchMatcher, error: Error) => {
+  enqueueFetch(matcher, () => Promise.reject(error));
+};
 
 // Mock toast context
 const mockShowSuccess = vi.fn();
@@ -22,6 +97,13 @@ const mockToastContext: ToastContextType = {
   showWarning: vi.fn(),
   showInfo: vi.fn(),
 };
+
+const mockSystemSettings = {
+  timezone: 'UTC',
+  feature_flags: {},
+};
+
+const LONG_TEST_TIMEOUT = 15000;
 
 const mockAccounts = [
   {
@@ -46,6 +128,20 @@ const mockAccounts = [
   },
 ];
 
+const queueAccountsResponse = (accounts: typeof mockAccounts | []) => {
+  queueJsonResponse({ method: 'GET', url: '/api/accounts/' }, accounts);
+};
+
+const queuePositionSettingsResponse = (
+  accountId: number,
+  settings: Record<string, unknown>
+) => {
+  queueJsonResponse(
+    { method: 'GET', url: `/api/accounts/${accountId}/position-diff/` },
+    settings
+  );
+};
+
 const renderComponent = () => {
   return render(
     <BrowserRouter>
@@ -61,11 +157,47 @@ const renderComponent = () => {
 describe('AccountManagement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    pendingFetches = [];
+    mockFetch.mockReset();
+    globalThis.fetch = mockFetch as unknown as typeof fetch;
+    mockFetch.mockImplementation(
+      (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = normalizeUrl(input);
+        const method = toMethod(init?.method);
+        const index = pendingFetches.findIndex(({ matcher }) =>
+          matchesRequest(matcher, method, url)
+        );
+
+        if (index === -1) {
+          if (originalFetch) {
+            return originalFetch(input as RequestInfo, init);
+          }
+          return Promise.reject(
+            new Error(`No mock handler for ${method} ${url}`)
+          );
+        }
+
+        const [entry] = pendingFetches.splice(index, 1);
+        return entry.resolver();
+      }
+    );
+    queueJsonResponse(
+      { method: 'GET', url: '/api/system/settings/public' },
+      mockSystemSettings
+    );
     localStorage.setItem('token', 'test-token');
     localStorage.setItem(
       'user',
       JSON.stringify({ id: 1, email: 'test@example.com' })
     );
+  });
+
+  afterAll(() => {
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    } else {
+      Reflect.deleteProperty(globalThis as { fetch?: typeof fetch }, 'fetch');
+    }
   });
 
   it('renders loading state initially', () => {
@@ -75,10 +207,7 @@ describe('AccountManagement', () => {
   });
 
   it('fetches and displays accounts', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockAccounts,
-    });
+    queueAccountsResponse(mockAccounts);
 
     renderComponent();
 
@@ -111,10 +240,7 @@ describe('AccountManagement', () => {
   });
 
   it('displays no data message when no accounts exist', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => [],
-    });
+    queueAccountsResponse([]);
 
     renderComponent();
 
@@ -124,10 +250,7 @@ describe('AccountManagement', () => {
   });
 
   it('opens add account dialog when Add Account button is clicked', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockAccounts,
-    });
+    queueAccountsResponse(mockAccounts);
 
     const user = userEvent.setup();
     renderComponent();
@@ -147,84 +270,83 @@ describe('AccountManagement', () => {
     });
   });
 
-  it('submits new account form successfully', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockAccounts,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: 3, account_id: '001-001-9999999-003' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [
-          ...mockAccounts,
-          { id: 3, account_id: '001-001-9999999-003' },
-        ],
+  it(
+    'submits new account form successfully',
+    async () => {
+      const newAccount = {
+        id: 3,
+        account_id: '001-001-9999999-003',
+        api_type: 'practice' as const,
+        currency: 'USD',
+        balance: 0,
+        margin_used: 0,
+        margin_available: 0,
+        is_active: true,
+      } satisfies (typeof mockAccounts)[number];
+
+      queueAccountsResponse(mockAccounts);
+      queueJsonResponse({ method: 'POST', url: '/api/accounts/' }, newAccount);
+      queueAccountsResponse([...mockAccounts, newAccount]);
+
+      const user = userEvent.setup();
+      renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByText('001-001-1234567-001')).toBeInTheDocument();
       });
 
-    const user = userEvent.setup();
-    renderComponent();
+      // Open dialog
+      const addButton = screen.getByRole('button', { name: /Add Account/i });
+      await user.click(addButton);
 
-    await waitFor(() => {
-      expect(screen.getByText('001-001-1234567-001')).toBeInTheDocument();
-    });
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+      });
 
-    // Open dialog
-    const addButton = screen.getByRole('button', { name: /Add Account/i });
-    await user.click(addButton);
+      // Fill form
+      const accountIdInput = screen.getByLabelText(/Account ID/i);
+      const apiTokenInput = screen.getByLabelText(/API Token/i);
 
-    await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeInTheDocument();
-    });
+      await user.clear(accountIdInput);
+      await user.type(accountIdInput, '001-001-9999999-003');
+      await user.clear(apiTokenInput);
+      await user.type(apiTokenInput, 'test-api-token-123');
 
-    // Fill form
-    const accountIdInput = screen.getByLabelText(/Account ID/i);
-    const apiTokenInput = screen.getByLabelText(/API Token/i);
+      // Submit
+      const submitButton = screen.getByRole('button', { name: /^Add$/i });
+      await user.click(submitButton);
 
-    await user.clear(accountIdInput);
-    await user.type(accountIdInput, '001-001-9999999-003');
-    await user.clear(apiTokenInput);
-    await user.type(apiTokenInput, 'test-api-token-123');
+      await waitFor(() => {
+        expect(mockShowSuccess).toHaveBeenCalled();
+      });
 
-    // Submit
-    const submitButton = screen.getByRole('button', { name: /^Add$/i });
-    await user.click(submitButton);
+      // Check that the POST request was made with correct data
+      const postCalls = mockFetch.mock.calls.filter(
+        (call) => call[0] === '/api/accounts/' && call[1]?.method === 'POST'
+      );
+      expect(postCalls.length).toBeGreaterThan(0);
 
-    await waitFor(() => {
-      expect(mockShowSuccess).toHaveBeenCalled();
-    });
+      const postCall = postCalls[0];
+      expect(postCall[1]).toMatchObject({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-token',
+        }),
+      });
 
-    // Check that the POST request was made with correct data
-    const postCalls = mockFetch.mock.calls.filter(
-      (call) => call[0] === '/api/accounts/' && call[1]?.method === 'POST'
-    );
-    expect(postCalls.length).toBeGreaterThan(0);
-
-    const postCall = postCalls[0];
-    expect(postCall[1]).toMatchObject({
-      method: 'POST',
-      headers: expect.objectContaining({
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer test-token',
-      }),
-    });
-
-    const body = JSON.parse(postCall[1].body);
-    expect(body).toMatchObject({
-      account_id: '001-001-9999999-003',
-      api_token: 'test-api-token-123',
-      api_type: 'practice',
-    });
-  });
+      const body = JSON.parse(postCall[1].body);
+      expect(body).toMatchObject({
+        account_id: '001-001-9999999-003',
+        api_token: 'test-api-token-123',
+        api_type: 'practice',
+      });
+    },
+    LONG_TEST_TIMEOUT
+  );
 
   it('opens edit dialog when edit button is clicked', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockAccounts,
-    });
+    queueAccountsResponse(mockAccounts);
 
     const user = userEvent.setup();
     renderComponent();
@@ -247,10 +369,7 @@ describe('AccountManagement', () => {
   });
 
   it('opens delete confirmation when delete button is clicked', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockAccounts,
-    });
+    queueAccountsResponse(mockAccounts);
 
     const user = userEvent.setup();
     renderComponent();
@@ -271,19 +390,9 @@ describe('AccountManagement', () => {
   });
 
   it('deletes account successfully', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockAccounts,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [mockAccounts[1]],
-      });
+    queueAccountsResponse(mockAccounts);
+    queueJsonResponse({ method: 'DELETE', url: '/api/accounts/1/' }, {});
+    queueAccountsResponse([mockAccounts[1]]);
 
     const user = userEvent.setup();
     renderComponent();
@@ -321,7 +430,10 @@ describe('AccountManagement', () => {
   });
 
   it('shows error when fetch fails', async () => {
-    mockFetch.mockRejectedValueOnce(new Error('Network error'));
+    queueNetworkError(
+      { method: 'GET', url: '/api/accounts/' },
+      new Error('Network error')
+    );
 
     renderComponent();
 
@@ -331,10 +443,7 @@ describe('AccountManagement', () => {
   });
 
   it('validates required fields in add form', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockAccounts,
-    });
+    queueAccountsResponse(mockAccounts);
 
     const user = userEvent.setup();
     renderComponent();
@@ -363,10 +472,7 @@ describe('AccountManagement', () => {
   });
 
   it('displays position differentiation button for each account', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockAccounts,
-    });
+    queueAccountsResponse(mockAccounts);
 
     renderComponent();
 
@@ -381,11 +487,7 @@ describe('AccountManagement', () => {
   });
 
   it('opens position differentiation dialog when settings button is clicked', async () => {
-    // Mock the initial accounts fetch
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockAccounts,
-    });
+    queueAccountsResponse(mockAccounts);
 
     const user = userEvent.setup();
     renderComponent();
@@ -394,14 +496,10 @@ describe('AccountManagement', () => {
       expect(screen.getByText('001-001-1234567-001')).toBeInTheDocument();
     });
 
-    // Mock the position differentiation settings fetch
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        enable_position_differentiation: false,
-        position_diff_increment: 1,
-        position_diff_pattern: 'increment',
-      }),
+    queuePositionSettingsResponse(1, {
+      enable_position_differentiation: false,
+      position_diff_increment: 1,
+      position_diff_pattern: 'increment',
     });
 
     // Find and click position differentiation button for first account

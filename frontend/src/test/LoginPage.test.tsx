@@ -1,13 +1,33 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  beforeAll,
+  afterAll,
+  afterEach,
+} from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import LoginPage from '../pages/LoginPage';
 import { AuthProvider } from '../contexts/AuthContext';
 
-// Mock fetch
+const originalFetch = globalThis.fetch;
 const mockFetch = vi.fn();
-globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+beforeAll(() => {
+  globalThis.fetch = mockFetch as unknown as typeof fetch;
+});
+
+afterAll(() => {
+  if (originalFetch) {
+    globalThis.fetch = originalFetch;
+  } else {
+    Reflect.deleteProperty(globalThis as { fetch?: typeof fetch }, 'fetch');
+  }
+});
 
 // Mock useNavigate
 const mockNavigate = vi.fn();
@@ -22,6 +42,7 @@ vi.mock('react-router-dom', async () => {
 describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFetch.mockReset();
     localStorage.clear();
     // Mock system settings API call that AuthProvider makes on mount
     mockFetch.mockResolvedValue({
@@ -31,6 +52,10 @@ describe('LoginPage', () => {
         login_enabled: true,
       }),
     });
+  });
+
+  afterEach(() => {
+    mockFetch.mockReset();
   });
 
   it('renders login form with email and password fields', async () => {

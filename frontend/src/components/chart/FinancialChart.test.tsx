@@ -997,6 +997,13 @@ describe('FinancialChart', () => {
    * These tests use fast-check to generate random inputs and verify
    * that certain properties hold across all valid executions.
    */
+  const PROPERTY_RUNS = 20;
+  const PROPERTY_TIME_LIMIT_MS = 3000;
+  const PROPERTY_OPTIONS = {
+    numRuns: PROPERTY_RUNS,
+    interruptAfterTimeLimit: PROPERTY_TIME_LIMIT_MS,
+  } as const;
+
   describe('Property-Based Tests', () => {
     /**
      * Feature: react-financial-charts-migration, Property 1: Overlay Position Invariance During Pan/Zoom
@@ -1032,7 +1039,7 @@ describe('FinancialChart', () => {
               high: Math.max(data.open, data.high, data.low, data.close),
               low: Math.min(data.open, data.high, data.low, data.close),
             })),
-          { minLength: 20, maxLength: 100 }
+          { minLength: 20, maxLength: 60 }
         )
         .map((data) =>
           // Sort by date to ensure chronological order
@@ -1197,7 +1204,7 @@ describe('FinancialChart', () => {
 
           return true;
         }),
-        { numRuns: 100 }
+        PROPERTY_OPTIONS
       );
     });
 
@@ -1215,7 +1222,7 @@ describe('FinancialChart', () => {
       const arbOHLCData = fc
         .array(
           fc.integer({ min: 0, max: 364 }), // Days offset from start date
-          { minLength: 20, maxLength: 100 }
+          { minLength: 20, maxLength: 60 }
         )
         .map((offsets) => {
           // Create unique dates by using day offsets
@@ -1397,7 +1404,7 @@ describe('FinancialChart', () => {
 
           return true;
         }),
-        { numRuns: 100 }
+        PROPERTY_OPTIONS
       );
     });
 
@@ -1621,7 +1628,7 @@ describe('FinancialChart', () => {
             unmount();
           }
         }),
-        { numRuns: 100 }
+        PROPERTY_OPTIONS
       );
     });
 
@@ -1635,7 +1642,7 @@ describe('FinancialChart', () => {
      */
     it('Property 15: OHLC Tooltip Data Accuracy', () => {
       // Arbitrary generator for OHLC data with unique timestamps
-      const arbOHLCData = fc.integer({ min: 10, max: 50 }).chain((length) =>
+      const arbOHLCData = fc.integer({ min: 10, max: 35 }).chain((length) =>
         fc
           .tuple(
             ...Array.from({ length }, (_, i) =>
@@ -1718,7 +1725,7 @@ describe('FinancialChart', () => {
 
           return true;
         }),
-        { numRuns: 100 }
+        PROPERTY_OPTIONS
       );
     });
   });

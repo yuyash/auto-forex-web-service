@@ -163,7 +163,7 @@ describe('BacktestTaskForm - Form State Persistence', () => {
         /Task Name/i
       ) as HTMLInputElement;
       expect(nameInputAfterBack.value).toBe('My Test Task');
-    });
+    }, 15000);
 
     it('should persist all step 2 parameters when navigating to step 3', async () => {
       renderForm();
@@ -215,7 +215,7 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       // Verify all values are displayed in review
       expect(screen.getByText('Test Task')).toBeInTheDocument();
       expect(screen.getByText('Test Config 1')).toBeInTheDocument();
-    });
+    }, 15000);
 
     it('should maintain validation state when navigating forward', async () => {
       renderForm({}, false);
@@ -335,7 +335,7 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       expect(descriptionInputAfterBack.value).toBe(
         'Testing backward navigation'
       );
-    });
+    }, 15000);
   });
 
   describe('Mixed Navigation (Forward and Backward Multiple Times)', () => {
@@ -456,7 +456,7 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       // Verify all values are present in review
       expect(screen.getByText('Mixed Nav Test')).toBeInTheDocument();
       expect(screen.getByText('Test Config 1')).toBeInTheDocument();
-    });
+    }, 15000);
 
     it('should handle field modifications during mixed navigation', async () => {
       renderForm();

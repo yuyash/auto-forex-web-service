@@ -22,7 +22,7 @@ import {
 import Grid from '@mui/material/Grid';
 import { Warning as WarningIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
@@ -79,7 +79,6 @@ export default function TradingTaskForm({
     handleSubmit,
     formState: { errors },
     trigger,
-    watch,
     getValues,
     setValue,
   } = useForm<TradingTaskFormData>({
@@ -107,13 +106,15 @@ export default function TradingTaskForm({
     }
   }, [formData, setValue]);
 
-  const selectedAccountId = watch('account_id');
+  const selectedAccountId = useWatch({ control, name: 'account_id' });
 
-  const selectedConfigId = watch('config_id');
+  const selectedConfigId = useWatch({ control, name: 'config_id' });
 
-  const watchedName = watch('name');
+  const watchedName = useWatch({ control, name: 'name' });
 
-  const watchedDescription = watch('description');
+  const watchedDescription = useWatch({ control, name: 'description' });
+
+  const sellOnStop = useWatch({ control, name: 'sell_on_stop' });
 
   // Fetch accounts
   const { data: accountsData } = useAccounts({ page_size: 100 });
@@ -545,7 +546,7 @@ export default function TradingTaskForm({
                       Close Positions on Stop
                     </Typography>
                     <Typography variant="body1" gutterBottom>
-                      {watch('sell_on_stop') ? 'Yes' : 'No'}
+                      {sellOnStop ? 'Yes' : 'No'}
                     </Typography>
                   </Box>
                 </Paper>

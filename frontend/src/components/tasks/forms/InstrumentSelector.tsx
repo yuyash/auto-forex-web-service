@@ -48,6 +48,9 @@ const DEFAULT_INSTRUMENT = [
   'NZD_JPY',
 ];
 
+const formatInstrumentLabel = (instrument: string) =>
+  instrument.replace('_', '/');
+
 export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
   value,
   onChange,
@@ -96,6 +99,9 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
         value={value}
         onChange={handleChange}
         label={label}
+        renderValue={(selected) =>
+          selected ? formatInstrumentLabel(selected as string) : ''
+        }
         MenuProps={{
           PaperProps: {
             style: {

@@ -1539,18 +1539,19 @@ class TestFloorStrategyRetracementReset:
         initial_count = layer.retracement_count
         assert initial_count == 0, "Initial retracement count should be 0"
 
-        # Increment retracement multiple times
+        # Increment retracement multiple times, respecting configured cap
         for i in range(num_retracements):
-            expected_count = initial_count + i + 1
+            expected_count = min(initial_count + i + 1, layer.max_retracements_per_layer)
             layer.increment_retracement_count()
             assert (
                 layer.retracement_count == expected_count
             ), f"After {i+1} increments, retracement should be {expected_count}"
 
-        # Final verification
+        # Final verification (should not exceed cap)
+        expected_final = min(num_retracements, layer.max_retracements_per_layer)
         assert (
-            layer.retracement_count == num_retracements
-        ), f"Final retracement count should be {num_retracements}"
+            layer.retracement_count == expected_final
+        ), f"Final retracement count should be {expected_final}"
 
     @given(
         base_lot_size=st.floats(min_value=0.01, max_value=10.0),

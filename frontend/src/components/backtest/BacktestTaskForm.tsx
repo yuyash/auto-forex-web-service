@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 import {
   Box,
@@ -43,6 +43,18 @@ import {
 } from '../../hooks/useStrategies';
 
 const steps = ['Configuration', 'Parameters', 'Review'];
+const DEFAULT_DATE_RANGE_DAYS = 30;
+
+const createDefaultDateRange = () => {
+  const end = new Date();
+  const start = new Date(
+    end.getTime() - DEFAULT_DATE_RANGE_DAYS * 24 * 60 * 60 * 1000
+  );
+  return {
+    start_time: start.toISOString(),
+    end_time: end.toISOString(),
+  };
+};
 
 interface BacktestTaskFormProps {
   taskId?: number;
@@ -176,6 +188,37 @@ export default function BacktestTaskForm({
   initialData,
 }: BacktestTaskFormProps) {
   const navigate = useNavigate();
+  const defaultDateRange = useMemo(() => {
+    const range = createDefaultDateRange();
+    return {
+      start_time: initialData?.start_time || range.start_time,
+      end_time: initialData?.end_time || range.end_time,
+    };
+  }, [initialData?.start_time, initialData?.end_time]);
+
+  const resolvedDefaultValues = useMemo(() => {
+    const baseDefaults: BacktestTaskSchemaOutput = {
+      config_id: 0,
+      name: '',
+      description: '',
+      data_source: DataSource.POSTGRESQL,
+      start_time: defaultDateRange.start_time,
+      end_time: defaultDateRange.end_time,
+      initial_balance: 10000,
+      commission_per_trade: 0,
+      instrument: '',
+      sell_at_completion: false,
+    };
+
+    return {
+      ...baseDefaults,
+      ...initialData,
+      start_time: initialData?.start_time || baseDefaults.start_time,
+      end_time: initialData?.end_time || baseDefaults.end_time,
+      instrument: initialData?.instrument || baseDefaults.instrument,
+    } as BacktestTaskSchemaOutput;
+  }, [defaultDateRange.end_time, defaultDateRange.start_time, initialData]);
+
   const [activeStep, setActiveStep] = useState(0);
   const [formData, setFormData] = useState<Partial<BacktestTaskSchemaOutput>>(
     initialData || {}
@@ -199,18 +242,7 @@ export default function BacktestTaskForm({
     mode: 'onChange',
     reValidateMode: 'onChange',
     shouldUnregister: false,
-    defaultValues: initialData || {
-      config_id: 0,
-      name: '',
-      description: '',
-      data_source: DataSource.POSTGRESQL,
-      start_time: '',
-      end_time: '',
-      initial_balance: 10000,
-      commission_per_trade: 0,
-      instrument: 'USD_JPY',
-      sell_at_completion: false,
-    },
+    defaultValues: resolvedDefaultValues,
   });
 
   // eslint-disable-next-line react-hooks/incompatible-library

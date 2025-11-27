@@ -17,20 +17,22 @@ import { Button } from '@mui/material';
 function TestComponent({
   errorMessage,
   withRetry = false,
+  durationMs,
 }: {
   errorMessage: string;
   withRetry?: boolean;
+  durationMs?: number;
 }) {
   const { showError } = useToast();
 
   const handleClick = () => {
     if (withRetry) {
-      showError(errorMessage, undefined, {
+      showError(errorMessage, durationMs, {
         label: 'Retry',
         onClick: () => console.log('Retry clicked'),
       });
     } else {
-      showError(errorMessage);
+      showError(errorMessage, durationMs);
     }
   };
 
@@ -99,7 +101,9 @@ describe('Error Toast Display', () => {
 
   it('should auto-dismiss toast after duration', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<TestComponent errorMessage="Auto dismiss error" />);
+    renderWithProviders(
+      <TestComponent errorMessage="Auto dismiss error" durationMs={100} />
+    );
 
     const button = screen.getByRole('button', { name: /trigger error/i });
     await user.click(button);
@@ -108,16 +112,15 @@ describe('Error Toast Display', () => {
       expect(screen.getByText(/auto dismiss error/i)).toBeInTheDocument();
     });
 
-    // Wait for auto-dismiss (8 seconds for errors)
     await waitFor(
       () => {
         expect(
           screen.queryByText(/auto dismiss error/i)
         ).not.toBeInTheDocument();
       },
-      { timeout: 9000 }
+      { timeout: 1000 }
     );
-  }, 10000);
+  });
 });
 
 describe('Error Recovery', () => {

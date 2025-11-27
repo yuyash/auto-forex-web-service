@@ -110,16 +110,16 @@ describe('FloorLayerLog Component', () => {
       (row) => !row.textContent?.includes('Total')
     );
 
-    // The component shows entry_price for entry events and exit_price for close events in the Price column (index 4)
+    // The component shows entry_price for entry events and exit_price for close events in the Price column (index 5)
     // Initial Entry event - should show entry price
     const initialRow = rows[0];
     const initialCells = initialRow?.querySelectorAll('td');
-    expect(initialCells?.[4]?.textContent).toContain('149.5');
+    expect(initialCells?.[5]?.textContent).toContain('149.5');
 
     // Take Profit event (row 2) - should show exit price
     const takeProfitRow = rows[2];
     const takeProfitCells = takeProfitRow?.querySelectorAll('td');
-    expect(takeProfitCells?.[4]?.textContent).toContain('149.75');
+    expect(takeProfitCells?.[5]?.textContent).toContain('149.75');
   });
 
   it('shows P&L only for close events', () => {
@@ -131,20 +131,36 @@ describe('FloorLayerLog Component', () => {
       (row) => !row.textContent?.includes('Total')
     );
 
-    // Initial Entry event - P&L should be dash (column index 5)
+    // Initial Entry event - P&L should be dash (column index 6)
     const initialRow = rows[0];
     const initialCells = initialRow?.querySelectorAll('td');
-    expect(initialCells?.[5]?.textContent).toBe('-');
+    expect(initialCells?.[6]?.textContent).toBe('-');
 
     // Add Layer event - P&L should be dash
     const scaleInRow = rows[1];
     const scaleInCells = scaleInRow?.querySelectorAll('td');
-    expect(scaleInCells?.[5]?.textContent).toBe('-');
+    expect(scaleInCells?.[6]?.textContent).toBe('-');
 
     // Take Profit event - P&L should be shown
     const takeProfitRow = rows[2];
     const takeProfitCells = takeProfitRow?.querySelectorAll('td');
-    expect(takeProfitCells?.[5]?.textContent).toContain('250.00');
+    expect(takeProfitCells?.[6]?.textContent).toContain('250.00');
+  });
+
+  it('renders retracement column before units', () => {
+    render(<FloorLayerLog trades={[]} strategyEvents={mockStrategyEvents} />);
+
+    const headerCells = Array.from(document.querySelectorAll('thead th')).map(
+      (cell) => cell.textContent?.replace(/\s+/g, ' ').trim() || ''
+    );
+
+    const retracementIndex = headerCells.findIndex((text) =>
+      text.includes('Retracement')
+    );
+    const unitsIndex = headerCells.findIndex((text) => text.includes('Units'));
+
+    expect(retracementIndex).toBeGreaterThan(-1);
+    expect(unitsIndex).toBeGreaterThan(retracementIndex);
   });
 
   it('calculates total P&L correctly', () => {
