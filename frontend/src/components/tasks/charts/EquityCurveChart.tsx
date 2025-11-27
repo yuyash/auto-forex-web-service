@@ -21,6 +21,90 @@ import {
 import DownloadIcon from '@mui/icons-material/Download';
 import { format } from 'date-fns';
 
+// Helper to determine optimal tick configuration based on date range
+interface TickConfig {
+  tickCount: number;
+  dateFormat: string;
+  showTime: boolean;
+}
+
+function getXAxisTickConfig(startTime: number, endTime: number): TickConfig {
+  const rangeMs = endTime - startTime;
+  const rangeHours = rangeMs / (1000 * 60 * 60);
+  const rangeDays = rangeMs / (1000 * 60 * 60 * 24);
+
+  // Less than 24 hours: show time with hours
+  if (rangeHours <= 24) {
+    return {
+      tickCount: Math.min(12, Math.max(4, Math.ceil(rangeHours / 2))),
+      dateFormat: 'HH:mm',
+      showTime: true,
+    };
+  }
+
+  // 1-3 days: show date + time
+  if (rangeDays <= 3) {
+    return {
+      tickCount: Math.min(12, Math.max(6, Math.ceil(rangeHours / 6))),
+      dateFormat: 'MMM dd HH:mm',
+      showTime: true,
+    };
+  }
+
+  // 3-14 days: show date only, more ticks
+  if (rangeDays <= 14) {
+    return {
+      tickCount: Math.min(14, Math.max(7, Math.ceil(rangeDays))),
+      dateFormat: 'MMM dd',
+      showTime: false,
+    };
+  }
+
+  // 14-60 days: show date, moderate ticks
+  if (rangeDays <= 60) {
+    return {
+      tickCount: Math.min(15, Math.max(8, Math.ceil(rangeDays / 4))),
+      dateFormat: 'MMM dd',
+      showTime: false,
+    };
+  }
+
+  // 60-180 days: show date, fewer ticks
+  if (rangeDays <= 180) {
+    return {
+      tickCount: Math.min(12, Math.max(6, Math.ceil(rangeDays / 15))),
+      dateFormat: 'MMM dd',
+      showTime: false,
+    };
+  }
+
+  // More than 180 days: show month/year
+  return {
+    tickCount: Math.min(12, Math.max(6, Math.ceil(rangeDays / 30))),
+    dateFormat: "MMM ''yy",
+    showTime: false,
+  };
+}
+
+// Helper to determine optimal Y-axis tick count based on value range
+function getYAxisTickCount(minValue: number, maxValue: number): number {
+  const range = maxValue - minValue;
+  if (range === 0) return 5;
+
+  // Calculate a reasonable number of ticks based on the range magnitude
+  const magnitude = Math.floor(Math.log10(range));
+  const normalizedRange = range / Math.pow(10, magnitude);
+
+  // Aim for 5-10 ticks depending on the range
+  if (normalizedRange <= 2) {
+    return 8;
+  } else if (normalizedRange <= 5) {
+    return 10;
+  } else {
+    return 6;
+  }
+}
+
 export interface EquityPoint {
   timestamp: string;
   balance: number;
@@ -151,6 +235,29 @@ export const EquityCurveChart: React.FC<EquityCurveChartProps> = ({
     return `$${value.toFixed(0)}`;
   };
 
+  // Calculate tick configurations based on data range
+  const axisConfig = React.useMemo(() => {
+    if (chartData.length === 0) {
+      return {
+        xAxis: { tickCount: 5, dateFormat: 'MMM dd', showTime: false },
+        yAxisTickCount: 5,
+      };
+    }
+
+    const timestamps = chartData.map((d) => d.timestamp);
+    const startTime = Math.min(...timestamps);
+    const endTime = Math.max(...timestamps);
+
+    const balances = chartData.map((d) => d.balance);
+    const minBalance = Math.min(...balances);
+    const maxBalance = Math.max(...balances);
+
+    return {
+      xAxis: getXAxisTickConfig(startTime, endTime),
+      yAxisTickCount: getYAxisTickCount(minBalance, maxBalance),
+    };
+  }, [chartData]);
+
   if (chartData.length === 0) {
     return (
       <Paper sx={{ p: 3, textAlign: 'center' }}>
@@ -230,13 +337,23 @@ export const EquityCurveChart: React.FC<EquityCurveChartProps> = ({
             dataKey="timestamp"
             type="number"
             domain={['dataMin', 'dataMax']}
-            tickFormatter={(timestamp) => format(new Date(timestamp), 'MMM dd')}
+            tickCount={axisConfig.xAxis.tickCount}
+            tickFormatter={(timestamp) =>
+              format(new Date(timestamp), axisConfig.xAxis.dateFormat)
+            }
             stroke="#666"
+            fontSize={12}
+            angle={axisConfig.xAxis.showTime ? -45 : 0}
+            textAnchor={axisConfig.xAxis.showTime ? 'end' : 'middle'}
+            height={axisConfig.xAxis.showTime ? 60 : 30}
           />
           <YAxis
             tickFormatter={formatYAxis}
             stroke="#666"
             domain={['auto', 'auto']}
+            tickCount={axisConfig.yAxisTickCount}
+            fontSize={12}
+            width={70}
           />
           <Tooltip
             content={
