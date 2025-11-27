@@ -15,6 +15,7 @@ Requirements: 2.3, 2.4, 2.5, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 6.1, 6.2, 6.3,
 from typing import Type
 
 from django.db.models import Q, QuerySet
+from django.utils import timezone
 
 from rest_framework import serializers as drf_serializers
 from rest_framework import status
@@ -490,6 +491,112 @@ class BacktestTaskExecutionsView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class BacktestTaskExportView(APIView):
+    """
+    Export backtest results as JSON.
+
+    GET: Export complete backtest results including metrics, trades, and strategy events
+
+    Requirements: 6.7, 8.4
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, task_id: int) -> Response:
+        """
+        Export backtest results as JSON.
+
+        Returns complete backtest data including:
+        - Task configuration
+        - Performance metrics (realized/unrealized P&L)
+        - Trade log with floor strategy details
+        - Strategy events
+        - Equity curve
+        """
+        # Get the task
+        try:
+            task = BacktestTask.objects.select_related("config", "user").get(
+                id=task_id, user=request.user.pk
+            )
+        except BacktestTask.DoesNotExist:
+            return Response(
+                {"error": "Backtest task not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Get latest execution with metrics
+        latest_execution = task.get_latest_execution()
+        if not latest_execution:
+            return Response(
+                {"error": "No execution found for this task"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Get metrics
+        metrics = None
+        if hasattr(latest_execution, "metrics") and latest_execution.metrics:
+            metrics_obj = latest_execution.metrics
+            metrics = {
+                "total_return": str(metrics_obj.total_return),
+                "total_pnl": str(metrics_obj.total_pnl),
+                "realized_pnl": str(getattr(metrics_obj, "realized_pnl", metrics_obj.total_pnl)),
+                "unrealized_pnl": str(getattr(metrics_obj, "unrealized_pnl", "0.00")),
+                "total_trades": metrics_obj.total_trades,
+                "winning_trades": metrics_obj.winning_trades,
+                "losing_trades": metrics_obj.losing_trades,
+                "win_rate": str(metrics_obj.win_rate),
+                "max_drawdown": str(metrics_obj.max_drawdown),
+                "sharpe_ratio": str(metrics_obj.sharpe_ratio) if metrics_obj.sharpe_ratio else None,
+                "profit_factor": (
+                    str(metrics_obj.profit_factor) if metrics_obj.profit_factor else None
+                ),
+                "average_win": str(metrics_obj.average_win) if metrics_obj.average_win else None,
+                "average_loss": str(metrics_obj.average_loss) if metrics_obj.average_loss else None,
+                "trade_log": metrics_obj.trade_log or [],
+                "strategy_events": metrics_obj.strategy_events or [],
+            }
+
+        # Build export data
+        strategy_type = task.config.strategy_type if task.config else None
+        export_data = {
+            "task": {
+                "id": task.pk,
+                "name": task.name,
+                "description": task.description,
+                "strategy_type": strategy_type,
+                "instrument": task.instrument,
+                "start_time": task.start_time.isoformat(),
+                "end_time": task.end_time.isoformat(),
+                "status": task.status,
+            },
+            "configuration": {
+                "id": task.config.pk if task.config else None,
+                "name": task.config.name if task.config else None,
+                "strategy_type": strategy_type,
+                "parameters": task.config.parameters if task.config else {},
+            },
+            "execution": {
+                "id": latest_execution.pk,
+                "execution_number": latest_execution.execution_number,
+                "status": latest_execution.status,
+                "started_at": (
+                    latest_execution.started_at.isoformat() if latest_execution.started_at else None
+                ),
+                "completed_at": (
+                    latest_execution.completed_at.isoformat()
+                    if latest_execution.completed_at
+                    else None
+                ),
+                "logs": latest_execution.logs or [],
+            },
+            "metrics": metrics,
+            "exported_at": timezone.now().isoformat(),
+        }
+
+        # Return as downloadable JSON response
+        return Response(export_data, status=status.HTTP_200_OK)
 
 
 class BacktestTaskLogsView(APIView):

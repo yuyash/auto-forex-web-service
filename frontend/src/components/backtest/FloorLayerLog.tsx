@@ -40,6 +40,8 @@ interface DisplayEvent {
   entryPrice?: number;
   exitPrice?: number;
   pnl?: number;
+  realizedPnl?: number;
+  unrealizedPnl?: number;
   retracementCount?: number;
   isFirstLot?: boolean;
   description: string;
@@ -137,6 +139,14 @@ export function FloorLayerLog({
           ? parseFloat(String(details.exit_price))
           : undefined,
         pnl: details.pnl ? parseFloat(String(details.pnl)) : undefined,
+        realizedPnl: details.realized_pnl
+          ? parseFloat(String(details.realized_pnl))
+          : details.pnl
+            ? parseFloat(String(details.pnl))
+            : undefined,
+        unrealizedPnl: details.unrealized_pnl
+          ? parseFloat(String(details.unrealized_pnl))
+          : undefined,
         retracementCount: details.retracement_count as number | undefined,
         isFirstLot: details.is_first_lot as boolean | undefined,
         description: event.description,
@@ -207,6 +217,8 @@ export function FloorLayerLog({
           entryPrice: trade.entry_price,
           exitPrice: trade.exit_price,
           pnl: trade.pnl,
+          realizedPnl: trade.realized_pnl ?? trade.pnl,
+          unrealizedPnl: trade.unrealized_pnl,
           retracementCount: trade.retracement_count,
           isFirstLot: trade.is_first_lot,
           description: `Take Profit: ${trade.direction?.toUpperCase()} ${trade.units} units closed @ ${trade.exit_price.toFixed(5)} | P&L: $${trade.pnl.toFixed(2)}`,
@@ -414,9 +426,10 @@ export function FloorLayerLog({
                             direction={sortField === 'pnl' ? sortOrder : 'asc'}
                             onClick={() => handleSort('pnl')}
                           >
-                            P&L
+                            Realized P&L
                           </TableSortLabel>
                         </TableCell>
+                        <TableCell align="right">Unrealized P&L</TableCell>
                         <TableCell>Details</TableCell>
                       </TableRow>
                     </TableHead>
@@ -496,17 +509,40 @@ export function FloorLayerLog({
                               align="right"
                               sx={{
                                 color:
-                                  event.pnl !== undefined && event.pnl >= 0
+                                  event.realizedPnl !== undefined &&
+                                  event.realizedPnl >= 0
                                     ? 'success.main'
-                                    : event.pnl !== undefined
+                                    : event.realizedPnl !== undefined
                                       ? 'error.main'
                                       : undefined,
                                 fontWeight:
-                                  event.pnl !== undefined ? 'bold' : undefined,
+                                  event.realizedPnl !== undefined
+                                    ? 'bold'
+                                    : undefined,
                               }}
                             >
-                              {isClose && event.pnl !== undefined
-                                ? formatCurrency(event.pnl)
+                              {isClose && event.realizedPnl !== undefined
+                                ? formatCurrency(event.realizedPnl)
+                                : '-'}
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{
+                                color:
+                                  event.unrealizedPnl !== undefined &&
+                                  event.unrealizedPnl >= 0
+                                    ? 'success.main'
+                                    : event.unrealizedPnl !== undefined
+                                      ? 'error.main'
+                                      : undefined,
+                                fontWeight:
+                                  event.unrealizedPnl !== undefined
+                                    ? 'bold'
+                                    : undefined,
+                              }}
+                            >
+                              {event.unrealizedPnl !== undefined
+                                ? formatCurrency(event.unrealizedPnl)
                                 : '-'}
                             </TableCell>
                             <TableCell sx={{ maxWidth: 300 }}>
@@ -550,6 +586,7 @@ export function FloorLayerLog({
                         >
                           {formatCurrency(layerPnL)}
                         </TableCell>
+                        <TableCell />
                         <TableCell />
                       </TableRow>
                     </TableBody>

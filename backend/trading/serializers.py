@@ -835,6 +835,8 @@ class ExecutionMetricsSerializer(serializers.ModelSerializer):
             "execution_id",
             "total_return",
             "total_pnl",
+            "realized_pnl",
+            "unrealized_pnl",
             "total_trades",
             "winning_trades",
             "losing_trades",

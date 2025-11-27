@@ -9,7 +9,11 @@ import {
   CircularProgress,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
-import { Download as DownloadIcon } from '@mui/icons-material';
+import {
+  Download as DownloadIcon,
+  FileDownload as FileDownloadIcon,
+} from '@mui/icons-material';
+import { backtestTasksApi } from '../../../services/api/backtestTasks';
 import { MetricsGrid } from '../../tasks/charts/MetricsGrid';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
 import { BacktestChart } from '../BacktestChart';
@@ -76,6 +80,8 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
     }
   }, []);
 
+  const [isExporting, setIsExporting] = React.useState(false);
+
   const handleExportCSV = () => {
     if (!metrics?.trade_log) return;
 
@@ -89,6 +95,7 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
       'Entry Price',
       'Exit Price',
       'P&L',
+      'Realized P&L',
       'Duration',
     ];
 
@@ -101,6 +108,7 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
       trade.entry_price.toString(),
       trade.exit_price.toString(),
       trade.pnl.toString(),
+      (trade.realized_pnl ?? trade.pnl).toString(),
       trade.duration || '',
     ]);
 
@@ -123,6 +131,17 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
     document.body.removeChild(link);
   };
 
+  const handleExportJSON = async () => {
+    setIsExporting(true);
+    try {
+      await backtestTasksApi.exportResults(task.id, task.name);
+    } catch (error) {
+      console.error('Failed to export backtest results:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const getTradeStatistics = () => {
     if (!metrics?.trade_log) return null;
 
@@ -131,6 +150,13 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
     const losingTrades = trades.filter((t: Trade) => t.pnl < 0);
 
     const totalPnL = trades.reduce((sum: number, t: Trade) => sum + t.pnl, 0);
+    const realizedPnL = trades.reduce(
+      (sum: number, t: Trade) => sum + (t.realized_pnl ?? t.pnl),
+      0
+    );
+    const unrealizedPnL = metrics.unrealized_pnl
+      ? parseFloat(metrics.unrealized_pnl)
+      : 0;
     const avgPnL = trades.length > 0 ? totalPnL / trades.length : 0;
 
     const avgWin =
@@ -160,6 +186,8 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
       winningTrades: winningTrades.length,
       losingTrades: losingTrades.length,
       totalPnL,
+      realizedPnL,
+      unrealizedPnL,
       avgPnL,
       avgWin,
       avgLoss,
@@ -280,9 +308,31 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
       {/* Trade Statistics */}
       {stats && (
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 3 }}>
-            Trade Statistics
-          </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mb: 3,
+            }}
+          >
+            <Typography variant="h6">Trade Statistics</Typography>
+            <Button
+              variant="contained"
+              startIcon={
+                isExporting ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <FileDownloadIcon />
+                )
+              }
+              onClick={handleExportJSON}
+              disabled={isExporting}
+              size="small"
+            >
+              Export Results
+            </Button>
+          </Box>
 
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
@@ -295,6 +345,36 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
                   color={stats.totalPnL >= 0 ? 'success.main' : 'error.main'}
                 >
                   ${stats.totalPnL.toFixed(2)}
+                </Typography>
+              </Box>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Box>
+                <Typography variant="body2" color="text.secondary">
+                  Realized P&L
+                </Typography>
+                <Typography
+                  variant="h5"
+                  color={stats.realizedPnL >= 0 ? 'success.main' : 'error.main'}
+                >
+                  ${stats.realizedPnL.toFixed(2)}
+                </Typography>
+              </Box>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Box>
+                <Typography variant="body2" color="text.secondary">
+                  Unrealized P&L
+                </Typography>
+                <Typography
+                  variant="h5"
+                  color={
+                    stats.unrealizedPnL >= 0 ? 'success.main' : 'error.main'
+                  }
+                >
+                  ${stats.unrealizedPnL.toFixed(2)}
                 </Typography>
               </Box>
             </Grid>

@@ -29,6 +29,8 @@ export interface ExecutionMetrics {
   execution_id: number;
   total_return: string;
   total_pnl: string;
+  realized_pnl?: string;
+  unrealized_pnl?: string;
   total_trades: number;
   winning_trades: number;
   losing_trades: number;
@@ -75,6 +77,8 @@ export interface StrategyEvent {
 export interface EquityPoint {
   timestamp: string;
   balance: number;
+  realized_pnl?: number;
+  unrealized_pnl?: number;
 }
 
 export interface Trade {
@@ -86,6 +90,8 @@ export interface Trade {
   entry_price: number;
   exit_price: number;
   pnl: number;
+  realized_pnl?: number;
+  unrealized_pnl?: number;
   duration?: string;
   // Floor strategy specific fields
   layer_number?: number;

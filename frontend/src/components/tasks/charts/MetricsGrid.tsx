@@ -49,6 +49,13 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({
     return 'neutral';
   };
 
+  const realizedPnl = metrics.realized_pnl
+    ? parseFloat(metrics.realized_pnl)
+    : parseFloat(metrics.total_pnl.toString());
+  const unrealizedPnl = metrics.unrealized_pnl
+    ? parseFloat(metrics.unrealized_pnl)
+    : 0;
+
   const metricsData = [
     {
       title: 'Total Return',
@@ -65,6 +72,20 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({
       color:
         parseFloat(metrics.total_pnl.toString()) >= 0 ? 'success' : 'error',
       trend: getTrend(metrics.total_pnl),
+    },
+    {
+      title: 'Realized P&L',
+      value: formatCurrency(realizedPnl),
+      icon: <AccountBalance />,
+      color: realizedPnl >= 0 ? 'success' : 'error',
+      trend: getTrend(realizedPnl),
+    },
+    {
+      title: 'Unrealized P&L',
+      value: formatCurrency(unrealizedPnl),
+      icon: <AccountBalance />,
+      color: unrealizedPnl >= 0 ? 'success' : 'error',
+      trend: getTrend(unrealizedPnl),
     },
     {
       title: 'Total Trades',

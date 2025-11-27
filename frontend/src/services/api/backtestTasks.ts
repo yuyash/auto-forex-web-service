@@ -115,4 +115,37 @@ export const backtestTasksApi = {
       `/backtest-tasks/${taskId}/executions/${executionId}/`
     );
   },
+
+  /**
+   * Export backtest results as JSON
+   */
+  exportResults: async (taskId: number, taskName: string): Promise<void> => {
+    const token = localStorage.getItem('token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
+
+    const response = await fetch(`/api/backtest-tasks/${taskId}/export/`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to export backtest results');
+    }
+
+    const data = await response.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/json',
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `backtest_${taskId}_${taskName.replace(/\s+/g, '_')}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
 };

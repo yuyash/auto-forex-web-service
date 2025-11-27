@@ -276,6 +276,18 @@ class ExecutionMetrics(models.Model):
         default=0,
         help_text="Total profit/loss",
     )
+    realized_pnl = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        help_text="Realized profit/loss from closed positions",
+    )
+    unrealized_pnl = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        help_text="Unrealized profit/loss from open positions",
+    )
     total_trades = models.IntegerField(
         default=0,
         help_text="Number of trades executed",
@@ -392,6 +404,14 @@ class ExecutionMetrics(models.Model):
         # Calculate basic statistics
         self.total_trades = len(trades)
         self.total_pnl = sum(Decimal(str(trade.get("pnl", 0))) for trade in trades)
+
+        # Calculate realized P&L (from closed trades with exit_time)
+        closed_trades = [t for t in trades if t.get("exit_time")]
+        self.realized_pnl = sum(Decimal(str(t.get("pnl", 0))) for t in closed_trades)
+
+        # Calculate unrealized P&L (from open positions without exit_time)
+        open_trades = [t for t in trades if not t.get("exit_time")]
+        self.unrealized_pnl = sum(Decimal(str(t.get("pnl", 0))) for t in open_trades)
 
         # Calculate return percentage
         if initial_balance > 0:
