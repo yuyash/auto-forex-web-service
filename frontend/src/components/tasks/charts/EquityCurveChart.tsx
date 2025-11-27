@@ -86,23 +86,48 @@ function getXAxisTickConfig(startTime: number, endTime: number): TickConfig {
   };
 }
 
-// Helper to determine optimal Y-axis tick count based on value range
-function getYAxisTickCount(minValue: number, maxValue: number): number {
-  const range = maxValue - minValue;
-  if (range === 0) return 5;
+// Helper to determine optimal Y-axis configuration based on value range
+interface YAxisConfig {
+  tickCount: number;
+  useCompactFormat: boolean;
+  decimals: number;
+}
 
-  // Calculate a reasonable number of ticks based on the range magnitude
+function getYAxisConfig(minValue: number, maxValue: number): YAxisConfig {
+  const range = maxValue - minValue;
+  if (range === 0) return { tickCount: 5, useCompactFormat: true, decimals: 0 };
+
+  // Calculate the relative range (range as percentage of max value)
+  const relativeRange =
+    range / Math.max(Math.abs(maxValue), Math.abs(minValue));
+
+  // If the range is small relative to the values (< 5%), use full precision
+  // This handles cases like $10,000 to $10,100 where compact format loses detail
+  if (relativeRange < 0.05) {
+    // Determine decimals based on the range magnitude
+    const rangeMagnitude = Math.floor(Math.log10(range));
+    const decimals = Math.max(0, 2 - rangeMagnitude);
+    return {
+      tickCount: 6,
+      useCompactFormat: false,
+      decimals: Math.min(decimals, 2),
+    };
+  }
+
+  // For larger relative ranges, use compact format
   const magnitude = Math.floor(Math.log10(range));
   const normalizedRange = range / Math.pow(10, magnitude);
 
-  // Aim for 5-10 ticks depending on the range
+  let tickCount: number;
   if (normalizedRange <= 2) {
-    return 8;
+    tickCount = 8;
   } else if (normalizedRange <= 5) {
-    return 10;
+    tickCount = 10;
   } else {
-    return 6;
+    tickCount = 6;
   }
+
+  return { tickCount, useCompactFormat: true, decimals: 1 };
 }
 
 export interface EquityPoint {
@@ -226,21 +251,12 @@ export const EquityCurveChart: React.FC<EquityCurveChartProps> = ({
     }).format(value);
   };
 
-  const formatYAxis = (value: number) => {
-    if (value >= 1000000) {
-      return `$${(value / 1000000).toFixed(1)}M`;
-    } else if (value >= 1000) {
-      return `$${(value / 1000).toFixed(1)}K`;
-    }
-    return `$${value.toFixed(0)}`;
-  };
-
   // Calculate tick configurations based on data range
   const axisConfig = React.useMemo(() => {
     if (chartData.length === 0) {
       return {
         xAxis: { tickCount: 5, dateFormat: 'MMM dd', showTime: false },
-        yAxisTickCount: 5,
+        yAxis: { tickCount: 5, useCompactFormat: true, decimals: 1 },
       };
     }
 
@@ -254,9 +270,34 @@ export const EquityCurveChart: React.FC<EquityCurveChartProps> = ({
 
     return {
       xAxis: getXAxisTickConfig(startTime, endTime),
-      yAxisTickCount: getYAxisTickCount(minBalance, maxBalance),
+      yAxis: getYAxisConfig(minBalance, maxBalance),
     };
   }, [chartData]);
+
+  const formatYAxis = React.useCallback(
+    (value: number) => {
+      const { useCompactFormat, decimals } = axisConfig.yAxis;
+
+      if (!useCompactFormat) {
+        // Full precision format for small ranges
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals,
+        }).format(value);
+      }
+
+      // Compact format for larger ranges
+      if (value >= 1000000) {
+        return `$${(value / 1000000).toFixed(1)}M`;
+      } else if (value >= 1000) {
+        return `$${(value / 1000).toFixed(1)}K`;
+      }
+      return `$${value.toFixed(0)}`;
+    },
+    [axisConfig.yAxis]
+  );
 
   if (chartData.length === 0) {
     return (
@@ -351,9 +392,9 @@ export const EquityCurveChart: React.FC<EquityCurveChartProps> = ({
             tickFormatter={formatYAxis}
             stroke="#666"
             domain={['auto', 'auto']}
-            tickCount={axisConfig.yAxisTickCount}
+            tickCount={axisConfig.yAxis.tickCount}
             fontSize={12}
-            width={70}
+            width={axisConfig.yAxis.useCompactFormat ? 70 : 90}
           />
           <Tooltip
             content={
