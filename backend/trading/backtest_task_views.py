@@ -457,32 +457,28 @@ class BacktestTaskStatusView(APIView):
                 # Refresh to get updated values
                 task.refresh_from_db()
 
-        # Check for stale stopped tasks (stop requested but worker hasn't responded)
+        # When task is stopped but execution is still running, update execution immediately
+        # The task status being STOPPED is authoritative - user requested stop
         if (
             task.status == TaskStatus.STOPPED
             and latest_execution
             and latest_execution.status == TaskStatus.RUNNING
         ):
+            logger.info(
+                "Task %d is stopped but execution still running, updating execution status",
+                task_id,
+            )
+
+            # Clean up any locks
             lock_info = lock_manager.get_lock_info("backtest", task_id)
-            is_stale = lock_info is None or lock_info.get("is_stale", False)
+            if lock_info:
+                lock_manager.release_lock("backtest", task_id)
 
-            if is_stale:
-                # Worker has stopped but execution wasn't updated
-                logger.warning(
-                    "Detected stale stopped task %d with running execution, "
-                    "updating execution status",
-                    task_id,
-                )
-
-                # Clean up any stale locks
-                if lock_info:
-                    lock_manager.release_lock("backtest", task_id)
-
-                # Update execution to stopped
-                latest_execution.status = TaskStatus.STOPPED
-                latest_execution.completed_at = timezone.now()
-                latest_execution.save(update_fields=["status", "completed_at"])
-                latest_execution.refresh_from_db()
+            # Update execution to stopped
+            latest_execution.status = TaskStatus.STOPPED
+            latest_execution.completed_at = timezone.now()
+            latest_execution.save(update_fields=["status", "completed_at"])
+            latest_execution.refresh_from_db()
 
         # Determine the correct progress to report
         # If task is RUNNING but latest execution is completed, a new execution is pending

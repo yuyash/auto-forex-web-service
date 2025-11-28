@@ -675,29 +675,29 @@ class TradingTaskStatusView(APIView):
                 task.save(update_fields=["status", "updated_at"])
                 task.refresh_from_db()
 
-        # Check for stale stopped tasks (stop requested but worker hasn't responded)
+        # When task is stopped but execution is still running, update execution immediately
+        # The task status being STOPPED is authoritative - user requested stop
         if (
             task.status == TaskStatus.STOPPED
             and latest_execution
             and latest_execution.status == TaskStatus.RUNNING
         ):
+            logger.info(
+                "Trading task %d is stopped but execution still running, "
+                "updating execution status",
+                task_id,
+            )
+
+            # Clean up any locks
             lock_info = lock_manager.get_lock_info("trading", task_id)
-            is_stale = lock_info is None or lock_info.get("is_stale", False)
+            if lock_info:
+                lock_manager.release_lock("trading", task_id)
 
-            if is_stale:
-                logger.warning(
-                    "Detected stale stopped trading task %d with running execution, "
-                    "updating execution status",
-                    task_id,
-                )
-
-                if lock_info:
-                    lock_manager.release_lock("trading", task_id)
-
-                latest_execution.status = TaskStatus.STOPPED
-                latest_execution.completed_at = timezone.now()
-                latest_execution.save(update_fields=["status", "completed_at"])
-                latest_execution.refresh_from_db()
+            # Update execution to stopped
+            latest_execution.status = TaskStatus.STOPPED
+            latest_execution.completed_at = timezone.now()
+            latest_execution.save(update_fields=["status", "completed_at"])
+            latest_execution.refresh_from_db()
 
         # Determine the correct progress to report
         pending_new_execution = (
