@@ -268,19 +268,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
           flexWrap: 'wrap',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box
-            sx={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              bgcolor: '#2196f3',
-            }}
-          />
-          <Typography variant="caption" sx={{ fontWeight: 500 }}>
-            Initial Entry
-          </Typography>
-        </Box>
+        {/* Long Initial Entry - Blue Triangle */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box
             sx={{
@@ -288,41 +276,58 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
               height: 0,
               borderLeft: '6px solid transparent',
               borderRight: '6px solid transparent',
-              borderBottom: '10px solid #00bcd4',
+              borderBottom: '10px solid #2196f3',
             }}
           />
           <Typography variant="caption" sx={{ fontWeight: 500 }}>
-            Retracement
+            Long (Initial)
           </Typography>
         </Box>
+        {/* Long Scale-in - Dark Green Triangle */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box
             sx={{
               width: 0,
               height: 0,
-              borderLeft: '5px solid transparent',
-              borderRight: '5px solid transparent',
-              borderTop: '8px solid #757575',
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderBottom: '10px solid #1b5e20',
+            }}
+          />
+          <Typography variant="caption" sx={{ fontWeight: 500 }}>
+            Long (Scale-in)
+          </Typography>
+        </Box>
+        {/* Short - Pink Inverted Triangle */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            sx={{
+              width: 0,
+              height: 0,
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderTop: '10px solid #e91e63',
+            }}
+          />
+          <Typography variant="caption" sx={{ fontWeight: 500 }}>
+            Short
+          </Typography>
+        </Box>
+        {/* Close - Gray Circle */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: '#757575',
             }}
           />
           <Typography variant="caption" sx={{ fontWeight: 500 }}>
             Close
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box
-            sx={{
-              width: 0,
-              height: 0,
-              borderLeft: '5px solid transparent',
-              borderRight: '5px solid transparent',
-              borderTop: '8px solid #4caf50',
-            }}
-          />
-          <Typography variant="caption" sx={{ fontWeight: 500 }}>
-            Take Profit
-          </Typography>
-        </Box>
+        {/* New Layer - Purple Circle */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box
             sx={{
@@ -336,26 +341,28 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
             New Layer
           </Typography>
         </Box>
+        {/* Volatility Lock - Orange Circle */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box
             sx={{
               width: 8,
               height: 8,
               borderRadius: '50%',
-              bgcolor: '#ff5722',
+              bgcolor: '#ff9800',
             }}
           />
           <Typography variant="caption" sx={{ fontWeight: 500 }}>
             Volatility Lock
           </Typography>
         </Box>
+        {/* Margin Protection - Red Circle */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box
             sx={{
               width: 8,
               height: 8,
               borderRadius: '50%',
-              bgcolor: '#e91e63',
+              bgcolor: '#f44336',
             }}
           />
           <Typography variant="caption" sx={{ fontWeight: 500 }}>

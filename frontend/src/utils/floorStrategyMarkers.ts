@@ -2,10 +2,35 @@
  * Floor Strategy Markers Utility
  *
  * Creates chart markers for floor strategy events (retracements, layer creation, etc.)
+ *
+ * Marker Types:
+ * - Long (Dark green triangle + Unit size) - scale_in with direction=long
+ * - Long (Blue triangle + Unit size) - initial_entry with direction=long
+ * - Short (Pink inverted triangle + Unit size) - entries with direction=short
+ * - Close (Gray circle + Unit size) - strategy_close, take_profit
+ * - New Layer (Purple circle + Layer number)
+ * - Volatility Lock (Orange circle)
+ * - Margin Protection (Red circle)
  */
 
 import type { ChartMarker } from './chartMarkers';
 import type { BacktestStrategyEvent } from '../types/execution';
+
+// Marker colors
+const COLORS = {
+  // Entry colors
+  LONG_INITIAL: '#2196f3', // Blue - initial entry long
+  LONG_SCALE_IN: '#1b5e20', // Dark green - scale-in long
+  SHORT: '#e91e63', // Pink - short positions
+  // Close colors
+  CLOSE: '#757575', // Gray - close/take profit
+  // Event colors
+  NEW_LAYER: '#9c27b0', // Purple - new layer
+  VOLATILITY_LOCK: '#ff9800', // Orange - volatility lock
+  MARGIN_PROTECTION: '#f44336', // Red - margin protection
+  // Start/End colors
+  START_END: '#757575', // Gray - start/end markers
+};
 
 // Event types that should be plotted as markers
 const PLOTTABLE_EVENT_TYPES = new Set([
@@ -47,6 +72,22 @@ export function createFloorStrategyMarkers(
 }
 
 /**
+ * Format unit size for display in marker label
+ */
+function formatUnits(units: unknown): string {
+  if (units === null || units === undefined || typeof units === 'boolean')
+    return '';
+  const numUnits =
+    typeof units === 'string' ? parseInt(units, 10) : Number(units);
+  if (isNaN(numUnits)) return '';
+  // Format with K suffix for thousands
+  if (numUnits >= 1000) {
+    return `${(numUnits / 1000).toFixed(numUnits % 1000 === 0 ? 0 : 1)}K`;
+  }
+  return String(numUnits);
+}
+
+/**
  * Create a single marker from a strategy event
  */
 function createMarkerFromEvent(
@@ -56,22 +97,21 @@ function createMarkerFromEvent(
   if (!event.timestamp) return null;
 
   // Round timestamp to nearest hour to align with H1 candles
-  // This ensures markers appear on the chart even if event times don't exactly match candle times
   const eventDate = new Date(event.timestamp);
   const roundedDate = new Date(eventDate);
-  roundedDate.setMinutes(0, 0, 0); // Round down to the hour
+  roundedDate.setMinutes(0, 0, 0);
 
   // Extract price from various possible fields
   const price =
     event.details.price ||
     event.details.current_price ||
-    event.details.exit_price || // For strategy_close events
-    event.details.entry_price; // Fallback for entry events
+    event.details.exit_price ||
+    event.details.entry_price;
 
   if (!price) return null;
 
-  // Map event types to marker styles
-  const markerConfig = getMarkerConfig(event.event_type);
+  // Get marker configuration based on event type and direction
+  const markerConfig = getMarkerConfig(event);
 
   return {
     id: `event-${index}`,
@@ -86,105 +126,119 @@ function createMarkerFromEvent(
 }
 
 /**
- * Get marker configuration for event type
+ * Get marker configuration based on event type and details
  */
-function getMarkerConfig(eventType: string): {
+function getMarkerConfig(event: BacktestStrategyEvent): {
   type: ChartMarker['type'];
   color: string;
   shape?: ChartMarker['shape'];
   label: string;
 } {
-  const configs: Record<
-    string,
-    {
-      type: ChartMarker['type'];
-      color: string;
-      shape?: ChartMarker['shape'];
-      label: string;
-    }
-  > = {
-    start_strategy: {
-      type: 'start_strategy',
-      color: '#757575',
-      shape: 'doubleCircle',
-      label: 'START',
-    },
-    end_strategy: {
-      type: 'end_strategy',
-      color: '#757575',
-      shape: 'doubleCircle',
-      label: 'END',
-    },
-    initial_entry: {
-      type: 'initial_entry',
-      color: '#2196f3',
-      shape: 'circle',
-      label: 'Entry',
-    },
-    order_created: {
-      type: 'info',
-      color: '#4caf50',
-      shape: undefined,
-      label: 'Order',
-    },
-    scale_in: {
-      type: 'info',
-      color: '#00bcd4',
-      shape: 'triangleUp',
-      label: 'Retr',
-    },
-    retracement_detected: {
-      type: 'info',
-      color: '#ff9800',
-      shape: undefined,
-      label: 'Retr',
-    },
-    new_layer_created: {
-      type: 'info',
-      color: '#9c27b0',
-      shape: undefined,
-      label: 'Layer+',
-    },
-    take_profit: {
-      type: 'info',
-      color: '#4caf50',
-      shape: 'triangleDown',
-      label: 'TP',
-    },
-    stop_loss: {
-      type: 'info',
-      color: '#f44336',
-      shape: 'triangleDown',
-      label: 'SL',
-    },
-    strategy_close: {
-      type: 'info',
-      color: '#757575',
-      shape: 'triangleDown',
-      label: 'Close',
-    },
-    volatility_lock: {
-      type: 'info',
-      color: '#ff5722',
-      shape: undefined,
-      label: 'VLock',
-    },
-    margin_protection: {
-      type: 'info',
-      color: '#e91e63',
-      shape: undefined,
-      label: 'Margin',
-    },
-  };
+  const { event_type, details } = event;
+  const direction = details.direction as string | undefined;
+  const units = formatUnits(details.units);
+  const layerNumber = details.layer_number;
 
-  return (
-    configs[eventType] || {
-      type: 'info',
-      color: '#666',
-      shape: undefined,
-      label: '?',
+  switch (event_type) {
+    // Initial entry - Blue triangle for long, Pink inverted for short
+    case 'initial_entry': {
+      const isLong = direction === 'long';
+      return {
+        type: 'initial_entry',
+        color: isLong ? COLORS.LONG_INITIAL : COLORS.SHORT,
+        shape: isLong ? 'triangleUp' : 'triangleDown',
+        label: units
+          ? `${isLong ? 'L' : 'S'} ${units}`
+          : isLong
+            ? 'Long'
+            : 'Short',
+      };
     }
-  );
+
+    // Scale-in (retracement) - Dark green triangle for long, Pink inverted for short
+    case 'scale_in': {
+      const isLong = direction === 'long';
+      return {
+        type: 'buy',
+        color: isLong ? COLORS.LONG_SCALE_IN : COLORS.SHORT,
+        shape: isLong ? 'triangleUp' : 'triangleDown',
+        label: units
+          ? `${isLong ? 'L' : 'S'} ${units}`
+          : isLong
+            ? 'Long'
+            : 'Short',
+      };
+    }
+
+    // Close events - Gray circle with unit size
+    case 'strategy_close':
+    case 'take_profit': {
+      return {
+        type: 'info',
+        color: COLORS.CLOSE,
+        shape: 'circle',
+        label: units ? `C ${units}` : 'Close',
+      };
+    }
+
+    // New layer - Purple circle with layer number
+    case 'new_layer_created': {
+      return {
+        type: 'info',
+        color: COLORS.NEW_LAYER,
+        shape: 'circle',
+        label: layerNumber !== undefined ? `L${layerNumber}` : 'Layer',
+      };
+    }
+
+    // Volatility lock - Orange circle
+    case 'volatility_lock': {
+      return {
+        type: 'info',
+        color: COLORS.VOLATILITY_LOCK,
+        shape: 'circle',
+        label: 'VLock',
+      };
+    }
+
+    // Margin protection - Red circle
+    case 'margin_protection': {
+      return {
+        type: 'info',
+        color: COLORS.MARGIN_PROTECTION,
+        shape: 'circle',
+        label: 'Margin',
+      };
+    }
+
+    // Start/End strategy
+    case 'start_strategy': {
+      return {
+        type: 'start_strategy',
+        color: COLORS.START_END,
+        shape: 'doubleCircle',
+        label: 'START',
+      };
+    }
+
+    case 'end_strategy': {
+      return {
+        type: 'end_strategy',
+        color: COLORS.START_END,
+        shape: 'doubleCircle',
+        label: 'END',
+      };
+    }
+
+    // Default fallback
+    default:
+      return {
+        type: 'info',
+        color: '#666',
+        shape: 'circle',
+        label: '?',
+      };
+  }
 }
 
 /**
