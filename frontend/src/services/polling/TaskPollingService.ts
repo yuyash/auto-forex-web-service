@@ -15,6 +15,7 @@ export interface TaskStatusResponse {
   started_at: string | null;
   completed_at: string | null;
   error_message: string | null;
+  pending_new_execution?: boolean; // True when task is RUNNING but new execution hasn't started
 }
 
 export interface TaskDetailsResponse {
