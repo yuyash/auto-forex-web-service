@@ -1263,6 +1263,7 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         # Add layer metadata for backtest engine
         order.layer_number = layer.layer_number  # type: ignore[attr-defined]
         order.is_first_lot = True  # type: ignore[attr-defined]
+        order.retracement_number = 0  # type: ignore[attr-defined]
 
         # Mark tick ID to prevent duplicates
         layer.last_initial_entry_tick_id = tick_id
@@ -1341,6 +1342,7 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         # Add layer metadata for backtest engine
         order.layer_number = layer.layer_number  # type: ignore[attr-defined]
         order.is_first_lot = False  # type: ignore[attr-defined]
+        order.retracement_number = layer.retracement_count + 1  # type: ignore[attr-defined]
 
         scale_in_msg = (
             f"[RETRACEMENT] Layer {layer.layer_number} | "
@@ -1387,30 +1389,46 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         """
         orders: list[Order] = []
 
-        for position in layer.positions:
-            if self._should_take_profit(position, tick_data):
-                # Log before creating order
-                current_price = tick_data.bid if position.direction == "long" else tick_data.ask
-                pip_movement = self.calculate_pips(
-                    position.entry_price, current_price, position.instrument
-                )
+        positions_to_close = [
+            position for position in layer.positions if self._should_take_profit(position, tick_data)
+        ]
 
-                is_first_lot = position == layer.first_lot_position
-                position_type = "INITIAL" if is_first_lot else "SCALED"
+        if not positions_to_close:
+            return orders
 
-                tp_msg = (
-                    f"[TAKE PROFIT] Layer {layer.layer_number} | "
-                    f"Closing {position_type} {position.direction.upper()} position | "
-                    f"Size: {position.units} units | "
-                    f"Entry: {position.entry_price} → Exit: {current_price} | "
-                    f"Profit: +{pip_movement:.1f} pips "
-                    f"(Target: {self.take_profit_pips} pips)"
-                )
-                logger.info(tp_msg)
+        retracement_closures = sum(
+            1
+            for position in positions_to_close
+            if position != layer.first_lot_position and not getattr(position, "is_first_lot", False)
+        )
+        remaining_retracements_after_batch = max(0, layer.retracement_count - retracement_closures)
 
-                close_order = self._create_close_order(position, tick_data, reason="strategy_close")
-                if close_order:
-                    orders.append(close_order)
+        for position in positions_to_close:
+            # Log before creating order
+            current_price = tick_data.bid if position.direction == "long" else tick_data.ask
+            pip_movement = self.calculate_pips(position.entry_price, current_price, position.instrument)
+
+            is_first_lot = position == layer.first_lot_position
+            position_type = "INITIAL" if is_first_lot else "SCALED"
+
+            tp_msg = (
+                f"[TAKE PROFIT] Layer {layer.layer_number} | "
+                f"Closing {position_type} {position.direction.upper()} position | "
+                f"Size: {position.units} units | "
+                f"Entry: {position.entry_price} → Exit: {current_price} | "
+                f"Profit: +{pip_movement:.1f} pips "
+                f"(Target: {self.take_profit_pips} pips)"
+            )
+            logger.info(tp_msg)
+
+            close_order = self._create_close_order(
+                position,
+                tick_data,
+                reason="strategy_close",
+                remaining_retracements_after_batch=remaining_retracements_after_batch,
+            )
+            if close_order:
+                orders.append(close_order)
 
         return orders
 
@@ -1437,7 +1455,11 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         return current_price < position.entry_price and pip_movement >= self.take_profit_pips
 
     def _create_close_order(
-        self, position: Position, tick_data: TickData, reason: str = "take_profit"
+        self,
+        position: Position,
+        tick_data: TickData,
+        reason: str = "take_profit",
+        remaining_retracements_after_batch: int | None = None,
     ) -> Order | None:
         """
         Create order to close a position.
@@ -1487,6 +1509,15 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         # Get event metadata
         event_type, reason_display = self._get_close_event_metadata(reason)
         layer = self.layer_manager.get_layer(getattr(position, "layer_number", 0))
+        entry_retracement_number = getattr(position, "retracement_number", None)
+        remaining_retracements: int | None = None
+        if layer:
+            if remaining_retracements_after_batch is not None:
+                remaining_retracements = remaining_retracements_after_batch
+            else:
+                remaining_retracements = layer.retracement_count
+                if not getattr(position, "is_first_lot", False):
+                    remaining_retracements = max(0, remaining_retracements - 1)
 
         # Log close event
         self.log_strategy_event(
@@ -1507,8 +1538,9 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                 "event_type": event_type,
                 "timestamp": tick_data.timestamp.isoformat(),
                 "layer_number": getattr(position, "layer_number", None),
-                "retracement_count": layer.retracement_count if layer else None,
+                "retracement_count": remaining_retracements,
                 "max_retracements": layer.max_retracements_per_layer if layer else None,
+                "entry_retracement_count": entry_retracement_number,
             },
         )
 

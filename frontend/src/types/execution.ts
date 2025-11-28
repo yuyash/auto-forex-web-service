@@ -65,6 +65,7 @@ export interface StrategyEvent {
   timestamp: string;
   layer_number: number;
   retracement_count: number;
+  entry_retracement_count?: number;
   direction?: 'long' | 'short';
   units?: number;
   entry_price?: number;
@@ -97,6 +98,7 @@ export interface Trade {
   layer_number?: number;
   is_first_lot?: boolean;
   retracement_count?: number;
+  entry_retracement_count?: number;
 }
 
 export interface ExecutionSummary {

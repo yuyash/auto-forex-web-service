@@ -192,6 +192,8 @@ function getMarkerConfig(eventType: string): {
  */
 function formatTooltip(event: BacktestStrategyEvent): string {
   const lines: string[] = [event.description];
+  const entryEventTypes = ['initial_entry', 'scale_in'];
+  const isEntryEvent = entryEventTypes.includes(event.event_type);
 
   // Add relevant details
   if (event.details.price) {
@@ -200,8 +202,12 @@ function formatTooltip(event: BacktestStrategyEvent): string {
   if (event.details.layer_number !== undefined) {
     lines.push(`Layer: ${event.details.layer_number}`);
   }
+  if (event.details.entry_retracement_count !== undefined) {
+    lines.push(`Entry Retracement: ${event.details.entry_retracement_count}`);
+  }
   if (event.details.retracement_count !== undefined) {
-    lines.push(`Retracement: ${event.details.retracement_count}`);
+    const label = isEntryEvent ? 'Retracement' : 'Remaining Retracements';
+    lines.push(`${label}: ${event.details.retracement_count}`);
   }
   if (event.details.units) {
     lines.push(`Units: ${event.details.units}`);

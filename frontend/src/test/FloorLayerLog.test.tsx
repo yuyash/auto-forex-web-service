@@ -24,6 +24,7 @@ describe('FloorLayerLog Component', () => {
       layer_number: 1,
       is_first_lot: true,
       retracement_count: 0,
+      entry_retracement_count: 0,
     },
     {
       entry_time: '2024-01-15T10:30:00Z',
@@ -37,6 +38,7 @@ describe('FloorLayerLog Component', () => {
       layer_number: 1,
       is_first_lot: false,
       retracement_count: 1,
+      entry_retracement_count: 1,
     },
   ];
 
@@ -51,6 +53,7 @@ describe('FloorLayerLog Component', () => {
         direction: 'long',
         units: 1000,
         entry_price: 149.5,
+        entry_retracement_count: 0,
       },
     },
     {
@@ -63,6 +66,7 @@ describe('FloorLayerLog Component', () => {
         direction: 'long',
         units: 1500,
         entry_price: 149.3,
+        entry_retracement_count: 1,
       },
     },
     {
@@ -78,6 +82,7 @@ describe('FloorLayerLog Component', () => {
         entry_price: 149.5,
         exit_price: 149.75,
         pnl: 250.0,
+        entry_retracement_count: 1,
       },
     },
   ];
@@ -211,6 +216,8 @@ describe('FloorLayerLog Component', () => {
     // Add Layer event has retracement_count = 1, should show in details
     const scaleInRow = rows[1];
     expect(scaleInRow?.textContent).toContain('Retracement #1');
+    const takeProfitRow = rows[2];
+    expect(takeProfitRow?.textContent).toContain('Remaining Retracements: 0');
   });
 
   it('handles empty state correctly', () => {

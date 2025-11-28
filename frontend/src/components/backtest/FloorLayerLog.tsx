@@ -43,6 +43,7 @@ interface DisplayEvent {
   realizedPnl?: number;
   unrealizedPnl?: number;
   retracementCount?: number;
+   entryRetracementCount?: number;
   maxRetracements?: number;
   isFirstLot?: boolean;
   description: string;
@@ -88,6 +89,11 @@ const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleString();
 };
 
+const parseNumber = (value: unknown): number | undefined => {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? parsedValue : undefined;
+};
+
 export function FloorLayerLog({
   trades,
   strategyEvents = [],
@@ -117,6 +123,8 @@ export function FloorLayerLog({
       const details = event.details || {};
       const layerNumber =
         (details.layer as number) || (details.layer_number as number) || 1;
+      const entryRetracementCount = parseNumber(details.entry_retracement_count);
+      const retracementCount = parseNumber(details.retracement_count);
 
       // Normalize strategy_close to take_profit (they're the same thing)
       const eventType =
@@ -148,10 +156,9 @@ export function FloorLayerLog({
         unrealizedPnl: details.unrealized_pnl
           ? parseFloat(String(details.unrealized_pnl))
           : undefined,
-        retracementCount: details.retracement_count as number | undefined,
-        maxRetracements: details.max_retracements
-          ? parseInt(String(details.max_retracements), 10)
-          : undefined,
+        retracementCount,
+        entryRetracementCount,
+        maxRetracements: parseNumber(details.max_retracements),
         isFirstLot: details.is_first_lot as boolean | undefined,
         description: event.description,
         source: 'event',
@@ -161,6 +168,10 @@ export function FloorLayerLog({
     // Add entry events from trades (if not already in strategy events)
     trades.forEach((trade, idx) => {
       const layerNum = trade.layer_number ?? 1;
+      const entryRetracementCount =
+        typeof trade.entry_retracement_count === 'number'
+          ? trade.entry_retracement_count
+          : undefined;
 
       // Check if we already have an entry event for this trade
       const hasMatchingEntryEvent = events.some(
@@ -187,6 +198,7 @@ export function FloorLayerLog({
           exitPrice: trade.exit_price,
           pnl: undefined, // Entry doesn't have P&L yet
           retracementCount: trade.retracement_count,
+          entryRetracementCount: entryRetracementCount ?? trade.retracement_count,
           isFirstLot: trade.is_first_lot,
           description: trade.is_first_lot
             ? `Initial ${trade.direction?.toUpperCase()} entry @ ${trade.entry_price.toFixed(5)}`
@@ -224,6 +236,7 @@ export function FloorLayerLog({
           realizedPnl: trade.realized_pnl ?? trade.pnl,
           unrealizedPnl: trade.unrealized_pnl,
           retracementCount: trade.retracement_count,
+          entryRetracementCount: entryRetracementCount ?? trade.retracement_count,
           isFirstLot: trade.is_first_lot,
           description: `Take Profit: ${trade.direction?.toUpperCase()} ${trade.units} units closed @ ${trade.exit_price.toFixed(5)} | P&L: $${trade.pnl.toFixed(2)}`,
           tradeIndex: idx,
@@ -454,6 +467,12 @@ export function FloorLayerLog({
                           'volatility_lock',
                           'margin_protection',
                         ].includes(event.eventType);
+                        const entryRetracementValue =
+                          event.entryRetracementCount ??
+                          (isEntry ? event.retracementCount : undefined);
+                        const remainingRetracementValue = !isEntry
+                          ? event.retracementCount
+                          : undefined;
 
                         let action = '-';
                         if (isEntry && event.direction)
@@ -501,7 +520,8 @@ export function FloorLayerLog({
                               )}
                             </TableCell>
                             <TableCell align="right">
-                              {event.retracementCount !== undefined ? (
+                              {entryRetracementValue !== undefined ||
+                              remainingRetracementValue !== undefined ? (
                                 <Tooltip
                                   title={
                                     event.maxRetracements
@@ -510,13 +530,32 @@ export function FloorLayerLog({
                                   }
                                   placement="top"
                                 >
-                                  <Typography
-                                    component="span"
-                                    variant="body2"
-                                    sx={{ fontWeight: 'bold' }}
+                                  <Box
+                                    sx={{
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      alignItems: 'flex-end',
+                                      gap: 0.5,
+                                    }}
                                   >
-                                    {event.retracementCount}
-                                  </Typography>
+                                    {entryRetracementValue !== undefined && (
+                                      <Typography
+                                        component="span"
+                                        variant="body2"
+                                        sx={{ fontWeight: 'bold' }}
+                                      >
+                                        {entryRetracementValue}
+                                      </Typography>
+                                    )}
+                                    {remainingRetracementValue !== undefined && (
+                                      <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                      >
+                                        Remaining: {remainingRetracementValue}
+                                      </Typography>
+                                    )}
+                                  </Box>
                                 </Tooltip>
                               ) : (
                                 '-'
@@ -586,15 +625,20 @@ export function FloorLayerLog({
                                   {event.description}
                                 </Typography>
                               </Tooltip>
-                              {event.retracementCount !== undefined &&
-                                event.retracementCount > 0 && (
+                              {entryRetracementValue !== undefined &&
+                                entryRetracementValue > 0 && (
                                   <Typography
                                     variant="caption"
                                     color="text.secondary"
                                   >
-                                    Retracement #{event.retracementCount}
+                                    Retracement #{entryRetracementValue}
                                   </Typography>
                                 )}
+                              {remainingRetracementValue !== undefined && (
+                                <Typography variant="caption" color="text.secondary">
+                                  Remaining Retracements: {remainingRetracementValue}
+                                </Typography>
+                              )}
                             </TableCell>
                           </TableRow>
                         );

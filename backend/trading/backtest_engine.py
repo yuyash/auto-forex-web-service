@@ -74,6 +74,7 @@ class BacktestPosition:
         layer_number: Layer number for multi-layer strategies (optional)
         is_first_lot: Whether this is the first lot in a layer (optional)
         position_id: Unique position identifier (optional)
+        retracement_number: Strategy-specific retracement index (optional)
     """
 
     instrument: str
@@ -87,6 +88,7 @@ class BacktestPosition:
     is_first_lot: bool = False
     position_id: str | None = None
     current_price: Decimal | None = None  # For strategy compatibility
+    retracement_number: int | None = None
 
     def calculate_pnl(self, current_price: Decimal) -> Decimal:
         """
@@ -148,7 +150,8 @@ class BacktestTrade:
         reason_display: Human-friendly reason description
         layer_number: Layer number for multi-layer strategies (optional)
         is_first_lot: Whether this was the first lot in a layer (optional)
-        retracement_count: Number of retracements at time of entry (optional, floor strategy)
+        retracement_count: Remaining retracements at close time (optional, floor strategy)
+        entry_retracement_count: Entry retracement number (optional, floor strategy)
     """
 
     instrument: str
@@ -166,6 +169,7 @@ class BacktestTrade:
     layer_number: int | None = None
     is_first_lot: bool = False
     retracement_count: int | None = None
+    entry_retracement_count: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -190,6 +194,8 @@ class BacktestTrade:
             result["is_first_lot"] = self.is_first_lot
         if self.retracement_count is not None:
             result["retracement_count"] = self.retracement_count
+        if self.entry_retracement_count is not None:
+            result["entry_retracement_count"] = self.entry_retracement_count
         return result
 
 
@@ -933,6 +939,7 @@ class BacktestEngine:
                 layer_number=getattr(order, "layer_number", None),
                 is_first_lot=getattr(order, "is_first_lot", False),
                 position_id=position_id,
+                retracement_number=getattr(order, "retracement_number", None),
             )
 
             self.positions.append(position)
@@ -1016,7 +1023,11 @@ class BacktestEngine:
             for layer in self.strategy.layer_manager.layers:
                 if position.layer_number == layer.layer_number:
                     retracement_count = layer.retracement_count
+                    if not position.is_first_lot and retracement_count is not None:
+                        retracement_count = max(0, retracement_count - 1)
                     break
+
+        entry_retracement_number = position.retracement_number
 
         trade = BacktestTrade(
             instrument=position.instrument,
@@ -1034,6 +1045,7 @@ class BacktestEngine:
             layer_number=position.layer_number,
             is_first_lot=position.is_first_lot,
             retracement_count=retracement_count,
+            entry_retracement_count=entry_retracement_number,
         )
         self.trade_log.append(trade)
 

@@ -138,6 +138,8 @@ class TestLogStrategyEventsToExecution:
                         "pnl": 25.0,
                         "reason_display": "Take Profit",
                         "layer_number": 1,
+                        "entry_retracement_count": 1,
+                        "retracement_count": 0,
                     },
                 }
             ]
@@ -151,6 +153,8 @@ class TestLogStrategyEventsToExecution:
         assert "[FLOOR] Layer 1 Take Profit" in execution.logs[0]["message"]
         assert "Entry: 1.10000 → Exit: 1.10250" in execution.logs[0]["message"]
         assert "+$25.00" in execution.logs[0]["message"]
+        assert "Entry Retracement #1" in execution.logs[0]["message"]
+        assert "Remaining Retracements: 0" in execution.logs[0]["message"]
 
     def test_logs_take_profit_event(self):
         """Test logging of take profit events."""
@@ -168,6 +172,8 @@ class TestLogStrategyEventsToExecution:
                         "exit_price": "1.10250",
                         "pnl": 50.0,
                         "reason_display": "Take Profit",
+                        "entry_retracement_count": 2,
+                        "retracement_count": 1,
                     },
                 }
             ]
@@ -181,6 +187,8 @@ class TestLogStrategyEventsToExecution:
         assert "[FLOOR]" in execution.logs[0]["message"]
         assert "Take Profit" in execution.logs[0]["message"]
         assert "+$50.00" in execution.logs[0]["message"]
+        assert "Entry Retracement #2" in execution.logs[0]["message"]
+        assert "Remaining Retracements: 1" in execution.logs[0]["message"]
 
     def test_logs_volatility_lock_event(self):
         """Test logging of volatility lock events."""
@@ -198,6 +206,8 @@ class TestLogStrategyEventsToExecution:
                         "exit_price": "1.09500",
                         "pnl": -50.0,
                         "reason_display": "Volatility Lock",
+                        "entry_retracement_count": None,
+                        "retracement_count": 3,
                     },
                 }
             ]

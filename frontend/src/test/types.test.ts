@@ -60,11 +60,13 @@ describe('Type Definitions', () => {
         direction: 'long',
         units: 1000,
         entry_price: 149.5,
+        entry_retracement_count: 0,
       };
 
       expect(event.direction).toBe('long');
       expect(event.units).toBe(1000);
       expect(event.entry_price).toBe(149.5);
+      expect(event.entry_retracement_count).toBe(0);
     });
 
     it('includes optional fields for close events', () => {
@@ -75,10 +77,12 @@ describe('Type Definitions', () => {
         retracement_count: 0,
         exit_price: 149.75,
         pnl: 250.0,
+        entry_retracement_count: 1,
       };
 
       expect(event.exit_price).toBe(149.75);
       expect(event.pnl).toBe(250.0);
+      expect(event.entry_retracement_count).toBe(1);
     });
 
     it('accepts metadata field', () => {
@@ -91,6 +95,7 @@ describe('Type Definitions', () => {
           reason: 'target_reached',
           target_price: 150.0,
         },
+        entry_retracement_count: 0,
       };
 
       expect(event.metadata).toBeDefined();
@@ -112,14 +117,17 @@ describe('Type Definitions', () => {
         layer_number: 1,
         is_first_lot: true,
         retracement_count: 0,
+        entry_retracement_count: 0,
       };
 
       expect(trade).toHaveProperty('layer_number');
       expect(trade).toHaveProperty('is_first_lot');
       expect(trade).toHaveProperty('retracement_count');
+      expect(trade).toHaveProperty('entry_retracement_count');
       expect(trade.layer_number).toBe(1);
       expect(trade.is_first_lot).toBe(true);
       expect(trade.retracement_count).toBe(0);
+      expect(trade.entry_retracement_count).toBe(0);
     });
 
     it('allows optional Floor Strategy fields', () => {
@@ -137,6 +145,7 @@ describe('Type Definitions', () => {
       expect(trade.layer_number).toBeUndefined();
       expect(trade.is_first_lot).toBeUndefined();
       expect(trade.retracement_count).toBeUndefined();
+      expect(trade.entry_retracement_count).toBeUndefined();
     });
   });
 
