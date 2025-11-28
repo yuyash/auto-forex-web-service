@@ -748,12 +748,12 @@ def collect_tick_data_for_default_account(
             result = start_market_data_stream.delay(
                 account_id=default_account.pk, instrument=instrument
             )
-            task_ids.append(result.pk)
+            task_ids.append(result.id)
             logger.info(
                 "Started tick data stream for %s on account %s (task: %s)",
                 instrument,
                 default_account.account_id,
-                result.pk,
+                result.id,
             )
 
         logger.info(
