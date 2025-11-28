@@ -174,15 +174,47 @@ class StateSynchronizer:
                 execution.pk,
             )
 
+            # Refresh from DB to ensure we have latest state
+            task.refresh_from_db()
+            execution.refresh_from_db()
+
+            logger.debug(
+                "Before update - Task %d status: %s, Execution %d status: %s",
+                task.pk,
+                task.status,
+                execution.pk,
+                execution.status,
+            )
+
             # Update task status
             task.status = TaskStatus.COMPLETED
             task.save(update_fields=["status", "updated_at"])
+            logger.debug("Task %d status saved as COMPLETED", task.pk)
 
             # Update execution status, timestamp, and progress
             execution.status = TaskStatus.COMPLETED
             execution.completed_at = timezone.now()
             execution.progress = 100
             execution.save(update_fields=["status", "completed_at", "progress"])
+            logger.debug("Execution %d status saved as COMPLETED", execution.pk)
+
+            # Verify the save was successful
+            task.refresh_from_db()
+            execution.refresh_from_db()
+            logger.debug(
+                "After update - Task %d status: %s, Execution %d status: %s",
+                task.pk,
+                task.status,
+                execution.pk,
+                execution.status,
+            )
+
+            if task.status != TaskStatus.COMPLETED:
+                logger.error(
+                    "Task %d status update failed - still showing %s",
+                    task.pk,
+                    task.status,
+                )
 
             # Broadcast notification
             send_task_status_notification(

@@ -12,6 +12,7 @@ Requirements: 2.3, 2.4, 2.5, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 6.1, 6.2, 6.3,
 6.4, 6.5, 6.6, 6.7, 8.1, 8.2, 8.3, 8.4
 """
 
+import logging
 from typing import Type
 
 from django.db.models import Q, QuerySet
@@ -34,6 +35,8 @@ from .backtest_task_serializers import (
 )
 from .enums import TaskStatus
 from .serializers import TaskExecutionSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class BacktestTaskListCreateView(ListCreateAPIView):
@@ -398,9 +401,12 @@ class BacktestTaskStatusView(APIView):
 
         Used by frontend for polling fallback when WebSocket connection fails.
         Returns current status, progress percentage, and latest execution details.
+        Also detects and auto-completes stale running tasks.
 
         Requirements: 3.1, 3.6
         """
+        from trading.services.task_lock_manager import TaskLockManager
+
         # Get the task
         try:
             task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
@@ -412,6 +418,88 @@ class BacktestTaskStatusView(APIView):
 
         # Get latest execution
         latest_execution = task.get_latest_execution()
+        lock_manager = TaskLockManager()
+
+        # Check for stale running tasks and auto-complete them
+        if task.status == TaskStatus.RUNNING and latest_execution:
+            lock_info = lock_manager.get_lock_info("backtest", task_id)
+
+            # Task is "running" but no lock exists or lock is stale
+            is_stale = lock_info is None or lock_info.get("is_stale", False)
+
+            # Check if latest execution is already completed (stale task)
+            # BUT only if the execution status is also completed (not just progress 100%)
+            execution_completed = latest_execution.status in [
+                TaskStatus.COMPLETED,
+                TaskStatus.FAILED,
+                TaskStatus.STOPPED,
+            ]
+
+            # Only auto-complete if execution is done AND (no lock OR stale lock)
+            if execution_completed and is_stale:
+                # Auto-complete stale task
+                logger.warning(
+                    "Detected stale running task %d (execution_status=%s, is_stale=%s), "
+                    "auto-completing",
+                    task_id,
+                    latest_execution.status,
+                    is_stale,
+                )
+
+                # Clean up any stale locks
+                if lock_info:
+                    lock_manager.release_lock("backtest", task_id)
+
+                # Update task status to match execution status
+                task.status = latest_execution.status
+                task.save(update_fields=["status", "updated_at"])
+
+                # Refresh to get updated values
+                task.refresh_from_db()
+
+        # Check for stale stopped tasks (stop requested but worker hasn't responded)
+        if (
+            task.status == TaskStatus.STOPPED
+            and latest_execution
+            and latest_execution.status == TaskStatus.RUNNING
+        ):
+            lock_info = lock_manager.get_lock_info("backtest", task_id)
+            is_stale = lock_info is None or lock_info.get("is_stale", False)
+
+            if is_stale:
+                # Worker has stopped but execution wasn't updated
+                logger.warning(
+                    "Detected stale stopped task %d with running execution, "
+                    "updating execution status",
+                    task_id,
+                )
+
+                # Clean up any stale locks
+                if lock_info:
+                    lock_manager.release_lock("backtest", task_id)
+
+                # Update execution to stopped
+                latest_execution.status = TaskStatus.STOPPED
+                latest_execution.completed_at = timezone.now()
+                latest_execution.save(update_fields=["status", "completed_at"])
+                latest_execution.refresh_from_db()
+
+        # Determine the correct progress to report
+        # If task is RUNNING but latest execution is completed, a new execution is pending
+        # In this case, report progress as 0 (pending new execution)
+        pending_new_execution = (
+            task.status == TaskStatus.RUNNING
+            and latest_execution
+            and latest_execution.status
+            in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.STOPPED]
+        )
+
+        if pending_new_execution:
+            reported_progress = 0
+        elif latest_execution:
+            reported_progress = latest_execution.progress
+        else:
+            reported_progress = 0
 
         # Build execution details
         execution_data = None
@@ -435,7 +523,8 @@ class BacktestTaskStatusView(APIView):
             "task_id": task.pk,
             "task_type": "backtest",
             "status": task.status,
-            "progress": latest_execution.progress if latest_execution else 0,
+            "progress": reported_progress,
+            "pending_new_execution": pending_new_execution,
             "started_at": (
                 latest_execution.started_at.isoformat()
                 if latest_execution and latest_execution.started_at
