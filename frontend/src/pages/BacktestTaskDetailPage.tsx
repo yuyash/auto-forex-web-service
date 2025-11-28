@@ -35,6 +35,7 @@ import {
   useRerunBacktestTask,
 } from '../hooks/useBacktestTaskMutations';
 import { useTaskPolling } from '../hooks/useTaskPolling';
+import { useBacktestLiveResults } from '../hooks/useBacktestLiveResults';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
 import { TaskActionButtons } from '../components/tasks/actions/TaskActionButtons';
@@ -103,6 +104,11 @@ export default function BacktestTaskDetailPage() {
     enabled: !!taskId,
     pollStatus: true,
     interval: 3000, // Poll every 3 seconds for active tasks
+  });
+
+  // Poll for live results when task is running
+  const { liveResults } = useBacktestLiveResults(taskId, task?.status, {
+    interval: 5000, // Poll every 5 seconds for live results
   });
 
   // Refetch when status changes
@@ -405,11 +411,44 @@ export default function BacktestTaskDetailPage() {
         </Tabs>
 
         <TabPanel value={tabValue} index={0}>
-          <TaskOverviewTab task={task} />
+          <TaskOverviewTab
+            task={task}
+            liveResults={
+              liveResults?.has_data
+                ? {
+                    day_date: liveResults.day_date || '',
+                    progress: liveResults.progress || 0,
+                    days_processed: liveResults.days_processed || 0,
+                    total_days: liveResults.total_days || 0,
+                    balance: liveResults.balance || 0,
+                    total_trades: liveResults.total_trades || 0,
+                    metrics: liveResults.metrics || {},
+                    equity_curve: liveResults.equity_curve || [],
+                  }
+                : null
+            }
+          />
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
-          <TaskResultsTab task={task} />
+          <TaskResultsTab
+            task={task}
+            liveResults={
+              liveResults?.has_data
+                ? {
+                    day_date: liveResults.day_date || '',
+                    progress: liveResults.progress || 0,
+                    days_processed: liveResults.days_processed || 0,
+                    total_days: liveResults.total_days || 0,
+                    balance: liveResults.balance || 0,
+                    total_trades: liveResults.total_trades || 0,
+                    metrics: liveResults.metrics || {},
+                    recent_trades: liveResults.recent_trades || [],
+                    equity_curve: liveResults.equity_curve || [],
+                  }
+                : null
+            }
+          />
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>

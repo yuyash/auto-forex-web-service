@@ -76,3 +76,48 @@ export interface BacktestTaskListParams {
 export interface BacktestTaskCopyData {
   new_name: string;
 }
+
+/**
+ * Live/intermediate results during backtest execution
+ */
+export interface BacktestLiveResults {
+  task_id: number;
+  has_data: boolean;
+  message?: string;
+  day_date?: string;
+  progress?: number;
+  days_processed?: number;
+  total_days?: number;
+  ticks_processed?: number;
+  balance?: number;
+  total_trades?: number;
+  metrics?: {
+    total_pnl?: number;
+    total_return?: number;
+    win_rate?: number;
+    winning_trades?: number;
+    losing_trades?: number;
+    average_win?: number;
+    average_loss?: number;
+    profit_factor?: number;
+    max_drawdown?: number;
+    sharpe_ratio?: number;
+    [key: string]: number | string | undefined;
+  };
+  recent_trades?: Array<{
+    timestamp: string;
+    instrument: string;
+    direction: string;
+    entry_price: number;
+    exit_price: number;
+    units: number;
+    pnl: number;
+    duration: number;
+    [key: string]: string | number | boolean | undefined;
+  }>;
+  equity_curve?: Array<{
+    timestamp: string;
+    balance: number;
+    [key: string]: string | number | undefined;
+  }>;
+}
