@@ -202,8 +202,20 @@ class Layer:  # pylint: disable=too-many-instance-attributes
         Returns:
             True if new layer should be created
         """
-        trigger: int = self.config.get("retracement_count_trigger", 10)
-        return self.retracement_count >= trigger
+        trigger_value = self.config.get("retracement_count_trigger")
+        auto_advance = self.config.get("auto_advance_on_low_trigger", False)
+
+        # Always unlock a new layer if this layer has exhausted its capacity
+        if self.retracement_count >= self.max_retracements_per_layer:
+            return True
+
+        if auto_advance:
+            return True
+
+        if trigger_value is None:
+            trigger_value = self.max_retracements_per_layer
+
+        return self.retracement_count >= trigger_value
 
 
 class ScalingEngine:
@@ -1690,6 +1702,9 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
 
                     new_layer = self.layer_manager.create_layer(next_layer_num, layer_config)
                     if new_layer:
+                        # Prevent duplicate auto-advance attempts once the next layer exists
+                        if layer.config.get("auto_advance_on_low_trigger"):
+                            layer.config["auto_advance_on_low_trigger"] = False
                         self.log_strategy_event(
                             "new_layer_created",
                             f"Created new layer {next_layer_num}",
@@ -1714,7 +1729,7 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
             Layer configuration dictionary
         """
         # Calculate retracement trigger based on progression mode
-        base_trigger = self.get_config_value("retracement_trigger_base", 10)
+        base_trigger = float(self.max_retracements_per_layer)
         trigger_progression = self.get_config_value("retracement_trigger_progression", "additive")
         trigger_increment = self.get_config_value("retracement_trigger_increment", 5)
 
@@ -1724,6 +1739,8 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
             progression_mode=trigger_progression,
             increment=trigger_increment,
         )
+        trigger_auto_advance = retracement_trigger < 1
+        trigger_threshold = 1 if trigger_auto_advance else int(retracement_trigger)
 
         # Calculate lot size based on progression mode
         lot_progression = self.get_config_value("lot_size_progression", "additive")
@@ -1737,7 +1754,8 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         )
 
         return {
-            "retracement_count_trigger": int(retracement_trigger),
+            "retracement_count_trigger": trigger_threshold,
+            "auto_advance_on_low_trigger": trigger_auto_advance,
             "base_lot_size": float(lot_size),
             "max_retracements_per_layer": self.max_retracements_per_layer,
         }
@@ -2022,7 +2040,8 @@ FLOOR_STRATEGY_CONFIG_SCHEMA = {
             "title": "Max Retracements Per Layer",
             "description": (
                 "Upper bound on how many retracement scale-ins a layer can perform before "
-                "requiring positions to close or the layer to reset"
+                "requiring positions to close or the layer to reset. Hitting this limit now "
+                "also unlocks the next layer if one is available."
             ),
             "default": 10,
             "minimum": 1,
@@ -2035,13 +2054,6 @@ FLOOR_STRATEGY_CONFIG_SCHEMA = {
             ),
             "default": 5.0,
             "minimum": 1.0,
-        },
-        "retracement_trigger_base": {
-            "type": "integer",
-            "title": "Base Retracement Trigger",
-            "description": "Base number of retracements for layer 1",
-            "default": 10,
-            "minimum": 1,
         },
         "retracement_trigger_progression": {
             "type": "string",
@@ -2059,6 +2071,10 @@ FLOOR_STRATEGY_CONFIG_SCHEMA = {
             ),
             "default": 5,
             "minimum": 0,
+            "dependsOn": {
+                "field": "retracement_trigger_progression",
+                "values": ["additive", "exponential"],
+            },
         },
         "lot_size_progression": {
             "type": "string",
@@ -2076,6 +2092,10 @@ FLOOR_STRATEGY_CONFIG_SCHEMA = {
             ),
             "default": 0.5,
             "minimum": 0,
+            "dependsOn": {
+                "field": "lot_size_progression",
+                "values": ["additive", "exponential"],
+            },
         },
         "entry_signal_lookback_ticks": {
             "type": "integer",

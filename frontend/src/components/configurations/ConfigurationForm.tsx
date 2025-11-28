@@ -153,13 +153,6 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
       default: 5.0,
       minimum: 1,
     },
-    retracement_trigger_base: {
-      type: 'integer',
-      title: 'Base Retracement Trigger',
-      description: 'Base number of retracements for layer 1',
-      default: 10,
-      minimum: 1,
-    },
     retracement_trigger_progression: {
       type: 'string',
       title: 'Retracement Trigger Progression',
@@ -174,6 +167,10 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
         'Value to add (additive) or multiply by (exponential). Not used for equal/inverse',
       default: 5,
       minimum: 0,
+      dependsOn: {
+        field: 'retracement_trigger_progression',
+        values: ['additive', 'exponential'],
+      },
     },
     lot_size_progression: {
       type: 'string',
@@ -189,6 +186,10 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
         'Value to add (additive) or multiply by (exponential). Not used for equal/inverse',
       default: 0.5,
       minimum: 0,
+      dependsOn: {
+        field: 'lot_size_progression',
+        values: ['additive', 'exponential'],
+      },
     },
     direction_method: {
       type: 'string',
@@ -365,7 +366,6 @@ const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
     max_layers: 3,
     max_retracements_per_layer: 10,
     volatility_lock_multiplier: 5.0,
-    retracement_trigger_base: 10,
     retracement_trigger_progression: 'additive',
     retracement_trigger_increment: 5,
     lot_size_progression: 'additive',

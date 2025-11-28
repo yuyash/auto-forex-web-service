@@ -45,6 +45,43 @@ const StrategyConfigForm = ({
     {}
   );
 
+  useEffect(() => {
+    if (!configSchema.properties) {
+      return;
+    }
+
+    let updatedConfig: StrategyConfig | null = null;
+
+    Object.entries(configSchema.properties).forEach(
+      ([fieldName, fieldSchema]) => {
+        if (!fieldSchema.dependsOn) {
+          return;
+        }
+
+        const dependentRaw = config[fieldSchema.dependsOn.field];
+        const dependentValue =
+          dependentRaw === undefined || dependentRaw === null
+            ? ''
+            : String(dependentRaw);
+        const matches = fieldSchema.dependsOn.values.includes(dependentValue);
+
+        if (
+          !matches &&
+          Object.prototype.hasOwnProperty.call(config, fieldName)
+        ) {
+          if (!updatedConfig) {
+            updatedConfig = { ...config };
+          }
+          delete updatedConfig[fieldName];
+        }
+      }
+    );
+
+    if (updatedConfig) {
+      onChange(updatedConfig);
+    }
+  }, [config, configSchema, onChange]);
+
   // Validate config against schema
   const validateConfig = (currentConfig: StrategyConfig): ValidationErrors => {
     const errors: ValidationErrors = {};

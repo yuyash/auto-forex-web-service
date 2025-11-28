@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StrategyConfigForm from '../components/strategy/StrategyConfigForm';
@@ -539,6 +540,65 @@ describe('StrategyConfigForm', () => {
     await waitFor(() => {
       expect(mockOnChange).toHaveBeenCalledWith({
         strategy_name: 'New Strategy',
+      });
+    });
+  });
+
+  it('removes dependent field values when hidden', async () => {
+    const schemaWithDepends: ConfigSchema = {
+      type: 'object',
+      properties: {
+        progression_mode: {
+          type: 'string',
+          title: 'Progression Mode',
+          enum: ['equal', 'additive'],
+          default: 'additive',
+        },
+        progression_increment: {
+          type: 'number',
+          title: 'Progression Increment',
+          default: 5,
+          dependsOn: {
+            field: 'progression_mode',
+            values: ['additive'],
+          },
+        },
+      },
+    };
+
+    const configWithDepends: StrategyConfig = {
+      progression_mode: 'additive',
+      progression_increment: 7,
+    };
+
+    const Wrapper = () => {
+      const [configState, setConfigState] = useState(configWithDepends);
+      return (
+        <StrategyConfigForm
+          configSchema={schemaWithDepends}
+          config={configState}
+          onChange={(nextConfig) => {
+            setConfigState(nextConfig);
+            mockOnChange(nextConfig);
+          }}
+        />
+      );
+    };
+
+    render(<Wrapper />);
+
+    const progressionSelect = screen
+      .getByText('Additive')
+      .closest('div[role="combobox"]');
+    expect(progressionSelect).toBeInTheDocument();
+    fireEvent.mouseDown(progressionSelect!);
+
+    const equalOption = await screen.findByText('Equal');
+    fireEvent.click(equalOption);
+
+    await waitFor(() => {
+      expect(mockOnChange).toHaveBeenLastCalledWith({
+        progression_mode: 'equal',
       });
     });
   });

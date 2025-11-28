@@ -100,6 +100,9 @@ describe('RegisterPage', () => {
     });
 
     const submitButton = screen.getByRole('button', { name: /sign up/i });
+    await waitFor(() => {
+      expect(submitButton).not.toBeDisabled();
+    });
     await user.click(submitButton);
 
     await waitFor(() => {
@@ -506,6 +509,9 @@ describe('RegisterPage', () => {
     const submitButton = screen.getByRole('button', { name: /sign up/i });
 
     // Trigger validation error
+    await waitFor(() => {
+      expect(submitButton).not.toBeDisabled();
+    });
     await user.click(submitButton);
 
     await waitFor(

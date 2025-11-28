@@ -353,12 +353,21 @@ describe('OrderHistoryPage', () => {
       { timeout: 3000 }
     );
 
-    // Open instrument dropdown and select EUR_USD
-    const instrumentSelect = screen.getByLabelText(/Instrument/i);
+    // Open instrument dropdown (MUI select uses combobox role) and select EUR_USD
+    const instrumentSelect = screen.getByRole('combobox', {
+      name: /Instrument/i,
+    });
     await user.click(instrumentSelect);
 
-    const eurUsdOptions = await screen.findAllByText('EUR_USD');
-    await user.click(eurUsdOptions[eurUsdOptions.length - 1]); // Click the dropdown option
+    const listbox = await screen.findByRole('listbox');
+    const eurUsdOption = within(listbox).getByRole('option', {
+      name: 'EUR_USD',
+    });
+    await user.click(eurUsdOption);
+
+    await waitFor(() => {
+      expect(instrumentSelect).toHaveTextContent('EUR_USD');
+    });
 
     // Click apply filters
     const applyButton = screen.getByRole('button', { name: /Apply Filters/i });

@@ -61,6 +61,7 @@ def strategy_config():
         "retracement_pips": 30,
         "take_profit_pips": 25,
         "max_layers": 3,
+        "max_retracements_per_layer": 10,
         "volatility_lock_multiplier": 5.0,
         "layer_configs": [
             {"retracement_count_trigger": 10, "base_lot_size": 1.0},
@@ -279,6 +280,31 @@ class TestLayer:
         # Increment to trigger threshold
         for _ in range(10):
             layer.increment_retracement_count()
+
+        assert layer.should_create_new_layer() is True
+
+    def test_should_create_new_layer_on_max_retracements(self):
+        """Layer should promote next layer once its retracement cap is hit."""
+        config = {
+            "base_lot_size": 1.0,
+            "retracement_count_trigger": 999,  # unrealistically high
+            "max_retracements_per_layer": 3,
+        }
+        layer = Layer(layer_number=1, config=config)
+
+        for _ in range(3):
+            layer.increment_retracement_count()
+
+        assert layer.should_create_new_layer() is True
+
+    def test_should_create_new_layer_auto_advance_when_trigger_below_one(self):
+        """Layers with sub-1 triggers (inverse progression) should auto-advance."""
+        config = {
+            "base_lot_size": 1.0,
+            "retracement_count_trigger": 1,
+            "auto_advance_on_low_trigger": True,
+        }
+        layer = Layer(layer_number=2, config=config)
 
         assert layer.should_create_new_layer() is True
 

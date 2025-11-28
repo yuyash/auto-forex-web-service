@@ -86,13 +86,13 @@ line-length = 100
 target-version = ["py313"]
 include = '\.pyi?$'
 extend-exclude = '''
-]
-  | \.tox
-  | \.venv
-  | build
-  | dist
-  | migrations
-)/
+(
+    /\\.tox
+    | /\\.venv
+    | /build
+    | /dist
+    | /migrations
+)
 '''
 
 [tool.mypy]

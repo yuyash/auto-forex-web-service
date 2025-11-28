@@ -346,6 +346,11 @@ describe('LoginPage', () => {
   it('shows loading state during login', async () => {
     const user = userEvent.setup();
 
+    let resolvePromise: ((value: Response) => void) | undefined;
+    const pendingResponse = new Promise<Response>((resolve) => {
+      resolvePromise = resolve;
+    });
+
     mockFetch
       .mockResolvedValueOnce({
         ok: true,
@@ -354,29 +359,7 @@ describe('LoginPage', () => {
           login_enabled: true,
         }),
       })
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) =>
-            setTimeout(
-              () =>
-                resolve({
-                  ok: true,
-                  json: async () => ({
-                    token: 'test-token',
-                    user: {
-                      id: 1,
-                      email: 'test@example.com',
-                      username: 'testuser',
-                      is_staff: false,
-                      timezone: 'UTC',
-                      language: 'en',
-                    },
-                  }),
-                }),
-              100
-            )
-          )
-      );
+      .mockReturnValueOnce(pendingResponse);
 
     render(
       <MemoryRouter>
@@ -401,5 +384,26 @@ describe('LoginPage', () => {
 
     // Check for loading spinner
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
+
+    // Resolve the pending login request to avoid lingering async work
+    resolvePromise!({
+      ok: true,
+      json: async () => ({
+        token: 'test-token',
+        user: {
+          id: 1,
+          email: 'test@example.com',
+          username: 'testuser',
+          is_staff: false,
+          timezone: 'UTC',
+          language: 'en',
+        },
+      }),
+    } as Response);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(submitButton).not.toBeDisabled();
+    });
   });
 });

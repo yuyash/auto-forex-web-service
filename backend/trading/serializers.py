@@ -169,18 +169,41 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
         strategy_type = attrs.get("strategy_type")
         parameters = attrs.get("parameters", {})
 
+        normalized_parameters = parameters
+        if strategy_type == "floor":
+            normalized_parameters = self._normalize_floor_parameters(parameters)
+
         if strategy_type:
             # Create temporary config for validation
             temp_config = StrategyConfig(
                 strategy_type=strategy_type,
-                parameters=parameters,
+                parameters=normalized_parameters,
             )
 
             is_valid, error_message = temp_config.validate_parameters()
             if not is_valid:
                 raise serializers.ValidationError({"parameters": error_message})
 
+        attrs["parameters"] = normalized_parameters
         return attrs
+
+    @staticmethod
+    def _normalize_floor_parameters(parameters: dict) -> dict:
+        """Drop unused floor strategy fields based on progression choices."""
+        normalized = dict(parameters)
+
+        # retracement_trigger_base is deprecated; always derive from max retracements
+        normalized.pop("retracement_trigger_base", None)
+
+        retracement_progression = normalized.get("retracement_trigger_progression", "additive")
+        if retracement_progression not in {"additive", "exponential"}:
+            normalized.pop("retracement_trigger_increment", None)
+
+        lot_progression = normalized.get("lot_size_progression", "additive")
+        if lot_progression not in {"additive", "exponential"}:
+            normalized.pop("lot_size_increment", None)
+
+        return normalized
 
     def create(self, validated_data: dict) -> StrategyConfig:
         """Create strategy configuration with user from context."""
