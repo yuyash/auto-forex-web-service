@@ -1389,25 +1389,38 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         """
         orders: list[Order] = []
 
-        positions_to_close = [
-            position for position in layer.positions if self._should_take_profit(position, tick_data)
-        ]
+        # First, collect all positions that should take profit
+        positions_to_close: list[Position] = []
+        for position in layer.positions:
+            if self._should_take_profit(position, tick_data):
+                positions_to_close.append(position)
 
-        if not positions_to_close:
-            return orders
-
-        retracement_closures = sum(
-            1
-            for position in positions_to_close
-            if position != layer.first_lot_position and not getattr(position, "is_first_lot", False)
+        # Count how many non-first-lot (retracement) positions are being closed
+        retracement_positions_closing = sum(
+            1 for pos in positions_to_close if pos != layer.first_lot_position
         )
-        remaining_retracements_after_batch = max(0, layer.retracement_count - retracement_closures)
+
+        # Decrement retracement count by the number of retracement positions being closed
+        # This ensures the log reflects the correct count as positions close
+        if retracement_positions_closing > 0:
+            layer.decrement_retracement_count(retracement_positions_closing)
+            self._sync_layer_lot_size(layer)
+
+        # Mark retracement positions as already decremented to avoid double-decrement
+        # in on_position_closed
+        for position in positions_to_close:
+            if position != layer.first_lot_position:
+                position.retracement_already_decremented = True  # type: ignore[attr-defined]
 
         for position in positions_to_close:
             # Log before creating order
             current_price = tick_data.bid if position.direction == "long" else tick_data.ask
-            pip_movement = self.calculate_pips(position.entry_price, current_price, position.instrument)
+            pip_movement = self.calculate_pips(
+                position.entry_price, current_price, position.instrument
+            )
 
+            is_first_lot = position == layer.first_lot_position
+            position_type = "INITIAL" if is_first_lot else "SCALED"
             is_first_lot = position == layer.first_lot_position
             position_type = "INITIAL" if is_first_lot else "SCALED"
 
@@ -1420,13 +1433,17 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                 f"(Target: {self.take_profit_pips} pips)"
             )
             logger.info(tp_msg)
-
-            close_order = self._create_close_order(
-                position,
-                tick_data,
-                reason="strategy_close",
-                remaining_retracements_after_batch=remaining_retracements_after_batch,
+            tp_msg = (
+                f"[TAKE PROFIT] Layer {layer.layer_number} | "
+                f"Closing {position_type} {position.direction.upper()} position | "
+                f"Size: {position.units} units | "
+                f"Entry: {position.entry_price} → Exit: {current_price} | "
+                f"Profit: +{pip_movement:.1f} pips "
+                f"(Target: {self.take_profit_pips} pips)"
             )
+            logger.info(tp_msg)
+
+            close_order = self._create_close_order(position, tick_data, reason="strategy_close")
             if close_order:
                 orders.append(close_order)
 
@@ -1878,47 +1895,79 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         for layer in self.layer_manager.layers:
             if position.layer_number == layer.layer_number:
                 if position in layer.positions:
-                    layer.positions.remove(position)
-                    remove_msg = (
-                        f"Removed position from layer {layer.layer_number}, "
-                        f"now has {len(layer.positions)} positions"
-                    )
-                    logger.debug(remove_msg)
-                    # Clear first_lot_position if this was it
-                    if layer.first_lot_position == position:
-                        layer.first_lot_position = None
-                        logger.debug(
-                            "Cleared first_lot_position for layer %s",
-                            layer.layer_number,
-                        )
-                    else:
-                        # Non-first positions correspond to retracement scaling
-                        previous_count = layer.retracement_count
-                        layer.decrement_retracement_count()
-                        if layer.retracement_count != previous_count:
-                            self._sync_layer_lot_size(layer)
-                            closed_timestamp = getattr(position, "closed_at", None)
-                            event_timestamp = (
-                                closed_timestamp.isoformat() if closed_timestamp else None
-                            )
-                            self.log_strategy_event(
-                                "retracement_released",
-                                (
-                                    f"Layer {layer.layer_number} retracement count decreased to "
-                                    f"{layer.retracement_count} after closing scaled position"
-                                ),
-                                {
-                                    "layer": layer.layer_number,
-                                    "position_id": position.position_id,
-                                    "retracement_count": layer.retracement_count,
-                                    "max_retracements": layer.max_retracements_per_layer,
-                                    "event_type": "layer",
-                                    "timestamp": event_timestamp,
-                                },
-                            )
-                    # Save state immediately when position is removed
-                    self._save_state()
+                    self._remove_position_from_layer(layer, position)
                 break
+
+    def _remove_position_from_layer(self, layer: Layer, position: Position) -> None:
+        """
+        Remove a position from a layer and handle retracement count updates.
+
+        Args:
+            layer: Layer containing the position
+            position: Position to remove
+        """
+        layer.positions.remove(position)
+        remove_msg = (
+            f"Removed position from layer {layer.layer_number}, "
+            f"now has {len(layer.positions)} positions"
+        )
+        logger.debug(remove_msg)
+
+        # Clear first_lot_position if this was it
+        if layer.first_lot_position == position:
+            layer.first_lot_position = None
+            logger.debug(
+                "Cleared first_lot_position for layer %s",
+                layer.layer_number,
+            )
+        else:
+            self._handle_retracement_position_close(layer, position)
+
+        # Save state immediately when position is removed
+        self._save_state()
+
+    def _handle_retracement_position_close(self, layer: Layer, position: Position) -> None:
+        """
+        Handle retracement count updates when a non-first-lot position closes.
+
+        Args:
+            layer: Layer containing the position
+            position: Position that was closed
+        """
+        # Skip decrement if already done in _check_take_profit
+        already_decremented = getattr(position, "retracement_already_decremented", False)
+        if already_decremented:
+            logger.debug(
+                "Skipping retracement decrement for position %s "
+                "(already decremented in take profit)",
+                position.position_id,
+            )
+            return
+
+        previous_count = layer.retracement_count
+        layer.decrement_retracement_count()
+        if layer.retracement_count == previous_count:
+            return
+
+        self._sync_layer_lot_size(layer)
+        closed_timestamp = getattr(position, "closed_at", None)
+        event_timestamp = closed_timestamp.isoformat() if closed_timestamp else None
+        self.log_strategy_event(
+            "retracement_released",
+            (
+                f"Layer {layer.layer_number} retracement count decreased "
+                f"to {layer.retracement_count} after closing scaled "
+                f"position"
+            ),
+            {
+                "layer": layer.layer_number,
+                "position_id": position.position_id,
+                "retracement_count": layer.retracement_count,
+                "max_retracements": layer.max_retracements_per_layer,
+                "event_type": "layer",
+                "timestamp": event_timestamp,
+            },
+        )
 
     def validate_config(self, config: dict[str, Any]) -> bool:
         """
