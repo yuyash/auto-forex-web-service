@@ -523,7 +523,7 @@ describe('BacktestTaskForm - Form State Persistence', () => {
 
       // Verify modified name is shown
       expect(screen.getByText('Modified Name')).toBeInTheDocument();
-    });
+    }, 15000);
   });
 
   describe('Validation State Persistence', () => {

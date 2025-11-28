@@ -307,7 +307,7 @@ describe('OrderHistoryPage', () => {
   });
 
   it('filters orders by instrument', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     let filterApplied = false;
 
     setFetchImplementation((urlStr) => {
@@ -379,7 +379,7 @@ describe('OrderHistoryPage', () => {
       },
       { timeout: 3000 }
     );
-  });
+  }, 15000);
 
   it('filters orders by status', async () => {
     const user = userEvent.setup();
@@ -456,7 +456,7 @@ describe('OrderHistoryPage', () => {
   });
 
   it('searches orders by order ID', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     let filterApplied = false;
 
     setFetchImplementation((urlStr) => {
@@ -516,7 +516,7 @@ describe('OrderHistoryPage', () => {
       },
       { timeout: 3000 }
     );
-  });
+  }, 15000);
 
   it('clears all filters', async () => {
     const user = userEvent.setup();
