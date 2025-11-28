@@ -705,6 +705,10 @@ def execute_backtest_task(
                 execution, engine, last_strategy_event_index
             )
 
+            # Clear day tick data to free memory (data is no longer needed)
+            del day_tick_data
+            day_tick_data = []
+
             # Move to next day
             day_index += 1
             current_date += timedelta(days=1)
@@ -881,20 +885,34 @@ def execute_backtest_task(
             engine.balance,
         )
 
-        # Create ExecutionMetrics
-        with transaction.atomic():
-            metrics = _create_execution_metrics(
-                execution, performance_metrics, equity_curve, trade_log
-            )
-
-        # Use StateSynchronizer to transition to completed state
+        # IMPORTANT: Update status to COMPLETED first, BEFORE creating metrics
+        # This ensures that if the process is killed during metrics creation (OOM),
+        # the task is still marked as completed.
         state_synchronizer.transition_to_completed(task, execution)
 
         logger.info(
-            "Backtest task %d execution #%d completed successfully",
+            "Backtest task %d execution #%d marked as COMPLETED",
             task_id,
             execution_number,
         )
+
+        # Create ExecutionMetrics (this can be memory-intensive with large equity curves)
+        # If this fails, the task is still marked as completed
+        metrics = None
+        try:
+            with transaction.atomic():
+                metrics = _create_execution_metrics(
+                    execution, performance_metrics, equity_curve, trade_log
+                )
+            logger.info("ExecutionMetrics created for execution %d", execution.pk)
+        except Exception as metrics_error:  # pylint: disable=broad-exception-caught
+            logger.error(
+                "Failed to create ExecutionMetrics for execution %d: %s",
+                execution.pk,
+                metrics_error,
+                exc_info=True,
+            )
+            execution.add_log("WARNING", f"Failed to save detailed metrics: {metrics_error}")
 
         # Release lock
         lock_manager.release_lock("backtest", task_id)
@@ -903,7 +921,7 @@ def execute_backtest_task(
             "success": True,
             "task_id": task_id,
             "execution_id": execution.pk,
-            "metrics": metrics.get_trade_summary(),
+            "metrics": metrics.get_trade_summary() if metrics else None,
             "error": None,
         }
 
