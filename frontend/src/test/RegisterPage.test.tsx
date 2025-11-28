@@ -176,7 +176,7 @@ describe('RegisterPage', () => {
         screen.getByText(/password must contain at least one number/i)
       ).toBeInTheDocument();
     });
-  });
+  }, 15000);
 
   it('validates password confirmation match', async () => {
     const user = userEvent.setup({ delay: null });

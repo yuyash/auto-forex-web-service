@@ -117,7 +117,7 @@ describe('FloorLayerLog Property-Based Tests', () => {
           // For each event row, verify P&L column behavior
           eventRows.forEach((row) => {
             const cells = row.querySelectorAll('td');
-            const pnlCell = cells[6]; // P&L column
+            const pnlCell = cells[7]; // P&L column (index 7 after adding Layer column)
 
             // Check if this is a close event by looking at the event chip
             const eventChip = row.querySelector('.MuiChip-label');
@@ -156,48 +156,34 @@ describe('FloorLayerLog Property-Based Tests', () => {
             <FloorLayerLog trades={[]} strategyEvents={events} />
           );
 
-          // Group events by layer to match component behavior
-          const eventsByLayer = events.reduce(
-            (acc, event) => {
-              const layer = (event.details.layer as number) || 1;
-              if (!acc[layer]) acc[layer] = [];
-              acc[layer].push(event);
-              return acc;
-            },
-            {} as Record<number, typeof events>
+          // Calculate expected total from all close events
+          const closeEvents = events.filter((e) => isCloseEvent(e.event_type));
+          const expectedTotal = closeEvents.reduce((sum, e) => {
+            const pnl = e.details.pnl;
+            return sum + (typeof pnl === 'number' ? pnl : 0);
+          }, 0);
+
+          // Find the total row (now a single row, not per-layer)
+          const allRows = Array.from(container.querySelectorAll('tbody tr'));
+          const totalRow = allRows.find(
+            (row) =>
+              row.textContent?.includes('Total') &&
+              !row.textContent?.includes('Layer')
           );
 
-          // Check each layer's total
-          Object.keys(eventsByLayer).forEach((layerKey) => {
-            const layerEvents = eventsByLayer[Number(layerKey)];
-            const closeEvents = layerEvents.filter((e) =>
-              isCloseEvent(e.event_type)
-            );
-            const expectedTotal = closeEvents.reduce((sum, e) => {
-              const pnl = e.details.pnl;
-              return sum + (typeof pnl === 'number' ? pnl : 0);
-            }, 0);
+          if (totalRow && closeEvents.length > 0) {
+            const totalCell = totalRow.querySelectorAll('td')[1]; // P&L in total row (after colSpan=7)
+            const totalText = totalCell?.textContent || '';
+            const displayedTotal = parseFloat(totalText.replace(/[$,]/g, ''));
 
-            // Find the total row for this layer
-            const allRows = Array.from(container.querySelectorAll('tbody tr'));
-            const totalRow = allRows.find((row) =>
-              row.textContent?.includes(`Layer ${layerKey} Total`)
-            );
-
-            if (totalRow && closeEvents.length > 0) {
-              const totalCell = totalRow.querySelectorAll('td')[1]; // P&L in total row (after colSpan=6)
-              const totalText = totalCell?.textContent || '';
-              const displayedTotal = parseFloat(totalText.replace(',', ''));
-
-              // Use relative tolerance for floating point comparison
-              if (!isNaN(displayedTotal)) {
-                const tolerance = Math.max(0.5, Math.abs(expectedTotal) * 0.01);
-                expect(Math.abs(displayedTotal - expectedTotal)).toBeLessThan(
-                  tolerance
-                );
-              }
+            // Use relative tolerance for floating point comparison
+            if (!isNaN(displayedTotal)) {
+              const tolerance = Math.max(0.5, Math.abs(expectedTotal) * 0.01);
+              expect(Math.abs(displayedTotal - expectedTotal)).toBeLessThan(
+                tolerance
+              );
             }
-          });
+          }
         }
       ),
       {
@@ -265,7 +251,7 @@ describe('FloorLayerLog Property-Based Tests', () => {
 
           // Check that rows with retracement info show the correct annotations
           eventRows.forEach((row) => {
-            const detailsCell = row.querySelectorAll('td')[8]; // Details column
+            const detailsCell = row.querySelectorAll('td')[9]; // Details column (index 9 after adding Layer column)
             const detailsText = detailsCell?.textContent || '';
 
             const retracementMatch = detailsText.match(/Retracement #(\d+)/);
@@ -274,7 +260,9 @@ describe('FloorLayerLog Property-Based Tests', () => {
               expect(retracementValue).toBeGreaterThan(0);
             }
 
-            const remainingMatch = detailsText.match(/Remaining Retracements: (\d+)/);
+            const remainingMatch = detailsText.match(
+              /Remaining Retracements: (\d+)/
+            );
             if (remainingMatch) {
               const remainingValue = parseInt(remainingMatch[1], 10);
               expect(remainingValue).toBeGreaterThanOrEqual(0);

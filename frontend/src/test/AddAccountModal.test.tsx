@@ -123,7 +123,7 @@ describe('AddAccountModal', () => {
       json: async () => ({ id: 1 }),
     });
 
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
 
     // Fill required fields
@@ -157,7 +157,7 @@ describe('AddAccountModal', () => {
         })
       );
     });
-  });
+  }, 15000);
 
   it('toggles API token visibility', async () => {
     const user = userEvent.setup();

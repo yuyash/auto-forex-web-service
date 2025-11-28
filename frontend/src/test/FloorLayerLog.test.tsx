@@ -93,7 +93,10 @@ describe('FloorLayerLog Component', () => {
     expect(
       screen.getByText('Floor Strategy Execution Log')
     ).toBeInTheDocument();
-    expect(screen.getByText('Layer 1')).toBeInTheDocument();
+    // Layer column should show layer number for each event
+    expect(
+      screen.getByRole('columnheader', { name: /Layer/i })
+    ).toBeInTheDocument();
   });
 
   it('displays event type column correctly', () => {
@@ -110,21 +113,21 @@ describe('FloorLayerLog Component', () => {
       <FloorLayerLog trades={[]} strategyEvents={mockStrategyEvents} />
     );
 
-    // Expand accordion to see table rows
+    // Get table rows (excluding Total row)
     const rows = Array.from(container.querySelectorAll('tbody tr')).filter(
       (row) => !row.textContent?.includes('Total')
     );
 
-    // The component shows entry_price for entry events and exit_price for close events in the Price column (index 5)
+    // The component shows entry_price for entry events and exit_price for close events in the Price column (index 6, after Layer column)
     // Initial Entry event - should show entry price
     const initialRow = rows[0];
     const initialCells = initialRow?.querySelectorAll('td');
-    expect(initialCells?.[5]?.textContent).toContain('149.5');
+    expect(initialCells?.[6]?.textContent).toContain('149.5');
 
     // Take Profit event (row 2) - should show exit price
     const takeProfitRow = rows[2];
     const takeProfitCells = takeProfitRow?.querySelectorAll('td');
-    expect(takeProfitCells?.[5]?.textContent).toContain('149.75');
+    expect(takeProfitCells?.[6]?.textContent).toContain('149.75');
   });
 
   it('shows P&L only for close events', () => {
@@ -136,20 +139,20 @@ describe('FloorLayerLog Component', () => {
       (row) => !row.textContent?.includes('Total')
     );
 
-    // Initial Entry event - P&L should be dash (column index 6)
+    // Initial Entry event - P&L should be dash (column index 7, after Layer column)
     const initialRow = rows[0];
     const initialCells = initialRow?.querySelectorAll('td');
-    expect(initialCells?.[6]?.textContent).toBe('-');
+    expect(initialCells?.[7]?.textContent).toBe('-');
 
     // Add Layer event - P&L should be dash
     const scaleInRow = rows[1];
     const scaleInCells = scaleInRow?.querySelectorAll('td');
-    expect(scaleInCells?.[6]?.textContent).toBe('-');
+    expect(scaleInCells?.[7]?.textContent).toBe('-');
 
     // Take Profit event - P&L should be shown
     const takeProfitRow = rows[2];
     const takeProfitCells = takeProfitRow?.querySelectorAll('td');
-    expect(takeProfitCells?.[6]?.textContent).toContain('250.00');
+    expect(takeProfitCells?.[7]?.textContent).toContain('250.00');
   });
 
   it('renders retracement column before units', () => {
@@ -159,11 +162,13 @@ describe('FloorLayerLog Component', () => {
       (cell) => cell.textContent?.replace(/\s+/g, ' ').trim() || ''
     );
 
+    const layerIndex = headerCells.findIndex((text) => text.includes('Layer'));
     const retracementIndex = headerCells.findIndex((text) =>
       text.includes('Retracement')
     );
     const unitsIndex = headerCells.findIndex((text) => text.includes('Units'));
 
+    expect(layerIndex).toBeGreaterThan(-1);
     expect(retracementIndex).toBeGreaterThan(-1);
     expect(unitsIndex).toBeGreaterThan(retracementIndex);
   });
@@ -174,13 +179,14 @@ describe('FloorLayerLog Component', () => {
     );
 
     const totalRow = Array.from(container.querySelectorAll('tbody tr')).find(
-      (row) => row.textContent?.includes('Layer 1 Total')
+      (row) => row.textContent?.includes('Total')
     );
 
     expect(totalRow).toBeTruthy();
-    // Total row has colSpan=6 on first cell, so P&L is in index 1
-    const totalCell = totalRow!.querySelectorAll('td')[1];
-    expect(totalCell.textContent).toContain('250.00');
+    // Total P&L should be displayed in the header and in the total row
+    expect(screen.getByText(/Total P&L:/)).toBeInTheDocument();
+    // Total row shows P&L value
+    expect(totalRow!.textContent).toContain('250.00');
   });
 
   it('displays Time column with correct timestamps', () => {
@@ -201,6 +207,28 @@ describe('FloorLayerLog Component', () => {
       const timeCell = cells[1];
       expect(timeCell?.textContent).not.toBe('');
       expect(timeCell?.textContent).not.toBe('-');
+    });
+  });
+
+  it('displays Layer column with layer numbers', () => {
+    const { container } = render(
+      <FloorLayerLog trades={[]} strategyEvents={mockStrategyEvents} />
+    );
+
+    // Check that Layer column header exists
+    expect(
+      screen.getByRole('columnheader', { name: /Layer/i })
+    ).toBeInTheDocument();
+
+    const rows = Array.from(container.querySelectorAll('tbody tr')).filter(
+      (row) => !row.textContent?.includes('Total')
+    );
+
+    // Each row should have layer number in the Layer column (index 2)
+    rows.forEach((row) => {
+      const cells = row.querySelectorAll('td');
+      const layerCell = cells[2];
+      expect(layerCell?.textContent).toContain('1');
     });
   });
 
@@ -228,7 +256,7 @@ describe('FloorLayerLog Component', () => {
     ).toBeInTheDocument();
   });
 
-  it('groups events by layer', () => {
+  it('shows events from multiple layers in a single table', () => {
     const multiLayerEvents: BacktestStrategyEvent[] = [
       {
         event_type: 'initial_entry',
@@ -256,17 +284,35 @@ describe('FloorLayerLog Component', () => {
       },
     ];
 
-    render(<FloorLayerLog trades={[]} strategyEvents={multiLayerEvents} />);
+    const { container } = render(
+      <FloorLayerLog trades={[]} strategyEvents={multiLayerEvents} />
+    );
 
-    expect(screen.getByText('Layer 1')).toBeInTheDocument();
-    expect(screen.getByText('Layer 2')).toBeInTheDocument();
+    // Both events should be in a single table (no accordions)
+    const tables = container.querySelectorAll('table');
+    expect(tables.length).toBe(1);
+
+    // Both layer numbers should appear in the Layer column
+    const rows = Array.from(container.querySelectorAll('tbody tr')).filter(
+      (row) => !row.textContent?.includes('Total')
+    );
+    expect(rows.length).toBe(2);
+
+    // Check layer column values
+    const layer1Row = rows[0];
+    const layer2Row = rows[1];
+    expect(layer1Row?.querySelectorAll('td')[2]?.textContent).toContain('1');
+    expect(layer2Row?.querySelectorAll('td')[2]?.textContent).toContain('2');
   });
 
-  it('displays event count per layer', () => {
+  it('can sort by layer column', () => {
     render(<FloorLayerLog trades={[]} strategyEvents={mockStrategyEvents} />);
 
-    // All 3 events are in layer 1
-    expect(screen.getByText('3 events')).toBeInTheDocument();
+    // Layer column header should be sortable
+    const layerHeader = screen.getByRole('columnheader', { name: /Layer/i });
+    expect(
+      layerHeader.querySelector('span.MuiTableSortLabel-root')
+    ).toBeInTheDocument();
   });
 
   it('renders with both trades and strategy events', () => {

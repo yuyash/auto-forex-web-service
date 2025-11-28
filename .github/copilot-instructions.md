@@ -1,5 +1,10 @@
 # Auto Forex Copilot Guide
 
+## Python
+
+- `cd backend && source ./.venv/bin/activate` to activate the virtual environment.
+- Use `uv` command to install dependencies.
+
 ## Architecture & Domains
 
 - `backend/accounts/` owns auth, OANDA account management, system settings, and email/JWT/rate-limiting helpers consumed by REST views in `accounts/views.py`.

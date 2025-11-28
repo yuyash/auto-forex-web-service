@@ -19,15 +19,11 @@ import {
   TableRow,
   TableSortLabel,
   Chip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Tooltip,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import type { Trade, BacktestStrategyEvent } from '../../types/execution';
 
-type SortField = 'timestamp' | 'units' | 'entry_price' | 'pnl';
+type SortField = 'timestamp' | 'layer' | 'units' | 'entry_price' | 'pnl';
 type SortOrder = 'asc' | 'desc';
 
 interface DisplayEvent {
@@ -43,7 +39,7 @@ interface DisplayEvent {
   realizedPnl?: number;
   unrealizedPnl?: number;
   retracementCount?: number;
-   entryRetracementCount?: number;
+  entryRetracementCount?: number;
   maxRetracements?: number;
   isFirstLot?: boolean;
   description: string;
@@ -101,9 +97,6 @@ export function FloorLayerLog({
 }: FloorLayerLogProps) {
   const [sortField, setSortField] = useState<SortField>('timestamp');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
-  const [expandedLayers, setExpandedLayers] = useState<Set<number>>(
-    new Set([1])
-  );
 
   const displayEvents = useMemo(() => {
     const events: DisplayEvent[] = [];
@@ -123,7 +116,9 @@ export function FloorLayerLog({
       const details = event.details || {};
       const layerNumber =
         (details.layer as number) || (details.layer_number as number) || 1;
-      const entryRetracementCount = parseNumber(details.entry_retracement_count);
+      const entryRetracementCount = parseNumber(
+        details.entry_retracement_count
+      );
       const retracementCount = parseNumber(details.retracement_count);
 
       // Normalize strategy_close to take_profit (they're the same thing)
@@ -198,7 +193,8 @@ export function FloorLayerLog({
           exitPrice: trade.exit_price,
           pnl: undefined, // Entry doesn't have P&L yet
           retracementCount: trade.retracement_count,
-          entryRetracementCount: entryRetracementCount ?? trade.retracement_count,
+          entryRetracementCount:
+            entryRetracementCount ?? trade.retracement_count,
           isFirstLot: trade.is_first_lot,
           description: trade.is_first_lot
             ? `Initial ${trade.direction?.toUpperCase()} entry @ ${trade.entry_price.toFixed(5)}`
@@ -236,7 +232,8 @@ export function FloorLayerLog({
           realizedPnl: trade.realized_pnl ?? trade.pnl,
           unrealizedPnl: trade.unrealized_pnl,
           retracementCount: trade.retracement_count,
-          entryRetracementCount: entryRetracementCount ?? trade.retracement_count,
+          entryRetracementCount:
+            entryRetracementCount ?? trade.retracement_count,
           isFirstLot: trade.is_first_lot,
           description: `Take Profit: ${trade.direction?.toUpperCase()} ${trade.units} units closed @ ${trade.exit_price.toFixed(5)} | P&L: $${trade.pnl.toFixed(2)}`,
           tradeIndex: idx,
@@ -252,60 +249,8 @@ export function FloorLayerLog({
     });
   }, [trades, strategyEvents, sortOrder]);
 
-  const eventsByLayer = useMemo(() => {
-    const grouped: Record<number, DisplayEvent[]> = {};
-    displayEvents.forEach((event) => {
-      const layer = event.layerNumber || 1;
-      if (!grouped[layer]) grouped[layer] = [];
-      grouped[layer].push(event);
-    });
-
-    Object.keys(grouped).forEach((layerKey) => {
-      grouped[Number(layerKey)].sort((a, b) => {
-        let aValue = 0,
-          bValue = 0;
-        switch (sortField) {
-          case 'timestamp':
-            aValue = new Date(a.timestamp).getTime();
-            bValue = new Date(b.timestamp).getTime();
-            break;
-          case 'units':
-            aValue = a.units ?? -1;
-            bValue = b.units ?? -1;
-            break;
-          case 'entry_price':
-            aValue = a.entryPrice ?? -1;
-            bValue = b.entryPrice ?? -1;
-            break;
-          case 'pnl':
-            aValue = a.pnl ?? -1;
-            bValue = b.pnl ?? -1;
-            break;
-        }
-        if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
-        return 0;
-      });
-    });
-    return grouped;
-  }, [displayEvents, sortField, sortOrder]);
-
-  const handleSort = (field: SortField) => {
-    const isAsc = sortField === field && sortOrder === 'asc';
-    setSortOrder(isAsc ? 'desc' : 'asc');
-    setSortField(field);
-  };
-
-  const toggleLayer = (layer: number) => {
-    setExpandedLayers((prev) => {
-      const next = new Set(prev);
-      if (next.has(layer)) next.delete(layer);
-      else next.add(layer);
-      return next;
-    });
-  };
-
-  const filteredEventsByLayer = useMemo(() => {
+  // Filter and sort all events (merged across all layers)
+  const sortedFilteredEvents = useMemo(() => {
     // Note: 'retracement_detected' and 'strategy_close' are excluded as they're redundant
     // with 'scale_in' (Add Layer) and 'take_profit' respectively
     const meaningfulEventTypes = [
@@ -315,14 +260,54 @@ export function FloorLayerLog({
       'volatility_lock',
       'margin_protection',
     ];
-    const filtered: Record<number, DisplayEvent[]> = {};
-    Object.entries(eventsByLayer).forEach(([layer, events]) => {
-      filtered[Number(layer)] = events.filter((e) =>
-        meaningfulEventTypes.includes(e.eventType)
-      );
+
+    const filtered = displayEvents.filter((e) =>
+      meaningfulEventTypes.includes(e.eventType)
+    );
+
+    return filtered.sort((a, b) => {
+      let aValue = 0,
+        bValue = 0;
+      switch (sortField) {
+        case 'timestamp':
+          aValue = new Date(a.timestamp).getTime();
+          bValue = new Date(b.timestamp).getTime();
+          break;
+        case 'layer':
+          aValue = a.layerNumber ?? 1;
+          bValue = b.layerNumber ?? 1;
+          break;
+        case 'units':
+          aValue = a.units ?? -1;
+          bValue = b.units ?? -1;
+          break;
+        case 'entry_price':
+          aValue = a.entryPrice ?? -1;
+          bValue = b.entryPrice ?? -1;
+          break;
+        case 'pnl':
+          aValue = a.pnl ?? -1;
+          bValue = b.pnl ?? -1;
+          break;
+      }
+      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
     });
-    return filtered;
-  }, [eventsByLayer]);
+  }, [displayEvents, sortField, sortOrder]);
+
+  const handleSort = (field: SortField) => {
+    const isAsc = sortField === field && sortOrder === 'asc';
+    setSortOrder(isAsc ? 'desc' : 'asc');
+    setSortField(field);
+  };
+
+  // Calculate total P&L across all events
+  const totalPnL = useMemo(() => {
+    return sortedFilteredEvents
+      .filter((e) => e.pnl !== undefined)
+      .reduce((sum, e) => sum + (e.pnl || 0), 0);
+  }, [sortedFilteredEvents]);
 
   if (displayEvents.length === 0) {
     return (
@@ -339,334 +324,293 @@ export function FloorLayerLog({
 
   return (
     <Paper sx={{ p: 3, mb: 3 }}>
-      <Typography variant="h6" sx={{ mb: 2 }}>
-        Floor Strategy Execution Log
-      </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 2,
+        }}
+      >
+        <Typography variant="h6">Floor Strategy Execution Log</Typography>
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 'bold',
+            color: totalPnL >= 0 ? 'success.main' : 'error.main',
+          }}
+        >
+          Total P&L: {formatCurrency(totalPnL)}
+        </Typography>
+      </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         Detailed execution log showing initial positions, layer additions,
         retracements, and take profits with buy/sell details.
       </Typography>
 
-      {Object.keys(filteredEventsByLayer)
-        .sort((a, b) => Number(a) - Number(b))
-        .map((layerKey) => {
-          const layer = Number(layerKey);
-          const layerEvents = filteredEventsByLayer[layer];
-          if (layerEvents.length === 0) return null;
+      <TableContainer>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Event</TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortField === 'timestamp'}
+                  direction={sortField === 'timestamp' ? sortOrder : 'asc'}
+                  onClick={() => handleSort('timestamp')}
+                >
+                  Time
+                </TableSortLabel>
+              </TableCell>
+              <TableCell align="center">
+                <TableSortLabel
+                  active={sortField === 'layer'}
+                  direction={sortField === 'layer' ? sortOrder : 'asc'}
+                  onClick={() => handleSort('layer')}
+                >
+                  Layer
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>Action</TableCell>
+              <TableCell align="right">Retracement #</TableCell>
+              <TableCell align="right">
+                <TableSortLabel
+                  active={sortField === 'units'}
+                  direction={sortField === 'units' ? sortOrder : 'asc'}
+                  onClick={() => handleSort('units')}
+                >
+                  Units
+                </TableSortLabel>
+              </TableCell>
+              <TableCell align="right">
+                <TableSortLabel
+                  active={sortField === 'entry_price'}
+                  direction={sortField === 'entry_price' ? sortOrder : 'asc'}
+                  onClick={() => handleSort('entry_price')}
+                >
+                  Price
+                </TableSortLabel>
+              </TableCell>
+              <TableCell align="right">
+                <TableSortLabel
+                  active={sortField === 'pnl'}
+                  direction={sortField === 'pnl' ? sortOrder : 'asc'}
+                  onClick={() => handleSort('pnl')}
+                >
+                  Realized P&L
+                </TableSortLabel>
+              </TableCell>
+              <TableCell align="right">Unrealized P&L</TableCell>
+              <TableCell>Details</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {sortedFilteredEvents.map((event) => {
+              const isSelected =
+                event.tradeIndex !== undefined &&
+                selectedTradeIndex === event.tradeIndex;
+              const eventDisplay = getEventTypeDisplay(event.eventType);
+              const isEntry = ['initial_entry', 'scale_in'].includes(
+                event.eventType
+              );
+              const isClose = [
+                'take_profit',
+                'volatility_lock',
+                'margin_protection',
+              ].includes(event.eventType);
+              const entryRetracementValue =
+                event.entryRetracementCount ??
+                (isEntry ? event.retracementCount : undefined);
+              const remainingRetracementValue = !isEntry
+                ? event.retracementCount
+                : undefined;
 
-          const isExpanded = expandedLayers.has(layer);
-          const layerPnL = layerEvents
-            .filter((e) => e.pnl !== undefined)
-            .reduce((sum, e) => sum + (e.pnl || 0), 0);
+              let action = '-';
+              if (isEntry && event.direction)
+                action = event.direction === 'long' ? 'LONG' : 'SHORT';
+              else if (isClose) action = 'CLOSE';
 
-          return (
-            <Accordion
-              key={layer}
-              expanded={isExpanded}
-              onChange={() => toggleLayer(layer)}
-              sx={{ mb: 1 }}
-            >
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Box
+              return (
+                <TableRow
+                  key={event.id}
+                  id={event.id}
                   sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 2,
-                    width: '100%',
+                    bgcolor: isSelected
+                      ? 'primary.light'
+                      : event.isFirstLot
+                        ? 'action.hover'
+                        : undefined,
+                    transition: 'background-color 0.3s',
                   }}
                 >
-                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                    Layer {layer}
-                  </Typography>
-                  <Chip
-                    label={`${layerEvents.length} events`}
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                  />
-                  <Box sx={{ flexGrow: 1 }} />
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontWeight: 'bold',
-                      color: layerPnL >= 0 ? 'success.main' : 'error.main',
-                      mr: 2,
-                    }}
-                  >
-                    P&L: {formatCurrency(layerPnL)}
-                  </Typography>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Event</TableCell>
-                        <TableCell>
-                          <TableSortLabel
-                            active={sortField === 'timestamp'}
-                            direction={
-                              sortField === 'timestamp' ? sortOrder : 'asc'
-                            }
-                            onClick={() => handleSort('timestamp')}
-                          >
-                            Time
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell>Action</TableCell>
-                        <TableCell align="right">Retracement #</TableCell>
-                        <TableCell align="right">
-                          <TableSortLabel
-                            active={sortField === 'units'}
-                            direction={
-                              sortField === 'units' ? sortOrder : 'asc'
-                            }
-                            onClick={() => handleSort('units')}
-                          >
-                            Units
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell align="right">
-                          <TableSortLabel
-                            active={sortField === 'entry_price'}
-                            direction={
-                              sortField === 'entry_price' ? sortOrder : 'asc'
-                            }
-                            onClick={() => handleSort('entry_price')}
-                          >
-                            Price
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell align="right">
-                          <TableSortLabel
-                            active={sortField === 'pnl'}
-                            direction={sortField === 'pnl' ? sortOrder : 'asc'}
-                            onClick={() => handleSort('pnl')}
-                          >
-                            Realized P&L
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell align="right">Unrealized P&L</TableCell>
-                        <TableCell>Details</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {layerEvents.map((event) => {
-                        const isSelected =
-                          event.tradeIndex !== undefined &&
-                          selectedTradeIndex === event.tradeIndex;
-                        const eventDisplay = getEventTypeDisplay(
-                          event.eventType
-                        );
-                        const isEntry = ['initial_entry', 'scale_in'].includes(
-                          event.eventType
-                        );
-                        const isClose = [
-                          'take_profit',
-                          'volatility_lock',
-                          'margin_protection',
-                        ].includes(event.eventType);
-                        const entryRetracementValue =
-                          event.entryRetracementCount ??
-                          (isEntry ? event.retracementCount : undefined);
-                        const remainingRetracementValue = !isEntry
-                          ? event.retracementCount
-                          : undefined;
-
-                        let action = '-';
-                        if (isEntry && event.direction)
-                          action =
-                            event.direction === 'long' ? 'LONG' : 'SHORT';
-                        else if (isClose) action = 'CLOSE';
-
-                        return (
-                          <TableRow
-                            key={event.id}
-                            id={event.id}
-                            sx={{
-                              bgcolor: isSelected
-                                ? 'primary.light'
-                                : event.isFirstLot
-                                  ? 'action.hover'
-                                  : undefined,
-                              transition: 'background-color 0.3s',
-                            }}
-                          >
-                            <TableCell>
-                              <Chip
-                                label={eventDisplay.label}
-                                size="small"
-                                color={eventDisplay.color}
-                              />
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.85rem' }}>
-                              {formatDate(event.timestamp)}
-                            </TableCell>
-                            <TableCell>
-                              {action !== '-' && (
-                                <Chip
-                                  label={action}
-                                  size="small"
-                                  variant="outlined"
-                                  color={
-                                    action === 'LONG'
-                                      ? 'success'
-                                      : action === 'SHORT'
-                                        ? 'error'
-                                        : 'default'
-                                  }
-                                />
-                              )}
-                            </TableCell>
-                            <TableCell align="right">
-                              {entryRetracementValue !== undefined ||
-                              remainingRetracementValue !== undefined ? (
-                                <Tooltip
-                                  title={
-                                    event.maxRetracements
-                                      ? `Max ${event.maxRetracements}`
-                                      : ''
-                                  }
-                                  placement="top"
-                                >
-                                  <Box
-                                    sx={{
-                                      display: 'flex',
-                                      flexDirection: 'column',
-                                      alignItems: 'flex-end',
-                                      gap: 0.5,
-                                    }}
-                                  >
-                                    {entryRetracementValue !== undefined && (
-                                      <Typography
-                                        component="span"
-                                        variant="body2"
-                                        sx={{ fontWeight: 'bold' }}
-                                      >
-                                        {entryRetracementValue}
-                                      </Typography>
-                                    )}
-                                    {remainingRetracementValue !== undefined && (
-                                      <Typography
-                                        variant="caption"
-                                        color="text.secondary"
-                                      >
-                                        Remaining: {remainingRetracementValue}
-                                      </Typography>
-                                    )}
-                                  </Box>
-                                </Tooltip>
-                              ) : (
-                                '-'
-                              )}
-                            </TableCell>
-                            <TableCell align="right">
-                              {event.units !== undefined
-                                ? event.units.toFixed(1)
-                                : '-'}
-                            </TableCell>
-                            <TableCell align="right">
-                              {isClose && event.exitPrice !== undefined
-                                ? formatPrice(event.exitPrice)
-                                : formatPrice(event.entryPrice)}
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{
-                                color:
-                                  event.realizedPnl !== undefined &&
-                                  event.realizedPnl >= 0
-                                    ? 'success.main'
-                                    : event.realizedPnl !== undefined
-                                      ? 'error.main'
-                                      : undefined,
-                                fontWeight:
-                                  event.realizedPnl !== undefined
-                                    ? 'bold'
-                                    : undefined,
-                              }}
-                            >
-                              {isClose && event.realizedPnl !== undefined
-                                ? formatCurrency(event.realizedPnl)
-                                : '-'}
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{
-                                color:
-                                  event.unrealizedPnl !== undefined &&
-                                  event.unrealizedPnl >= 0
-                                    ? 'success.main'
-                                    : event.unrealizedPnl !== undefined
-                                      ? 'error.main'
-                                      : undefined,
-                                fontWeight:
-                                  event.unrealizedPnl !== undefined
-                                    ? 'bold'
-                                    : undefined,
-                              }}
-                            >
-                              {event.unrealizedPnl !== undefined
-                                ? formatCurrency(event.unrealizedPnl)
-                                : '-'}
-                            </TableCell>
-                            <TableCell sx={{ maxWidth: 300 }}>
-                              <Tooltip title={event.description} arrow>
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    display: 'block',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {event.description}
-                                </Typography>
-                              </Tooltip>
-                              {entryRetracementValue !== undefined &&
-                                entryRetracementValue > 0 && (
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
-                                    Retracement #{entryRetracementValue}
-                                  </Typography>
-                                )}
-                              {remainingRetracementValue !== undefined && (
-                                <Typography variant="caption" color="text.secondary">
-                                  Remaining Retracements: {remainingRetracementValue}
-                                </Typography>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                      <TableRow sx={{ bgcolor: 'grey.100' }}>
-                        <TableCell colSpan={6} sx={{ fontWeight: 'bold' }}>
-                          Layer {layer} Total
-                        </TableCell>
-                        <TableCell
-                          align="right"
+                  <TableCell>
+                    <Chip
+                      label={eventDisplay.label}
+                      size="small"
+                      color={eventDisplay.color}
+                    />
+                  </TableCell>
+                  <TableCell sx={{ fontSize: '0.85rem' }}>
+                    {formatDate(event.timestamp)}
+                  </TableCell>
+                  <TableCell align="center">
+                    <Chip
+                      label={event.layerNumber}
+                      size="small"
+                      variant="outlined"
+                      color="default"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    {action !== '-' && (
+                      <Chip
+                        label={action}
+                        size="small"
+                        variant="outlined"
+                        color={
+                          action === 'LONG'
+                            ? 'success'
+                            : action === 'SHORT'
+                              ? 'error'
+                              : 'default'
+                        }
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell align="right">
+                    {entryRetracementValue !== undefined ||
+                    remainingRetracementValue !== undefined ? (
+                      <Tooltip
+                        title={
+                          event.maxRetracements
+                            ? `Max ${event.maxRetracements}`
+                            : ''
+                        }
+                        placement="top"
+                      >
+                        <Box
                           sx={{
-                            fontWeight: 'bold',
-                            color:
-                              layerPnL >= 0 ? 'success.main' : 'error.main',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'flex-end',
+                            gap: 0.5,
                           }}
                         >
-                          {formatCurrency(layerPnL)}
-                        </TableCell>
-                        <TableCell />
-                        <TableCell />
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </AccordionDetails>
-            </Accordion>
-          );
-        })}
+                          {entryRetracementValue !== undefined && (
+                            <Typography
+                              component="span"
+                              variant="body2"
+                              sx={{ fontWeight: 'bold' }}
+                            >
+                              {entryRetracementValue}
+                            </Typography>
+                          )}
+                          {remainingRetracementValue !== undefined && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Remaining: {remainingRetracementValue}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Tooltip>
+                    ) : (
+                      '-'
+                    )}
+                  </TableCell>
+                  <TableCell align="right">
+                    {event.units !== undefined ? event.units.toFixed(1) : '-'}
+                  </TableCell>
+                  <TableCell align="right">
+                    {isClose && event.exitPrice !== undefined
+                      ? formatPrice(event.exitPrice)
+                      : formatPrice(event.entryPrice)}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      color:
+                        event.realizedPnl !== undefined &&
+                        event.realizedPnl >= 0
+                          ? 'success.main'
+                          : event.realizedPnl !== undefined
+                            ? 'error.main'
+                            : undefined,
+                      fontWeight:
+                        event.realizedPnl !== undefined ? 'bold' : undefined,
+                    }}
+                  >
+                    {isClose && event.realizedPnl !== undefined
+                      ? formatCurrency(event.realizedPnl)
+                      : '-'}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      color:
+                        event.unrealizedPnl !== undefined &&
+                        event.unrealizedPnl >= 0
+                          ? 'success.main'
+                          : event.unrealizedPnl !== undefined
+                            ? 'error.main'
+                            : undefined,
+                      fontWeight:
+                        event.unrealizedPnl !== undefined ? 'bold' : undefined,
+                    }}
+                  >
+                    {event.unrealizedPnl !== undefined
+                      ? formatCurrency(event.unrealizedPnl)
+                      : '-'}
+                  </TableCell>
+                  <TableCell sx={{ maxWidth: 300 }}>
+                    <Tooltip title={event.description} arrow>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          display: 'block',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {event.description}
+                      </Typography>
+                    </Tooltip>
+                    {entryRetracementValue !== undefined &&
+                      entryRetracementValue > 0 && (
+                        <Typography variant="caption" color="text.secondary">
+                          Retracement #{entryRetracementValue}
+                        </Typography>
+                      )}
+                    {remainingRetracementValue !== undefined && (
+                      <Typography variant="caption" color="text.secondary">
+                        Remaining Retracements: {remainingRetracementValue}
+                      </Typography>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            <TableRow sx={{ bgcolor: 'grey.100' }}>
+              <TableCell colSpan={7} sx={{ fontWeight: 'bold' }}>
+                Total
+              </TableCell>
+              <TableCell
+                align="right"
+                sx={{
+                  fontWeight: 'bold',
+                  color: totalPnL >= 0 ? 'success.main' : 'error.main',
+                }}
+              >
+                {formatCurrency(totalPnL)}
+              </TableCell>
+              <TableCell />
+              <TableCell />
+            </TableRow>
+          </TableBody>
+        </Table>
+      </TableContainer>
     </Paper>
   );
 }
