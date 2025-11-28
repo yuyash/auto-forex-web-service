@@ -814,3 +814,60 @@ class BacktestTaskLogsView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class BacktestTaskLiveResultsView(APIView):
+    """
+    Get live intermediate results for a running backtest task.
+
+    GET: Get cached live results including equity curve, trades, and metrics
+
+    This endpoint provides real-time data during backtest execution,
+    allowing the frontend to show progressive results without waiting
+    for task completion.
+
+    Requirements: 6.7, 8.4
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, task_id: int) -> Response:
+        """
+        Get live intermediate results for a running backtest task.
+
+        Returns cached intermediate results from Redis if available,
+        or empty data if no results are cached yet.
+        """
+        from trading.services.notifications import get_backtest_intermediate_results
+
+        # Get the task (verify ownership)
+        try:
+            BacktestTask.objects.get(id=task_id, user=request.user.pk)
+        except BacktestTask.DoesNotExist:
+            return Response(
+                {"error": "Backtest task not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Get cached live results
+        live_results = get_backtest_intermediate_results(task_id)
+
+        if live_results is None:
+            # No cached results yet
+            return Response(
+                {
+                    "task_id": task_id,
+                    "has_data": False,
+                    "message": "No live results available yet",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {
+                "task_id": task_id,
+                "has_data": True,
+                **live_results,
+            },
+            status=status.HTTP_200_OK,
+        )

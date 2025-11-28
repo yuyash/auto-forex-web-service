@@ -14,6 +14,7 @@ from .backtest_task_views import (  # noqa: E501
     BacktestTaskExecutionsView,
     BacktestTaskExportView,
     BacktestTaskListCreateView,
+    BacktestTaskLiveResultsView,
     BacktestTaskLogsView,
     BacktestTaskRerunView,
     BacktestTaskStartView,
@@ -154,6 +155,11 @@ urlpatterns = [
         "backtest-tasks/<int:task_id>/export/",
         BacktestTaskExportView.as_view(),
         name="backtest_task_export",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/live-results/",
+        BacktestTaskLiveResultsView.as_view(),
+        name="backtest_task_live_results",
     ),
     # TradingTask endpoints (new task-based API)
     path(

@@ -97,22 +97,62 @@ def send_execution_progress_notification(
     # WebSocket notifications removed - progress is now retrieved via HTTP polling
 
 
+# Cache key for intermediate results
+INTERMEDIATE_RESULTS_CACHE_KEY = "backtest:intermediate_results:{task_id}"
+INTERMEDIATE_RESULTS_TTL = 300  # 5 minutes
+
+
 def send_backtest_intermediate_results(
-    task_id: int,  # pylint: disable=unused-argument
+    task_id: int,
     execution_id: int,  # pylint: disable=unused-argument
     user_id: int,  # pylint: disable=unused-argument
-    intermediate_results: dict[str, Any],  # pylint: disable=unused-argument
+    intermediate_results: dict[str, Any],
 ) -> None:
     """
-    Legacy function for intermediate results notifications.
+    Store intermediate backtest results in cache for HTTP polling.
 
-    This function is deprecated as intermediate results are now retrieved via HTTP polling.
-    Kept for backward compatibility but does nothing.
+    This function stores the intermediate results in Redis cache so that
+    the frontend can poll for live updates during backtest execution.
 
     Args:
-        task_id: Task ID (unused)
-        execution_id: Execution ID (unused)
-        user_id: User ID (unused)
-        intermediate_results: Intermediate metrics and results (unused)
+        task_id: Task ID
+        execution_id: Execution ID (unused, kept for backward compatibility)
+        user_id: User ID (unused, kept for backward compatibility)
+        intermediate_results: Intermediate metrics and results
     """
-    # WebSocket notifications removed - intermediate results are now retrieved via HTTP polling
+    from django.core.cache import cache
+
+    cache_key = INTERMEDIATE_RESULTS_CACHE_KEY.format(task_id=task_id)
+    cache.set(cache_key, intermediate_results, INTERMEDIATE_RESULTS_TTL)
+
+
+def get_backtest_intermediate_results(task_id: int) -> dict[str, Any] | None:
+    """
+    Retrieve intermediate backtest results from cache.
+
+    Args:
+        task_id: Task ID
+
+    Returns:
+        Intermediate results dict or None if not available
+    """
+    from django.core.cache import cache
+
+    cache_key = INTERMEDIATE_RESULTS_CACHE_KEY.format(task_id=task_id)
+    result: dict[str, Any] | None = cache.get(cache_key)
+    return result
+
+
+def clear_backtest_intermediate_results(task_id: int) -> None:
+    """
+    Clear intermediate backtest results from cache.
+
+    Should be called when backtest completes or fails.
+
+    Args:
+        task_id: Task ID
+    """
+    from django.core.cache import cache
+
+    cache_key = INTERMEDIATE_RESULTS_CACHE_KEY.format(task_id=task_id)
+    cache.delete(cache_key)

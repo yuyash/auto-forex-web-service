@@ -16,6 +16,7 @@ import {
 import { backtestTasksApi } from '../../../services/api/backtestTasks';
 import { MetricsGrid } from '../../tasks/charts/MetricsGrid';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
+import { EquityCurveChart } from '../../tasks/charts/EquityCurveChart';
 import { BacktestChart } from '../BacktestChart';
 import { FloorLayerLog } from '../FloorLayerLog';
 import type { BacktestTask } from '../../../types/backtestTask';
@@ -24,11 +25,55 @@ import type { Trade } from '../../../types/execution';
 import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
 import type { ChartMarker } from '../../../utils/chartMarkers';
 
-interface TaskResultsTabProps {
-  task: BacktestTask;
+interface EquityPoint {
+  timestamp: string;
+  balance: number;
 }
 
-export function TaskResultsTab({ task }: TaskResultsTabProps) {
+interface LiveMetrics {
+  total_return?: number;
+  total_pnl?: number;
+  win_rate?: number;
+  winning_trades?: number;
+  losing_trades?: number;
+  max_drawdown?: number;
+  sharpe_ratio?: number;
+  profit_factor?: number;
+  average_win?: number;
+  average_loss?: number;
+  [key: string]: string | number | undefined;
+}
+
+interface LiveResults {
+  day_date: string;
+  progress: number;
+  days_processed: number;
+  total_days: number;
+  balance: number;
+  total_trades: number;
+  metrics: LiveMetrics;
+  recent_trades?: Array<{
+    timestamp?: string;
+    entry_time?: string;
+    exit_time?: string;
+    instrument?: string;
+    direction?: string;
+    entry_price?: number;
+    exit_price?: number;
+    units?: number;
+    pnl?: number;
+    duration?: number;
+    [key: string]: string | number | boolean | undefined;
+  }>;
+  equity_curve: EquityPoint[];
+}
+
+interface TaskResultsTabProps {
+  task: BacktestTask;
+  liveResults?: LiveResults | null;
+}
+
+export function TaskResultsTab({ task, liveResults }: TaskResultsTabProps) {
   // Fetch latest execution with full metrics
   const { data: executionsData, isLoading: executionsLoading } =
     useTaskExecutions(task.id, TaskType.BACKTEST, { page: 1, page_size: 1 });
@@ -196,6 +241,10 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
     };
   };
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
   if (executionsLoading) {
     return (
       <Box
@@ -222,11 +271,217 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
   }
 
   if (task.status === TaskStatus.RUNNING) {
+    // Show live results if available
+    if (liveResults && liveResults.total_trades > 0) {
+      const liveMetrics = liveResults.metrics;
+
+      return (
+        <Box sx={{ px: 3 }}>
+          {/* Running Status Banner */}
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CircularProgress size={16} />
+              <Typography variant="body2">
+                Task is running... Day {liveResults.days_processed} of{' '}
+                {liveResults.total_days} ({liveResults.progress}% complete)
+              </Typography>
+            </Box>
+          </Alert>
+
+          {/* Live Backtest Period */}
+          <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              Backtest Period (Live Data up to {liveResults.day_date})
+            </Typography>
+            <Typography variant="body1">
+              {formatDate(task.start_time)} → {formatDate(task.end_time)}
+            </Typography>
+          </Paper>
+
+          {/* Live Performance Metrics */}
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Typography variant="h6" sx={{ mb: 3 }}>
+              Live Performance Metrics
+            </Typography>
+
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    textAlign: 'center',
+                    bgcolor: 'background.default',
+                  }}
+                >
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Current Balance
+                  </Typography>
+                  <Typography variant="h6">
+                    $
+                    {liveResults.balance.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    textAlign: 'center',
+                    bgcolor: 'background.default',
+                  }}
+                >
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Total Return
+                  </Typography>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      color:
+                        (liveMetrics.total_return || 0) >= 0
+                          ? 'success.main'
+                          : 'error.main',
+                    }}
+                  >
+                    {(liveMetrics.total_return || 0).toFixed(2)}%
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    textAlign: 'center',
+                    bgcolor: 'background.default',
+                  }}
+                >
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Total Trades
+                  </Typography>
+                  <Typography variant="h6">
+                    {liveResults.total_trades}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    textAlign: 'center',
+                    bgcolor: 'background.default',
+                  }}
+                >
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Win Rate
+                  </Typography>
+                  <Typography variant="h6">
+                    {(liveMetrics.win_rate || 0).toFixed(1)}%
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    textAlign: 'center',
+                    bgcolor: 'background.default',
+                  }}
+                >
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Total P&L
+                  </Typography>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      color:
+                        (liveMetrics.total_pnl || 0) >= 0
+                          ? 'success.main'
+                          : 'error.main',
+                    }}
+                  >
+                    $
+                    {(liveMetrics.total_pnl || 0).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    textAlign: 'center',
+                    bgcolor: 'background.default',
+                  }}
+                >
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Max Drawdown
+                  </Typography>
+                  <Typography variant="h6" sx={{ color: 'error.main' }}>
+                    {(liveMetrics.max_drawdown || 0).toFixed(2)}%
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+          </Paper>
+
+          {/* Live Equity Curve */}
+          {liveResults.equity_curve && liveResults.equity_curve.length > 0 && (
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" sx={{ mb: 3 }}>
+                Live Equity Curve
+              </Typography>
+              <EquityCurveChart
+                data={liveResults.equity_curve}
+                initialBalance={parseFloat(task.initial_balance)}
+              />
+            </Paper>
+          )}
+
+          {/* Recent Trades */}
+          {liveResults.recent_trades &&
+            liveResults.recent_trades.length > 0 && (
+              <Paper sx={{ p: 3 }}>
+                <Typography variant="h6" sx={{ mb: 3 }}>
+                  Recent Trades (Last 10)
+                </Typography>
+                <TradeLogTable
+                  trades={liveResults.recent_trades.map((t) => ({
+                    entry_time: t.entry_time || t.timestamp || '',
+                    exit_time: t.exit_time || '',
+                    instrument: t.instrument || task.instrument,
+                    direction: (t.direction?.toLowerCase() === 'short'
+                      ? 'short'
+                      : 'long') as 'long' | 'short',
+                    units: t.units || 0,
+                    entry_price: t.entry_price || 0,
+                    exit_price: t.exit_price || 0,
+                    pnl: t.pnl || 0,
+                    realized_pnl: t.pnl || 0,
+                    duration: t.duration?.toString() || '',
+                  }))}
+                  selectedTradeIndex={null}
+                />
+              </Paper>
+            )}
+        </Box>
+      );
+    }
+
+    // No live results yet - show waiting message
     return (
       <Box sx={{ px: 3 }}>
         <Alert severity="info">
-          This task is currently running. Results will be available once the
-          execution completes.
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CircularProgress size={16} />
+            <Typography variant="body2">
+              This task is currently running. Live results will appear here
+              shortly...
+            </Typography>
+          </Box>
         </Alert>
       </Box>
     );
@@ -260,10 +515,6 @@ export function TaskResultsTab({ task }: TaskResultsTabProps) {
   }
 
   const stats = getTradeStatistics();
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
-  };
 
   return (
     <Box sx={{ px: 3 }}>

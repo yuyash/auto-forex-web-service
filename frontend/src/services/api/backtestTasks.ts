@@ -7,6 +7,7 @@ import type {
   BacktestTaskUpdateData,
   BacktestTaskListParams,
   BacktestTaskCopyData,
+  BacktestLiveResults,
   TaskExecution,
   PaginatedResponse,
 } from '../../types';
@@ -147,5 +148,15 @@ export const backtestTasksApi = {
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
+  },
+
+  /**
+   * Get live/intermediate results during backtest execution
+   * Returns cached results from the running backtest task
+   */
+  getLiveResults: (taskId: number): Promise<BacktestLiveResults> => {
+    return apiClient.get<BacktestLiveResults>(
+      `/backtest-tasks/${taskId}/live-results/`
+    );
   },
 };
