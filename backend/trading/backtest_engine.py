@@ -131,7 +131,7 @@ class BacktestPosition:
 
 
 @dataclass
-class BacktestTrade:
+class BacktestTrade:  # pylint: disable=too-many-instance-attributes
     """
     Completed trade record for backtesting.
 
@@ -296,7 +296,7 @@ class ResourceMonitor:
         return self.peak_memory
 
 
-class BacktestEngine:
+class BacktestEngine:  # pylint: disable=too-many-instance-attributes
     """
     Backtesting engine for strategy performance evaluation.
 
@@ -898,15 +898,20 @@ class BacktestEngine:
             execution_price = tick.bid
 
         # Check if this order closes an existing position (opposite direction)
-        # Find matching position with opposite direction and same instrument
+        # Find matching position with opposite direction, same instrument, and same layer
         opposite_direction = "short" if order.direction == "long" else "long"
+        order_layer = getattr(order, "layer_number", None)
         matching_position = None
 
         for position in self.positions:
+            # Match on instrument, direction, units, AND layer_number
+            # This prevents closing positions from different layers accidentally
+            position_layer = getattr(position, "layer_number", None)
             if (
                 position.instrument == order.instrument
                 and position.direction == opposite_direction
                 and position.units == Decimal(str(order.units))
+                and position_layer == order_layer
             ):
                 matching_position = position
                 break
