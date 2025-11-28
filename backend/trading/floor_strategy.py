@@ -1387,67 +1387,82 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         Returns:
             List of close orders
         """
-        orders: list[Order] = []
+        # Collect and sort positions that should take profit
+        positions_to_close = self._collect_take_profit_positions(layer, tick_data)
+        if not positions_to_close:
+            return []
 
-        # First, collect all positions that should take profit
-        positions_to_close: list[Position] = []
-        for position in layer.positions:
-            if self._should_take_profit(position, tick_data):
-                positions_to_close.append(position)
+        # Identify retracement positions and mark them
+        retracement_positions = [
+            pos for pos in positions_to_close if pos != layer.first_lot_position
+        ]
+        for position in retracement_positions:
+            position.retracement_already_decremented = True  # type: ignore[attr-defined]
 
-        # Count how many non-first-lot (retracement) positions are being closed
-        retracement_positions_closing = sum(
-            1 for pos in positions_to_close if pos != layer.first_lot_position
+        # Process each position and create close orders
+        orders = self._process_take_profit_closes(
+            layer, tick_data, positions_to_close, retracement_positions
         )
 
-        # Decrement retracement count by the number of retracement positions being closed
-        # This ensures the log reflects the correct count as positions close
-        if retracement_positions_closing > 0:
-            layer.decrement_retracement_count(retracement_positions_closing)
+        # Decrement layer count for closed retracement positions
+        if retracement_positions:
+            layer.decrement_retracement_count(len(retracement_positions))
             self._sync_layer_lot_size(layer)
 
-        # Mark retracement positions as already decremented to avoid double-decrement
-        # in on_position_closed
-        for position in positions_to_close:
-            if position != layer.first_lot_position:
-                position.retracement_already_decremented = True  # type: ignore[attr-defined]
+        return orders
+
+    def _collect_take_profit_positions(self, layer: Layer, tick_data: TickData) -> list[Position]:
+        """Collect and sort positions that should take profit."""
+        positions = [p for p in layer.positions if self._should_take_profit(p, tick_data)]
+        # Sort by unit size descending (larger units first)
+        positions.sort(key=lambda p: p.units, reverse=True)
+        return positions
+
+    def _process_take_profit_closes(
+        self,
+        layer: Layer,
+        tick_data: TickData,
+        positions_to_close: list[Position],
+        retracement_positions: list[Position],
+    ) -> list[Order]:
+        """Process take profit closes and create orders."""
+        orders: list[Order] = []
+        remaining_count = layer.retracement_count
 
         for position in positions_to_close:
-            # Log before creating order
-            current_price = tick_data.bid if position.direction == "long" else tick_data.ask
-            pip_movement = self.calculate_pips(
-                position.entry_price, current_price, position.instrument
-            )
+            is_retracement = position in retracement_positions
+            if is_retracement:
+                remaining_count -= 1
 
-            is_first_lot = position == layer.first_lot_position
-            position_type = "INITIAL" if is_first_lot else "SCALED"
-            is_first_lot = position == layer.first_lot_position
-            position_type = "INITIAL" if is_first_lot else "SCALED"
+            self._log_take_profit(layer, tick_data, position)
 
-            tp_msg = (
-                f"[TAKE PROFIT] Layer {layer.layer_number} | "
-                f"Closing {position_type} {position.direction.upper()} position | "
-                f"Size: {position.units} units | "
-                f"Entry: {position.entry_price} → Exit: {current_price} | "
-                f"Profit: +{pip_movement:.1f} pips "
-                f"(Target: {self.take_profit_pips} pips)"
+            close_order = self._create_close_order(
+                position,
+                tick_data,
+                reason="strategy_close",
+                remaining_retracements_after_batch=remaining_count,
             )
-            logger.info(tp_msg)
-            tp_msg = (
-                f"[TAKE PROFIT] Layer {layer.layer_number} | "
-                f"Closing {position_type} {position.direction.upper()} position | "
-                f"Size: {position.units} units | "
-                f"Entry: {position.entry_price} → Exit: {current_price} | "
-                f"Profit: +{pip_movement:.1f} pips "
-                f"(Target: {self.take_profit_pips} pips)"
-            )
-            logger.info(tp_msg)
-
-            close_order = self._create_close_order(position, tick_data, reason="strategy_close")
             if close_order:
                 orders.append(close_order)
 
         return orders
+
+    def _log_take_profit(self, layer: Layer, tick_data: TickData, position: Position) -> None:
+        """Log take profit event."""
+        current_price = tick_data.bid if position.direction == "long" else tick_data.ask
+        pip_movement = self.calculate_pips(position.entry_price, current_price, position.instrument)
+        is_first_lot = position == layer.first_lot_position
+        position_type = "INITIAL" if is_first_lot else "SCALED"
+
+        tp_msg = (
+            f"[TAKE PROFIT] Layer {layer.layer_number} | "
+            f"Closing {position_type} {position.direction.upper()} position | "
+            f"Size: {position.units} units | "
+            f"Entry: {position.entry_price} → Exit: {current_price} | "
+            f"Profit: +{pip_movement:.1f} pips "
+            f"(Target: {self.take_profit_pips} pips)"
+        )
+        logger.info(tp_msg)
 
     def _should_take_profit(self, position: Position, tick_data: TickData) -> bool:
         """
@@ -1490,7 +1505,15 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         Returns:
             Close order or None
         """
-        # Create close order
+        order = self._build_close_order(position, tick_data)
+        pip_diff, pnl = self._calculate_close_metrics(position, tick_data)
+        self._log_close_event(
+            position, tick_data, reason, pip_diff, pnl, remaining_retracements_after_batch
+        )
+        return order
+
+    def _build_close_order(self, position: Position, tick_data: TickData) -> Order:
+        """Build the close order object."""
         order = Order(
             account=self.account,
             strategy=self.strategy,
@@ -1503,8 +1526,12 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         )
         order.layer_number = getattr(position, "layer_number", None)  # type: ignore[attr-defined]
         order.is_first_lot = False  # type: ignore[attr-defined]
+        return order
 
-        # Calculate pip metrics
+    def _calculate_close_metrics(
+        self, position: Position, tick_data: TickData
+    ) -> tuple[float, float]:
+        """Calculate pip difference and P&L for a close."""
         is_jpy = "JPY" in position.instrument
         pip_size = Decimal("0.01") if is_jpy else Decimal("0.0001")
         price_diff = tick_data.mid - position.entry_price
@@ -1512,31 +1539,29 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
             price_diff = -price_diff
         pip_diff = float(price_diff / pip_size)
 
-        # Calculate P&L in USD (matching backtest_engine.py calculation)
-        # units represents lot size (1.0 = 1 lot = 1,000 base currency units)
+        # Calculate P&L (1.0 unit = 1 lot = 1,000 base currency units)
         base_currency_amount = position.units * Decimal("1000")
         pnl_raw = price_diff * base_currency_amount
+        pnl = float(pnl_raw / tick_data.mid) if is_jpy else float(pnl_raw)
 
-        # For JPY pairs, P&L is in JPY and needs conversion to USD
-        if is_jpy:
-            pnl = float(pnl_raw / tick_data.mid)
-        else:
-            pnl = float(pnl_raw)
+        return pip_diff, pnl
 
-        # Get event metadata
+    def _log_close_event(
+        self,
+        position: Position,
+        tick_data: TickData,
+        reason: str,
+        pip_diff: float,
+        pnl: float,
+        remaining_retracements_after_batch: int | None,
+    ) -> None:
+        """Log the close event with all details."""
         event_type, reason_display = self._get_close_event_metadata(reason)
         layer = self.layer_manager.get_layer(getattr(position, "layer_number", 0))
-        entry_retracement_number = getattr(position, "retracement_number", None)
-        remaining_retracements: int | None = None
-        if layer:
-            if remaining_retracements_after_batch is not None:
-                remaining_retracements = remaining_retracements_after_batch
-            else:
-                remaining_retracements = layer.retracement_count
-                if not getattr(position, "is_first_lot", False):
-                    remaining_retracements = max(0, remaining_retracements - 1)
+        remaining = self._get_remaining_retracements(
+            position, layer, remaining_retracements_after_batch
+        )
 
-        # Log close event
         self.log_strategy_event(
             reason,
             f"Closing position: {position.direction.upper()} {position.units} units | "
@@ -1555,13 +1580,27 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                 "event_type": event_type,
                 "timestamp": tick_data.timestamp.isoformat(),
                 "layer_number": getattr(position, "layer_number", None),
-                "retracement_count": remaining_retracements,
+                "retracement_count": remaining,
                 "max_retracements": layer.max_retracements_per_layer if layer else None,
-                "entry_retracement_count": entry_retracement_number,
+                "entry_retracement_count": getattr(position, "retracement_number", None),
             },
         )
 
-        return order
+    def _get_remaining_retracements(
+        self,
+        position: Position,
+        layer: Layer | None,
+        remaining_after_batch: int | None,
+    ) -> int | None:
+        """Calculate remaining retracements after close."""
+        if not layer:
+            return None
+        if remaining_after_batch is not None:
+            return remaining_after_batch
+        remaining = layer.retracement_count
+        if not getattr(position, "is_first_lot", False):
+            remaining = max(0, remaining - 1)
+        return remaining
 
     def _get_close_event_metadata(self, reason: str) -> tuple[str, str]:
         """

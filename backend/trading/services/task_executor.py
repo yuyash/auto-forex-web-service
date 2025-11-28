@@ -117,7 +117,7 @@ def _load_backtest_data_by_day(
     return instrument_data, None
 
 
-def _log_strategy_events_to_execution(  # pylint: disable=too-many-locals
+def _log_strategy_events_to_execution(  # pylint: disable=too-many-locals,too-many-statements
     execution: TaskExecution,
     engine: BacktestEngine,
     last_event_index: int,
@@ -203,9 +203,7 @@ def _log_strategy_events_to_execution(  # pylint: disable=too-many-locals
             if entry_retracement is not None:
                 retracement_info_parts.append(f"Entry Retracement #{entry_retracement}")
             if remaining_retracements is not None:
-                retracement_info_parts.append(
-                    f"Remaining Retracements: {remaining_retracements}"
-                )
+                retracement_info_parts.append(f"Remaining Retracements: {remaining_retracements}")
             retracement_suffix = (
                 f" ({', '.join(retracement_info_parts)})" if retracement_info_parts else ""
             )
