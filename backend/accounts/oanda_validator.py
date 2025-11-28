@@ -12,6 +12,7 @@ from typing import Dict, Optional, Tuple
 
 import v20
 from v20.errors import V20ConnectionError, V20Timeout
+from v20.response import Response
 
 
 class OandaAPIValidator:
@@ -116,7 +117,7 @@ class OandaAPIValidator:
             error_msg = f"Unexpected error during validation: {str(e)}"
             return False, error_msg, None
 
-    def _extract_error_message(self, response: v20.response.Response) -> str:
+    def _extract_error_message(self, response: Response) -> str:
         """
         Extract error message from OANDA API response.
 

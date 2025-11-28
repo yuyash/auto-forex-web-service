@@ -9,17 +9,17 @@ This module provides admin-only endpoints for:
 """
 
 import logging
-from typing import cast
+from collections.abc import Mapping
+from typing import Any, cast
 
 from django.contrib.auth.hashers import make_password
-from django.contrib.auth.models import AbstractUser
 from django.db import transaction
 from django.utils import timezone
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.request import Request
+from rest_framework.request import Empty, Request
 from rest_framework.response import Response
 
 from accounts.models import User
@@ -27,6 +27,13 @@ from accounts.permissions import IsAdminUser
 from trading.event_logger import EventLogger
 
 logger = logging.getLogger(__name__)
+
+
+def _get_admin_user(user_obj: Any) -> User | None:
+    """Return the authenticated User instance when available."""
+    if isinstance(user_obj, User):
+        return user_obj
+    return None
 
 
 @api_view(["GET"])
@@ -84,7 +91,7 @@ def list_users(request: Request) -> Response:
         # Serialize user data
         users_data = [
             {
-                "id": user.id,
+                "id": user.pk,
                 "username": user.username,
                 "email": user.email,
                 "first_name": user.first_name,
@@ -141,8 +148,13 @@ def create_user(request: Request) -> Response:
         Response with created user data
     """
     try:
-        # Get request data
-        data = request.data
+        # Get request data with Empty sentinel safety for type checkers
+        raw_data: Any = request.data
+        data: Mapping[str, Any]
+        if raw_data is Empty:
+            data = {}
+        else:
+            data = cast(Mapping[str, Any], raw_data)
 
         # Validate required fields
         required_fields = ["username", "email", "password"]
@@ -184,33 +196,29 @@ def create_user(request: Request) -> Response:
 
             # Log the creation event
             event_logger = EventLogger()
-            admin_email = str(request.user.email) if hasattr(request.user, "email") else "unknown"
+            admin_user = _get_admin_user(request.user)
+            admin_email = admin_user.email if admin_user else "unknown"
             event_logger.log_event(
                 category="admin",
                 event_type="user_created",
                 severity="info",
                 description=f"Admin {admin_email} created user {user.email}",
                 details={
-                    "admin_user_id": request.user.id,
+                    "admin_user_id": request.user.pk,
                     "admin_email": admin_email,
-                    "created_user_id": user.id,
+                    "created_user_id": user.pk,
                     "created_email": user.email,
                     "created_username": user.username,
                     "is_staff": user.is_staff,
                 },
-                user=cast(AbstractUser, request.user) if request.user.is_authenticated else None,
+                user=admin_user if admin_user else None,
             )
 
-            logger.info(
-                "Admin %s created user %s (ID: %d)",
-                admin_email,
-                user.email,
-                user.id,
-            )
+            logger.info("Admin %s created user %s (ID: %d)", admin_email, user.email, user.pk)
 
         # Return created user data
         user_data = {
-            "id": user.id,
+            "id": user.pk,
             "username": user.username,
             "email": user.email,
             "first_name": user.first_name,
@@ -222,10 +230,7 @@ def create_user(request: Request) -> Response:
         }
 
         return Response(
-            {
-                "message": "User created successfully",
-                "user": user_data,
-            },
+            {"message": "User created successfully", "user": user_data},
             status=status.HTTP_201_CREATED,
         )
 
@@ -265,7 +270,7 @@ def delete_user(request: Request, user_id: int) -> Response:
             )
 
         # Prevent self-deletion
-        if target_user.id == request.user.id:
+        if target_user.pk == request.user.pk:
             return Response(
                 {"error": "Cannot delete your own account"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -281,20 +286,21 @@ def delete_user(request: Request, user_id: int) -> Response:
 
             # Log the deletion event
             event_logger = EventLogger()
-            admin_email = str(request.user.email) if hasattr(request.user, "email") else "unknown"
+            admin_user = _get_admin_user(request.user)
+            admin_email = admin_user.email if admin_user else "unknown"
             event_logger.log_event(
                 category="admin",
                 event_type="user_deleted",
                 severity="warning",
                 description=f"Admin {admin_email} deleted user {deleted_email}",
                 details={
-                    "admin_user_id": request.user.id,
+                    "admin_user_id": request.user.pk,
                     "admin_email": admin_email,
                     "deleted_user_id": user_id,
                     "deleted_email": deleted_email,
                     "deleted_username": deleted_username,
                 },
-                user=cast(AbstractUser, request.user) if request.user.is_authenticated else None,
+                user=admin_user if admin_user else None,
             )
 
             logger.warning(
@@ -349,8 +355,13 @@ def update_user(request: Request, user_id: int) -> Response:
         # Get the target user
         target_user = User.objects.get(id=user_id)
 
-        # Get request data
-        data = request.data
+        # Get request data with Empty sentinel safety for type checkers
+        raw_data: Any = request.data
+        data: Mapping[str, Any]
+        if raw_data is Empty:
+            data = {}
+        else:
+            data = cast(Mapping[str, Any], raw_data)
 
         # Update allowed fields
         updated_fields = []
@@ -389,20 +400,21 @@ def update_user(request: Request, user_id: int) -> Response:
 
             # Log the update event
             event_logger = EventLogger()
-            admin_email = str(request.user.email) if hasattr(request.user, "email") else "unknown"
+            admin_user = _get_admin_user(request.user)
+            admin_email = admin_user.email if admin_user else "unknown"
             event_logger.log_event(
                 category="admin",
                 event_type="user_updated",
                 severity="info",
                 description=f"Admin {admin_email} updated user {target_user.email}",
                 details={
-                    "admin_user_id": request.user.id,
+                    "admin_user_id": request.user.pk,
                     "admin_email": admin_email,
-                    "updated_user_id": target_user.id,
+                    "updated_user_id": target_user.pk,
                     "updated_email": target_user.email,
                     "updated_fields": updated_fields,
                 },
-                user=cast(AbstractUser, request.user) if request.user.is_authenticated else None,
+                user=admin_user if admin_user else None,
             )
 
             logger.info(
@@ -414,7 +426,7 @@ def update_user(request: Request, user_id: int) -> Response:
 
         # Return updated user data
         user_data = {
-            "id": target_user.id,
+            "id": target_user.pk,
             "username": target_user.username,
             "email": target_user.email,
             "first_name": target_user.first_name,
