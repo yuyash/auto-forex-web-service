@@ -1,34 +1,24 @@
-"""
-Security monitoring middleware for authentication events.
-
-This module provides middleware for:
-- Logging all authentication events
-- IP blocking for failed login attempts
-- Account locking after excessive failures
-- Security event logging
-
-Requirements: 34.1, 34.2, 34.3, 34.4, 34.5, 35.1, 35.2, 35.3, 35.4, 35.5
-"""
+"""Security monitoring middleware for authentication events."""
 
 import logging
-from typing import TYPE_CHECKING, Callable
+from typing import Any, Callable
 
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
 
 from trading.event_models import Event
 
-from .models import UserSession
+from .models import User, UserSession
 from .rate_limiter import RateLimiter
 
-if TYPE_CHECKING:
-    from accounts.models import User as UserType
-else:
-    UserType = get_user_model()  # type: ignore[misc]
-
 logger = logging.getLogger(__name__)
+
+
+def _get_authenticated_user(user_obj: Any) -> User | None:
+    """Return the authenticated User instance when available."""
+    if isinstance(user_obj, User) and user_obj.is_authenticated:
+        return user_obj
+    return None
 
 
 class SecurityMonitoringMiddleware:
@@ -86,16 +76,13 @@ class SecurityMonitoringMiddleware:
         response = self.get_response(request)
 
         # Track session for authenticated users
-        if (
-            hasattr(request, "user")
-            and request.user.is_authenticated
-            and not isinstance(request.user, AnonymousUser)
-            and response.status_code == 200
-        ):
+        auth_user = _get_authenticated_user(getattr(request, "user", None))
+
+        if auth_user and response.status_code == 200:
             # Update or create session for authenticated requests
             user_agent = request.META.get("HTTP_USER_AGENT", "")
             self._create_or_update_user_session(
-                request.user,
+                auth_user,
                 ip_address,
                 user_agent,
             )
@@ -195,13 +182,15 @@ class SecurityMonitoringMiddleware:
 
         # Log login attempts
         elif path == "/api/auth/login" and method == "POST":
-            if status_code == 200 and hasattr(request, "user") and request.user.is_authenticated:
+            auth_user = _get_authenticated_user(getattr(request, "user", None))
+            if status_code == 200 and auth_user:
                 # Successful login - get user from request
+                user_email = auth_user.email
                 Event.log_security_event(
                     event_type="login_success",
-                    description=(f"User {request.user.email} " f"logged in from {ip_address}"),
+                    description=(f"User {user_email} logged in from {ip_address}"),
                     severity="info",
-                    user=request.user,
+                    user=auth_user,
                     ip_address=ip_address,
                     user_agent=user_agent,
                     details={
@@ -211,7 +200,7 @@ class SecurityMonitoringMiddleware:
 
                 # Create or update user session
                 self._create_or_update_user_session(
-                    request.user,
+                    auth_user,
                     ip_address,
                     user_agent,
                 )
@@ -267,18 +256,15 @@ class SecurityMonitoringMiddleware:
                 )
 
         # Log logout events
-        elif (
-            path == "/api/auth/logout"
-            and method == "POST"
-            and status_code == 200
-            and hasattr(request, "user")
-            and request.user.is_authenticated
-        ):
+        elif path == "/api/auth/logout" and method == "POST" and status_code == 200:
+            auth_user = _get_authenticated_user(getattr(request, "user", None))
+            if not auth_user:
+                return
             Event.log_security_event(
                 event_type="logout_success",
-                description=(f"User {request.user.email} " f"logged out from {ip_address}"),
+                description=(f"User {auth_user.email} logged out from {ip_address}"),
                 severity="info",
-                user=request.user,
+                user=auth_user,
                 ip_address=ip_address,
                 user_agent=user_agent,
                 details={
@@ -288,7 +274,7 @@ class SecurityMonitoringMiddleware:
 
     def _create_user_session(
         self,
-        user: "UserType",
+        user: User,
         ip_address: str,
         user_agent: str,
     ) -> None:
@@ -301,7 +287,7 @@ class SecurityMonitoringMiddleware:
             user_agent: User agent string
         """
         # Generate a session key
-        session_key = f"{user.id}_{ip_address}_{timezone.now().timestamp()}"
+        session_key = f"{user.pk}_{ip_address}_{timezone.now().timestamp()}"
 
         # Create new session record
         UserSession.objects.create(
@@ -316,7 +302,7 @@ class SecurityMonitoringMiddleware:
             user.email,
             ip_address,
             extra={
-                "user_id": user.id,
+                "user_id": user.pk,
                 "email": user.email,
                 "ip_address": ip_address,
             },
@@ -324,7 +310,7 @@ class SecurityMonitoringMiddleware:
 
     def _create_or_update_user_session(
         self,
-        user: "UserType",
+        user: User,
         ip_address: str,
         user_agent: str,
     ) -> None:
@@ -549,17 +535,9 @@ class HTTPAccessLoggingMiddleware:
 
         # Log admin endpoint access
         if path.startswith("/api/admin/"):
-            is_authenticated = hasattr(request, "user") and request.user.is_authenticated
-            is_staff = is_authenticated and request.user.is_staff
-
-            # Get user for logging (only if authenticated and not AnonymousUser)
-            log_user = None
-            if (
-                is_authenticated
-                and hasattr(request.user, "id")
-                and not isinstance(request.user, AnonymousUser)
-            ):
-                log_user = request.user
+            log_user = _get_authenticated_user(getattr(request, "user", None))
+            is_authenticated = log_user is not None
+            is_staff = bool(log_user and log_user.is_staff)
 
             Event.log_security_event(
                 event_type="admin_endpoint_access",

@@ -1,4 +1,36 @@
 {
+  "[json]": {
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.detectIndentation": false,
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true
+  },
+  "[python]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.detectIndentation": false,
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true
+  },
+  "[typescript]": {
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.detectIndentation": false,
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true
+  },
+  "[dockercompose]": {
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.defaultFormatter": "docker.docker",
+    "editor.detectIndentation": false,
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true
+  },
   "chat.agent.maxRequests": 1024,
   "chat.agent.enabled": true,
   "chat.checkpoints.enabled": true,
@@ -57,6 +89,8 @@
   "editor.formatOnPaste": true,
   "editor.wordWrap": "on",
   "explorer.excludeGitIgnore": true,
+  "flake8.enabled": true,
+  "flake8.args": ["--toml-config"],
   "kiroAgent.enableTabAutocomplete": true,
   "kiroAgent.modelSelection": "claude-opus-4.5",
   "kiroAgent.trustedCommands": [
@@ -98,49 +132,24 @@
     "wc *",
     "which *"
   ],
+  "mypy-type-checker.cwd": "${workspaceFolder}/backend",
+  "mypy-type-checker.interpreter": [
+    "${workspaceFolder}/backend/.venv/bin/python"
+  ],
+  "mypy-type-checker.path": ["${workspaceFolder}/backend/.venv/bin/mypy"],
+  "pylint.enabled": true,
+  "pylint.cwd": "${workspaceFolder}/backend",
+  "pylint.interpreter": ["${workspaceFolder}/backend/.venv/bin/python"],
+  "pylint.path": ["${workspaceFolder}/backend/.venv/bin/pylint"],
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
+  "python-envs.defaultEnvManager": "ms-python.python:venv",
+  "python-envs.pythonProjects": [],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
   "python.terminal.activateEnvironment": true,
   "python.terminal.activateEnvInCurrentTerminal": true,
   "python.terminal.useEnvFile": true,
   "python.useEnvironmentsExtension": true,
-  "[json]": {
-    "editor.tabSize": 2,
-    "editor.insertSpaces": true,
-    "editor.defaultFormatter": "esbenp.prettier-vscode",
-    "editor.detectIndentation": false,
-    "editor.formatOnSave": true,
-    "editor.formatOnPaste": true
-  },
-  "[python]": {
-    "editor.tabSize": 4,
-    "editor.insertSpaces": true,
-    "editor.defaultFormatter": "ms-python.black-formatter",
-    "editor.detectIndentation": false,
-    "editor.formatOnSave": true,
-    "editor.formatOnPaste": true
-  },
-  "[typescript]": {
-    "editor.tabSize": 2,
-    "editor.insertSpaces": true,
-    "editor.defaultFormatter": "esbenp.prettier-vscode",
-    "editor.detectIndentation": false,
-    "editor.formatOnSave": true,
-    "editor.formatOnPaste": true
-  },
-  "[dockercompose]": {
-    "editor.tabSize": 2,
-    "editor.insertSpaces": true,
-    "editor.defaultFormatter": "docker.docker",
-    "editor.detectIndentation": false,
-    "editor.formatOnSave": true,
-    "editor.formatOnPaste": true
-  },
-  "flake8.enabled": true,
-  "flake8.args": ["--toml-config"],
-  "pylint.enabled": true,
   "typescript.autoClosingTags": false,
-  "workbench.colorTheme": "Visual Studio Light",
-  "python-envs.defaultEnvManager": "ms-python.python:system",
-  "python-envs.pythonProjects": []
+  "workbench.colorTheme": "Visual Studio Light"
 }

@@ -22,6 +22,8 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
+from botocore.exceptions import BotoCoreError, ClientError
+
 if TYPE_CHECKING:
     from accounts.models import User
 
@@ -153,7 +155,6 @@ def _verify_session_credentials(session: Any) -> None:
 def _assume_role(session: Any, role_arn: str) -> Any:
     """Assume AWS role using STS and return new session."""
     import boto3  # pylint: disable=import-error
-    from botocore.exceptions import ClientError  # pylint: disable=import-error
 
     logger.info("Attempting to assume AWS role: %s", role_arn)
 
@@ -236,8 +237,6 @@ def get_aws_session() -> Any:
         RuntimeError: If AWS client initialization fails
     """
     try:
-        from botocore.exceptions import BotoCoreError, ClientError  # pylint: disable=import-error
-
         # Get configuration
         config = _get_aws_config()
         _log_aws_config(config)
@@ -285,8 +284,6 @@ def _send_email_via_ses(
         True if email sent successfully, False otherwise
     """
     try:
-        from botocore.exceptions import BotoCoreError, ClientError  # pylint: disable=import-error
-
         # Get AWS session with proper authentication
         session = get_aws_session()
 
@@ -344,15 +341,6 @@ def _send_email_via_ses(
                 "backend": "ses",
             },
             exc_info=True,
-        )
-        return False
-    except ImportError:
-        logger.error(
-            "boto3 not installed. Install with: pip install boto3",
-            extra={
-                "recipients": recipient_list,
-                "backend": "ses",
-            },
         )
         return False
 
@@ -465,7 +453,7 @@ def send_verification_email(user: "User", verification_url: str) -> bool:
             "Verification email sent to %s",
             user.email,
             extra={
-                "user_id": user.id,
+                "user_id": user.pk,
                 "email": user.email,
             },
         )
@@ -474,7 +462,7 @@ def send_verification_email(user: "User", verification_url: str) -> bool:
             "Failed to send verification email to %s",
             user.email,
             extra={
-                "user_id": user.id,
+                "user_id": user.pk,
                 "email": user.email,
             },
         )
@@ -522,7 +510,7 @@ def send_password_reset_email(user: "User", reset_url: str) -> bool:
             "Password reset email sent to %s",
             user.email,
             extra={
-                "user_id": user.id,
+                "user_id": user.pk,
                 "email": user.email,
             },
         )
@@ -531,7 +519,7 @@ def send_password_reset_email(user: "User", reset_url: str) -> bool:
             "Failed to send password reset email to %s",
             user.email,
             extra={
-                "user_id": user.id,
+                "user_id": user.pk,
                 "email": user.email,
             },
         )
@@ -578,7 +566,7 @@ def send_welcome_email(user: "User") -> bool:
             "Welcome email sent to %s",
             user.email,
             extra={
-                "user_id": user.id,
+                "user_id": user.pk,
                 "email": user.email,
             },
         )
@@ -587,7 +575,7 @@ def send_welcome_email(user: "User") -> bool:
             "Failed to send welcome email to %s",
             user.email,
             extra={
-                "user_id": user.id,
+                "user_id": user.pk,
                 "email": user.email,
             },
         )

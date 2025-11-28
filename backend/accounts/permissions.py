@@ -13,6 +13,16 @@ from rest_framework import permissions
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
+from accounts.models import User
+
+
+def _get_request_user(request: Request) -> User | None:
+    """Return authenticated User instance when available."""
+    user = getattr(request, "user", None)
+    if isinstance(user, User) and user.is_authenticated:
+        return user
+    return None
+
 
 class IsAdminUser(permissions.BasePermission):
     """
@@ -38,15 +48,16 @@ class IsAdminUser(permissions.BasePermission):
             True if user is authenticated and is_staff, False otherwise
         """
         # User must be authenticated
-        if not request.user or not request.user.is_authenticated:
+        user = _get_request_user(request)
+        if not user:
             return False
 
         # User must be active
-        if not request.user.is_active:
+        if not user.is_active:
             return False
 
         # User must be staff (admin)
-        return bool(request.user.is_staff)
+        return bool(user.is_staff)
 
 
 class IsAdminOrReadOnly(permissions.BasePermission):
@@ -71,10 +82,11 @@ class IsAdminOrReadOnly(permissions.BasePermission):
             True if read-only request or user is admin, False otherwise
         """
         # User must be authenticated and active
-        if not request.user or not request.user.is_authenticated:
+        user = _get_request_user(request)
+        if not user:
             return False
 
-        if not request.user.is_active:
+        if not user.is_active:
             return False
 
         # Allow read-only methods for all authenticated active users
@@ -82,4 +94,4 @@ class IsAdminOrReadOnly(permissions.BasePermission):
             return True
 
         # Write methods require admin privileges
-        return bool(request.user.is_staff)
+        return bool(user.is_staff)

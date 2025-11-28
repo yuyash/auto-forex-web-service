@@ -1047,7 +1047,7 @@ class OandaAccount(models.Model):
         Automatically unsets any other default account for the same user.
         """
         # Unset any existing default account for this user
-        OandaAccount.objects.filter(user=self.user, is_default=True).exclude(id=self.id).update(
+        OandaAccount.objects.filter(user=self.user, is_default=True).exclude(id=self.pk).update(
             is_default=False
         )
         # Set this account as default

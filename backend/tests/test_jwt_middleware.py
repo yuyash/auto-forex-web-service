@@ -7,6 +7,7 @@ Requirements: 2.3, 2.4
 # mypy: disable-error-code="attr-defined,valid-type,union-attr"
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from unittest.mock import Mock
 
 from django.conf import settings
@@ -22,6 +23,15 @@ from accounts.authentication import JWTAuthentication
 from accounts.jwt_utils import decode_jwt_token, generate_jwt_token, refresh_jwt_token
 
 User = get_user_model()
+
+
+def _token_to_str(token: Any) -> str:
+    """Coerce PyJWT token return type to a plain string for mypy and headers."""
+    if isinstance(token, memoryview):
+        token = token.tobytes()
+    if isinstance(token, (bytes, bytearray)):
+        return token.decode("utf-8")
+    return str(token)
 
 
 @pytest.fixture
@@ -63,7 +73,7 @@ def expired_token(test_user: User) -> str:
     }
 
     token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-    return token
+    return _token_to_str(token)
 
 
 @pytest.mark.django_db
@@ -228,7 +238,7 @@ class TestJWTAuthentication:
         url = reverse("accounts:logout")
 
         # Set authorization header
-        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {_token_to_str(token)}")
 
         response = api_client.post(url, format="json")
 

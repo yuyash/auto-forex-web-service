@@ -250,4 +250,5 @@ color = true
 [dependency-groups]
 dev = [
     "pytest-xdist>=3.8.0",
+    "types-pyjwt>=1.7.1",
 ]
