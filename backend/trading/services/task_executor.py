@@ -232,6 +232,59 @@ def _log_strategy_events_to_execution(  # pylint: disable=too-many-locals,too-ma
     return len(events)
 
 
+# Maximum number of equity curve points to store (for chart display)
+MAX_EQUITY_CURVE_POINTS = 1000
+
+
+def _downsample_equity_curve(equity_curve: list, max_points: int = MAX_EQUITY_CURVE_POINTS) -> list:
+    """
+    Downsample equity curve to reduce storage size while preserving chart shape.
+
+    Uses LTTB (Largest Triangle Three Buckets) inspired algorithm that preserves
+    important points like peaks and troughs.
+
+    Args:
+        equity_curve: List of equity point dicts with 'timestamp' and 'equity' keys
+        max_points: Maximum number of points to keep
+
+    Returns:
+        Downsampled list of equity points
+    """
+    if len(equity_curve) <= max_points:
+        return equity_curve
+
+    # Always keep first and last points
+    result = [equity_curve[0]]
+
+    # Calculate bucket size (excluding first and last)
+    bucket_size = (len(equity_curve) - 2) / (max_points - 2)
+
+    for i in range(1, max_points - 1):
+        # Calculate bucket boundaries
+        bucket_start = int((i - 1) * bucket_size) + 1
+        bucket_end = int(i * bucket_size) + 1
+        bucket_end = min(bucket_end, len(equity_curve) - 1)
+
+        # Find point with max equity change in bucket (preserves peaks/troughs)
+        best_point = equity_curve[bucket_start]
+        max_change = 0
+
+        prev_equity = result[-1].get("equity", 0)
+        for j in range(bucket_start, bucket_end):
+            point = equity_curve[j]
+            change = abs(point.get("equity", 0) - prev_equity)
+            if change > max_change:
+                max_change = change
+                best_point = point
+
+        result.append(best_point)
+
+    # Add last point
+    result.append(equity_curve[-1])
+
+    return result
+
+
 def _create_execution_metrics(
     execution: TaskExecution,
     performance_metrics: dict[str, Any],
@@ -257,6 +310,16 @@ def _create_execution_metrics(
     trade_log_dicts = [
         trade.to_dict() if hasattr(trade, "to_dict") else trade for trade in trade_log
     ]
+
+    # Downsample equity curve to prevent huge JSON payloads
+    # (25 days of tick data can generate 1M+ points)
+    if len(equity_curve_dicts) > MAX_EQUITY_CURVE_POINTS:
+        logger.info(
+            "Downsampling equity curve from %d to %d points",
+            len(equity_curve_dicts),
+            MAX_EQUITY_CURVE_POINTS,
+        )
+        equity_curve_dicts = _downsample_equity_curve(equity_curve_dicts, MAX_EQUITY_CURVE_POINTS)
 
     return ExecutionMetrics.objects.create(
         execution=execution,
