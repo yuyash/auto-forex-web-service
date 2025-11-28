@@ -264,10 +264,7 @@ class TestLogStrategyEventsToExecution:
         result = _log_strategy_events_to_execution(execution, engine, 0)  # type: ignore[arg-type]
 
         assert result == 1
-        assert len(execution.logs) == 1
-        assert "[FLOOR] Layer 1 Retracement Detected" in execution.logs[0]["message"]
-        assert "LONG position" in execution.logs[0]["message"]
-        assert "35.5 pips from peak" in execution.logs[0]["message"]
+        assert len(execution.logs) == 0
 
     def test_skips_already_logged_events(self):
         """Test that events before last_event_index are skipped."""

@@ -175,15 +175,8 @@ def _log_strategy_events_to_execution(  # pylint: disable=too-many-locals
                 f"{direction} {units} units @ {price}",
             )
         elif detail_event_type == "layer":
-            # Layer add event (from retracement_detected)
-            layer = details.get("layer", 1)
-            direction = details.get("direction", "").upper()
-            retracement_pips = details.get("retracement_pips", "")
-            execution.add_log(
-                "INFO",
-                f"[FLOOR] Layer {layer} Retracement Detected: "
-                f"{direction} position, {retracement_pips} pips from peak",
-            )
+            # Retracement detection events are noisy; skip logging to avoid redundant UI spam.
+            continue
         elif detail_event_type in ("close", "take_profit", "volatility_lock", "margin_protection"):
             # Close events
             direction = details.get("direction", "").upper()
