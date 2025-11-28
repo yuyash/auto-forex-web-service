@@ -120,6 +120,7 @@ module = [
     "redis.*",
     "boto3.*",
     "botocore.*",
+    "hypothesis.*",
 ]
 ignore_missing_imports = true
 
