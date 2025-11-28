@@ -112,8 +112,8 @@ services:
       - "8000:8000"
     command: >
       sh -c "python manage.py migrate &&
-             python manage.py collectstatic --noinput &&
-             daphne -b 0.0.0.0 -p 8000 trading_system.asgi:application"
+        python manage.py collectstatic --noinput &&
+        daphne -b 0.0.0.0 -p 8000 trading_system.asgi:application"
     restart: unless-stopped
     networks:
       - forex_network
@@ -168,7 +168,13 @@ services:
       - ./config:/app/config
       - ./logs:/app/logs
       - ${HOME}/.aws:/root/.aws:ro
-    command: celery -A trading_system worker -l info --concurrency=4
+    command: celery -A trading_system worker -l info --concurrency=2
+    # Memory limits to prevent OOM killer from killing the process
+    # mem_limit sets hard limit, memswap_limit enables swap usage
+    mem_limit: 6g
+    memswap_limit: 8g
+    # Reduce OOM killer priority (lower score = less likely to be killed)
+    oom_score_adj: -500
     restart: unless-stopped
     networks:
       - forex_network
