@@ -68,21 +68,29 @@ const strategyEventArbitrary = fc
       entry_price,
       exit_price,
       pnl,
-    ]): BacktestStrategyEvent => ({
-      event_type,
-      timestamp,
-      description: `${event_type} event`,
-      details: {
-        layer,
-        retracement_count:
-          event_type === 'initial_entry' ? 0 : retracement_count,
-        direction,
-        units,
-        entry_price,
-        exit_price: isCloseEvent(event_type) ? exit_price : null,
-        pnl: isCloseEvent(event_type) ? pnl : null,
-      },
-    })
+    ]): BacktestStrategyEvent => {
+      const entryRetracement =
+        event_type === 'initial_entry' ? 0 : retracement_count;
+      const remainingRetracement = isCloseEvent(event_type)
+        ? Math.max(0, entryRetracement - 1)
+        : entryRetracement;
+
+      return {
+        event_type,
+        timestamp,
+        description: `${event_type} event`,
+        details: {
+          layer,
+          retracement_count: remainingRetracement,
+          entry_retracement_count: entryRetracement,
+          direction,
+          units,
+          entry_price,
+          exit_price: isCloseEvent(event_type) ? exit_price : null,
+          pnl: isCloseEvent(event_type) ? pnl : null,
+        },
+      };
+    }
   );
 
 describe('FloorLayerLog Property-Based Tests', () => {
@@ -255,16 +263,21 @@ describe('FloorLayerLog Property-Based Tests', () => {
             container.querySelectorAll('tbody tr')
           ).filter((row) => !row.textContent?.includes('Total'));
 
-          // Check that rows with retracement > 0 show "Retracement #N" in details
+          // Check that rows with retracement info show the correct annotations
           eventRows.forEach((row) => {
             const detailsCell = row.querySelectorAll('td')[8]; // Details column
             const detailsText = detailsCell?.textContent || '';
 
-            // If it shows retracement, it should be a positive number
             const retracementMatch = detailsText.match(/Retracement #(\d+)/);
             if (retracementMatch) {
               const retracementValue = parseInt(retracementMatch[1], 10);
               expect(retracementValue).toBeGreaterThan(0);
+            }
+
+            const remainingMatch = detailsText.match(/Remaining Retracements: (\d+)/);
+            if (remainingMatch) {
+              const remainingValue = parseInt(remainingMatch[1], 10);
+              expect(remainingValue).toBeGreaterThanOrEqual(0);
             }
           });
         }

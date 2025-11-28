@@ -140,6 +140,14 @@ def _log_strategy_events_to_execution(  # pylint: disable=too-many-locals
     if not engine.strategy or not hasattr(engine.strategy, "_backtest_events"):
         return last_event_index
 
+    def _parse_int(value: Any) -> int | None:
+        try:
+            if value is None:
+                return None
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
     events = engine.strategy._backtest_events  # pylint: disable=protected-access
 
     # Log new events since last check
@@ -189,12 +197,25 @@ def _log_strategy_events_to_execution(  # pylint: disable=too-many-locals
             )
             layer = details.get("layer_number", details.get("layer", ""))
 
+            entry_retracement = _parse_int(details.get("entry_retracement_count"))
+            remaining_retracements = _parse_int(details.get("retracement_count"))
+            retracement_info_parts = []
+            if entry_retracement is not None:
+                retracement_info_parts.append(f"Entry Retracement #{entry_retracement}")
+            if remaining_retracements is not None:
+                retracement_info_parts.append(
+                    f"Remaining Retracements: {remaining_retracements}"
+                )
+            retracement_suffix = (
+                f" ({', '.join(retracement_info_parts)})" if retracement_info_parts else ""
+            )
+
             pnl_str = f"+${pnl:.2f}" if pnl >= 0 else f"-${abs(pnl):.2f}"
             layer_str = f"Layer {layer} " if layer else ""
             execution.add_log(
                 "INFO",
                 f"[FLOOR] {layer_str}{reason_display}: {direction} {units} units, "
-                f"Entry: {entry_price} → Exit: {exit_price}, P&L: {pnl_str}",
+                f"Entry: {entry_price} → Exit: {exit_price}, P&L: {pnl_str}{retracement_suffix}",
             )
         elif event_type == "entry_signal_triggered":
             # Entry signal event (optional - can be verbose)
