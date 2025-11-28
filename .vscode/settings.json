@@ -140,5 +140,7 @@
   "flake8.args": ["--toml-config"],
   "pylint.enabled": true,
   "typescript.autoClosingTags": false,
-  "workbench.colorTheme": "Visual Studio Light"
+  "workbench.colorTheme": "Visual Studio Light",
+  "python-envs.defaultEnvManager": "ms-python.python:system",
+  "python-envs.pythonProjects": []
 }
