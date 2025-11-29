@@ -1295,8 +1295,8 @@ def _parse_tick_timestamp(time_str: str) -> datetime:
 
 @shared_task(
     bind=True,
-    time_limit=3600,  # 1 hour hard limit
-    soft_time_limit=3300,  # 55 minutes soft limit
+    time_limit=7200,  # 2 hours hard limit
+    soft_time_limit=6600,  # 110 minutes soft limit
 )
 def run_backtest_task(  # type: ignore[no-untyped-def]
     self,  # pylint: disable=unused-argument
