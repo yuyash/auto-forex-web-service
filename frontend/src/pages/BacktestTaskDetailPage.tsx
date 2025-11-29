@@ -443,8 +443,8 @@ export default function BacktestTaskDetailPage() {
                     balance: liveResults.balance || 0,
                     total_trades: liveResults.total_trades || 0,
                     metrics: liveResults.metrics || {},
-                    recent_trades: liveResults.recent_trades || [],
-                    equity_curve: liveResults.equity_curve || [],
+                    trade_log: liveResults.trade_log || [],
+                    strategy_events: liveResults.strategy_events || [],
                   }
                 : null
             }

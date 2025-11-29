@@ -104,16 +104,29 @@ export interface BacktestLiveResults {
     sharpe_ratio?: number;
     [key: string]: number | string | undefined;
   };
-  recent_trades?: Array<{
-    timestamp: string;
-    instrument: string;
-    direction: string;
-    entry_price: number;
-    exit_price: number;
-    units: number;
-    pnl: number;
-    duration: number;
+  trade_log?: Array<{
+    timestamp?: string;
+    entry_time?: string;
+    exit_time?: string;
+    instrument?: string;
+    direction?: string;
+    entry_price?: number;
+    exit_price?: number;
+    units?: number;
+    pnl?: number;
+    realized_pnl?: number;
+    duration?: number | string;
+    layer_number?: number;
+    is_first_lot?: boolean;
+    retracement_count?: number;
+    entry_retracement_count?: number;
     [key: string]: string | number | boolean | undefined;
+  }>;
+  strategy_events?: Array<{
+    event_type: string;
+    description: string;
+    details: Record<string, string | number | boolean | null>;
+    timestamp?: string;
   }>;
   equity_curve?: Array<{
     timestamp: string;
