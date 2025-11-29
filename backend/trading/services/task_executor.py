@@ -305,9 +305,11 @@ def _create_execution_metrics(
         ExecutionMetrics instance
     """
     # Convert objects to dicts for JSON storage
+    logger.debug("Converting equity curve to dicts...")
     equity_curve_dicts = [
         point.to_dict() if hasattr(point, "to_dict") else point for point in equity_curve
     ]
+    logger.debug("Converting trade log to dicts...")
     trade_log_dicts = [
         trade.to_dict() if hasattr(trade, "to_dict") else trade for trade in trade_log
     ]
@@ -329,7 +331,14 @@ def _create_execution_metrics(
         len(trade_log_dicts),
     )
 
-    return ExecutionMetrics.objects.create(
+    # Force flush logs before potentially failing operation
+    import sys
+
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    logger.info("Inserting ExecutionMetrics into database...")
+    result = ExecutionMetrics.objects.create(
         execution=execution,
         total_return=Decimal(str(performance_metrics.get("total_return", 0))),
         total_pnl=Decimal(str(performance_metrics.get("total_pnl", 0))),
@@ -354,6 +363,8 @@ def _create_execution_metrics(
         trade_log=trade_log_dicts,
         strategy_events=performance_metrics.get("strategy_events", []),
     )
+    logger.info("ExecutionMetrics inserted successfully with ID %d", result.pk)
+    return result
 
 
 @contextmanager
