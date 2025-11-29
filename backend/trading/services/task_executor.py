@@ -704,6 +704,12 @@ def execute_backtest_task(
                 )
                 batch_tick_count += len(day_tick_data)
 
+                # Record initial equity on the first day using first tick timestamp
+                # pylint: disable=protected-access
+                if day_index == 0:
+                    engine._record_equity(day_tick_data[0].timestamp)
+                # pylint: enable=protected-access
+
                 # For large tick batches (>100k), report intermediate progress
                 tick_count = len(day_tick_data)
                 report_interval = 10000 if tick_count > 100000 else tick_count + 1

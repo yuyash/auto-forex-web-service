@@ -367,8 +367,9 @@ class BacktestEngine:  # pylint: disable=too-many-instance-attributes
             # Set CPU limit (soft limit only, doesn't enforce)
             self._set_cpu_limit()
 
-            # Record initial equity
-            self._record_equity(tick_data[0].timestamp if tick_data else datetime.now())
+            # Record initial equity - use first tick timestamp if available,
+            # otherwise fall back to configured start_date (avoid using datetime.now())
+            self._record_equity(tick_data[0].timestamp if tick_data else self.config.start_date)
 
             # Log start strategy event
             if self.strategy and tick_data:
@@ -426,8 +427,9 @@ class BacktestEngine:  # pylint: disable=too-many-instance-attributes
                     if self.progress_callback:
                         self.progress_callback(progress)  # pylint: disable=not-callable
 
-            # Record final equity
-            self._record_equity(tick_data[-1].timestamp if tick_data else datetime.now())
+            # Record final equity - use last tick timestamp if available,
+            # otherwise fall back to configured end_date (avoid using datetime.now())
+            self._record_equity(tick_data[-1].timestamp if tick_data else self.config.end_date)
 
             # Finalize backtest - close positions if configured
             if backtest and tick_data:
