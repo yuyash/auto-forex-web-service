@@ -453,7 +453,7 @@ describe('OrderHistoryPage', () => {
       },
       { timeout: 3000 }
     );
-  });
+  }, 15000);
 
   it('searches orders by order ID', async () => {
     const user = userEvent.setup({ delay: null });

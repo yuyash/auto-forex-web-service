@@ -786,10 +786,16 @@ def execute_backtest_task(
                 intermediate_metrics = engine.calculate_performance_metrics()
                 progress = int((day_index / total_days) * 100)
 
-                # Prepare intermediate results
-                recent_trades = (
-                    [t.to_dict() for t in engine.trade_log[-10:]] if engine.trade_log else []
-                )
+                # Prepare full trade log for live display
+                all_trades = [t.to_dict() for t in engine.trade_log] if engine.trade_log else []
+
+                # Get strategy events for live display (floor layer markers, etc.)
+                strategy_events = []
+                if engine.strategy and hasattr(engine.strategy, "_backtest_events"):
+                    # pylint: disable=protected-access
+                    strategy_events = engine.strategy._backtest_events
+
+                # Get equity curve for live display (last 100 points for Overview tab)
                 equity_points = (
                     [p.to_dict() for p in engine.equity_curve[-100:]] if engine.equity_curve else []
                 )
@@ -806,7 +812,8 @@ def execute_backtest_task(
                     "balance": float(engine.balance),
                     "total_trades": len(engine.trade_log),
                     "metrics": intermediate_metrics,
-                    "recent_trades": recent_trades,
+                    "trade_log": all_trades,
+                    "strategy_events": strategy_events,
                     "equity_curve": equity_points,
                 }
 

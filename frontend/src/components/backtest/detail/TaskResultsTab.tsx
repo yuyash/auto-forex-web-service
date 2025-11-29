@@ -16,7 +16,6 @@ import {
 import { backtestTasksApi } from '../../../services/api/backtestTasks';
 import { MetricsGrid } from '../../tasks/charts/MetricsGrid';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
-import { EquityCurveChart } from '../../tasks/charts/EquityCurveChart';
 import { BacktestChart } from '../BacktestChart';
 import { FloorLayerLog } from '../FloorLayerLog';
 import type { BacktestTask } from '../../../types/backtestTask';
@@ -24,11 +23,7 @@ import { TaskStatus, TaskType } from '../../../types/common';
 import type { Trade } from '../../../types/execution';
 import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
 import type { ChartMarker } from '../../../utils/chartMarkers';
-
-interface EquityPoint {
-  timestamp: string;
-  balance: number;
-}
+import type { BacktestStrategyEvent } from '../../../types/execution';
 
 interface LiveMetrics {
   total_return?: number;
@@ -44,6 +39,25 @@ interface LiveMetrics {
   [key: string]: string | number | undefined;
 }
 
+interface LiveTrade {
+  timestamp?: string;
+  entry_time?: string;
+  exit_time?: string;
+  instrument?: string;
+  direction?: string;
+  entry_price?: number;
+  exit_price?: number;
+  units?: number;
+  pnl?: number;
+  realized_pnl?: number;
+  duration?: number | string;
+  layer_number?: number;
+  is_first_lot?: boolean;
+  retracement_count?: number;
+  entry_retracement_count?: number;
+  [key: string]: string | number | boolean | undefined;
+}
+
 interface LiveResults {
   day_date: string;
   progress: number;
@@ -52,20 +66,8 @@ interface LiveResults {
   balance: number;
   total_trades: number;
   metrics: LiveMetrics;
-  recent_trades?: Array<{
-    timestamp?: string;
-    entry_time?: string;
-    exit_time?: string;
-    instrument?: string;
-    direction?: string;
-    entry_price?: number;
-    exit_price?: number;
-    units?: number;
-    pnl?: number;
-    duration?: number;
-    [key: string]: string | number | boolean | undefined;
-  }>;
-  equity_curve: EquityPoint[];
+  trade_log?: LiveTrade[];
+  strategy_events?: BacktestStrategyEvent[];
 }
 
 interface TaskResultsTabProps {
@@ -428,28 +430,32 @@ export function TaskResultsTab({ task, liveResults }: TaskResultsTabProps) {
             </Grid>
           </Paper>
 
-          {/* Live Equity Curve */}
-          {liveResults.equity_curve && liveResults.equity_curve.length > 0 && (
+          {/* Live OHLC Chart with Trading Events */}
+          {liveResults.trade_log && liveResults.trade_log.length > 0 && (
             <Paper sx={{ p: 3, mb: 3 }}>
               <Typography variant="h6" sx={{ mb: 3 }}>
-                Live Equity Curve
+                Price Chart with Trading Events (Live)
               </Typography>
-              <EquityCurveChart
-                data={liveResults.equity_curve}
-                initialBalance={parseFloat(task.initial_balance)}
+
+              <BacktestChart
+                instrument={task.instrument}
+                startDate={task.start_time}
+                endDate={liveResults.day_date}
+                strategyEvents={liveResults.strategy_events}
+                timezone="UTC"
+                height={500}
+                onTradeClick={handleMarkerClick}
               />
             </Paper>
           )}
 
-          {/* Recent Trades */}
-          {liveResults.recent_trades &&
-            liveResults.recent_trades.length > 0 && (
-              <Paper sx={{ p: 3 }}>
-                <Typography variant="h6" sx={{ mb: 3 }}>
-                  Recent Trades (Last 10)
-                </Typography>
-                <TradeLogTable
-                  trades={liveResults.recent_trades.map((t) => ({
+          {/* Live Floor Layer Log (for floor strategy) */}
+          {task.strategy_type === 'floor' &&
+            liveResults.trade_log &&
+            liveResults.trade_log.length > 0 && (
+              <Paper sx={{ p: 3, mb: 3 }}>
+                <FloorLayerLog
+                  trades={liveResults.trade_log.map((t) => ({
                     entry_time: t.entry_time || t.timestamp || '',
                     exit_time: t.exit_time || '',
                     instrument: t.instrument || task.instrument,
@@ -460,13 +466,46 @@ export function TaskResultsTab({ task, liveResults }: TaskResultsTabProps) {
                     entry_price: t.entry_price || 0,
                     exit_price: t.exit_price || 0,
                     pnl: t.pnl || 0,
-                    realized_pnl: t.pnl || 0,
+                    realized_pnl: t.realized_pnl || t.pnl || 0,
                     duration: t.duration?.toString() || '',
+                    layer_number: t.layer_number,
+                    is_first_lot: t.is_first_lot,
+                    retracement_count: t.retracement_count,
+                    entry_retracement_count: t.entry_retracement_count,
                   }))}
-                  selectedTradeIndex={null}
                 />
               </Paper>
             )}
+
+          {/* Live Trade Log Table */}
+          {liveResults.trade_log && liveResults.trade_log.length > 0 && (
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ mb: 3 }}>
+                Trade Log (Live - {liveResults.trade_log.length} trades)
+              </Typography>
+              <TradeLogTable
+                trades={liveResults.trade_log.map((t) => ({
+                  entry_time: t.entry_time || t.timestamp || '',
+                  exit_time: t.exit_time || '',
+                  instrument: t.instrument || task.instrument,
+                  direction: (t.direction?.toLowerCase() === 'short'
+                    ? 'short'
+                    : 'long') as 'long' | 'short',
+                  units: t.units || 0,
+                  entry_price: t.entry_price || 0,
+                  exit_price: t.exit_price || 0,
+                  pnl: t.pnl || 0,
+                  realized_pnl: t.realized_pnl || t.pnl || 0,
+                  duration: t.duration?.toString() || '',
+                  layer_number: t.layer_number,
+                  is_first_lot: t.is_first_lot,
+                  retracement_count: t.retracement_count,
+                  entry_retracement_count: t.entry_retracement_count,
+                }))}
+                selectedTradeIndex={selectedTradeIndex}
+              />
+            </Paper>
+          )}
         </Box>
       );
     }
