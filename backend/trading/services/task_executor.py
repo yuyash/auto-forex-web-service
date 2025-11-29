@@ -244,7 +244,7 @@ def _downsample_equity_curve(equity_curve: list, max_points: int = MAX_EQUITY_CU
     important points like peaks and troughs.
 
     Args:
-        equity_curve: List of equity point dicts with 'timestamp' and 'equity' keys
+        equity_curve: List of equity point dicts with 'timestamp' and 'balance' keys
         max_points: Maximum number of points to keep
 
     Returns:
@@ -265,14 +265,15 @@ def _downsample_equity_curve(equity_curve: list, max_points: int = MAX_EQUITY_CU
         bucket_end = int(i * bucket_size) + 1
         bucket_end = min(bucket_end, len(equity_curve) - 1)
 
-        # Find point with max equity change in bucket (preserves peaks/troughs)
+        # Find point with max balance change in bucket (preserves peaks/troughs)
+        # Note: EquityPoint.to_dict() uses 'balance' key, not 'equity'
         best_point = equity_curve[bucket_start]
         max_change = 0
 
-        prev_equity = result[-1].get("equity", 0)
+        prev_balance = result[-1].get("balance", 0)
         for j in range(bucket_start, bucket_end):
             point = equity_curve[j]
-            change = abs(point.get("equity", 0) - prev_equity)
+            change = abs(point.get("balance", 0) - prev_balance)
             if change > max_change:
                 max_change = change
                 best_point = point
@@ -320,6 +321,13 @@ def _create_execution_metrics(
             MAX_EQUITY_CURVE_POINTS,
         )
         equity_curve_dicts = _downsample_equity_curve(equity_curve_dicts, MAX_EQUITY_CURVE_POINTS)
+
+    # Log sizes before creating metrics
+    logger.info(
+        "Creating ExecutionMetrics: equity_curve=%d points, trade_log=%d trades",
+        len(equity_curve_dicts),
+        len(trade_log_dicts),
+    )
 
     return ExecutionMetrics.objects.create(
         execution=execution,
@@ -975,6 +983,7 @@ def execute_backtest_task(
         # Create ExecutionMetrics (this can be memory-intensive with large equity curves)
         # If this fails, the task is still marked as completed
         metrics = None
+        logger.info("Starting ExecutionMetrics creation for execution %d...", execution.pk)
         try:
             with transaction.atomic():
                 metrics = _create_execution_metrics(
@@ -988,7 +997,16 @@ def execute_backtest_task(
                 metrics_error,
                 exc_info=True,
             )
-            execution.add_log("WARNING", f"Failed to save detailed metrics: {metrics_error}")
+            try:
+                execution.add_log("WARNING", f"Failed to save detailed metrics: {metrics_error}")
+            except Exception as log_error:  # pylint: disable=broad-exception-caught  # nosec B110
+                # Log the failure but don't let it prevent task completion
+                logger.warning(
+                    "Failed to add log entry for execution %d: %s",
+                    execution.pk,
+                    log_error,
+                )
+        logger.info("ExecutionMetrics creation attempt completed for execution %d", execution.pk)
 
         # Release lock
         lock_manager.release_lock("backtest", task_id)
