@@ -331,12 +331,6 @@ def _create_execution_metrics(
         len(trade_log_dicts),
     )
 
-    # Force flush logs before potentially failing operation
-    import sys
-
-    sys.stdout.flush()
-    sys.stderr.flush()
-
     logger.info("Inserting ExecutionMetrics into database...")
     result = ExecutionMetrics.objects.create(
         execution=execution,
@@ -995,28 +989,67 @@ def execute_backtest_task(
         # If this fails, the task is still marked as completed
         metrics = None
         logger.info("Starting ExecutionMetrics creation for execution %d...", execution.pk)
-        try:
-            with transaction.atomic():
-                metrics = _create_execution_metrics(
-                    execution, performance_metrics, equity_curve, trade_log
-                )
-            logger.info("ExecutionMetrics created for execution %d", execution.pk)
-        except Exception as metrics_error:  # pylint: disable=broad-exception-caught
-            logger.error(
-                "Failed to create ExecutionMetrics for execution %d: %s",
-                execution.pk,
-                metrics_error,
-                exc_info=True,
-            )
+
+        # Force garbage collection to free memory before database insert
+        # This helps prevent OOM kills during JSON serialization
+        import gc
+        import time
+
+        gc.collect()
+        logger.info("Garbage collection completed, proceeding with metrics creation")
+
+        # Retry logic for metrics creation (handles transient DB issues)
+        max_retries = 3
+        retry_delay = 2  # seconds
+        last_error = None
+
+        for attempt in range(1, max_retries + 1):
             try:
-                execution.add_log("WARNING", f"Failed to save detailed metrics: {metrics_error}")
-            except Exception as log_error:  # pylint: disable=broad-exception-caught  # nosec B110
-                # Log the failure but don't let it prevent task completion
-                logger.warning(
-                    "Failed to add log entry for execution %d: %s",
+                logger.info(
+                    "Attempt %d/%d: Creating ExecutionMetrics for execution %d",
+                    attempt,
+                    max_retries,
                     execution.pk,
-                    log_error,
                 )
+                with transaction.atomic():
+                    metrics = _create_execution_metrics(
+                        execution, performance_metrics, equity_curve, trade_log
+                    )
+                logger.info("ExecutionMetrics created for execution %d", execution.pk)
+                break  # Success, exit retry loop
+            except Exception as metrics_error:  # pylint: disable=broad-exception-caught
+                last_error = metrics_error
+                logger.warning(
+                    "Attempt %d/%d failed to create ExecutionMetrics for execution %d: %s",
+                    attempt,
+                    max_retries,
+                    execution.pk,
+                    metrics_error,
+                )
+                if attempt < max_retries:
+                    logger.info("Retrying in %d seconds...", retry_delay)
+                    time.sleep(retry_delay)
+                    gc.collect()  # Clean up before retry
+                else:
+                    logger.error(
+                        "All %d attempts failed to create ExecutionMetrics for execution %d: %s",
+                        max_retries,
+                        execution.pk,
+                        metrics_error,
+                        exc_info=True,
+                    )
+                    try:
+                        execution.add_log(
+                            "WARNING", f"Failed to save detailed metrics: {metrics_error}"
+                        )
+                    except Exception as log_error:  # pylint: disable=broad-exception-caught  # nosec B110
+                        # Log the failure but don't let it prevent task completion
+                        logger.warning(
+                            "Failed to add log entry for execution %d: %s",
+                            execution.pk,
+                            log_error,
+                        )
+
         logger.info("ExecutionMetrics creation attempt completed for execution %d", execution.pk)
 
         # Release lock
