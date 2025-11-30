@@ -1111,6 +1111,12 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
             # Update peak to current price so next retracement is measured from here
             layer.peak_price = current_price
             layer.has_scaled_at_current_level = False
+            # IMPORTANT: Return early - we've reset the peak, so no retracement from the
+            # new peak has occurred yet. The NEXT tick must show retracement from this
+            # new peak before we can scale again. This prevents back-to-back retracements
+            # when the old retracement_pips value (calculated before reset) would still
+            # meet the threshold.
+            return []
 
         # Check if we should scale (either first time or after reset above)
         # Conditions: not already scaled, different tick, positive retracement >= threshold
