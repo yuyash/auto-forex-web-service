@@ -54,9 +54,18 @@ class LayerManager:
             config: Layer configuration
 
         Returns:
-            Layer instance or None if max layers reached
+            Layer instance or None if max layers reached or layer already exists
         """
         if len(self.layers) >= self.max_layers:
+            return None
+
+        # Check if a layer with this number already exists
+        existing_layer = self.get_layer(layer_number)
+        if existing_layer is not None:
+            logger.debug(
+                "Layer %s already exists, skipping creation",
+                layer_number,
+            )
             return None
 
         layer = Layer(layer_number=layer_number, config=config)
@@ -1794,6 +1803,14 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
             if layer.should_create_new_layer():
                 next_layer_num = layer.layer_number + 1
                 if next_layer_num <= self.layer_manager.max_layers:
+                    # Check if the next layer already exists
+                    existing_layer = self.layer_manager.get_layer(next_layer_num)
+                    if existing_layer is not None:
+                        # Layer already exists - just disable auto-advance on the trigger layer
+                        if layer.config.get("auto_advance_on_low_trigger"):
+                            layer.config["auto_advance_on_low_trigger"] = False
+                        continue
+
                     # Get layer-specific config from individual parameters
                     layer_config = self._get_layer_config(next_layer_num)
 

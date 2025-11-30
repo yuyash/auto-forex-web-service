@@ -136,6 +136,35 @@ class TestLayerManager:
         assert layer3 is None
         assert len(manager.layers) == 2
 
+    def test_duplicate_layer_prevention(self):
+        """Test that duplicate layers with same number are not created."""
+        manager = LayerManager(max_layers=5)
+        config = {"base_lot_size": 1.0}
+
+        # Create layer 1
+        layer1_first = manager.create_layer(1, config)
+        assert layer1_first is not None
+        assert len(manager.layers) == 1
+
+        # Try to create another layer 1 - should return None
+        layer1_duplicate = manager.create_layer(1, config)
+        assert layer1_duplicate is None
+        assert len(manager.layers) == 1  # Should still be 1 layer
+
+        # Create layer 2
+        layer2 = manager.create_layer(2, config)
+        assert layer2 is not None
+        assert len(manager.layers) == 2
+
+        # Try to create duplicate layer 2 - should return None
+        layer2_duplicate = manager.create_layer(2, config)
+        assert layer2_duplicate is None
+        assert len(manager.layers) == 2  # Should still be 2 layers
+
+        # Verify the original layers are still correct
+        assert manager.get_layer(1) is layer1_first
+        assert manager.get_layer(2) is layer2
+
     def test_get_layer(self):
         """Test retrieving a layer by number."""
         manager = LayerManager(max_layers=3)
