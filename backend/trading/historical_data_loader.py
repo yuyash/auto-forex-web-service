@@ -222,6 +222,35 @@ class HistoricalDataLoader:
         elif self.data_source == "s3":
             self._initialize_s3_client()
 
+    def _is_expired_token_error(self, error: Exception) -> bool:
+        """
+        Check if the error is due to expired AWS credentials.
+
+        Args:
+            error: The exception to check
+
+        Returns:
+            True if the error is an expired token error
+        """
+        error_str = str(error)
+        return (
+            "ExpiredTokenException" in error_str
+            or "ExpiredToken" in error_str
+            or "security token included in the request is expired" in error_str.lower()
+        )
+
+    def _refresh_aws_clients(self) -> None:
+        """
+        Refresh AWS clients by re-initializing with fresh credentials.
+
+        This is called when an ExpiredTokenException is detected.
+        """
+        logger.info("Refreshing AWS credentials due to token expiration")
+        if self.data_source == "athena":
+            self._initialize_aws_clients()
+        elif self.data_source == "s3":
+            self._initialize_s3_client()
+
     def _get_system_setting(self, key: str, default: str) -> str:
         """
         Get configuration value from SystemSettings model.
@@ -517,12 +546,15 @@ class HistoricalDataLoader:
 
         return query
 
-    def _execute_athena_query(self, query: str) -> str:
+    def _execute_athena_query(self, query: str, retry_on_expired: bool = True) -> str:
         """
         Execute Athena query and return execution ID.
 
+        Handles expired token errors by refreshing credentials and retrying.
+
         Args:
             query: SQL query string
+            retry_on_expired: Whether to retry on expired token (default True)
 
         Returns:
             Query execution ID
@@ -564,6 +596,14 @@ class HistoricalDataLoader:
             return query_execution_id
 
         except (BotoCoreError, ClientError) as e:
+            # Check if this is an expired token error and retry
+            if retry_on_expired and self._is_expired_token_error(e):
+                logger.warning(
+                    "AWS credentials expired during query execution, refreshing and retrying"
+                )
+                self._refresh_aws_clients()
+                return self._execute_athena_query(query, retry_on_expired=False)
+
             logger.error("Failed to execute Athena query: %s", e)
             raise RuntimeError(f"Athena query execution failed: {e}") from e
 
@@ -574,6 +614,8 @@ class HistoricalDataLoader:
     ) -> None:
         """
         Wait for Athena query to complete.
+
+        Handles expired token errors by refreshing credentials and retrying.
 
         Args:
             query_execution_id: Query execution ID
@@ -649,6 +691,15 @@ class HistoricalDataLoader:
                 elapsed += 2
 
             except (BotoCoreError, ClientError) as e:
+                # Check if this is an expired token error
+                if self._is_expired_token_error(e):
+                    logger.warning(
+                        "AWS credentials expired during query wait, refreshing and continuing"
+                    )
+                    self._refresh_aws_clients()
+                    # Continue the loop - don't increment elapsed for refresh time
+                    continue
+
                 logger.error("Failed to check query status: %s", e)
                 raise RuntimeError(f"Query status check failed: {e}") from e
 
@@ -669,7 +720,7 @@ class HistoricalDataLoader:
         raise RuntimeError(f"Athena query timed out after {max_wait_seconds} seconds")
 
     def _fetch_query_results(  # pylint: disable=too-many-locals
-        self, query_execution_id: str
+        self, query_execution_id: str, retry_on_expired: bool = True
     ) -> list[TickDataPoint]:
         """
         Fetch results from completed Athena query and convert Polygon.io format.
@@ -681,6 +732,7 @@ class HistoricalDataLoader:
 
         Args:
             query_execution_id: Query execution ID
+            retry_on_expired: Whether to retry on expired token (default True)
 
         Returns:
             List of TickDataPoint objects
@@ -733,6 +785,14 @@ class HistoricalDataLoader:
             return tick_data
 
         except (BotoCoreError, ClientError) as e:
+            # Check if this is an expired token error and retry
+            if retry_on_expired and self._is_expired_token_error(e):
+                logger.warning(
+                    "AWS credentials expired during results fetch, refreshing and retrying"
+                )
+                self._refresh_aws_clients()
+                return self._fetch_query_results(query_execution_id, retry_on_expired=False)
+
             logger.error("Failed to fetch query results: %s", e)
             raise RuntimeError(f"Query results fetch failed: {e}") from e
 

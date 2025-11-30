@@ -184,6 +184,7 @@ disable = [
     "import-outside-toplevel",  # C0415: Lazy imports are acceptable to avoid circular imports
     "redefined-outer-name",  # W0621: Acceptable in some contexts
     "too-many-positional-arguments",  # R0917: Acceptable for some functions
+    "too-many-lines",  # C0302: Large data loading modules naturally have many lines
 ]
 
 [tool.pylint.typecheck]
