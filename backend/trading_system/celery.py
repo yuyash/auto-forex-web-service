@@ -25,15 +25,6 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 # Load task modules from all registered Django apps.
 app.autodiscover_tasks()
 
-# Configure task routes for resource-intensive tasks
-# Backtesting tasks are routed to a dedicated queue with resource limits
-app.conf.task_routes = {
-    "trading.tasks.run_backtest_task": {
-        "queue": "backtest",
-        "routing_key": "backtest",
-    },
-}
-
 # Configure task annotations for resource limits
 # These limits are enforced at the Celery worker level
 app.conf.task_annotations = {
