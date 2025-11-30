@@ -61,6 +61,8 @@ interface SystemSettings {
   backtest_cpu_limit: number;
   backtest_memory_limit: number;
   backtest_day_batch_size: number;
+  celery_task_soft_time_limit: number;
+  celery_task_hard_time_limit: number;
   tick_data_retention_days: number;
   tick_data_instruments: string;
   system_health_update_interval: number;
@@ -1156,6 +1158,38 @@ const AdminSystemSettingsPage = () => {
               }
               helperText="Days to process before sending progress update (1 = real-time per day, higher = less frequent updates)"
               inputProps={{ min: 1, max: 30, step: 1 }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              fullWidth
+              label="Celery Task Soft Time Limit (hours)"
+              type="number"
+              value={(settings.celery_task_soft_time_limit / 3600).toFixed(2)}
+              onChange={(e) =>
+                handleChange(
+                  'celery_task_soft_time_limit',
+                  Math.round(parseFloat(e.target.value) * 3600) || 1500
+                )
+              }
+              helperText="Soft limit: tasks receive exception to clean up gracefully (default: 0.42 = 25 min)"
+              inputProps={{ min: 0.01, max: 24, step: 0.25 }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              fullWidth
+              label="Celery Task Hard Time Limit (hours)"
+              type="number"
+              value={(settings.celery_task_hard_time_limit / 3600).toFixed(2)}
+              onChange={(e) =>
+                handleChange(
+                  'celery_task_hard_time_limit',
+                  Math.round(parseFloat(e.target.value) * 3600) || 1800
+                )
+              }
+              helperText="Hard limit: tasks are forcefully terminated (default: 0.50 = 30 min)"
+              inputProps={{ min: 0.01, max: 24, step: 0.25 }}
             />
           </Grid>
         </Grid>

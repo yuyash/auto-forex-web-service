@@ -294,6 +294,10 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             # Backtesting Resource Limits
             "backtest_cpu_limit",
             "backtest_memory_limit",
+            "backtest_day_batch_size",
+            # Celery Task Time Limits
+            "celery_task_soft_time_limit",
+            "celery_task_hard_time_limit",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]
