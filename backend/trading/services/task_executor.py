@@ -304,6 +304,10 @@ def _create_execution_metrics(
     Returns:
         ExecutionMetrics instance
     """
+    # CRITICAL: Limit data sizes to prevent PostgreSQL memory issues
+    # PostgreSQL has a 1GB allocation limit which can cause crashes
+    MAX_STRATEGY_EVENTS = 10000  # Limit strategy events to prevent 1GB+ JSON
+
     # Convert objects to dicts for JSON storage
     logger.debug("Converting equity curve to dicts...")
     equity_curve_dicts = [
@@ -324,11 +328,25 @@ def _create_execution_metrics(
         )
         equity_curve_dicts = _downsample_equity_curve(equity_curve_dicts, MAX_EQUITY_CURVE_POINTS)
 
+    # Limit strategy events to prevent massive JSON payloads
+    strategy_events = performance_metrics.get("strategy_events", [])
+    original_events_count = len(strategy_events)
+    if original_events_count > MAX_STRATEGY_EVENTS:
+        logger.warning(
+            "Truncating strategy_events from %d to %d events to prevent memory issues",
+            original_events_count,
+            MAX_STRATEGY_EVENTS,
+        )
+        # Keep the most recent events
+        strategy_events = strategy_events[-MAX_STRATEGY_EVENTS:]
+
     # Log sizes before creating metrics
     logger.info(
-        "Creating ExecutionMetrics: equity_curve=%d points, trade_log=%d trades",
+        "Creating ExecutionMetrics: equity_curve=%d points, trade_log=%d trades, "
+        "strategy_events=%d events",
         len(equity_curve_dicts),
         len(trade_log_dicts),
+        len(strategy_events),
     )
 
     logger.info("Inserting ExecutionMetrics into database...")
@@ -355,7 +373,7 @@ def _create_execution_metrics(
         average_loss=Decimal(str(performance_metrics.get("average_loss", 0))),
         equity_curve=equity_curve_dicts,
         trade_log=trade_log_dicts,
-        strategy_events=performance_metrics.get("strategy_events", []),
+        strategy_events=strategy_events,  # Limited to MAX_STRATEGY_EVENTS
     )
     logger.info("ExecutionMetrics inserted successfully with ID %d", result.pk)
     return result
@@ -805,14 +823,24 @@ def execute_backtest_task(
                 intermediate_metrics = engine.calculate_performance_metrics()
                 progress = int((day_index / total_days) * 100)
 
-                # Prepare full trade log for live display
-                all_trades = [t.to_dict() for t in engine.trade_log] if engine.trade_log else []
+                # CRITICAL: Limit data sizes to prevent memory issues
+                # Full data is saved to ExecutionMetrics at the end
+                MAX_LIVE_TRADES = 200  # Last 200 trades for live display
+                MAX_LIVE_EVENTS = 500  # Last 500 strategy events for live display
 
-                # Get strategy events for live display (floor layer markers, etc.)
+                # Prepare limited trade log for live display (most recent trades only)
+                recent_trades = (
+                    [t.to_dict() for t in engine.trade_log[-MAX_LIVE_TRADES:]]
+                    if engine.trade_log
+                    else []
+                )
+
+                # Get limited strategy events for live display (most recent only)
                 strategy_events = []
                 if engine.strategy and hasattr(engine.strategy, "_backtest_events"):
                     # pylint: disable=protected-access
-                    strategy_events = engine.strategy._backtest_events
+                    all_events = engine.strategy._backtest_events
+                    strategy_events = all_events[-MAX_LIVE_EVENTS:] if all_events else []
 
                 # Get equity curve for live display (last 100 points for Overview tab)
                 equity_points = (
@@ -831,8 +859,8 @@ def execute_backtest_task(
                     "balance": float(engine.balance),
                     "total_trades": len(engine.trade_log),
                     "metrics": intermediate_metrics,
-                    "trade_log": all_trades,
-                    "strategy_events": strategy_events,
+                    "trade_log": recent_trades,  # Limited to MAX_LIVE_TRADES
+                    "strategy_events": strategy_events,  # Limited to MAX_LIVE_EVENTS
                     "equity_curve": equity_points,
                 }
 
