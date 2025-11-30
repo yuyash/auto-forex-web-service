@@ -282,6 +282,9 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             "athena_output_bucket",
             "athena_instruments",
             "athena_query_timeout",
+            # S3 Data Source Settings
+            "s3_data_bucket",
+            "s3_data_prefix",
             # Logging Settings
             "django_log_level",
             # Application Settings

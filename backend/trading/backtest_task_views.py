@@ -235,9 +235,9 @@ class BacktestTaskStartView(APIView):
             )
 
         # Queue the backtest task for execution
-        from .tasks import run_backtest_task_v2
+        from .tasks import run_backtest_task
 
-        run_backtest_task_v2.delay(task.pk)
+        run_backtest_task.delay(task.pk)
 
         # Return success response
         return Response(
@@ -370,9 +370,9 @@ class BacktestTaskRerunView(APIView):
             )
 
         # Queue the backtest task for execution
-        from .tasks import run_backtest_task_v2
+        from .tasks import run_backtest_task
 
-        run_backtest_task_v2.delay(task.pk)
+        run_backtest_task.delay(task.pk)
 
         # Return success response
         return Response(

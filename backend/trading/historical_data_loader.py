@@ -4,6 +4,7 @@ Historical data loader for backtesting.
 This module provides functionality to load historical tick data from multiple sources:
 - PostgreSQL database (TickData model)
 - AWS Athena for large-scale historical data from Polygon.io
+- AWS S3 for direct CSV/GZ file loading
 
 AWS Authentication:
 - Uses IAM roles for EC2/ECS instances (recommended for production)
@@ -15,9 +16,12 @@ AWS Authentication:
 Requirements: 12.1
 """
 
+import csv
+import gzip
+import io
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -157,6 +161,7 @@ class HistoricalDataLoader:
     Supports loading data from:
     - PostgreSQL database (TickData model)
     - AWS Athena for large-scale historical data (Polygon.io format)
+    - AWS S3 for direct CSV/GZ file loading
 
     AWS Authentication:
     - Uses IAM roles by default (recommended for production)
@@ -167,21 +172,29 @@ class HistoricalDataLoader:
     Requirements: 12.1
     """
 
+    # Default S3 bucket for historical forex data (can be overridden via SystemSettings)
+    DEFAULT_S3_BUCKET = "forex-hist-data-789121567207-us-west-2"
+    DEFAULT_S3_PREFIX = "global_forex/quotes"
+
     def __init__(
         self,
-        data_source: Literal["postgresql", "athena"] = "postgresql",
+        data_source: Literal["postgresql", "athena", "s3"] = "athena",
         athena_database: str | None = None,
         athena_table: str | None = None,
         athena_output_bucket: str | None = None,
+        s3_bucket: str | None = None,
+        s3_prefix: str | None = None,
     ):
         """
         Initialize HistoricalDataLoader.
 
         Args:
-            data_source: Data source to use ('postgresql' or 'athena')
+            data_source: Data source to use ('postgresql', 'athena', or 's3')
             athena_database: Athena database name (default: forex_hist_data_db)
             athena_table: Athena table name (default: quotes)
             athena_output_bucket: S3 bucket for Athena query results
+            s3_bucket: S3 bucket for direct file loading
+            s3_prefix: S3 key prefix for tick data files
         """
         self.data_source = data_source
         self.athena_database = athena_database or self._get_system_setting(
@@ -193,10 +206,21 @@ class HistoricalDataLoader:
         )
         self.athena_query_timeout = int(self._get_system_setting("athena_query_timeout", "600"))
 
-        # Initialize AWS clients if using Athena source
+        # S3 configuration
+        self.s3_bucket = s3_bucket or self._get_system_setting(
+            "s3_data_bucket", self.DEFAULT_S3_BUCKET
+        )
+        self.s3_prefix = s3_prefix or self._get_system_setting(
+            "s3_data_prefix", self.DEFAULT_S3_PREFIX
+        )
+
+        # Initialize AWS clients if using Athena or S3 source
         self.athena_client = None
+        self.s3_client = None
         if self.data_source == "athena":
             self._initialize_aws_clients()
+        elif self.data_source == "s3":
+            self._initialize_s3_client()
 
     def _get_system_setting(self, key: str, default: str) -> str:
         """
@@ -248,6 +272,35 @@ class HistoricalDataLoader:
             logger.error("Failed to initialize AWS clients: %s", e)
             raise RuntimeError(f"AWS client initialization failed: {e}") from e
 
+    def _initialize_s3_client(self) -> None:
+        """
+        Initialize AWS S3 client with proper authentication.
+
+        Authentication priority:
+        1. System Settings (database configuration)
+        2. Environment variables (AWS_PROFILE, AWS_ROLE_ARN, AWS_CREDENTIALS_FILE)
+        3. IAM role (default for EC2/ECS instances)
+
+        Never uses hardcoded AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY.
+        """
+        try:
+            # Import here to avoid circular dependency
+            from accounts.email_utils import get_aws_session
+
+            logger.info("Initializing AWS S3 client using system settings")
+
+            # Use the centralized AWS session logic from email_utils
+            # This respects system settings configuration
+            session = get_aws_session()
+
+            # Initialize S3 client
+            self.s3_client = session.client("s3")
+            logger.info("S3 client initialized successfully")
+
+        except (BotoCoreError, ClientError) as e:
+            logger.error("Failed to initialize S3 client: %s", e)
+            raise RuntimeError(f"S3 client initialization failed: {e}") from e
+
     def load_data(
         self,
         instrument: str,
@@ -273,6 +326,8 @@ class HistoricalDataLoader:
             return self._load_from_postgresql(instrument, start_date, end_date)
         if self.data_source == "athena":
             return self._load_from_athena(instrument, start_date, end_date)
+        if self.data_source == "s3":
+            return self._load_from_s3(instrument, start_date, end_date)
         raise ValueError(f"Invalid data source: {self.data_source}")
 
     def _load_from_postgresql(
@@ -702,3 +757,216 @@ class HistoricalDataLoader:
                 continue
 
         return normalized_data
+
+    def _load_from_s3(
+        self,
+        instrument: str,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> list[TickDataPoint]:
+        """
+        Load tick data directly from S3 compressed CSV files.
+
+        File path format:
+        {bucket}/{prefix}/year={YYYY}/month={MM}/day={DD}/{YYYY}-{MM}-{DD}.csv.gz
+
+        CSV format (Polygon.io):
+        - ticker: e.g., "C:EUR-USD"
+        - ask_price, bid_price: prices
+        - participant_timestamp: nanoseconds since epoch
+
+        Args:
+            instrument: Currency pair (e.g., 'EUR_USD')
+            start_date: Start date
+            end_date: End date
+
+        Returns:
+            List of TickDataPoint objects
+
+        Raises:
+            ValueError: If S3 bucket is not configured
+            RuntimeError: If S3 operations fail
+        """
+        if not self.s3_bucket:
+            raise ValueError("S3 bucket not configured")
+        if not self.s3_client:
+            raise RuntimeError("S3 client not initialized")
+
+        logger.info("Loading tick data from S3: %s from %s to %s", instrument, start_date, end_date)
+
+        # Convert instrument format for filtering: EUR_USD -> C:EUR-USD
+        polygon_ticker = f"C:{instrument.replace('_', '-')}"
+
+        # Convert timestamps for filtering
+        start_timestamp_ns = int(start_date.timestamp() * 1_000_000_000)
+        end_timestamp_ns = int(end_date.timestamp() * 1_000_000_000)
+
+        tick_data: list[TickDataPoint] = []
+
+        try:
+            # Iterate through each day in the date range
+            current_date = start_date.date()
+            end_date_only = end_date.date()
+
+            while current_date <= end_date_only:
+                # Build S3 key for this day's file
+                s3_key = self._build_s3_key(current_date)
+
+                try:
+                    # Load and process the file for this day
+                    day_ticks = self._load_s3_file(
+                        s3_key,
+                        polygon_ticker,
+                        start_timestamp_ns,
+                        end_timestamp_ns,
+                        instrument,
+                    )
+                    tick_data.extend(day_ticks)
+                    logger.info(
+                        "Loaded %d ticks from S3 for %s on %s",
+                        len(day_ticks),
+                        instrument,
+                        current_date.isoformat(),
+                    )
+                except self.s3_client.exceptions.NoSuchKey:
+                    logger.warning("S3 file not found for %s: %s", current_date.isoformat(), s3_key)
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    logger.warning(
+                        "Failed to load S3 file for %s: %s - %s",
+                        current_date.isoformat(),
+                        s3_key,
+                        e,
+                    )
+
+                # Move to next day
+                current_date += timedelta(days=1)
+
+            logger.info("Loaded %d total ticks from S3", len(tick_data))
+            return tick_data
+
+        except Exception as e:
+            logger.error("Failed to load data from S3: %s", e)
+            raise RuntimeError(f"S3 data loading failed: {e}") from e
+
+    def _build_s3_key(self, date: Any) -> str:
+        """
+        Build S3 key for a specific date's data file.
+
+        Path format: {prefix}/year={YYYY}/month={MM}/day={DD}/{YYYY}-{MM}-{DD}.csv.gz
+
+        Args:
+            date: Date object for which to build the key
+
+        Returns:
+            S3 key string
+        """
+        year = str(date.year)
+        month = str(date.month).zfill(2)
+        day = str(date.day).zfill(2)
+        date_str = f"{year}-{month}-{day}"
+
+        return f"{self.s3_prefix}/year={year}/month={month}/day={day}/{date_str}.csv.gz"
+
+    def _parse_s3_row(
+        self,
+        row: dict[str, str],
+        polygon_ticker: str,
+        start_timestamp_ns: int,
+        end_timestamp_ns: int,
+        instrument: str,
+    ) -> TickDataPoint | None:
+        """
+        Parse a single CSV row from S3 file into a TickDataPoint.
+
+        Args:
+            row: CSV row as dictionary
+            polygon_ticker: Ticker in Polygon.io format (e.g., "C:EUR-USD")
+            start_timestamp_ns: Start timestamp in nanoseconds
+            end_timestamp_ns: End timestamp in nanoseconds
+            instrument: Instrument in our format (e.g., "EUR_USD")
+
+        Returns:
+            TickDataPoint if row is valid and matches filters, None otherwise
+        """
+        # Filter by ticker
+        if row.get("ticker", "") != polygon_ticker:
+            return None
+
+        # Filter by timestamp
+        try:
+            timestamp_ns = int(row.get("participant_timestamp", 0))
+        except (ValueError, TypeError):
+            return None
+
+        if timestamp_ns < start_timestamp_ns or timestamp_ns > end_timestamp_ns:
+            return None
+
+        # Parse prices
+        try:
+            bid_price = Decimal(row.get("bid_price", "0"))
+            ask_price = Decimal(row.get("ask_price", "0"))
+        except (ValueError, TypeError, ArithmeticError):
+            logger.warning("Invalid price data in row: %s", row)
+            return None
+
+        # Skip invalid prices
+        if bid_price <= 0 or ask_price <= 0:
+            return None
+
+        # Convert timestamp from nanoseconds to timezone-aware datetime (UTC)
+        timestamp = datetime.fromtimestamp(timestamp_ns / 1_000_000_000, tz=timezone.utc)
+
+        return TickDataPoint(
+            instrument=instrument,
+            timestamp=timestamp,
+            bid=bid_price,
+            ask=ask_price,
+            mid=(bid_price + ask_price) / 2,
+            spread=ask_price - bid_price,
+        )
+
+    def _load_s3_file(
+        self,
+        s3_key: str,
+        polygon_ticker: str,
+        start_timestamp_ns: int,
+        end_timestamp_ns: int,
+        instrument: str,
+    ) -> list[TickDataPoint]:
+        """
+        Load and parse a single S3 file.
+
+        Downloads the gzipped CSV file, decompresses it, parses the content,
+        filters by ticker and timestamp range.
+
+        Args:
+            s3_key: S3 object key
+            polygon_ticker: Ticker in Polygon.io format (e.g., "C:EUR-USD")
+            start_timestamp_ns: Start timestamp in nanoseconds
+            end_timestamp_ns: End timestamp in nanoseconds
+            instrument: Instrument in our format (e.g., "EUR_USD")
+
+        Returns:
+            List of TickDataPoint objects for matching records
+        """
+        if not self.s3_client:
+            raise RuntimeError("S3 client not initialized")
+
+        logger.debug("Downloading S3 file: s3://%s/%s", self.s3_bucket, s3_key)
+
+        # Download and decompress the file
+        response = self.s3_client.get_object(Bucket=self.s3_bucket, Key=s3_key)
+        decompressed_data = gzip.decompress(response["Body"].read())
+
+        # Parse CSV content
+        reader = csv.DictReader(io.StringIO(decompressed_data.decode("utf-8")))
+
+        tick_data: list[TickDataPoint] = []
+        for row in reader:
+            tick = self._parse_s3_row(
+                row, polygon_ticker, start_timestamp_ns, end_timestamp_ns, instrument
+            )
+            if tick:
+                tick_data.append(tick)
+
+        return tick_data

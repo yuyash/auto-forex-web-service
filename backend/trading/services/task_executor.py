@@ -598,12 +598,12 @@ def execute_backtest_task(
         # Initialize data loader
         execution.add_log("INFO", f"Initializing data loader from {task.data_source}...")
         # Validate data_source is one of the expected literal values
-        if task.data_source not in ("postgresql", "athena"):
+        if task.data_source not in ("postgresql", "athena", "s3"):
             raise ValueError(f"Invalid data source: {task.data_source}")
         # Type narrowing: after validation, we know it's one of the literal values
         from typing import Literal, cast
 
-        data_source = cast(Literal["postgresql", "athena"], task.data_source)
+        data_source = cast(Literal["postgresql", "athena", "s3"], task.data_source)
         data_loader = HistoricalDataLoader(data_source=data_source)
 
         execution.add_log("INFO", f"Processing {total_days} days of data incrementally...")

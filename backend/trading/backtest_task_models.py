@@ -83,7 +83,7 @@ class BacktestTask(models.Model):
     )
     data_source = models.CharField(
         max_length=20,
-        default=DataSource.POSTGRESQL,
+        default=DataSource.ATHENA,
         choices=DataSource.choices,
         help_text="Data source for historical tick data",
     )
