@@ -15,7 +15,11 @@ class Migration(migrations.Migration):
             name="celery_task_hard_time_limit",
             field=models.IntegerField(
                 default=1800,
-                help_text="Hard time limit for Celery tasks in seconds. Tasks will be terminated (SIGKILL) when this limit is reached (default: 1800 = 30 minutes)",
+                help_text=(
+                    "Hard time limit for Celery tasks in seconds. "
+                    "Tasks will be terminated (SIGKILL) when this limit is reached "
+                    "(default: 1800 = 30 minutes)"
+                ),
             ),
         ),
         migrations.AddField(
@@ -23,7 +27,11 @@ class Migration(migrations.Migration):
             name="celery_task_soft_time_limit",
             field=models.IntegerField(
                 default=1500,
-                help_text="Soft time limit for Celery tasks in seconds. Tasks will receive a SoftTimeLimitExceeded exception when this limit is reached (default: 1500 = 25 minutes)",
+                help_text=(
+                    "Soft time limit for Celery tasks in seconds. "
+                    "Tasks will receive a SoftTimeLimitExceeded exception when this limit "
+                    "is reached (default: 1500 = 25 minutes)"
+                ),
             ),
         ),
     ]
