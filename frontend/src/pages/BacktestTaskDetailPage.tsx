@@ -57,10 +57,6 @@ interface TabPanelProps {
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
 
-  console.log(
-    `[TabPanel] index=${index}, value=${value}, shouldRender=${value === index}`
-  );
-
   if (value !== index) {
     return null;
   }
