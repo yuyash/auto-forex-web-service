@@ -149,6 +149,8 @@ class Layer:  # pylint: disable=too-many-instance-attributes
         self.direction: str | None = (
             None  # Store direction for retracements (Requirements 8.1, 8.2, 8.3)
         )
+        # Track if we've logged the "limit reached" message to avoid per-tick spam
+        self.has_logged_limit_reached = False
 
     def add_position(self, position: Position, is_first_lot: bool = False) -> None:
         """
@@ -182,6 +184,9 @@ class Layer:  # pylint: disable=too-many-instance-attributes
         if count < 1:
             return
         self.retracement_count = max(0, self.retracement_count - count)
+        # Reset the "limit reached" logging flag since we may have capacity again
+        if self.has_retracement_capacity():
+            self.has_logged_limit_reached = False
 
     def has_retracement_capacity(self) -> bool:
         """Return True if the layer can scale further this cycle."""
@@ -1110,21 +1115,25 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
             return []
 
         if not layer.has_retracement_capacity():
-            self.log_strategy_event(
-                "retracement_limit_reached",
-                (
-                    f"Layer {layer.layer_number} reached max retracements "
-                    f"({layer.max_retracements_per_layer}) — waiting for closures"
-                ),
-                {
-                    "layer": layer.layer_number,
-                    "direction": direction,
-                    "retracement_count": layer.retracement_count,
-                    "max_retracements": layer.max_retracements_per_layer,
-                    "event_type": "layer",
-                    "timestamp": tick_data.timestamp.isoformat(),
-                },
-            )
+            # Only log once per capacity exhaustion to avoid per-tick spam
+            # (This was generating 167,000+ events in a 25-day backtest!)
+            if not layer.has_logged_limit_reached:
+                self.log_strategy_event(
+                    "retracement_limit_reached",
+                    (
+                        f"Layer {layer.layer_number} reached max retracements "
+                        f"({layer.max_retracements_per_layer}) — waiting for closures"
+                    ),
+                    {
+                        "layer": layer.layer_number,
+                        "direction": direction,
+                        "retracement_count": layer.retracement_count,
+                        "max_retracements": layer.max_retracements_per_layer,
+                        "event_type": "layer",
+                        "timestamp": tick_data.timestamp.isoformat(),
+                    },
+                )
+                layer.has_logged_limit_reached = True
             layer.last_scale_tick_id = tick_id
             return []
 
