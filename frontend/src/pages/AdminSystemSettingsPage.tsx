@@ -1165,15 +1165,15 @@ const AdminSystemSettingsPage = () => {
               fullWidth
               label="Celery Task Soft Time Limit (hours)"
               type="number"
-              value={(settings.celery_task_soft_time_limit / 3600).toFixed(2)}
+              value={Math.round(settings.celery_task_soft_time_limit / 3600)}
               onChange={(e) =>
                 handleChange(
                   'celery_task_soft_time_limit',
-                  Math.round(parseFloat(e.target.value) * 3600) || 1500
+                  (parseInt(e.target.value) || 72) * 3600
                 )
               }
-              helperText="Soft limit: tasks receive exception to clean up gracefully (default: 0.42 = 25 min)"
-              inputProps={{ min: 0.01, max: 24, step: 0.25 }}
+              helperText="Soft limit: tasks receive exception to clean up gracefully (default: 72 hours)"
+              inputProps={{ min: 1, max: 168, step: 1 }}
             />
           </Grid>
           <Grid size={{ xs: 12, md: 6 }}>
@@ -1181,15 +1181,15 @@ const AdminSystemSettingsPage = () => {
               fullWidth
               label="Celery Task Hard Time Limit (hours)"
               type="number"
-              value={(settings.celery_task_hard_time_limit / 3600).toFixed(2)}
+              value={Math.round(settings.celery_task_hard_time_limit / 3600)}
               onChange={(e) =>
                 handleChange(
                   'celery_task_hard_time_limit',
-                  Math.round(parseFloat(e.target.value) * 3600) || 1800
+                  (parseInt(e.target.value) || 72) * 3600
                 )
               }
-              helperText="Hard limit: tasks are forcefully terminated (default: 0.50 = 30 min)"
-              inputProps={{ min: 0.01, max: 24, step: 0.25 }}
+              helperText="Hard limit: tasks are forcefully terminated (default: 72 hours)"
+              inputProps={{ min: 1, max: 168, step: 1 }}
             />
           </Grid>
         </Grid>
