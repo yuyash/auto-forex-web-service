@@ -7,6 +7,7 @@ This module provides system health monitoring functionality including:
 - Redis connection health checks
 - OANDA API connection health checks
 - Active stream and task monitoring
+- Uptime tracking for host, container, and Celery process
 
 Requirements: 19.1, 19.2, 19.3, 19.4
 """
@@ -14,7 +15,8 @@ Requirements: 19.1, 19.2, 19.3, 19.4
 import logging
 import os
 import time
-from typing import Any, Dict
+from datetime import datetime, timezone as dt_timezone
+from typing import Any, Dict, Optional
 
 from django.conf import settings
 from django.db import connection
@@ -24,6 +26,10 @@ import psutil
 import redis
 
 logger = logging.getLogger(__name__)
+
+# Track when this module was first imported (approximate process start time)
+# Use stdlib timezone to avoid Django settings requirement at import time
+_PROCESS_START_TIME: Optional[datetime] = datetime.now(dt_timezone.utc)
 
 
 class SystemHealthMonitor:
@@ -331,6 +337,194 @@ class SystemHealthMonitor:
                 "total": 0,
             }
 
+    def get_uptime_info(self) -> Dict[str, Any]:
+        """
+        Get uptime information for host, container, and process.
+
+        Returns:
+            Dictionary containing:
+            - host: Host system uptime (since last reboot)
+            - container: Docker container uptime (from /proc/1/stat)
+            - process: Current Python process uptime
+            - celery_workers: Celery worker process info
+        """
+        now = timezone.now()
+
+        result: Dict[str, Any] = {
+            "timestamp": now.isoformat(),
+            "host": self._get_host_uptime(),
+            "container": self._get_container_uptime(),
+            "process": self._get_process_uptime(now),
+            "celery_workers": self._get_celery_worker_uptime(),
+        }
+
+        return result
+
+    def _get_host_uptime(self) -> Dict[str, Any]:
+        """Get host system uptime since last boot."""
+        try:
+            boot_time = datetime.fromtimestamp(psutil.boot_time(), tz=timezone.get_current_timezone())
+            uptime_seconds = (timezone.now() - boot_time).total_seconds()
+
+            return {
+                "boot_time": boot_time.isoformat(),
+                "uptime_seconds": int(uptime_seconds),
+                "uptime_human": self._format_uptime(uptime_seconds),
+                "status": "healthy",
+            }
+        except Exception as e:
+            logger.error(f"Failed to get host uptime: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+            }
+
+    def _get_container_uptime(self) -> Dict[str, Any]:
+        """
+        Get Docker container uptime by checking PID 1 start time.
+
+        In Docker, PID 1 is the main container process (entrypoint).
+        """
+        try:
+            # Check if we're in a container (PID 1 is not init/systemd)
+            proc1 = psutil.Process(1)
+            proc1_name = proc1.name()
+
+            # In Docker, PID 1 is typically the entrypoint (e.g., python, bash, etc.)
+            # On a host system, PID 1 is init/systemd
+            is_container = proc1_name not in ("init", "systemd", "launchd")
+
+            if not is_container:
+                return {
+                    "is_container": False,
+                    "status": "not_applicable",
+                    "message": "Not running in a container",
+                }
+
+            create_time = datetime.fromtimestamp(
+                proc1.create_time(), tz=timezone.get_current_timezone()
+            )
+            uptime_seconds = (timezone.now() - create_time).total_seconds()
+
+            return {
+                "is_container": True,
+                "container_start_time": create_time.isoformat(),
+                "uptime_seconds": int(uptime_seconds),
+                "uptime_human": self._format_uptime(uptime_seconds),
+                "entrypoint": proc1_name,
+                "status": "healthy",
+            }
+        except Exception as e:
+            logger.error(f"Failed to get container uptime: {e}")
+            return {
+                "is_container": None,
+                "status": "error",
+                "error": str(e),
+            }
+
+    def _get_process_uptime(self, now: datetime) -> Dict[str, Any]:
+        """Get current Python process uptime."""
+        try:
+            # Get the actual process start time from psutil
+            current_proc = psutil.Process()
+            proc_start = datetime.fromtimestamp(
+                current_proc.create_time(), tz=timezone.get_current_timezone()
+            )
+            uptime_seconds = (now - proc_start).total_seconds()
+
+            return {
+                "pid": current_proc.pid,
+                "process_name": current_proc.name(),
+                "start_time": proc_start.isoformat(),
+                "uptime_seconds": int(uptime_seconds),
+                "uptime_human": self._format_uptime(uptime_seconds),
+                "module_load_time": (
+                    _PROCESS_START_TIME.isoformat() if _PROCESS_START_TIME else None
+                ),
+                "status": "healthy",
+            }
+        except Exception as e:
+            logger.error(f"Failed to get process uptime: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+            }
+
+    def _get_celery_worker_uptime(self) -> Dict[str, Any]:
+        """
+        Get Celery worker process information.
+
+        Uses Celery's inspect API to get worker stats including uptime.
+        """
+        try:
+            from celery import current_app
+
+            # Get worker stats with a short timeout
+            inspect = current_app.control.inspect(timeout=1.0)
+            if inspect is None:
+                return {
+                    "status": "error",
+                    "error": "Celery inspect returned None",
+                }
+
+            stats = inspect.stats() or {}
+            workers: Dict[str, Any] = {}
+
+            for worker_name, worker_stats in stats.items():
+                # Extract relevant uptime info
+                pool_info = worker_stats.get("pool", {})
+
+                # Calculate uptime from broker connection time if available
+                broker_info = worker_stats.get("broker", {})
+
+                workers[worker_name] = {
+                    "pid": worker_stats.get("pid"),
+                    "pool": pool_info.get("implementation", "unknown"),
+                    "concurrency": pool_info.get("max-concurrency", 0),
+                    "processes": pool_info.get("processes", []),
+                    "prefetch_count": worker_stats.get("prefetch_count", 0),
+                    "broker_connected": broker_info.get("connected", False) if broker_info else None,
+                    "status": "healthy",
+                }
+
+            if not workers:
+                return {
+                    "status": "warning",
+                    "message": "No Celery workers found",
+                    "workers": {},
+                }
+
+            return {
+                "status": "healthy",
+                "worker_count": len(workers),
+                "workers": workers,
+            }
+        except Exception as e:
+            logger.error(f"Failed to get Celery worker uptime: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+            }
+
+    @staticmethod
+    def _format_uptime(seconds: float) -> str:
+        """Format uptime seconds into human-readable string."""
+        days, remainder = divmod(int(seconds), 86400)
+        hours, remainder = divmod(remainder, 3600)
+        minutes, secs = divmod(remainder, 60)
+
+        parts = []
+        if days > 0:
+            parts.append(f"{days}d")
+        if hours > 0:
+            parts.append(f"{hours}h")
+        if minutes > 0:
+            parts.append(f"{minutes}m")
+        if secs > 0 or not parts:
+            parts.append(f"{secs}s")
+
+        return " ".join(parts)
+
     def get_health_summary(self, include_external_apis: bool = False) -> Dict[str, Any]:
         """
         Get comprehensive system health summary.
@@ -351,6 +545,7 @@ class SystemHealthMonitor:
             "redis": self.check_redis_connection(),
             "active_streams": self.get_active_streams_count(),
             "celery_tasks": self.get_celery_tasks_count(),
+            "uptime": self.get_uptime_info(),
             "overall_status": self._calculate_overall_status(),
         }
 

@@ -1042,7 +1042,9 @@ def execute_backtest_task(
                         execution.add_log(
                             "WARNING", f"Failed to save detailed metrics: {metrics_error}"
                         )
-                    except Exception as log_error:  # pylint: disable=broad-exception-caught  # nosec B110
+                    except (
+                        Exception
+                    ) as log_error:  # pylint: disable=broad-exception-caught  # nosec B110
                         # Log the failure but don't let it prevent task completion
                         logger.warning(
                             "Failed to add log entry for execution %d: %s",
