@@ -162,3 +162,44 @@ def oanda_health_check(request: Request) -> Response:
             },
             status=status.HTTP_200_OK,
         )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def uptime_check(request: Request) -> Response:
+    """
+    Get system uptime information for host, container, and Celery processes.
+
+    This endpoint provides detailed uptime monitoring:
+    - Host: Time since last system reboot
+    - Container: Time since Docker container started
+    - Process: Current Python/Django process uptime
+    - Celery: Worker process information
+
+    Returns HTTP 200 with uptime data.
+
+    Args:
+        request: HTTP request object with authenticated user
+
+    Returns:
+        Response with uptime information for all components
+    """
+    try:
+        monitor = SystemHealthMonitor()
+        uptime_data = monitor.get_uptime_info()
+
+        return Response(uptime_data, status=status.HTTP_200_OK)
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error(
+            "Uptime check failed: %s",
+            str(e),
+            exc_info=True,
+        )
+        return Response(
+            {
+                "status": "error",
+                "message": f"Uptime check failed: {str(e)}",
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
