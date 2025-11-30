@@ -1029,7 +1029,6 @@ def execute_backtest_task(
         # Retry logic for metrics creation (handles transient DB issues)
         max_retries = 3
         retry_delay = 2  # seconds
-        last_error = None
 
         for attempt in range(1, max_retries + 1):
             try:
@@ -1046,7 +1045,6 @@ def execute_backtest_task(
                 logger.info("ExecutionMetrics created for execution %d", execution.pk)
                 break  # Success, exit retry loop
             except Exception as metrics_error:  # pylint: disable=broad-exception-caught
-                last_error = metrics_error
                 logger.warning(
                     "Attempt %d/%d failed to create ExecutionMetrics for execution %d: %s",
                     attempt,

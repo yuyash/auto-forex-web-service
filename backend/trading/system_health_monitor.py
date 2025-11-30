@@ -15,7 +15,8 @@ Requirements: 19.1, 19.2, 19.3, 19.4
 import logging
 import os
 import time
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime
+from datetime import timezone as dt_timezone
 from typing import Any, Dict, Optional
 
 from django.conf import settings
