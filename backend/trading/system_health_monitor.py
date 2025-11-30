@@ -363,7 +363,9 @@ class SystemHealthMonitor:
     def _get_host_uptime(self) -> Dict[str, Any]:
         """Get host system uptime since last boot."""
         try:
-            boot_time = datetime.fromtimestamp(psutil.boot_time(), tz=timezone.get_current_timezone())
+            boot_time = datetime.fromtimestamp(
+                psutil.boot_time(), tz=timezone.get_current_timezone()
+            )
             uptime_seconds = (timezone.now() - boot_time).total_seconds()
 
             return {
@@ -483,7 +485,9 @@ class SystemHealthMonitor:
                     "concurrency": pool_info.get("max-concurrency", 0),
                     "processes": pool_info.get("processes", []),
                     "prefetch_count": worker_stats.get("prefetch_count", 0),
-                    "broker_connected": broker_info.get("connected", False) if broker_info else None,
+                    "broker_connected": (
+                        broker_info.get("connected", False) if broker_info else None
+                    ),
                     "status": "healthy",
                 }
 
