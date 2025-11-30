@@ -126,7 +126,11 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
           Data Source
         </Typography>
         <Typography variant="body1">
-          {data_source === DataSource.POSTGRESQL ? 'PostgreSQL' : 'AWS Athena'}
+          {data_source === DataSource.POSTGRESQL
+            ? 'PostgreSQL'
+            : data_source === DataSource.ATHENA
+              ? 'AWS Athena'
+              : 'AWS S3'}
         </Typography>
       </Grid>
 
@@ -201,7 +205,7 @@ export default function BacktestTaskForm({
       config_id: 0,
       name: '',
       description: '',
-      data_source: DataSource.POSTGRESQL,
+      data_source: DataSource.ATHENA,
       start_time: defaultDateRange.start_time,
       end_time: defaultDateRange.end_time,
       initial_balance: 10000,

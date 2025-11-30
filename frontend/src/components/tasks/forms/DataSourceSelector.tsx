@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import StorageIcon from '@mui/icons-material/Storage';
 import CloudIcon from '@mui/icons-material/Cloud';
+import FolderIcon from '@mui/icons-material/Folder';
 import { DataSource } from '../../../types/common';
 
 interface DataSourceSelectorProps {
@@ -36,6 +37,11 @@ const DATA_SOURCE_INFO = {
     description:
       'Query historical data from AWS Athena for long-term backtests',
     icon: CloudIcon,
+  },
+  [DataSource.S3]: {
+    label: 'AWS S3',
+    description: 'Load historical data directly from S3 compressed CSV files',
+    icon: FolderIcon,
   },
 };
 

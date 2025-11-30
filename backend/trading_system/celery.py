@@ -38,9 +38,13 @@ app.conf.task_routes = {
 # These limits are enforced at the Celery worker level
 app.conf.task_annotations = {
     "trading.tasks.run_backtest_task": {
-        "time_limit": 3600,  # 1 hour hard limit
-        "soft_time_limit": 3300,  # 55 minutes soft limit
+        "time_limit": 259200,  # 72 hours hard limit (matches SystemSettings default)
+        "soft_time_limit": 255600,  # 71 hours soft limit
         "rate_limit": "5/m",  # Max 5 backtests per minute
+    },
+    "trading.tasks.run_trading_task": {
+        "time_limit": 259200,  # 72 hours hard limit (matches SystemSettings default)
+        "soft_time_limit": 255600,  # 71 hours soft limit
     },
 }
 

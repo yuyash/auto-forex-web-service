@@ -176,6 +176,20 @@ class SystemSettings(models.Model):
         help_text="Maximum time to wait for Athena query completion (in seconds)",
     )
 
+    # S3 Data Source Settings
+    s3_data_bucket = models.CharField(
+        max_length=255,
+        blank=True,
+        default="forex-hist-data-789121567207-us-west-2",
+        help_text="S3 bucket name for historical forex data files",
+    )
+    s3_data_prefix = models.CharField(
+        max_length=255,
+        blank=True,
+        default="global_forex/quotes",
+        help_text="S3 key prefix for tick data files (e.g., global_forex/quotes)",
+    )
+
     # Logging Settings
     django_log_level = models.CharField(
         max_length=20,

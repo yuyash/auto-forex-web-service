@@ -23,6 +23,7 @@ class DataSource(models.TextChoices):
 
     POSTGRESQL = "postgresql", "PostgreSQL"
     ATHENA = "athena", "AWS Athena"
+    S3 = "s3", "AWS S3"
 
 
 class TaskStatus(models.TextChoices):

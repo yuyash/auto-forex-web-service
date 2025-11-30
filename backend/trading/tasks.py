@@ -1295,111 +1295,18 @@ def _parse_tick_timestamp(time_str: str) -> datetime:
 
 @shared_task(
     bind=True,
-    time_limit=7200,  # 2 hours hard limit
-    soft_time_limit=6600,  # 110 minutes soft limit
+    time_limit=259200,  # 72 hours hard limit (matches SystemSettings default)
+    soft_time_limit=255600,  # 71 hours soft limit
 )
 def run_backtest_task(  # type: ignore[no-untyped-def]
-    self,  # pylint: disable=unused-argument
-    backtest_id: int,
-    config_dict: Dict[str, Any],
-) -> Dict[str, Any]:
-    """
-    Execute a backtest with the provided configuration.
-
-    This is the legacy version that accepts backtest_id and config_dict.
-    For new code, use run_backtest_task_v2 which works with BacktestTask model.
-
-    Args:
-        backtest_id: Primary key of the Backtest model instance
-        config_dict: Configuration dictionary containing strategy and backtest parameters
-
-    Returns:
-        Dictionary containing:
-            - success: Whether the backtest completed successfully
-            - backtest_id: Backtest ID
-            - trade_count: Number of trades executed
-            - final_balance: Final account balance
-            - total_return: Total profit/loss
-            - win_rate: Percentage of winning trades
-            - resource_usage: Resource usage statistics
-            - error: Error message (if backtest failed)
-            - terminated: Whether backtest was terminated due to resource limits
-
-    Requirements: 12.2
-    """
-    logger.info("Starting backtest execution for backtest_id=%d", backtest_id)
-
-    try:
-        # Initialize backtest
-        backtest, error_response = _initialize_backtest(backtest_id)
-        if error_response:
-            return error_response
-
-        # Prepare backtest data
-        backtest_config, tick_data, cpu_limit, memory_limit = _prepare_backtest_data(config_dict)
-
-        # Check if we have data
-        if not tick_data:
-            error_msg = "No historical data available for the specified date range"
-            logger.error("Backtest %d failed: %s", backtest_id, error_msg)
-            backtest.status = TaskStatus.FAILED
-            backtest.error_message = error_msg
-            backtest.completed_at = timezone.now()
-            backtest.save()
-            return {
-                "success": False,
-                "backtest_id": backtest_id,
-                "error": error_msg,
-            }
-
-        # Create and run backtest engine
-        from trading.backtest_engine import BacktestEngine
-
-        engine = BacktestEngine(backtest_config)
-        return _execute_backtest(backtest, backtest_id, engine, tick_data, memory_limit, cpu_limit)
-
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        error_msg = f"Backtest execution failed: {str(e)}"
-        logger.error(
-            "Error in run_backtest_task for backtest_id=%d: %s",
-            backtest_id,
-            error_msg,
-            exc_info=True,
-        )
-
-        # Update backtest status
-        try:
-            from trading.backtest_models import Backtest
-
-            backtest = Backtest.objects.get(id=backtest_id)
-            backtest.status = TaskStatus.FAILED
-            backtest.error_message = error_msg
-            backtest.completed_at = timezone.now()
-            backtest.save()
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.debug("Could not save backtest error state: %s", e)
-
-        return {
-            "success": False,
-            "backtest_id": backtest_id,
-            "error": error_msg,
-        }
-
-
-@shared_task(
-    bind=True,
-    time_limit=3600,  # 1 hour hard limit
-    soft_time_limit=3300,  # 55 minutes soft limit
-)
-def run_backtest_task_v2(  # type: ignore[no-untyped-def]
     self,  # pylint: disable=unused-argument
     task_id: int,
 ) -> Dict[str, Any]:
     """
     Execute a BacktestTask with resource limits.
 
-    This is the new version that works with the BacktestTask model from
-    the task-based strategy configuration feature.
+    This task works with the BacktestTask model from the task-based
+    strategy configuration feature.
 
     This task:
     1. Creates a TaskExecution record at start
@@ -1445,7 +1352,7 @@ def run_backtest_task_v2(  # type: ignore[no-untyped-def]
     except Exception as e:  # pylint: disable=broad-exception-caught
         error_msg = f"BacktestTask execution failed: {str(e)}"
         logger.error(
-            "Error in run_backtest_task_v2 for task_id=%d: %s",
+            "Error in run_backtest_task for task_id=%d: %s",
             task_id,
             error_msg,
             exc_info=True,
@@ -1460,12 +1367,12 @@ def run_backtest_task_v2(  # type: ignore[no-untyped-def]
 
 
 @shared_task
-def run_trading_task_v2(task_id: int) -> Dict[str, Any]:
+def run_trading_task(task_id: int) -> Dict[str, Any]:
     """
     Execute a TradingTask.
 
-    This is the new version that works with the TradingTask model from
-    the task-based strategy configuration feature.
+    This task works with the TradingTask model from the task-based
+    strategy configuration feature.
 
     This task:
     1. Creates a TaskExecution record at start
@@ -1527,7 +1434,7 @@ def run_trading_task_v2(task_id: int) -> Dict[str, Any]:
     except Exception as e:  # pylint: disable=broad-exception-caught
         error_msg = f"TradingTask execution failed: {str(e)}"
         logger.error(
-            "Error in run_trading_task_v2 for task_id=%d: %s",
+            "Error in run_trading_task for task_id=%d: %s",
             task_id,
             error_msg,
             exc_info=True,
@@ -1542,7 +1449,7 @@ def run_trading_task_v2(task_id: int) -> Dict[str, Any]:
 
 
 @shared_task
-def stop_trading_task_v2(task_id: int) -> Dict[str, Any]:
+def stop_trading_task(task_id: int) -> Dict[str, Any]:
     """
     Stop a running TradingTask.
 
@@ -1587,7 +1494,7 @@ def stop_trading_task_v2(task_id: int) -> Dict[str, Any]:
     except Exception as e:  # pylint: disable=broad-exception-caught
         error_msg = f"Failed to stop TradingTask: {str(e)}"
         logger.error(
-            "Error in stop_trading_task_v2 for task_id=%d: %s",
+            "Error in stop_trading_task for task_id=%d: %s",
             task_id,
             error_msg,
             exc_info=True,
@@ -1600,7 +1507,7 @@ def stop_trading_task_v2(task_id: int) -> Dict[str, Any]:
 
 
 @shared_task
-def pause_trading_task_v2(task_id: int) -> Dict[str, Any]:
+def pause_trading_task(task_id: int) -> Dict[str, Any]:
     """
     Pause a running TradingTask.
 
@@ -1623,7 +1530,7 @@ def pause_trading_task_v2(task_id: int) -> Dict[str, Any]:
     except Exception as e:  # pylint: disable=broad-exception-caught
         error_msg = f"Failed to pause TradingTask: {str(e)}"
         logger.error(
-            "Error in pause_trading_task_v2 for task_id=%d: %s",
+            "Error in pause_trading_task for task_id=%d: %s",
             task_id,
             error_msg,
             exc_info=True,
@@ -1636,7 +1543,7 @@ def pause_trading_task_v2(task_id: int) -> Dict[str, Any]:
 
 
 @shared_task
-def resume_trading_task_v2(task_id: int) -> Dict[str, Any]:
+def resume_trading_task(task_id: int) -> Dict[str, Any]:
     """
     Resume a paused TradingTask.
 
@@ -1659,7 +1566,7 @@ def resume_trading_task_v2(task_id: int) -> Dict[str, Any]:
     except Exception as e:  # pylint: disable=broad-exception-caught
         error_msg = f"Failed to resume TradingTask: {str(e)}"
         logger.error(
-            "Error in resume_trading_task_v2 for task_id=%d: %s",
+            "Error in resume_trading_task for task_id=%d: %s",
             task_id,
             error_msg,
             exc_info=True,

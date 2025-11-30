@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import { DataSource } from '../../../types/common';
 
+// Data source values array for Zod validation
+const dataSourceValues = [
+  DataSource.POSTGRESQL,
+  DataSource.ATHENA,
+  DataSource.S3,
+] as const;
+
 // Configuration validation schema
 export const configurationSchema = z.object({
   name: z
@@ -25,7 +32,7 @@ export const backtestTaskSchema = z
       .min(1, 'Name is required')
       .max(255, 'Name must be less than 255 characters'),
     description: z.string().optional(),
-    data_source: z.enum(DataSource),
+    data_source: z.enum(dataSourceValues),
     start_time: z.string().min(1, 'Start date is required'),
     end_time: z.string().min(1, 'End date is required'),
     initial_balance: z.coerce

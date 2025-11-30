@@ -427,3 +427,41 @@ class TestBacktestTaskExecution:
             assert mock_logger.log_day_processing.call_count == 3
             assert mock_logger.log_day_complete.call_count == 3
             assert mock_logger.log_execution_complete.call_count == 1
+
+
+class TestCeleryTaskTimeLimits:
+    """Tests for Celery task time limit configuration."""
+
+    def test_backtest_task_has_72_hour_time_limit(self):
+        """Verify run_backtest_task has 72 hour time limits for long-running backtests."""
+        from trading.tasks import run_backtest_task
+
+        # Get the celery task's time limit settings
+        # These are set via the @shared_task decorator
+        assert hasattr(run_backtest_task, "time_limit")
+        assert hasattr(run_backtest_task, "soft_time_limit")
+
+        # 72 hours = 259200 seconds
+        expected_time_limit = 72 * 60 * 60  # 259200
+        expected_soft_limit = 71 * 60 * 60  # 255600
+
+        assert run_backtest_task.time_limit == expected_time_limit, (
+            f"Expected time_limit={expected_time_limit}, " f"got {run_backtest_task.time_limit}"
+        )
+        assert run_backtest_task.soft_time_limit == expected_soft_limit, (
+            f"Expected soft_time_limit={expected_soft_limit}, "
+            f"got {run_backtest_task.soft_time_limit}"
+        )
+
+    def test_trading_task_has_72_hour_time_limit(self):
+        """Verify run_trading_task has 72 hour time limits for live trading."""
+        from trading.tasks import run_trading_task
+
+        assert hasattr(run_trading_task, "time_limit")
+        assert hasattr(run_trading_task, "soft_time_limit")
+
+        expected_time_limit = 72 * 60 * 60  # 259200
+        expected_soft_limit = 71 * 60 * 60  # 255600
+
+        assert run_trading_task.time_limit == expected_time_limit
+        assert run_trading_task.soft_time_limit == expected_soft_limit

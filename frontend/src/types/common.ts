@@ -17,6 +17,7 @@ export enum TaskType {
 export enum DataSource {
   POSTGRESQL = 'postgresql',
   ATHENA = 'athena',
+  S3 = 's3',
 }
 
 export interface PaginatedResponse<T> {
