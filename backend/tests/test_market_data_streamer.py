@@ -120,9 +120,9 @@ class TestMarketDataStreamer:
         streamer = MarketDataStreamer(mock_oanda_account)
         streamer.initialize_connection()
 
-        # Verify v20.Context was called with correct parameters
+        # Verify v20.Context was called with streaming hostname (not api-*)
         mock_v20_context.assert_called_once_with(
-            hostname="api-fxpractice.oanda.com",
+            hostname="stream-fxpractice.oanda.com",
             token="test_token_12345",
             port=443,
             ssl=True,
@@ -140,9 +140,9 @@ class TestMarketDataStreamer:
         streamer = MarketDataStreamer(mock_oanda_account)
         streamer.initialize_connection()
 
-        # Verify v20.Context was called with live hostname
+        # Verify v20.Context was called with live streaming hostname
         mock_v20_context.assert_called_once_with(
-            hostname="api-fxtrade.oanda.com",
+            hostname="stream-fxtrade.oanda.com",
             token="test_token_12345",
             port=443,
             ssl=True,
