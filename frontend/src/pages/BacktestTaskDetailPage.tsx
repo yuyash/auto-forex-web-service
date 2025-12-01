@@ -35,6 +35,7 @@ import {
   useRerunBacktestTask,
 } from '../hooks/useBacktestTaskMutations';
 import { useTaskPolling } from '../hooks/useTaskPolling';
+import { useInvalidateExecutions } from '../hooks/useTaskExecutions';
 import { useBacktestLiveResults } from '../hooks/useBacktestLiveResults';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
@@ -164,6 +165,7 @@ export default function BacktestTaskDetailPage() {
   const rerunTask = useRerunBacktestTask();
   const copyTask = useCopyBacktestTask();
   const deleteTask = useDeleteBacktestTask();
+  const { invalidateBacktestExecutions } = useInvalidateExecutions();
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -195,6 +197,7 @@ export default function BacktestTaskDetailPage() {
       setProgress(0); // Reset progress when starting
       await startTask.mutate(taskId);
       await refetch(); // Force immediate refetch to show updated status
+      invalidateBacktestExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch {
       setIsTransitioning(false);
@@ -207,6 +210,7 @@ export default function BacktestTaskDetailPage() {
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
       await stopTask.mutate(taskId);
       await refetch(); // Force immediate refetch to show updated status
+      invalidateBacktestExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch {
       setIsTransitioning(false);
@@ -221,6 +225,7 @@ export default function BacktestTaskDetailPage() {
       await rerunTask.mutate(taskId);
       // Force immediate refetch after mutation completes
       await refetch();
+      invalidateBacktestExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch {
       setIsTransitioning(false);

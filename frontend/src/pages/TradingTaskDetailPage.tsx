@@ -33,6 +33,7 @@ import {
   useDeleteTradingTask,
 } from '../hooks/useTradingTaskMutations';
 import { useTaskPolling } from '../hooks/useTaskPolling';
+import { useInvalidateExecutions } from '../hooks/useTaskExecutions';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
 import { TaskActionButtons } from '../components/tasks/actions/TaskActionButtons';
@@ -141,6 +142,7 @@ export default function TradingTaskDetailPage() {
   const rerunTask = useRerunTradingTask();
   const copyTask = useCopyTradingTask();
   const deleteTask = useDeleteTradingTask();
+  const { invalidateTradingExecutions } = useInvalidateExecutions();
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -171,6 +173,7 @@ export default function TradingTaskDetailPage() {
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
       await startTask.mutate(taskId);
       await refetch(); // Force immediate refetch to show updated status
+      invalidateTradingExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch {
       setIsTransitioning(false);
@@ -184,6 +187,7 @@ export default function TradingTaskDetailPage() {
       await rerunTask.mutate(taskId);
       // Force immediate refetch after mutation completes
       await refetch();
+      invalidateTradingExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch {
       setIsTransitioning(false);
@@ -234,6 +238,7 @@ export default function TradingTaskDetailPage() {
       setIsTransitioning(true);
       await stopTask.mutate({ id: taskId, mode: option });
       await refetch(); // Force immediate refetch to show updated status
+      invalidateTradingExecutions(taskId); // Refresh executions list
       setStopDialogOpen(false);
     } catch {
       setIsTransitioning(false);

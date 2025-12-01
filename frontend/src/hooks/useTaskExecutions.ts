@@ -1,8 +1,14 @@
 // Task Execution hooks for data fetching
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { backtestTasksApi, tradingTasksApi } from '../services/api';
 import { TaskType } from '../types';
 import type { TaskExecution, PaginatedResponse } from '../types';
+
+// Query key factories for cache invalidation
+export const executionQueryKeys = {
+  backtestExecutions: (taskId: number) => ['backtest-task-executions', taskId],
+  tradingExecutions: (taskId: number) => ['trading-task-executions', taskId],
+};
 
 interface UseTaskExecutionsResult {
   data: PaginatedResponse<TaskExecution> | undefined;
@@ -83,5 +89,25 @@ export function useTaskExecution(
     isLoading,
     error: error as Error | null,
     refetch,
+  };
+}
+
+/**
+ * Hook to get a function that invalidates executions cache for a task
+ */
+export function useInvalidateExecutions() {
+  const queryClient = useQueryClient();
+
+  return {
+    invalidateBacktestExecutions: (taskId: number) => {
+      queryClient.invalidateQueries({
+        queryKey: executionQueryKeys.backtestExecutions(taskId),
+      });
+    },
+    invalidateTradingExecutions: (taskId: number) => {
+      queryClient.invalidateQueries({
+        queryKey: executionQueryKeys.tradingExecutions(taskId),
+      });
+    },
   };
 }
