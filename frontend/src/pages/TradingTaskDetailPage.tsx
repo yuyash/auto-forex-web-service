@@ -20,8 +20,6 @@ import {
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
-  Pause as PauseIcon,
-  PlayCircleOutline as ResumeIcon,
   ContentCopy as ContentCopyIcon,
   Edit as EditIcon,
   MoreVert as MoreVertIcon,
@@ -30,8 +28,6 @@ import { useTradingTask } from '../hooks/useTradingTasks';
 import {
   useStartTradingTask,
   useStopTradingTask,
-  usePauseTradingTask,
-  useResumeTradingTask,
   useRerunTradingTask,
   useCopyTradingTask,
   useDeleteTradingTask,
@@ -42,7 +38,10 @@ import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
 import { TaskActionButtons } from '../components/tasks/actions/TaskActionButtons';
 import { CopyTaskDialog } from '../components/tasks/actions/CopyTaskDialog';
 import { DeleteTaskDialog } from '../components/tasks/actions/DeleteTaskDialog';
-import { ConfirmDialog } from '../components/tasks/actions/ConfirmDialog';
+import {
+  StopOptionsDialog,
+  type StopOption,
+} from '../components/tasks/actions/StopOptionsDialog';
 import { LiveTaskTab } from '../components/trading/detail/LiveTaskTab';
 import { TaskPerformanceTab } from '../components/trading/detail/TaskPerformanceTab';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
@@ -91,7 +90,7 @@ export default function TradingTaskDetailPage() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [emergencyStopDialogOpen, setEmergencyStopDialogOpen] = useState(false);
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
@@ -139,8 +138,6 @@ export default function TradingTaskDetailPage() {
 
   const startTask = useStartTradingTask();
   const stopTask = useStopTradingTask();
-  const pauseTask = usePauseTradingTask();
-  const resumeTask = useResumeTradingTask();
   const rerunTask = useRerunTradingTask();
   const copyTask = useCopyTradingTask();
   const deleteTask = useDeleteTradingTask();
@@ -173,30 +170,6 @@ export default function TradingTaskDetailPage() {
     try {
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
       await startTask.mutate(taskId);
-      await refetch(); // Force immediate refetch to show updated status
-      handleMenuClose();
-    } catch {
-      setIsTransitioning(false);
-      // Error handled by mutation hook
-    }
-  };
-
-  const handlePause = async () => {
-    try {
-      setIsTransitioning(true); // Optimistic update (Requirement 3.1)
-      await pauseTask.mutate(taskId);
-      await refetch(); // Force immediate refetch to show updated status
-      handleMenuClose();
-    } catch {
-      setIsTransitioning(false);
-      // Error handled by mutation hook
-    }
-  };
-
-  const handleResume = async () => {
-    try {
-      setIsTransitioning(true); // Optimistic update (Requirement 3.1)
-      await resumeTask.mutate(taskId);
       await refetch(); // Force immediate refetch to show updated status
       handleMenuClose();
     } catch {
@@ -251,16 +224,17 @@ export default function TradingTaskDetailPage() {
     }
   };
 
-  const handleEmergencyStop = () => {
-    setEmergencyStopDialogOpen(true);
+  const handleStop = () => {
+    setStopDialogOpen(true);
+    handleMenuClose();
   };
 
-  const handleEmergencyStopConfirm = async () => {
+  const handleStopConfirm = async (option: StopOption) => {
     try {
       setIsTransitioning(true);
-      await stopTask.mutate({ id: taskId });
+      await stopTask.mutate({ id: taskId, mode: option });
       await refetch(); // Force immediate refetch to show updated status
-      setEmergencyStopDialogOpen(false);
+      setStopDialogOpen(false);
     } catch {
       setIsTransitioning(false);
       // Error handled by mutation hook
@@ -296,10 +270,11 @@ export default function TradingTaskDetailPage() {
   }
 
   const canStart =
-    task.status === TaskStatus.CREATED || task.status === TaskStatus.STOPPED;
-  const canStop = task.status === TaskStatus.RUNNING;
-  const canPause = task.status === TaskStatus.RUNNING;
-  const canResume = task.status === TaskStatus.PAUSED;
+    task.status === TaskStatus.CREATED ||
+    task.status === TaskStatus.STOPPED ||
+    task.status === TaskStatus.PAUSED;
+  const canStop =
+    task.status === TaskStatus.RUNNING || task.status === TaskStatus.PAUSED;
   const canEdit =
     task.status !== TaskStatus.RUNNING && task.status !== TaskStatus.PAUSED;
   const canDelete =
@@ -381,36 +356,11 @@ export default function TradingTaskDetailPage() {
               <TaskActionButtons
                 status={task.status}
                 onStart={handleStart}
-                onStop={handleEmergencyStop}
+                onStop={handleStop}
                 onRerun={handleRerun}
                 onDelete={handleDelete}
                 loading={isTransitioning}
               />
-              {/* Trading-specific pause/resume buttons */}
-              {canPause && (
-                <Button
-                  variant="contained"
-                  color="warning"
-                  startIcon={<PauseIcon />}
-                  onClick={handlePause}
-                  disabled={isTransitioning}
-                  size="small"
-                >
-                  Pause
-                </Button>
-              )}
-              {canResume && (
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<ResumeIcon />}
-                  onClick={handleResume}
-                  disabled={isTransitioning}
-                  size="small"
-                >
-                  Resume
-                </Button>
-              )}
               <Button
                 variant="outlined"
                 startIcon={<ContentCopyIcon />}
@@ -439,10 +389,10 @@ export default function TradingTaskDetailPage() {
           onClose={handleMenuClose}
         >
           {canStart && <MenuItem onClick={handleStart}>Start</MenuItem>}
-          {canPause && <MenuItem onClick={handlePause}>Pause</MenuItem>}
-          {canResume && <MenuItem onClick={handleResume}>Resume</MenuItem>}
           {canStop && (
-            <MenuItem onClick={handleEmergencyStop}>Emergency Stop</MenuItem>
+            <MenuItem onClick={handleStop} sx={{ color: 'error.main' }}>
+              Stop
+            </MenuItem>
           )}
           <MenuItem onClick={handleRerun}>Rerun</MenuItem>
           <MenuItem onClick={handleCopy}>Copy</MenuItem>
@@ -504,14 +454,11 @@ export default function TradingTaskDetailPage() {
         isLoading={deleteTask.isLoading}
       />
 
-      <ConfirmDialog
-        open={emergencyStopDialogOpen}
-        title="Emergency Stop"
-        message="Are you sure you want to immediately stop this trading task? All open positions will remain open and must be closed manually."
-        confirmText="Emergency Stop"
-        confirmColor="error"
-        onCancel={() => setEmergencyStopDialogOpen(false)}
-        onConfirm={handleEmergencyStopConfirm}
+      <StopOptionsDialog
+        open={stopDialogOpen}
+        taskName={task.name}
+        onCancel={() => setStopDialogOpen(false)}
+        onConfirm={handleStopConfirm}
         isLoading={stopTask.isLoading}
       />
     </Container>

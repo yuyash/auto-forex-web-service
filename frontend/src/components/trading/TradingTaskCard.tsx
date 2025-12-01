@@ -19,13 +19,10 @@ import Grid from '@mui/material/Grid';
 import {
   PlayArrow as PlayIcon,
   Stop as StopIcon,
-  Pause as PauseIcon,
-  PlayCircleOutline as ResumeIcon,
   Visibility as ViewIcon,
   MoreVert as MoreVertIcon,
   Warning as WarningIcon,
-  FlashOn as ImmediateIcon,
-  Timer as GracefulIcon,
+  TrendingFlat as KeepPositionsIcon,
   ExitToApp as ClosePositionsIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -37,8 +34,6 @@ import TradingTaskActions from './TradingTaskActions';
 import {
   useStartTradingTask,
   useStopTradingTask,
-  usePauseTradingTask,
-  useResumeTradingTask,
 } from '../../hooks/useTradingTaskMutations';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
 import { useToast } from '../common';
@@ -71,8 +66,6 @@ export default function TradingTaskCard({
 
   const startTask = useStartTradingTask();
   const stopTask = useStopTradingTask();
-  const pauseTask = usePauseTradingTask();
-  const resumeTask = useResumeTradingTask();
 
   // Fetch strategies for display names
   const { strategies } = useStrategies();
@@ -204,50 +197,6 @@ export default function TradingTaskCard({
     }
   };
 
-  const handlePause = async () => {
-    try {
-      // Optimistically update status to PAUSED
-      setOptimisticStatus(TaskStatus.PAUSED);
-      await pauseTask.mutate(task.id);
-      // Trigger refresh after successful pause
-      onRefresh?.();
-    } catch (error) {
-      console.error('Failed to pause task:', error);
-      // Revert optimistic update on error
-      setOptimisticStatus(null);
-
-      // Show error notification with retry option
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to pause task';
-      toast.showError(errorMessage, undefined, {
-        label: 'Retry',
-        onClick: handlePause,
-      });
-    }
-  };
-
-  const handleResume = async () => {
-    try {
-      // Optimistically update status to RUNNING
-      setOptimisticStatus(TaskStatus.RUNNING);
-      await resumeTask.mutate(task.id);
-      // Trigger refresh after successful resume
-      onRefresh?.();
-    } catch (error) {
-      console.error('Failed to resume task:', error);
-      // Revert optimistic update on error
-      setOptimisticStatus(null);
-
-      // Show error notification with retry option
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to resume task';
-      toast.showError(errorMessage, undefined, {
-        label: 'Retry',
-        onClick: handleResume,
-      });
-    }
-  };
-
   const formatDateTime = (dateString: string): string => {
     return new Date(dateString).toLocaleString('en-US', {
       year: 'numeric',
@@ -370,7 +319,9 @@ export default function TradingTaskCard({
 
         {/* Action buttons - Trading tasks have different button logic */}
         <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
-          {displayStatus === TaskStatus.CREATED && (
+          {(displayStatus === TaskStatus.CREATED ||
+            displayStatus === TaskStatus.STOPPED ||
+            displayStatus === TaskStatus.PAUSED) && (
             <Button
               variant="contained"
               color="primary"
@@ -382,64 +333,17 @@ export default function TradingTaskCard({
               Start
             </Button>
           )}
-          {displayStatus === TaskStatus.RUNNING && (
-            <>
-              <Button
-                variant="contained"
-                color="warning"
-                startIcon={<PauseIcon />}
-                onClick={handlePause}
-                disabled={pauseTask.isLoading}
-                size="small"
-              >
-                Pause
-              </Button>
-              <Button
-                variant="contained"
-                color="error"
-                startIcon={<StopIcon />}
-                onClick={handleStopMenuOpen}
-                disabled={stopTask.isLoading}
-                size="small"
-              >
-                Stop
-              </Button>
-            </>
-          )}
-          {displayStatus === TaskStatus.PAUSED && (
-            <>
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={<ResumeIcon />}
-                onClick={handleResume}
-                disabled={resumeTask.isLoading}
-                size="small"
-              >
-                Resume
-              </Button>
-              <Button
-                variant="contained"
-                color="error"
-                startIcon={<StopIcon />}
-                onClick={handleStopMenuOpen}
-                disabled={stopTask.isLoading}
-                size="small"
-              >
-                Stop
-              </Button>
-            </>
-          )}
-          {displayStatus === TaskStatus.STOPPED && (
+          {(displayStatus === TaskStatus.RUNNING ||
+            displayStatus === TaskStatus.PAUSED) && (
             <Button
               variant="contained"
-              color="primary"
-              startIcon={<PlayIcon />}
-              onClick={handleStart}
-              disabled={startTask.isLoading}
+              color="error"
+              startIcon={<StopIcon />}
+              onClick={handleStopMenuOpen}
+              disabled={stopTask.isLoading}
               size="small"
             >
-              Start
+              Stop
             </Button>
           )}
         </Box>
@@ -564,29 +468,20 @@ export default function TradingTaskCard({
       >
         <MenuItem onClick={() => handleStop('graceful')}>
           <ListItemIcon>
-            <GracefulIcon fontSize="small" />
+            <KeepPositionsIcon fontSize="small" color="primary" />
           </ListItemIcon>
           <ListItemText
-            primary="Graceful Stop"
-            secondary="Keep positions open"
+            primary="Stop (Keep Positions)"
+            secondary="Stop trading but keep all open positions"
           />
         </MenuItem>
         <MenuItem onClick={() => handleStop('graceful_close')}>
           <ListItemIcon>
-            <ClosePositionsIcon fontSize="small" color="warning" />
+            <ClosePositionsIcon fontSize="small" color="error" />
           </ListItemIcon>
           <ListItemText
-            primary="Stop & Close Positions"
-            secondary="Close all open positions"
-          />
-        </MenuItem>
-        <MenuItem onClick={() => handleStop('immediate')}>
-          <ListItemIcon>
-            <ImmediateIcon fontSize="small" color="error" />
-          </ListItemIcon>
-          <ListItemText
-            primary="Immediate Stop"
-            secondary="Stop without waiting"
+            primary="Stop (Close All Positions)"
+            secondary="Stop trading and close all positions at market price"
           />
         </MenuItem>
       </Menu>
