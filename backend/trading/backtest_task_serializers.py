@@ -132,7 +132,6 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "end_time",
             "initial_balance",
             "commission_per_trade",
-            "instrument",
         ]
         # Make fields optional for partial updates (PATCH)
         extra_kwargs = {
@@ -143,7 +142,6 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "end_time": {"required": False},
             "initial_balance": {"required": False},
             "commission_per_trade": {"required": False},
-            "instrument": {"required": False},
         }
 
     def validate_config(self, value: StrategyConfig) -> StrategyConfig:
@@ -198,6 +196,12 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             is_valid, error_message = config.validate_parameters()
             if not is_valid:
                 raise serializers.ValidationError({"config": error_message})
+
+            # Validate configuration has instrument parameter
+            if not config.parameters.get("instrument"):
+                raise serializers.ValidationError(
+                    {"config": "Configuration must have an instrument parameter"}
+                )
 
         return attrs
 

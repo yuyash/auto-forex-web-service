@@ -94,6 +94,24 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
   description:
     'Configuration for the Floor Strategy with dynamic retracement and ATR-based volatility lock.',
   properties: {
+    instrument: {
+      type: 'string',
+      title: 'Instrument',
+      description: 'Trading instrument (currency pair) to trade',
+      enum: [
+        'EUR_USD',
+        'GBP_USD',
+        'USD_JPY',
+        'USD_CHF',
+        'AUD_USD',
+        'USD_CAD',
+        'NZD_USD',
+        'EUR_GBP',
+        'EUR_JPY',
+        'GBP_JPY',
+      ],
+      default: 'USD_JPY',
+    },
     base_lot_size: {
       type: 'number',
       title: 'Base Lot Size',
@@ -358,6 +376,7 @@ const STRATEGY_CONFIG_SCHEMAS: Record<string, ConfigSchema> = {
 // These should match the required parameters in the backend strategy schemas
 const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
   floor: {
+    instrument: 'USD_JPY',
     base_lot_size: 1.0,
     scaling_mode: 'additive',
     scaling_amount: 1.0,
@@ -384,6 +403,7 @@ const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
     ohlc_slow_period: 20,
   },
   ma_crossover: {
+    instrument: 'USD_JPY',
     fast_period: 50,
     slow_period: 200,
     position_size: 1000,
@@ -391,33 +411,39 @@ const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
     take_profit_pips: 100,
   },
   rsi: {
+    instrument: 'USD_JPY',
     period: 14,
     oversold: 30,
     overbought: 70,
     position_size: 1000,
   },
   macd: {
+    instrument: 'USD_JPY',
     fast_period: 12,
     slow_period: 26,
     signal_period: 9,
     position_size: 1000,
   },
   mean_reversion: {
+    instrument: 'USD_JPY',
     period: 20,
     std_dev: 2,
     position_size: 1000,
   },
   scalping: {
+    instrument: 'USD_JPY',
     position_size: 1000,
     stop_loss_pips: 10,
     take_profit_pips: 15,
   },
   swing_trading: {
+    instrument: 'USD_JPY',
     position_size: 1000,
     stop_loss_pips: 100,
     take_profit_pips: 200,
   },
   stochastic: {
+    instrument: 'USD_JPY',
     k_period: 14,
     d_period: 3,
     oversold: 20,
@@ -425,6 +451,7 @@ const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
     position_size: 1000,
   },
   arbitrage: {
+    instrument: 'USD_JPY',
     position_size: 1000,
     min_spread: 0.0001,
   },

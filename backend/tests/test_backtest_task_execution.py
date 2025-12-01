@@ -49,6 +49,7 @@ def strategy_config(user, db):
         name="Test Floor Strategy",
         strategy_type="floor",
         parameters={
+            "instrument": "EUR_USD",
             "base_lot_size": 1.0,
             "scaling_mode": "additive",
             "retracement_pips": 30,

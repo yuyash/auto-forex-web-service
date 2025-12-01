@@ -19,7 +19,6 @@ import { useForm, Controller, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { DateRangePicker } from '../tasks/forms/DateRangePicker';
-import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
 import { DataSourceSelector } from '../tasks/forms/DataSourceSelector';
 import {
@@ -63,7 +62,12 @@ interface BacktestTaskFormProps {
 
 // Separate component to avoid infinite loop with watch()
 interface ReviewContentProps {
-  selectedConfig: { name: string; id: number; description?: string };
+  selectedConfig: {
+    name: string;
+    id: number;
+    description?: string;
+    parameters?: Record<string, unknown>;
+  };
   formValues: {
     config_id: number;
     name: string;
@@ -73,7 +77,6 @@ interface ReviewContentProps {
     end_time: string;
     initial_balance: number;
     commission_per_trade: number;
-    instrument: string;
     sell_at_completion?: boolean;
   };
 }
@@ -87,9 +90,12 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
     end_time,
     initial_balance,
     commission_per_trade,
-    instrument,
     sell_at_completion,
   } = formValues;
+
+  // Get instrument from configuration parameters
+  const instrument =
+    (selectedConfig.parameters?.instrument as string) || 'Not specified';
 
   return (
     <Grid container spacing={2}>
@@ -210,7 +216,6 @@ export default function BacktestTaskForm({
       end_time: defaultDateRange.end_time,
       initial_balance: 10000,
       commission_per_trade: 0,
-      instrument: '',
       sell_at_completion: false,
     };
 
@@ -219,7 +224,6 @@ export default function BacktestTaskForm({
       ...initialData,
       start_time: initialData?.start_time || baseDefaults.start_time,
       end_time: initialData?.end_time || baseDefaults.end_time,
-      instrument: initialData?.instrument || baseDefaults.instrument,
     } as BacktestTaskSchemaOutput;
   }, [defaultDateRange.end_time, defaultDateRange.start_time, initialData]);
 
@@ -300,7 +304,6 @@ export default function BacktestTaskForm({
           'start_time',
           'end_time',
           'initial_balance',
-          'instrument',
         ];
         break;
       default:
@@ -351,7 +354,6 @@ export default function BacktestTaskForm({
       end_time: completeData.end_time,
       initial_balance: completeData.initial_balance,
       commission_per_trade: completeData.commission_per_trade,
-      instrument: completeData.instrument,
       sell_at_completion: completeData.sell_at_completion,
     };
 
@@ -385,7 +387,6 @@ export default function BacktestTaskForm({
           start_time: 'Start Date',
           end_time: 'End Date',
           initial_balance: 'Initial Balance',
-          instrument: 'Instrument',
         };
 
         Object.entries(backendErrors).forEach(([field, messages]) => {
@@ -546,21 +547,6 @@ export default function BacktestTaskForm({
                 />
               </Grid>
 
-              <Grid size={{ xs: 12 }}>
-                <Controller
-                  name="instrument"
-                  control={control}
-                  render={({ field }) => (
-                    <InstrumentSelector
-                      value={field.value}
-                      onChange={field.onChange}
-                      error={errors.instrument?.message}
-                      helperText={errors.instrument?.message as string}
-                    />
-                  )}
-                />
-              </Grid>
-
               <Grid size={{ xs: 12, md: 6 }}>
                 <Controller
                   name="initial_balance"
@@ -645,7 +631,6 @@ export default function BacktestTaskForm({
           end_time: formData.end_time as string,
           initial_balance: formData.initial_balance as number,
           commission_per_trade: formData.commission_per_trade as number,
-          instrument: formData.instrument as string,
           sell_at_completion: formData.sell_at_completion as boolean,
         };
 
@@ -659,7 +644,6 @@ export default function BacktestTaskForm({
           end_time: 'End Date',
           initial_balance: 'Initial Balance',
           commission_per_trade: 'Commission Per Trade',
-          instrument: 'Instrument',
         };
 
         return (

@@ -32,7 +32,6 @@ export interface BacktestTaskCreateData {
   end_time: string;
   initial_balance: number | string;
   commission_per_trade?: number | string;
-  instrument: string;
   sell_at_completion?: boolean;
 }
 
@@ -46,7 +45,6 @@ export interface BacktestTaskFormData {
   end_time: string;
   initial_balance: number;
   commission_per_trade?: number;
-  instrument: string;
   sell_at_completion?: boolean;
 }
 

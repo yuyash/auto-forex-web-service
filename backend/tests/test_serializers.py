@@ -48,6 +48,7 @@ def strategy_config(db, user):
         name="Test Strategy",
         strategy_type="floor",
         parameters={
+            "instrument": "USD_JPY",
             "base_lot_size": 1.0,
             "scaling_mode": "additive",
             "scaling_amount": 1.0,
