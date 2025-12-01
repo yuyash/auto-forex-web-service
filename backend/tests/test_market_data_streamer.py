@@ -185,7 +185,7 @@ class TestMarketDataStreamer:
 
         # Verify stream was started with correct parameters
         mock_context_instance.pricing.stream.assert_called_once_with(
-            accountID="001-001-1234567-001", instrument="EUR_USD", snapshot=True
+            accountID="001-001-1234567-001", instruments="EUR_USD", snapshot=True
         )
 
         assert streamer.is_connected is True

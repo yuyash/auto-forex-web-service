@@ -16,6 +16,7 @@ from django.utils import timezone
 
 from .models import Order, Position, Strategy
 from .tick_data_models import TickData
+from .trading_task_models import TradingTask
 
 
 class BaseStrategy(ABC):
@@ -33,26 +34,55 @@ class BaseStrategy(ABC):
     _backtest_events: list[dict[str, Any]]
     _is_backtest: bool
 
-    def __init__(self, strategy: Strategy | dict) -> None:
+    # Internal storage for strategy model and trading task
+    _strategy_model: Strategy | None
+    _trading_task: TradingTask | None
+
+    def __init__(self, strategy: Strategy | TradingTask | dict) -> None:
         """
-        Initialize the strategy with a Strategy model instance or config dict.
+        Initialize the strategy with a Strategy/TradingTask model instance or config dict.
 
         Args:
-            strategy: Strategy model instance (for live trading) or
+            strategy: Strategy model instance (legacy live trading),
+                     TradingTask model instance (new live trading), or
                      config dict (for backtesting)
         """
         if isinstance(strategy, dict):
             # Backtesting mode - strategy is a config dict
-            self.strategy = None
+            self._strategy_model = None
+            self._trading_task = None
             self.account = None
             self.config = strategy
             self.instrument = strategy.get("instrument", [])
+        elif isinstance(strategy, TradingTask):
+            # New live trading mode - TradingTask model instance
+            self._strategy_model = None
+            self._trading_task = strategy
+            self.account = strategy.oanda_account
+            self.config = strategy.config.parameters
+            self.instrument = strategy.config.parameters.get("instrument", "")
         else:
-            # Live trading mode - strategy is a Strategy model instance
-            self.strategy = strategy
+            # Legacy live trading mode - strategy is a Strategy model instance
+            self._strategy_model = strategy
+            self._trading_task = None
             self.account = strategy.account
             self.config = strategy.config
             self.instrument = strategy.instrument
+
+    @property
+    def strategy(self) -> Strategy | None:
+        """
+        Get the Strategy model instance for database operations.
+
+        Returns the Strategy model for legacy mode, None for TradingTask or backtest mode.
+        This property is used for backward compatibility with Order/Position creation.
+        """
+        return self._strategy_model
+
+    @property
+    def trading_task(self) -> TradingTask | None:
+        """Get the TradingTask model instance if in new live trading mode."""
+        return self._trading_task
 
     @abstractmethod
     def on_tick(self, tick_data: TickData) -> list[Order]:
@@ -232,21 +262,23 @@ class BaseStrategy(ABC):
         """
         Update strategy state with new values.
 
+        Only applicable for legacy Strategy mode, not TradingTask mode.
+
         Args:
             state_updates: Dictionary of state updates to apply
         """
-        if not self.strategy:
+        if not self._strategy_model:
             return
 
-        if not hasattr(self.strategy, "state"):
+        if not hasattr(self._strategy_model, "state"):
             # Create state if it doesn't exist
             # pylint: disable=import-outside-toplevel
             from .models import StrategyState
 
-            StrategyState.objects.create(strategy=self.strategy)
-            self.strategy.refresh_from_db()
+            StrategyState.objects.create(strategy=self._strategy_model)
+            self._strategy_model.refresh_from_db()
 
-        state = self.strategy.state
+        state = self._strategy_model.state
 
         # Update state fields
         for key, value in state_updates.items():
@@ -263,10 +295,10 @@ class BaseStrategy(ABC):
         Returns:
             Dictionary containing strategy state
         """
-        if not self.strategy or not hasattr(self.strategy, "state"):
+        if not self._strategy_model or not hasattr(self._strategy_model, "state"):
             return {}
 
-        state = self.strategy.state
+        state = self._strategy_model.state
         return {
             "current_layer": state.current_layer,
             "layer_states": state.layer_states,
@@ -335,11 +367,17 @@ class BaseStrategy(ABC):
 
     def __repr__(self) -> str:
         """Developer-friendly representation of the strategy."""
-        if self.strategy and self.account:
+        if self._strategy_model and self.account:
             return (
                 f"<{self.__class__.__name__} "
-                f"strategy_id={self.strategy.id} "
+                f"strategy_id={self._strategy_model.id} "
                 f"account={self.account.account_id} "
-                f"active={self.strategy.is_active}>"
+                f"active={self._strategy_model.is_active}>"
+            )
+        if self._trading_task and self.account:
+            return (
+                f"<{self.__class__.__name__} "
+                f"trading_task_id={self._trading_task.id} "
+                f"account={self.account.account_id}>"
             )
         return f"<{self.__class__.__name__} (backtest mode)>"

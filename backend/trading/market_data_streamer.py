@@ -245,7 +245,7 @@ class MarketDataStreamer:
         try:
             # Create pricing stream
             response = self.api_context.pricing.stream(
-                accountID=self.account.account_id, instrument=instrument, snapshot=True
+                accountID=self.account.account_id, instruments=instrument, snapshot=True
             )
 
             self.stream = response

@@ -24,6 +24,7 @@ from trading.backtest_task_models import BacktestTask
 from trading.enums import TaskStatus, TaskType
 from trading.execution_models import ExecutionMetrics, TaskExecution
 from trading.historical_data_loader import HistoricalDataLoader
+from trading.result_models import PerformanceMetrics
 from trading.strategy_registry import registry
 from trading.trading_task_models import TradingTask
 from trading_system.config_loader import get_config
@@ -288,7 +289,7 @@ def _downsample_equity_curve(equity_curve: list, max_points: int = MAX_EQUITY_CU
 
 def _create_execution_metrics(
     execution: TaskExecution,
-    performance_metrics: dict[str, Any],
+    performance_metrics: PerformanceMetrics,
     equity_curve: list,
     trade_log: list,
 ) -> ExecutionMetrics:
@@ -297,7 +298,7 @@ def _create_execution_metrics(
 
     Args:
         execution: TaskExecution instance
-        performance_metrics: Performance metrics dictionary
+        performance_metrics: PerformanceMetrics dataclass
         equity_curve: List of EquityPoint objects or dicts
         trade_log: List of BacktestTrade objects or dicts
 
@@ -329,7 +330,7 @@ def _create_execution_metrics(
         equity_curve_dicts = _downsample_equity_curve(equity_curve_dicts, MAX_EQUITY_CURVE_POINTS)
 
     # Limit strategy events to prevent massive JSON payloads
-    strategy_events = performance_metrics.get("strategy_events", [])
+    strategy_events = performance_metrics.strategy_events
     original_events_count = len(strategy_events)
     if original_events_count > MAX_STRATEGY_EVENTS:
         logger.warning(
@@ -352,25 +353,25 @@ def _create_execution_metrics(
     logger.info("Inserting ExecutionMetrics into database...")
     result = ExecutionMetrics.objects.create(
         execution=execution,
-        total_return=Decimal(str(performance_metrics.get("total_return", 0))),
-        total_pnl=Decimal(str(performance_metrics.get("total_pnl", 0))),
-        total_trades=performance_metrics.get("total_trades", 0),
-        winning_trades=performance_metrics.get("winning_trades", 0),
-        losing_trades=performance_metrics.get("losing_trades", 0),
-        win_rate=Decimal(str(performance_metrics.get("win_rate", 0))),
-        max_drawdown=Decimal(str(performance_metrics.get("max_drawdown", 0))),
+        total_return=Decimal(str(performance_metrics.total_return)),
+        total_pnl=Decimal(str(performance_metrics.total_pnl)),
+        total_trades=performance_metrics.total_trades,
+        winning_trades=performance_metrics.winning_trades,
+        losing_trades=performance_metrics.losing_trades,
+        win_rate=Decimal(str(performance_metrics.win_rate)),
+        max_drawdown=Decimal(str(performance_metrics.max_drawdown)),
         sharpe_ratio=(
-            Decimal(str(performance_metrics["sharpe_ratio"]))
-            if performance_metrics.get("sharpe_ratio") is not None
+            Decimal(str(performance_metrics.sharpe_ratio))
+            if performance_metrics.sharpe_ratio is not None
             else None
         ),
         profit_factor=(
-            Decimal(str(performance_metrics["profit_factor"]))
-            if performance_metrics.get("profit_factor") is not None
+            Decimal(str(performance_metrics.profit_factor))
+            if performance_metrics.profit_factor is not None
             else None
         ),
-        average_win=Decimal(str(performance_metrics.get("average_win", 0))),
-        average_loss=Decimal(str(performance_metrics.get("average_loss", 0))),
+        average_win=Decimal(str(performance_metrics.average_win)),
+        average_loss=Decimal(str(performance_metrics.average_loss)),
         equity_curve=equity_curve_dicts,
         trade_log=trade_log_dicts,
         strategy_events=strategy_events,  # Limited to MAX_STRATEGY_EVENTS

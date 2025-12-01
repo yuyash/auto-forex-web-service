@@ -18,6 +18,7 @@ from typing import Any
 
 from trading.backtest_engine import BacktestConfig, BacktestEngine
 from trading.historical_data_loader import TickDataPoint
+from trading.result_models import PerformanceMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ def _run_single_strategy(
             "config": strategy_config["config"],
             "trade_log": trade_log,
             "equity_curve": equity_curve,
-            "performance_metrics": performance_metrics,
+            "performance_metrics": performance_metrics.to_dict(),
             "success": True,
             "error": None,
         }
@@ -115,7 +116,7 @@ def _run_single_strategy(
             "config": strategy_config.get("config", {}),
             "trade_log": [],
             "equity_curve": [],
-            "performance_metrics": {},
+            "performance_metrics": PerformanceMetrics().to_dict(),
             "success": False,
             "error": str(e),
         }

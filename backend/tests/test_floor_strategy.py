@@ -1493,7 +1493,7 @@ class TestFloorStrategyRetracementReset:
 
         floor_strategy = FloorStrategy(config)
         floor_strategy.account = oanda_account
-        floor_strategy.strategy = strategy_obj
+        floor_strategy._strategy_model = strategy_obj
 
         # Get the first layer
         layer = floor_strategy.layer_manager.layers[0]
@@ -1585,7 +1585,7 @@ class TestFloorStrategyRetracementReset:
 
         floor_strategy = FloorStrategy(config)
         floor_strategy.account = oanda_account
-        floor_strategy.strategy = strategy_obj
+        floor_strategy._strategy_model = strategy_obj
 
         # Get the first layer
         layer = floor_strategy.layer_manager.layers[0]
@@ -1658,7 +1658,7 @@ class TestFloorStrategyRetracementReset:
 
         floor_strategy = FloorStrategy(config)
         floor_strategy.account = oanda_account
-        floor_strategy.strategy = strategy_obj
+        floor_strategy._strategy_model = strategy_obj
 
         # Get the first layer
         layer = floor_strategy.layer_manager.layers[0]
@@ -1773,7 +1773,7 @@ class TestFloorStrategyDirectionRecalculation:
 
         floor_strategy = FloorStrategy(config)
         floor_strategy.account = oanda_account
-        floor_strategy.strategy = strategy_obj
+        floor_strategy._strategy_model = strategy_obj
 
         # Get the first layer
         layer = floor_strategy.layer_manager.layers[0]
