@@ -31,6 +31,7 @@ from trading.athena_import_task import (  # noqa: F401  # pylint: disable=unused
 from trading.enums import TaskStatus
 from trading.market_data_streamer import MarketDataStreamer, TickData
 from trading.oanda_sync_task import oanda_sync_task  # noqa: F401  # pylint: disable=unused-import
+from trading.result_models import PerformanceMetrics
 from trading.tick_data_models import TickData as TickDataModel
 from trading_system.config_loader import get_config
 
@@ -911,7 +912,7 @@ def _get_resource_usage(engine: Any, memory_limit: int, cpu_limit: int) -> Dict[
 
 def _update_backtest_success(
     backtest: Any,
-    metrics: Dict[str, Any],
+    metrics: PerformanceMetrics,
     engine: Any,
     equity_curve: list,
     trade_log: list,
@@ -921,21 +922,21 @@ def _update_backtest_success(
 
     Args:
         backtest: Backtest model instance
-        metrics: Performance metrics dictionary
+        metrics: PerformanceMetrics dataclass
         engine: BacktestEngine instance
         equity_curve: Equity curve data
         trade_log: Trade log data
     """
     backtest.status = "completed"
-    backtest.total_trades = metrics["total_trades"]
-    backtest.winning_trades = metrics["winning_trades"]
-    backtest.losing_trades = metrics["losing_trades"]
-    backtest.total_return = float(metrics["total_pnl"])
-    backtest.win_rate = metrics["win_rate"]
+    backtest.total_trades = metrics.total_trades
+    backtest.winning_trades = metrics.winning_trades
+    backtest.losing_trades = metrics.losing_trades
+    backtest.total_return = float(metrics.total_pnl)
+    backtest.win_rate = metrics.win_rate
     backtest.final_balance = float(engine.balance)
     backtest.equity_curve = equity_curve
     backtest.trade_log = trade_log
-    backtest.strategy_events = metrics.get("strategy_events", [])
+    backtest.strategy_events = metrics.strategy_events
     backtest.completed_at = timezone.now()
     backtest.save()
 
@@ -1090,9 +1091,9 @@ def _execute_backtest(
         logger.info(
             "Backtest %d completed: %d trades, final balance: %s, win rate: %.1f%%",
             backtest_id,
-            metrics["total_trades"],
+            metrics.total_trades,
             engine.balance,
-            metrics["win_rate"],
+            metrics.win_rate,
         )
 
         _update_backtest_success(backtest, metrics, engine, equity_curve, trade_log)
@@ -1100,10 +1101,10 @@ def _execute_backtest(
         return {
             "success": True,
             "backtest_id": backtest_id,
-            "trade_count": metrics["total_trades"],
+            "trade_count": metrics.total_trades,
             "final_balance": float(engine.balance),
-            "total_return": float(metrics["total_pnl"]),
-            "win_rate": metrics["win_rate"],
+            "total_return": float(metrics.total_pnl),
+            "win_rate": metrics.win_rate,
             "resource_usage": resource_usage,
             "error": None,
             "terminated": False,
@@ -1166,12 +1167,14 @@ def run_host_access_monitoring() -> Dict[str, Any]:
         }
 
 
-def _broadcast_to_strategy_executors(account: OandaAccount, tick: TickData) -> None:
+def _broadcast_to_strategy_executors(  # pylint: disable=too-many-locals
+    account: OandaAccount, tick: TickData
+) -> None:
     """
     Broadcast tick data to all active strategy executors for the account.
 
-    This function finds all active strategies for the account and processes
-    the tick through each strategy's executor.
+    This function finds all active strategies and running trading tasks for the account
+    and processes the tick through each strategy's executor.
 
     Args:
         account: OandaAccount instance
@@ -1181,27 +1184,76 @@ def _broadcast_to_strategy_executors(account: OandaAccount, tick: TickData) -> N
     """
     from trading.models import Strategy
     from trading.strategy_executor import StrategyExecutor
+    from trading.strategy_registry import registry
+    from trading.trading_task_models import TradingTask
 
+    # Convert TickData to TickDataModel for strategy executor
+    tick_model = TickDataModel(
+        account=account,
+        instrument=tick.instrument,
+        timestamp=_parse_tick_timestamp(tick.time),
+        bid=Decimal(str(tick.bid)),
+        ask=Decimal(str(tick.ask)),
+        mid=Decimal(str(tick.mid)),
+        spread=Decimal(str(tick.spread)),
+    )
+
+    # Process tick through running TradingTask objects
     try:
-        # Get all active strategies for this account
+        running_tasks = TradingTask.objects.filter(
+            oanda_account=account,
+            status=TaskStatus.RUNNING,
+        ).select_related("config")
+
+        for task in running_tasks:
+            try:
+                # Get instrument from configuration
+                task_instrument = task.config.parameters.get("instrument")
+                if not task_instrument or tick.instrument != task_instrument:
+                    continue
+
+                # Get strategy class from registry
+                strategy_class = registry.get_strategy_class(task.config.strategy_type)
+                if not strategy_class:
+                    logger.warning(
+                        "Unknown strategy type %s for task %d",
+                        task.config.strategy_type,
+                        task.pk,
+                    )
+                    continue
+
+                # Create strategy instance with TradingTask model
+                strategy_instance = strategy_class(task)
+
+                # Process tick through strategy
+                orders = strategy_instance.on_tick(tick_model)
+
+                if orders:
+                    logger.info(
+                        "TradingTask %d (%s) generated %d orders for %s",
+                        task.pk,
+                        task.config.strategy_type,
+                        len(orders),
+                        tick.instrument,
+                    )
+
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error(
+                    "Error processing tick for TradingTask %d: %s",
+                    task.pk,
+                    e,
+                    exc_info=True,
+                )
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Error broadcasting tick to trading tasks: %s", e, exc_info=True)
+
+    # Also process tick through legacy Strategy objects (if any)
+    try:
         active_strategies = Strategy.objects.filter(account=account, is_active=True)
 
         if not active_strategies.exists():
-            logger.debug(
-                "No active strategies for account %s, skipping tick broadcast", account.account_id
-            )
             return
-
-        # Convert TickData to TickDataModel for strategy executor
-        tick_model = TickDataModel(
-            account=account,
-            instrument=tick.instrument,
-            timestamp=_parse_tick_timestamp(tick.time),
-            bid=Decimal(str(tick.bid)),
-            ask=Decimal(str(tick.ask)),
-            mid=Decimal(str(tick.mid)),
-            spread=Decimal(str(tick.spread)),
-        )
 
         # Process tick through each active strategy
         for strategy in active_strategies:

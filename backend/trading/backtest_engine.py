@@ -26,6 +26,7 @@ import psutil
 
 from trading.base_strategy import BaseStrategy
 from trading.historical_data_loader import TickDataPoint
+from trading.result_models import PerformanceMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -338,7 +339,7 @@ class BacktestEngine:  # pylint: disable=too-many-instance-attributes
 
     def run(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-lines
         self, tick_data: list[TickDataPoint], backtest: Any = None
-    ) -> tuple[list[BacktestTrade], list[EquityPoint], dict[str, Any]]:
+    ) -> tuple[list[BacktestTrade], list[EquityPoint], PerformanceMetrics]:
         """
         Run backtest on historical tick data.
 
@@ -517,7 +518,7 @@ class BacktestEngine:  # pylint: disable=too-many-instance-attributes
         tick_data: list[TickDataPoint],
         day_complete_callback: Any = None,
         backtest: Any = None,
-    ) -> tuple[list[BacktestTrade], list[EquityPoint], dict[str, Any]]:
+    ) -> tuple[list[BacktestTrade], list[EquityPoint], PerformanceMetrics]:
         """
         Run backtest incrementally, calling callback after each day with intermediate results.
 
@@ -1098,7 +1099,8 @@ class BacktestEngine:  # pylint: disable=too-many-instance-attributes
         if system_config:
             logger.info(f"CPU limit: {self.config.cpu_limit} cores")
 
-    def calculate_performance_metrics(self) -> dict[str, Any]:
+    # pylint: disable=too-many-locals
+    def calculate_performance_metrics(self) -> PerformanceMetrics:
         """
         Calculate comprehensive performance metrics from backtest results.
 
@@ -1110,24 +1112,22 @@ class BacktestEngine:  # pylint: disable=too-many-instance-attributes
         - Average win/loss and profit factor
 
         Returns:
-            Dictionary containing all performance metrics
+            PerformanceMetrics dataclass containing all performance metrics
 
         Requirements: 12.4
         """
         if not self.trade_log:
             return self._get_zero_metrics()
 
-        metrics: dict[str, Any] = {}
-
         # Basic metrics
-        metrics["total_trades"] = len(self.trade_log)
-        metrics["final_balance"] = float(self.balance)
-        metrics["initial_balance"] = float(self.config.initial_balance)
+        total_trades = len(self.trade_log)
+        final_balance = float(self.balance)
+        initial_balance = float(self.config.initial_balance)
 
         # Calculate total P&L and return
         total_pnl = self.balance - self.config.initial_balance
-        metrics["total_pnl"] = float(total_pnl)
-        metrics["total_return"] = (
+        total_pnl_float = float(total_pnl)
+        total_return = (
             float((total_pnl / self.config.initial_balance) * 100)
             if self.config.initial_balance > 0
             else 0.0
@@ -1137,95 +1137,109 @@ class BacktestEngine:  # pylint: disable=too-many-instance-attributes
         winning_trades = [t for t in self.trade_log if t.pnl > 0]
         losing_trades = [t for t in self.trade_log if t.pnl < 0]
 
-        metrics["winning_trades"] = len(winning_trades)
-        metrics["losing_trades"] = len(losing_trades)
-        metrics["win_rate"] = (
-            (len(winning_trades) / len(self.trade_log)) * 100 if self.trade_log else 0.0
-        )
+        winning_trades_count = len(winning_trades)
+        losing_trades_count = len(losing_trades)
+        win_rate = (len(winning_trades) / len(self.trade_log)) * 100 if self.trade_log else 0.0
 
         # Calculate average win/loss
         if winning_trades:
             total_wins = sum(t.pnl for t in winning_trades)
-            metrics["average_win"] = total_wins / len(winning_trades)
-            metrics["largest_win"] = max(t.pnl for t in winning_trades)
+            average_win = total_wins / len(winning_trades)
+            largest_win = max(t.pnl for t in winning_trades)
         else:
-            metrics["average_win"] = 0.0
-            metrics["largest_win"] = 0.0
+            average_win = 0.0
+            largest_win = 0.0
 
         if losing_trades:
             total_losses = sum(t.pnl for t in losing_trades)
-            metrics["average_loss"] = total_losses / len(losing_trades)
-            metrics["largest_loss"] = min(t.pnl for t in losing_trades)
+            average_loss = total_losses / len(losing_trades)
+            largest_loss = min(t.pnl for t in losing_trades)
         else:
-            metrics["average_loss"] = 0.0
-            metrics["largest_loss"] = 0.0
+            average_loss = 0.0
+            largest_loss = 0.0
 
         # Calculate profit factor
         if losing_trades:
             gross_profit = sum(t.pnl for t in winning_trades)
             gross_loss = abs(sum(t.pnl for t in losing_trades))
-            metrics["profit_factor"] = gross_profit / gross_loss if gross_loss > 0 else None
+            profit_factor = gross_profit / gross_loss if gross_loss > 0 else None
         else:
-            metrics["profit_factor"] = None
+            profit_factor = None
 
         # Calculate maximum drawdown
         max_dd_metrics = self._calculate_max_drawdown()
-        metrics.update(max_dd_metrics)
 
         # Calculate Sharpe ratio
-        metrics["sharpe_ratio"] = self._calculate_sharpe_ratio()
+        sharpe_ratio = self._calculate_sharpe_ratio()
 
         # Calculate average trade duration
         if self.trade_log:
             total_duration = sum(t.duration for t in self.trade_log)
-            metrics["average_trade_duration"] = total_duration / len(self.trade_log)
+            average_trade_duration = total_duration / len(self.trade_log)
         else:
-            metrics["average_trade_duration"] = 0.0
+            average_trade_duration = 0.0
 
-        sharpe_str = (
-            f"{metrics['sharpe_ratio']:.2f}" if metrics["sharpe_ratio"] is not None else "N/A"
-        )
+        sharpe_str = f"{sharpe_ratio:.2f}" if sharpe_ratio is not None else "N/A"
         logger.info(
-            f"Performance metrics calculated: Return={metrics['total_return']:.2f}%, "
-            f"Win Rate={metrics['win_rate']:.2f}%, "
+            f"Performance metrics calculated: Return={total_return:.2f}%, "
+            f"Win Rate={win_rate:.2f}%, "
             f"Sharpe={sharpe_str}"
         )
 
-        # Add strategy events if available (for floor strategy markers)
+        # Get strategy events if available (for floor strategy markers)
         if self.strategy and hasattr(self.strategy, "_backtest_events"):
             # pylint: disable=protected-access
-            metrics["strategy_events"] = self.strategy._backtest_events
+            strategy_events = self.strategy._backtest_events
         else:
-            metrics["strategy_events"] = []
+            strategy_events = []
 
-        return metrics
+        return PerformanceMetrics(
+            total_trades=total_trades,
+            winning_trades=winning_trades_count,
+            losing_trades=losing_trades_count,
+            win_rate=win_rate,
+            total_pnl=total_pnl_float,
+            total_return=total_return,
+            initial_balance=initial_balance,
+            final_balance=final_balance,
+            average_win=average_win,
+            average_loss=average_loss,
+            largest_win=largest_win,
+            largest_loss=largest_loss,
+            profit_factor=profit_factor,
+            max_drawdown=max_dd_metrics["max_drawdown"],
+            max_drawdown_amount=max_dd_metrics["max_drawdown_amount"],
+            sharpe_ratio=sharpe_ratio,
+            average_trade_duration=average_trade_duration,
+            strategy_events=strategy_events,
+        )
 
-    def _get_zero_metrics(self) -> dict[str, Any]:
+    def _get_zero_metrics(self) -> PerformanceMetrics:
         """
         Get zero/default metrics when no trades were executed.
 
         Returns:
-            Dictionary with zero metrics
+            PerformanceMetrics with zero/default values
         """
-        return {
-            "total_trades": 0,
-            "final_balance": float(self.config.initial_balance),
-            "initial_balance": float(self.config.initial_balance),
-            "total_pnl": 0.0,
-            "total_return": 0.0,
-            "winning_trades": 0,
-            "losing_trades": 0,
-            "win_rate": 0.0,
-            "average_win": 0.0,
-            "average_loss": 0.0,
-            "largest_win": 0.0,
-            "largest_loss": 0.0,
-            "profit_factor": None,
-            "max_drawdown": 0.0,
-            "max_drawdown_amount": 0.0,
-            "sharpe_ratio": None,
-            "average_trade_duration": 0.0,
-        }
+        return PerformanceMetrics(
+            total_trades=0,
+            final_balance=float(self.config.initial_balance),
+            initial_balance=float(self.config.initial_balance),
+            total_pnl=0.0,
+            total_return=0.0,
+            winning_trades=0,
+            losing_trades=0,
+            win_rate=0.0,
+            average_win=0.0,
+            average_loss=0.0,
+            largest_win=0.0,
+            largest_loss=0.0,
+            profit_factor=None,
+            max_drawdown=0.0,
+            max_drawdown_amount=0.0,
+            sharpe_ratio=None,
+            average_trade_duration=0.0,
+        )
 
     def _calculate_max_drawdown(self) -> dict[str, float]:
         """
