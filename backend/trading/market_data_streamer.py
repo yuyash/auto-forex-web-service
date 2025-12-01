@@ -292,9 +292,10 @@ class MarketDataStreamer:
 
         try:
             for msg_type, msg in self.stream.parts():
-                if msg_type == "pricing.Price":
+                # Handle both old and new OANDA API message types
+                if msg_type in ("pricing.Price", "pricing.ClientPrice"):
                     self._process_price_message(msg)
-                elif msg_type == "pricing.Heartbeat":
+                elif msg_type in ("pricing.Heartbeat", "pricing.PricingHeartbeat"):
                     self._process_heartbeat_message(msg)
                 else:
                     logger.debug("Received unknown message type: %s", msg_type)
