@@ -201,7 +201,7 @@ class MarketDataStreamer:
         Raises:
             ValueError: If account API credentials are invalid
         """
-        if not self.account.api_token:
+        if not self.account.get_api_token():
             raise ValueError("API token is required for streaming")
 
         # Determine streaming hostname based on account type
@@ -214,9 +214,10 @@ class MarketDataStreamer:
             raise ValueError(f"Invalid API type: {self.account.api_type}")
 
         # Create v20 context for streaming
+        # Note: api_token is encrypted, use get_api_token() to decrypt
         self.api_context = v20.Context(
             hostname=hostname,
-            token=self.account.api_token,
+            token=self.account.get_api_token(),
             port=443,
             ssl=True,
             application="AutoForexTradingSystem",
