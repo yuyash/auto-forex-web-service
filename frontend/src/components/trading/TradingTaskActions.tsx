@@ -10,22 +10,20 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   FileCopy as CopyIcon,
-  Pause as PauseIcon,
-  PlayCircleOutline as ResumeIcon,
   Stop as StopIcon,
-  Warning as WarningIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import type { TradingTask } from '../../types/tradingTask';
 import { TaskStatus } from '../../types/common';
 import { CopyTaskDialog } from '../tasks/actions/CopyTaskDialog';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
-import { ConfirmDialog } from '../tasks/actions/ConfirmDialog';
+import {
+  StopOptionsDialog,
+  type StopOption,
+} from '../tasks/actions/StopOptionsDialog';
 import {
   useCopyTradingTask,
   useDeleteTradingTask,
-  usePauseTradingTask,
-  useResumeTradingTask,
   useStopTradingTask,
 } from '../../hooks/useTradingTaskMutations';
 import { useToast } from '../common';
@@ -47,14 +45,10 @@ export default function TradingTaskActions({
   const { showError } = useToast();
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [pauseDialogOpen, setPauseDialogOpen] = useState(false);
-  const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
 
   const copyTask = useCopyTradingTask();
   const deleteTask = useDeleteTradingTask();
-  const pauseTask = usePauseTradingTask();
-  const resumeTask = useResumeTradingTask();
   const stopTask = useStopTradingTask();
 
   const handleEdit = () => {
@@ -121,54 +115,14 @@ export default function TradingTaskActions({
     }
   };
 
-  const handlePauseClick = () => {
-    onClose();
-    setPauseDialogOpen(true);
-  };
-
-  const handlePauseConfirm = async () => {
-    try {
-      await pauseTask.mutate(task.id);
-      setPauseDialogOpen(false);
-      // Trigger refresh after successful pause
-      onRefresh?.();
-    } catch (error) {
-      console.error('Failed to pause task:', error);
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to pause task';
-      showError(errorMessage);
-      setPauseDialogOpen(false);
-    }
-  };
-
-  const handleResumeClick = () => {
-    onClose();
-    setResumeDialogOpen(true);
-  };
-
-  const handleResumeConfirm = async () => {
-    try {
-      await resumeTask.mutate(task.id);
-      setResumeDialogOpen(false);
-      // Trigger refresh after successful resume
-      onRefresh?.();
-    } catch (error) {
-      console.error('Failed to resume task:', error);
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to resume task';
-      showError(errorMessage);
-      setResumeDialogOpen(false);
-    }
-  };
-
   const handleStopClick = () => {
     onClose();
     setStopDialogOpen(true);
   };
 
-  const handleStopConfirm = async () => {
+  const handleStopConfirm = async (option: StopOption) => {
     try {
-      await stopTask.mutate({ id: task.id });
+      await stopTask.mutate({ id: task.id, mode: option });
       setStopDialogOpen(false);
       // Trigger refresh after successful stop
       onRefresh?.();
@@ -185,8 +139,6 @@ export default function TradingTaskActions({
     task.status !== TaskStatus.RUNNING && task.status !== TaskStatus.PAUSED;
   const canDelete =
     task.status !== TaskStatus.RUNNING && task.status !== TaskStatus.PAUSED;
-  const canPause = task.status === TaskStatus.RUNNING;
-  const canResume = task.status === TaskStatus.PAUSED;
   const canStop =
     task.status === TaskStatus.RUNNING || task.status === TaskStatus.PAUSED;
 
@@ -206,24 +158,6 @@ export default function TradingTaskActions({
           horizontal: 'right',
         }}
       >
-        {canPause && (
-          <MenuItem onClick={handlePauseClick}>
-            <ListItemIcon>
-              <PauseIcon fontSize="small" color="warning" />
-            </ListItemIcon>
-            <ListItemText>Pause</ListItemText>
-          </MenuItem>
-        )}
-
-        {canResume && (
-          <MenuItem onClick={handleResumeClick}>
-            <ListItemIcon>
-              <ResumeIcon fontSize="small" color="primary" />
-            </ListItemIcon>
-            <ListItemText>Resume</ListItemText>
-          </MenuItem>
-        )}
-
         {canStop && (
           <MenuItem onClick={handleStopClick}>
             <ListItemIcon>
@@ -233,7 +167,7 @@ export default function TradingTaskActions({
           </MenuItem>
         )}
 
-        {(canPause || canResume || canStop) && <Divider />}
+        {canStop && <Divider />}
 
         <MenuItem onClick={handleCopyClick}>
           <ListItemIcon>
@@ -280,40 +214,12 @@ export default function TradingTaskActions({
         hasExecutionHistory={true}
       />
 
-      <ConfirmDialog
-        open={pauseDialogOpen}
-        title="Pause Trading Task"
-        message={`Are you sure you want to pause "${task.name}"? The task will stop executing new trades but existing positions will remain open.`}
-        confirmText="Pause"
-        confirmColor="warning"
-        onCancel={() => setPauseDialogOpen(false)}
-        onConfirm={handlePauseConfirm}
-        isLoading={pauseTask.isLoading}
-        icon={<PauseIcon />}
-      />
-
-      <ConfirmDialog
-        open={resumeDialogOpen}
-        title="Resume Trading Task"
-        message={`Are you sure you want to resume "${task.name}"? The task will start executing trades again.`}
-        confirmText="Resume"
-        confirmColor="primary"
-        onCancel={() => setResumeDialogOpen(false)}
-        onConfirm={handleResumeConfirm}
-        isLoading={resumeTask.isLoading}
-        icon={<ResumeIcon />}
-      />
-
-      <ConfirmDialog
+      <StopOptionsDialog
         open={stopDialogOpen}
-        title="Emergency Stop"
-        message={`Are you sure you want to stop "${task.name}"? This will immediately halt all trading activity. Existing positions will remain open.`}
-        confirmText="Stop"
-        confirmColor="error"
+        taskName={task.name}
         onCancel={() => setStopDialogOpen(false)}
         onConfirm={handleStopConfirm}
         isLoading={stopTask.isLoading}
-        icon={<WarningIcon />}
       />
     </>
   );

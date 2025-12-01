@@ -36,8 +36,11 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
 }) => {
   // Determine which buttons to show based on task status
   const showStart =
-    status === TaskStatus.CREATED || status === TaskStatus.STOPPED;
-  const showStop = status === TaskStatus.RUNNING;
+    status === TaskStatus.CREATED ||
+    status === TaskStatus.STOPPED ||
+    status === TaskStatus.PAUSED;
+  const showStop =
+    status === TaskStatus.RUNNING || status === TaskStatus.PAUSED;
   const showRerun =
     status === TaskStatus.COMPLETED || status === TaskStatus.FAILED;
 
