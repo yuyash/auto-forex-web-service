@@ -592,7 +592,24 @@ def execute_backtest_task(
         execution.add_log("INFO", f"Started backtest execution #{execution_number}")
         execution.add_log("INFO", f"Period: {start_str} to {end_str}")
         execution.add_log("INFO", f"Strategy: {task.config.strategy_type}")
-        execution.add_log("INFO", f"Instrument: {task.instrument}")
+
+        # Get instrument from configuration parameters
+        instrument = task.config.parameters.get("instrument")
+        if not instrument:
+            error_msg = "No instrument specified in configuration"
+            logger.error(error_msg)
+            execution.add_log("ERROR", error_msg)
+            execution.mark_failed(ValueError(error_msg))
+            task.status = TaskStatus.FAILED
+            task.save(update_fields=["status", "updated_at"])
+            return {
+                "success": False,
+                "task_id": task_id,
+                "execution_id": execution.pk,
+                "error": error_msg,
+            }
+
+        execution.add_log("INFO", f"Instrument: {instrument}")
         execution.add_log("INFO", f"Initial balance: ${task.initial_balance}")
 
         # Initialize data loader
@@ -607,9 +624,6 @@ def execute_backtest_task(
         data_loader = HistoricalDataLoader(data_source=data_source)
 
         execution.add_log("INFO", f"Processing {total_days} days of data incrementally...")
-
-        # Get instrument from task (not from config parameters)
-        instrument = task.instrument
 
         # Get resource limits and batch size from SystemSettings
         from accounts.models import SystemSettings

@@ -170,6 +170,12 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             if not is_valid:
                 raise serializers.ValidationError({"config": error_message})
 
+            # Validate configuration has instrument parameter
+            if not config.parameters.get("instrument"):
+                raise serializers.ValidationError(
+                    {"config": "Configuration must have an instrument parameter"}
+                )
+
         return attrs
 
     def create(self, validated_data: dict) -> TradingTask:

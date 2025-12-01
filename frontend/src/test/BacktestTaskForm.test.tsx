@@ -40,12 +40,14 @@ vi.mock('../hooks/useConfigurations', () => ({
           name: 'Test Config 1',
           strategy_type: 'MA_CROSSOVER',
           description: 'Test configuration 1',
+          parameters: { instrument: 'USD_JPY' },
         },
         {
           id: 2,
           name: 'Test Config 2',
           strategy_type: 'RSI',
           description: 'Test configuration 2',
+          parameters: { instrument: 'EUR_USD' },
         },
       ],
     },
@@ -59,6 +61,7 @@ vi.mock('../hooks/useConfigurations', () => ({
             name: 'Test Config 1',
             strategy_type: 'MA_CROSSOVER',
             description: 'Test configuration 1',
+            parameters: { instrument: 'USD_JPY' },
           }
         : id === 2
           ? {
@@ -66,6 +69,7 @@ vi.mock('../hooks/useConfigurations', () => ({
               name: 'Test Config 2',
               strategy_type: 'RSI',
               description: 'Test configuration 2',
+              parameters: { instrument: 'EUR_USD' },
             }
           : undefined,
     isLoading: false,
@@ -199,12 +203,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '50000' } });
 
-      // Select instrument
-      const instrumentSelect = screen.getByLabelText(/Instrument/i);
-      fireEvent.mouseDown(instrumentSelect);
-      const instrumentOption = await screen.findByText('USD_JPY');
-      fireEvent.click(instrumentOption);
-
       // Navigate to step 3
       fireEvent.click(screen.getByRole('button', { name: /Next/i }));
 
@@ -290,12 +288,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '25000' } });
 
-      // Select instrument
-      const instrumentSelect = screen.getByLabelText(/Instrument/i);
-      fireEvent.mouseDown(instrumentSelect);
-      const instrumentOption = await screen.findByText('USD_JPY');
-      fireEvent.click(instrumentOption);
-
       // Navigate to step 3
       fireEvent.click(screen.getByRole('button', { name: /Next/i }));
 
@@ -370,12 +362,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
 
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '30000' } });
-
-      // Select instrument
-      const instrumentSelect = screen.getByLabelText(/Instrument/i);
-      fireEvent.mouseDown(instrumentSelect);
-      const instrumentOption = await screen.findByText('USD_JPY');
-      fireEvent.click(instrumentOption);
 
       // Back to step 1
       fireEvent.click(screen.getByRole('button', { name: /Back/i }));
@@ -508,12 +494,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '40000' } });
 
-      // Select instrument
-      const instrumentSelect = screen.getByLabelText(/Instrument/i);
-      fireEvent.mouseDown(instrumentSelect);
-      const instrumentOption = await screen.findByText('USD_JPY');
-      fireEvent.click(instrumentOption);
-
       // Forward to step 3
       fireEvent.click(screen.getByRole('button', { name: /Next/i }));
 
@@ -589,31 +569,20 @@ describe('BacktestTaskForm - Form State Persistence', () => {
         expect(screen.getByText('Backtest Parameters')).toBeInTheDocument();
       });
 
-      // Try to navigate to step 3 without filling required fields
+      // Clear balance to cause validation error
+      const balanceInput = screen.getByLabelText(/Initial Balance/i);
+      fireEvent.change(balanceInput, { target: { value: '' } });
+
+      // Try to navigate to step 3 with invalid balance
       fireEvent.click(screen.getByRole('button', { name: /Next/i }));
 
-      // Should stay on step 2
+      // Should stay on step 2 due to validation error
       await waitFor(() => {
         expect(screen.getByText('Backtest Parameters')).toBeInTheDocument();
       });
 
-      // Fill required fields
-      // Date fields are pre-filled via initialData
-
-      // Select data source (it's a radio button, not a select)
-      const postgresqlRadio = screen.getByRole('radio', {
-        name: /PostgreSQL/i,
-      });
-      fireEvent.click(postgresqlRadio);
-
-      const balanceInput = screen.getByLabelText(/Initial Balance/i);
+      // Fix the balance field
       fireEvent.change(balanceInput, { target: { value: '10000' } });
-
-      // Select instrument using the select element directly
-      const instrumentSelect = screen.getByLabelText(/Instrument/i);
-      fireEvent.mouseDown(instrumentSelect);
-      const instrumentOption = await screen.findByText('USD_JPY');
-      fireEvent.click(instrumentOption);
 
       // Now should be able to proceed
       fireEvent.click(screen.getByRole('button', { name: /Next/i }));
@@ -635,7 +604,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
         end_time: '2024-12-31',
         initial_balance: 15000,
         commission_per_trade: 2,
-        instrument: 'EUR_USD',
       };
 
       renderForm({ taskId: 123, initialData });
@@ -709,7 +677,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
         end_time: '2024-03-31',
         initial_balance: 20000,
         commission_per_trade: 3,
-        instrument: 'GBP_USD',
       };
 
       renderForm({ taskId: 456, initialData });
@@ -744,7 +711,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
             end_time: '2024-03-31',
             initial_balance: 20000,
             commission_per_trade: 3,
-            instrument: 'GBP_USD',
           }),
         });
       });
@@ -764,7 +730,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
         end_time: '2024-05-31',
         initial_balance: 12000,
         commission_per_trade: 1.5,
-        instrument: 'AUD_USD',
       };
 
       renderForm({ taskId: 789, initialData });
@@ -804,7 +769,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
         end_time: '2024-12-31',
         initial_balance: 10000,
         commission_per_trade: 0,
-        instrument: 'USD_JPY',
       };
 
       renderForm({ taskId: 999, initialData });
@@ -975,11 +939,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '10000' } });
 
-      const instrumentSelect = screen.getByLabelText(/Instrument/i);
-      fireEvent.mouseDown(instrumentSelect);
-      const instrumentOption = await screen.findByText('USD_JPY');
-      fireEvent.click(instrumentOption);
-
       const checkbox = screen.getByRole('checkbox', {
         name: /Close all positions at backtest completion/i,
       });
@@ -1037,11 +996,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
 
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '10000' } });
-
-      const instrumentSelect = screen.getByLabelText(/Instrument/i);
-      fireEvent.mouseDown(instrumentSelect);
-      const instrumentOption = await screen.findByText('USD_JPY');
-      fireEvent.click(instrumentOption);
 
       const checkbox = screen.getByRole('checkbox', {
         name: /Close all positions at backtest completion/i,
@@ -1102,11 +1056,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
 
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '10000' } });
-
-      const instrumentSelect = screen.getByLabelText(/Instrument/i);
-      fireEvent.mouseDown(instrumentSelect);
-      const instrumentOption = await screen.findByText('USD_JPY');
-      fireEvent.click(instrumentOption);
 
       fireEvent.click(screen.getByRole('button', { name: /Next/i }));
 
