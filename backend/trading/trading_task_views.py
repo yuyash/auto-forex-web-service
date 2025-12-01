@@ -252,7 +252,12 @@ class TradingTaskStopView(APIView):
     """
     Stop a running trading task.
 
-    POST: Stop the live trading execution
+    POST: Stop the live trading execution with configurable stop mode
+
+    Stop modes:
+    - immediate: Stop immediately without waiting (fastest, keeps positions)
+    - graceful: Stop gracefully, wait for pending operations (keeps positions)
+    - graceful_close: Stop gracefully and close all open positions
 
     Requirements: 4.3, 6.3, 8.3
     """
@@ -263,8 +268,15 @@ class TradingTaskStopView(APIView):
         """
         Stop trading task execution.
 
+        Request body (optional):
+        - mode: Stop mode ('immediate', 'graceful', 'graceful_close')
+                Default: 'graceful'
+
         Transitions task to stopped state and marks current execution as stopped.
         """
+        from .enums import StopMode
+        from .tasks import stop_trading_task
+
         # Get the task
         try:
             task = TradingTask.objects.get(id=task_id, user=request.user.pk)
@@ -274,21 +286,40 @@ class TradingTaskStopView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Stop the task
-        try:
-            task.stop()
-        except ValueError as e:
+        # Validate task is running or paused
+        if task.status not in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
             return Response(
-                {"error": str(e)},
+                {"error": "Task is not running or paused"},
                 status=status.HTTP_409_CONFLICT,
             )
 
-        # TODO: Cancel the Celery task (will be implemented in task 6.3)
-        # This would require storing the Celery task ID in TaskExecution
+        # Get stop mode from request (default: graceful)
+        mode_str = request.data.get("mode", StopMode.GRACEFUL)
+        try:
+            stop_mode = StopMode(mode_str)
+        except ValueError:
+            return Response(
+                {
+                    "error": f"Invalid stop mode: {mode_str}. "
+                    f"Valid modes: {', '.join([m.value for m in StopMode])}"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update task status to indicate stopping
+        task.status = TaskStatus.STOPPED
+        task.save(update_fields=["status", "updated_at"])
+
+        # Queue the stop task with the specified mode
+        stop_trading_task.delay(task.pk, stop_mode.value)
 
         return Response(
-            {"message": "Trading task stopped successfully"},
-            status=status.HTTP_200_OK,
+            {
+                "message": f"Trading task stop initiated ({stop_mode.label})",
+                "task_id": task.pk,
+                "stop_mode": stop_mode.value,
+            },
+            status=status.HTTP_202_ACCEPTED,
         )
 
 

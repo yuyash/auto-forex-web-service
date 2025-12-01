@@ -1501,29 +1501,57 @@ def run_trading_task(task_id: int) -> Dict[str, Any]:
 
 
 @shared_task
-def stop_trading_task(task_id: int) -> Dict[str, Any]:
+def stop_trading_task(task_id: int, stop_mode: str = "graceful") -> Dict[str, Any]:
     """
-    Stop a running TradingTask.
+    Stop a running TradingTask with configurable stop mode.
 
     Args:
         task_id: Primary key of the TradingTask model instance
+        stop_mode: Stop mode - 'immediate', 'graceful', or 'graceful_close'
+            - immediate: Stop immediately without waiting
+            - graceful: Stop gracefully, wait for pending operations (default)
+            - graceful_close: Stop gracefully and close all open positions
 
     Returns:
         Dictionary containing success status and error message if any
 
     Requirements: 4.3, 7.2, 7.3
     """
+    from trading.enums import StopMode
     from trading.services.task_executor import stop_trading_task_execution
     from trading.trading_task_models import TradingTask
 
-    logger.info("Stopping TradingTask for task_id=%d", task_id)
+    logger.info(
+        "Stopping TradingTask for task_id=%d with mode=%s",
+        task_id,
+        stop_mode,
+    )
 
     try:
+        # Validate stop mode
+        try:
+            mode = StopMode(stop_mode)
+        except ValueError:
+            mode = StopMode.GRACEFUL
+            logger.warning(
+                "Invalid stop mode '%s', defaulting to '%s'",
+                stop_mode,
+                mode.value,
+            )
+
         # Get the task to find the account
         task = TradingTask.objects.select_related("oanda_account").get(id=task_id)
 
-        # Stop the task execution
-        result = stop_trading_task_execution(task_id)
+        # Determine if we should close positions based on mode
+        # graceful_close always closes, others respect sell_on_stop setting
+        close_positions = mode == StopMode.GRACEFUL_CLOSE or task.sell_on_stop
+
+        # Stop the task execution with the appropriate settings
+        result = stop_trading_task_execution(
+            task_id=task_id,
+            close_positions=close_positions,
+            immediate=mode == StopMode.IMMEDIATE,
+        )
 
         if result["success"]:
             # Stop market data streaming for the account
@@ -1532,6 +1560,9 @@ def stop_trading_task(task_id: int) -> Dict[str, Any]:
                 "Stopped market data streaming for account %s",
                 task.oanda_account.account_id,
             )
+
+        # Add stop mode to result
+        result["stop_mode"] = stop_mode
 
         return result
 
@@ -1542,6 +1573,7 @@ def stop_trading_task(task_id: int) -> Dict[str, Any]:
             "success": False,
             "task_id": task_id,
             "error": error_msg,
+            "stop_mode": stop_mode,
         }
     except Exception as e:  # pylint: disable=broad-exception-caught
         error_msg = f"Failed to stop TradingTask: {str(e)}"
@@ -1555,6 +1587,7 @@ def stop_trading_task(task_id: int) -> Dict[str, Any]:
             "success": False,
             "task_id": task_id,
             "error": error_msg,
+            "stop_mode": stop_mode,
         }
 
 

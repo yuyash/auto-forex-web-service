@@ -18,7 +18,11 @@ import {
   type SelectChangeEvent,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
-import { Add as AddIcon, Search as SearchIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Search as SearchIcon,
+  Refresh as RefreshIcon,
+} from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useBacktestTasks } from '../hooks/useBacktestTasks';
 import { TaskStatus } from '../types/common';
@@ -76,13 +80,17 @@ export default function BacktestTasksPage() {
     }
   };
 
-  const { data, isLoading, error } = useBacktestTasks({
+  const { data, isLoading, error, refetch } = useBacktestTasks({
     page,
     page_size: pageSize,
     search: searchQuery || undefined,
     status: getStatusFilter(),
     ordering: sortBy,
   });
+
+  const handleRefresh = () => {
+    refetch();
+  };
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -133,6 +141,14 @@ export default function BacktestTasksPage() {
             Backtest Tasks
           </Typography>
           <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={handleRefresh}
+              disabled={isLoading}
+            >
+              Refresh
+            </Button>
             <Button
               variant="outlined"
               onClick={() => navigate('/configurations?from=backtest-tasks')}
@@ -234,7 +250,7 @@ export default function BacktestTasksPage() {
               <Grid container spacing={3}>
                 {data.results.map((task) => (
                   <Grid key={task.id} size={{ xs: 12 }}>
-                    <BacktestTaskCard task={task} />
+                    <BacktestTaskCard task={task} onRefresh={handleRefresh} />
                   </Grid>
                 ))}
               </Grid>
@@ -275,7 +291,7 @@ export default function BacktestTasksPage() {
               <Grid container spacing={3}>
                 {data.results.map((task) => (
                   <Grid key={task.id} size={{ xs: 12 }}>
-                    <BacktestTaskCard task={task} />
+                    <BacktestTaskCard task={task} onRefresh={handleRefresh} />
                   </Grid>
                 ))}
               </Grid>
@@ -316,7 +332,7 @@ export default function BacktestTasksPage() {
               <Grid container spacing={3}>
                 {data.results.map((task) => (
                   <Grid key={task.id} size={{ xs: 12 }}>
-                    <BacktestTaskCard task={task} />
+                    <BacktestTaskCard task={task} onRefresh={handleRefresh} />
                   </Grid>
                 ))}
               </Grid>
@@ -357,7 +373,7 @@ export default function BacktestTasksPage() {
               <Grid container spacing={3}>
                 {data.results.map((task) => (
                   <Grid key={task.id} size={{ xs: 12 }}>
-                    <BacktestTaskCard task={task} />
+                    <BacktestTaskCard task={task} onRefresh={handleRefresh} />
                   </Grid>
                 ))}
               </Grid>

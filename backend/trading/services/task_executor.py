@@ -1526,30 +1526,42 @@ def _close_all_positions_for_trading_task(task: TradingTask) -> int:
     return closed_count
 
 
-def stop_trading_task_execution(task_id: int) -> dict[str, Any]:
+def stop_trading_task_execution(
+    task_id: int,
+    close_positions: bool | None = None,
+    immediate: bool = False,
+) -> dict[str, Any]:
     """
     Stop a running trading task execution.
 
     This function:
     1. Finds the current execution
-    2. Closes all positions if sell_on_stop is enabled
+    2. Closes all positions if close_positions is True (or task.sell_on_stop if not specified)
     3. Stops market data streaming
     4. Calculates final metrics
     5. Marks execution as stopped
     6. Releases execution lock
+    7. Sends WebSocket notification for frontend sync
 
     Args:
         task_id: ID of the TradingTask to stop
+        close_positions: Whether to close all open positions. If None, uses task.sell_on_stop
+        immediate: If True, skip waiting for pending operations
 
     Returns:
         Dictionary containing:
             - success: Whether stop was successful
             - task_id: TradingTask ID
             - execution_id: TaskExecution ID
+            - positions_closed: Number of positions closed (if close_positions=True)
             - error: Error message (if failed)
 
     Requirements: 4.3, 4.7, 4.9, 7.2, 7.3, 10.2, 10.4
     """
+    from trading.services.notifications import send_task_status_notification
+
+    positions_closed = 0
+
     try:
         # Fetch the task
         try:
@@ -1561,37 +1573,62 @@ def stop_trading_task_execution(task_id: int) -> dict[str, Any]:
                 "success": False,
                 "task_id": task_id,
                 "execution_id": None,
+                "positions_closed": 0,
                 "error": error_msg,
             }
+
+        # Determine if we should close positions
+        # If close_positions is explicitly set, use that; otherwise fall back to task.sell_on_stop
+        should_close_positions = (
+            close_positions if close_positions is not None else task.sell_on_stop
+        )
 
         # Get current execution
         execution = task.get_latest_execution()
-        if not execution or execution.status != TaskStatus.RUNNING:
-            error_msg = "No running execution found for this task"
-            logger.error(error_msg)
+        if not execution or execution.status not in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
+            # Task may already be stopped by the view, just clean up
+            logger.info(
+                "Task %d execution already stopped or not found, cleaning up",
+                task_id,
+            )
+            # Still release lock and return success
+            lock_key = f"{LOCK_KEY_PREFIX}trading:{task_id}"
+            cache.delete(lock_key)
             return {
-                "success": False,
+                "success": True,
                 "task_id": task_id,
                 "execution_id": execution.pk if execution else None,
-                "error": error_msg,
+                "positions_closed": 0,
+                "error": None,
             }
 
-        # Close all positions if sell_on_stop is enabled
-        if task.sell_on_stop:
+        # Log stop mode
+        mode_desc = "immediate" if immediate else "graceful"
+        close_desc = "with position closure" if should_close_positions else "keeping positions"
+        logger.info(
+            "Stopping task %d: %s stop %s",
+            task_id,
+            mode_desc,
+            close_desc,
+        )
+        execution.add_log("INFO", f"Stop initiated: {mode_desc} stop {close_desc}")
+
+        # Close all positions if requested
+        if should_close_positions:
             logger.info(
-                "Closing all positions for task %d (sell_on_stop=True)",
+                "Closing all positions for task %d",
                 task_id,
             )
             try:
-                closed_count = _close_all_positions_for_trading_task(task)
+                positions_closed = _close_all_positions_for_trading_task(task)
                 logger.info(
                     "Closed %d positions for task %d at task stop",
-                    closed_count,
+                    positions_closed,
                     task_id,
                 )
                 execution.add_log(
                     "INFO",
-                    f"Closed {closed_count} positions at task stop (sell_on_stop=True)",
+                    f"Closed {positions_closed} positions at task stop",
                 )
             except Exception as e:  # pylint: disable=broad-exception-caught
                 logger.error(
@@ -1606,19 +1643,16 @@ def stop_trading_task_execution(task_id: int) -> dict[str, Any]:
                 )
         else:
             logger.info(
-                "Preserving open positions for task %d (sell_on_stop=False)",
+                "Preserving open positions for task %d",
                 task_id,
             )
-
-        # Stop market data streaming
-        # This will be handled by the stop_market_data_stream Celery task
 
         # Mark execution as stopped
         execution.status = TaskStatus.STOPPED
         execution.completed_at = timezone.now()
         execution.save(update_fields=["status", "completed_at"])
 
-        # Update task status
+        # Update task status (may already be stopped by view)
         task.status = TaskStatus.STOPPED
         task.save(update_fields=["status", "updated_at"])
 
@@ -1627,16 +1661,33 @@ def stop_trading_task_execution(task_id: int) -> dict[str, Any]:
         cache.delete(lock_key)
         logger.info("Released execution lock for trading task %d", task_id)
 
+        # Send WebSocket notification for frontend sync
+        send_task_status_notification(
+            user_id=task.user.pk,
+            task_id=task.pk,
+            task_name=task.name,
+            task_type="trading",
+            status=TaskStatus.STOPPED,
+            execution_id=execution.pk,
+            extra_data={
+                "positions_closed": positions_closed,
+                "close_positions": should_close_positions,
+                "immediate": immediate,
+            },
+        )
+
         logger.info(
-            "Stopped trading task %d execution #%d",
+            "Stopped trading task %d execution #%d (closed %d positions)",
             task_id,
             execution.execution_number,
+            positions_closed,
         )
 
         return {
             "success": True,
             "task_id": task_id,
             "execution_id": execution.pk,
+            "positions_closed": positions_closed,
             "error": None,
         }
 

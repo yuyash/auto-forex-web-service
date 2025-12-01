@@ -258,7 +258,7 @@ export default function TradingTaskDetailPage() {
   const handleEmergencyStopConfirm = async () => {
     try {
       setIsTransitioning(true);
-      await stopTask.mutate(taskId);
+      await stopTask.mutate({ id: taskId });
       await refetch(); // Force immediate refetch to show updated status
       setEmergencyStopDialogOpen(false);
     } catch {

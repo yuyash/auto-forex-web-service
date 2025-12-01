@@ -10,6 +10,10 @@ import {
   Tooltip,
   Alert,
   Button,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import {
@@ -20,6 +24,9 @@ import {
   Visibility as ViewIcon,
   MoreVert as MoreVertIcon,
   Warning as WarningIcon,
+  FlashOn as ImmediateIcon,
+  Timer as GracefulIcon,
+  ExitToApp as ClosePositionsIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import type { TradingTask } from '../../types/tradingTask';
@@ -40,13 +47,22 @@ import {
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 
+import type { StopMode } from '../../hooks/useTradingTaskMutations';
+
 interface TradingTaskCardProps {
   task: TradingTask;
+  onRefresh?: () => void;
 }
 
-export default function TradingTaskCard({ task }: TradingTaskCardProps) {
+export default function TradingTaskCard({
+  task,
+  onRefresh,
+}: TradingTaskCardProps) {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [stopMenuAnchor, setStopMenuAnchor] = useState<null | HTMLElement>(
+    null
+  );
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
   );
@@ -143,6 +159,8 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
       // Optimistically update status to RUNNING
       setOptimisticStatus(TaskStatus.RUNNING);
       await startTask.mutate(task.id);
+      // Trigger refresh after successful start
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to start task:', error);
       // Revert optimistic update on error
@@ -158,11 +176,22 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
     }
   };
 
-  const handleStop = async () => {
+  const handleStopMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setStopMenuAnchor(event.currentTarget);
+  };
+
+  const handleStopMenuClose = () => {
+    setStopMenuAnchor(null);
+  };
+
+  const handleStop = async (mode: StopMode = 'graceful') => {
+    handleStopMenuClose();
     try {
       // Optimistically update status to STOPPED
       setOptimisticStatus(TaskStatus.STOPPED);
-      await stopTask.mutate(task.id);
+      await stopTask.mutate({ id: task.id, mode });
+      // Trigger refresh after successful stop
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to stop task:', error);
       // Revert optimistic update on error
@@ -180,6 +209,8 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
       // Optimistically update status to PAUSED
       setOptimisticStatus(TaskStatus.PAUSED);
       await pauseTask.mutate(task.id);
+      // Trigger refresh after successful pause
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to pause task:', error);
       // Revert optimistic update on error
@@ -200,6 +231,8 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
       // Optimistically update status to RUNNING
       setOptimisticStatus(TaskStatus.RUNNING);
       await resumeTask.mutate(task.id);
+      // Trigger refresh after successful resume
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to resume task:', error);
       // Revert optimistic update on error
@@ -365,7 +398,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
                 variant="contained"
                 color="error"
                 startIcon={<StopIcon />}
-                onClick={handleStop}
+                onClick={handleStopMenuOpen}
                 disabled={stopTask.isLoading}
                 size="small"
               >
@@ -389,7 +422,7 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
                 variant="contained"
                 color="error"
                 startIcon={<StopIcon />}
-                onClick={handleStop}
+                onClick={handleStopMenuOpen}
                 disabled={stopTask.isLoading}
                 size="small"
               >
@@ -523,10 +556,46 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
         </Box>
       </CardContent>
 
+      {/* Stop Mode Menu */}
+      <Menu
+        anchorEl={stopMenuAnchor}
+        open={Boolean(stopMenuAnchor)}
+        onClose={handleStopMenuClose}
+      >
+        <MenuItem onClick={() => handleStop('graceful')}>
+          <ListItemIcon>
+            <GracefulIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Graceful Stop"
+            secondary="Keep positions open"
+          />
+        </MenuItem>
+        <MenuItem onClick={() => handleStop('graceful_close')}>
+          <ListItemIcon>
+            <ClosePositionsIcon fontSize="small" color="warning" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Stop & Close Positions"
+            secondary="Close all open positions"
+          />
+        </MenuItem>
+        <MenuItem onClick={() => handleStop('immediate')}>
+          <ListItemIcon>
+            <ImmediateIcon fontSize="small" color="error" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Immediate Stop"
+            secondary="Stop without waiting"
+          />
+        </MenuItem>
+      </Menu>
+
       <TradingTaskActions
         task={currentTask}
         anchorEl={anchorEl}
         onClose={handleActionsClose}
+        onRefresh={onRefresh}
       />
     </Card>
   );

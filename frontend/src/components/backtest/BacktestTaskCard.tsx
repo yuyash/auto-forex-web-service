@@ -36,9 +36,13 @@ import { useToast } from '../common';
 
 interface BacktestTaskCardProps {
   task: BacktestTask;
+  onRefresh?: () => void;
 }
 
-export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
+export default function BacktestTaskCard({
+  task,
+  onRefresh,
+}: BacktestTaskCardProps) {
   const navigate = useNavigate();
   const { showError } = useToast();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -93,6 +97,8 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
       // Optimistically update status to RUNNING
       setOptimisticStatus(TaskStatus.RUNNING);
       await startTask.mutate(task.id);
+      // Trigger refresh after successful start
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to start task:', error);
       // Revert optimistic update on error
@@ -113,6 +119,8 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
       // Optimistically update status to STOPPED
       setOptimisticStatus(TaskStatus.STOPPED);
       await stopTask.mutate(task.id);
+      // Trigger refresh after successful stop
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to stop task:', error);
       // Revert optimistic update on error
@@ -130,6 +138,8 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
       // Optimistically update status to RUNNING
       setOptimisticStatus(TaskStatus.RUNNING);
       await rerunTask.mutate(task.id);
+      // Trigger refresh after successful rerun
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to rerun task:', error);
       // Revert optimistic update on error
@@ -344,6 +354,7 @@ export default function BacktestTaskCard({ task }: BacktestTaskCardProps) {
         task={currentTask}
         anchorEl={anchorEl}
         onClose={handleActionsClose}
+        onRefresh={onRefresh}
       />
     </Card>
   );
