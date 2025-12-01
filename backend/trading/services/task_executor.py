@@ -1323,7 +1323,8 @@ def execute_trading_task(
             "success": True,
             "task_id": task_id,
             "execution_id": execution.pk,
-            "account_id": task.oanda_account.account_id,
+            "account_id": task.oanda_account.pk,  # Use DB PK for start_market_data_stream
+            "oanda_account_id": task.oanda_account.account_id,  # OANDA account ID for logging
             "instrument": instrument,
             "error": None,
         }

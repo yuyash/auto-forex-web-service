@@ -1407,20 +1407,20 @@ def run_trading_task(task_id: int) -> Dict[str, Any]:
                 "TradingTask %d execution started successfully: execution_id=%d, account=%s",
                 task_id,
                 result["execution_id"],
-                result.get("account_id"),
+                result.get("oanda_account_id"),
             )
 
             # Start market data streaming for the account
-            account_id = result.get("account_id")
-            instrument = result.get("instrument", [])
+            account_pk = result.get("account_id")  # Database PK
+            instrument = result.get("instrument")
 
-            if account_id and instrument:
+            if account_pk and instrument:
                 # Trigger market data streaming
-                start_market_data_stream.delay(account_id, instrument)
+                start_market_data_stream.delay(account_pk, instrument)
                 logger.info(
                     "Started market data streaming for account %s with instrument: %s",
-                    account_id,
-                    ", ".join(instrument),
+                    result.get("oanda_account_id"),
+                    instrument,
                 )
         else:
             logger.error(
