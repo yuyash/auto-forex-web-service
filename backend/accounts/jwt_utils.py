@@ -10,7 +10,7 @@ Requirements: 2.3, 2.4
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -52,7 +52,7 @@ def generate_jwt_token(user: Any) -> str:
     if isinstance(token, (bytes, bytearray)):
         token_str = token.decode("utf-8")
     else:
-        token_str = cast(str, token)
+        token_str = token
 
     return token_str
 
