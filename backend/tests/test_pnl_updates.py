@@ -31,13 +31,14 @@ def mock_oanda_account(db):
         username="testuser", email="test@example.com", password="testpass123"
     )
 
-    account = OandaAccount.objects.create(
+    account = OandaAccount(
         user=user,
         account_id="001-001-1234567-001",
-        api_token="test_token_12345",
         api_type="practice",
         balance=10000.00,
     )
+    account.set_api_token("test_token_12345")
+    account.save()
     return account
 
 
