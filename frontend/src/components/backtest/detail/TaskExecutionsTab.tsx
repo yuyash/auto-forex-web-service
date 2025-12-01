@@ -52,6 +52,7 @@ interface ExecutionItemProps {
 
 function ExecutionItem({
   execution,
+  taskType,
   isSelected,
   onSelect,
 }: ExecutionItemProps) {
@@ -114,39 +115,40 @@ function ExecutionItem({
               {formatDate(execution.started_at)}
             </Typography>
 
-            {/* Show progress bar for running executions */}
-            {execution.status === TaskStatus.RUNNING && (
-              <Box
-                sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}
-              >
-                <Box sx={{ flex: 1, position: 'relative' }}>
-                  <Box
-                    sx={{
-                      height: 4,
-                      bgcolor: 'grey.200',
-                      borderRadius: 1,
-                      overflow: 'hidden',
-                    }}
-                  >
+            {/* Show progress bar for running backtest executions only */}
+            {execution.status === TaskStatus.RUNNING &&
+              taskType === TaskType.BACKTEST && (
+                <Box
+                  sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}
+                >
+                  <Box sx={{ flex: 1, position: 'relative' }}>
                     <Box
                       sx={{
-                        height: '100%',
-                        bgcolor: 'primary.main',
-                        width: `${execution.progress || 0}%`,
-                        transition: 'width 0.3s ease',
+                        height: 4,
+                        bgcolor: 'grey.200',
+                        borderRadius: 1,
+                        overflow: 'hidden',
                       }}
-                    />
+                    >
+                      <Box
+                        sx={{
+                          height: '100%',
+                          bgcolor: 'primary.main',
+                          width: `${execution.progress || 0}%`,
+                          transition: 'width 0.3s ease',
+                        }}
+                      />
+                    </Box>
                   </Box>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ minWidth: 40 }}
+                  >
+                    {execution.progress || 0}%
+                  </Typography>
                 </Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ minWidth: 40 }}
-                >
-                  {execution.progress || 0}%
-                </Typography>
-              </Box>
-            )}
+              )}
           </Box>
         </Box>
       </ListItemButton>
