@@ -25,7 +25,6 @@ import { useNavigate } from 'react-router-dom';
 import type { TradingTask } from '../../types/tradingTask';
 import { TaskStatus } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
-import { TaskProgress } from '../tasks/TaskProgress';
 import { MetricCard } from '../tasks/display/MetricCard';
 import TradingTaskActions from './TradingTaskActions';
 import {
@@ -411,18 +410,6 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
             </Button>
           )}
         </Box>
-
-        {/* Progress bar for running tasks in compact mode (Requirement 3.2) */}
-        {displayStatus === TaskStatus.RUNNING && (
-          <Box sx={{ mb: 2 }}>
-            <TaskProgress
-              status={displayStatus}
-              progress={polledStatus?.progress || 0}
-              compact={true}
-              showPercentage={true}
-            />
-          </Box>
-        )}
 
         {/* Live Metrics for Running/Paused Tasks */}
         {(displayStatus === TaskStatus.RUNNING ||

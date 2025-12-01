@@ -40,7 +40,6 @@ import { useTaskPolling } from '../hooks/useTaskPolling';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
 import { TaskActionButtons } from '../components/tasks/actions/TaskActionButtons';
-import { TaskProgress } from '../components/tasks/TaskProgress';
 import { CopyTaskDialog } from '../components/tasks/actions/CopyTaskDialog';
 import { DeleteTaskDialog } from '../components/tasks/actions/DeleteTaskDialog';
 import { ConfirmDialog } from '../components/tasks/actions/ConfirmDialog';
@@ -93,7 +92,6 @@ export default function TradingTaskDetailPage() {
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [emergencyStopDialogOpen, setEmergencyStopDialogOpen] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
@@ -105,9 +103,6 @@ export default function TradingTaskDetailPage() {
     pollStatus: true,
     interval: 3000, // Poll every 3 seconds for active tasks
   });
-
-  // Use polled progress directly (no local state needed)
-  const currentProgress = polledStatus?.progress || progress;
 
   // Refetch when status changes
   const prevStatusRef = useRef<string | undefined>(undefined);
@@ -177,7 +172,6 @@ export default function TradingTaskDetailPage() {
   const handleStart = async () => {
     try {
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
-      setProgress(0); // Reset progress when starting
       await startTask.mutate(taskId);
       await refetch(); // Force immediate refetch to show updated status
       handleMenuClose();
@@ -214,7 +208,6 @@ export default function TradingTaskDetailPage() {
   const handleRerun = async () => {
     try {
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
-      setProgress(0); // Reset progress when rerunning
       await rerunTask.mutate(taskId);
       // Force immediate refetch after mutation completes
       await refetch();
@@ -461,18 +454,6 @@ export default function TradingTaskDetailPage() {
           )}
         </Menu>
       </Paper>
-
-      {/* Progress Bar in full-width mode for detail page (Requirement 3.3) */}
-      {task.status === TaskStatus.RUNNING && (
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <TaskProgress
-            status={task.status}
-            progress={currentProgress}
-            compact={false}
-            showPercentage={true}
-          />
-        </Paper>
-      )}
 
       {/* Tabs */}
       <Paper sx={{ mb: 3 }}>
