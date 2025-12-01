@@ -80,9 +80,18 @@ export const tradingTasksApi = {
 
   /**
    * Stop a running trading task
+   * @param id - Task ID
+   * @param mode - Stop mode: 'immediate', 'graceful', or 'graceful_close'
    */
-  stop: (id: number): Promise<{ message: string }> => {
-    return apiClient.post<{ message: string }>(`/trading-tasks/${id}/stop/`);
+  stop: (
+    id: number,
+    mode: 'immediate' | 'graceful' | 'graceful_close' = 'graceful'
+  ): Promise<{ message: string; task_id: number; stop_mode: string }> => {
+    return apiClient.post<{
+      message: string;
+      task_id: number;
+      stop_mode: string;
+    }>(`/trading-tasks/${id}/stop/`, { mode });
   },
 
   /**

@@ -24,6 +24,7 @@ def send_task_status_notification(
     status: TaskStatus,
     execution_id: int | None = None,  # pylint: disable=unused-argument
     error_message: str | None = None,  # pylint: disable=unused-argument
+    extra_data: dict[str, Any] | None = None,  # pylint: disable=unused-argument
 ) -> None:
     """
     Legacy function for task status notifications.
@@ -39,6 +40,7 @@ def send_task_status_notification(
         status: New task status
         execution_id: Execution ID if available (unused)
         error_message: Error message if task failed (unused)
+        extra_data: Additional data to include in notification (unused)
     """
     # WebSocket notifications removed - task status is now retrieved via HTTP polling
     logger.debug(

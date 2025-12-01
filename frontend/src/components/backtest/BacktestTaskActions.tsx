@@ -27,12 +27,14 @@ interface BacktestTaskActionsProps {
   task: BacktestTask;
   anchorEl: HTMLElement | null;
   onClose: () => void;
+  onRefresh?: () => void;
 }
 
 export default function BacktestTaskActions({
   task,
   anchorEl,
   onClose,
+  onRefresh,
 }: BacktestTaskActionsProps) {
   const navigate = useNavigate();
   const { showError } = useToast();
@@ -57,6 +59,8 @@ export default function BacktestTaskActions({
       await copyTask.mutate({ id: task.id, data: { new_name: newName } });
       invalidateBacktestTasksCache(); // Refresh task list
       setCopyDialogOpen(false);
+      // Trigger refresh after successful copy
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to copy task:', error);
       const errorMessage =
@@ -81,6 +85,8 @@ export default function BacktestTaskActions({
       await deleteTask.mutate(task.id);
       invalidateBacktestTasksCache(); // Refresh task list
       setDeleteDialogOpen(false);
+      // Trigger refresh after successful delete
+      onRefresh?.();
       navigate('/backtest-tasks');
     } catch (error) {
       console.error('Failed to delete task:', error);

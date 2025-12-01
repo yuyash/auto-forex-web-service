@@ -24,6 +24,7 @@ import {
   Search as SearchIcon,
   Warning as WarningIcon,
   Settings as SettingsIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTradingTasks } from '../hooks/useTradingTasks';
@@ -86,7 +87,7 @@ export default function TradingTasksPage() {
     }
   };
 
-  const { data, isLoading, error } = useTradingTasks({
+  const { data, isLoading, error, refetch } = useTradingTasks({
     page,
     page_size: pageSize,
     search: searchQuery || undefined,
@@ -94,6 +95,10 @@ export default function TradingTasksPage() {
     config_id: configFilter || undefined,
     ordering: sortBy,
   });
+
+  const handleRefresh = () => {
+    refetch();
+  };
 
   // Fetch configurations for filter dropdown and strategies
   const { data: configurationsData } = useConfigurations({
@@ -158,6 +163,14 @@ export default function TradingTasksPage() {
             Trading Tasks
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={handleRefresh}
+              disabled={isLoading}
+            >
+              Refresh
+            </Button>
             <Button
               variant="outlined"
               startIcon={<SettingsIcon />}
@@ -293,7 +306,7 @@ export default function TradingTasksPage() {
               <Grid container spacing={3}>
                 {data.results.map((task) => (
                   <Grid size={{ xs: 12 }} key={task.id}>
-                    <TradingTaskCard task={task} />
+                    <TradingTaskCard task={task} onRefresh={handleRefresh} />
                   </Grid>
                 ))}
               </Grid>
@@ -334,7 +347,7 @@ export default function TradingTasksPage() {
               <Grid container spacing={3}>
                 {data.results.map((task) => (
                   <Grid size={{ xs: 12 }} key={task.id}>
-                    <TradingTaskCard task={task} />
+                    <TradingTaskCard task={task} onRefresh={handleRefresh} />
                   </Grid>
                 ))}
               </Grid>
@@ -375,7 +388,7 @@ export default function TradingTasksPage() {
               <Grid container spacing={3}>
                 {data.results.map((task) => (
                   <Grid size={{ xs: 12 }} key={task.id}>
-                    <TradingTaskCard task={task} />
+                    <TradingTaskCard task={task} onRefresh={handleRefresh} />
                   </Grid>
                 ))}
               </Grid>
@@ -416,7 +429,7 @@ export default function TradingTasksPage() {
               <Grid container spacing={3}>
                 {data.results.map((task) => (
                   <Grid size={{ xs: 12 }} key={task.id}>
-                    <TradingTaskCard task={task} />
+                    <TradingTaskCard task={task} onRefresh={handleRefresh} />
                   </Grid>
                 ))}
               </Grid>

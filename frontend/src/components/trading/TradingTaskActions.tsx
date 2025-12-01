@@ -34,12 +34,14 @@ interface TradingTaskActionsProps {
   task: TradingTask;
   anchorEl: HTMLElement | null;
   onClose: () => void;
+  onRefresh?: () => void;
 }
 
 export default function TradingTaskActions({
   task,
   anchorEl,
   onClose,
+  onRefresh,
 }: TradingTaskActionsProps) {
   const navigate = useNavigate();
   const { showError } = useToast();
@@ -69,6 +71,8 @@ export default function TradingTaskActions({
     try {
       await copyTask.mutate({ id: task.id, data: { new_name: newName } });
       setCopyDialogOpen(false);
+      // Trigger refresh after successful copy
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to copy task:', error);
       const errorMessage =
@@ -95,6 +99,8 @@ export default function TradingTaskActions({
     try {
       await deleteTask.mutate(task.id);
       setDeleteDialogOpen(false);
+      // Trigger refresh after successful delete
+      onRefresh?.();
       navigate('/trading-tasks');
     } catch (error) {
       console.error('Failed to delete task:', error);
@@ -124,6 +130,8 @@ export default function TradingTaskActions({
     try {
       await pauseTask.mutate(task.id);
       setPauseDialogOpen(false);
+      // Trigger refresh after successful pause
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to pause task:', error);
       const errorMessage =
@@ -142,6 +150,8 @@ export default function TradingTaskActions({
     try {
       await resumeTask.mutate(task.id);
       setResumeDialogOpen(false);
+      // Trigger refresh after successful resume
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to resume task:', error);
       const errorMessage =
@@ -158,8 +168,10 @@ export default function TradingTaskActions({
 
   const handleStopConfirm = async () => {
     try {
-      await stopTask.mutate(task.id);
+      await stopTask.mutate({ id: task.id });
       setStopDialogOpen(false);
+      // Trigger refresh after successful stop
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to stop task:', error);
       const errorMessage =

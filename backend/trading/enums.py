@@ -50,3 +50,17 @@ class TaskType(models.TextChoices):
 
     BACKTEST = "backtest", "Backtest"
     TRADING = "trading", "Trading"
+
+
+class StopMode(models.TextChoices):
+    """
+    Stop modes for trading tasks.
+
+    - IMMEDIATE: Stop immediately without closing positions (fastest)
+    - GRACEFUL: Stop gracefully, wait for pending operations to complete
+    - GRACEFUL_CLOSE: Stop gracefully and close all open positions
+    """
+
+    IMMEDIATE = "immediate", "Immediate Stop"
+    GRACEFUL = "graceful", "Graceful Stop (Keep Positions)"
+    GRACEFUL_CLOSE = "graceful_close", "Graceful Stop (Close Positions)"

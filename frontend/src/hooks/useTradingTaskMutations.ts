@@ -221,23 +221,40 @@ export function useStartTradingTask(options?: {
 }
 
 /**
+ * Stop mode options for trading tasks
+ */
+export type StopMode = 'immediate' | 'graceful' | 'graceful_close';
+
+/**
  * Hook to stop a trading task
  */
 export function useStopTradingTask(options?: {
-  onSuccess?: (data: { message: string }) => void;
+  onSuccess?: (data: {
+    message: string;
+    task_id: number;
+    stop_mode: string;
+  }) => void;
   onError?: (error: Error) => void;
-}): MutationResult<{ message: string }, number> {
-  const [state, setState] = useState<MutationState<{ message: string }>>({
+}): MutationResult<
+  { message: string; task_id: number; stop_mode: string },
+  { id: number; mode?: StopMode }
+> {
+  const [state, setState] = useState<
+    MutationState<{ message: string; task_id: number; stop_mode: string }>
+  >({
     data: null,
     isLoading: false,
     error: null,
   });
 
   const mutate = useCallback(
-    async (id: number) => {
+    async (variables: { id: number; mode?: StopMode }) => {
       try {
         setState({ data: null, isLoading: true, error: null });
-        const result = await tradingTasksApi.stop(id);
+        const result = await tradingTasksApi.stop(
+          variables.id,
+          variables.mode || 'graceful'
+        );
         setState({ data: result, isLoading: false, error: null });
         // Invalidate cache to force refetch
         invalidateTradingTasksCache();
