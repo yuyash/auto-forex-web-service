@@ -233,9 +233,10 @@ class TradingTaskStartView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        # TODO: Queue the trading task for execution (will be implemented in task 6.3)
-        # from .tasks import run_trading_task
-        # run_trading_task.delay(task.pk)
+        # Queue the trading task for execution
+        from .tasks import run_trading_task
+
+        run_trading_task.delay(task.pk)
 
         # Return success response
         return Response(
@@ -418,9 +419,10 @@ class TradingTaskRerunView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        # TODO: Queue the trading task for execution (will be implemented in task 6.3)
-        # from .tasks import run_trading_task
-        # run_trading_task.delay(task.pk)
+        # Queue the trading task for execution
+        from .tasks import run_trading_task
+
+        run_trading_task.delay(task.pk)
 
         # Return success response
         return Response(

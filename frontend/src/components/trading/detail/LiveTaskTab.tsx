@@ -66,11 +66,10 @@ export function LiveTaskTab({ task }: LiveTaskTabProps) {
     }
   };
 
-  // Mock data - in real implementation, this would come from API
   const liveMetrics = {
-    currentPnL: '0.00', // Would come from task.latest_execution
-    openPositions: 2, // Mock value
-    totalTrades: 0, // Would come from task.latest_execution
+    currentPnL: task.latest_execution?.total_pnl ?? '0.00',
+    openPositions: 0,
+    totalTrades: task.latest_execution?.total_trades ?? 0,
     uptime: calculateUptime(),
   };
 

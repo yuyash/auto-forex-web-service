@@ -32,43 +32,11 @@ interface OpenPositionsTableProps {
 }
 
 export function OpenPositionsTable({ taskId }: OpenPositionsTableProps) {
-  const [positions, setPositions] = useState<Position[]>([]);
+  const [positions] = useState<Position[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  // Mock data - in real implementation, this would fetch from API
   useEffect(() => {
-    // Simulate fetching positions
-    const fetchPositions = () => {
-      const mockPositions: Position[] = [
-        {
-          id: 1,
-          instrument: 'EUR_USD',
-          direction: 'long',
-          units: 10000,
-          entry_price: '1.0850',
-          current_price: '1.0920',
-          unrealized_pnl: '70.00',
-          entry_time: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          id: 2,
-          instrument: 'GBP_USD',
-          direction: 'short',
-          units: 5000,
-          entry_price: '1.2650',
-          current_price: '1.2620',
-          unrealized_pnl: '30.00',
-          entry_time: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-        },
-      ];
-      setPositions(mockPositions);
-    };
-
-    fetchPositions();
-
-    // Auto-refresh every 5 seconds
     const interval = setInterval(() => {
-      // In real implementation, fetch updated positions
       setLastUpdate(new Date());
     }, 5000);
 

@@ -226,11 +226,10 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
     });
   };
 
-  // Mock P&L and positions data (would come from backend in real implementation)
-  const mockPnL = currentTask.latest_execution?.total_pnl
+  const currentPnL = currentTask.latest_execution?.total_pnl
     ? parseFloat(currentTask.latest_execution.total_pnl)
     : 0;
-  const mockOpenPositions = 0; // Would come from backend
+  const openPositions = 0;
 
   return (
     <Card
@@ -247,14 +246,15 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
     >
       <CardContent>
         {/* Risk Warning for Live Trading */}
-        {displayStatus === TaskStatus.RUNNING && (
-          <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 2 }}>
-            <Typography variant="caption">
-              <strong>Live Trading Active:</strong> Real money is at risk.
-              Monitor closely.
-            </Typography>
-          </Alert>
-        )}
+        {displayStatus === TaskStatus.RUNNING &&
+          currentTask.account_type === 'live' && (
+            <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 2 }}>
+              <Typography variant="caption">
+                <strong>Live Trading Active:</strong> Real money is at risk.
+                Monitor closely.
+              </Typography>
+            </Alert>
+          )}
 
         <Box
           sx={{
@@ -431,14 +431,14 @@ export default function TradingTaskCard({ task }: TradingTaskCardProps) {
             <Grid size={{ xs: 6, sm: 4 }}>
               <MetricCard
                 title="Live P&L"
-                value={`$${mockPnL.toFixed(2)}`}
-                color={mockPnL >= 0 ? 'success' : 'error'}
+                value={`$${currentPnL.toFixed(2)}`}
+                color={currentPnL >= 0 ? 'success' : 'error'}
               />
             </Grid>
             <Grid size={{ xs: 6, sm: 4 }}>
               <MetricCard
                 title="Open Positions"
-                value={mockOpenPositions.toString()}
+                value={openPositions.toString()}
               />
             </Grid>
             {currentTask.latest_execution?.total_trades !== undefined && (

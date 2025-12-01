@@ -38,84 +38,17 @@ type SortField = 'exit_time' | 'pnl' | 'instrument';
 type SortOrder = 'asc' | 'desc';
 
 export function RecentTradesLog({ taskId }: RecentTradesLogProps) {
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const [trades] = useState<Trade[]>([]);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [totalPages] = useState(1);
   const [sortField, setSortField] = useState<SortField>('exit_time');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   const tradesPerPage = 10;
 
-  // Mock data - in real implementation, this would fetch from API
   useEffect(() => {
-    const fetchTrades = () => {
-      // Simulate fetching recent trades
-      const mockTrades: Trade[] = [
-        {
-          id: 1,
-          instrument: 'EUR_USD',
-          direction: 'long',
-          units: 10000,
-          entry_price: '1.0800',
-          exit_price: '1.0845',
-          pnl: '45.20',
-          entry_time: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-          exit_time: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-        },
-        {
-          id: 2,
-          instrument: 'GBP_USD',
-          direction: 'short',
-          units: 5000,
-          entry_price: '1.2680',
-          exit_price: '1.2705',
-          pnl: '-12.50',
-          entry_time: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-          exit_time: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-        },
-        {
-          id: 3,
-          instrument: 'USD_JPY',
-          direction: 'long',
-          units: 8000,
-          entry_price: '149.50',
-          exit_price: '149.85',
-          pnl: '28.00',
-          entry_time: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-          exit_time: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-        },
-      ];
-
-      // Sort trades
-      const sortedTrades = [...mockTrades].sort((a, b) => {
-        let aValue: string | number = a[sortField];
-        let bValue: string | number = b[sortField];
-
-        if (sortField === 'pnl') {
-          aValue = parseFloat(a.pnl);
-          bValue = parseFloat(b.pnl);
-        } else if (sortField === 'exit_time') {
-          aValue = new Date(a.exit_time).getTime();
-          bValue = new Date(b.exit_time).getTime();
-        }
-
-        if (sortOrder === 'asc') {
-          return aValue > bValue ? 1 : -1;
-        } else {
-          return aValue < bValue ? 1 : -1;
-        }
-      });
-
-      setTrades(sortedTrades);
-      setTotalPages(Math.ceil(sortedTrades.length / tradesPerPage));
-    };
-
-    fetchTrades();
-
-    // Auto-refresh every 5 seconds
     const interval = setInterval(() => {
-      // In real implementation, fetch updated trades
       setLastUpdate(new Date());
     }, 5000);
 
