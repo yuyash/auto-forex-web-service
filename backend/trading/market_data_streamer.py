@@ -192,7 +192,11 @@ class MarketDataStreamer:
 
     def initialize_connection(self) -> None:
         """
-        Initialize the v20 API context.
+        Initialize the v20 API context for streaming.
+
+        Note: OANDA requires different hostnames for REST API vs streaming:
+        - REST API: api-fxpractice.oanda.com / api-fxtrade.oanda.com
+        - Streaming: stream-fxpractice.oanda.com / stream-fxtrade.oanda.com
 
         Raises:
             ValueError: If account API credentials are invalid
@@ -200,15 +204,16 @@ class MarketDataStreamer:
         if not self.account.api_token:
             raise ValueError("API token is required for streaming")
 
-        # Determine API hostname based on account type
+        # Determine streaming hostname based on account type
+        # IMPORTANT: Use stream-* hostname for pricing streams, not api-*
         if self.account.api_type == "practice":
-            hostname = "api-fxpractice.oanda.com"
+            hostname = "stream-fxpractice.oanda.com"
         elif self.account.api_type == "live":
-            hostname = "api-fxtrade.oanda.com"
+            hostname = "stream-fxtrade.oanda.com"
         else:
             raise ValueError(f"Invalid API type: {self.account.api_type}")
 
-        # Create v20 context
+        # Create v20 context for streaming
         self.api_context = v20.Context(
             hostname=hostname,
             token=self.account.api_token,
