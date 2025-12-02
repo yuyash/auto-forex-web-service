@@ -145,7 +145,7 @@ class OrderExecutor:
         # Preserve the sign (positive for long, negative for short)
         return adjusted_units if units > 0 else -adjusted_units
 
-    def submit_market_order(  # pylint: disable=too-many-locals
+    def submit_market_order(  # pylint: disable=too-many-locals,too-many-branches
         self,
         instrument: str,
         units: Decimal,
@@ -218,10 +218,17 @@ class OrderExecutor:
         response = self._execute_with_retry(order_data)
 
         # Check if order was filled or rejected
-        # OANDA returns 201 even for rejected orders, but with different transaction types
+        # OANDA v20 library may put transactions as attributes OR in response.body dict
+        fill_transaction = None
+
+        # First try direct attribute access
         if hasattr(response, "orderFillTransaction") and response.orderFillTransaction:
-            # Order was filled successfully
             fill_transaction = response.orderFillTransaction
+        # Then try response.body dict (some v20 versions use this)
+        elif hasattr(response, "body") and isinstance(response.body, dict):
+            fill_transaction = response.body.get("orderFillTransaction")
+
+        if fill_transaction:
             order = self._create_order_record(
                 order_id=fill_transaction.id,
                 instrument=instrument,
