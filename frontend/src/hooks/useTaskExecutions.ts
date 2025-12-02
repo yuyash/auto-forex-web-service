@@ -53,9 +53,13 @@ export function useTaskExecutions(
     staleTime: 2000, // Consider data fresh for 2 seconds
     refetchOnWindowFocus: true,
     // Enable automatic polling for running executions to get live logs
-    refetchInterval: () => {
+    // The callback receives the current query data as parameter
+    refetchInterval: (query) => {
       // Check if any execution is running
-      const hasRunningExecution = data?.results?.some(
+      const queryData = query.state.data as
+        | PaginatedResponse<TaskExecution>
+        | undefined;
+      const hasRunningExecution = queryData?.results?.some(
         (exec) => exec.status === 'running'
       );
       // If polling is enabled and there's a running execution, poll every 3 seconds
