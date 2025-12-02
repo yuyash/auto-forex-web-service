@@ -200,8 +200,9 @@ export default function BacktestTaskDetailPage() {
       invalidateBacktestExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch {
-      setIsTransitioning(false);
       // Error handled by mutation hook
+    } finally {
+      setIsTransitioning(false);
     }
   };
 
@@ -213,8 +214,9 @@ export default function BacktestTaskDetailPage() {
       invalidateBacktestExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch {
-      setIsTransitioning(false);
       // Error handled by mutation hook
+    } finally {
+      setIsTransitioning(false);
     }
   };
 
@@ -228,8 +230,9 @@ export default function BacktestTaskDetailPage() {
       invalidateBacktestExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch {
-      setIsTransitioning(false);
       // Error handled by mutation hook
+    } finally {
+      setIsTransitioning(false);
     }
   };
 
@@ -263,8 +266,9 @@ export default function BacktestTaskDetailPage() {
       invalidateBacktestTasksCache(); // Refresh task list
       navigate('/backtest-tasks');
     } catch {
-      setIsTransitioning(false);
       // Error handled by mutation hook
+    } finally {
+      setIsTransitioning(false);
     }
   };
 

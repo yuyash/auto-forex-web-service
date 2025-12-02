@@ -176,8 +176,9 @@ export default function TradingTaskDetailPage() {
       invalidateTradingExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch {
-      setIsTransitioning(false);
       // Error handled by mutation hook
+    } finally {
+      setIsTransitioning(false);
     }
   };
 
@@ -190,8 +191,9 @@ export default function TradingTaskDetailPage() {
       invalidateTradingExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch {
-      setIsTransitioning(false);
       // Error handled by mutation hook
+    } finally {
+      setIsTransitioning(false);
     }
   };
 
@@ -223,8 +225,9 @@ export default function TradingTaskDetailPage() {
       await deleteTask.mutate(taskId);
       navigate('/trading-tasks');
     } catch {
-      setIsTransitioning(false);
       // Error handled by mutation hook
+    } finally {
+      setIsTransitioning(false);
     }
   };
 
@@ -241,8 +244,9 @@ export default function TradingTaskDetailPage() {
       invalidateTradingExecutions(taskId); // Refresh executions list
       setStopDialogOpen(false);
     } catch {
-      setIsTransitioning(false);
       // Error handled by mutation hook
+    } finally {
+      setIsTransitioning(false);
     }
   };
 
