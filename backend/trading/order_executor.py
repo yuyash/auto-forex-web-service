@@ -157,7 +157,8 @@ class OrderExecutor:
 
         Args:
             instrument: Currency pair (e.g., 'EUR_USD')
-            units: Number of units (positive for long, negative for short)
+            units: Number of units (positive for long, negative for short).
+                   Strategy should convert lot sizes to actual units before calling.
             take_profit: Optional take-profit price
             stop_loss: Optional stop-loss price
 
@@ -681,17 +682,26 @@ class OrderExecutor:
 
         for attempt in range(self.max_retries):
             try:
-                response = self.api.order.create(self.account.account_id, **order_data)
+                # OANDA v20 API expects order data wrapped in 'order' key
+                response = self.api.order.create(self.account.account_id, order=order_data)
 
                 if response.status in [200, 201]:
                     return response
 
+                # Extract error details from response
+                error_details = ""
+                if hasattr(response, "body") and response.body:
+                    error_details = f" - {response.body}"
+                elif hasattr(response, "raw_body"):
+                    error_details = f" - {response.raw_body}"
+
                 logger.warning(
-                    "Order submission attempt %s failed: status %s",
+                    "Order submission attempt %s failed: status %s%s",
                     attempt + 1,
                     response.status,
+                    error_details,
                 )
-                last_error = f"API returned status {response.status}"
+                last_error = f"API returned status {response.status}{error_details}"
 
             except Exception as e:  # pylint: disable=broad-exception-caught
                 logger.warning("Order submission attempt %s failed: %s", attempt + 1, e)

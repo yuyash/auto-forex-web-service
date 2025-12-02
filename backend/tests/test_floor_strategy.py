@@ -672,7 +672,8 @@ class TestFloorStrategy:
         assert len(orders) == 1
         assert orders[0].order_type == "market"
         assert orders[0].instrument == "EUR_USD"
-        assert orders[0].units == Decimal("1.0")
+        # Units are now actual OANDA units: base_lot_size (1.0) * base_unit_size (1000) = 1000
+        assert orders[0].units == Decimal("1000.0")
         assert orders[0].direction == "long"  # Upward momentum
 
     def test_calculate_pips(self, strategy):
