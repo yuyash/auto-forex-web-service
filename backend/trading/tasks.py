@@ -228,7 +228,22 @@ class TickDataBuffer:
             }
 
 
-@shared_task(bind=True, max_retries=3, soft_time_limit=None, time_limit=None)
+# Time limits for long-running tasks
+# Note: Celery decorators are evaluated at import time, so we can't dynamically
+# read from SystemSettings. These values should match SystemSettings defaults.
+# For streaming tasks (market data, trading): use effectively unlimited (10 years)
+# For backtest tasks: use SystemSettings.celery_task_soft/hard_time_limit defaults
+STREAMING_TIME_LIMIT = 10 * 365 * 24 * 60 * 60  # 315,360,000 seconds (10 years)
+BACKTEST_SOFT_TIME_LIMIT = 259200  # 72 hours (matches SystemSettings default)
+BACKTEST_HARD_TIME_LIMIT = 259200  # 72 hours (matches SystemSettings default)
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    soft_time_limit=STREAMING_TIME_LIMIT,
+    time_limit=STREAMING_TIME_LIMIT + 3600,  # 1 hour buffer
+)
 def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
     self,  # pylint: disable=unused-argument
     account_id: int,
@@ -1237,8 +1252,87 @@ _task_log_counts: dict[int, int] = {}
 # Cache strategy instances per task to maintain state across ticks
 _strategy_instances: dict[int, Any] = {}
 
+# Track last metrics update time per task
+_task_last_metrics_time: dict[int, float] = {}
 
-# pylint: disable=too-many-locals,too-many-branches,too-many-statements
+
+def _update_trading_task_metrics(  # pylint: disable=too-many-locals
+    task: Any, execution: Any
+) -> None:
+    """
+    Update performance metrics for a trading task.
+
+    Calculates current P&L from open positions and closed trades,
+    then updates or creates ExecutionMetrics record.
+
+    Args:
+        task: TradingTask instance
+        execution: TaskExecution instance
+    """
+    from trading.execution_models import ExecutionMetrics
+    from trading.models import Position, Trade
+
+    try:
+        # Get open positions for this task
+        open_positions = Position.objects.filter(
+            trading_task=task,
+            closed_at__isnull=True,
+        )
+
+        # Calculate unrealized P&L from open positions
+        unrealized_pnl = sum(pos.unrealized_pnl or Decimal("0") for pos in open_positions)
+
+        # Get closed trades for this task's execution
+        closed_trades = Trade.objects.filter(
+            account=task.oanda_account,
+            opened_at__gte=execution.started_at if execution.started_at else timezone.now(),
+        )
+
+        # Calculate realized P&L and trade stats
+        realized_pnl = Decimal("0")
+        winning_trades = 0
+        losing_trades = 0
+
+        for trade in closed_trades:
+            realized_pnl += trade.pnl or Decimal("0")
+            if trade.pnl and trade.pnl > 0:
+                winning_trades += 1
+            elif trade.pnl and trade.pnl < 0:
+                losing_trades += 1
+
+        total_trades = closed_trades.count()
+        total_pnl = realized_pnl + unrealized_pnl
+        win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else Decimal("0")
+
+        # Update or create ExecutionMetrics
+        _, created = ExecutionMetrics.objects.update_or_create(
+            execution=execution,
+            defaults={
+                "total_pnl": total_pnl,
+                "realized_pnl": realized_pnl,
+                "unrealized_pnl": unrealized_pnl,
+                "total_trades": total_trades,
+                "winning_trades": winning_trades,
+                "losing_trades": losing_trades,
+                "win_rate": win_rate,
+            },
+        )
+
+        if created:
+            logger.info("Created ExecutionMetrics for task %d execution %d", task.pk, execution.id)
+        else:
+            logger.debug(
+                "Updated metrics for task %d: P&L=%s, trades=%d",
+                task.pk,
+                total_pnl,
+                total_trades,
+            )
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Error updating metrics for task %d: %s", task.pk, e)
+
+
+# pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-nested-blocks
 def _process_tick_for_task(  # noqa: C901
     task: Any, tick: "TickData", tick_model: "TickDataModel", registry: Any
 ) -> None:
@@ -1277,9 +1371,8 @@ def _process_tick_for_task(  # noqa: C901
                 f"Task {task_id} processed {tick_count} ticks. "
                 f"Latest: {tick.instrument} @ {tick.mid} (spread: {tick.spread})"
             )
+            # Only log to server, not to frontend execution logs (too noisy)
             logger.info(progress_msg)
-            if execution:
-                execution.add_log("INFO", progress_msg)
 
         # Get instrument from configuration
         task_instrument = task.config.parameters.get("instrument")
@@ -1345,7 +1438,17 @@ def _process_tick_for_task(  # noqa: C901
 
         # Log when strategy processes tick but generates no orders (periodically)
         if not orders and tick_count % 100 == 0:
-            no_order_msg = f"Strategy evaluated {tick_count} ticks, no orders generated yet"
+            # Count open positions for this task
+            from trading.models import Position
+
+            open_positions_count = Position.objects.filter(
+                trading_task=task,
+                closed_at__isnull=True,
+            ).count()
+            no_order_msg = (
+                f"Strategy evaluated {tick_count} ticks | "
+                f"Open positions: {open_positions_count}"
+            )
             logger.info(no_order_msg)
             if execution:
                 execution.add_log("INFO", no_order_msg)
@@ -1413,6 +1516,64 @@ def _process_tick_for_task(  # noqa: C901
                             logger.info(success_msg)
                             if execution:
                                 execution.add_log("INFO", success_msg)
+
+                            # Check if this is a close order or an open order
+                            from trading.models import Position
+                            from trading.position_manager import PositionManager
+
+                            is_close_order = getattr(order, "is_close_order", False)
+                            closing_position_id = getattr(order, "closing_position_id", None)
+
+                            if is_close_order and closing_position_id:
+                                # Close the existing position
+                                try:
+                                    existing_position = Position.objects.get(
+                                        position_id=closing_position_id,
+                                        account=task.oanda_account,
+                                        closed_at__isnull=True,
+                                    )
+                                    closed_pos = PositionManager.close_position(
+                                        position=existing_position,
+                                        exit_price=tick_model.mid,
+                                        create_trade_record=True,
+                                    )
+                                    close_msg = (
+                                        f"Position closed: {closed_pos.position_id} - "
+                                        f"P&L: {closed_pos.realized_pnl}"
+                                    )
+                                    logger.info(close_msg)
+                                    if execution:
+                                        execution.add_log("INFO", close_msg)
+                                except Position.DoesNotExist:
+                                    warn_msg = (
+                                        f"Position {closing_position_id} not found for closing"
+                                    )
+                                    logger.warning(warn_msg)
+                                    if execution:
+                                        execution.add_log("WARNING", warn_msg)
+                            else:
+                                # Create new Position record for the filled order
+                                position = PositionManager.create_position(
+                                    account=task.oanda_account,
+                                    order=result,
+                                    fill_price=tick_model.mid,
+                                    strategy=(
+                                        strategy_instance.strategy if strategy_instance else None
+                                    ),
+                                    layer_number=getattr(order, "layer_number", 1),
+                                    is_first_lot=getattr(order, "is_first_lot", False),
+                                )
+                                # Link position to trading task
+                                position.trading_task = task
+                                position.save(update_fields=["trading_task"])
+
+                                pos_msg = (
+                                    f"Position created: {position.position_id} - "
+                                    f"{position.direction} {position.units} {position.instrument}"
+                                )
+                                logger.info(pos_msg)
+                                if execution:
+                                    execution.add_log("INFO", pos_msg)
                         # Add support for other order types as needed
                 except Exception as exec_error:
                     error_msg = f"Error executing orders: {str(exec_error)}"
@@ -1425,6 +1586,23 @@ def _process_tick_for_task(  # noqa: C901
         logger.error(error_msg, exc_info=True)
         if execution:
             execution.add_log("ERROR", error_msg)
+
+    # Periodically update performance metrics
+    try:
+        from accounts.models import SystemSettings
+
+        settings = SystemSettings.get_settings()
+        metrics_interval = settings.trading_metrics_interval_seconds
+
+        current_time = time.time()
+        last_metrics_time = _task_last_metrics_time.get(task_id, 0)
+
+        if current_time - last_metrics_time >= metrics_interval:
+            _task_last_metrics_time[task_id] = current_time
+            if execution:
+                _update_trading_task_metrics(task, execution)
+    except Exception as metrics_error:  # pylint: disable=broad-exception-caught
+        logger.debug("Error updating metrics: %s", metrics_error)
 
 
 def _broadcast_to_strategy_executors(  # pylint: disable=too-many-locals
@@ -1597,8 +1775,8 @@ def _parse_tick_timestamp(time_str: str) -> datetime:
 
 @shared_task(
     bind=True,
-    time_limit=259200,  # 72 hours hard limit (matches SystemSettings default)
-    soft_time_limit=255600,  # 71 hours soft limit
+    time_limit=BACKTEST_HARD_TIME_LIMIT,
+    soft_time_limit=BACKTEST_SOFT_TIME_LIMIT,
 )
 def run_backtest_task(  # type: ignore[no-untyped-def]
     self,  # pylint: disable=unused-argument
@@ -1668,7 +1846,10 @@ def run_backtest_task(  # type: ignore[no-untyped-def]
         }
 
 
-@shared_task(soft_time_limit=None, time_limit=None)
+@shared_task(
+    soft_time_limit=STREAMING_TIME_LIMIT,
+    time_limit=STREAMING_TIME_LIMIT + 3600,
+)
 def run_trading_task(task_id: int) -> Dict[str, Any]:
     """
     Execute a TradingTask.
@@ -1837,6 +2018,8 @@ def stop_trading_task(task_id: int, stop_mode: str = "graceful") -> Dict[str, An
                 del _task_tick_counts[task_id]
             if task_id in _task_last_log_time:
                 del _task_last_log_time[task_id]
+            if task_id in _task_last_metrics_time:
+                del _task_last_metrics_time[task_id]
 
             # Stop market data streaming for the account
             stop_market_data_stream.delay(task.oanda_account.pk)

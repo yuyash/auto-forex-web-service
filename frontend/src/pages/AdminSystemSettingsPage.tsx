@@ -61,8 +61,7 @@ interface SystemSettings {
   backtest_cpu_limit: number;
   backtest_memory_limit: number;
   backtest_day_batch_size: number;
-  celery_task_soft_time_limit: number;
-  celery_task_hard_time_limit: number;
+  trading_metrics_interval_seconds: number;
   tick_data_retention_days: number;
   tick_data_instruments: string;
   system_health_update_interval: number;
@@ -1163,33 +1162,17 @@ const AdminSystemSettingsPage = () => {
           <Grid size={{ xs: 12, md: 6 }}>
             <TextField
               fullWidth
-              label="Celery Task Soft Time Limit (hours)"
+              label="Trading Metrics Update Interval (seconds)"
               type="number"
-              value={Math.round(settings.celery_task_soft_time_limit / 3600)}
+              value={settings.trading_metrics_interval_seconds}
               onChange={(e) =>
                 handleChange(
-                  'celery_task_soft_time_limit',
-                  (parseInt(e.target.value) || 72) * 3600
+                  'trading_metrics_interval_seconds',
+                  parseInt(e.target.value) || 30
                 )
               }
-              helperText="Soft limit: tasks receive exception to clean up gracefully (default: 72 hours)"
-              inputProps={{ min: 1, max: 168, step: 1 }}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <TextField
-              fullWidth
-              label="Celery Task Hard Time Limit (hours)"
-              type="number"
-              value={Math.round(settings.celery_task_hard_time_limit / 3600)}
-              onChange={(e) =>
-                handleChange(
-                  'celery_task_hard_time_limit',
-                  (parseInt(e.target.value) || 72) * 3600
-                )
-              }
-              helperText="Hard limit: tasks are forcefully terminated (default: 72 hours)"
-              inputProps={{ min: 1, max: 168, step: 1 }}
+              helperText="How often to update P&L and trade metrics for live trading tasks (default: 30 seconds)"
+              inputProps={{ min: 5, max: 300, step: 5 }}
             />
           </Grid>
         </Grid>

@@ -111,7 +111,11 @@ export interface ExecutionSummary {
   error_message?: string;
   total_return?: string;
   total_pnl?: string;
+  realized_pnl?: string;
+  unrealized_pnl?: string;
   total_trades?: number;
+  winning_trades?: number;
+  losing_trades?: number;
   win_rate?: string;
 }
 
