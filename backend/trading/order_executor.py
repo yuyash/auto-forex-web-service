@@ -145,7 +145,7 @@ class OrderExecutor:
         # Preserve the sign (positive for long, negative for short)
         return adjusted_units if units > 0 else -adjusted_units
 
-    def submit_market_order(
+    def submit_market_order(  # pylint: disable=too-many-locals
         self,
         instrument: str,
         units: Decimal,
@@ -217,46 +217,89 @@ class OrderExecutor:
         # Execute with retry logic
         response = self._execute_with_retry(order_data)
 
-        # Create Order record
-        order = self._create_order_record(
-            order_id=response.orderFillTransaction.id,
-            instrument=instrument,
-            order_type="market",
-            direction=direction,
-            units=abs_units,
-            price=None,
-            take_profit=take_profit,
-            stop_loss=stop_loss,
-            status="filled",
+        # Check if order was filled or rejected
+        # OANDA returns 201 even for rejected orders, but with different transaction types
+        if hasattr(response, "orderFillTransaction") and response.orderFillTransaction:
+            # Order was filled successfully
+            fill_transaction = response.orderFillTransaction
+            order = self._create_order_record(
+                order_id=fill_transaction.id,
+                instrument=instrument,
+                order_type="market",
+                direction=direction,
+                units=abs_units,
+                price=None,
+                take_profit=take_profit,
+                stop_loss=stop_loss,
+                status="filled",
+            )
+
+            logger.info(
+                "Market order filled: %s at %s",
+                order.order_id,
+                fill_transaction.price,
+            )
+
+            # Log order submission event
+            Event.log_trading_event(
+                event_type="order_submitted",
+                description=f"Market order submitted: {direction} {abs_units} {instrument}",
+                severity="info",
+                user=self.account.user,
+                account=self.account,
+                details={
+                    "order_id": order.order_id,
+                    "instrument": instrument,
+                    "order_type": "market",
+                    "direction": direction,
+                    "units": str(abs_units),
+                    "take_profit": str(take_profit) if take_profit else None,
+                    "stop_loss": str(stop_loss) if stop_loss else None,
+                    "status": "filled",
+                    "fill_price": str(fill_transaction.price),
+                },
+            )
+
+            return order
+
+        # Order was rejected - extract rejection reason
+        reject_reason = "Unknown rejection reason"
+        reject_transaction = None
+
+        if hasattr(response, "orderRejectTransaction") and response.orderRejectTransaction:
+            reject_transaction = response.orderRejectTransaction
+            reject_reason = getattr(reject_transaction, "rejectReason", reject_reason)
+        elif hasattr(response, "orderCancelTransaction") and response.orderCancelTransaction:
+            reject_transaction = response.orderCancelTransaction
+            reject_reason = getattr(reject_transaction, "reason", reject_reason)
+
+        # Log the full response for debugging
+        logger.error(
+            "Market order rejected: %s %s %s - Reason: %s, Response attrs: %s",
+            direction,
+            abs_units,
+            instrument,
+            reject_reason,
+            [attr for attr in dir(response) if not attr.startswith("_")],
         )
 
-        logger.info(
-            "Market order filled: %s at %s",
-            order.order_id,
-            response.orderFillTransaction.price,
-        )
-
-        # Log order submission event
+        # Log rejection event
         Event.log_trading_event(
-            event_type="order_submitted",
-            description=f"Market order submitted: {direction} {abs_units} {instrument}",
-            severity="info",
+            event_type="order_rejected",
+            description=f"Market order rejected: {direction} {abs_units} {instrument}",
+            severity="error",
             user=self.account.user,
             account=self.account,
             details={
-                "order_id": order.order_id,
                 "instrument": instrument,
                 "order_type": "market",
                 "direction": direction,
                 "units": str(abs_units),
-                "take_profit": str(take_profit) if take_profit else None,
-                "stop_loss": str(stop_loss) if stop_loss else None,
-                "status": "filled",
-                "fill_price": str(response.orderFillTransaction.price),
+                "reject_reason": reject_reason,
             },
         )
 
-        return order
+        raise OrderExecutionError(f"Market order rejected: {reject_reason}")
 
     def submit_limit_order(  # pylint: disable=too-many-positional-arguments
         self,
