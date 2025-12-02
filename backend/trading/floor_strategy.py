@@ -314,6 +314,9 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
 
         # Configuration
         self.base_lot_size = Decimal(str(self.get_config_value("base_lot_size", 1.0)))
+        # Base unit size: multiplier to convert lot size to actual OANDA units
+        # Default 1000 means 1 lot = 1000 units
+        self.base_unit_size = Decimal(str(self.get_config_value("base_unit_size", 1000)))
         self.retracement_pips = Decimal(str(self.get_config_value("retracement_pips", 30)))
         self.take_profit_pips = Decimal(str(self.get_config_value("take_profit_pips", 25)))
         self.max_retracements_per_layer = int(
@@ -416,6 +419,18 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                 "normal_atr": self.normal_atr,
             }
         )
+
+    def _lot_to_units(self, lot_size: Decimal) -> Decimal:
+        """
+        Convert lot size to actual OANDA units.
+
+        Args:
+            lot_size: Number of lots
+
+        Returns:
+            Actual units for OANDA API (lot_size * base_unit_size)
+        """
+        return lot_size * self.base_unit_size
 
     def on_tick(  # pylint: disable=too-many-branches,attribute-defined-outside-init
         self, tick_data: TickData
@@ -1332,6 +1347,9 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         # Use bid/ask for order price
         order_price = tick_data.ask if direction == "long" else tick_data.bid
 
+        # Convert lot size to actual units for OANDA
+        actual_units = self._lot_to_units(self.base_lot_size)
+
         order = Order(
             account=self.account,
             strategy=self.strategy,
@@ -1340,7 +1358,7 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
             instrument=tick_data.instrument,
             order_type="market",
             direction=direction,
-            units=self.base_lot_size,
+            units=actual_units,
             price=tick_data.mid,
         )
         # Add layer metadata for backtest engine
@@ -1354,13 +1372,14 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         initial_entry_msg = (
             f"[INITIAL ENTRY] Layer {layer.layer_number} | "
             f"Opening {direction.upper()} position | "
-            f"Size: {self.base_lot_size} units @ {order_price} | "
+            f"Size: {self.base_lot_size} lots ({actual_units} units) @ {order_price} | "
             f"Signal: {entry_signal.get('reason', 'N/A')}"
         )
         logger.info(initial_entry_msg)
 
         entry_log_msg = (
-            f"Initial entry: {direction.upper()} {self.base_lot_size} units " f"@ {order_price}"
+            f"Initial entry: {direction.upper()} {self.base_lot_size} lots "
+            f"({actual_units} units) @ {order_price}"
         )
         self.log_strategy_event(
             "initial_entry",
@@ -1411,6 +1430,9 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         # Use bid/ask for order price
         order_price = tick_data.ask if direction == "long" else tick_data.bid
 
+        # Convert lot size to actual units for OANDA
+        actual_units = self._lot_to_units(next_lot_size)
+
         order = Order(
             account=self.account,
             strategy=self.strategy,
@@ -1419,7 +1441,7 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
             instrument=tick_data.instrument,
             order_type="market",
             direction=direction,
-            units=next_lot_size,
+            units=actual_units,
             price=tick_data.mid,
             # take_profit=None - let strategy handle it
         )
@@ -1431,14 +1453,15 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         scale_in_msg = (
             f"[RETRACEMENT] Layer {layer.layer_number} | "
             f"Adding {direction.upper()} position | "
-            f"Size: {next_lot_size} units @ {order_price} | "
+            f"Size: {next_lot_size} lots ({actual_units} units) @ {order_price} | "
             f"Peak: {layer.peak_price} | "
             f"Retracement #{layer.retracement_count + 1}"
         )
         logger.info(scale_in_msg)
 
         scale_log_msg = (
-            f"Retracement: {direction.upper()} {next_lot_size} units @ {order_price} "
+            f"Retracement: {direction.upper()} {next_lot_size} lots "
+            f"({actual_units} units) @ {order_price} "
             f"(Retracement #{layer.retracement_count + 1})"
         )
         self.log_strategy_event(
@@ -1624,9 +1647,9 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
             price_diff = -price_diff
         pip_diff = float(price_diff / pip_size)
 
-        # Calculate P&L (1.0 unit = 1 lot = 1,000 base currency units)
-        base_currency_amount = position.units * Decimal("1000")
-        pnl_raw = price_diff * base_currency_amount
+        # Calculate P&L using position.units (already in actual OANDA units)
+        # For JPY pairs, P&L is in JPY and needs to be converted to base currency
+        pnl_raw = price_diff * position.units
         pnl = float(pnl_raw / tick_data.mid) if is_jpy else float(pnl_raw)
 
         return pip_diff, pnl
@@ -2205,11 +2228,22 @@ FLOOR_STRATEGY_CONFIG_SCHEMA = {
             "title": "Base Lot Size",
             "description": (
                 "Initial lot size for first entry. "
-                "1 lot = 1,000 units of base currency. "
-                "For USD/JPY: 1.0 = 1,000 USD"
+                "Actual units = base_lot_size × base_unit_size. "
+                "For USD/JPY with base_unit_size=1000: 1.0 lot = 1,000 USD"
             ),
             "default": 1.0,
             "minimum": 0.01,
+        },
+        "base_unit_size": {
+            "type": "integer",
+            "title": "Base Unit Size",
+            "description": (
+                "Multiplier to convert lot size to actual OANDA units. "
+                "Default 1000 means 1 lot = 1,000 units. "
+                "Set to 100000 for standard forex lots."
+            ),
+            "default": 1000,
+            "minimum": 1,
         },
         "scaling_mode": {
             "type": "string",

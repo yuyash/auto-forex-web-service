@@ -115,9 +115,18 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
     base_lot_size: {
       type: 'number',
       title: 'Base Lot Size',
-      description: 'Initial lot size for first entry (e.g., 1.0 = 1000 units)',
+      description:
+        'Initial lot size for first entry. Actual units = base_lot_size × base_unit_size',
       default: 1.0,
       minimum: 0.01,
+    },
+    base_unit_size: {
+      type: 'integer',
+      title: 'Base Unit Size',
+      description:
+        'Multiplier to convert lot size to OANDA units. Default 1000 means 1 lot = 1000 units',
+      default: 1000,
+      minimum: 1,
     },
     scaling_mode: {
       type: 'string',
@@ -378,6 +387,7 @@ const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
   floor: {
     instrument: 'USD_JPY',
     base_lot_size: 1.0,
+    base_unit_size: 1000,
     scaling_mode: 'additive',
     scaling_amount: 1.0,
     retracement_pips: 30,
