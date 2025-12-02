@@ -15,7 +15,7 @@ from decimal import Decimal
 from typing import Any
 
 from .base_strategy import BaseStrategy
-from .models import Order, Position
+from .models import Order, Position  # Order used for type hints
 from .strategy_registry import register_strategy
 from .tick_data_models import TickData
 
@@ -330,9 +330,7 @@ class MACrossoverStrategy(BaseStrategy):
         """
         direction = "long" if signal == "bullish" else "short"
 
-        order = Order(
-            account=self.account,
-            strategy=self.strategy,
+        order = self.create_order(
             order_id=(f"ma_crossover_{direction}_" f"{tick_data.timestamp.timestamp()}"),
             instrument=tick_data.instrument,
             order_type="market",
@@ -372,9 +370,7 @@ class MACrossoverStrategy(BaseStrategy):
         # Reverse direction for closing
         close_direction = "short" if position.direction == "long" else "long"
 
-        order = Order(
-            account=self.account,
-            strategy=self.strategy,
+        order = self.create_order(
             order_id=(
                 f"ma_crossover_close_{position.position_id}_" f"{tick_data.timestamp.timestamp()}"
             ),

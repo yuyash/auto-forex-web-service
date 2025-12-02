@@ -228,7 +228,7 @@ class TickDataBuffer:
             }
 
 
-@shared_task(bind=True, max_retries=3)
+@shared_task(bind=True, max_retries=3, soft_time_limit=None, time_limit=None)
 def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
     self,  # pylint: disable=unused-argument
     account_id: int,
@@ -1184,10 +1184,18 @@ def run_host_access_monitoring() -> Dict[str, Any]:
 def _process_tick_for_task(
     task: Any, tick: "TickData", tick_model: "TickDataModel", registry: Any
 ) -> None:
+    import uuid
+
     try:
         # Get instrument from configuration
         task_instrument = task.config.parameters.get("instrument")
         if not task_instrument or tick.instrument != task_instrument:
+            logger.debug(
+                "Tick instrument %s doesn't match task %d instrument %s",
+                tick.instrument,
+                task.pk,
+                task_instrument,
+            )
             return
 
         # Get strategy class from registry
@@ -1203,6 +1211,12 @@ def _process_tick_for_task(
         # Create strategy instance with TradingTask model
         strategy_instance = strategy_class(task)
 
+        logger.debug(
+            "Processing tick for task %d with strategy %s",
+            task.pk,
+            task.config.strategy_type,
+        )
+
         # Process tick through strategy
         orders = strategy_instance.on_tick(tick_model)
 
@@ -1214,6 +1228,59 @@ def _process_tick_for_task(
                 len(orders),
                 tick.instrument,
             )
+
+            # Save orders to database and execute them
+            from trading.order_executor import OrderExecutor
+
+            saved_orders = []
+            with transaction.atomic():
+                for order in orders:
+                    # Ensure order has required fields
+                    order.account = task.oanda_account
+                    order.trading_task = task
+
+                    # Generate unique order ID if not set
+                    if not order.order_id:
+                        order.order_id = f"ORD-{uuid.uuid4().hex[:12].upper()}"
+
+                    # Set default status if not set
+                    if not order.status:
+                        order.status = "pending"
+
+                    # Save order
+                    order.save()
+                    saved_orders.append(order)
+
+                    logger.info(
+                        "Saved order %s: %s %s %s units of %s for task %d",
+                        order.order_id,
+                        order.order_type,
+                        order.direction,
+                        order.units,
+                        order.instrument,
+                        task.pk,
+                    )
+
+            # Execute orders via OANDA API
+            if saved_orders:
+                try:
+                    executor = OrderExecutor(task.oanda_account)
+                    for order in saved_orders:
+                        if order.order_type == "market":
+                            executor.submit_market_order(
+                                instrument=order.instrument,
+                                units=order.units if order.direction == "long" else -order.units,
+                                take_profit=order.take_profit,
+                                stop_loss=order.stop_loss,
+                            )
+                        # Add support for other order types as needed
+                except Exception as exec_error:
+                    logger.error(
+                        "Error executing orders for task %d: %s",
+                        task.pk,
+                        exec_error,
+                        exc_info=True,
+                    )
 
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error(
@@ -1261,6 +1328,14 @@ def _broadcast_to_strategy_executors(  # pylint: disable=too-many-locals
             oanda_account=account,
             status=TaskStatus.RUNNING,
         ).select_related("config")
+
+        task_count = running_tasks.count()
+        if task_count == 0:
+            logger.debug(
+                "No running trading tasks found for account %s (id=%d)",
+                account.account_id,
+                account.pk,
+            )
 
         for task in running_tasks:
             _process_tick_for_task(task, tick, tick_model, registry)
@@ -1438,13 +1513,14 @@ def run_backtest_task(  # type: ignore[no-untyped-def]
         }
 
 
-@shared_task
+@shared_task(soft_time_limit=None, time_limit=None)
 def run_trading_task(task_id: int) -> Dict[str, Any]:
     """
     Execute a TradingTask.
 
     This task works with the TradingTask model from the task-based
-    strategy configuration feature.
+    strategy configuration feature. Trading tasks run permanently until
+    explicitly stopped, so time limits are disabled.
 
     This task:
     1. Creates a TaskExecution record at start
