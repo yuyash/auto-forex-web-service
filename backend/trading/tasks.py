@@ -503,6 +503,12 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
         cache_key = f"{STREAM_CACHE_PREFIX}{account_id}"
         cache.delete(cache_key)
 
+        logger.info(
+            "Stream error handled gracefully for account %s. "
+            "Resources cleaned up, task will be retried if configured.",
+            account_id,
+        )
+
         return {
             "success": False,
             "account_id": account_id,
