@@ -417,7 +417,9 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
             }
         )
 
-    def on_tick(self, tick_data: TickData) -> list[Order]:
+    def on_tick(  # pylint: disable=too-many-branches,attribute-defined-outside-init
+        self, tick_data: TickData
+    ) -> list[Order]:
         """
         Process incoming tick data and generate trading signals.
 
@@ -437,6 +439,31 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
             return []
         self._last_processed_tick_id = tick_id
 
+        # Track tick count for periodic logging
+        if not hasattr(self, "_strategy_tick_count"):
+            self._strategy_tick_count = 0
+            logger.info(
+                "FloorStrategy initialized: instrument=%s, max_layers=%d, direction_method=%s",
+                self.instrument,
+                self.layer_manager.max_layers,
+                self.direction_method,
+            )
+        self._strategy_tick_count += 1
+
+        # Log strategy state periodically (every 200 ticks)
+        if self._strategy_tick_count % 200 == 0:
+            active_layers = sum(1 for layer in self.layer_manager.layers if layer.is_active)
+            total_positions = sum(len(layer.positions) for layer in self.layer_manager.layers)
+            logger.info(
+                "FloorStrategy tick #%d: active_layers=%d, total_positions=%d, "
+                "is_locked=%s, price=%s",
+                self._strategy_tick_count,
+                active_layers,
+                total_positions,
+                self.is_locked,
+                tick_data.mid,
+            )
+
         orders: list[Order] = []
 
         # Check if instrument is active for this strategy
@@ -454,6 +481,11 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                     },
                 )
                 self._logged_inactive_instruments.add(tick_data.instrument)
+                logger.warning(
+                    "FloorStrategy: Tick instrument %s doesn't match strategy instrument %s",
+                    tick_data.instrument,
+                    self.instrument,
+                )
             return orders
 
         # Check volatility lock
@@ -474,6 +506,13 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                 continue
 
             layer_orders = self._process_layer(layer, tick_data)
+            if layer_orders:
+                logger.info(
+                    "FloorStrategy layer %d generated %d order(s) at tick #%d",
+                    layer.layer_number,
+                    len(layer_orders),
+                    self._strategy_tick_count,
+                )
             orders.extend(layer_orders)
 
         # Check if we need to create a new layer
@@ -483,6 +522,15 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         self._tick_count += 1
         if self._tick_count % self._state_save_interval == 0:
             self._save_state()
+
+        # Log when orders are generated
+        if orders:
+            logger.info(
+                "FloorStrategy generated %d total order(s) at tick #%d: %s",
+                len(orders),
+                self._strategy_tick_count,
+                [(o.direction, o.units, o.instrument) for o in orders],
+            )
 
         return orders
 
@@ -1218,13 +1266,22 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         # Determine entry signal and direction
         entry_signal = self._check_entry_signal(tick_data)
         if not entry_signal:
-            # Log why we're not entering (only first few times to avoid spam)
-            if self._no_signal_log_count < 3:
+            # Log why we're not entering (more frequently for debugging)
+            if self._no_signal_log_count < 10 or self._no_signal_log_count % 100 == 0:
                 history_len = 0
                 if tick_data.instrument in self._price_history:
                     history_len = len(self._price_history[tick_data.instrument])
                 required = self.entry_signal_lookback_ticks
-                msg = f"No entry signal yet - need {required} ticks, " f"have {history_len}"
+                msg = (
+                    f"No entry signal yet - need {required} ticks, have {history_len}. "
+                    f"Method: {self.direction_method}"
+                )
+                logger.info(
+                    "FloorStrategy layer %d: %s (check #%d)",
+                    layer.layer_number,
+                    msg,
+                    self._no_signal_log_count + 1,
+                )
                 self.log_strategy_event(
                     "no_entry_signal",
                     msg,
@@ -1232,11 +1289,12 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                         "layer": layer.layer_number,
                         "history_length": history_len,
                         "required_ticks": required,
+                        "direction_method": self.direction_method,
                         "retracement_count": layer.retracement_count,
                         "max_retracements": layer.max_retracements_per_layer,
                     },
                 )
-                self._no_signal_log_count += 1
+            self._no_signal_log_count += 1
             return None
 
         direction = entry_signal["direction"]

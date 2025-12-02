@@ -175,7 +175,10 @@ export function TaskExecutionsTab({
     isLoading,
     error,
     refetch: refetchExecutions,
-  } = useTaskExecutions(taskId, taskType);
+  } = useTaskExecutions(taskId, taskType, undefined, {
+    enablePolling: true,
+    pollingInterval: 3000, // Poll every 3 seconds for running executions
+  });
 
   const executions = useMemo(
     () => executionsData?.results || [],

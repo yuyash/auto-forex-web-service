@@ -1288,6 +1288,19 @@ def execute_trading_task(
         execution.add_log("INFO", f"Account: {task.oanda_account.account_id}")
         execution.add_log("INFO", f"Account type: {task.oanda_account.api_type}")
 
+        # Log strategy configuration parameters for debugging
+        config_params = task.config.parameters
+        execution.add_log("INFO", f"Configuration parameters: {config_params}")
+
+        # Log risk management settings from config parameters
+        risk_params = task.config.parameters
+        if risk_params.get("max_position_size"):
+            execution.add_log("INFO", f"Max position size: {risk_params['max_position_size']}")
+        if risk_params.get("max_daily_loss"):
+            execution.add_log("INFO", f"Max daily loss: {risk_params['max_daily_loss']}")
+        if risk_params.get("max_drawdown"):
+            execution.add_log("INFO", f"Max drawdown: {risk_params['max_drawdown']}")
+
         # Initialize strategy executor
         # Note: The actual strategy execution happens via market data streaming
         # which is managed by the start_market_data_stream Celery task
@@ -1310,6 +1323,12 @@ def execute_trading_task(
             }
 
         execution.add_log("INFO", f"Instrument: {instrument}")
+        execution.add_log("INFO", "Waiting for market data stream to start...")
+        execution.add_log(
+            "INFO",
+            f"Strategy will process ticks for {instrument} "
+            "and generate orders when conditions are met",
+        )
 
         # Start market data streaming for the account
         # This will be handled by the Celery task in the next subtask

@@ -330,6 +330,10 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
         streamer = MarketDataStreamer(oanda_account)
         streamer.initialize_connection()
 
+        # Track tick count for periodic logging
+        stream_tick_count = [0]  # Use list to allow modification in nested function
+        stream_last_log_time = [time.time()]
+
         # Register tick callback to process and broadcast ticks
         def on_tick(tick: TickData) -> None:
             """
@@ -345,6 +349,35 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
             Args:
                 tick: Normalized tick data
             """
+            stream_tick_count[0] += 1
+            current_time = time.time()
+
+            # Log first tick and then every 100 ticks or every 60 seconds
+            is_first_tick = stream_tick_count[0] == 1
+            should_log = (
+                is_first_tick
+                or stream_tick_count[0] % 100 == 0
+                or (current_time - stream_last_log_time[0]) >= 60
+            )
+
+            if should_log:
+                stream_last_log_time[0] = current_time
+                if is_first_tick:
+                    logger.info(
+                        "First tick received from stream for account %s: %s @ %s",
+                        oanda_account.account_id,
+                        tick.instrument,
+                        tick.mid,
+                    )
+                else:
+                    logger.info(
+                        "Stream tick count for account %s: %d (latest: %s @ %s)",
+                        oanda_account.account_id,
+                        stream_tick_count[0],
+                        tick.instrument,
+                        tick.mid,
+                    )
+
             # Store tick to database if enabled
             if tick_storage_enabled and tick_buffer:
                 try:
@@ -1181,53 +1214,143 @@ def run_host_access_monitoring() -> Dict[str, Any]:
         }
 
 
-def _process_tick_for_task(
+def _get_task_execution(task: Any) -> Any:
+    """Get the latest running execution for a task."""
+    from trading.enums import TaskType
+    from trading.execution_models import TaskExecution
+
+    return TaskExecution.objects.filter(
+        task_type=TaskType.TRADING,
+        task_id=task.pk,
+        status=TaskStatus.RUNNING,
+    ).first()
+
+
+# Track tick counts per task for periodic logging
+_task_tick_counts: dict[int, int] = {}
+_task_last_log_time: dict[int, float] = {}
+
+# Track tick counts for broadcast logging (per account)
+_no_task_log_counts: dict[int, int] = {}
+_task_log_counts: dict[int, int] = {}
+
+
+# pylint: disable=too-many-locals,too-many-branches,too-many-statements
+def _process_tick_for_task(  # noqa: C901
     task: Any, tick: "TickData", tick_model: "TickDataModel", registry: Any
 ) -> None:
     import uuid
 
+    # Get execution for logging
+    execution = _get_task_execution(task)
+
     try:
+        # Track tick count for periodic logging
+        task_id = task.pk
+        if task_id not in _task_tick_counts:
+            _task_tick_counts[task_id] = 0
+            _task_last_log_time[task_id] = time.time()
+            # Log first tick received for this task
+            first_tick_msg = (
+                f"First tick received for task {task_id}: "
+                f"{tick.instrument} bid={tick.bid} ask={tick.ask} mid={tick.mid}"
+            )
+            logger.info(first_tick_msg)
+            if execution:
+                execution.add_log("INFO", first_tick_msg)
+
+        _task_tick_counts[task_id] += 1
+        tick_count = _task_tick_counts[task_id]
+
+        # Log every 50 ticks or every 30 seconds for better visibility
+        current_time = time.time()
+        should_log_progress = (
+            tick_count % 50 == 0 or (current_time - _task_last_log_time[task_id]) >= 30
+        )
+
+        if should_log_progress:
+            _task_last_log_time[task_id] = current_time
+            progress_msg = (
+                f"Task {task_id} processed {tick_count} ticks. "
+                f"Latest: {tick.instrument} @ {tick.mid} (spread: {tick.spread})"
+            )
+            logger.info(progress_msg)
+            if execution:
+                execution.add_log("INFO", progress_msg)
+
         # Get instrument from configuration
         task_instrument = task.config.parameters.get("instrument")
-        if not task_instrument or tick.instrument != task_instrument:
-            logger.debug(
-                "Tick instrument %s doesn't match task %d instrument %s",
-                tick.instrument,
-                task.pk,
-                task_instrument,
-            )
+        if not task_instrument:
+            warning_msg = f"Task {task_id} has no instrument configured"
+            logger.warning(warning_msg)
+            if execution and tick_count == 1:
+                execution.add_log("WARNING", warning_msg)
+            return
+
+        if tick.instrument != task_instrument:
+            # Only log instrument mismatch on first occurrence
+            if tick_count <= 5:
+                logger.debug(
+                    "Tick instrument %s doesn't match task %d instrument %s",
+                    tick.instrument,
+                    task.pk,
+                    task_instrument,
+                )
             return
 
         # Get strategy class from registry
         strategy_class = registry.get_strategy_class(task.config.strategy_type)
         if not strategy_class:
-            logger.warning(
-                "Unknown strategy type %s for task %d",
-                task.config.strategy_type,
-                task.pk,
-            )
+            warning_msg = f"Unknown strategy type '{task.config.strategy_type}' for task {task.pk}"
+            logger.warning(warning_msg)
+            if execution:
+                execution.add_log("WARNING", warning_msg)
             return
 
         # Create strategy instance with TradingTask model
         strategy_instance = strategy_class(task)
 
+        # Log strategy initialization on first matching tick
+        if tick_count == 1 or (task_id in _task_tick_counts and _task_tick_counts[task_id] == 1):
+            init_msg = (
+                f"Strategy '{task.config.strategy_type}' initialized for task {task_id} "
+                f"on instrument {task_instrument}"
+            )
+            logger.info(init_msg)
+            if execution:
+                execution.add_log("INFO", init_msg)
+
         logger.debug(
-            "Processing tick for task %d with strategy %s",
+            "Processing tick for task %d with strategy %s @ %s",
             task.pk,
             task.config.strategy_type,
+            tick.mid,
         )
 
         # Process tick through strategy
-        orders = strategy_instance.on_tick(tick_model)
+        try:
+            orders = strategy_instance.on_tick(tick_model)
+        except Exception as strategy_error:
+            error_msg = f"Strategy error processing tick: {str(strategy_error)}"
+            logger.error(error_msg, exc_info=True)
+            if execution:
+                execution.add_log("ERROR", error_msg)
+            return
+
+        # Log when strategy processes tick but generates no orders (periodically)
+        if not orders and tick_count % 100 == 0:
+            no_order_msg = f"Strategy evaluated {tick_count} ticks, no orders generated yet"
+            logger.info(no_order_msg)
+            if execution:
+                execution.add_log("INFO", no_order_msg)
 
         if orders:
-            logger.info(
-                "TradingTask %d (%s) generated %d orders for %s",
-                task.pk,
-                task.config.strategy_type,
-                len(orders),
-                tick.instrument,
+            order_msg = (
+                f"Strategy generated {len(orders)} order(s) for {tick.instrument} @ {tick.mid}"
             )
+            logger.info(order_msg)
+            if execution:
+                execution.add_log("INFO", order_msg)
 
             # Save orders to database and execute them
             from trading.order_executor import OrderExecutor
@@ -1251,15 +1374,13 @@ def _process_tick_for_task(
                     order.save()
                     saved_orders.append(order)
 
-                    logger.info(
-                        "Saved order %s: %s %s %s units of %s for task %d",
-                        order.order_id,
-                        order.order_type,
-                        order.direction,
-                        order.units,
-                        order.instrument,
-                        task.pk,
+                    save_msg = (
+                        f"Order saved: {order.order_id} - {order.direction.upper()} "
+                        f"{order.units} {order.instrument} @ {order.price}"
                     )
+                    logger.info(save_msg)
+                    if execution:
+                        execution.add_log("INFO", save_msg)
 
             # Execute orders via OANDA API
             if saved_orders:
@@ -1267,28 +1388,37 @@ def _process_tick_for_task(
                     executor = OrderExecutor(task.oanda_account)
                     for order in saved_orders:
                         if order.order_type == "market":
-                            executor.submit_market_order(
+                            exec_msg = (
+                                f"Executing market order: {order.direction.upper()} "
+                                f"{order.units} {order.instrument}"
+                            )
+                            logger.info(exec_msg)
+                            if execution:
+                                execution.add_log("INFO", exec_msg)
+
+                            result = executor.submit_market_order(
                                 instrument=order.instrument,
                                 units=order.units if order.direction == "long" else -order.units,
                                 take_profit=order.take_profit,
                                 stop_loss=order.stop_loss,
                             )
+
+                            success_msg = f"Order executed successfully: {result.order_id}"
+                            logger.info(success_msg)
+                            if execution:
+                                execution.add_log("INFO", success_msg)
                         # Add support for other order types as needed
                 except Exception as exec_error:
-                    logger.error(
-                        "Error executing orders for task %d: %s",
-                        task.pk,
-                        exec_error,
-                        exc_info=True,
-                    )
+                    error_msg = f"Error executing orders: {str(exec_error)}"
+                    logger.error(error_msg, exc_info=True)
+                    if execution:
+                        execution.add_log("ERROR", error_msg)
 
     except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.error(
-            "Error processing tick for TradingTask %d: %s",
-            task.pk,
-            e,
-            exc_info=True,
-        )
+        error_msg = f"Error processing tick for task {task.pk}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        if execution:
+            execution.add_log("ERROR", error_msg)
 
 
 def _broadcast_to_strategy_executors(  # pylint: disable=too-many-locals
@@ -1331,11 +1461,30 @@ def _broadcast_to_strategy_executors(  # pylint: disable=too-many-locals
 
         task_count = running_tasks.count()
         if task_count == 0:
-            logger.debug(
-                "No running trading tasks found for account %s (id=%d)",
-                account.account_id,
-                account.pk,
-            )
+            # Log periodically to help debug (use module-level dict)
+            account_key = account.pk
+            count = _no_task_log_counts.get(account_key, 0)
+            _no_task_log_counts[account_key] = count + 1
+            if count % 100 == 0:  # Log every 100 ticks when no tasks
+                logger.info(
+                    "No running trading tasks for account %s (id=%d) - %d ticks",
+                    account.account_id,
+                    account.pk,
+                    count + 1,
+                )
+        else:
+            # Log task count periodically
+            account_key = account.pk
+            count = _task_log_counts.get(account_key, 0)
+            _task_log_counts[account_key] = count + 1
+            if count % 500 == 0:  # Log every 500 ticks
+                task_names = [t.name for t in running_tasks]
+                logger.info(
+                    "Broadcasting tick to %d task(s) for account %s: %s",
+                    task_count,
+                    account.account_id,
+                    task_names,
+                )
 
         for task in running_tasks:
             _process_tick_for_task(task, tick, tick_model, registry)
@@ -1564,10 +1713,32 @@ def run_trading_task(task_id: int) -> Dict[str, Any]:
 
             if account_pk and instrument:
                 # Trigger market data streaming
-                start_market_data_stream.delay(account_pk, instrument)
+                stream_task = start_market_data_stream.delay(account_pk, instrument)
                 logger.info(
-                    "Started market data streaming for account %s with instrument: %s",
+                    "Started market data streaming for account %s "
+                    "with instrument: %s (celery task: %s)",
                     result.get("oanda_account_id"),
+                    instrument,
+                    stream_task.id,
+                )
+
+                # Add log to execution
+                from trading.execution_models import TaskExecution
+
+                try:
+                    execution = TaskExecution.objects.get(pk=result["execution_id"])
+                    execution.add_log(
+                        "INFO",
+                        f"Market data stream started for {instrument} (task: {stream_task.id})",
+                    )
+                except TaskExecution.DoesNotExist:
+                    pass
+            else:
+                logger.warning(
+                    "TradingTask %d: Missing account_pk (%s) or instrument (%s) - "
+                    "market data streaming not started",
+                    task_id,
+                    account_pk,
                     instrument,
                 )
         else:

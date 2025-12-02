@@ -19,11 +19,19 @@ interface UseTaskExecutionsResult {
 
 /**
  * Hook to fetch execution history for a task
+ *
+ * @param taskId - The task ID to fetch executions for
+ * @param taskType - The type of task (backtest or trading)
+ * @param params - Optional pagination parameters
+ * @param options - Optional configuration options
+ * @param options.enablePolling - Enable automatic polling for running executions (default: true)
+ * @param options.pollingInterval - Polling interval in ms (default: 3000 for running, disabled otherwise)
  */
 export function useTaskExecutions(
   taskId: number,
   taskType: TaskType,
-  params?: { page?: number; page_size?: number }
+  params?: { page?: number; page_size?: number },
+  options?: { enablePolling?: boolean; pollingInterval?: number }
 ): UseTaskExecutionsResult {
   const queryKey =
     taskType === TaskType.BACKTEST
@@ -42,8 +50,20 @@ export function useTaskExecutions(
         ? await backtestTasksApi.getExecutions(taskId, fetchParams)
         : await tradingTasksApi.getExecutions(taskId, fetchParams);
     },
-    staleTime: 5000, // Consider data fresh for 5 seconds
+    staleTime: 2000, // Consider data fresh for 2 seconds
     refetchOnWindowFocus: true,
+    // Enable automatic polling for running executions to get live logs
+    refetchInterval: () => {
+      // Check if any execution is running
+      const hasRunningExecution = data?.results?.some(
+        (exec) => exec.status === 'running'
+      );
+      // If polling is enabled and there's a running execution, poll every 3 seconds
+      if (options?.enablePolling !== false && hasRunningExecution) {
+        return options?.pollingInterval ?? 3000;
+      }
+      return false; // Disable polling when no running executions
+    },
   });
 
   return {
