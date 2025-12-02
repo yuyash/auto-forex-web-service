@@ -1234,6 +1234,9 @@ _task_last_log_time: dict[int, float] = {}
 _no_task_log_counts: dict[int, int] = {}
 _task_log_counts: dict[int, int] = {}
 
+# Cache strategy instances per task to maintain state across ticks
+_strategy_instances: dict[int, Any] = {}
+
 
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements
 def _process_tick_for_task(  # noqa: C901
@@ -1298,20 +1301,21 @@ def _process_tick_for_task(  # noqa: C901
                 )
             return
 
-        # Get strategy class from registry
-        strategy_class = registry.get_strategy_class(task.config.strategy_type)
-        if not strategy_class:
-            warning_msg = f"Unknown strategy type '{task.config.strategy_type}' for task {task.pk}"
-            logger.warning(warning_msg)
-            if execution:
-                execution.add_log("WARNING", warning_msg)
-            return
+        # Get or create cached strategy instance to maintain state across ticks
+        if task_id not in _strategy_instances:
+            # Get strategy class from registry
+            strategy_class = registry.get_strategy_class(task.config.strategy_type)
+            if not strategy_class:
+                warning_msg = (
+                    f"Unknown strategy type '{task.config.strategy_type}' for task {task.pk}"
+                )
+                logger.warning(warning_msg)
+                if execution:
+                    execution.add_log("WARNING", warning_msg)
+                return
 
-        # Create strategy instance with TradingTask model
-        strategy_instance = strategy_class(task)
-
-        # Log strategy initialization on first matching tick
-        if tick_count == 1 or (task_id in _task_tick_counts and _task_tick_counts[task_id] == 1):
+            # Create and cache strategy instance
+            _strategy_instances[task_id] = strategy_class(task)
             init_msg = (
                 f"Strategy '{task.config.strategy_type}' initialized for task {task_id} "
                 f"on instrument {task_instrument}"
@@ -1319,6 +1323,8 @@ def _process_tick_for_task(  # noqa: C901
             logger.info(init_msg)
             if execution:
                 execution.add_log("INFO", init_msg)
+
+        strategy_instance = _strategy_instances[task_id]
 
         logger.debug(
             "Processing tick for task %d with strategy %s @ %s",
@@ -1821,6 +1827,17 @@ def stop_trading_task(task_id: int, stop_mode: str = "graceful") -> Dict[str, An
         )
 
         if result["success"]:
+            # Clear cached strategy instance
+            if task_id in _strategy_instances:
+                del _strategy_instances[task_id]
+                logger.info("Cleared cached strategy instance for task %d", task_id)
+
+            # Clear tick counters
+            if task_id in _task_tick_counts:
+                del _task_tick_counts[task_id]
+            if task_id in _task_last_log_time:
+                del _task_last_log_time[task_id]
+
             # Stop market data streaming for the account
             stop_market_data_stream.delay(task.oanda_account.pk)
             logger.info(
