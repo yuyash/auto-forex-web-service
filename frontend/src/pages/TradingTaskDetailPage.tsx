@@ -110,6 +110,17 @@ export default function TradingTaskDetailPage() {
     if (polledStatus) {
       console.log('[TradingTaskDetail] Polled status update:', polledStatus);
 
+      // Always clear transitioning state when polled status shows task is not running
+      // This handles cases where task stops externally (e.g., stream error)
+      if (
+        polledStatus.status === TaskStatus.STOPPED ||
+        polledStatus.status === TaskStatus.CREATED ||
+        polledStatus.status === TaskStatus.FAILED ||
+        polledStatus.status === TaskStatus.COMPLETED
+      ) {
+        setIsTransitioning(false);
+      }
+
       if (
         task &&
         prevStatusRef.current &&
@@ -278,16 +289,20 @@ export default function TradingTaskDetailPage() {
     );
   }
 
+  // Use polled status if available, otherwise fall back to task status
+  // This ensures UI reflects real-time status changes (e.g., external stops)
+  const currentStatus = (polledStatus?.status as TaskStatus) || task.status;
+
   const canStart =
-    task.status === TaskStatus.CREATED ||
-    task.status === TaskStatus.STOPPED ||
-    task.status === TaskStatus.PAUSED;
+    currentStatus === TaskStatus.CREATED ||
+    currentStatus === TaskStatus.STOPPED ||
+    currentStatus === TaskStatus.PAUSED;
   const canStop =
-    task.status === TaskStatus.RUNNING || task.status === TaskStatus.PAUSED;
+    currentStatus === TaskStatus.RUNNING || currentStatus === TaskStatus.PAUSED;
   const canEdit =
-    task.status !== TaskStatus.RUNNING && task.status !== TaskStatus.PAUSED;
+    currentStatus !== TaskStatus.RUNNING && currentStatus !== TaskStatus.PAUSED;
   const canDelete =
-    task.status !== TaskStatus.RUNNING && task.status !== TaskStatus.PAUSED;
+    currentStatus !== TaskStatus.RUNNING && currentStatus !== TaskStatus.PAUSED;
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -305,7 +320,7 @@ export default function TradingTaskDetailPage() {
       </Breadcrumbs>
 
       {/* Live Trading Warning */}
-      {task.status === TaskStatus.RUNNING && (
+      {currentStatus === TaskStatus.RUNNING && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           This task is actively trading with real money. Monitor carefully and
           use the emergency stop button if needed.
@@ -324,8 +339,8 @@ export default function TradingTaskDetailPage() {
               <Typography variant="h4" component="h1">
                 {task.name}
               </Typography>
-              <StatusBadge status={task.status} />
-              {task.status === TaskStatus.RUNNING && (
+              <StatusBadge status={currentStatus} />
+              {currentStatus === TaskStatus.RUNNING && (
                 <Box
                   sx={{
                     width: 12,
@@ -363,7 +378,7 @@ export default function TradingTaskDetailPage() {
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {/* Use TaskActionButtons component (Requirement 4.5) */}
               <TaskActionButtons
-                status={task.status}
+                status={currentStatus}
                 onStart={handleStart}
                 onStop={handleStop}
                 onRerun={handleRerun}

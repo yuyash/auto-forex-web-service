@@ -648,7 +648,7 @@ class TradingTaskStatusView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def get(self, request: Request, task_id: int) -> Response:
+    def get(self, request: Request, task_id: int) -> Response:  # pylint: disable=too-many-locals
         """
         Get current task status and execution details.
 
@@ -676,7 +676,14 @@ class TradingTaskStatusView(APIView):
         lock_manager = TaskLockManager()
 
         # Check for stale running tasks and auto-complete them
-        if task.status == TaskStatus.RUNNING and latest_execution:
+        # But first check if task was recently started (grace period for Celery to pick up)
+        from datetime import timedelta
+
+        task_recently_started = task.updated_at and (timezone.now() - task.updated_at) < timedelta(
+            seconds=30
+        )
+
+        if task.status == TaskStatus.RUNNING and latest_execution and not task_recently_started:
             lock_info = lock_manager.get_lock_info("trading", task_id)
 
             # Task is "running" but no lock exists or lock is stale
