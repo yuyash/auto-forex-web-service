@@ -56,6 +56,7 @@ class TickDataBuffer:
         account: OandaAccount,
         batch_size: int = 100,
         batch_timeout: float = 1.0,
+        log_interval: int = 1000,
     ):
         """
         Initialize the tick data buffer.
@@ -64,15 +65,18 @@ class TickDataBuffer:
             account: OandaAccount instance
             batch_size: Number of ticks to buffer before flushing (default: 100)
             batch_timeout: Maximum time in seconds to wait before flushing (default: 1.0)
+            log_interval: Log at INFO level every N ticks stored (default: 1000)
         """
         self.account = account
         self.batch_size = batch_size
         self.batch_timeout = batch_timeout
+        self.log_interval = log_interval
         self.buffer: List[TickDataModel] = []
         self.lock = threading.Lock()
         self.last_flush_time = time.time()
         self.total_stored = 0
         self.total_errors = 0
+        self._last_logged_total = 0
 
     def add_tick(self, tick: TickData) -> None:
         """
@@ -157,12 +161,22 @@ class TickDataBuffer:
                 )
 
             self.total_stored += buffer_size
-            logger.info(
-                "Flushed %d ticks to database for account %s (total stored: %d)",
-                buffer_size,
-                self.account.account_id,
-                self.total_stored,
-            )
+
+            # Log at DEBUG level for each flush, INFO only at intervals
+            if self.total_stored - self._last_logged_total >= self.log_interval:
+                logger.info(
+                    "Tick storage progress for account %s: %d ticks stored",
+                    self.account.account_id,
+                    self.total_stored,
+                )
+                self._last_logged_total = self.total_stored
+            else:
+                logger.debug(
+                    "Flushed %d ticks to database for account %s (total stored: %d)",
+                    buffer_size,
+                    self.account.account_id,
+                    self.total_stored,
+                )
 
         except DatabaseError as e:
             self.total_errors += buffer_size
@@ -1167,6 +1181,49 @@ def run_host_access_monitoring() -> Dict[str, Any]:
         }
 
 
+def _process_tick_for_task(
+    task: Any, tick: "TickData", tick_model: "TickDataModel", registry: Any
+) -> None:
+    try:
+        # Get instrument from configuration
+        task_instrument = task.config.parameters.get("instrument")
+        if not task_instrument or tick.instrument != task_instrument:
+            return
+
+        # Get strategy class from registry
+        strategy_class = registry.get_strategy_class(task.config.strategy_type)
+        if not strategy_class:
+            logger.warning(
+                "Unknown strategy type %s for task %d",
+                task.config.strategy_type,
+                task.pk,
+            )
+            return
+
+        # Create strategy instance with TradingTask model
+        strategy_instance = strategy_class(task)
+
+        # Process tick through strategy
+        orders = strategy_instance.on_tick(tick_model)
+
+        if orders:
+            logger.info(
+                "TradingTask %d (%s) generated %d orders for %s",
+                task.pk,
+                task.config.strategy_type,
+                len(orders),
+                tick.instrument,
+            )
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error(
+            "Error processing tick for TradingTask %d: %s",
+            task.pk,
+            e,
+            exc_info=True,
+        )
+
+
 def _broadcast_to_strategy_executors(  # pylint: disable=too-many-locals
     account: OandaAccount, tick: TickData
 ) -> None:
@@ -1206,44 +1263,7 @@ def _broadcast_to_strategy_executors(  # pylint: disable=too-many-locals
         ).select_related("config")
 
         for task in running_tasks:
-            try:
-                # Get instrument from configuration
-                task_instrument = task.config.parameters.get("instrument")
-                if not task_instrument or tick.instrument != task_instrument:
-                    continue
-
-                # Get strategy class from registry
-                strategy_class = registry.get_strategy_class(task.config.strategy_type)
-                if not strategy_class:
-                    logger.warning(
-                        "Unknown strategy type %s for task %d",
-                        task.config.strategy_type,
-                        task.pk,
-                    )
-                    continue
-
-                # Create strategy instance with TradingTask model
-                strategy_instance = strategy_class(task)
-
-                # Process tick through strategy
-                orders = strategy_instance.on_tick(tick_model)
-
-                if orders:
-                    logger.info(
-                        "TradingTask %d (%s) generated %d orders for %s",
-                        task.pk,
-                        task.config.strategy_type,
-                        len(orders),
-                        tick.instrument,
-                    )
-
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                logger.error(
-                    "Error processing tick for TradingTask %d: %s",
-                    task.pk,
-                    e,
-                    exc_info=True,
-                )
+            _process_tick_for_task(task, tick, tick_model, registry)
 
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error("Error broadcasting tick to trading tasks: %s", e, exc_info=True)
