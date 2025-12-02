@@ -16,6 +16,7 @@ import Grid from '@mui/material/Grid';
 import { MetricCard } from '../../tasks/display/MetricCard';
 import { EquityCurveChart } from '../../tasks/charts/EquityCurveChart';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
+import { FloorLayerLog } from '../../backtest/FloorLayerLog';
 import { TradingTaskChart } from '../TradingTaskChart';
 import type { TradingTask } from '../../../types/tradingTask';
 import { TaskStatus, TaskType } from '../../../types/common';
@@ -298,6 +299,19 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           onTradeClick={handleTradeClick}
         />
       </Paper>
+
+      {/* Floor Strategy Layer Log (for floor strategy only) */}
+      {task.strategy_type === 'floor' &&
+        metrics?.trade_log &&
+        metrics.trade_log.length > 0 && (
+          <Paper sx={{ p: 3, mt: 3 }}>
+            <FloorLayerLog
+              trades={metrics.trade_log}
+              strategyEvents={metrics.strategy_events}
+              selectedTradeIndex={selectedTradeIndex}
+            />
+          </Paper>
+        )}
 
       {/* Trade Log Table */}
       <Box ref={tradeLogTableRef} sx={{ mt: 3 }}>

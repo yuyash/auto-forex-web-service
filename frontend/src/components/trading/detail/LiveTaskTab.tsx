@@ -95,6 +95,7 @@ export function LiveTaskTab({ task }: LiveTaskTabProps) {
           justifyContent: 'space-between',
           alignItems: 'center',
           mb: 3,
+          px: 3,
         }}
       >
         <Typography variant="body2" color="text.secondary">

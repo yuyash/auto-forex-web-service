@@ -1634,6 +1634,9 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         )
         order.layer_number = getattr(position, "layer_number", None)  # type: ignore[attr-defined]
         order.is_first_lot = False  # type: ignore[attr-defined]
+        # Mark as close order with reference to position being closed
+        order.is_close_order = True  # type: ignore[attr-defined]
+        order.closing_position_id = position.position_id  # type: ignore[attr-defined]
         return order
 
     def _calculate_close_metrics(

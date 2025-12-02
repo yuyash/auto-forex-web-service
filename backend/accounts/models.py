@@ -255,21 +255,12 @@ class SystemSettings(models.Model):
         ),
     )
 
-    # Celery Task Time Limits
-    celery_task_soft_time_limit = models.IntegerField(
-        default=259200,  # 72 hours in seconds
+    # Trading Task Performance Metrics
+    trading_metrics_interval_seconds = models.IntegerField(
+        default=30,
         help_text=(
-            "Soft time limit for Celery tasks in seconds. Tasks will receive a "
-            "SoftTimeLimitExceeded exception when this limit is reached "
-            "(default: 259200 = 72 hours)"
-        ),
-    )
-    celery_task_hard_time_limit = models.IntegerField(
-        default=259200,  # 72 hours in seconds
-        help_text=(
-            "Hard time limit for Celery tasks in seconds. Tasks will be "
-            "terminated (SIGKILL) when this limit is reached "
-            "(default: 259200 = 72 hours)"
+            "Interval in seconds for submitting trading task performance metrics "
+            "(default: 30 seconds)"
         ),
     )
 

@@ -68,18 +68,48 @@ class TradingTaskSerializer(serializers.ModelSerializer):
         ]
 
     def get_latest_execution(self, obj: TradingTask) -> dict | None:
-        """Get summary of latest execution."""
+        """Get summary of latest execution with metrics."""
         execution = obj.get_latest_execution()
         if not execution:
             return None
 
-        return {
+        result = {
             "id": execution.id,
             "execution_number": execution.execution_number,
             "status": execution.status,
             "started_at": execution.started_at,
             "completed_at": execution.completed_at,
         }
+
+        # Include metrics if available
+        if hasattr(execution, "metrics") and execution.metrics:
+            metrics = execution.metrics
+            result.update(
+                {
+                    "total_pnl": str(metrics.total_pnl),
+                    "realized_pnl": str(metrics.realized_pnl),
+                    "unrealized_pnl": str(metrics.unrealized_pnl),
+                    "total_trades": metrics.total_trades,
+                    "winning_trades": metrics.winning_trades,
+                    "losing_trades": metrics.losing_trades,
+                    "win_rate": str(metrics.win_rate),
+                }
+            )
+        else:
+            # Default values when no metrics exist yet
+            result.update(
+                {
+                    "total_pnl": "0.00",
+                    "realized_pnl": "0.00",
+                    "unrealized_pnl": "0.00",
+                    "total_trades": 0,
+                    "winning_trades": 0,
+                    "losing_trades": 0,
+                    "win_rate": "0.00",
+                }
+            )
+
+        return result
 
 
 class TradingTaskListSerializer(serializers.ModelSerializer):
