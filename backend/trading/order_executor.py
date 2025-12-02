@@ -262,25 +262,43 @@ class OrderExecutor:
 
             return order
 
-        # Order was rejected - extract rejection reason
+        # Order was rejected - extract rejection reason from response body
         reject_reason = "Unknown rejection reason"
-        reject_transaction = None
 
+        # Try to get error details from response body
+        response_body = None
+        if hasattr(response, "body") and response.body:
+            response_body = response.body
+        elif hasattr(response, "raw_body") and response.raw_body:
+            response_body = response.raw_body
+
+        # Extract rejection reason from various possible locations
         if hasattr(response, "orderRejectTransaction") and response.orderRejectTransaction:
             reject_transaction = response.orderRejectTransaction
             reject_reason = getattr(reject_transaction, "rejectReason", reject_reason)
         elif hasattr(response, "orderCancelTransaction") and response.orderCancelTransaction:
             reject_transaction = response.orderCancelTransaction
             reject_reason = getattr(reject_transaction, "reason", reject_reason)
+        elif response_body:
+            # Try to extract from body dict
+            if isinstance(response_body, dict):
+                error_msg = response_body.get("errorMessage")
+                if error_msg:
+                    reject_reason = str(error_msg)
+                else:
+                    reject_msg = response_body.get("rejectReason")
+                    reject_reason = str(reject_msg) if reject_msg else str(response_body)
+            else:
+                reject_reason = str(response_body)
 
         # Log the full response for debugging
         logger.error(
-            "Market order rejected: %s %s %s - Reason: %s, Response attrs: %s",
+            "Market order rejected: %s %s %s - Reason: %s, Body: %s",
             direction,
             abs_units,
             instrument,
             reject_reason,
-            [attr for attr in dir(response) if not attr.startswith("_")],
+            response_body,
         )
 
         # Log rejection event
