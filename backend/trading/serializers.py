@@ -537,6 +537,9 @@ class PositionSerializer(serializers.ModelSerializer):
     strategy_type = serializers.CharField(
         source="strategy.strategy_type", read_only=True, allow_null=True
     )
+    trading_task_id = serializers.IntegerField(
+        source="trading_task.id", read_only=True, allow_null=True
+    )
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = Position
@@ -546,6 +549,7 @@ class PositionSerializer(serializers.ModelSerializer):
             "account_name",
             "strategy_id",
             "strategy_type",
+            "trading_task_id",
             "position_id",
             "instrument",
             "direction",

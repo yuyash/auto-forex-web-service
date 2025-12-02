@@ -539,7 +539,15 @@ class Order(models.Model):
         null=True,
         blank=True,
         related_name="orders",
-        help_text="Strategy that generated this order",
+        help_text="Strategy that generated this order (legacy mode)",
+    )
+    trading_task = models.ForeignKey(
+        "TradingTask",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="orders",
+        help_text="Trading task that generated this order",
     )
     order_id = models.CharField(
         max_length=100,
@@ -692,7 +700,15 @@ class Position(models.Model):
         null=True,
         blank=True,
         related_name="positions",
-        help_text="Strategy that opened this position",
+        help_text="Strategy that opened this position (legacy mode)",
+    )
+    trading_task = models.ForeignKey(
+        "TradingTask",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="positions",
+        help_text="Trading task that opened this position",
     )
     position_id = models.CharField(
         max_length=100,

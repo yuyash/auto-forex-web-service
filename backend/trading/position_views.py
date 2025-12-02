@@ -78,6 +78,7 @@ class PositionListView(APIView):
         # Get query parameters
         account_id = request.query_params.get("account_id")
         strategy_id = request.query_params.get("strategy_id")
+        trading_task_id = request.query_params.get("trading_task_id")
         instrument = request.query_params.get("instrument")
         position_status = request.query_params.get("status", "open").lower()
 
@@ -92,6 +93,7 @@ class PositionListView(APIView):
         filters = {
             "account_id": account_id,
             "strategy_id": strategy_id,
+            "trading_task_id": trading_task_id,
             "instrument": instrument,
             "position_status": position_status,
         }
@@ -129,13 +131,14 @@ class PositionListView(APIView):
 
         Args:
             request: HTTP request
-            filters: Dict with account_id, strategy_id, instrument, position_status
+            filters: Dict with account_id, strategy_id, trading_task_id, instrument, position_status
 
         Returns:
             Filtered queryset or error response
         """
         account_id = filters.get("account_id")
         strategy_id = filters.get("strategy_id")
+        trading_task_id = filters.get("trading_task_id")
         instrument = filters.get("instrument")
         position_status = filters.get("position_status")
 
@@ -171,6 +174,17 @@ class PositionListView(APIView):
             except ValueError:
                 return Response(
                     {"error": "Invalid strategy_id. Must be an integer."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Apply trading_task filter
+        if trading_task_id:
+            try:
+                trading_task_id_int = int(trading_task_id)
+                queryset = queryset.filter(trading_task__id=trading_task_id_int)
+            except ValueError:
+                return Response(
+                    {"error": "Invalid trading_task_id. Must be an integer."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 

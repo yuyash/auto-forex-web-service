@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -12,11 +12,25 @@ import {
   Alert,
   Pagination,
   TableSortLabel,
+  CircularProgress,
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
 } from '@mui/icons-material';
+import { apiClient } from '../../../services/api/client';
+
+interface Position {
+  id: number;
+  instrument: string;
+  direction: 'long' | 'short';
+  units: number;
+  entry_price: string;
+  current_price: string;
+  realized_pnl: string;
+  opened_at: string;
+  closed_at: string;
+}
 
 interface Trade {
   id: number;
@@ -38,22 +52,57 @@ type SortField = 'exit_time' | 'pnl' | 'instrument';
 type SortOrder = 'asc' | 'desc';
 
 export function RecentTradesLog({ taskId }: RecentTradesLogProps) {
-  const [trades] = useState<Trade[]>([]);
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [totalPages] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [sortField, setSortField] = useState<SortField>('exit_time');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   const tradesPerPage = 10;
 
-  useEffect(() => {
-    const interval = setInterval(() => {
+  const fetchTrades = useCallback(async () => {
+    try {
+      const response = await apiClient.get<{
+        results: Position[];
+        count: number;
+      }>(`/positions/?trading_task_id=${taskId}&status=closed&page_size=50`);
+      // Convert positions to trades format
+      const closedPositions = response.results || [];
+      const tradeData: Trade[] = closedPositions.map((pos: Position) => ({
+        id: pos.id,
+        instrument: pos.instrument,
+        direction: pos.direction,
+        units: pos.units,
+        entry_price: pos.entry_price,
+        exit_price: pos.current_price,
+        pnl: pos.realized_pnl || '0',
+        entry_time: pos.opened_at,
+        exit_time: pos.closed_at,
+      }));
+      setTrades(tradeData);
+      setTotalPages(Math.ceil(tradeData.length / tradesPerPage));
+      setError(null);
       setLastUpdate(new Date());
+    } catch (err) {
+      console.error('Failed to fetch trades:', err);
+      setError('Failed to load trades');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [taskId]);
+
+  useEffect(() => {
+    fetchTrades();
+
+    const interval = setInterval(() => {
+      fetchTrades();
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [taskId, sortField, sortOrder, tradesPerPage]);
+  }, [fetchTrades]);
 
   const handlePageChange = (
     _event: React.ChangeEvent<unknown>,
@@ -95,6 +144,18 @@ export function RecentTradesLog({ taskId }: RecentTradesLogProps) {
     (page - 1) * tradesPerPage,
     page * tradesPerPage
   );
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+        <CircularProgress size={24} />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return <Alert severity="error">{error}</Alert>;
+  }
 
   if (trades.length === 0) {
     return (

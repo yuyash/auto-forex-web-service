@@ -173,9 +173,14 @@ class BaseStrategy(ABC):
         Returns:
             List of open Position instances
         """
-        queryset = Position.objects.filter(
-            account=self.account, strategy=self.strategy, closed_at__isnull=True
-        )
+        # Filter by account and open positions
+        queryset = Position.objects.filter(account=self.account, closed_at__isnull=True)
+
+        # Filter by trading_task or strategy depending on mode
+        if self._trading_task:
+            queryset = queryset.filter(trading_task=self._trading_task)
+        elif self._strategy_model:
+            queryset = queryset.filter(strategy=self._strategy_model)
 
         if instrument:
             queryset = queryset.filter(instrument=instrument)
@@ -192,14 +197,39 @@ class BaseStrategy(ABC):
         Returns:
             List of pending Order instances
         """
-        queryset = Order.objects.filter(
-            account=self.account, strategy=self.strategy, status="pending"
-        )
+        # Filter by account and pending status
+        queryset = Order.objects.filter(account=self.account, status="pending")
+
+        # Filter by trading_task or strategy depending on mode
+        if self._trading_task:
+            queryset = queryset.filter(trading_task=self._trading_task)
+        elif self._strategy_model:
+            queryset = queryset.filter(strategy=self._strategy_model)
 
         if instrument:
             queryset = queryset.filter(instrument=instrument)
 
         return list(queryset.order_by("created_at"))
+
+    def create_order(self, **kwargs: Any) -> Order:
+        """
+        Create an Order with the correct strategy/trading_task reference.
+
+        This helper method automatically sets the account, strategy, and trading_task
+        fields based on the current mode (legacy Strategy or TradingTask).
+
+        Args:
+            **kwargs: Order field values (order_id, instrument, order_type, etc.)
+
+        Returns:
+            Order instance (not saved to database)
+        """
+        return Order(
+            account=self.account,
+            strategy=self._strategy_model,
+            trading_task=self._trading_task,
+            **kwargs,
+        )
 
     def calculate_position_size(
         self, base_units: Decimal, scaling_factor: Decimal | None = None

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -10,11 +10,13 @@ import {
   Chip,
   Box,
   Alert,
+  CircularProgress,
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
 } from '@mui/icons-material';
+import { apiClient } from '../../../services/api/client';
 
 interface Position {
   id: number;
@@ -24,7 +26,7 @@ interface Position {
   entry_price: string;
   current_price: string;
   unrealized_pnl: string;
-  entry_time: string;
+  opened_at: string;
 }
 
 interface OpenPositionsTableProps {
@@ -32,16 +34,36 @@ interface OpenPositionsTableProps {
 }
 
 export function OpenPositionsTable({ taskId }: OpenPositionsTableProps) {
-  const [positions] = useState<Position[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  useEffect(() => {
-    const interval = setInterval(() => {
+  const fetchPositions = useCallback(async () => {
+    try {
+      const response = await apiClient.get<{ results: Position[] }>(
+        `/positions/?trading_task_id=${taskId}&status=open`
+      );
+      setPositions(response.results || []);
+      setError(null);
       setLastUpdate(new Date());
+    } catch (err) {
+      console.error('Failed to fetch positions:', err);
+      setError('Failed to load positions');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [taskId]);
+
+  useEffect(() => {
+    fetchPositions();
+
+    const interval = setInterval(() => {
+      fetchPositions();
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [taskId]);
+  }, [fetchPositions]);
 
   const formatDuration = (entryTime: string) => {
     const entry = new Date(entryTime);
@@ -57,6 +79,18 @@ export function OpenPositionsTable({ taskId }: OpenPositionsTableProps) {
       return `${minutes}m`;
     }
   };
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+        <CircularProgress size={24} />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return <Alert severity="error">{error}</Alert>;
+  }
 
   if (positions.length === 0) {
     return (
@@ -145,7 +179,7 @@ export function OpenPositionsTable({ taskId }: OpenPositionsTableProps) {
                   </TableCell>
                   <TableCell align="right">
                     <Typography variant="body2" color="text.secondary">
-                      {formatDuration(position.entry_time)}
+                      {formatDuration(position.opened_at)}
                     </Typography>
                   </TableCell>
                 </TableRow>
