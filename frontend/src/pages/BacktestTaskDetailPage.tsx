@@ -192,14 +192,20 @@ export default function BacktestTaskDetailPage() {
   };
 
   const handleStart = async () => {
+    console.log('[BacktestTask] Starting task:', {
+      taskId,
+      taskName: task?.name,
+    });
     try {
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
       setProgress(0); // Reset progress when starting
-      await startTask.mutate(taskId);
+      const result = await startTask.mutate(taskId);
+      console.log('[BacktestTask] Start task response:', result);
       await refetch(); // Force immediate refetch to show updated status
       invalidateBacktestExecutions(taskId); // Refresh executions list
       handleMenuClose();
-    } catch {
+    } catch (error) {
+      console.error('[BacktestTask] Failed to start task:', error);
       // Error handled by mutation hook
     } finally {
       setIsTransitioning(false);
@@ -207,13 +213,19 @@ export default function BacktestTaskDetailPage() {
   };
 
   const handleStop = async () => {
+    console.log('[BacktestTask] Stopping task:', {
+      taskId,
+      taskName: task?.name,
+    });
     try {
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
-      await stopTask.mutate(taskId);
+      const result = await stopTask.mutate(taskId);
+      console.log('[BacktestTask] Stop task response:', result);
       await refetch(); // Force immediate refetch to show updated status
       invalidateBacktestExecutions(taskId); // Refresh executions list
       handleMenuClose();
-    } catch {
+    } catch (error) {
+      console.error('[BacktestTask] Failed to stop task:', error);
       // Error handled by mutation hook
     } finally {
       setIsTransitioning(false);
@@ -221,15 +233,21 @@ export default function BacktestTaskDetailPage() {
   };
 
   const handleRerun = async () => {
+    console.log('[BacktestTask] Rerunning task:', {
+      taskId,
+      taskName: task?.name,
+    });
     try {
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
       setProgress(0); // Reset progress when rerunning
-      await rerunTask.mutate(taskId);
+      const result = await rerunTask.mutate(taskId);
+      console.log('[BacktestTask] Rerun task response:', result);
       // Force immediate refetch after mutation completes
       await refetch();
       invalidateBacktestExecutions(taskId); // Refresh executions list
       handleMenuClose();
-    } catch {
+    } catch (error) {
+      console.error('[BacktestTask] Failed to rerun task:', error);
       // Error handled by mutation hook
     } finally {
       setIsTransitioning(false);
