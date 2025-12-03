@@ -2290,7 +2290,7 @@ def cleanup_stale_locks_task() -> Dict[str, Any]:
 
 
 @shared_task
-def resume_running_trading_tasks() -> Dict[str, Any]:
+def resume_running_trading_tasks(force_restart: bool = False) -> Dict[str, Any]:
     """
     Resume all trading tasks that are marked as 'running' in the database.
 
@@ -2299,9 +2299,14 @@ def resume_running_trading_tasks() -> Dict[str, Any]:
     with their market data streams.
 
     For each running task, this function:
-    1. Checks if a market data stream is already running for the account
-    2. If not, starts a new market data stream for the task's instrument
-    3. Logs the action for monitoring
+    1. Optionally clears stale cache entries (if force_restart=True)
+    2. Checks if a market data stream is already running for the account
+    3. If not, starts a new market data stream for the task's instrument
+    4. Logs the action for monitoring
+
+    Args:
+        force_restart: If True, clears cache entries and restarts all streams.
+                      Use this on system startup to ensure streams are actually running.
 
     Returns:
         Dictionary containing:
@@ -2315,7 +2320,10 @@ def resume_running_trading_tasks() -> Dict[str, Any]:
     """
     from trading.trading_task_models import TradingTask
 
-    logger.info("Checking for running trading tasks that need stream resumption...")
+    logger.info(
+        "Checking for running trading tasks that need stream resumption (force_restart=%s)...",
+        force_restart,
+    )
 
     try:
         # Find all tasks marked as running
@@ -2334,6 +2342,22 @@ def resume_running_trading_tasks() -> Dict[str, Any]:
             }
 
         logger.info("Found %d running trading task(s)", running_tasks.count())
+
+        # On startup (force_restart=True), clear all stream cache entries
+        # to ensure we don't have stale entries from before the restart
+        if force_restart:
+            accounts_cleared = set()
+            for task in running_tasks:
+                account_pk = task.oanda_account.pk
+                if account_pk not in accounts_cleared:
+                    cache_key = f"{STREAM_CACHE_PREFIX}{account_pk}"
+                    cache.delete(cache_key)
+                    accounts_cleared.add(account_pk)
+                    logger.info(
+                        "Cleared stale stream cache for account %s (pk=%d)",
+                        task.oanda_account.account_id,
+                        account_pk,
+                    )
 
         resumed_count = 0
         already_running = 0

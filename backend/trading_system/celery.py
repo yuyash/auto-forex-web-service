@@ -90,4 +90,5 @@ def setup_startup_tasks(
 
     # Schedule the task to run 10 seconds after worker starts
     # This gives time for the worker to fully initialize
-    resume_running_trading_tasks.apply_async(countdown=10)
+    # Use force_restart=True to clear stale cache entries from before the restart
+    resume_running_trading_tasks.apply_async(kwargs={"force_restart": True}, countdown=10)
