@@ -347,7 +347,6 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
 
         # Track tick count for periodic logging
         stream_tick_count = [0]  # Use list to allow modification in nested function
-        stream_last_log_time = [time.time()]
 
         # Register tick callback to process and broadcast ticks
         def on_tick(tick: TickData) -> None:
@@ -365,33 +364,17 @@ def start_market_data_stream(  # type: ignore[no-untyped-def]  # noqa: C901
                 tick: Normalized tick data
             """
             stream_tick_count[0] += 1
-            current_time = time.time()
 
-            # Log first tick and then every 100 ticks or every 60 seconds
+            # Log first tick only, subsequent ticks logged at debug level
             is_first_tick = stream_tick_count[0] == 1
-            should_log = (
-                is_first_tick
-                or stream_tick_count[0] % 100 == 0
-                or (current_time - stream_last_log_time[0]) >= 60
-            )
 
-            if should_log:
-                stream_last_log_time[0] = current_time
-                if is_first_tick:
-                    logger.info(
-                        "First tick received from stream for account %s: %s @ %s",
-                        oanda_account.account_id,
-                        tick.instrument,
-                        tick.mid,
-                    )
-                else:
-                    logger.info(
-                        "Stream tick count for account %s: %d (latest: %s @ %s)",
-                        oanda_account.account_id,
-                        stream_tick_count[0],
-                        tick.instrument,
-                        tick.mid,
-                    )
+            if is_first_tick:
+                logger.info(
+                    "First tick received from stream for account %s: %s @ %s",
+                    oanda_account.account_id,
+                    tick.instrument,
+                    tick.mid,
+                )
 
             # Store tick to database if enabled
             if tick_storage_enabled and tick_buffer:
@@ -1274,6 +1257,8 @@ def _update_trading_task_metrics(  # pylint: disable=too-many-locals
         task: TradingTask instance
         execution: TaskExecution instance
     """
+    from django.db import IntegrityError
+
     from trading.execution_models import ExecutionMetrics
     from trading.models import Position, Trade
 
@@ -1309,22 +1294,35 @@ def _update_trading_task_metrics(  # pylint: disable=too-many-locals
         total_pnl = realized_pnl + unrealized_pnl
         win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else Decimal("0")
 
-        # For trading tasks, delete existing metrics and create new ones
-        # (ExecutionMetrics is immutable, so we can't update in place)
-        existing_metrics = ExecutionMetrics.objects.filter(execution=execution).first()
-        if existing_metrics:
-            existing_metrics.delete()
+        # Use atomic transaction with select_for_update to prevent race conditions
+        # This ensures only one worker can update metrics for a given execution at a time
+        with transaction.atomic():
+            # Lock and delete existing metrics within the transaction
+            existing_metrics = (
+                ExecutionMetrics.objects.select_for_update().filter(execution=execution).first()
+            )
+            if existing_metrics:
+                existing_metrics.delete()
 
-        ExecutionMetrics.objects.create(
-            execution=execution,
-            total_pnl=total_pnl,
-            realized_pnl=realized_pnl,
-            unrealized_pnl=unrealized_pnl,
-            total_trades=total_trades,
-            winning_trades=winning_trades,
-            losing_trades=losing_trades,
-            win_rate=win_rate,
-        )
+            try:
+                ExecutionMetrics.objects.create(
+                    execution=execution,
+                    total_pnl=total_pnl,
+                    realized_pnl=realized_pnl,
+                    unrealized_pnl=unrealized_pnl,
+                    total_trades=total_trades,
+                    winning_trades=winning_trades,
+                    losing_trades=losing_trades,
+                    win_rate=win_rate,
+                )
+            except IntegrityError:
+                # Another worker created metrics between our check and create
+                # This is fine - the other worker's data is equally valid
+                logger.debug(
+                    "Metrics for task %d already created by another worker, skipping",
+                    task.pk,
+                )
+                return
 
         logger.debug(
             "Updated metrics for task %d: P&L=%s, trades=%d",
@@ -1363,21 +1361,6 @@ def _process_tick_for_task(  # noqa: C901
 
         _task_tick_counts[task_id] += 1
         tick_count = _task_tick_counts[task_id]
-
-        # Log every 50 ticks or every 30 seconds for better visibility
-        current_time = time.time()
-        should_log_progress = (
-            tick_count % 50 == 0 or (current_time - _task_last_log_time[task_id]) >= 30
-        )
-
-        if should_log_progress:
-            _task_last_log_time[task_id] = current_time
-            progress_msg = (
-                f"Task {task_id} processed {tick_count} ticks. "
-                f"Latest: {tick.instrument} @ {tick.mid} (spread: {tick.spread})"
-            )
-            # Only log to server, not to frontend execution logs (too noisy)
-            logger.info(progress_msg)
 
         # Get instrument from configuration
         task_instrument = task.config.parameters.get("instrument")
@@ -1484,9 +1467,8 @@ def _process_tick_for_task(  # noqa: C901
                 f"Realized P&L: ${realized_pnl:.2f} | "
                 f"Unrealized P&L: ${unrealized_pnl:.2f}"
             )
+            # Log to server only, not to frontend execution logs (too noisy)
             logger.info(no_order_msg)
-            if execution:
-                execution.add_log("INFO", no_order_msg)
 
         if orders:
             order_msg = (
@@ -1680,14 +1662,14 @@ def _broadcast_to_strategy_executors(  # pylint: disable=too-many-locals
 
         task_count = running_tasks.count()
 
-        # Log periodically when there are running tasks (every 100 ticks per account)
+        # Log periodically when there are running tasks (every 1000 ticks per account)
         account_id = account.pk
         if account_id not in _task_log_counts:
             _task_log_counts[account_id] = 0
         _task_log_counts[account_id] += 1
 
         if task_count > 0:
-            if _task_log_counts[account_id] % 100 == 1:  # Log on first tick and every 100
+            if _task_log_counts[account_id] % 1000 == 1:  # Log on first tick and every 1000
                 task_names = [t.name for t in running_tasks]
                 logger.info(
                     "Broadcasting tick to %d task(s) for account %s: %s",
