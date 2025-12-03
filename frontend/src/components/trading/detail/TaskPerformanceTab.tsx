@@ -282,7 +282,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
         </Typography>
 
         <TradingTaskChart
-          instrument={task.config_name.split(' - ')[0] || 'EUR_USD'} // Extract instrument from config name
+          instrument={task.instrument || 'EUR_USD'}
           startDate={latestExecution?.started_at || task.created_at}
           stopDate={
             task.status === TaskStatus.STOPPED ||

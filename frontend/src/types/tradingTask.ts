@@ -8,6 +8,7 @@ export interface TradingTask {
   config_id: number;
   config_name: string;
   strategy_type: string;
+  instrument: string;
   account_id: number;
   account_name: string;
   account_type: 'live' | 'practice';

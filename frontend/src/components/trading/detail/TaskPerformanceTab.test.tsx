@@ -75,6 +75,7 @@ describe('TaskPerformanceTab Integration Tests', () => {
     config_id: 1,
     config_name: 'EUR_USD - MA Crossover',
     strategy_type: 'ma_crossover',
+    instrument: 'EUR_USD',
     account_id: 1,
     account_name: 'Test Account',
     account_type: 'practice',
