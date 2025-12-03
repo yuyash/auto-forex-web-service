@@ -59,6 +59,10 @@ app.conf.beat_schedule = {
         "task": "trading.oanda_sync_task.oanda_sync_task",
         "schedule": 300.0,  # Default: Run every 5 minutes (configurable in System Settings)
     },
+    "resume-running-trading-tasks": {
+        "task": "trading.tasks.resume_running_trading_tasks",
+        "schedule": 120.0,  # Run every 2 minutes to ensure trading tasks have streams
+    },
 }
 
 
@@ -66,3 +70,24 @@ app.conf.beat_schedule = {
 def debug_task(self) -> str:  # type: ignore[no-untyped-def]
     """Debug task for testing Celery configuration."""
     return f"Request: {self.request!r}"
+
+
+# Signal to resume running trading tasks when worker is ready
+@app.on_after_finalize.connect
+def setup_startup_tasks(
+    sender: Celery,  # pylint: disable=unused-argument
+    **kwargs: object,
+) -> None:
+    """
+    Schedule startup tasks after Celery app is fully configured.
+
+    This signal fires after the app is fully configured and ready.
+    We use a short delay to ensure the worker is fully operational
+    before attempting to resume trading tasks.
+    """
+    # Import here to avoid circular imports
+    from trading.tasks import resume_running_trading_tasks
+
+    # Schedule the task to run 10 seconds after worker starts
+    # This gives time for the worker to fully initialize
+    resume_running_trading_tasks.apply_async(countdown=10)
