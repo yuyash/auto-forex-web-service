@@ -180,13 +180,19 @@ export default function TradingTaskDetailPage() {
   };
 
   const handleStart = async () => {
+    console.log('[TradingTask] Starting task:', {
+      taskId,
+      taskName: task?.name,
+    });
     try {
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
-      await startTask.mutate(taskId);
+      const result = await startTask.mutate(taskId);
+      console.log('[TradingTask] Start task response:', result);
       await refetch(); // Force immediate refetch to show updated status
       invalidateTradingExecutions(taskId); // Refresh executions list
       handleMenuClose();
-    } catch {
+    } catch (error) {
+      console.error('[TradingTask] Failed to start task:', error);
       // Error handled by mutation hook
     } finally {
       setIsTransitioning(false);
@@ -194,14 +200,20 @@ export default function TradingTaskDetailPage() {
   };
 
   const handleRerun = async () => {
+    console.log('[TradingTask] Rerunning task:', {
+      taskId,
+      taskName: task?.name,
+    });
     try {
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
-      await rerunTask.mutate(taskId);
+      const result = await rerunTask.mutate(taskId);
+      console.log('[TradingTask] Rerun task response:', result);
       // Force immediate refetch after mutation completes
       await refetch();
       invalidateTradingExecutions(taskId); // Refresh executions list
       handleMenuClose();
-    } catch {
+    } catch (error) {
+      console.error('[TradingTask] Failed to rerun task:', error);
       // Error handled by mutation hook
     } finally {
       setIsTransitioning(false);
@@ -248,13 +260,20 @@ export default function TradingTaskDetailPage() {
   };
 
   const handleStopConfirm = async (option: StopOption) => {
+    console.log('[TradingTask] Stopping task:', {
+      taskId,
+      taskName: task?.name,
+      stopMode: option,
+    });
     try {
       setIsTransitioning(true);
-      await stopTask.mutate({ id: taskId, mode: option });
+      const result = await stopTask.mutate({ id: taskId, mode: option });
+      console.log('[TradingTask] Stop task response:', result);
       await refetch(); // Force immediate refetch to show updated status
       invalidateTradingExecutions(taskId); // Refresh executions list
       setStopDialogOpen(false);
-    } catch {
+    } catch (error) {
+      console.error('[TradingTask] Failed to stop task:', error);
       // Error handled by mutation hook
     } finally {
       setIsTransitioning(false);
