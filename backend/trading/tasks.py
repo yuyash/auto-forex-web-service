@@ -1252,7 +1252,6 @@ _task_tick_counts: dict[int, int] = {}
 _task_last_log_time: dict[int, float] = {}
 
 # Track tick counts for broadcast logging (per account)
-_no_task_log_counts: dict[int, int] = {}
 _task_log_counts: dict[int, int] = {}
 
 # Cache strategy instances per task to maintain state across ticks
@@ -1451,9 +1450,39 @@ def _process_tick_for_task(  # noqa: C901
                 trading_task=task,
                 closed_at__isnull=True,
             ).count()
+
+            # Get realized and unrealized P&L
+            from django.db.models import Sum
+
+            realized_pnl = Position.objects.filter(
+                trading_task=task,
+                closed_at__isnull=False,
+            ).aggregate(total=Sum("realized_pnl"))["total"] or Decimal("0")
+
+            unrealized_pnl = Position.objects.filter(
+                trading_task=task,
+                closed_at__isnull=True,
+            ).aggregate(total=Sum("unrealized_pnl"))["total"] or Decimal("0")
+
+            # Get floor strategy layer info if available
+            layer_info = ""
+            if hasattr(strategy_instance, "layer_manager"):
+                active_layers = [
+                    layer for layer in strategy_instance.layer_manager.layers if layer.is_active
+                ]
+                if active_layers:
+                    current_layer = active_layers[-1]  # Most recent active layer
+                    layer_info = (
+                        f"Layer {current_layer.layer_number} | "
+                        f"Retracements: {current_layer.retracement_count}/"
+                        f"{current_layer.max_retracements_per_layer} | "
+                    )
+
             no_order_msg = (
-                f"Strategy evaluated {tick_count} ticks | "
-                f"Open positions: {open_positions_count}"
+                f"Tick #{tick_count} | {layer_info}"
+                f"Open: {open_positions_count} | "
+                f"Realized P&L: ${realized_pnl:.2f} | "
+                f"Unrealized P&L: ${unrealized_pnl:.2f}"
             )
             logger.info(no_order_msg)
             if execution:
@@ -1650,30 +1679,30 @@ def _broadcast_to_strategy_executors(  # pylint: disable=too-many-locals
         ).select_related("config")
 
         task_count = running_tasks.count()
-        if task_count == 0:
-            # Log periodically to help debug (use module-level dict)
-            account_key = account.pk
-            count = _no_task_log_counts.get(account_key, 0)
-            _no_task_log_counts[account_key] = count + 1
-            if count % 100 == 0:  # Log every 100 ticks when no tasks
-                logger.info(
-                    "No running trading tasks for account %s (id=%d) - %d ticks",
-                    account.account_id,
-                    account.pk,
-                    count + 1,
-                )
-        else:
-            # Log task count periodically
-            account_key = account.pk
-            count = _task_log_counts.get(account_key, 0)
-            _task_log_counts[account_key] = count + 1
-            if count % 500 == 0:  # Log every 500 ticks
+
+        # Log periodically when there are running tasks (every 100 ticks per account)
+        account_id = account.pk
+        if account_id not in _task_log_counts:
+            _task_log_counts[account_id] = 0
+        _task_log_counts[account_id] += 1
+
+        if task_count > 0:
+            if _task_log_counts[account_id] % 100 == 1:  # Log on first tick and every 100
                 task_names = [t.name for t in running_tasks]
                 logger.info(
                     "Broadcasting tick to %d task(s) for account %s: %s",
                     task_count,
                     account.account_id,
                     task_names,
+                )
+        else:
+            # Log "no running tasks" every 100 ticks
+            if _task_log_counts[account_id] % 100 == 0:
+                logger.info(
+                    "No running trading tasks for account %s (id=%d) - %d ticks",
+                    account.account_id,
+                    account_id,
+                    _task_log_counts[account_id],
                 )
 
         for task in running_tasks:
@@ -2255,6 +2284,140 @@ def cleanup_stale_locks_task() -> Dict[str, Any]:
         return {
             "success": False,
             "cleaned_count": 0,
+            "failed_tasks": [],
+            "error": error_msg,
+        }
+
+
+@shared_task
+def resume_running_trading_tasks() -> Dict[str, Any]:
+    """
+    Resume all trading tasks that are marked as 'running' in the database.
+
+    This task should be called on system startup (via Celery Beat or app ready signal)
+    to ensure that trading tasks that were running before a restart are resumed
+    with their market data streams.
+
+    For each running task, this function:
+    1. Checks if a market data stream is already running for the account
+    2. If not, starts a new market data stream for the task's instrument
+    3. Logs the action for monitoring
+
+    Returns:
+        Dictionary containing:
+            - success: Whether the resume operation completed successfully
+            - resumed_count: Number of tasks that had streams started
+            - already_running: Number of tasks that already had streams
+            - failed_tasks: List of task IDs that failed to resume
+            - error: Error message if operation failed
+
+    Requirements: 7.2, 7.3
+    """
+    from trading.trading_task_models import TradingTask
+
+    logger.info("Checking for running trading tasks that need stream resumption...")
+
+    try:
+        # Find all tasks marked as running
+        running_tasks = TradingTask.objects.filter(
+            status=TaskStatus.RUNNING,
+        ).select_related("oanda_account", "config")
+
+        if not running_tasks.exists():
+            logger.info("No running trading tasks found")
+            return {
+                "success": True,
+                "resumed_count": 0,
+                "already_running": 0,
+                "failed_tasks": [],
+                "error": None,
+            }
+
+        logger.info("Found %d running trading task(s)", running_tasks.count())
+
+        resumed_count = 0
+        already_running = 0
+        failed_tasks = []
+
+        for task in running_tasks:
+            try:
+                account = task.oanda_account
+                instrument = task.config.parameters.get("instrument")
+
+                if not instrument:
+                    logger.warning(
+                        "Task %d (%s) has no instrument configured, skipping",
+                        task.pk,
+                        task.name,
+                    )
+                    failed_tasks.append(task.pk)
+                    continue
+
+                # Check if stream is already running for this account
+                cache_key = f"{STREAM_CACHE_PREFIX}{account.pk}"
+                if cache.get(cache_key):
+                    logger.info(
+                        "Market data stream already running for task %d (%s) on account %s",
+                        task.pk,
+                        task.name,
+                        account.account_id,
+                    )
+                    already_running += 1
+                    continue
+
+                # Start market data stream for this account
+                logger.info(
+                    "Starting market data stream for task %d (%s) on account %s, instrument %s",
+                    task.pk,
+                    task.name,
+                    account.account_id,
+                    instrument,
+                )
+
+                stream_task = start_market_data_stream.delay(account.pk, instrument)
+
+                logger.info(
+                    "Market data stream started for task %d (%s): celery_task=%s",
+                    task.pk,
+                    task.name,
+                    stream_task.id,
+                )
+
+                resumed_count += 1
+
+            except Exception as task_error:  # pylint: disable=broad-exception-caught
+                logger.error(
+                    "Failed to resume task %d (%s): %s",
+                    task.pk,
+                    task.name,
+                    task_error,
+                    exc_info=True,
+                )
+                failed_tasks.append(task.pk)
+
+        logger.info(
+            "Trading task resumption completed: resumed=%d, already_running=%d, failed=%d",
+            resumed_count,
+            already_running,
+            len(failed_tasks),
+        )
+
+        return {
+            "success": True,
+            "resumed_count": resumed_count,
+            "already_running": already_running,
+            "failed_tasks": failed_tasks,
+            "error": None,
+        }
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"Failed to resume running trading tasks: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+
+        return {
+            "success": False,
+            "resumed_count": 0,
+            "already_running": 0,
             "failed_tasks": [],
             "error": error_msg,
         }
