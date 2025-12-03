@@ -1309,29 +1309,29 @@ def _update_trading_task_metrics(  # pylint: disable=too-many-locals
         total_pnl = realized_pnl + unrealized_pnl
         win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else Decimal("0")
 
-        # Update or create ExecutionMetrics
-        _, created = ExecutionMetrics.objects.update_or_create(
+        # For trading tasks, delete existing metrics and create new ones
+        # (ExecutionMetrics is immutable, so we can't update in place)
+        existing_metrics = ExecutionMetrics.objects.filter(execution=execution).first()
+        if existing_metrics:
+            existing_metrics.delete()
+
+        ExecutionMetrics.objects.create(
             execution=execution,
-            defaults={
-                "total_pnl": total_pnl,
-                "realized_pnl": realized_pnl,
-                "unrealized_pnl": unrealized_pnl,
-                "total_trades": total_trades,
-                "winning_trades": winning_trades,
-                "losing_trades": losing_trades,
-                "win_rate": win_rate,
-            },
+            total_pnl=total_pnl,
+            realized_pnl=realized_pnl,
+            unrealized_pnl=unrealized_pnl,
+            total_trades=total_trades,
+            winning_trades=winning_trades,
+            losing_trades=losing_trades,
+            win_rate=win_rate,
         )
 
-        if created:
-            logger.info("Created ExecutionMetrics for task %d execution %d", task.pk, execution.id)
-        else:
-            logger.debug(
-                "Updated metrics for task %d: P&L=%s, trades=%d",
-                task.pk,
-                total_pnl,
-                total_trades,
-            )
+        logger.debug(
+            "Updated metrics for task %d: P&L=%s, trades=%d",
+            task.pk,
+            total_pnl,
+            total_trades,
+        )
 
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error("Error updating metrics for task %d: %s", task.pk, e)
