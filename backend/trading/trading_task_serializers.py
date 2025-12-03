@@ -28,6 +28,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     config_id = serializers.IntegerField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
+    instrument = serializers.SerializerMethodField()
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
@@ -41,6 +42,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "config_id",
             "config_name",
             "strategy_type",
+            "instrument",
             "account_id",
             "account_name",
             "account_type",
@@ -58,6 +60,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "config_id",
             "config_name",
             "strategy_type",
+            "instrument",
             "account_id",
             "account_name",
             "account_type",
@@ -66,6 +69,14 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_instrument(self, obj: TradingTask) -> str:
+        """Get instrument from configuration parameters."""
+        if obj.config and obj.config.parameters:
+            instrument = obj.config.parameters.get("instrument")
+            if instrument:
+                return str(instrument)
+        return "EUR_USD"
 
     def get_latest_execution(self, obj: TradingTask) -> dict | None:
         """Get summary of latest execution with metrics."""
@@ -123,6 +134,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     config_id = serializers.IntegerField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
+    instrument = serializers.SerializerMethodField()
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
@@ -135,6 +147,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "config_id",
             "config_name",
             "strategy_type",
+            "instrument",
             "account_id",
             "account_name",
             "account_type",
@@ -146,6 +159,14 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields
+
+    def get_instrument(self, obj: TradingTask) -> str:
+        """Get instrument from configuration parameters."""
+        if obj.config and obj.config.parameters:
+            instrument = obj.config.parameters.get("instrument")
+            if instrument:
+                return str(instrument)
+        return "EUR_USD"
 
 
 class TradingTaskCreateSerializer(serializers.ModelSerializer):
