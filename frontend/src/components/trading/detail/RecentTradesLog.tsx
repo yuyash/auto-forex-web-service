@@ -46,12 +46,16 @@ interface Trade {
 
 interface RecentTradesLogProps {
   taskId: number;
+  executionStartedAt?: string;
 }
 
 type SortField = 'exit_time' | 'pnl' | 'instrument';
 type SortOrder = 'asc' | 'desc';
 
-export function RecentTradesLog({ taskId }: RecentTradesLogProps) {
+export function RecentTradesLog({
+  taskId,
+  executionStartedAt,
+}: RecentTradesLogProps) {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,10 +69,14 @@ export function RecentTradesLog({ taskId }: RecentTradesLogProps) {
 
   const fetchTrades = useCallback(async () => {
     try {
+      let url = `/positions/?trading_task_id=${taskId}&status=closed&page_size=50`;
+      if (executionStartedAt) {
+        url += `&opened_after=${encodeURIComponent(executionStartedAt)}`;
+      }
       const response = await apiClient.get<{
         results: Position[];
         count: number;
-      }>(`/positions/?trading_task_id=${taskId}&status=closed&page_size=50`);
+      }>(url);
       // Convert positions to trades format
       const closedPositions = response.results || [];
       const tradeData: Trade[] = closedPositions.map((pos: Position) => ({
@@ -92,7 +100,7 @@ export function RecentTradesLog({ taskId }: RecentTradesLogProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [taskId]);
+  }, [taskId, executionStartedAt]);
 
   useEffect(() => {
     fetchTrades();

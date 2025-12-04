@@ -81,6 +81,7 @@ class PositionListView(APIView):
         trading_task_id = request.query_params.get("trading_task_id")
         instrument = request.query_params.get("instrument")
         position_status = request.query_params.get("status", "open").lower()
+        opened_after = request.query_params.get("opened_after")
 
         # Validate status parameter
         if position_status not in ["open", "closed", "all"]:
@@ -96,6 +97,7 @@ class PositionListView(APIView):
             "trading_task_id": trading_task_id,
             "instrument": instrument,
             "position_status": position_status,
+            "opened_after": opened_after,
         }
         queryset = self.get_queryset(request, filters)
 
@@ -131,7 +133,8 @@ class PositionListView(APIView):
 
         Args:
             request: HTTP request
-            filters: Dict with account_id, strategy_id, trading_task_id, instrument, position_status
+            filters: Dict with account_id, strategy_id, trading_task_id,
+                instrument, position_status, opened_after
 
         Returns:
             Filtered queryset or error response
@@ -141,6 +144,7 @@ class PositionListView(APIView):
         trading_task_id = filters.get("trading_task_id")
         instrument = filters.get("instrument")
         position_status = filters.get("position_status")
+        opened_after = filters.get("opened_after")
 
         # Start with base queryset filtered to user's accounts
         queryset = Position.objects.filter(account__user=request.user.id).select_related(
@@ -191,6 +195,14 @@ class PositionListView(APIView):
         # Apply instrument filter
         if instrument:
             queryset = queryset.filter(instrument=instrument)
+
+        # Apply opened_after filter (for filtering by execution start time)
+        if opened_after:
+            from django.utils.dateparse import parse_datetime
+
+            parsed_date = parse_datetime(opened_after)
+            if parsed_date:
+                queryset = queryset.filter(opened_at__gte=parsed_date)
 
         # Order by opened_at (newest first)
         queryset = queryset.order_by("-opened_at")

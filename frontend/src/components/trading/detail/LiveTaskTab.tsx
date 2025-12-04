@@ -154,7 +154,10 @@ export function LiveTaskTab({ task }: LiveTaskTabProps) {
         <Typography variant="h6" gutterBottom>
           Open Positions
         </Typography>
-        <OpenPositionsTable taskId={task.id} />
+        <OpenPositionsTable
+          taskId={task.id}
+          executionStartedAt={task.latest_execution?.started_at}
+        />
       </Paper>
 
       {/* Recent Trades */}
@@ -162,7 +165,10 @@ export function LiveTaskTab({ task }: LiveTaskTabProps) {
         <Typography variant="h6" gutterBottom>
           Recent Trades
         </Typography>
-        <RecentTradesLog taskId={task.id} />
+        <RecentTradesLog
+          taskId={task.id}
+          executionStartedAt={task.latest_execution?.started_at}
+        />
       </Paper>
     </Box>
   );
