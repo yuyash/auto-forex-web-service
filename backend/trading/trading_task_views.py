@@ -277,6 +277,14 @@ class TradingTaskStartView(APIView):
 
         run_trading_task.delay(task.pk)
 
+        # Log lifecycle event
+        logger.info(
+            "Trading task %d '%s' started by user %s",
+            task.pk,
+            task.name,
+            request.user.pk,
+        )
+
         # Return success response
         return Response(
             {
@@ -381,6 +389,9 @@ class TradingTaskStopView(APIView):
             latest_execution.completed_at = timezone.now()
             latest_execution.save(update_fields=["status", "completed_at"])
 
+            # Add lifecycle log to execution
+            latest_execution.add_log("INFO", f"Task stopped (mode: {stop_mode.label})")
+
         # Queue the stop task with the specified mode to handle cleanup
         # (closing positions, releasing locks, etc.)
         if has_active_lock:
@@ -389,6 +400,15 @@ class TradingTaskStopView(APIView):
             # No active celery task, just clean up any stale locks
             if lock_info:
                 lock_manager.release_lock("trading", task_id)
+
+        # Log lifecycle event
+        logger.info(
+            "Trading task %d '%s' stopped by user %s (mode: %s)",
+            task.pk,
+            task.name,
+            request.user.pk,
+            stop_mode.value,
+        )
 
         return Response(
             {
@@ -437,6 +457,19 @@ class TradingTaskPauseView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        # Add lifecycle log to execution
+        latest_execution = task.get_latest_execution()
+        if latest_execution:
+            latest_execution.add_log("INFO", "Task paused")
+
+        # Log lifecycle event
+        logger.info(
+            "Trading task %d '%s' paused by user %s",
+            task.pk,
+            task.name,
+            request.user.pk,
+        )
+
         return Response(
             {"message": "Trading task paused successfully"},
             status=status.HTTP_200_OK,
@@ -477,6 +510,19 @@ class TradingTaskResumeView(APIView):
                 {"error": str(e)},
                 status=status.HTTP_409_CONFLICT,
             )
+
+        # Add lifecycle log to execution
+        latest_execution = task.get_latest_execution()
+        if latest_execution:
+            latest_execution.add_log("INFO", "Task resumed")
+
+        # Log lifecycle event
+        logger.info(
+            "Trading task %d '%s' resumed by user %s",
+            task.pk,
+            task.name,
+            request.user.pk,
+        )
 
         return Response(
             {"message": "Trading task resumed successfully"},
@@ -532,6 +578,14 @@ class TradingTaskRerunView(APIView):
         from .tasks import run_trading_task
 
         run_trading_task.delay(task.pk)
+
+        # Log lifecycle event
+        logger.info(
+            "Trading task %d '%s' rerun by user %s",
+            task.pk,
+            task.name,
+            request.user.pk,
+        )
 
         # Return success response
         return Response(
@@ -600,6 +654,16 @@ class TradingTaskRestartView(APIView):
         from .tasks import run_trading_task
 
         run_trading_task.delay(task.pk)
+
+        # Log lifecycle event
+        state_info = "with state cleared" if clear_state else "preserving state"
+        logger.info(
+            "Trading task %d '%s' restarted by user %s (%s)",
+            task.pk,
+            task.name,
+            request.user.pk,
+            state_info,
+        )
 
         # Return success response
         return Response(

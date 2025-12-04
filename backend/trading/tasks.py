@@ -1629,8 +1629,9 @@ def _process_tick_for_task(  # noqa: C901
                                         create_trade_record=True,
                                     )
                                     close_msg = (
-                                        f"Position closed: {closed_pos.position_id} - "
-                                        f"P&L: {closed_pos.realized_pnl}"
+                                        f"CLOSED {closed_pos.direction.upper()} position: "
+                                        f"{closed_pos.units} units @ {tick_model.mid} | "
+                                        f"P&L: ${closed_pos.realized_pnl:.2f}"
                                     )
                                     logger.info(close_msg)
                                     if execution:
@@ -1659,8 +1660,9 @@ def _process_tick_for_task(  # noqa: C901
                                 position.save(update_fields=["trading_task"])
 
                                 pos_msg = (
-                                    f"Position created: {position.position_id} - "
-                                    f"{position.direction} {position.units} {position.instrument}"
+                                    f"OPENED {position.direction.upper()} position: "
+                                    f"{position.units} units @ {tick_model.mid} | "
+                                    f"{position.instrument}"
                                 )
                                 logger.info(pos_msg)
                                 if execution:
