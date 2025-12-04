@@ -31,9 +31,13 @@ interface Position {
 
 interface OpenPositionsTableProps {
   taskId: number;
+  executionStartedAt?: string;
 }
 
-export function OpenPositionsTable({ taskId }: OpenPositionsTableProps) {
+export function OpenPositionsTable({
+  taskId,
+  executionStartedAt,
+}: OpenPositionsTableProps) {
   const [positions, setPositions] = useState<Position[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,9 +45,11 @@ export function OpenPositionsTable({ taskId }: OpenPositionsTableProps) {
 
   const fetchPositions = useCallback(async () => {
     try {
-      const response = await apiClient.get<{ results: Position[] }>(
-        `/positions/?trading_task_id=${taskId}&status=open`
-      );
+      let url = `/positions/?trading_task_id=${taskId}&status=open`;
+      if (executionStartedAt) {
+        url += `&opened_after=${encodeURIComponent(executionStartedAt)}`;
+      }
+      const response = await apiClient.get<{ results: Position[] }>(url);
       setPositions(response.results || []);
       setError(null);
       setLastUpdate(new Date());
@@ -53,7 +59,7 @@ export function OpenPositionsTable({ taskId }: OpenPositionsTableProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [taskId]);
+  }, [taskId, executionStartedAt]);
 
   useEffect(() => {
     fetchPositions();
