@@ -44,6 +44,126 @@ class PositionListView(APIView):
 
     def get(self, request: Request) -> Response:
         """
+        Retrieve positions from local database or OANDA API.
+
+        When trading_task_id is provided, retrieves positions from the local
+        database (positions created by the trading task). Otherwise, retrieves
+        positions directly from OANDA API.
+
+        Args:
+            request: HTTP request with query parameters
+
+        Returns:
+            Response with position data
+        """
+        trading_task_id = request.query_params.get("trading_task_id")
+        opened_after = request.query_params.get("opened_after")
+
+        # If trading_task_id is provided, query local database
+        if trading_task_id:
+            return self._get_positions_from_database(request, trading_task_id, opened_after)
+
+        # Otherwise, query OANDA API directly
+        return self._get_positions_from_oanda(request)
+
+    def _get_positions_from_database(
+        self, request: Request, trading_task_id: str, opened_after: str | None
+    ) -> Response:
+        """
+        Retrieve positions from local database for a trading task.
+
+        Args:
+            request: HTTP request
+            trading_task_id: Trading task ID to filter by
+            opened_after: ISO timestamp to filter positions opened after
+
+        Returns:
+            Response with position data from database
+        """
+        from django.utils.dateparse import parse_datetime
+
+        from trading.models import Position
+        from trading.trading_task_models import TradingTask
+
+        try:
+            task_id = int(trading_task_id)
+        except (ValueError, TypeError):
+            return Response(
+                {"error": "Invalid trading_task_id"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verify task belongs to user
+        try:
+            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
+        except TradingTask.DoesNotExist:
+            return Response(
+                {"error": "Trading task not found or access denied"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Build query
+        position_status = request.query_params.get("status", "open").lower()
+        queryset = Position.objects.filter(trading_task=task)
+
+        # Filter by status
+        if position_status == "open":
+            queryset = queryset.filter(closed_at__isnull=True)
+        elif position_status == "closed":
+            queryset = queryset.filter(closed_at__isnull=False)
+        # "all" returns both open and closed
+
+        # Filter by opened_after
+        if opened_after:
+            parsed_dt = parse_datetime(opened_after)
+            if parsed_dt:
+                queryset = queryset.filter(opened_at__gte=parsed_dt)
+
+        # Order by opened_at descending
+        queryset = queryset.order_by("-opened_at")
+
+        # Format response to match OANDA format for frontend compatibility
+        positions = []
+        for pos in queryset:
+            positions.append(
+                {
+                    "id": str(pos.position_id),
+                    "instrument": pos.instrument,
+                    "units": str(pos.units) if pos.direction == "long" else str(-pos.units),
+                    "current_units": str(pos.units) if pos.direction == "long" else str(-pos.units),
+                    "price": str(pos.entry_price),
+                    "unrealized_pl": str(pos.unrealized_pnl),
+                    "realized_pl": str(pos.realized_pnl) if pos.realized_pnl else "0.00",
+                    "open_time": pos.opened_at.isoformat() if pos.opened_at else None,
+                    "closed_time": pos.closed_at.isoformat() if pos.closed_at else None,
+                    "account_name": task.oanda_account.account_id,
+                    "account_db_id": task.oanda_account.id,
+                    "status": "closed" if pos.closed_at else "open",
+                    "direction": pos.direction,
+                    "layer_number": pos.layer_number,
+                    "is_first_lot": pos.is_first_lot,
+                }
+            )
+
+        logger.info(
+            "Positions retrieved from database for trading task",
+            extra={
+                "user_id": request.user.id,
+                "trading_task_id": task_id,
+                "status": position_status,
+                "count": len(positions),
+            },
+        )
+
+        return Response(
+            {
+                "results": positions,
+                "count": len(positions),
+            }
+        )
+
+    def _get_positions_from_oanda(self, request: Request) -> Response:
+        """
         Retrieve positions directly from OANDA API.
 
         Args:
