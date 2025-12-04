@@ -52,7 +52,6 @@ const tradingTaskSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   description: z.string().optional(),
   risk_acknowledged: z.boolean().optional(),
-  sell_on_stop: z.boolean().optional(),
 });
 
 type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
@@ -89,7 +88,6 @@ export default function TradingTaskForm({
       name: initialData?.name || '',
       description: initialData?.description || '',
       risk_acknowledged: false,
-      sell_on_stop: false,
     },
   });
 
@@ -113,8 +111,6 @@ export default function TradingTaskForm({
   const watchedName = useWatch({ control, name: 'name' });
 
   const watchedDescription = useWatch({ control, name: 'description' });
-
-  const sellOnStop = useWatch({ control, name: 'sell_on_stop' });
 
   // Fetch accounts
   const { data: accountsData } = useAccounts({ page_size: 100 });
@@ -226,7 +222,6 @@ export default function TradingTaskForm({
         config_id: completeData.config_id,
         name: completeData.name,
         description: completeData.description,
-        sell_on_stop: completeData.sell_on_stop,
       };
 
       if (taskId) {
@@ -428,40 +423,6 @@ export default function TradingTaskForm({
                   )}
                 />
               </Grid>
-
-              <Grid size={{ xs: 12 }}>
-                <Controller
-                  name="sell_on_stop"
-                  control={control}
-                  render={({ field }) => (
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={field.value || false}
-                          onChange={(e) => field.onChange(e.target.checked)}
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body1">
-                            Close all positions when task is stopped
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{ mt: 0.5 }}
-                          >
-                            When enabled, all open positions will be
-                            automatically closed at the current market price
-                            when you stop the trading task. When disabled,
-                            positions remain open for manual management.
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  )}
-                />
-              </Grid>
             </Grid>
           </Box>
         );
@@ -538,15 +499,6 @@ export default function TradingTaskForm({
                       ) : (
                         'Loading...'
                       )}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Close Positions on Stop
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      {sellOnStop ? 'Yes' : 'No'}
                     </Typography>
                   </Box>
                 </Paper>

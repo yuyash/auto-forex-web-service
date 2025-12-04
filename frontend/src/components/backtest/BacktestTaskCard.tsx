@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 import {
   Card,
@@ -77,6 +77,23 @@ export default function BacktestTaskCard({
       ? optimisticStatus
       : currentStatus;
 
+  // Trigger refresh when polled status differs from task prop status
+  // This ensures parent component gets updated data
+  useEffect(() => {
+    if (polledStatus && polledStatus.status !== task.status) {
+      console.log('[BacktestTaskCard] Status changed via polling:', {
+        taskId: task.id,
+        propStatus: task.status,
+        polledStatus: polledStatus.status,
+      });
+      // Clear optimistic status since we have real status now
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOptimisticStatus(null);
+      // Notify parent to refetch task list
+      onRefresh?.();
+    }
+  }, [polledStatus, task.status, task.id, onRefresh]);
+
   // Use original task data (polledStatus only provides status, not full task details)
   const currentTask = task;
 
@@ -94,14 +111,15 @@ export default function BacktestTaskCard({
 
   const handleStart = async () => {
     try {
-      // Optimistically update status to RUNNING
-      setOptimisticStatus(TaskStatus.RUNNING);
+      // Wait for API response before updating status
       await startTask.mutate(task.id);
+      // Only update status after successful response
+      setOptimisticStatus(TaskStatus.RUNNING);
       // Trigger refresh after successful start
       onRefresh?.();
     } catch (error) {
       console.error('Failed to start task:', error);
-      // Revert optimistic update on error
+      // Clear any optimistic update on error
       setOptimisticStatus(null);
 
       // Show error notification with retry option
@@ -116,14 +134,15 @@ export default function BacktestTaskCard({
 
   const handleStop = async () => {
     try {
-      // Optimistically update status to STOPPED
-      setOptimisticStatus(TaskStatus.STOPPED);
+      // Wait for API response before updating status
       await stopTask.mutate(task.id);
+      // Only update status after successful response
+      setOptimisticStatus(TaskStatus.STOPPED);
       // Trigger refresh after successful stop
       onRefresh?.();
     } catch (error) {
       console.error('Failed to stop task:', error);
-      // Revert optimistic update on error
+      // Clear any optimistic update on error
       setOptimisticStatus(null);
 
       // Show error notification
@@ -135,14 +154,15 @@ export default function BacktestTaskCard({
 
   const handleRerun = async () => {
     try {
-      // Optimistically update status to RUNNING
-      setOptimisticStatus(TaskStatus.RUNNING);
+      // Wait for API response before updating status
       await rerunTask.mutate(task.id);
+      // Only update status after successful response
+      setOptimisticStatus(TaskStatus.RUNNING);
       // Trigger refresh after successful rerun
       onRefresh?.();
     } catch (error) {
       console.error('Failed to rerun task:', error);
-      // Revert optimistic update on error
+      // Clear any optimistic update on error
       setOptimisticStatus(null);
 
       // Show error notification with retry option

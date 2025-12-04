@@ -95,13 +95,30 @@ export default function TradingTaskCard({
   // Use original task data (polledStatus only provides status, not full task details)
   const currentTask = task;
 
+  // Trigger refresh when polled status differs from task prop status
+  // This ensures parent component gets updated data
+  useEffect(() => {
+    if (polledStatus && polledStatus.status !== task.status) {
+      console.log('[TradingTaskCard] Status changed via polling:', {
+        taskId: task.id,
+        propStatus: task.status,
+        polledStatus: polledStatus.status,
+      });
+      // Clear optimistic status since we have real status now
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOptimisticStatus(null);
+      // Notify parent to refetch task list
+      onRefresh?.();
+    }
+  }, [polledStatus, task.status, task.id, onRefresh]);
+
   // Show toast notifications for status changes and trades
   useEffect(() => {
     const prevTask = prevTaskRef.current;
 
-    // Status change notifications
-    if (prevTask.status !== currentTask.status) {
-      switch (currentTask.status) {
+    // Status change notifications - use displayStatus for accurate current state
+    if (prevTask.status !== displayStatus) {
+      switch (displayStatus) {
         case TaskStatus.RUNNING:
           toast.showSuccess(`Task "${currentTask.name}" is now running`);
           break;
@@ -115,6 +132,8 @@ export default function TradingTaskCard({
           toast.showError(`Task "${currentTask.name}" has failed`);
           break;
       }
+      // Update prevTask status to reflect the new status
+      prevTaskRef.current = { ...prevTask, status: displayStatus };
     }
 
     // Trade notifications (check if total trades increased)
@@ -133,7 +152,7 @@ export default function TradingTaskCard({
     }
 
     prevTaskRef.current = currentTask;
-  }, [currentTask, toast]);
+  }, [currentTask, displayStatus, toast]);
 
   const handleActionsClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -149,14 +168,15 @@ export default function TradingTaskCard({
 
   const handleStart = async () => {
     try {
-      // Optimistically update status to RUNNING
-      setOptimisticStatus(TaskStatus.RUNNING);
+      // Wait for API response before updating status
       await startTask.mutate(task.id);
+      // Only update status after successful response
+      setOptimisticStatus(TaskStatus.RUNNING);
       // Trigger refresh after successful start
       onRefresh?.();
     } catch (error) {
       console.error('Failed to start task:', error);
-      // Revert optimistic update on error
+      // Clear any optimistic update on error
       setOptimisticStatus(null);
 
       // Show error notification with retry option
@@ -180,14 +200,15 @@ export default function TradingTaskCard({
   const handleStop = async (mode: StopMode = 'graceful') => {
     handleStopMenuClose();
     try {
-      // Optimistically update status to STOPPED
-      setOptimisticStatus(TaskStatus.STOPPED);
+      // Wait for API response before updating status
       await stopTask.mutate({ id: task.id, mode });
+      // Only update status after successful response
+      setOptimisticStatus(TaskStatus.STOPPED);
       // Trigger refresh after successful stop
       onRefresh?.();
     } catch (error) {
       console.error('Failed to stop task:', error);
-      // Revert optimistic update on error
+      // Clear any optimistic update on error
       setOptimisticStatus(null);
 
       // Show error notification
@@ -327,10 +348,10 @@ export default function TradingTaskCard({
               color="primary"
               startIcon={<PlayIcon />}
               onClick={handleStart}
-              disabled={startTask.isLoading}
+              disabled={startTask.isLoading || stopTask.isLoading}
               size="small"
             >
-              Start
+              {startTask.isLoading ? 'Starting...' : 'Start'}
             </Button>
           )}
           {(displayStatus === TaskStatus.RUNNING ||
@@ -340,10 +361,10 @@ export default function TradingTaskCard({
               color="error"
               startIcon={<StopIcon />}
               onClick={handleStopMenuOpen}
-              disabled={stopTask.isLoading}
+              disabled={stopTask.isLoading || startTask.isLoading}
               size="small"
             >
-              Stop
+              {stopTask.isLoading ? 'Stopping...' : 'Stop'}
             </Button>
           )}
         </Box>

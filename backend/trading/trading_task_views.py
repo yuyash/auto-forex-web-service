@@ -204,9 +204,12 @@ class TradingTaskStartView(APIView):
         """
         Start trading task execution.
 
-        Creates a new TaskExecution and queues the trading task for processing.
-        Enforces one active task per account constraint.
+        Validates task status in database AND checks celery task lock status
+        before starting. Creates a new TaskExecution and queues the trading
+        task for processing. Enforces one active task per account constraint.
         """
+        from .services.task_lock_manager import TaskLockManager
+
         # Get the task
         try:
             task = TradingTask.objects.get(id=task_id, user=request.user.pk)
@@ -216,6 +219,42 @@ class TradingTaskStartView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        # Check database status first
+        if task.status == TaskStatus.RUNNING:
+            return Response(
+                {"error": "Task is already running according to database status"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Check if there's an active celery task lock (actual running state)
+        lock_manager = TaskLockManager()
+        lock_info = lock_manager.get_lock_info("trading", task_id)
+
+        if lock_info is not None:
+            # Lock exists - check if it's stale
+            is_stale = lock_info.get("is_stale", False)
+            if not is_stale:
+                # Active lock exists - task is actually running
+                return Response(
+                    {
+                        "error": "Task has an active execution lock. "
+                        "A celery task may already be running."
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            # Stale lock - clean it up before proceeding
+            logger.warning(
+                "Cleaning up stale lock for trading task %d before starting",
+                task_id,
+            )
+            lock_manager.release_lock("trading", task_id)
+
+            # Also sync database status if it's inconsistent
+            if task.status == TaskStatus.RUNNING:
+                task.status = TaskStatus.STOPPED
+                task.save(update_fields=["status", "updated_at"])
+                task.refresh_from_db()
+
         # Validate configuration before starting
         is_valid, error_message = task.validate_configuration()
         if not is_valid:
@@ -224,7 +263,7 @@ class TradingTaskStartView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Start the task
+        # Start the task (this also checks for other running tasks on the account)
         try:
             task.start()
         except ValueError as e:
@@ -268,13 +307,15 @@ class TradingTaskStopView(APIView):
         """
         Stop trading task execution.
 
+        Validates task status in database AND checks celery task lock status
+        before stopping. Updates task to stopped state and triggers cleanup.
+
         Request body (optional):
         - mode: Stop mode ('immediate', 'graceful', 'graceful_close')
                 Default: 'graceful'
-
-        Transitions task to stopped state and marks current execution as stopped.
         """
         from .enums import StopMode
+        from .services.task_lock_manager import TaskLockManager
         from .tasks import stop_trading_task
 
         # Get the task
@@ -286,12 +327,30 @@ class TradingTaskStopView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Validate task is running or paused
-        if task.status not in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
+        # Check celery task lock status to determine actual running state
+        lock_manager = TaskLockManager()
+        lock_info = lock_manager.get_lock_info("trading", task_id)
+        has_active_lock = lock_info is not None and not lock_info.get("is_stale", False)
+
+        # Validate task status - check both database and actual celery state
+        db_is_stoppable = task.status in [TaskStatus.RUNNING, TaskStatus.PAUSED]
+
+        if not db_is_stoppable and not has_active_lock:
+            # Task is not running in database AND no active celery task
             return Response(
                 {"error": "Task is not running or paused"},
                 status=status.HTTP_409_CONFLICT,
             )
+
+        # If database says not running but lock exists, sync database first
+        if not db_is_stoppable and has_active_lock:
+            logger.warning(
+                "Trading task %d has active lock but database status is %s. "
+                "Syncing database status before stopping.",
+                task_id,
+                task.status,
+            )
+            # Don't change to RUNNING, just proceed to stop
 
         # Get stop mode from request (default: graceful)
         mode_str = request.data.get("mode", StopMode.GRACEFUL)
@@ -306,20 +365,39 @@ class TradingTaskStopView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Update task status to indicate stopping
+        # Update task status to stopped
         task.status = TaskStatus.STOPPED
         task.save(update_fields=["status", "updated_at"])
 
-        # Queue the stop task with the specified mode
-        stop_trading_task.delay(task.pk, stop_mode.value)
+        # Update latest execution if it exists and is running
+        latest_execution = task.get_latest_execution()
+        if latest_execution and latest_execution.status in [
+            TaskStatus.RUNNING,
+            TaskStatus.PAUSED,
+        ]:
+            from django.utils import timezone
+
+            latest_execution.status = TaskStatus.STOPPED
+            latest_execution.completed_at = timezone.now()
+            latest_execution.save(update_fields=["status", "completed_at"])
+
+        # Queue the stop task with the specified mode to handle cleanup
+        # (closing positions, releasing locks, etc.)
+        if has_active_lock:
+            stop_trading_task.delay(task.pk, stop_mode.value)
+        else:
+            # No active celery task, just clean up any stale locks
+            if lock_info:
+                lock_manager.release_lock("trading", task_id)
 
         return Response(
             {
                 "message": f"Trading task stop initiated ({stop_mode.label})",
                 "task_id": task.pk,
                 "stop_mode": stop_mode.value,
+                "status": TaskStatus.STOPPED,
             },
-            status=status.HTTP_202_ACCEPTED,
+            status=status.HTTP_200_OK,
         )
 
 

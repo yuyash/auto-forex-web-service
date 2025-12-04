@@ -25,7 +25,6 @@ from trading.enums import TaskStatus, TaskType
 from trading.execution_models import ExecutionMetrics, TaskExecution
 from trading.historical_data_loader import HistoricalDataLoader
 from trading.result_models import PerformanceMetrics
-from trading.strategy_registry import registry
 from trading.trading_task_models import TradingTask
 from trading_system.config_loader import get_config
 
@@ -1403,7 +1402,7 @@ def _close_all_positions_for_trading_task(task: TradingTask) -> int:
             trading_task=task,
             closed_at__isnull=True,
         )
-        
+
         # Also check for positions linked by account but not by task
         # (for backwards compatibility with older positions)
         if not open_positions.exists():
@@ -1500,7 +1499,8 @@ def _close_all_positions_for_trading_task(task: TradingTask) -> int:
                         execution.add_log(
                             "INFO",
                             f"Closed position at task stop: {position.direction} "
-                            f"{position.units} {position.instrument} at {exit_price} (P&L: {realized_pnl})",
+                            f"{position.units} {position.instrument} at {exit_price} "
+                            f"(P&L: {realized_pnl})",
                         )
                 except Exception as e:  # pylint: disable=broad-exception-caught
                     logger.warning(
