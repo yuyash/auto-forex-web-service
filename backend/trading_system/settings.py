@@ -163,25 +163,11 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
 # Celery Beat Schedule
 # https://docs.celeryq.dev/en/stable/userguide/periodic-tasks.html
 CELERY_BEAT_SCHEDULE = {
-    "fetch-all-account-balances": {
-        "task": "accounts.tasks.fetch_all_active_account_balances",
-        "schedule": 120.0,  # Every 2 minutes (120 seconds)
-        "options": {
-            "expires": 60.0,  # Task expires after 60 seconds if not executed
-        },
-    },
     "cleanup-old-tick-data": {
         "task": "trading.tasks.cleanup_old_tick_data",
         "schedule": crontab(hour=2, minute=0),  # Daily at 2:00 AM UTC
         "options": {
             "expires": 3600.0,  # Task expires after 1 hour if not executed
-        },
-    },
-    "oanda-sync-task": {
-        "task": "trading.oanda_sync_task.oanda_sync_task",
-        "schedule": 300.0,  # Every 5 minutes (300 seconds)
-        "options": {
-            "expires": 240.0,  # Task expires after 4 minutes if not executed
         },
     },
     "daily-athena-import": {

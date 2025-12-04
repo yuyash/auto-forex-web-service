@@ -3,7 +3,7 @@ Views for order management and execution.
 
 This module contains views for:
 - Order submission (market, limit, stop, OCO)
-- Order listing with filtering
+- Order listing with filtering (directly from OANDA API)
 - Order details retrieval
 - Order cancellation
 
@@ -11,34 +11,23 @@ Requirements: 8.1, 8.2
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 from rest_framework import status
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import OandaAccount
-from trading.models import Order
+from trading.oanda_api import OandaAPIClient, OandaAPIError
 from trading.order_executor import OrderExecutionError, OrderExecutor
-from trading.serializers import OrderCreateSerializer, OrderSerializer
+from trading.serializers import OrderCreateSerializer
+
+if TYPE_CHECKING:
+    from trading.models import Order
 
 logger = logging.getLogger(__name__)
-
-
-class OrderPagination(PageNumberPagination):
-    """
-    Pagination class for orders.
-
-    Provides configurable page size with reasonable defaults and limits.
-
-    Requirements: 8.1, 8.2
-    """
-
-    page_size = 50
-    page_size_query_param = "page_size"
-    max_page_size = 100
 
 
 class OrderListCreateView(APIView):
@@ -46,9 +35,8 @@ class OrderListCreateView(APIView):
     API endpoint for order listing and creation.
 
     GET /api/orders
-    - List user's orders with filtering
-    - Support pagination
-    - Filter by account, instrument, status, date range
+    - List user's orders directly from OANDA API
+    - Filter by account, instrument, status
 
     POST /api/orders
     - Submit new order (market, limit, stop, OCO)
@@ -56,70 +44,90 @@ class OrderListCreateView(APIView):
     - Execute via OANDA API with retry logic
 
     Query Parameters (GET):
-        - account_id: Filter by OANDA account ID
+        - account_id: Filter by OANDA account ID (required)
         - instrument: Filter by currency pair (e.g., 'EUR_USD')
-        - status: Filter by order status (pending, filled, cancelled, rejected)
-        - start_date: Filter orders created after this date (ISO format)
-        - end_date: Filter orders created before this date (ISO format)
-        - page: Page number for pagination (default: 1)
-        - page_size: Number of results per page (default: 50, max: 100)
+        - status: Filter by order status (pending, all)
+        - count: Number of orders to return (default: 50)
 
     Requirements: 8.1, 8.2
     """
 
     permission_classes = [IsAuthenticated]
-    pagination_class = OrderPagination
 
     def get(self, request: Request) -> Response:
         """
-        List user's orders with optional filtering.
+        List user's orders directly from OANDA API.
 
         Args:
             request: HTTP request with query parameters
 
         Returns:
-            Response with paginated order list
+            Response with order list from OANDA
         """
-        # Get user's OANDA accounts
-        user_accounts = OandaAccount.objects.filter(user=request.user.id)
-
-        # Start with orders from user's accounts
-        queryset = Order.objects.filter(account__in=user_accounts)
-
-        # Apply filters
         account_id = request.query_params.get("account_id")
-        if account_id:
-            queryset = queryset.filter(account_id=int(account_id))
-
         instrument = request.query_params.get("instrument")
-        if instrument:
-            queryset = queryset.filter(instrument=instrument)
+        order_status = request.query_params.get("status", "all").lower()
+        count = int(request.query_params.get("count", "50"))
 
-        order_status = request.query_params.get("status")
-        if order_status:
-            queryset = queryset.filter(status=order_status)
+        # If no account_id specified, get orders from all user accounts
+        if account_id:
+            try:
+                accounts = [OandaAccount.objects.get(id=int(account_id), user=request.user.id)]
+            except OandaAccount.DoesNotExist:
+                return Response(
+                    {"error": "Account not found or access denied"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        else:
+            accounts = list(OandaAccount.objects.filter(user=request.user.id, is_active=True))
 
-        start_date = request.query_params.get("start_date")
-        if start_date:
-            queryset = queryset.filter(created_at__gte=start_date)
+        if not accounts:
+            return Response({"results": [], "count": 0})
 
-        end_date = request.query_params.get("end_date")
-        if end_date:
-            queryset = queryset.filter(created_at__lte=end_date)
+        all_orders = []
 
-        # Order by creation date (newest first)
-        queryset = queryset.order_by("-created_at")
+        for account in accounts:
+            try:
+                client = OandaAPIClient(account)
 
-        # Apply pagination
-        paginator = self.pagination_class()
-        page = paginator.paginate_queryset(queryset, request)
+                if order_status == "pending":
+                    # Get only pending orders
+                    orders = client.get_pending_orders(instrument=instrument)
+                else:
+                    # Get order history (includes all states)
+                    orders = client.get_order_history(
+                        instrument=instrument,
+                        count=count,
+                        state="ALL",
+                    )
 
-        if page is not None:
-            serializer = OrderSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data)
+                # Add account info to each order
+                for order in orders:
+                    order["account_name"] = account.account_id
+                    order["account_db_id"] = account.id
 
-        serializer = OrderSerializer(queryset, many=True)
-        return Response(serializer.data)
+                all_orders.extend(orders)
+
+            except OandaAPIError as e:
+                logger.error(
+                    "Failed to fetch orders from OANDA for account %s: %s",
+                    account.account_id,
+                    str(e),
+                )
+                # Continue with other accounts
+
+        # Sort by create_time (newest first)
+        all_orders.sort(key=lambda x: x.get("create_time", ""), reverse=True)
+
+        # Limit total results
+        all_orders = all_orders[:count]
+
+        return Response(
+            {
+                "results": all_orders,
+                "count": len(all_orders),
+            }
+        )
 
     def post(  # pylint: disable=too-many-locals,too-many-return-statements
         self, request: Request
@@ -177,14 +185,14 @@ class OrderListCreateView(APIView):
             executor = OrderExecutor(account)
 
             if order_type == "market":
-                order = executor.submit_market_order(
+                result = executor.submit_market_order(
                     instrument=instrument,
                     units=signed_units,
                     take_profit=take_profit,
                     stop_loss=stop_loss,
                 )
             elif order_type == "limit":
-                order = executor.submit_limit_order(
+                result = executor.submit_limit_order(
                     instrument=instrument,
                     units=signed_units,
                     price=price,
@@ -192,7 +200,7 @@ class OrderListCreateView(APIView):
                     stop_loss=stop_loss,
                 )
             elif order_type == "stop":
-                order = executor.submit_stop_order(
+                result = executor.submit_stop_order(
                     instrument=instrument,
                     units=signed_units,
                     price=price,
@@ -200,17 +208,17 @@ class OrderListCreateView(APIView):
                     stop_loss=stop_loss,
                 )
             elif order_type == "oco":
-                limit_order, stop_order = executor.submit_oco_order(
+                limit_result, stop_result = executor.submit_oco_order(
                     instrument=instrument,
                     units=signed_units,
                     limit_price=limit_price,
                     stop_price=stop_price,
                 )
-                # Return both orders for OCO
+                # Return both order responses for OCO
                 return Response(
                     {
-                        "limit_order": OrderSerializer(limit_order).data,
-                        "stop_order": OrderSerializer(stop_order).data,
+                        "limit_order": self._format_order_from_model(limit_result),
+                        "stop_order": self._format_order_from_model(stop_result),
                     },
                     status=status.HTTP_201_CREATED,
                 )
@@ -222,7 +230,7 @@ class OrderListCreateView(APIView):
 
             # Return created order
             return Response(
-                OrderSerializer(order).data,
+                self._format_order_from_model(result),
                 status=status.HTTP_201_CREATED,
             )
 
@@ -239,99 +247,134 @@ class OrderListCreateView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    def _format_order_response(self, order_result: dict) -> dict:
+        """Format order execution result for API response."""
+        return {
+            "id": order_result.get("order_id") or order_result.get("id"),
+            "instrument": order_result.get("instrument"),
+            "type": order_result.get("type"),
+            "units": str(order_result.get("units", 0)),
+            "price": (str(order_result.get("price", "")) if order_result.get("price") else None),
+            "state": order_result.get("state", "PENDING"),
+            "create_time": order_result.get("create_time") or order_result.get("time"),
+        }
+
+    def _format_order_from_model(self, order: "Order") -> dict:
+        """Format Order model instance for API response."""
+        return {
+            "id": order.order_id,
+            "instrument": order.instrument,
+            "type": order.order_type,
+            "units": str(order.units),
+            "price": str(order.price) if order.price else None,
+            "state": order.status.upper() if order.status else "PENDING",
+            "create_time": order.created_at.isoformat() if order.created_at else None,
+        }
+
 
 class OrderDetailView(APIView):
     """
     API endpoint for order details and cancellation.
 
-    GET /api/orders/{id}
-    - Retrieve order details by ID
-    - Verify user has access to the order
+    GET /api/orders/{order_id}
+    - Retrieve order details from OANDA API
+    - order_id is the OANDA order ID
 
-    DELETE /api/orders/{id}
-    - Cancel a pending order
-    - Only pending orders can be cancelled
+    DELETE /api/orders/{order_id}
+    - Cancel a pending order via OANDA API
 
     Requirements: 8.1, 8.2
     """
 
     permission_classes = [IsAuthenticated]
 
-    def get(self, request: Request, order_id: int) -> Response:
+    def get(self, request: Request, order_id: str) -> Response:
         """
-        Retrieve order details.
+        Retrieve order details from OANDA API.
 
         Args:
             request: HTTP request
-            order_id: Order ID
+            order_id: OANDA Order ID
 
         Returns:
             Response with order details or error
         """
-        # Get user's OANDA accounts
-        user_accounts = OandaAccount.objects.filter(user=request.user.id)
+        account_id = request.query_params.get("account_id")
 
-        # Get order
-        try:
-            order = Order.objects.get(id=order_id, account__in=user_accounts)
-        except Order.DoesNotExist:
+        if not account_id:
             return Response(
-                {"error": "Order not found or access denied"},
+                {"error": "account_id query parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            account = OandaAccount.objects.get(id=int(account_id), user=request.user.id)
+        except OandaAccount.DoesNotExist:
+            return Response(
+                {"error": "Account not found or access denied"},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        serializer = OrderSerializer(order)
-        return Response(serializer.data)
+        try:
+            client = OandaAPIClient(account)
+            # Get order from history to find it
+            orders = client.get_order_history(count=100, state="ALL")
+            order = next((o for o in orders if o.get("id") == order_id), None)
 
-    def delete(self, request: Request, order_id: int) -> Response:
+            if not order:
+                return Response(
+                    {"error": "Order not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            return Response(order)
+
+        except OandaAPIError as e:
+            logger.error("Failed to fetch order %s: %s", order_id, str(e))
+            return Response(
+                {"error": f"Failed to fetch order: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def delete(self, request: Request, order_id: str) -> Response:
         """
-        Cancel a pending order.
+        Cancel a pending order via OANDA API.
 
         Args:
             request: HTTP request
-            order_id: Order ID
+            order_id: OANDA Order ID
 
         Returns:
             Response with success message or error
         """
-        # Get user's OANDA accounts
-        user_accounts = OandaAccount.objects.filter(user=request.user.id)
+        account_id = request.query_params.get("account_id")
 
-        # Get order
-        try:
-            order = Order.objects.get(id=order_id, account__in=user_accounts)
-        except Order.DoesNotExist:
+        if not account_id:
             return Response(
-                {"error": "Order not found or access denied"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        # Check if order can be cancelled
-        if order.status != "pending":
-            return Response(
-                {"error": f"Cannot cancel order with status: {order.status}"},
+                {"error": "account_id query parameter is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Cancel order via OrderExecutor
         try:
-            executor = OrderExecutor(order.account)
-            success = executor.cancel_order(order.order_id)
-
-            if success:
-                return Response(
-                    {"message": "Order cancelled successfully"},
-                    status=status.HTTP_200_OK,
-                )
-
+            account = OandaAccount.objects.get(id=int(account_id), user=request.user.id)
+        except OandaAccount.DoesNotExist:
             return Response(
-                {"error": "Failed to cancel order"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                {"error": "Account not found or access denied"},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.error("Error cancelling order %s: %s", order_id, e)
+        try:
+            client = OandaAPIClient(account)
+            result = client.cancel_order(order_id)
+
             return Response(
-                {"error": "An unexpected error occurred"},
+                {"message": "Order cancelled successfully", "details": result},
+                status=status.HTTP_200_OK,
+            )
+
+        except OandaAPIError as e:
+            logger.error("Failed to cancel order %s: %s", order_id, str(e))
+            return Response(
+                {"error": f"Failed to cancel order: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
