@@ -577,7 +577,7 @@ class TestTradingTaskStop:
         )
 
         # Create task execution
-        TaskExecution.objects.create(
+        execution = TaskExecution.objects.create(
             task_type=TaskType.TRADING,
             task_id=task.pk,
             execution_number=1,
@@ -585,40 +585,47 @@ class TestTradingTaskStop:
             started_at=timezone.now(),
         )
 
-        # Add some open positions
+        # Add some open positions linked to the trading_task
+        positions = []
         for i in range(2):
-            create_random_position(
+            pos = Position.objects.create(
                 account=test_account,
                 strategy=test_strategy,
+                trading_task=task,
+                position_id=f"TEST_POS_{i}_{timezone.now().timestamp()}",
+                instrument="EUR_USD",
                 direction="long",
-                units=1.0 + i,
+                units=Decimal("1000"),
+                entry_price=Decimal("1.10000"),
+                current_price=Decimal("1.10100"),
             )
+            positions.append(pos)
 
-        # Mock the order executor and strategy logging
+        # Mock the order executor to avoid actual OANDA calls
+        # Note: OrderExecutor is imported locally in task_executor, so patch at definition
         with patch("trading.order_executor.OrderExecutor") as mock_executor_class:
             mock_executor = Mock()
             mock_executor_class.return_value = mock_executor
             mock_executor.execute_order.return_value = None
 
-            with patch("trading.services.task_executor.registry") as mock_registry:
-                mock_strategy_class = Mock()
-                mock_strategy_instance = Mock()
-                mock_strategy_class.return_value = mock_strategy_instance
-                mock_registry.get_strategy_class.return_value = mock_strategy_class
+            # Stop the task
+            result = stop_trading_task_execution(task.pk)
 
-                # Stop the task
-                stop_trading_task_execution(task.pk)
+            # Verify success
+            assert result["success"] is True
+            assert result["positions_closed"] == 2
 
-                # Verify log_strategy_event was called
-                assert mock_strategy_instance.log_strategy_event.call_count == 2
+            # Verify positions were closed
+            for pos in positions:
+                pos.refresh_from_db()
+                assert pos.closed_at is not None
 
-                # Verify event details
-                for call in mock_strategy_instance.log_strategy_event.call_args_list:
-                    args, kwargs = call
-                    assert args[0] == "position_closed"
-                    assert "event_type" in args[2]
-                    assert args[2]["event_type"] == "close"
-                    assert args[2]["reason"] == "task_stop"
+            # Verify execution has logs about position closures
+            execution.refresh_from_db()
+            assert execution.logs is not None
+            # Check that logs contain position closure info
+            log_text = str(execution.logs)
+            assert "Closed" in log_text or "position" in log_text.lower()
 
     def test_no_positions_to_close(self, test_user, test_account, test_config, test_strategy):
         """

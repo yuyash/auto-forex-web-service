@@ -1238,10 +1238,17 @@ _task_last_log_time: dict[int, float] = {}
 _task_log_counts: dict[int, int] = {}
 
 # Cache strategy instances per task to maintain state across ticks
+# NOTE: Each Celery worker has its own instance, but we use Redis locking
+# to ensure only ONE worker processes ticks for a given task at any time
 _strategy_instances: dict[int, Any] = {}
 
 # Track last metrics update time per task
 _task_last_metrics_time: dict[int, float] = {}
+
+# Redis key prefixes for tick processing coordination
+_TICK_LOCK_PREFIX = "tick_processing_lock"
+_TICK_INIT_PREFIX = "tick_strategy_initialized"
+_TICK_WORKER_PREFIX = "tick_processing_worker"
 
 
 def _update_trading_task_metrics(  # pylint: disable=too-many-locals
@@ -1335,6 +1342,28 @@ def _update_trading_task_metrics(  # pylint: disable=too-many-locals
         logger.error("Error updating metrics for task %d: %s", task.pk, e)
 
 
+def _get_tick_lock_key(task_id: int) -> str:
+    """Get Redis key for task tick processing lock."""
+    return f"{_TICK_LOCK_PREFIX}:{task_id}"
+
+
+def _get_tick_init_key(task_id: int) -> str:
+    """Get Redis key for strategy initialization flag."""
+    return f"{_TICK_INIT_PREFIX}:{task_id}"
+
+
+def _get_tick_worker_key(task_id: int) -> str:
+    """Get Redis key for assigned worker ID."""
+    return f"{_TICK_WORKER_PREFIX}:{task_id}"
+
+
+def _get_worker_id() -> str:
+    """Get a unique identifier for this worker process."""
+    import os
+
+    return f"{os.getpid()}_{id(time)}"
+
+
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-nested-blocks
 def _process_tick_for_task(  # noqa: C901
     task: Any, tick: "TickData", tick_model: "TickDataModel", registry: Any
@@ -1345,21 +1374,57 @@ def _process_tick_for_task(  # noqa: C901
 
     # Get execution for logging
     execution = _get_task_execution(task)
+    task_id = task.pk
+    worker_id = _get_worker_id()
+
+    # ========================================================================
+    # CRITICAL: Redis-based worker assignment to prevent duplicate processing
+    # This ensures only ONE worker processes ticks for a given task at any time
+    # ========================================================================
+    worker_key = _get_tick_worker_key(task_id)
+    assigned_worker = cache.get(worker_key)
+
+    if assigned_worker is None:
+        # No worker assigned yet - try to claim this task
+        # Use add() which is atomic (SETNX) - only succeeds if key doesn't exist
+        if cache.add(worker_key, worker_id, timeout=300):  # 5 minute timeout
+            assigned_worker = worker_id
+            logger.info(
+                "Worker %s claimed tick processing for task %d",
+                worker_id,
+                task_id,
+            )
+        else:
+            # Another worker claimed it between our check and add - get their ID
+            assigned_worker = cache.get(worker_key)
+
+    # If this worker is not the assigned worker, skip processing
+    if assigned_worker != worker_id:
+        # Silently skip - another worker is handling this task
+        return
+
+    # Refresh the worker assignment timeout to keep it alive
+    cache.set(worker_key, worker_id, timeout=300)
 
     try:
         # Track tick count for periodic logging
-        task_id = task.pk
         if task_id not in _task_tick_counts:
             _task_tick_counts[task_id] = 0
             _task_last_log_time[task_id] = time.time()
-            # Log first tick received for this task
-            first_tick_msg = (
-                f"First tick received for task {task_id}: "
-                f"{tick.instrument} bid={tick.bid} ask={tick.ask} mid={tick.mid}"
-            )
-            logger.info(first_tick_msg)
-            if execution:
-                execution.add_log("INFO", first_tick_msg)
+
+            # Check if another worker already logged "first tick" using Redis flag
+            init_key = _get_tick_init_key(task_id)
+            is_first_init = cache.add(init_key, worker_id, timeout=3600)  # 1 hour timeout
+
+            if is_first_init:
+                # This is truly the first initialization across all workers
+                first_tick_msg = (
+                    f"First tick received for task {task_id}: "
+                    f"{tick.instrument} bid={tick.bid} ask={tick.ask} mid={tick.mid}"
+                )
+                logger.info(first_tick_msg)
+                if execution:
+                    execution.add_log("INFO", first_tick_msg)
 
         _task_tick_counts[task_id] += 1
         tick_count = _task_tick_counts[task_id]
@@ -1391,6 +1456,8 @@ def _process_tick_for_task(  # noqa: C901
             return
 
         # Get or create cached strategy instance to maintain state across ticks
+        # Since we've established worker assignment above, only this worker
+        # will create and use the strategy instance for this task
         if task_id not in _strategy_instances:
             # Get strategy class from registry
             strategy_class = registry.get_strategy_class(task.config.strategy_type)
@@ -2045,6 +2112,13 @@ def stop_trading_task(task_id: int, stop_mode: str = "graceful") -> Dict[str, An
                 del _task_last_log_time[task_id]
             if task_id in _task_last_metrics_time:
                 del _task_last_metrics_time[task_id]
+
+            # Clear Redis keys for worker assignment and initialization tracking
+            worker_key = _get_tick_worker_key(task_id)
+            init_key = _get_tick_init_key(task_id)
+            cache.delete(worker_key)
+            cache.delete(init_key)
+            logger.info("Cleared Redis tick processing keys for task %d", task_id)
 
             # Stop market data streaming for the account
             stop_market_data_stream.delay(task.oanda_account.pk)
