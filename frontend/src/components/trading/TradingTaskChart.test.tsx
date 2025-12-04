@@ -29,6 +29,24 @@ vi.mock('../../contexts/AuthContext', () => ({
   }),
 }));
 
+// Mock the useMarketConfig hook
+vi.mock('../../hooks/useMarketConfig', () => ({
+  useSupportedGranularities: () => ({
+    granularities: [
+      { value: 'M1', label: '1 Minute' },
+      { value: 'M5', label: '5 Minutes' },
+      { value: 'M15', label: '15 Minutes' },
+      { value: 'M30', label: '30 Minutes' },
+      { value: 'H1', label: '1 Hour' },
+      { value: 'H4', label: '4 Hours' },
+      { value: 'D', label: 'Daily' },
+      { value: 'W', label: 'Weekly' },
+    ],
+    isLoading: false,
+    error: null,
+  }),
+}));
+
 // Mock the FinancialChart component
 interface MockFinancialChartProps {
   loading?: boolean;
@@ -354,7 +372,7 @@ describe('TradingTaskChart', () => {
       const comboboxes = screen.getAllByRole('combobox');
       const granularitySelect = comboboxes[0];
       await user.click(granularitySelect);
-      const option = screen.getByRole('option', { name: 'M5' });
+      const option = screen.getByRole('option', { name: '5 Minutes' });
       await user.click(option);
 
       await waitFor(() => {
@@ -385,7 +403,7 @@ describe('TradingTaskChart', () => {
       const comboboxes = screen.getAllByRole('combobox');
       const granularitySelect = comboboxes[0];
       await user.click(granularitySelect);
-      const option = screen.getByRole('option', { name: 'M5' });
+      const option = screen.getByRole('option', { name: '5 Minutes' });
       await user.click(option);
 
       await waitFor(() => {
