@@ -52,10 +52,8 @@ import {
   createHorizontalLine,
 } from '../../utils/chartMarkers';
 import { transformCandles } from '../../utils/chartDataTransform';
-import {
-  calculateGranularity,
-  getAvailableGranularities,
-} from '../../utils/granularityCalculator';
+import { calculateGranularity } from '../../utils/granularityCalculator';
+import { useSupportedGranularities } from '../../hooks/useMarketConfig';
 import type { OandaGranularity } from '../../types/oanda';
 import type { Trade } from '../../types/execution';
 import { CHART_CONFIG } from '../../config/chartConfig';
@@ -133,8 +131,8 @@ export const TradingTaskChart: React.FC<TradingTaskChartProps> = ({
     }
   }, [propGranularity, calculatedGranularity]);
 
-  // Available granularities for selector
-  const availableGranularities = useMemo(() => getAvailableGranularities(), []);
+  // Available granularities for selector (with human-readable labels)
+  const { granularities: availableGranularities } = useSupportedGranularities();
 
   // Parse dates
   const parsedStartDate = useMemo(() => new Date(startDate), [startDate]);
@@ -294,31 +292,36 @@ export const TradingTaskChart: React.FC<TradingTaskChartProps> = ({
     []
   );
 
-  // Convert trades to chart markers with cyan/orange colors, aligning to nearest candle
-  const tradeMarkers = useMemo<ChartMarker[]>(() => {
-    if (!trades || trades.length === 0 || !candles || candles.length === 0) {
-      return [];
-    }
+  // Helper function to find nearest candle date
+  const findNearestCandleDate = useCallback(
+    (targetDate: Date): Date | null => {
+      if (!candles || candles.length === 0) return null;
 
-    // Helper: find nearest candle date to the trade timestamp
-    const findNearestCandleDate = (ts: Date): Date => {
       let nearest = candles[0].date;
-      let minDiff = Math.abs(candles[0].date.getTime() - ts.getTime());
+      let minDiff = Math.abs(candles[0].date.getTime() - targetDate.getTime());
       for (let i = 1; i < candles.length; i++) {
         const d = candles[i].date;
-        const diff = Math.abs(d.getTime() - ts.getTime());
+        const diff = Math.abs(d.getTime() - targetDate.getTime());
         if (diff < minDiff) {
           minDiff = diff;
           nearest = d;
         }
       }
       return nearest;
-    };
+    },
+    [candles]
+  );
+
+  // Convert trades to chart markers with cyan/orange colors, aligning to nearest candle
+  const tradeMarkers = useMemo<ChartMarker[]>(() => {
+    if (!trades || trades.length === 0 || !candles || candles.length === 0) {
+      return [];
+    }
 
     // Convert Trade format to ChartTrade format with aligned dates
     const chartTrades: ChartTrade[] = trades.map((trade) => {
       const tradeDate = new Date(trade.entry_time);
-      const alignedDate = findNearestCandleDate(tradeDate);
+      const alignedDate = findNearestCandleDate(tradeDate) || tradeDate;
       return {
         timestamp: alignedDate.toISOString(),
         action: trade.direction === 'long' ? 'buy' : 'sell',
@@ -329,7 +332,7 @@ export const TradingTaskChart: React.FC<TradingTaskChartProps> = ({
     });
 
     return createTradeMarkers(chartTrades);
-  }, [trades, candles]);
+  }, [trades, candles, findNearestCandleDate]);
 
   // Create start/end markers with gray double circles
   const startEndMarkers = useMemo<ChartMarker[]>(() => {
@@ -349,13 +352,19 @@ export const TradingTaskChart: React.FC<TradingTaskChartProps> = ({
         candles[candles.length - 1];
     }
 
+    // Use candle-aligned dates for markers
+    const alignedStartDate = findNearestCandleDate(parsedStartDate);
+    const alignedStopDate = parsedStopDate
+      ? findNearestCandleDate(parsedStopDate)
+      : null;
+
     return createStartEndMarkers(
-      parsedStartDate,
-      parsedStopDate,
+      alignedStartDate || parsedStartDate,
+      alignedStopDate,
       startCandle.high,
       stopCandle?.high
     );
-  }, [parsedStartDate, parsedStopDate, candles]);
+  }, [parsedStartDate, parsedStopDate, candles, findNearestCandleDate]);
 
   // Create vertical lines for start and stop
   const verticalLines = useMemo<VerticalLine[]>(() => {
@@ -450,8 +459,8 @@ export const TradingTaskChart: React.FC<TradingTaskChartProps> = ({
             onChange={handleGranularityChange}
           >
             {availableGranularities.map((gran) => (
-              <MenuItem key={gran} value={gran}>
-                {gran}
+              <MenuItem key={gran.value} value={gran.value}>
+                {gran.label}
               </MenuItem>
             ))}
           </Select>

@@ -151,15 +151,12 @@ export function createTradeMarkers(trades: Trade[]): ChartMarker[] {
       tooltipLines.push(`P&L: ${sign}$${amount}`);
     }
 
-    // Round timestamp to nearest hour to align with H1 candles
-    // This ensures markers appear on the chart even if trade times don't exactly match candle times
+    // Use the trade timestamp directly - callers should align to candle dates if needed
     const tradeDate = new Date(trade.timestamp);
-    const roundedDate = new Date(tradeDate);
-    roundedDate.setMinutes(0, 0, 0); // Round down to the hour
 
     return {
       id: `trade-${index}`,
-      date: roundedDate,
+      date: tradeDate,
       price: trade.price + priceOffset,
       type: trade.action,
       color: isBuy ? '#00bcd4' : '#ff9800', // Cyan for buy, Orange for sell
