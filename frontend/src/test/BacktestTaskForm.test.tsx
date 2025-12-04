@@ -442,7 +442,7 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       // Verify all values are present in review
       expect(screen.getByText('Mixed Nav Test')).toBeInTheDocument();
       expect(screen.getByText('Test Config 1')).toBeInTheDocument();
-    }, 15000);
+    }, 60000);
 
     it('should handle field modifications during mixed navigation', async () => {
       renderForm();

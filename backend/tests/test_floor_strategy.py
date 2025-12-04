@@ -1832,3 +1832,216 @@ class TestFloorStrategyDirectionRecalculation:
         assert all(
             d in ["long", "short"] for d in directions
         ), "All directions should be 'long' or 'short'"
+
+
+# ============================================================================
+# Tests for Position Restoration on Restart (TradingTask Mode)
+# ============================================================================
+
+
+@pytest.fixture
+def strategy_config_for_trading_task(user):
+    """Create a test strategy configuration for trading task."""
+    from trading.models import StrategyConfig
+
+    return StrategyConfig.objects.create(
+        name="Test Floor Config",
+        user=user,
+        strategy_type="floor",
+        parameters={
+            "instrument": "USD_JPY",
+            "base_lot_size": 1.0,
+            "scaling_mode": "additive",
+            "scaling_amount": 1.0,
+            "retracement_pips": 30,
+            "take_profit_pips": 25,
+            "max_layers": 3,
+            "max_retracements_per_layer": 10,
+            "volatility_lock_multiplier": 5.0,
+            "direction_method": "momentum",
+            "entry_signal_lookback_ticks": 10,
+        },
+    )
+
+
+@pytest.fixture
+def trading_task(user, oanda_account, strategy_config_for_trading_task):
+    """Create a test trading task."""
+    from trading.trading_task_models import TradingTask
+
+    return TradingTask.objects.create(
+        user=user,
+        config=strategy_config_for_trading_task,
+        oanda_account=oanda_account,
+        name="Test Floor Task",
+        status="running",
+    )
+
+
+@pytest.fixture
+def existing_positions(oanda_account, trading_task):
+    """Create existing positions for testing restoration."""
+    positions = []
+    base_time = timezone.now() - timedelta(hours=1)
+
+    # Create first lot position
+    pos1 = Position.objects.create(
+        account=oanda_account,
+        trading_task=trading_task,
+        position_id="137_POS",
+        instrument="USD_JPY",
+        direction="long",
+        units=Decimal("1000"),
+        entry_price=Decimal("155.367"),
+        current_price=Decimal("155.400"),
+        layer_number=1,
+        is_first_lot=True,
+    )
+    Position.objects.filter(pk=pos1.pk).update(opened_at=base_time)
+    pos1.refresh_from_db()
+    positions.append(pos1)
+
+    return positions
+
+
+class TestPositionRestoration:
+    """Test position restoration on strategy restart."""
+
+    def test_load_state_restores_existing_positions(self, trading_task, existing_positions):
+        """Test that _load_state restores existing open positions."""
+        # Create a new FloorStrategy instance (simulating restart)
+        floor_strategy = FloorStrategy(trading_task)
+
+        # Verify positions were loaded into layer manager
+        assert len(floor_strategy.layer_manager.layers) == 1
+
+        layer = floor_strategy.layer_manager.layers[0]
+        assert len(layer.positions) == 1
+        assert layer.positions[0].position_id == "137_POS"
+        assert layer.direction == "long"
+        assert layer.first_lot_position is not None
+        assert layer.first_lot_position.position_id == "137_POS"
+
+    def test_load_state_does_not_create_duplicate_entry(self, trading_task, existing_positions):
+        """Test that strategy does not create new entry when positions exist."""
+        # Create a new FloorStrategy instance (simulating restart)
+        floor_strategy = FloorStrategy(trading_task)
+
+        # Process a tick
+        tick = TickData(
+            instrument="USD_JPY",
+            timestamp=timezone.now(),
+            bid=Decimal("155.450"),
+            ask=Decimal("155.468"),
+            mid=Decimal("155.459"),
+        )
+        orders = floor_strategy.on_tick(tick)
+
+        # Should NOT create a new initial entry order since we already have positions
+        # Check no new long orders with base_lot_size units were created
+        # (a new initial entry would have base_lot_size units)
+        new_initial_entries = [
+            o
+            for o in orders
+            if o.direction == "long"
+            and o.units == floor_strategy._lot_to_units(floor_strategy.base_lot_size)
+        ]
+        assert len(new_initial_entries) == 0, "Should not create new initial entry"
+
+        # The key assertion: no new initial entry should be created
+        # because we already have a position in layer 1
+        layer = floor_strategy.layer_manager.layers[0]
+        assert len(layer.positions) == 1  # Still just the restored position
+        assert layer.has_pending_initial_entry is False
+
+    def test_load_state_restores_multiple_positions_in_layer(self, oanda_account, trading_task):
+        """Test restoration of multiple positions in a layer (scaling scenario)."""
+        base_time = timezone.now() - timedelta(hours=1)
+
+        # Create multiple positions simulating scaling
+        Position.objects.create(
+            account=oanda_account,
+            trading_task=trading_task,
+            position_id="100_POS",
+            instrument="USD_JPY",
+            direction="long",
+            units=Decimal("1000"),
+            entry_price=Decimal("155.300"),
+            current_price=Decimal("155.400"),
+            layer_number=1,
+            is_first_lot=True,
+            opened_at=base_time,
+        )
+        Position.objects.create(
+            account=oanda_account,
+            trading_task=trading_task,
+            position_id="101_POS",
+            instrument="USD_JPY",
+            direction="long",
+            units=Decimal("2000"),
+            entry_price=Decimal("155.200"),
+            current_price=Decimal("155.400"),
+            layer_number=1,
+            is_first_lot=False,
+            opened_at=base_time + timedelta(minutes=30),
+        )
+        Position.objects.create(
+            account=oanda_account,
+            trading_task=trading_task,
+            position_id="102_POS",
+            instrument="USD_JPY",
+            direction="long",
+            units=Decimal("3000"),
+            entry_price=Decimal("155.100"),
+            current_price=Decimal("155.400"),
+            layer_number=1,
+            is_first_lot=False,
+            opened_at=base_time + timedelta(hours=1),
+        )
+
+        # Create strategy instance
+        floor_strategy = FloorStrategy(trading_task)
+
+        # Verify all 3 positions were restored
+        layer = floor_strategy.layer_manager.layers[0]
+        assert len(layer.positions) == 3
+        assert layer.retracement_count == 2  # 3 positions - 1 (first lot) = 2 retracements
+        assert layer.first_lot_position is not None
+        assert layer.first_lot_position.position_id == "100_POS"
+        assert layer.direction == "long"
+        assert layer.peak_price == Decimal("155.300")  # Highest entry for long
+
+    def test_load_state_restores_strategy_state_json(self, trading_task, existing_positions):
+        """Test that strategy_state JSON is used for additional state."""
+        # Save some state to the trading task
+        trading_task.strategy_state = {
+            "layer_states": {
+                "1": {
+                    "current_lot_size": "5",
+                    "is_active": True,
+                    "retracement_count": 3,
+                }
+            },
+            "normal_atr": "0.50",
+        }
+        trading_task.save()
+
+        # Create strategy instance
+        floor_strategy = FloorStrategy(trading_task)
+
+        # Verify state was restored
+        layer = floor_strategy.layer_manager.layers[0]
+        assert layer.current_lot_size == Decimal("5")
+        assert floor_strategy.normal_atr == Decimal("0.50")
+
+    def test_no_positions_creates_initial_layer(self, trading_task):
+        """Test that strategy creates initial layer when no positions exist."""
+        # Create strategy with no existing positions
+        floor_strategy = FloorStrategy(trading_task)
+
+        # Should have created layer 1
+        assert len(floor_strategy.layer_manager.layers) == 1
+        layer = floor_strategy.layer_manager.layers[0]
+        assert layer.layer_number == 1
+        assert len(layer.positions) == 0
+        assert layer.first_lot_position is None

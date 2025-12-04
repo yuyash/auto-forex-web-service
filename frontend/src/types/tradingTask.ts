@@ -17,6 +17,11 @@ export interface TradingTask {
   status: TaskStatus;
   sell_on_stop: boolean;
   latest_execution?: ExecutionSummary;
+  // State management fields
+  has_strategy_state: boolean;
+  has_open_positions: boolean;
+  open_positions_count: number;
+  can_resume: boolean;
   created_at: string;
   updated_at: string;
 }

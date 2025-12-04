@@ -118,6 +118,26 @@ export const tradingTasksApi = {
   },
 
   /**
+   * Restart a trading task with fresh state
+   * @param id - Task ID
+   * @param clearState - Whether to clear strategy state (default: true)
+   */
+  restart: (
+    id: number,
+    clearState: boolean = true
+  ): Promise<{
+    message: string;
+    task_id: number;
+    state_cleared: boolean;
+  }> => {
+    return apiClient.post<{
+      message: string;
+      task_id: number;
+      state_cleared: boolean;
+    }>(`/trading-tasks/${id}/restart/`, { clear_state: clearState });
+  },
+
+  /**
    * Get execution history for a trading task
    */
   getExecutions: (

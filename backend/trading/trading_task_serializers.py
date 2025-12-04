@@ -33,6 +33,11 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
     latest_execution = serializers.SerializerMethodField()
+    # State management fields for frontend button logic
+    has_strategy_state = serializers.SerializerMethodField()
+    has_open_positions = serializers.SerializerMethodField()
+    open_positions_count = serializers.SerializerMethodField()
+    can_resume = serializers.SerializerMethodField()
 
     class Meta:
         model = TradingTask
@@ -51,6 +56,11 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "sell_on_stop",
             "status",
             "latest_execution",
+            # State management fields
+            "has_strategy_state",
+            "has_open_positions",
+            "open_positions_count",
+            "can_resume",
             "created_at",
             "updated_at",
         ]
@@ -66,6 +76,10 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "account_type",
             "status",
             "latest_execution",
+            "has_strategy_state",
+            "has_open_positions",
+            "open_positions_count",
+            "can_resume",
             "created_at",
             "updated_at",
         ]
@@ -77,6 +91,22 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             if instrument:
                 return str(instrument)
         return "EUR_USD"
+
+    def get_has_strategy_state(self, obj: TradingTask) -> bool:
+        """Check if task has saved strategy state."""
+        return obj.has_strategy_state()
+
+    def get_has_open_positions(self, obj: TradingTask) -> bool:
+        """Check if task has open positions."""
+        return obj.has_open_positions()
+
+    def get_open_positions_count(self, obj: TradingTask) -> int:
+        """Get count of open positions."""
+        return obj.get_open_positions_count()
+
+    def get_can_resume(self, obj: TradingTask) -> bool:
+        """Check if task can be resumed with state recovery."""
+        return obj.can_resume()
 
     def get_latest_execution(self, obj: TradingTask) -> dict | None:
         """Get summary of latest execution with metrics."""

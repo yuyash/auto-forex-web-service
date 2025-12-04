@@ -250,12 +250,14 @@ class TestBacktestEngineCPULimit:
 class TestBacktestEngineMemoryLimit:
     """Test memory limit enforcement in BacktestEngine."""
 
+    @pytest.mark.django_db
     def test_memory_limit_configuration(self, backtest_config):
         """Test memory limit is configured from BacktestConfig."""
         engine = BacktestEngine(backtest_config)
 
         assert engine.config.memory_limit == 200 * 1024 * 1024
 
+    @pytest.mark.django_db
     def test_memory_limit_monitoring_starts(self, backtest_config, sample_tick_data):
         """Test memory monitoring starts when backtest runs."""
         engine = BacktestEngine(backtest_config)
@@ -285,6 +287,7 @@ class TestBacktestEngineMemoryLimit:
                 mock_monitor.start.assert_called_once()
                 mock_monitor.stop.assert_called_once()
 
+    @pytest.mark.django_db
     def test_automatic_termination_on_memory_overflow(self, backtest_config, sample_tick_data):
         """Test backtest terminates automatically when memory limit is exceeded."""
         engine = BacktestEngine(backtest_config)
@@ -333,6 +336,7 @@ class TestBacktestEngineMemoryLimit:
 class TestBacktestEngineResourceLogging:
     """Test resource usage logging in BacktestEngine."""
 
+    @pytest.mark.django_db
     def test_resource_usage_logged_on_completion(self, backtest_config, sample_tick_data):
         """Test resource usage is logged when backtest completes."""
         engine = BacktestEngine(backtest_config)
@@ -363,6 +367,7 @@ class TestBacktestEngineResourceLogging:
                     ]
                     assert len(resource_log) > 0
 
+    @pytest.mark.django_db
     def test_resource_usage_logged_on_failure(self, backtest_config, sample_tick_data):
         """Test resource usage is logged even when backtest fails."""
         engine = BacktestEngine(backtest_config)
@@ -387,6 +392,7 @@ class TestBacktestEngineResourceLogging:
                 # Verify monitoring was stopped (which triggers logging)
                 mock_monitor.stop.assert_called_once()
 
+    @pytest.mark.django_db
     def test_peak_memory_logged(self, backtest_config, sample_tick_data):
         """Test peak memory usage is logged."""
         engine = BacktestEngine(backtest_config)
@@ -415,6 +421,7 @@ class TestBacktestEngineResourceLogging:
                     peak_log = [call for call in log_calls if f"{peak_memory_mb:.0f}MB" in call]
                     assert len(peak_log) > 0
 
+    @pytest.mark.django_db
     def test_cpu_limit_logged(self, backtest_config, sample_tick_data):
         """Test CPU limit is logged."""
         engine = BacktestEngine(backtest_config)

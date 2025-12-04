@@ -28,6 +28,8 @@ import { useTradingTask } from '../hooks/useTradingTasks';
 import {
   useStartTradingTask,
   useStopTradingTask,
+  useResumeTradingTask,
+  useRestartTradingTask,
   useRerunTradingTask,
   useCopyTradingTask,
   useDeleteTradingTask,
@@ -43,6 +45,7 @@ import {
   StopOptionsDialog,
   type StopOption,
 } from '../components/tasks/actions/StopOptionsDialog';
+import { RestartOptionsDialog } from '../components/tasks/actions/RestartOptionsDialog';
 import { LiveTaskTab } from '../components/trading/detail/LiveTaskTab';
 import { TaskPerformanceTab } from '../components/trading/detail/TaskPerformanceTab';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
@@ -92,6 +95,7 @@ export default function TradingTaskDetailPage() {
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [restartDialogOpen, setRestartDialogOpen] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
@@ -150,6 +154,8 @@ export default function TradingTaskDetailPage() {
 
   const startTask = useStartTradingTask();
   const stopTask = useStopTradingTask();
+  const resumeTask = useResumeTradingTask();
+  const restartTask = useRestartTradingTask();
   const rerunTask = useRerunTradingTask();
   const copyTask = useCopyTradingTask();
   const deleteTask = useDeleteTradingTask();
@@ -194,6 +200,50 @@ export default function TradingTaskDetailPage() {
     } catch (error) {
       console.error('[TradingTask] Failed to start task:', error);
       // Error handled by mutation hook
+    } finally {
+      setIsTransitioning(false);
+    }
+  };
+
+  const handleResume = async () => {
+    console.log('[TradingTask] Resuming task:', {
+      taskId,
+      taskName: task?.name,
+    });
+    try {
+      setIsTransitioning(true);
+      const result = await resumeTask.mutate(taskId);
+      console.log('[TradingTask] Resume task response:', result);
+      await refetch();
+      invalidateTradingExecutions(taskId);
+      handleMenuClose();
+    } catch (error) {
+      console.error('[TradingTask] Failed to resume task:', error);
+    } finally {
+      setIsTransitioning(false);
+    }
+  };
+
+  const handleRestart = () => {
+    setRestartDialogOpen(true);
+    handleMenuClose();
+  };
+
+  const handleRestartConfirm = async (clearState: boolean) => {
+    console.log('[TradingTask] Restarting task:', {
+      taskId,
+      taskName: task?.name,
+      clearState,
+    });
+    try {
+      setIsTransitioning(true);
+      const result = await restartTask.mutate({ id: taskId, clearState });
+      console.log('[TradingTask] Restart task response:', result);
+      await refetch();
+      invalidateTradingExecutions(taskId);
+      setRestartDialogOpen(false);
+    } catch (error) {
+      console.error('[TradingTask] Failed to restart task:', error);
     } finally {
       setIsTransitioning(false);
     }
@@ -312,10 +362,6 @@ export default function TradingTaskDetailPage() {
   // This ensures UI reflects real-time status changes (e.g., external stops)
   const currentStatus = (polledStatus?.status as TaskStatus) || task.status;
 
-  const canStart =
-    currentStatus === TaskStatus.CREATED ||
-    currentStatus === TaskStatus.STOPPED ||
-    currentStatus === TaskStatus.PAUSED;
   const canStop =
     currentStatus === TaskStatus.RUNNING || currentStatus === TaskStatus.PAUSED;
   const canEdit =
@@ -398,11 +444,17 @@ export default function TradingTaskDetailPage() {
               {/* Use TaskActionButtons component (Requirement 4.5) */}
               <TaskActionButtons
                 status={currentStatus}
-                onStart={handleStart}
+                onStart={
+                  currentStatus === TaskStatus.CREATED ? handleStart : undefined
+                }
+                onResume={handleResume}
+                onRestart={handleRestart}
                 onStop={handleStop}
                 onRerun={handleRerun}
                 onDelete={handleDelete}
                 loading={isTransitioning}
+                canResume={task.can_resume}
+                hasOpenPositions={task.has_open_positions}
               />
               <Button
                 variant="outlined"
@@ -431,7 +483,19 @@ export default function TradingTaskDetailPage() {
           open={Boolean(anchorEl)}
           onClose={handleMenuClose}
         >
-          {canStart && <MenuItem onClick={handleStart}>Start</MenuItem>}
+          {currentStatus === TaskStatus.CREATED && (
+            <MenuItem onClick={handleStart}>Start</MenuItem>
+          )}
+          {task.can_resume && (
+            <MenuItem onClick={handleResume}>Resume</MenuItem>
+          )}
+          {(currentStatus === TaskStatus.STOPPED ||
+            currentStatus === TaskStatus.PAUSED ||
+            currentStatus === TaskStatus.FAILED) && (
+            <MenuItem onClick={handleRestart} sx={{ color: 'warning.main' }}>
+              Restart
+            </MenuItem>
+          )}
           {canStop && (
             <MenuItem onClick={handleStop} sx={{ color: 'error.main' }}>
               Stop
@@ -503,6 +567,17 @@ export default function TradingTaskDetailPage() {
         onCancel={() => setStopDialogOpen(false)}
         onConfirm={handleStopConfirm}
         isLoading={stopTask.isLoading}
+      />
+
+      <RestartOptionsDialog
+        open={restartDialogOpen}
+        taskName={task.name}
+        hasOpenPositions={task.has_open_positions}
+        openPositionsCount={task.open_positions_count}
+        hasStrategyState={task.has_strategy_state}
+        onCancel={() => setRestartDialogOpen(false)}
+        onConfirm={handleRestartConfirm}
+        isLoading={restartTask.isLoading}
       />
     </Container>
   );

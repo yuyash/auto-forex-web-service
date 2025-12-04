@@ -1,25 +1,38 @@
 import React from 'react';
 import { Box, Button, Tooltip } from '@mui/material';
-import { PlayArrow, Stop, Refresh, Delete } from '@mui/icons-material';
+import {
+  PlayArrow,
+  Stop,
+  Refresh,
+  Delete,
+  RestartAlt,
+} from '@mui/icons-material';
 import { TaskStatus } from '../../../types/common';
 
 export interface TaskActionButtonsProps {
   status: TaskStatus;
   onStart?: () => void;
   onStop?: () => void;
+  onResume?: () => void;
+  onRestart?: () => void;
   onRerun?: () => void;
   onDelete?: () => void;
   loading?: boolean;
   disabled?: boolean;
+  // State management props for showing Resume vs Restart
+  canResume?: boolean;
+  hasOpenPositions?: boolean;
 }
 
 /**
  * Shared component for task action buttons with consistent visibility logic.
  *
  * Button visibility rules:
- * - Show "Start" for created/stopped tasks
- * - Show "Stop" for running tasks
- * - Show "Rerun" for completed/failed tasks
+ * - Show "Start" for created tasks (no previous execution)
+ * - Show "Resume" for stopped/paused tasks that can resume (has previous state)
+ * - Show "Restart" for stopped/paused/failed tasks to start fresh
+ * - Show "Stop" for running/paused tasks
+ * - Show "Rerun" for completed/failed tasks (legacy support)
  * - Disable all buttons during state transitions
  * - Disable "Delete" for running tasks
  *
@@ -29,31 +42,49 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
   status,
   onStart,
   onStop,
+  onResume,
+  onRestart,
   onRerun,
   onDelete,
   loading = false,
   disabled = false,
+  canResume = false,
+  hasOpenPositions = false,
 }) => {
   // Determine which buttons to show based on task status
-  const showStart =
-    status === TaskStatus.CREATED ||
-    status === TaskStatus.STOPPED ||
-    status === TaskStatus.PAUSED;
-  const showStop =
-    status === TaskStatus.RUNNING || status === TaskStatus.PAUSED;
+  const isCreated = status === TaskStatus.CREATED;
+  const isStopped = status === TaskStatus.STOPPED;
+  const isPaused = status === TaskStatus.PAUSED;
+  const isRunning = status === TaskStatus.RUNNING;
+  const isFailed = status === TaskStatus.FAILED;
+  const isCompleted = status === TaskStatus.COMPLETED;
+
+  // Start: Only for CREATED tasks (no previous execution)
+  const showStart = isCreated && onStart;
+
+  // Resume: For STOPPED/PAUSED tasks that can resume (has previous state)
+  const showResume = (isStopped || isPaused) && canResume && onResume;
+
+  // Restart: For STOPPED/PAUSED/FAILED tasks when we want a fresh start
+  const showRestart = (isStopped || isPaused || isFailed) && onRestart;
+
+  // Stop: For RUNNING or PAUSED tasks
+  const showStop = (isRunning || isPaused) && onStop;
+
+  // Rerun: For COMPLETED/FAILED tasks (legacy, if Resume is not used)
   const showRerun =
-    status === TaskStatus.COMPLETED || status === TaskStatus.FAILED;
+    (isCompleted || isFailed) && !showResume && !showRestart && onRerun;
 
   // Delete button is disabled for running tasks
-  const deleteDisabled = status === TaskStatus.RUNNING || loading || disabled;
+  const deleteDisabled = isRunning || loading || disabled;
 
   // All action buttons are disabled during state transitions
   const actionDisabled = loading || disabled;
 
   return (
     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-      {/* Start button - shown for created/stopped tasks */}
-      {showStart && onStart && (
+      {/* Start button - shown for created tasks only */}
+      {showStart && (
         <Button
           variant="contained"
           color="primary"
@@ -67,8 +98,49 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
         </Button>
       )}
 
+      {/* Resume button - shown for stopped/paused tasks with state */}
+      {showResume && (
+        <Tooltip title="Continue from where you stopped" arrow>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<PlayArrow />}
+            onClick={onResume}
+            disabled={actionDisabled}
+            size="small"
+            aria-label="Resume task"
+          >
+            Resume
+          </Button>
+        </Tooltip>
+      )}
+
+      {/* Restart button - shown for stopped/paused/failed tasks */}
+      {showRestart && (
+        <Tooltip
+          title={
+            hasOpenPositions
+              ? 'Restart from scratch (has open positions)'
+              : 'Start fresh with new execution'
+          }
+          arrow
+        >
+          <Button
+            variant="outlined"
+            color="warning"
+            startIcon={<RestartAlt />}
+            onClick={onRestart}
+            disabled={actionDisabled}
+            size="small"
+            aria-label="Restart task"
+          >
+            Restart
+          </Button>
+        </Tooltip>
+      )}
+
       {/* Stop button - shown for running tasks */}
-      {showStop && onStop && (
+      {showStop && (
         <Button
           variant="contained"
           color="error"
@@ -82,8 +154,8 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
         </Button>
       )}
 
-      {/* Rerun button - shown for completed/failed tasks */}
-      {showRerun && onRerun && (
+      {/* Rerun button - shown for completed/failed tasks (legacy) */}
+      {showRerun && (
         <Button
           variant="contained"
           color="primary"
@@ -101,9 +173,7 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
       {onDelete && (
         <Tooltip
           title={
-            status === TaskStatus.RUNNING
-              ? 'Cannot delete while task is running'
-              : ''
+            isRunning ? 'Cannot delete while task is running' : 'Delete task'
           }
           arrow
         >

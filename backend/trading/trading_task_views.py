@@ -543,6 +543,75 @@ class TradingTaskRerunView(APIView):
         )
 
 
+class TradingTaskRestartView(APIView):
+    """
+    Restart a trading task with fresh state.
+
+    POST: Clear strategy state and start fresh execution
+
+    Unlike resume, restart clears all saved strategy state and starts from scratch.
+    Use this when you want to abandon the previous state and start over.
+
+    Requirements: 3.4, 4.4, 4.5, 6.1, 6.3, 8.3, 8.6
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, task_id: int) -> Response:
+        """
+        Restart trading task with fresh state.
+
+        Clears strategy_state and starts a new execution. Task can be in any
+        state (stopped, failed) to be restarted, but not running or paused.
+
+        Request body:
+            - clear_state: bool (default: True) - Clear strategy state
+        """
+        # Get the task
+        try:
+            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
+        except TradingTask.DoesNotExist:
+            return Response(
+                {"error": "Trading task not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Validate configuration before restarting
+        is_valid, error_message = task.validate_configuration()
+        if not is_valid:
+            return Response(
+                {"error": f"Configuration validation failed: {error_message}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Get clear_state option (default True)
+        clear_state = request.data.get("clear_state", True)
+
+        # Restart the task
+        try:
+            task.restart(clear_state=clear_state)
+        except ValueError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Queue the trading task for execution
+        from .tasks import run_trading_task
+
+        run_trading_task.delay(task.pk)
+
+        # Return success response
+        return Response(
+            {
+                "message": "Trading task restarted successfully",
+                "task_id": task.pk,
+                "state_cleared": clear_state,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
 class TradingTaskExecutionsView(APIView):
     """
     Get execution history for a trading task.

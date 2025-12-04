@@ -376,47 +376,164 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
             self.layer_manager.create_layer(1, layer_config)
 
     def _load_state(self) -> None:
-        """Load strategy state from database."""
-        state = self.get_strategy_state()
-        if state:
-            self.normal_atr = state.get("normal_atr")
-            layer_states = state.get("layer_states", {})
+        """
+        Load strategy state from database and restore existing positions.
 
-            # Reconstruct layers from state
-            for layer_num_str, layer_state in layer_states.items():
-                layer_num = int(layer_num_str)
+        This method is critical for proper resume after container restart.
+        It restores:
+        1. Existing open positions from the database
+        2. Layer state from the strategy_state JSONField
+        3. Layer positions organized by layer_number
+
+        Requirements: 7.2, 7.3
+        """
+        # First, load any existing open positions from the database
+        open_positions = self.get_open_positions(self.instrument)
+
+        if open_positions:
+            logger.info(
+                "FloorStrategy: Found %d existing open position(s) to restore for %s",
+                len(open_positions),
+                self.instrument,
+            )
+
+            # Group positions by layer_number
+            positions_by_layer: dict[int, list[Position]] = {}
+            for pos in open_positions:
+                layer_num = pos.layer_number or 1
+                if layer_num not in positions_by_layer:
+                    positions_by_layer[layer_num] = []
+                positions_by_layer[layer_num].append(pos)
+
+            # Create layers and add positions to them
+            for layer_num in sorted(positions_by_layer.keys()):
+                layer_positions = positions_by_layer[layer_num]
                 layer_config = self._get_layer_config(layer_num)
                 layer = self.layer_manager.create_layer(layer_num, layer_config)
-                if layer:
-                    # Retracement counters intentionally reset on restart per product spec
-                    layer.reset_retracement_count()
 
-                    # Restore persisted layer parameters when available
-                    saved_lot_raw = layer_state.get("current_lot_size")
-                    try:
-                        saved_lot = (
-                            Decimal(saved_lot_raw)
-                            if saved_lot_raw is not None
-                            else layer.base_lot_size
+                if layer:
+                    # Sort positions by opened_at to find first lot
+                    layer_positions.sort(key=lambda p: p.opened_at)
+
+                    for idx, pos in enumerate(layer_positions):
+                        # First position is the first lot
+                        is_first_lot = idx == 0 or pos.is_first_lot
+                        layer.add_position(pos, is_first_lot=is_first_lot)
+
+                        logger.info(
+                            "FloorStrategy: Restored position %s to layer %d "
+                            "(direction=%s, units=%s, entry=%s, is_first_lot=%s)",
+                            pos.position_id,
+                            layer_num,
+                            pos.direction,
+                            pos.units,
+                            pos.entry_price,
+                            is_first_lot,
                         )
-                    except (ArithmeticError, ValueError, TypeError):
-                        saved_lot = layer.base_lot_size
-                    layer.current_lot_size = saved_lot
-                    layer.is_active = layer_state.get("is_active", layer.is_active)
+
+                    # Set layer direction from first position
+                    if layer_positions:
+                        first_pos = layer_positions[0]
+                        layer.direction = first_pos.direction
+
+                        # Set peak price based on direction - use last entry price as peak
+                        # since we don't know the actual peak from market data
+                        if first_pos.direction == "long":
+                            # For long, peak is highest entry price
+                            layer.peak_price = max(p.entry_price for p in layer_positions)
+                        else:
+                            # For short, peak is lowest entry price
+                            layer.peak_price = min(p.entry_price for p in layer_positions)
+
+                        # Set retracement count based on number of positions
+                        # (excluding the first lot which is the initial entry)
+                        layer.retracement_count = len(layer_positions) - 1
+
+                        logger.info(
+                            "FloorStrategy: Layer %d restored with %d position(s), "
+                            "direction=%s, peak_price=%s, retracement_count=%d",
+                            layer_num,
+                            len(layer_positions),
+                            layer.direction,
+                            layer.peak_price,
+                            layer.retracement_count,
+                        )
+
+        # Then load additional state from database (ATR values, etc.)
+        self._restore_additional_state()
+
+        # Log summary of restored state
+        if self.layer_manager.layers:
+            total_positions = sum(len(layer.positions) for layer in self.layer_manager.layers)
+            logger.info(
+                "FloorStrategy: State restoration complete. "
+                "Layers: %d, Total positions: %d, Normal ATR: %s",
+                len(self.layer_manager.layers),
+                total_positions,
+                self.normal_atr,
+            )
+
+    def _restore_additional_state(self) -> None:
+        """Restore additional state from database (ATR, lot sizes, etc.)."""
+        import contextlib
+
+        state = self.get_strategy_state()
+        if not state:
+            return
+
+        # Restore ATR baseline if available
+        normal_atr_raw = state.get("normal_atr")
+        if normal_atr_raw is not None:
+            with contextlib.suppress(ArithmeticError, ValueError, TypeError):
+                self.normal_atr = Decimal(str(normal_atr_raw))
+
+        # Restore layer-specific state (lot sizes, active status)
+        layer_states = state.get("layer_states", {})
+        for layer_num_str, layer_state in layer_states.items():
+            with contextlib.suppress(ValueError, TypeError):
+                layer_num = int(layer_num_str)
+                layer = self.layer_manager.get_layer(layer_num)
+                if layer:
+                    self._restore_layer_state(layer, layer_state)
+
+    def _restore_layer_state(self, layer: "Layer", layer_state: dict[str, Any]) -> None:
+        """Restore state for a single layer."""
+        import contextlib
+
+        # Restore lot size
+        saved_lot_raw = layer_state.get("current_lot_size")
+        if saved_lot_raw is not None:
+            with contextlib.suppress(ArithmeticError, ValueError, TypeError):
+                layer.current_lot_size = Decimal(str(saved_lot_raw))
+
+        # Restore active status
+        layer.is_active = layer_state.get("is_active", layer.is_active)
 
     def _save_state(self) -> None:
-        """Save strategy state to database."""
+        """
+        Save strategy state to database.
+
+        Persists layer state including lot sizes and active status.
+        Position data is already in the database, so we only save
+        the computed layer state.
+        """
         layer_states = {}
         for layer in self.layer_manager.layers:
             layer_states[str(layer.layer_number)] = {
                 "current_lot_size": str(layer.current_lot_size),
                 "is_active": layer.is_active,
+                "retracement_count": layer.retracement_count,
+                "direction": layer.direction,
+                "peak_price": str(layer.peak_price) if layer.peak_price else None,
             }
+
+        # Convert normal_atr to string if it's a Decimal
+        normal_atr_str = str(self.normal_atr) if self.normal_atr is not None else None
 
         self.update_strategy_state(
             {
                 "layer_states": layer_states,
-                "normal_atr": self.normal_atr,
+                "normal_atr": normal_atr_str,
             }
         )
 

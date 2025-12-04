@@ -105,6 +105,11 @@ class TradingTask(models.Model):
         default=False,
         help_text="Close all positions when task is stopped",
     )
+    strategy_state = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Strategy-specific state for persistence across restarts",
+    )
 
     class Meta:
         db_table = "trading_tasks"
@@ -417,3 +422,100 @@ class TradingTask(models.Model):
             return False, f"Configuration validation failed: {error_message}"
 
         return True, None
+
+    def has_strategy_state(self) -> bool:
+        """
+        Check if task has saved strategy state.
+
+        Returns:
+            bool: True if strategy_state has data
+        """
+        return bool(self.strategy_state)
+
+    def has_open_positions(self) -> bool:
+        """
+        Check if task has open positions in the database.
+
+        Returns:
+            bool: True if there are open positions for this task
+        """
+        from .models import Position
+
+        return Position.objects.filter(
+            trading_task=self,
+            closed_at__isnull=True,
+        ).exists()
+
+    def get_open_positions_count(self) -> int:
+        """
+        Get count of open positions for this task.
+
+        Returns:
+            int: Number of open positions
+        """
+        from .models import Position
+
+        return Position.objects.filter(
+            trading_task=self,
+            closed_at__isnull=True,
+        ).count()
+
+    def can_resume(self) -> bool:
+        """
+        Check if task can be resumed with state recovery.
+
+        A task can be resumed if:
+        - Status is STOPPED or PAUSED
+        - Has previous execution OR has strategy state OR has open positions
+
+        Returns:
+            bool: True if task can be resumed with state recovery
+        """
+        if self.status not in [TaskStatus.STOPPED, TaskStatus.PAUSED]:
+            return False
+
+        return (
+            self.get_latest_execution() is not None
+            or self.has_strategy_state()
+            or self.has_open_positions()
+        )
+
+    def restart(self, clear_state: bool = True) -> None:
+        """
+        Restart the trading task from the beginning.
+
+        Unlike rerun, restart clears the strategy state to start fresh.
+        Positions can optionally be closed via the stop endpoint before restart.
+
+        Args:
+            clear_state: If True, clears the strategy_state field
+
+        Raises:
+            ValueError: If task is currently running or paused
+        """
+        if self.status in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
+            raise ValueError(
+                "Cannot restart a task that is currently running or paused. Stop it first."
+            )
+
+        # Check if another task is running on this account
+        other_running_tasks = TradingTask.objects.filter(
+            oanda_account=self.oanda_account,
+            status=TaskStatus.RUNNING,
+        ).exclude(id=self.pk)
+
+        if other_running_tasks.exists():
+            other_task = other_running_tasks.first()
+            if other_task:
+                raise ValueError(
+                    f"Another task '{other_task.name}' is already running on this account. "
+                    "Only one task can run per account at a time."
+                )
+
+        # Clear strategy state if requested
+        if clear_state:
+            self.strategy_state = {}
+
+        # Update task status
+        self.status = TaskStatus.RUNNING
+        self.save(update_fields=["status", "strategy_state", "updated_at"])

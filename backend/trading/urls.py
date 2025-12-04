@@ -46,6 +46,7 @@ from .trading_task_views import (  # noqa: E501
     TradingTaskLogsView,
     TradingTaskPauseView,
     TradingTaskRerunView,
+    TradingTaskRestartView,
     TradingTaskResumeView,
     TradingTaskStartView,
     TradingTaskStatusView,
@@ -202,6 +203,11 @@ urlpatterns = [
         "trading-tasks/<int:task_id>/rerun/",
         TradingTaskRerunView.as_view(),
         name="trading_task_rerun",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/restart/",
+        TradingTaskRestartView.as_view(),
+        name="trading_task_restart",
     ),
     path(
         "trading-tasks/<int:task_id>/status/",
