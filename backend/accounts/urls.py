@@ -6,8 +6,6 @@ This module defines URL patterns for authentication endpoints.
 
 from django.urls import path
 
-from trading.sync_views import AccountSyncView
-
 from .views import (
     AdminAthenaImportProgressView,
     AdminSystemSettingsView,
@@ -96,11 +94,6 @@ urlpatterns = [
         "accounts/<int:account_id>/position-diff/suggest/",
         PositionDifferentiationSuggestionView.as_view(),
         name="position_differentiation_suggest",
-    ),
-    path(
-        "accounts/<int:account_id>/sync/",
-        AccountSyncView.as_view(),
-        name="account_sync",
     ),
     path("settings/", UserSettingsView.as_view(), name="user_settings"),
 ]

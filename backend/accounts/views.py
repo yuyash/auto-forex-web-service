@@ -1287,14 +1287,14 @@ class OandaAccountDetailView(APIView):
 
     def get(self, request: Request, account_id: int) -> Response:
         """
-        Retrieve details of a specific OANDA account.
+        Retrieve details of a specific OANDA account with live data from OANDA API.
 
         Args:
             request: HTTP request
             account_id: OANDA account ID
 
         Returns:
-            Response with OANDA account details or error
+            Response with OANDA account details including live balance/margin
         """
         if not request.user.is_authenticated:
             return Response(
@@ -1309,7 +1309,43 @@ class OandaAccountDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        # Start with serialized database data
         serializer = self.serializer_class(account)
+        response_data = serializer.data
+
+        # Fetch live data from OANDA API
+        try:
+            from trading.oanda_api import OandaAPIClient  # pylint: disable=import-outside-toplevel
+
+            client = OandaAPIClient(account)
+            live_data = client.get_account_details()
+
+            # Override balance fields with live data
+            response_data["balance"] = str(live_data.get("balance", response_data["balance"]))
+            response_data["margin_used"] = str(
+                live_data.get("margin_used", response_data.get("margin_used", "0"))
+            )
+            response_data["margin_available"] = str(
+                live_data.get("margin_available", response_data.get("margin_available", "0"))
+            )
+            response_data["unrealized_pnl"] = str(
+                live_data.get("unrealized_pl", response_data.get("unrealized_pnl", "0"))
+            )
+            response_data["nav"] = str(live_data.get("nav", "0"))
+            response_data["open_trade_count"] = live_data.get("open_trade_count", 0)
+            response_data["open_position_count"] = live_data.get("open_position_count", 0)
+            response_data["pending_order_count"] = live_data.get("pending_order_count", 0)
+            response_data["live_data"] = True
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            # If OANDA API fails, fall back to database values
+            logger.warning(
+                "Failed to fetch live data from OANDA for account %s: %s",
+                account.account_id,
+                str(e),
+            )
+            response_data["live_data"] = False
+            response_data["live_data_error"] = str(e)
 
         logger.info(
             "User %s retrieved OANDA account %s",
@@ -1322,7 +1358,7 @@ class OandaAccountDetailView(APIView):
             },
         )
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(response_data, status=status.HTTP_200_OK)
 
     def put(self, request: Request, account_id: int) -> Response:
         """

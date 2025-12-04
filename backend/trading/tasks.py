@@ -30,7 +30,6 @@ from trading.athena_import_task import (  # noqa: F401  # pylint: disable=unused
 )
 from trading.enums import TaskStatus
 from trading.market_data_streamer import MarketDataStreamer, TickData
-from trading.oanda_sync_task import oanda_sync_task  # noqa: F401  # pylint: disable=unused-import
 from trading.result_models import PerformanceMetrics
 from trading.tick_data_models import TickData as TickDataModel
 from trading_system.config_loader import get_config

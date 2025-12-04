@@ -40,8 +40,6 @@ app.conf.task_annotations = {
 }
 
 # Configure Celery Beat schedule for periodic tasks
-# Note: The oanda-sync-task schedule is dynamically updated from SystemSettings
-# The default value here is used only on first startup
 app.conf.beat_schedule = {
     "run-host-access-monitoring": {
         "task": "trading.tasks.run_host_access_monitoring",
@@ -54,10 +52,6 @@ app.conf.beat_schedule = {
     "cleanup-stale-locks": {
         "task": "trading.tasks.cleanup_stale_locks_task",
         "schedule": 60.0,  # Run every 1 minute (60 seconds)
-    },
-    "oanda-sync-task": {
-        "task": "trading.oanda_sync_task.oanda_sync_task",
-        "schedule": 300.0,  # Default: Run every 5 minutes (configurable in System Settings)
     },
     "resume-running-trading-tasks": {
         "task": "trading.tasks.resume_running_trading_tasks",
