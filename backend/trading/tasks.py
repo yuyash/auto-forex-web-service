@@ -1341,6 +1341,8 @@ def _process_tick_for_task(  # noqa: C901
 ) -> None:
     import uuid
 
+    from trading.services.task_lock_manager import TaskLockManager
+
     # Get execution for logging
     execution = _get_task_execution(task)
 
@@ -1361,6 +1363,12 @@ def _process_tick_for_task(  # noqa: C901
 
         _task_tick_counts[task_id] += 1
         tick_count = _task_tick_counts[task_id]
+
+        # Update heartbeat periodically (every 100 ticks or ~30 seconds worth)
+        # This keeps the TaskLockManager lock alive
+        if tick_count % 100 == 0:
+            lock_manager = TaskLockManager()
+            lock_manager.update_heartbeat("trading", task_id)
 
         # Get instrument from configuration
         task_instrument = task.config.parameters.get("instrument")
