@@ -1290,7 +1290,14 @@ def execute_trading_task(
             task.oanda_account.account_id,
         )
 
-        execution.add_log("INFO", f"Started trading execution #{execution_number}")
+        # Determine if this is a restart or fresh start
+        has_strategy_state = bool(task.strategy_state)
+        if has_strategy_state:
+            execution.add_log("INFO", f"Task RESUMED - execution #{execution_number}")
+            execution.add_log("INFO", "Restoring strategy state from previous session...")
+        else:
+            execution.add_log("INFO", f"Task STARTED - execution #{execution_number}")
+
         execution.add_log("INFO", f"Strategy: {task.config.strategy_type}")
         execution.add_log("INFO", f"Account: {task.oanda_account.account_id}")
         execution.add_log("INFO", f"Account type: {task.oanda_account.api_type}")
