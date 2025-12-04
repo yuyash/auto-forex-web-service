@@ -1142,7 +1142,7 @@ def execute_trading_task(
     Execute a trading task.
 
     This function:
-    1. Acquires execution lock to prevent concurrent execution
+    1. Acquires execution lock using TaskLockManager to prevent concurrent execution
     2. Validates the task configuration
     3. Creates a TaskExecution record
     4. Initializes the strategy executor
@@ -1153,7 +1153,7 @@ def execute_trading_task(
 
     Note: This function starts the execution but returns immediately.
     The actual trading runs in the background via market data streaming.
-    The lock is held for the duration of the trading session.
+    The lock is held for the duration of the trading session with heartbeat updates.
 
     Args:
         task_id: ID of the TradingTask to execute
@@ -1167,13 +1167,17 @@ def execute_trading_task(
 
     Requirements: 4.2, 4.3, 4.4, 4.5, 4.7, 4.9, 7.2, 7.3
     """
+    from trading.services.task_lock_manager import TaskLockManager
+
     execution = None
     task = None
+    lock_manager = TaskLockManager()
 
-    # Check if task is already locked (running)
-    if is_task_locked("trading", task_id):
+    # Check if task is already locked (running) using TaskLockManager
+    lock_info = lock_manager.get_lock_info("trading", task_id)
+    if lock_info is not None and not lock_info.get("is_stale", False):
         error_msg = "Task is already running. Cannot start concurrent execution."
-        logger.error("Task %d is already locked", task_id)
+        logger.error("Task %d is already locked (TaskLockManager)", task_id)
         return {
             "success": False,
             "task_id": task_id,
@@ -1181,9 +1185,13 @@ def execute_trading_task(
             "error": error_msg,
         }
 
-    # Acquire lock (will be held until task is stopped)
-    lock_key = f"{LOCK_KEY_PREFIX}trading:{task_id}"
-    lock_acquired = cache.add(lock_key, "locked", timeout=LOCK_TIMEOUT)
+    # Clean up stale lock if exists
+    if lock_info is not None and lock_info.get("is_stale", False):
+        logger.warning("Cleaning up stale lock for trading task %d", task_id)
+        lock_manager.release_lock("trading", task_id)
+
+    # Acquire lock using TaskLockManager (with heartbeat support)
+    lock_acquired = lock_manager.acquire_lock("trading", task_id)
 
     if not lock_acquired:
         error_msg = "Failed to acquire execution lock. Task may already be running."
@@ -1195,7 +1203,7 @@ def execute_trading_task(
             "error": error_msg,
         }
 
-    logger.info("Acquired execution lock for trading task %d", task_id)
+    logger.info("Acquired execution lock for trading task %d (TaskLockManager)", task_id)
 
     try:
         # Fetch the task
@@ -1365,6 +1373,10 @@ def execute_trading_task(
         if task:
             task.status = TaskStatus.FAILED
             task.save(update_fields=["status", "updated_at"])
+
+        # Release lock on failure
+        lock_manager.release_lock("trading", task_id)
+        logger.info("Released execution lock for trading task %d on failure", task_id)
 
         return {
             "success": False,
@@ -1543,7 +1555,7 @@ def stop_trading_task_execution(
     3. Stops market data streaming
     4. Calculates final metrics
     5. Marks execution as stopped
-    6. Releases execution lock
+    6. Releases execution lock using TaskLockManager
     7. Sends WebSocket notification for frontend sync
 
     Args:
@@ -1562,8 +1574,10 @@ def stop_trading_task_execution(
     Requirements: 4.3, 4.7, 4.9, 7.2, 7.3, 10.2, 10.4
     """
     from trading.services.notifications import send_task_status_notification
+    from trading.services.task_lock_manager import TaskLockManager
 
     positions_closed = 0
+    lock_manager = TaskLockManager()
 
     try:
         # Fetch the task
@@ -1594,9 +1608,10 @@ def stop_trading_task_execution(
                 "Task %d execution already stopped or not found, cleaning up",
                 task_id,
             )
-            # Still release lock and return success
+            # Release both old-style and new-style locks for compatibility
             lock_key = f"{LOCK_KEY_PREFIX}trading:{task_id}"
             cache.delete(lock_key)
+            lock_manager.release_lock("trading", task_id)
             return {
                 "success": True,
                 "task_id": task_id,
@@ -1659,9 +1674,10 @@ def stop_trading_task_execution(
         task.status = TaskStatus.STOPPED
         task.save(update_fields=["status", "updated_at"])
 
-        # Release execution lock
+        # Release execution lock (both old-style and new-style for compatibility)
         lock_key = f"{LOCK_KEY_PREFIX}trading:{task_id}"
         cache.delete(lock_key)
+        lock_manager.release_lock("trading", task_id)
         logger.info("Released execution lock for trading task %d", task_id)
 
         # Send WebSocket notification for frontend sync
