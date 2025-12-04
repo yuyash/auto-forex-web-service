@@ -1390,33 +1390,28 @@ def _close_all_positions_for_trading_task(task: TradingTask) -> int:
 
     Requirements: 10.2, 10.4
     """
-    from trading.models import Order, Position, Strategy
+    from trading.models import Order, Position
     from trading.order_executor import OrderExecutor
     from trading.tick_data_models import TickData
 
     closed_count = 0
 
     try:
-        # Get the strategy instance for this task
-        try:
-            strategy = Strategy.objects.get(
-                account=task.oanda_account,
-                strategy_type=task.config.strategy_type,
-                is_active=True,
-            )
-        except Strategy.DoesNotExist:
-            logger.warning(
-                "No active strategy found for task %d, cannot close positions",
-                task.pk,
-            )
-            return 0
-
-        # Get all open positions for this strategy
+        # Get all open positions for this trading task
+        # TradingTask positions are linked via trading_task field, not strategy
         open_positions = Position.objects.filter(
-            account=task.oanda_account,
-            strategy=strategy,
+            trading_task=task,
             closed_at__isnull=True,
         )
+        
+        # Also check for positions linked by account but not by task
+        # (for backwards compatibility with older positions)
+        if not open_positions.exists():
+            open_positions = Position.objects.filter(
+                account=task.oanda_account,
+                closed_at__isnull=True,
+                trading_task__isnull=True,
+            )
 
         if not open_positions.exists():
             logger.info("No open positions to close for task %d", task.pk)
@@ -1467,10 +1462,11 @@ def _close_all_positions_for_trading_task(task: TradingTask) -> int:
                     # Fallback to current price if no tick data
                     exit_price = position.current_price
 
-                # Create close order
+                # Create close order (without strategy link for trading task positions)
                 close_order = Order.objects.create(
                     account=task.oanda_account,
-                    strategy=strategy,
+                    strategy=position.strategy,  # Use existing strategy if any
+                    trading_task=task,
                     instrument=position.instrument,
                     direction="sell" if position.direction == "long" else "buy",
                     units=position.units,
@@ -1497,26 +1493,14 @@ def _close_all_positions_for_trading_task(task: TradingTask) -> int:
                     realized_pnl,
                 )
 
-                # Log close event to strategy if it has the method
+                # Log close event to task execution
                 try:
-                    strategy_class = registry.get_strategy_class(strategy.strategy_type)
-                    strategy_instance = strategy_class(strategy)
-
-                    if hasattr(strategy_instance, "log_strategy_event"):
-                        strategy_instance.log_strategy_event(
-                            "position_closed",
-                            f"Position closed at task stop: {position.direction} "
-                            f"{position.units} {position.instrument}",
-                            {
-                                "instrument": position.instrument,
-                                "direction": position.direction,
-                                "units": str(position.units),
-                                "entry_price": str(position.entry_price),
-                                "exit_price": str(exit_price),
-                                "pnl": str(realized_pnl),
-                                "event_type": "close",
-                                "reason": "task_stop",
-                            },
+                    execution = task.get_latest_execution()
+                    if execution:
+                        execution.add_log(
+                            "INFO",
+                            f"Closed position at task stop: {position.direction} "
+                            f"{position.units} {position.instrument} at {exit_price} (P&L: {realized_pnl})",
                         )
                 except Exception as e:  # pylint: disable=broad-exception-caught
                     logger.warning(
