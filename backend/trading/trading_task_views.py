@@ -375,7 +375,15 @@ class TradingTaskStopView(APIView):
 
         # Update task status to stopped
         task.status = TaskStatus.STOPPED
-        task.save(update_fields=["status", "updated_at"])
+
+        # For graceful_close mode, clear strategy state immediately so can_resume returns false
+        # This prevents Resume button from showing when positions are being closed
+        update_fields = ["status", "updated_at"]
+        if stop_mode == StopMode.GRACEFUL_CLOSE:
+            task.strategy_state = {}
+            update_fields.append("strategy_state")
+
+        task.save(update_fields=update_fields)
 
         # Update latest execution if it exists and is running
         latest_execution = task.get_latest_execution()
@@ -390,7 +398,7 @@ class TradingTaskStopView(APIView):
             latest_execution.save(update_fields=["status", "completed_at"])
 
             # Add lifecycle log to execution
-            latest_execution.add_log("INFO", f"Task stopped (mode: {stop_mode.label})")
+            latest_execution.add_log("INFO", f"=== Task STOPPED (mode: {stop_mode.label}) ===")
 
         # Queue the stop task with the specified mode to handle cleanup
         # (closing positions, releasing locks, etc.)
@@ -460,7 +468,7 @@ class TradingTaskPauseView(APIView):
         # Add lifecycle log to execution
         latest_execution = task.get_latest_execution()
         if latest_execution:
-            latest_execution.add_log("INFO", "Task paused")
+            latest_execution.add_log("INFO", "=== Task PAUSED ===")
 
         # Log lifecycle event
         logger.info(
@@ -514,7 +522,7 @@ class TradingTaskResumeView(APIView):
         # Add lifecycle log to execution
         latest_execution = task.get_latest_execution()
         if latest_execution:
-            latest_execution.add_log("INFO", "Task resumed")
+            latest_execution.add_log("INFO", "=== Task RESUMED ===")
 
         # Log lifecycle event
         logger.info(

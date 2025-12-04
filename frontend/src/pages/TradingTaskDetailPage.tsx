@@ -358,9 +358,21 @@ export default function TradingTaskDetailPage() {
     );
   }
 
-  // Use polled status if available, otherwise fall back to task status
-  // This ensures UI reflects real-time status changes (e.g., external stops)
-  const currentStatus = (polledStatus?.status as TaskStatus) || task.status;
+  // Use task.status as the authoritative source. The polledStatus is mainly
+  // for detecting external changes between refetches. After any mutation,
+  // refetch() gets the latest data from the server which is authoritative.
+  // If polledStatus shows a different status than task.status, prefer task.status
+  // since it's from a direct API call, not a polling interval that might be stale.
+  const currentStatus = task.status;
+
+  // Log status for debugging
+  useEffect(() => {
+    console.log('[TradingTaskDetail] Status:', {
+      taskStatus: task.status,
+      polledStatus: polledStatus?.status,
+      currentStatus,
+    });
+  }, [task.status, polledStatus?.status, currentStatus]);
 
   const canStop =
     currentStatus === TaskStatus.RUNNING || currentStatus === TaskStatus.PAUSED;

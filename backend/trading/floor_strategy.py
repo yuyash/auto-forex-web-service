@@ -381,12 +381,30 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
 
         This method is critical for proper resume after container restart.
         It restores:
-        1. Existing open positions from the database
-        2. Layer state from the strategy_state JSONField
+        1. Existing open positions from the database (ALWAYS - they're real trades)
+        2. Layer state from the strategy_state JSONField (if available)
         3. Layer positions organized by layer_number
+
+        IMPORTANT: Open positions are ALWAYS restored because they represent real
+        money in the market. The strategy_state provides additional metadata
+        (ATR values, lot sizes, etc.) but position restoration doesn't depend on it.
 
         Requirements: 7.2, 7.3
         """
+        state = self.get_strategy_state()
+        has_state = bool(state)
+
+        if has_state:
+            logger.info(
+                "FloorStrategy: RESUMING - Found existing strategy state, "
+                "will restore positions and layer state"
+            )
+        else:
+            logger.info(
+                "FloorStrategy: Starting without saved strategy state, "
+                "will still restore any existing open positions"
+            )
+
         # First, load any existing open positions from the database
         open_positions = self.get_open_positions(self.instrument)
 

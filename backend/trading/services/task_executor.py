@@ -1290,17 +1290,110 @@ def execute_trading_task(
             task.oanda_account.account_id,
         )
 
-        # Determine if this is a restart or fresh start
+        # Determine start mode based on strategy state
+        # - STARTED: First time starting (no previous executions) or after restart (state cleared)
+        # - RESUMED: Continuing from previous session (has strategy state)
         has_strategy_state = bool(task.strategy_state)
+        is_first_execution = execution_number == 1
+
         if has_strategy_state:
-            execution.add_log("INFO", f"Task RESUMED - execution #{execution_number}")
+            start_mode = "RESUMED"
+            execution.add_log("INFO", f"=== Task {start_mode} - execution #{execution_number} ===")
             execution.add_log("INFO", "Restoring strategy state from previous session...")
+            logger.info("Trading task %d RESUMED with existing strategy state", task_id)
+        elif is_first_execution:
+            start_mode = "STARTED"
+            execution.add_log("INFO", f"=== Task {start_mode} - execution #{execution_number} ===")
+            execution.add_log("INFO", "Fresh start - no previous state to restore")
+            logger.info("Trading task %d STARTED fresh (first execution)", task_id)
         else:
-            execution.add_log("INFO", f"Task STARTED - execution #{execution_number}")
+            start_mode = "RESTARTED"
+            execution.add_log("INFO", f"=== Task {start_mode} - execution #{execution_number} ===")
+            execution.add_log("INFO", "State was cleared - starting with clean slate")
+            logger.info(
+                "Trading task %d RESTARTED with cleared state (execution #%d)",
+                task_id,
+                execution_number,
+            )
 
         execution.add_log("INFO", f"Strategy: {task.config.strategy_type}")
         execution.add_log("INFO", f"Account: {task.oanda_account.account_id}")
         execution.add_log("INFO", f"Account type: {task.oanda_account.api_type}")
+
+        # Sync positions with OANDA to ensure database is up to date
+        # This is critical - we must verify position state before trading
+        from trading.services.position_sync import sync_trading_task_positions
+
+        execution.add_log("INFO", "Syncing positions with OANDA...")
+        try:
+            sync_result = sync_trading_task_positions(task)
+            if not sync_result.synced:
+                # Sync failed - cannot proceed
+                error_msg = f"Position sync failed: {', '.join(sync_result.errors)}"
+                logger.error(error_msg)
+                execution.add_log("ERROR", error_msg)
+                execution.mark_failed(Exception(error_msg))
+                task.status = TaskStatus.FAILED
+                task.save(update_fields=["status", "updated_at"])
+                lock_manager.release_lock("trading", task_id)
+                return {
+                    "success": False,
+                    "task_id": task_id,
+                    "execution_id": execution.pk,
+                    "error": error_msg,
+                }
+
+            # Log sync results
+            if sync_result.positions_checked > 0:
+                execution.add_log(
+                    "INFO",
+                    f"Position sync completed: checked={sync_result.positions_checked}, "
+                    f"updated={sync_result.positions_updated}, "
+                    f"closed={sync_result.positions_closed}",
+                )
+                if sync_result.positions_closed > 0:
+                    execution.add_log(
+                        "WARNING",
+                        f"{sync_result.positions_closed} position(s) were closed externally "
+                        "(not found in OANDA)",
+                    )
+                if sync_result.positions_missing > 0:
+                    execution.add_log(
+                        "WARNING",
+                        f"{sync_result.positions_missing} position(s) found in OANDA "
+                        "but not tracked by this task",
+                    )
+            else:
+                execution.add_log("INFO", "Position sync completed: no open positions")
+
+            logger.info(
+                "Position sync for task %d: checked=%d, updated=%d, closed=%d, missing=%d",
+                task_id,
+                sync_result.positions_checked,
+                sync_result.positions_updated,
+                sync_result.positions_closed,
+                sync_result.positions_missing,
+            )
+        except Exception as sync_error:
+            # Position sync is critical - fail the task
+            error_msg = f"Position sync failed: {str(sync_error)}"
+            logger.error(
+                "Position sync failed for task %d: %s",
+                task_id,
+                str(sync_error),
+                exc_info=True,
+            )
+            execution.add_log("ERROR", error_msg)
+            execution.mark_failed(sync_error)
+            task.status = TaskStatus.FAILED
+            task.save(update_fields=["status", "updated_at"])
+            lock_manager.release_lock("trading", task_id)
+            return {
+                "success": False,
+                "task_id": task_id,
+                "execution_id": execution.pk,
+                "error": error_msg,
+            }
 
         # Log strategy configuration parameters for debugging
         config_params = task.config.parameters
@@ -1670,6 +1763,19 @@ def stop_trading_task_execution(
             logger.info(
                 "Preserving open positions for task %d",
                 task_id,
+            )
+
+        # If positions were closed, also clear strategy state since there's nothing to resume
+        if should_close_positions:
+            task.strategy_state = {}
+            task.save(update_fields=["strategy_state"])
+            logger.info(
+                "Cleared strategy state for task %d (positions were closed)",
+                task_id,
+            )
+            execution.add_log(
+                "INFO",
+                "Strategy state cleared - task cannot be resumed",
             )
 
         # Mark execution as stopped

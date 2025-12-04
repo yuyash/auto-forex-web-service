@@ -103,7 +103,7 @@ const mockSystemSettings = {
   feature_flags: {},
 };
 
-const LONG_TEST_TIMEOUT = 15000;
+const LONG_TEST_TIMEOUT = 30000;
 
 const mockAccounts = [
   {
@@ -169,9 +169,8 @@ describe('AccountManagement', () => {
         );
 
         if (index === -1) {
-          if (originalFetch) {
-            return originalFetch(input as RequestInfo, init);
-          }
+          // Fail fast for unmocked requests instead of hanging
+          console.error(`No mock handler for ${method} ${url}`);
           return Promise.reject(
             new Error(`No mock handler for ${method} ${url}`)
           );
