@@ -149,12 +149,19 @@ class TestBacktestTaskStopEndpoint:
         api_client.force_authenticate(user=user)
 
         # Mock TaskLockManager and notification
+        # Note: The import is local inside the view method, so we patch the class
+        # at its definition site
         with (
             patch("trading.services.task_lock_manager.TaskLockManager") as mock_lock_manager_class,
             patch("trading.services.notifications.send_task_status_notification") as mock_notify,
         ):
             mock_lock_manager = MagicMock()
             mock_lock_manager_class.return_value = mock_lock_manager
+            # Mock get_lock_info to return a valid lock so set_cancellation_flag is called
+            mock_lock_manager.get_lock_info.return_value = {
+                "acquired_at": "2024-01-01T00:00:00",
+                "is_stale": False,
+            }
 
             # Make request
             url = reverse(
