@@ -157,11 +157,10 @@ class TestBacktestTaskStopEndpoint:
         ):
             mock_lock_manager = MagicMock()
             mock_lock_manager_class.return_value = mock_lock_manager
-            # Mock get_lock_info to return a valid lock so set_cancellation_flag is called
-            mock_lock_manager.get_lock_info.return_value = {
-                "acquired_at": "2024-01-01T00:00:00",
-                "is_stale": False,
-            }
+            # Mock get_lock_info to return a valid LockInfo so set_cancellation_flag is called
+            mock_lock_info = MagicMock()
+            mock_lock_info.is_stale = False
+            mock_lock_manager.get_lock_info.return_value = mock_lock_info
 
             # Make request
             url = reverse(
@@ -177,7 +176,7 @@ class TestBacktestTaskStopEndpoint:
 
             # Verify cancellation flag was set
             mock_lock_manager.set_cancellation_flag.assert_called_once_with(
-                "backtest", running_backtest_task.pk
+                TaskType.BACKTEST, running_backtest_task.pk
             )
 
             # Verify notification was sent

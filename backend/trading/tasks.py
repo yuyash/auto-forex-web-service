@@ -1369,6 +1369,7 @@ def _process_tick_for_task(  # noqa: C901
 ) -> None:
     import uuid
 
+    from trading.enums import TaskType
     from trading.services.task_lock_manager import TaskLockManager
 
     # Get execution for logging
@@ -1432,7 +1433,7 @@ def _process_tick_for_task(  # noqa: C901
         # This keeps the TaskLockManager lock alive
         if tick_count % 100 == 0:
             lock_manager = TaskLockManager()
-            lock_manager.update_heartbeat("trading", task_id)
+            lock_manager.update_heartbeat(TaskType.TRADING, task_id)
 
         # Get instrument from configuration
         task_instrument = task.config.parameters.get("instrument")
@@ -2255,6 +2256,7 @@ def cleanup_stale_locks_task() -> Dict[str, Any]:
     Requirements: 7.3, 7.4, 7.5
     """
     from trading.backtest_task_models import BacktestTask
+    from trading.enums import TaskType
     from trading.services.task_lock_manager import TaskLockManager
 
     logger.info("Starting stale lock cleanup task")
@@ -2273,7 +2275,7 @@ def cleanup_stale_locks_task() -> Dict[str, Any]:
             try:
                 # Check if lock is stale
                 was_stale = lock_manager.cleanup_stale_lock(
-                    task_type="backtest",
+                    task_type=TaskType.BACKTEST,
                     task_id=task.pk,
                 )
 

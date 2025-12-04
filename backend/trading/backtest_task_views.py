@@ -33,7 +33,7 @@ from .backtest_task_serializers import (
     BacktestTaskListSerializer,
     BacktestTaskSerializer,
 )
-from .enums import TaskStatus
+from .enums import TaskStatus, TaskType
 from .serializers import TaskExecutionSerializer
 
 logger = logging.getLogger(__name__)
@@ -230,12 +230,11 @@ class BacktestTaskStartView(APIView):
 
         # Check if there's an active celery task lock (actual running state)
         lock_manager = TaskLockManager()
-        lock_info = lock_manager.get_lock_info("backtest", task_id)
+        lock_info = lock_manager.get_lock_info(TaskType.BACKTEST, task_id)
 
         if lock_info is not None:
             # Lock exists - check if it's stale
-            is_stale = lock_info.get("is_stale", False)
-            if not is_stale:
+            if not lock_info.is_stale:
                 # Active lock exists - task is actually running
                 return Response(
                     {
@@ -249,7 +248,7 @@ class BacktestTaskStartView(APIView):
                 "Cleaning up stale lock for backtest task %d before starting",
                 task_id,
             )
-            lock_manager.release_lock("backtest", task_id)
+            lock_manager.release_lock(TaskType.BACKTEST, task_id)
 
             # Also sync database status if it's inconsistent
             if task.status == TaskStatus.RUNNING:
@@ -324,8 +323,8 @@ class BacktestTaskStopView(APIView):
 
         # Check celery task lock status to determine actual running state
         lock_manager = TaskLockManager()
-        lock_info = lock_manager.get_lock_info("backtest", task_id)
-        has_active_lock = lock_info is not None and not lock_info.get("is_stale", False)
+        lock_info = lock_manager.get_lock_info(TaskType.BACKTEST, task_id)
+        has_active_lock = lock_info is not None and not lock_info.is_stale
 
         # Validate task status - check both database and actual celery state
         db_is_running = task.status == TaskStatus.RUNNING
@@ -348,11 +347,11 @@ class BacktestTaskStopView(APIView):
 
         # Set cancellation flag via TaskLockManager (if there's an active task)
         if has_active_lock:
-            lock_manager.set_cancellation_flag("backtest", task_id)
+            lock_manager.set_cancellation_flag(TaskType.BACKTEST, task_id)
         else:
             # No active celery task, clean up any stale locks
             if lock_info:
-                lock_manager.release_lock("backtest", task_id)
+                lock_manager.release_lock(TaskType.BACKTEST, task_id)
 
         # Update task status
         task.status = TaskStatus.STOPPED
@@ -489,10 +488,10 @@ class BacktestTaskStatusView(APIView):
 
         # Check for stale running tasks and auto-complete them
         if task.status == TaskStatus.RUNNING and latest_execution:
-            lock_info = lock_manager.get_lock_info("backtest", task_id)
+            lock_info = lock_manager.get_lock_info(TaskType.BACKTEST, task_id)
 
             # Task is "running" but no lock exists or lock is stale
-            is_stale = lock_info is None or lock_info.get("is_stale", False)
+            is_stale = lock_info is None or lock_info.is_stale
 
             # Check if latest execution is already completed (stale task)
             # BUT only if the execution status is also completed (not just progress 100%)
@@ -515,7 +514,7 @@ class BacktestTaskStatusView(APIView):
 
                 # Clean up any stale locks
                 if lock_info:
-                    lock_manager.release_lock("backtest", task_id)
+                    lock_manager.release_lock(TaskType.BACKTEST, task_id)
 
                 # Update task status to match execution status
                 task.status = latest_execution.status
@@ -537,9 +536,9 @@ class BacktestTaskStatusView(APIView):
             )
 
             # Clean up any locks
-            lock_info = lock_manager.get_lock_info("backtest", task_id)
+            lock_info = lock_manager.get_lock_info(TaskType.BACKTEST, task_id)
             if lock_info:
-                lock_manager.release_lock("backtest", task_id)
+                lock_manager.release_lock(TaskType.BACKTEST, task_id)
 
             # Update execution to stopped
             latest_execution.status = TaskStatus.STOPPED

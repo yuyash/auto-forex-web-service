@@ -25,7 +25,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .enums import TaskStatus
+from .enums import TaskStatus, TaskType
 from .serializers import TaskExecutionSerializer
 from .trading_task_models import TradingTask
 from .trading_task_serializers import (
@@ -228,12 +228,11 @@ class TradingTaskStartView(APIView):
 
         # Check if there's an active celery task lock (actual running state)
         lock_manager = TaskLockManager()
-        lock_info = lock_manager.get_lock_info("trading", task_id)
+        lock_info = lock_manager.get_lock_info(TaskType.TRADING, task_id)
 
         if lock_info is not None:
             # Lock exists - check if it's stale
-            is_stale = lock_info.get("is_stale", False)
-            if not is_stale:
+            if not lock_info.is_stale:
                 # Active lock exists - task is actually running
                 return Response(
                     {
@@ -247,7 +246,7 @@ class TradingTaskStartView(APIView):
                 "Cleaning up stale lock for trading task %d before starting",
                 task_id,
             )
-            lock_manager.release_lock("trading", task_id)
+            lock_manager.release_lock(TaskType.TRADING, task_id)
 
             # Also sync database status if it's inconsistent
             if task.status == TaskStatus.RUNNING:
@@ -311,6 +310,7 @@ class TradingTaskStopView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    # pylint: disable=too-many-locals
     def post(self, request: Request, task_id: int) -> Response:
         """
         Stop trading task execution.
@@ -337,8 +337,8 @@ class TradingTaskStopView(APIView):
 
         # Check celery task lock status to determine actual running state
         lock_manager = TaskLockManager()
-        lock_info = lock_manager.get_lock_info("trading", task_id)
-        has_active_lock = lock_info is not None and not lock_info.get("is_stale", False)
+        lock_info = lock_manager.get_lock_info(TaskType.TRADING, task_id)
+        has_active_lock = lock_info is not None and not lock_info.is_stale
 
         # Validate task status - check both database and actual celery state
         db_is_stoppable = task.status in [TaskStatus.RUNNING, TaskStatus.PAUSED]
@@ -407,7 +407,7 @@ class TradingTaskStopView(APIView):
         else:
             # No active celery task, just clean up any stale locks
             if lock_info:
-                lock_manager.release_lock("trading", task_id)
+                lock_manager.release_lock(TaskType.TRADING, task_id)
 
         # Log lifecycle event
         logger.info(
@@ -903,10 +903,10 @@ class TradingTaskStatusView(APIView):
         )
 
         if task.status == TaskStatus.RUNNING and latest_execution and not task_recently_started:
-            lock_info = lock_manager.get_lock_info("trading", task_id)
+            lock_info = lock_manager.get_lock_info(TaskType.TRADING, task_id)
 
             # Task is "running" but no lock exists or lock is stale
-            is_stale = lock_info is None or lock_info.get("is_stale", False)
+            is_stale = lock_info is None or lock_info.is_stale
 
             # Check if latest execution is already completed (stale task)
             execution_completed = latest_execution.status in [
@@ -927,7 +927,7 @@ class TradingTaskStatusView(APIView):
 
                 # Clean up any stale locks
                 if lock_info:
-                    lock_manager.release_lock("trading", task_id)
+                    lock_manager.release_lock(TaskType.TRADING, task_id)
 
                 # Update task status to match execution status
                 task.status = latest_execution.status
@@ -948,9 +948,9 @@ class TradingTaskStatusView(APIView):
             )
 
             # Clean up any locks
-            lock_info = lock_manager.get_lock_info("trading", task_id)
+            lock_info = lock_manager.get_lock_info(TaskType.TRADING, task_id)
             if lock_info:
-                lock_manager.release_lock("trading", task_id)
+                lock_manager.release_lock(TaskType.TRADING, task_id)
 
             # Update execution to stopped
             latest_execution.status = TaskStatus.STOPPED

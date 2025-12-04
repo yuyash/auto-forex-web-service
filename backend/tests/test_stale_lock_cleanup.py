@@ -21,10 +21,10 @@ from django.utils import timezone
 import pytest
 
 from trading.backtest_task_models import BacktestTask
-from trading.enums import TaskStatus
+from trading.enums import TaskStatus, TaskType
 from trading.execution_models import TaskExecution
 from trading.models import StrategyConfig
-from trading.services.task_lock_manager import TaskLockManager
+from trading.services.task_lock_manager import HeartbeatData, TaskLockManager
 from trading.tasks import cleanup_stale_locks_task
 
 User = get_user_model()
@@ -74,7 +74,7 @@ def backtest_task(db, user, strategy_config):
 def task_execution(db, backtest_task):
     """Create a test task execution."""
     return TaskExecution.objects.create(
-        task_type="backtest",
+        task_type=TaskType.BACKTEST,
         task_id=backtest_task.pk,
         execution_number=1,
         status=TaskStatus.RUNNING,
@@ -105,17 +105,21 @@ class TestStaleLockDetection:
         """Test detection of lock with old heartbeat."""
         # Acquire lock
         lock_manager.acquire_lock(
-            task_type="backtest",
+            task_type=TaskType.BACKTEST,
             task_id=backtest_task.pk,
             execution_id=task_execution.pk,
         )
 
         # Manually set old heartbeat (simulate stale lock)
-        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.pk)
+        heartbeat_key = lock_manager._get_heartbeat_key(TaskType.BACKTEST, backtest_task.pk)
         old_time = timezone.now() - timedelta(seconds=400)  # 6+ minutes ago
+        heartbeat = HeartbeatData(
+            last_beat=old_time.isoformat(),
+            execution_id=task_execution.pk,
+        )
         cache.set(
             heartbeat_key,
-            {"last_beat": old_time.isoformat(), "execution_id": task_execution.pk},
+            heartbeat.to_dict(),
             timeout=lock_manager.LOCK_TIMEOUT,
         )
 
@@ -129,7 +133,7 @@ class TestStaleLockDetection:
         assert backtest_task.pk in result["failed_tasks"]
 
         # Verify lock was released
-        lock_key = lock_manager._get_lock_key("backtest", backtest_task.pk)
+        lock_key = lock_manager._get_lock_key(TaskType.BACKTEST, backtest_task.pk)
         lock_data = cache.get(lock_key)
         assert lock_data is None
 
@@ -137,13 +141,13 @@ class TestStaleLockDetection:
         """Test detection of lock with no heartbeat data."""
         # Acquire lock
         lock_manager.acquire_lock(
-            task_type="backtest",
+            task_type=TaskType.BACKTEST,
             task_id=backtest_task.pk,
             execution_id=task_execution.pk,
         )
 
         # Remove heartbeat (simulate missing heartbeat)
-        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.pk)
+        heartbeat_key = lock_manager._get_heartbeat_key(TaskType.BACKTEST, backtest_task.pk)
         cache.delete(heartbeat_key)
 
         # Run cleanup task
@@ -159,13 +163,13 @@ class TestStaleLockDetection:
         """Test that fresh lock with recent heartbeat is not cleaned up."""
         # Acquire lock
         lock_manager.acquire_lock(
-            task_type="backtest",
+            task_type=TaskType.BACKTEST,
             task_id=backtest_task.pk,
             execution_id=task_execution.pk,
         )
 
         # Update heartbeat to ensure it's fresh
-        lock_manager.update_heartbeat(task_type="backtest", task_id=backtest_task.pk)
+        lock_manager.update_heartbeat(task_type=TaskType.BACKTEST, task_id=backtest_task.pk)
 
         # Run cleanup task
         with patch("trading.services.notifications.send_task_status_notification"):
@@ -177,7 +181,7 @@ class TestStaleLockDetection:
         assert len(result["failed_tasks"]) == 0
 
         # Verify lock still exists
-        lock_key = lock_manager._get_lock_key("backtest", backtest_task.pk)
+        lock_key = lock_manager._get_lock_key(TaskType.BACKTEST, backtest_task.pk)
         lock_data = cache.get(lock_key)
         assert lock_data is not None
 
@@ -189,17 +193,21 @@ class TestAutomaticLockRelease:
         """Test that stale lock is automatically released."""
         # Acquire lock
         lock_manager.acquire_lock(
-            task_type="backtest",
+            task_type=TaskType.BACKTEST,
             task_id=backtest_task.pk,
             execution_id=task_execution.pk,
         )
 
         # Make lock stale
-        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.pk)
+        heartbeat_key = lock_manager._get_heartbeat_key(TaskType.BACKTEST, backtest_task.pk)
         old_time = timezone.now() - timedelta(seconds=400)
+        heartbeat = HeartbeatData(
+            last_beat=old_time.isoformat(),
+            execution_id=task_execution.pk,
+        )
         cache.set(
             heartbeat_key,
-            {"last_beat": old_time.isoformat(), "execution_id": task_execution.pk},
+            heartbeat.to_dict(),
             timeout=lock_manager.LOCK_TIMEOUT,
         )
 
@@ -208,14 +216,14 @@ class TestAutomaticLockRelease:
             cleanup_stale_locks_task()
 
         # Verify lock was released
-        lock_key = lock_manager._get_lock_key("backtest", backtest_task.pk)
+        lock_key = lock_manager._get_lock_key(TaskType.BACKTEST, backtest_task.pk)
         assert cache.get(lock_key) is None
 
         # Verify heartbeat was removed
         assert cache.get(heartbeat_key) is None
 
         # Verify cancellation flag was removed
-        cancel_key = lock_manager._get_cancellation_key("backtest", backtest_task.pk)
+        cancel_key = lock_manager._get_cancellation_key(TaskType.BACKTEST, backtest_task.pk)
         assert cache.get(cancel_key) is None
 
     def test_multiple_stale_locks_released(self, user, strategy_config, lock_manager):
@@ -237,7 +245,7 @@ class TestAutomaticLockRelease:
 
             # Create execution
             execution = TaskExecution.objects.create(
-                task_type="backtest",
+                task_type=TaskType.BACKTEST,
                 task_id=task.pk,
                 execution_number=1,
                 status=TaskStatus.RUNNING,
@@ -246,16 +254,20 @@ class TestAutomaticLockRelease:
 
             # Acquire lock and make it stale
             lock_manager.acquire_lock(
-                task_type="backtest",
+                task_type=TaskType.BACKTEST,
                 task_id=task.pk,
                 execution_id=execution.pk,
             )
 
-            heartbeat_key = lock_manager._get_heartbeat_key("backtest", task.pk)
+            heartbeat_key = lock_manager._get_heartbeat_key(TaskType.BACKTEST, task.pk)
             old_time = timezone.now() - timedelta(seconds=400)
+            heartbeat = HeartbeatData(
+                last_beat=old_time.isoformat(),
+                execution_id=execution.pk,
+            )
             cache.set(
                 heartbeat_key,
-                {"last_beat": old_time.isoformat(), "execution_id": execution.pk},
+                heartbeat.to_dict(),
                 timeout=lock_manager.LOCK_TIMEOUT,
             )
 
@@ -270,7 +282,7 @@ class TestAutomaticLockRelease:
 
         # Verify all locks were released
         for task in tasks:
-            lock_key = lock_manager._get_lock_key("backtest", task.pk)
+            lock_key = lock_manager._get_lock_key(TaskType.BACKTEST, task.pk)
             assert cache.get(lock_key) is None
 
 
@@ -281,16 +293,20 @@ class TestTaskStatusUpdate:
         """Test that task status is updated to failed on cleanup."""
         # Acquire lock and make it stale
         lock_manager.acquire_lock(
-            task_type="backtest",
+            task_type=TaskType.BACKTEST,
             task_id=backtest_task.pk,
             execution_id=task_execution.pk,
         )
 
-        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.pk)
+        heartbeat_key = lock_manager._get_heartbeat_key(TaskType.BACKTEST, backtest_task.pk)
         old_time = timezone.now() - timedelta(seconds=400)
+        heartbeat = HeartbeatData(
+            last_beat=old_time.isoformat(),
+            execution_id=task_execution.pk,
+        )
         cache.set(
             heartbeat_key,
-            {"last_beat": old_time.isoformat(), "execution_id": task_execution.pk},
+            heartbeat.to_dict(),
             timeout=lock_manager.LOCK_TIMEOUT,
         )
 
@@ -312,16 +328,20 @@ class TestTaskStatusUpdate:
         """Test that WebSocket notification is sent on cleanup."""
         # Acquire lock and make it stale
         lock_manager.acquire_lock(
-            task_type="backtest",
+            task_type=TaskType.BACKTEST,
             task_id=backtest_task.pk,
             execution_id=task_execution.pk,
         )
 
-        heartbeat_key = lock_manager._get_heartbeat_key("backtest", backtest_task.pk)
+        heartbeat_key = lock_manager._get_heartbeat_key(TaskType.BACKTEST, backtest_task.pk)
         old_time = timezone.now() - timedelta(seconds=400)
+        heartbeat = HeartbeatData(
+            last_beat=old_time.isoformat(),
+            execution_id=task_execution.pk,
+        )
         cache.set(
             heartbeat_key,
-            {"last_beat": old_time.isoformat(), "execution_id": task_execution.pk},
+            heartbeat.to_dict(),
             timeout=lock_manager.LOCK_TIMEOUT,
         )
 
@@ -359,13 +379,13 @@ class TestCleanupWithNoStaleLocks:
         """Test cleanup when all locks are fresh."""
         # Acquire lock with fresh heartbeat
         lock_manager.acquire_lock(
-            task_type="backtest",
+            task_type=TaskType.BACKTEST,
             task_id=backtest_task.pk,
             execution_id=task_execution.pk,
         )
 
         # Update heartbeat to ensure it's fresh
-        lock_manager.update_heartbeat(task_type="backtest", task_id=backtest_task.pk)
+        lock_manager.update_heartbeat(task_type=TaskType.BACKTEST, task_id=backtest_task.pk)
 
         # Run cleanup task
         with patch("trading.services.notifications.send_task_status_notification"):
@@ -434,7 +454,7 @@ class TestErrorHandling:
 
         # Create executions
         execution1 = TaskExecution.objects.create(
-            task_type="backtest",
+            task_type=TaskType.BACKTEST,
             task_id=task1.pk,
             execution_number=1,
             status=TaskStatus.RUNNING,
@@ -442,7 +462,7 @@ class TestErrorHandling:
         )
 
         execution2 = TaskExecution.objects.create(
-            task_type="backtest",
+            task_type=TaskType.BACKTEST,
             task_id=task2.pk,
             execution_number=1,
             status=TaskStatus.RUNNING,
@@ -452,16 +472,20 @@ class TestErrorHandling:
         # Make both locks stale
         for task, execution in [(task1, execution1), (task2, execution2)]:
             lock_manager.acquire_lock(
-                task_type="backtest",
+                task_type=TaskType.BACKTEST,
                 task_id=task.pk,
                 execution_id=execution.pk,
             )
 
-            heartbeat_key = lock_manager._get_heartbeat_key("backtest", task.pk)
+            heartbeat_key = lock_manager._get_heartbeat_key(TaskType.BACKTEST, task.pk)
             old_time = timezone.now() - timedelta(seconds=400)
+            heartbeat = HeartbeatData(
+                last_beat=old_time.isoformat(),
+                execution_id=execution.pk,
+            )
             cache.set(
                 heartbeat_key,
-                {"last_beat": old_time.isoformat(), "execution_id": execution.pk},
+                heartbeat.to_dict(),
                 timeout=lock_manager.LOCK_TIMEOUT,
             )
 
