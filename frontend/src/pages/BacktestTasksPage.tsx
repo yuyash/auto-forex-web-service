@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import {
   Box,
@@ -87,6 +87,38 @@ export default function BacktestTasksPage() {
     status: getStatusFilter(),
     ordering: sortBy,
   });
+
+  // Auto-refresh every 10 seconds when there are running tasks
+  // This ensures status changes are detected across all pages
+  const autoRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  );
+
+  useEffect(() => {
+    const hasRunningTasks = data?.results.some(
+      (task) => task.status === TaskStatus.RUNNING
+    );
+
+    // Clear existing interval
+    if (autoRefreshIntervalRef.current) {
+      clearInterval(autoRefreshIntervalRef.current);
+      autoRefreshIntervalRef.current = null;
+    }
+
+    // Set up auto-refresh if there are running tasks
+    if (hasRunningTasks) {
+      autoRefreshIntervalRef.current = setInterval(() => {
+        console.log('[BacktestTasksPage] Auto-refreshing task list');
+        refetch();
+      }, 10000); // 10 seconds
+    }
+
+    return () => {
+      if (autoRefreshIntervalRef.current) {
+        clearInterval(autoRefreshIntervalRef.current);
+      }
+    };
+  }, [data?.results, refetch]);
 
   const handleRefresh = () => {
     refetch();

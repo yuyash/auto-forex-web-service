@@ -206,8 +206,12 @@ class BacktestTaskStartView(APIView):
         """
         Start backtest task execution.
 
-        Creates a new TaskExecution and queues the backtest for processing.
+        Validates task status in database AND checks celery task lock status
+        before starting. Creates a new TaskExecution and queues the backtest
+        for processing.
         """
+        from .services.task_lock_manager import TaskLockManager
+
         # Get the task
         try:
             task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
@@ -216,6 +220,42 @@ class BacktestTaskStartView(APIView):
                 {"error": "Backtest task not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        # Check database status first
+        if task.status == TaskStatus.RUNNING:
+            return Response(
+                {"error": "Task is already running according to database status"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Check if there's an active celery task lock (actual running state)
+        lock_manager = TaskLockManager()
+        lock_info = lock_manager.get_lock_info("backtest", task_id)
+
+        if lock_info is not None:
+            # Lock exists - check if it's stale
+            is_stale = lock_info.get("is_stale", False)
+            if not is_stale:
+                # Active lock exists - task is actually running
+                return Response(
+                    {
+                        "error": "Task has an active execution lock. "
+                        "A celery task may already be running."
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            # Stale lock - clean it up before proceeding
+            logger.warning(
+                "Cleaning up stale lock for backtest task %d before starting",
+                task_id,
+            )
+            lock_manager.release_lock("backtest", task_id)
+
+            # Also sync database status if it's inconsistent
+            if task.status == TaskStatus.RUNNING:
+                task.status = TaskStatus.STOPPED
+                task.save(update_fields=["status", "updated_at"])
+                task.refresh_from_db()
 
         # Validate configuration before starting
         is_valid, error_message = task.validate_configuration()
@@ -264,12 +304,15 @@ class BacktestTaskStopView(APIView):
         """
         Stop backtest task execution.
 
-        Sets cancellation flag via TaskLockManager, performs optimistic status update,
-        and broadcasts WebSocket notification. Returns immediately without waiting
-        for task to stop.
+        Validates task status in database AND checks celery task lock status.
+        Sets cancellation flag via TaskLockManager, performs status update,
+        and broadcasts WebSocket notification. Returns immediately without
+        waiting for task to stop.
 
         Requirements: 2.1, 2.3, 3.1, 3.2
         """
+        from .services.task_lock_manager import TaskLockManager
+
         # Get the task
         try:
             task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
@@ -279,25 +322,49 @@ class BacktestTaskStopView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Check if task is running
-        if task.status != TaskStatus.RUNNING:
+        # Check celery task lock status to determine actual running state
+        lock_manager = TaskLockManager()
+        lock_info = lock_manager.get_lock_info("backtest", task_id)
+        has_active_lock = lock_info is not None and not lock_info.get("is_stale", False)
+
+        # Validate task status - check both database and actual celery state
+        db_is_running = task.status == TaskStatus.RUNNING
+
+        if not db_is_running and not has_active_lock:
+            # Task is not running in database AND no active celery task
             return Response(
                 {"error": "Task is not running"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Set cancellation flag via TaskLockManager
-        from .services.task_lock_manager import TaskLockManager
+        # If database says not running but lock exists, log warning and proceed
+        if not db_is_running and has_active_lock:
+            logger.warning(
+                "Backtest task %d has active lock but database status is %s. "
+                "Proceeding with stop.",
+                task_id,
+                task.status,
+            )
 
-        lock_manager = TaskLockManager()
-        lock_manager.set_cancellation_flag("backtest", task_id)
+        # Set cancellation flag via TaskLockManager (if there's an active task)
+        if has_active_lock:
+            lock_manager.set_cancellation_flag("backtest", task_id)
+        else:
+            # No active celery task, clean up any stale locks
+            if lock_info:
+                lock_manager.release_lock("backtest", task_id)
 
-        # Optimistic status update
+        # Update task status
         task.status = TaskStatus.STOPPED
         task.save(update_fields=["status", "updated_at"])
 
-        # Get latest execution for notification
+        # Update latest execution if it exists and is running
         latest_execution = task.get_latest_execution()
+        if latest_execution and latest_execution.status == TaskStatus.RUNNING:
+            latest_execution.status = TaskStatus.STOPPED
+            latest_execution.completed_at = timezone.now()
+            latest_execution.save(update_fields=["status", "completed_at"])
+
         execution_id = latest_execution.pk if latest_execution else None
 
         # Broadcast WebSocket notification
@@ -318,7 +385,7 @@ class BacktestTaskStopView(APIView):
         return Response(
             {
                 "id": task.pk,
-                "status": task.status,
+                "status": TaskStatus.STOPPED,
                 "message": "Task stop initiated",
             },
             status=status.HTTP_200_OK,
