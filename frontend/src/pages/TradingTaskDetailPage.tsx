@@ -152,6 +152,16 @@ export default function TradingTaskDetailPage() {
     };
   }, [refetch]);
 
+  // Log status for debugging (must be before any early returns)
+  useEffect(() => {
+    if (task) {
+      console.log('[TradingTaskDetail] Status:', {
+        taskStatus: task.status,
+        polledStatus: polledStatus?.status,
+      });
+    }
+  }, [task, polledStatus?.status]);
+
   const startTask = useStartTradingTask();
   const stopTask = useStopTradingTask();
   const resumeTask = useResumeTradingTask();
@@ -364,15 +374,6 @@ export default function TradingTaskDetailPage() {
   // If polledStatus shows a different status than task.status, prefer task.status
   // since it's from a direct API call, not a polling interval that might be stale.
   const currentStatus = task.status;
-
-  // Log status for debugging
-  useEffect(() => {
-    console.log('[TradingTaskDetail] Status:', {
-      taskStatus: task.status,
-      polledStatus: polledStatus?.status,
-      currentStatus,
-    });
-  }, [task.status, polledStatus?.status, currentStatus]);
 
   const canStop =
     currentStatus === TaskStatus.RUNNING || currentStatus === TaskStatus.PAUSED;
