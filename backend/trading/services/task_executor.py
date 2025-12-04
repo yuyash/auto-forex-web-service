@@ -502,7 +502,7 @@ def execute_backtest_task(
     lock_manager = TaskLockManager()
 
     # Acquire execution lock using TaskLockManager
-    if not lock_manager.acquire_lock("backtest", task_id):
+    if not lock_manager.acquire_lock(TaskType.BACKTEST, task_id):
         error_msg = "Task is already running. Cannot start concurrent execution."
         logger.error("Failed to acquire lock for backtest task %d", task_id)
         return {
@@ -519,7 +519,7 @@ def execute_backtest_task(
         except BacktestTask.DoesNotExist:
             error_msg = f"BacktestTask with id {task_id} does not exist"
             logger.error(error_msg)
-            lock_manager.release_lock("backtest", task_id)
+            lock_manager.release_lock(TaskType.BACKTEST, task_id)
             return {
                 "success": False,
                 "task_id": task_id,
@@ -531,7 +531,7 @@ def execute_backtest_task(
         is_valid, error_message = task.validate_configuration()
         if not is_valid:
             logger.error("Task %d validation failed: %s", task_id, error_message)
-            lock_manager.release_lock("backtest", task_id)
+            lock_manager.release_lock(TaskType.BACKTEST, task_id)
             return {
                 "success": False,
                 "task_id": task_id,
@@ -685,7 +685,7 @@ def execute_backtest_task(
 
         while current_date.date() <= task.end_time.date():
             # Check cancellation flag at the start of each day
-            if lock_manager.check_cancellation_flag("backtest", task_id):
+            if lock_manager.check_cancellation_flag(TaskType.BACKTEST, task_id):
                 logger.info("Task %d cancelled by user", task_id)
                 backtest_logger.log_warning("Task cancelled by user")
                 execution.add_log("WARNING", "Task cancelled by user")
@@ -698,7 +698,7 @@ def execute_backtest_task(
                 state_synchronizer.transition_to_stopped(task, execution)
 
                 # Release lock
-                lock_manager.release_lock("backtest", task_id)
+                lock_manager.release_lock(TaskType.BACKTEST, task_id)
 
                 return {
                     "success": False,
@@ -708,7 +708,7 @@ def execute_backtest_task(
                 }
 
             # Update heartbeat
-            lock_manager.update_heartbeat("backtest", task_id)
+            lock_manager.update_heartbeat(TaskType.BACKTEST, task_id)
 
             # Report day start
             progress_reporter.report_day_start(current_date, day_index)
@@ -729,7 +729,7 @@ def execute_backtest_task(
                 state_synchronizer.transition_to_failed(task, execution, load_error)
 
                 # Release lock
-                lock_manager.release_lock("backtest", task_id)
+                lock_manager.release_lock(TaskType.BACKTEST, task_id)
 
                 return {
                     "success": False,
@@ -762,7 +762,7 @@ def execute_backtest_task(
                 for tick_idx, tick in enumerate(day_tick_data):
                     # Check cancellation flag periodically during large batches
                     if tick_idx % 10000 == 0 and lock_manager.check_cancellation_flag(
-                        "backtest", task_id
+                        TaskType.BACKTEST, task_id
                     ):
                         logger.info("Task %d cancelled by user during tick processing", task_id)
                         backtest_logger.log_warning("Task cancelled by user during tick processing")
@@ -772,7 +772,7 @@ def execute_backtest_task(
                             engine.resource_monitor.stop()
 
                         state_synchronizer.transition_to_stopped(task, execution)
-                        lock_manager.release_lock("backtest", task_id)
+                        lock_manager.release_lock(TaskType.BACKTEST, task_id)
 
                         return {
                             "success": False,
@@ -1095,7 +1095,7 @@ def execute_backtest_task(
         logger.info("ExecutionMetrics creation attempt completed for execution %d", execution.pk)
 
         # Release lock
-        lock_manager.release_lock("backtest", task_id)
+        lock_manager.release_lock(TaskType.BACKTEST, task_id)
 
         return {
             "success": True,
@@ -1124,7 +1124,7 @@ def execute_backtest_task(
                 state_synchronizer.transition_to_failed(task, execution, error_msg)
 
         # Release lock
-        lock_manager.release_lock("backtest", task_id)
+        lock_manager.release_lock(TaskType.BACKTEST, task_id)
 
         return {
             "success": False,
@@ -1174,8 +1174,8 @@ def execute_trading_task(
     lock_manager = TaskLockManager()
 
     # Check if task is already locked (running) using TaskLockManager
-    lock_info = lock_manager.get_lock_info("trading", task_id)
-    if lock_info is not None and not lock_info.get("is_stale", False):
+    lock_info = lock_manager.get_lock_info(TaskType.TRADING, task_id)
+    if lock_info is not None and not lock_info.is_stale:
         error_msg = "Task is already running. Cannot start concurrent execution."
         logger.error("Task %d is already locked (TaskLockManager)", task_id)
         return {
@@ -1186,12 +1186,12 @@ def execute_trading_task(
         }
 
     # Clean up stale lock if exists
-    if lock_info is not None and lock_info.get("is_stale", False):
+    if lock_info is not None and lock_info.is_stale:
         logger.warning("Cleaning up stale lock for trading task %d", task_id)
-        lock_manager.release_lock("trading", task_id)
+        lock_manager.release_lock(TaskType.TRADING, task_id)
 
     # Acquire lock using TaskLockManager (with heartbeat support)
-    lock_acquired = lock_manager.acquire_lock("trading", task_id)
+    lock_acquired = lock_manager.acquire_lock(TaskType.TRADING, task_id)
 
     if not lock_acquired:
         error_msg = "Failed to acquire execution lock. Task may already be running."
@@ -1335,7 +1335,7 @@ def execute_trading_task(
                 execution.mark_failed(Exception(error_msg))
                 task.status = TaskStatus.FAILED
                 task.save(update_fields=["status", "updated_at"])
-                lock_manager.release_lock("trading", task_id)
+                lock_manager.release_lock(TaskType.TRADING, task_id)
                 return {
                     "success": False,
                     "task_id": task_id,
@@ -1387,7 +1387,7 @@ def execute_trading_task(
             execution.mark_failed(sync_error)
             task.status = TaskStatus.FAILED
             task.save(update_fields=["status", "updated_at"])
-            lock_manager.release_lock("trading", task_id)
+            lock_manager.release_lock(TaskType.TRADING, task_id)
             return {
                 "success": False,
                 "task_id": task_id,
@@ -1475,7 +1475,7 @@ def execute_trading_task(
             task.save(update_fields=["status", "updated_at"])
 
         # Release lock on failure
-        lock_manager.release_lock("trading", task_id)
+        lock_manager.release_lock(TaskType.TRADING, task_id)
         logger.info("Released execution lock for trading task %d on failure", task_id)
 
         return {
@@ -1711,7 +1711,7 @@ def stop_trading_task_execution(
             # Release both old-style and new-style locks for compatibility
             lock_key = f"{LOCK_KEY_PREFIX}trading:{task_id}"
             cache.delete(lock_key)
-            lock_manager.release_lock("trading", task_id)
+            lock_manager.release_lock(TaskType.TRADING, task_id)
             return {
                 "success": True,
                 "task_id": task_id,
@@ -1790,7 +1790,7 @@ def stop_trading_task_execution(
         # Release execution lock (both old-style and new-style for compatibility)
         lock_key = f"{LOCK_KEY_PREFIX}trading:{task_id}"
         cache.delete(lock_key)
-        lock_manager.release_lock("trading", task_id)
+        lock_manager.release_lock(TaskType.TRADING, task_id)
         logger.info("Released execution lock for trading task %d", task_id)
 
         # Send WebSocket notification for frontend sync
