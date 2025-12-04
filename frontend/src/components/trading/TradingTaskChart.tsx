@@ -294,23 +294,42 @@ export const TradingTaskChart: React.FC<TradingTaskChartProps> = ({
     []
   );
 
-  // Convert trades to chart markers with cyan/orange colors
+  // Convert trades to chart markers with cyan/orange colors, aligning to nearest candle
   const tradeMarkers = useMemo<ChartMarker[]>(() => {
-    if (!trades || trades.length === 0) {
+    if (!trades || trades.length === 0 || !candles || candles.length === 0) {
       return [];
     }
 
-    // Convert Trade format to ChartTrade format
-    const chartTrades: ChartTrade[] = trades.map((trade) => ({
-      timestamp: trade.entry_time, // Use entry_time as the marker timestamp
-      action: trade.direction === 'long' ? 'buy' : 'sell',
-      price: trade.entry_price,
-      units: trade.units,
-      pnl: trade.pnl,
-    }));
+    // Helper: find nearest candle date to the trade timestamp
+    const findNearestCandleDate = (ts: Date): Date => {
+      let nearest = candles[0].date;
+      let minDiff = Math.abs(candles[0].date.getTime() - ts.getTime());
+      for (let i = 1; i < candles.length; i++) {
+        const d = candles[i].date;
+        const diff = Math.abs(d.getTime() - ts.getTime());
+        if (diff < minDiff) {
+          minDiff = diff;
+          nearest = d;
+        }
+      }
+      return nearest;
+    };
+
+    // Convert Trade format to ChartTrade format with aligned dates
+    const chartTrades: ChartTrade[] = trades.map((trade) => {
+      const tradeDate = new Date(trade.entry_time);
+      const alignedDate = findNearestCandleDate(tradeDate);
+      return {
+        timestamp: alignedDate.toISOString(),
+        action: trade.direction === 'long' ? 'buy' : 'sell',
+        price: trade.entry_price,
+        units: trade.units,
+        pnl: trade.pnl,
+      };
+    });
 
     return createTradeMarkers(chartTrades);
-  }, [trades]);
+  }, [trades, candles]);
 
   // Create start/end markers with gray double circles
   const startEndMarkers = useMemo<ChartMarker[]>(() => {
