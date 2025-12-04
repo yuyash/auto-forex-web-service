@@ -292,11 +292,21 @@ class BaseStrategy(ABC):
         """
         Update strategy state with new values.
 
-        Only applicable for legacy Strategy mode, not TradingTask mode.
+        Works for both legacy Strategy mode and TradingTask mode.
 
         Args:
             state_updates: Dictionary of state updates to apply
         """
+        # TradingTask mode - use JSONField on TradingTask
+        if self._trading_task:
+            if not isinstance(self._trading_task.strategy_state, dict):
+                self._trading_task.strategy_state = {}
+            self._trading_task.strategy_state.update(state_updates)
+            self._trading_task.strategy_state["last_updated"] = timezone.now().isoformat()
+            self._trading_task.save(update_fields=["strategy_state", "updated_at"])
+            return
+
+        # Legacy Strategy mode
         if not self._strategy_model:
             return
 
@@ -322,9 +332,19 @@ class BaseStrategy(ABC):
         """
         Get current strategy state as a dictionary.
 
+        Works for both legacy Strategy mode and TradingTask mode.
+
         Returns:
             Dictionary containing strategy state
         """
+        # TradingTask mode - use JSONField on TradingTask
+        if self._trading_task:
+            state = self._trading_task.strategy_state
+            if isinstance(state, dict):
+                return state
+            return {}
+
+        # Legacy Strategy mode
         if not self._strategy_model or not hasattr(self._strategy_model, "state"):
             return {}
 

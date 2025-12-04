@@ -5,6 +5,8 @@ export { TaskActionButtons } from './TaskActionButtons';
 export type { TaskActionButtonsProps } from './TaskActionButtons';
 export { CopyTaskDialog } from './CopyTaskDialog';
 export { DeleteTaskDialog } from './DeleteTaskDialog';
+export { StopOptionsDialog, type StopOption } from './StopOptionsDialog';
+export { RestartOptionsDialog } from './RestartOptionsDialog';
 
 // Keyboard shortcuts
 export {

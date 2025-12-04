@@ -398,3 +398,55 @@ export function useRerunTradingTask(options?: {
 
   return { ...state, mutate, reset };
 }
+
+/**
+ * Hook to restart a trading task with fresh state
+ */
+export function useRestartTradingTask(options?: {
+  onSuccess?: (data: {
+    message: string;
+    task_id: number;
+    state_cleared: boolean;
+  }) => void;
+  onError?: (error: Error) => void;
+}): MutationResult<
+  { message: string; task_id: number; state_cleared: boolean },
+  { id: number; clearState?: boolean }
+> {
+  const [state, setState] = useState<
+    MutationState<{ message: string; task_id: number; state_cleared: boolean }>
+  >({
+    data: null,
+    isLoading: false,
+    error: null,
+  });
+
+  const mutate = useCallback(
+    async (variables: { id: number; clearState?: boolean }) => {
+      try {
+        setState({ data: null, isLoading: true, error: null });
+        const result = await tradingTasksApi.restart(
+          variables.id,
+          variables.clearState ?? true
+        );
+        setState({ data: result, isLoading: false, error: null });
+        // Invalidate cache to force refetch
+        invalidateTradingTasksCache();
+        options?.onSuccess?.(result);
+        return result;
+      } catch (err) {
+        const error = err as Error;
+        setState({ data: null, isLoading: false, error });
+        options?.onError?.(error);
+        throw error;
+      }
+    },
+    [options]
+  );
+
+  const reset = useCallback(() => {
+    setState({ data: null, isLoading: false, error: null });
+  }, []);
+
+  return { ...state, mutate, reset };
+}

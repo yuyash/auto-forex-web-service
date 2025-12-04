@@ -25,24 +25,51 @@ describe('TaskActionButtons', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows Start button for stopped tasks', () => {
-    const onStart = vi.fn();
+  it('shows Resume button for stopped tasks that can resume', () => {
+    const onResume = vi.fn();
     render(
       <TaskActionButtons
         status={TaskStatus.STOPPED}
-        onStart={onStart}
+        onResume={onResume}
+        onRestart={vi.fn()}
         onDelete={vi.fn()}
+        canResume={true}
       />
     );
 
     expect(
-      screen.getByRole('button', { name: /start task/i })
+      screen.getByRole('button', { name: /resume task/i })
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /restart task/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^start task$/i })
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /stop task/i })
     ).not.toBeInTheDocument();
+  });
+
+  it('shows only Restart button for stopped tasks that cannot resume', () => {
+    const onRestart = vi.fn();
+    render(
+      <TaskActionButtons
+        status={TaskStatus.STOPPED}
+        onRestart={onRestart}
+        onDelete={vi.fn()}
+        canResume={false}
+      />
+    );
+
     expect(
-      screen.queryByRole('button', { name: /rerun task/i })
+      screen.getByRole('button', { name: /restart task/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /resume task/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /stop task/i })
     ).not.toBeInTheDocument();
   });
 
@@ -60,7 +87,7 @@ describe('TaskActionButtons', () => {
       screen.getByRole('button', { name: /stop task/i })
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /start task/i })
+      screen.queryByRole('button', { name: /^start task$/i })
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /rerun task/i })
@@ -81,7 +108,7 @@ describe('TaskActionButtons', () => {
       screen.getByRole('button', { name: /rerun task/i })
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /start task/i })
+      screen.queryByRole('button', { name: /^start task$/i })
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /stop task/i })
@@ -102,7 +129,7 @@ describe('TaskActionButtons', () => {
       screen.getByRole('button', { name: /rerun task/i })
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /start task/i })
+      screen.queryByRole('button', { name: /^start task$/i })
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /stop task/i })
