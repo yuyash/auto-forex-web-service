@@ -7,8 +7,6 @@ The strategy supports:
 - Multi-layer position management (up to 3 layers)
 - ATR-based volatility lock
 - Margin-maintenance stop-losses
-
-Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
 """
 
 # pylint: disable=too-many-lines
@@ -31,8 +29,6 @@ class LayerManager:
 
     Each layer represents a complete cycle of scaling-in and scaling-out.
     Up to 3 layers can be active simultaneously.
-
-    Requirements: 13.1, 13.3
     """
 
     def __init__(self, max_layers: int) -> None:
@@ -127,8 +123,6 @@ class Layer:  # pylint: disable=too-many-instance-attributes
     Represents a single trading layer.
 
     A layer tracks positions, retracement count, and scaling state.
-
-    Requirements: 13.1, 13.3
     """
 
     def __init__(self, layer_number: int, config: dict[str, Any]) -> None:
@@ -237,8 +231,6 @@ class ScalingEngine:
     Handle position scaling logic.
 
     Supports additive and multiplicative scaling modes.
-
-    Requirements: 13.2
     """
 
     def __init__(self, mode: str = "additive", amount: Decimal | None = None) -> None:
@@ -296,8 +288,6 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
     - ATR-based volatility lock
     - Margin-maintenance stop-losses
     - Take-profit logic
-
-    Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -365,7 +355,6 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         self._no_signal_log_count = 0
         self._tick_count = 0
         self._state_save_interval = self.get_config_value("state_save_interval", 1000)
-        self._last_processed_tick_id: str | None = None  # Track last processed tick globally
 
         # Load state from database if exists
         self._load_state()
@@ -388,8 +377,6 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
         IMPORTANT: Open positions are ALWAYS restored because they represent real
         money in the market. The strategy_state provides additional metadata
         (ATR values, lot sizes, etc.) but position restoration doesn't depend on it.
-
-        Requirements: 7.2, 7.3
         """
         state = self.get_strategy_state()
         has_state = bool(state)
@@ -581,14 +568,6 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
 
         Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
         """
-        # CRITICAL: Prevent processing the same tick multiple times
-        # This can happen if orders are executed synchronously and trigger callbacks
-        tick_id = f"{tick_data.timestamp.timestamp()}_{tick_data.mid}"
-        if self._last_processed_tick_id == tick_id:
-            logger.debug(f"Skipping duplicate tick processing: {tick_id}")
-            return []
-        self._last_processed_tick_id = tick_id
-
         # Track tick count for periodic logging
         if not hasattr(self, "_strategy_tick_count"):
             self._strategy_tick_count = 0
@@ -599,20 +578,6 @@ class FloorStrategy(BaseStrategy):  # pylint: disable=too-many-instance-attribut
                 self.direction_method,
             )
         self._strategy_tick_count += 1
-
-        # Log strategy state periodically (every 200 ticks)
-        if self._strategy_tick_count % 200 == 0:
-            active_layers = sum(1 for layer in self.layer_manager.layers if layer.is_active)
-            total_positions = sum(len(layer.positions) for layer in self.layer_manager.layers)
-            logger.info(
-                "FloorStrategy tick #%d: active_layers=%d, total_positions=%d, "
-                "is_locked=%s, price=%s",
-                self._strategy_tick_count,
-                active_layers,
-                total_positions,
-                self.is_locked,
-                tick_data.mid,
-            )
 
         orders: list[Order] = []
 

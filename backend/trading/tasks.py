@@ -1530,14 +1530,18 @@ def _process_tick_for_task(  # noqa: C901
                 ]
                 if active_layers:
                     current_layer = active_layers[-1]  # Most recent active layer
+                    remaining_retracements = (
+                        current_layer.max_retracements_per_layer - current_layer.retracement_count
+                    )
                     layer_info = (
                         f"Layer {current_layer.layer_number} | "
                         f"Retracements: {current_layer.retracement_count}/"
-                        f"{current_layer.max_retracements_per_layer} | "
+                        f"{current_layer.max_retracements_per_layer} "
+                        f"(remaining: {remaining_retracements}) | "
                     )
 
             no_order_msg = (
-                f"Tick #{tick_count} | {layer_info}"
+                f"{layer_info}"
                 f"Open: {open_positions_count} | "
                 f"Realized P&L: ${realized_pnl:.2f} | "
                 f"Unrealized P&L: ${unrealized_pnl:.2f}"
@@ -1629,6 +1633,15 @@ def _process_tick_for_task(  # noqa: C901
                                         exit_price=tick_model.mid,
                                         create_trade_record=True,
                                     )
+
+                                    # CRITICAL: Notify strategy of position closure
+                                    # This allows strategies (like FloorStrategy) to remove
+                                    # positions from their internal layer structures
+                                    if strategy_instance and hasattr(
+                                        strategy_instance, "on_position_closed"
+                                    ):
+                                        strategy_instance.on_position_closed(closed_pos)
+
                                     close_msg = (
                                         f"CLOSED {closed_pos.direction.upper()} position: "
                                         f"{closed_pos.units} units @ {tick_model.mid} | "
@@ -1659,6 +1672,14 @@ def _process_tick_for_task(  # noqa: C901
                                 # Link position to trading task
                                 position.trading_task = task
                                 position.save(update_fields=["trading_task"])
+
+                                # CRITICAL: Notify strategy of new position
+                                # This allows strategies (like FloorStrategy) to track
+                                # positions in their internal layer structures
+                                if strategy_instance and hasattr(
+                                    strategy_instance, "on_position_update"
+                                ):
+                                    strategy_instance.on_position_update(position)
 
                                 pos_msg = (
                                     f"OPENED {position.direction.upper()} position: "
