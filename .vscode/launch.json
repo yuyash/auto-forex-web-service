@@ -2,59 +2,16 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Backtest with Profiling (Athena)",
+      "name": "Django: runserver",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/backend/debug_backtest.py",
-      "args": [
-        "--instrument", "USD_JPY",
-        "--start-date", "2025-09-01T00:00:00Z",
-        "--end-date", "2025-09-30T23:59:59Z",
-        "--data-source", "athena"
-      ],
-      "console": "integratedTerminal",
-      "justMyCode": false,
+      "program": "${workspaceFolder}/backend/manage.py",
+      "args": ["runserver", "0.0.0.0:8000"],
+      "django": true,
+      "justMyCode": true,
       "cwd": "${workspaceFolder}/backend",
       "env": {
-        "DJANGO_SETTINGS_MODULE": "trading_system.settings",
-        "BACKTEST_PROFILING": "true"
-      }
-    },
-    {
-      "name": "Debug Backtest with Profiling (Mock Data)",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/backend/debug_backtest.py",
-      "args": [
-        "--instrument", "USD_JPY",
-        "--data-source", "mock",
-        "--num-ticks", "10000"
-      ],
-      "console": "integratedTerminal",
-      "justMyCode": false,
-      "cwd": "${workspaceFolder}/backend",
-      "env": {
-        "DJANGO_SETTINGS_MODULE": "trading_system.settings",
-        "BACKTEST_PROFILING": "true"
-      }
-    },
-    {
-      "name": "Debug Backtest with Profiling (PostgreSQL)",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/backend/debug_backtest.py",
-      "args": [
-        "--instrument", "USD_JPY",
-        "--start-date", "2025-11-10T08:00:00Z",
-        "--end-date", "2025-11-11T16:00:00Z",
-        "--data-source", "postgres"
-      ],
-      "console": "integratedTerminal",
-      "justMyCode": false,
-      "cwd": "${workspaceFolder}/backend",
-      "env": {
-        "DJANGO_SETTINGS_MODULE": "trading_system.settings",
-        "BACKTEST_PROFILING": "true"
+        "DJANGO_SETTINGS_MODULE": "config.settings"
       }
     }
   ]
