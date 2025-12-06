@@ -141,6 +141,7 @@
   "pylint.cwd": "${workspaceFolder}/backend",
   "pylint.interpreter": ["${workspaceFolder}/backend/.venv/bin/python"],
   "pylint.path": ["${workspaceFolder}/backend/.venv/bin/pylint"],
+  "python.analysis.extraPaths": ["${workspaceFolder}/backend/"],
   "python.createEnvironment.contentButton": "show",
   "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
   "python-envs.defaultEnvManager": "ms-python.python:venv",
