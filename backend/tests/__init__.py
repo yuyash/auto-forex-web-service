@@ -1,1 +1,1 @@
-"""Tests package for trading_system."""
+"""Test package for the trading system."""

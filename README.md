@@ -100,9 +100,6 @@ DB_PASSWORD=your_secure_password
 SECRET_KEY=your_secret_key_here_min_50_chars
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
-
-# Security
-ENCRYPTION_KEY=your_encryption_key_32_chars_min
 ```
 
 **Generate secure keys:**
@@ -110,9 +107,6 @@ ENCRYPTION_KEY=your_encryption_key_32_chars_min
 ```bash
 # Django SECRET_KEY
 python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-
-# ENCRYPTION_KEY
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
 ### 3. Build and Start Services

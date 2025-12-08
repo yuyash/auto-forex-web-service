@@ -23,6 +23,7 @@ dependencies = [
     "cryptography>=43.0.0",
     "psutil>=6.1.0",
     "requests>=2.32.0",
+    "pydantic>=2.12.5",
 ]
 
 [project.optional-dependencies]
@@ -57,10 +58,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["trading_system"]
+packages = ["config"]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "trading_system.settings_test"
+DJANGO_SETTINGS_MODULE = "tests.settings_test"
 python_files = ["test_*.py", "*_test.py", "tests.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -130,7 +131,7 @@ disallow_untyped_defs = false
 disallow_incomplete_defs = false
 
 [tool.django-stubs]
-django_settings_module = "trading_system.settings"
+django_settings_module = "config.settings"
 
 [tool.coverage.run]
 source = ["."]
@@ -167,7 +168,7 @@ ignore = ["migrations", "tests"]
 ignore-patterns = ["test_.*?.py"]
 extension-pkg-allow-list = ["psutil", "redis"]
 load-plugins = ["pylint_django"]
-django-settings-module = "trading_system.settings"
+django-settings-module = "config.settings"
 
 [tool.pylint.messages_control]
 disable = [
@@ -224,7 +225,7 @@ profile = "black"
 line_length = 100
 skip_gitignore = true
 known_django = "django"
-known_first_party = ["trading_system", "trading", "accounts"]
+known_first_party = ["config", "apps", "apps.trading", "apps.accounts"]
 sections = ["FUTURE", "STDLIB", "DJANGO", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 
 [tool.bandit]

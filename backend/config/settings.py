@@ -1,0 +1,444 @@
+"""
+Django settings for auto_forex project.
+
+Auto Forex Trader Backend Configuration
+
+Configuration is done via environment variables and this settings file.
+- .env file: Secrets (passwords, keys, credentials)
+- Environment variables: Configuration overrides
+"""
+
+import os
+from pathlib import Path
+from typing import Any
+
+from celery.schedules import crontab
+from dotenv import load_dotenv
+
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env file in project root.
+# override=True ensures .env values take precedence over shell environment variables.
+load_dotenv(BASE_DIR.parent / ".env", override=True)
+
+# =============================================================================
+# Server Configuration
+# =============================================================================
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.getenv(
+    "SECRET_KEY",
+    "django-insecure-*6sf5x8=a0@4y+y1wwckk&vlp+)nv5%gl+-az@tt*ahkx3zav0",
+)
+
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
+
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+
+
+# Application definition
+
+INSTALLED_APPS = [
+    # Django Channels must be before django.contrib.staticfiles
+    "daphne",
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    # Third-party apps
+    "rest_framework",
+    "channels",
+    "django_celery_beat",
+    # Local apps
+    "apps.accounts",
+    # "apps.dashboard",
+    # "apps.backtest",
+    # "apps.events",
+    # "apps.market",
+    # "apps.monitoring",
+    # "apps.orders",
+    # "apps.positions",
+    # "apps.strategy",
+    # "apps.trading",
+    # "apps.notification",
+    # "apps.tasks",
+]
+
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Custom security and logging middleware
+    "apps.accounts.middleware.HTTPAccessLoggingMiddleware",
+    "apps.accounts.middleware.SecurityMonitoringMiddleware",
+]
+
+ROOT_URLCONF = "config.urls"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
+
+
+# =============================================================================
+# Database Configuration
+# =============================================================================
+
+DATABASES = {
+    "default": {
+        "ENGINE": os.getenv("DB_ENGINE", "django.db.backends.postgresql"),
+        "NAME": os.getenv("DB_NAME", "auto-forex"),
+        "USER": os.getenv("DB_USER", "postgres"),
+        "PASSWORD": os.getenv("DB_PASSWORD", "postgres"),
+        "HOST": os.getenv("DB_HOST", "postgres"),
+        "PORT": os.getenv("DB_PORT", "5432"),
+        "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "600")),
+        "OPTIONS": {
+            "connect_timeout": 10,
+        },
+    }
+}
+
+
+# =============================================================================
+# Redis Configuration
+# =============================================================================
+
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_DB = int(os.getenv("REDIS_DB", "0"))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
+
+REDIS_URL = (
+    f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+    if REDIS_PASSWORD
+    else f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+)
+
+
+# =============================================================================
+# Cache Configuration (Redis)
+# =============================================================================
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+        "OPTIONS": {
+            "db": REDIS_DB,
+            "pool_class": "redis.BlockingConnectionPool",
+        },
+        "KEY_PREFIX": "auto_forex",
+        "TIMEOUT": 300,
+    }
+}
+
+
+# =============================================================================
+# Session Configuration (Redis)
+# =============================================================================
+
+# Security settings
+JWT_EXPIRATION = int(os.getenv("JWT_EXPIRATION", "86400"))  # 24 hours
+MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
+LOCKOUT_DURATION = int(os.getenv("LOCKOUT_DURATION", "900"))  # 15 minutes
+RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "100"))
+RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))  # 1 minute
+
+SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+SESSION_CACHE_ALIAS = "default"
+SESSION_COOKIE_AGE = JWT_EXPIRATION
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = "Lax"
+
+
+# =============================================================================
+# Django Channels Configuration
+# =============================================================================
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [REDIS_URL.replace(f"/{REDIS_DB}", "/1")],  # Use db 1 for channels
+            "capacity": 1500,
+            "expiry": 10,
+        },
+    },
+}
+
+
+# =============================================================================
+# Celery Configuration
+# =============================================================================
+
+CELERY_BROKER_URL = REDIS_URL.replace(f"/{REDIS_DB}", "/2")  # Use db 2 for celery
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "UTC"
+CELERY_ENABLE_UTC = True
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT", "1800"))  # 30 minutes
+CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "1500"))  # 25 minutes
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
+
+# Celery Beat Schedule
+# https://docs.celeryq.dev/en/stable/userguide/periodic-tasks.html
+CELERY_BEAT_SCHEDULE = {
+    "daily-athena-import": {
+        "task": "apps.backtest.athena_import_task.schedule_daily_athena_import",
+        "schedule": crontab(hour=1, minute=0),  # Daily at 1:00 AM UTC
+        "options": {
+            "expires": 7200.0,  # Task expires after 2 hours if not executed
+        },
+    },
+}
+
+
+# Django REST Framework Configuration
+# https://www.django-rest-framework.org/api-guide/settings/
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "apps.accounts.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+    ],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 50,
+    "DEFAULT_FILTER_BACKENDS": [
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
+    "DATETIME_FORMAT": "%Y-%m-%dT%H:%M:%S.%fZ",
+    "DATE_FORMAT": "%Y-%m-%d",
+    "TIME_FORMAT": "%H:%M:%S",
+}
+
+
+# Password validation
+# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {
+            "min_length": 8,
+        },
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
+]
+
+
+# Internationalization
+# https://docs.djangoproject.com/en/5.2/topics/i18n/
+
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "UTC"
+USE_I18N = True
+USE_TZ = True
+
+
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/5.2/howto/static-files/
+
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# Custom User Model
+# https://docs.djangoproject.com/en/5.2/topics/auth/customizing/#substituting-a-custom-user-model
+
+AUTH_USER_MODEL = "accounts.User"
+
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+LOG_FILE = os.getenv("LOG_FILE", "logs/django.log")
+LOG_MAX_SIZE = int(os.getenv("LOG_MAX_SIZE", "10485760"))  # 10 MB
+LOG_BACKUP_COUNT = int(os.getenv("LOG_BACKUP_COUNT", "5"))
+
+LOG_FILE_PATH = BASE_DIR / LOG_FILE
+LOG_FILE_HANDLER: dict[str, Any] = {
+    "level": LOG_LEVEL,
+    "class": "logging.NullHandler",
+}
+
+if os.getenv("DJANGO_ENABLE_FILE_LOGGING", "True") == "True":
+    try:
+        LOG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(LOG_FILE_PATH, "a", encoding="utf-8"):
+            pass
+        LOG_FILE_HANDLER = {
+            "level": LOG_LEVEL,
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOG_FILE_PATH,
+            "maxBytes": LOG_MAX_SIZE,
+            "backupCount": LOG_BACKUP_COUNT,
+            "formatter": "verbose",
+        }
+    except OSError:
+        # Fall back to console-only logging when file access is restricted
+        LOG_FILE_HANDLER = {
+            "level": "INFO",
+            "class": "logging.NullHandler",
+        }
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{asctime} {levelname} {module} {process:d} {thread:d} {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{asctime} {levelname} {message}",
+            "style": "{",
+        },
+    },
+    "filters": {
+        "require_debug_true": {
+            "()": "django.utils.log.RequireDebugTrue",
+        },
+    },
+    "handlers": {
+        "console": {
+            "level": LOG_LEVEL,
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+        "file": LOG_FILE_HANDLER,
+    },
+    "root": {
+        "handlers": ["console", "file"],
+        "level": LOG_LEVEL,
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console", "file"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "django.db.backends": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "celery": {
+            "handlers": ["console", "file"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "channels": {
+            "handlers": ["console", "file"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+    },
+}
+
+
+# =============================================================================
+# Security Settings
+# =============================================================================
+# https://docs.djangoproject.com/en/5.2/topics/security/
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+    X_FRAME_OPTIONS = "DENY"
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True
+
+
+# =============================================================================
+# CORS Configuration
+# =============================================================================
+
+CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+CORS_ALLOW_CREDENTIALS = True
+
+
+# =============================================================================
+# JWT Configuration
+# =============================================================================
+
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", SECRET_KEY)
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_DELTA = JWT_EXPIRATION
+
+
+# =============================================================================
+# Frontend Configuration
+# =============================================================================
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+
+# =============================================================================
+# OANDA API Configuration
+# =============================================================================
+
+OANDA_PRACTICE_API = os.getenv("OANDA_PRACTICE_API", "https://api-fxpractice.oanda.com")
+OANDA_LIVE_API = os.getenv("OANDA_LIVE_API", "https://api-fxtrade.oanda.com")
+OANDA_STREAM_TIMEOUT = int(os.getenv("OANDA_STREAM_TIMEOUT", "30"))
