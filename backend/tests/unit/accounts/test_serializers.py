@@ -216,6 +216,72 @@ class TestUserRegistrationSerializerCreate:
         assert "+" not in user.username
         assert user.username == "testalias"
 
+    def test_create_user_with_first_and_last_name(self) -> None:
+        """Test creating user with first_name and last_name."""
+        data = {
+            "email": "nameuser@example.com",
+            "username": "nameuser",
+            "first_name": "John",
+            "last_name": "Doe",
+            "password": "TestPass123!",
+            "password_confirm": "TestPass123!",
+        }
+        serializer = UserRegistrationSerializer(data=data)
+        assert serializer.is_valid(), serializer.errors
+        user = serializer.save()
+
+        assert user.email == "nameuser@example.com"
+        assert user.username == "nameuser"
+        assert user.first_name == "John"
+        assert user.last_name == "Doe"
+
+    def test_create_user_without_names_defaults_to_empty(self) -> None:
+        """Test creating user without first_name/last_name defaults to empty strings."""
+        data = {
+            "email": "noname@example.com",
+            "username": "nonameuser",
+            "password": "TestPass123!",
+            "password_confirm": "TestPass123!",
+        }
+        serializer = UserRegistrationSerializer(data=data)
+        assert serializer.is_valid(), serializer.errors
+        user = serializer.save()
+
+        assert user.first_name == ""
+        assert user.last_name == ""
+
+    def test_create_user_with_first_name_only(self) -> None:
+        """Test creating user with only first_name provided."""
+        data = {
+            "email": "firstonly@example.com",
+            "username": "firstonly",
+            "first_name": "Jane",
+            "password": "TestPass123!",
+            "password_confirm": "TestPass123!",
+        }
+        serializer = UserRegistrationSerializer(data=data)
+        assert serializer.is_valid(), serializer.errors
+        user = serializer.save()
+
+        assert user.first_name == "Jane"
+        assert user.last_name == ""
+
+    def test_create_user_with_last_name_only(self) -> None:
+        """Test creating user with only last_name provided."""
+        data = {
+            "email": "lastonly@example.com",
+            "username": "lastonly",
+            "last_name": "Smith",
+            "password": "TestPass123!",
+            "password_confirm": "TestPass123!",
+        }
+        serializer = UserRegistrationSerializer(data=data)
+        assert serializer.is_valid(), serializer.errors
+        user = serializer.save()
+
+        assert user.first_name == ""
+        assert user.last_name == "Smith"
+
 
 @pytest.mark.django_db
 class TestUserLoginSerializer:
@@ -395,6 +461,54 @@ class TestUserSettingsSerializer:
 
 class TestUserProfileSerializer:
     """Test cases for UserProfileSerializer."""
+
+    @pytest.mark.django_db
+    def test_serializer_includes_first_and_last_name(self) -> None:
+        """Test serializer includes first_name and last_name fields."""
+        from apps.accounts.models import User
+
+        user = User.objects.create_user(
+            username="profileuser",
+            email="profile@example.com",
+            password="testpass123",
+            first_name="John",
+            last_name="Doe",
+        )
+
+        serializer = UserProfileSerializer(user)
+        data = serializer.data
+
+        assert "first_name" in data
+        assert "last_name" in data
+        assert data["first_name"] == "John"
+        assert data["last_name"] == "Doe"
+
+    @pytest.mark.django_db
+    def test_serializer_fields_complete(self) -> None:
+        """Test serializer contains all expected fields."""
+        from apps.accounts.models import User
+
+        user = User.objects.create_user(
+            username="completeuser",
+            email="complete@example.com",
+            password="testpass123",
+        )
+
+        serializer = UserProfileSerializer(user)
+        data = serializer.data
+
+        expected_fields = [
+            "id",
+            "email",
+            "username",
+            "first_name",
+            "last_name",
+            "timezone",
+            "language",
+            "email_verified",
+        ]
+        for field in expected_fields:
+            assert field in data, f"Field '{field}' missing from serializer data"
 
     def test_validate_timezone_valid(self) -> None:
         """Test timezone validation with valid timezone."""

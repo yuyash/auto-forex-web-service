@@ -153,3 +153,57 @@ class TestUserRegistration:
         response = requests.post(url, json={}, timeout=10)
 
         assert response.status_code == 400
+
+    def test_registration_with_first_and_last_name(self, live_server):
+        """Test successful registration with first_name and last_name."""
+        url = f"{live_server.url}/api/auth/register"
+        data = {
+            "email": "nameduser@example.com",
+            "username": "nameduser",
+            "first_name": "John",
+            "last_name": "Doe",
+            "password": "SecurePass123!",
+            "password_confirm": "SecurePass123!",
+        }
+
+        response = requests.post(url, json=data, timeout=10)
+
+        assert response.status_code == 201
+        json_data = response.json()
+        assert json_data["user"]["first_name"] == "John"
+        assert json_data["user"]["last_name"] == "Doe"
+
+    def test_registration_with_first_name_only(self, live_server):
+        """Test registration with only first_name provided."""
+        url = f"{live_server.url}/api/auth/register"
+        data = {
+            "email": "firstname@example.com",
+            "username": "firstname",
+            "first_name": "Jane",
+            "password": "SecurePass123!",
+            "password_confirm": "SecurePass123!",
+        }
+
+        response = requests.post(url, json=data, timeout=10)
+
+        assert response.status_code == 201
+        json_data = response.json()
+        assert json_data["user"]["first_name"] == "Jane"
+        assert json_data["user"]["last_name"] == ""
+
+    def test_registration_without_names(self, live_server):
+        """Test registration without first_name and last_name defaults to empty."""
+        url = f"{live_server.url}/api/auth/register"
+        data = {
+            "email": "nonames@example.com",
+            "username": "nonames",
+            "password": "SecurePass123!",
+            "password_confirm": "SecurePass123!",
+        }
+
+        response = requests.post(url, json=data, timeout=10)
+
+        assert response.status_code == 201
+        json_data = response.json()
+        assert json_data["user"]["first_name"] == ""
+        assert json_data["user"]["last_name"] == ""

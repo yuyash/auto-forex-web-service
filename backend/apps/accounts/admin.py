@@ -15,6 +15,8 @@ class UserAdmin(BaseUserAdmin):
     list_display = [
         "email",
         "username",
+        "first_name",
+        "last_name",
         "is_staff",
         "is_active",
         "is_locked",
@@ -28,7 +30,7 @@ class UserAdmin(BaseUserAdmin):
         "language",
         "created_at",
     ]
-    search_fields = ["email", "username"]
+    search_fields = ["email", "username", "first_name", "last_name"]
     ordering = ["-created_at"]
 
     fieldsets = BaseUserAdmin.fieldsets + (  # type: ignore[operator]

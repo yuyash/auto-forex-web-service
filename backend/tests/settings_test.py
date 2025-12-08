@@ -8,16 +8,13 @@ This settings module extends the base settings with test-specific overrides:
 """
 
 import os
+import uuid
 
 # Set environment to test mode
 os.environ.setdefault("DJANGO_ENV", "development")
 
-# Use unique file-based SQLite for each test run
-import os
-import uuid
-
 # Import all settings from the main settings module
-from config.settings import *  # noqa: F401, F403
+from config.settings import *  # noqa: E402, F401, F403
 
 # =============================================================================
 # Test-specific Database Configuration

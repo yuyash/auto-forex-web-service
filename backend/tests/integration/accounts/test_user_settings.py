@@ -174,3 +174,63 @@ class TestUserSettingsUpdate:
         assert get_response.status_code == 200
         json_data = get_response.json()
         assert json_data["user"]["timezone"] == "Asia/Tokyo"
+
+    def test_update_first_name(self, live_server, test_user, auth_headers):
+        """Test updating user first_name."""
+        url = f"{live_server.url}/api/settings/"
+        data = {"first_name": "UpdatedFirstName"}
+
+        response = requests.put(url, json=data, headers=auth_headers, timeout=10)
+
+        assert response.status_code == 200
+        json_data = response.json()
+        assert json_data["user"]["first_name"] == "UpdatedFirstName"
+
+    def test_update_last_name(self, live_server, test_user, auth_headers):
+        """Test updating user last_name."""
+        url = f"{live_server.url}/api/settings/"
+        data = {"last_name": "UpdatedLastName"}
+
+        response = requests.put(url, json=data, headers=auth_headers, timeout=10)
+
+        assert response.status_code == 200
+        json_data = response.json()
+        assert json_data["user"]["last_name"] == "UpdatedLastName"
+
+    def test_update_first_and_last_name(self, live_server, test_user, auth_headers):
+        """Test updating both first_name and last_name."""
+        url = f"{live_server.url}/api/settings/"
+        data = {
+            "first_name": "John",
+            "last_name": "Doe",
+        }
+
+        response = requests.put(url, json=data, headers=auth_headers, timeout=10)
+
+        assert response.status_code == 200
+        json_data = response.json()
+        assert json_data["user"]["first_name"] == "John"
+        assert json_data["user"]["last_name"] == "Doe"
+
+    def test_update_username(self, live_server, test_user, auth_headers):
+        """Test updating username."""
+        url = f"{live_server.url}/api/settings/"
+        data = {"username": "newusername123"}
+
+        response = requests.put(url, json=data, headers=auth_headers, timeout=10)
+
+        assert response.status_code == 200
+        json_data = response.json()
+        assert json_data["user"]["username"] == "newusername123"
+
+    def test_get_settings_returns_first_and_last_name(self, live_server, test_user, auth_headers):
+        """Test settings response includes first_name and last_name."""
+        url = f"{live_server.url}/api/settings/"
+
+        response = requests.get(url, headers=auth_headers, timeout=10)
+
+        assert response.status_code == 200
+        json_data = response.json()
+        user_data = json_data["user"]
+        assert "first_name" in user_data
+        assert "last_name" in user_data

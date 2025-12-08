@@ -30,6 +30,8 @@ class TestUserAdmin:
         expected_fields = [
             "email",
             "username",
+            "first_name",
+            "last_name",
             "is_staff",
             "is_active",
             "is_locked",
@@ -51,7 +53,7 @@ class TestUserAdmin:
 
     def test_search_fields(self) -> None:
         """Test search_fields contains expected fields."""
-        assert self.admin.search_fields == ["email", "username"]
+        assert self.admin.search_fields == ["email", "username", "first_name", "last_name"]
 
     def test_ordering(self) -> None:
         """Test ordering is by created_at descending."""

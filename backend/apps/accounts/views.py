@@ -158,6 +158,8 @@ class UserRegistrationView(APIView):
                         "id": user.id,
                         "email": user.email,
                         "username": user.username,
+                        "first_name": user.first_name,
+                        "last_name": user.last_name,
                         "email_verified": user.email_verified,
                     },
                     "email_sent": email_sent,
@@ -882,7 +884,7 @@ class UserSettingsView(APIView):
         settings_data = {}
 
         # User profile fields
-        user_fields = ["timezone", "language"]
+        user_fields = ["timezone", "language", "first_name", "last_name", "username"]
         for field in user_fields:
             if field in request.data:
                 user_data[field] = request.data[field]
