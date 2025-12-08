@@ -30,6 +30,18 @@ class Command(BaseCommand):
             help="Username for the user (defaults to email prefix)",
         )
         parser.add_argument(
+            "--first-name",
+            type=str,
+            default="",
+            help="First name for the user",
+        )
+        parser.add_argument(
+            "--last-name",
+            type=str,
+            default="",
+            help="Last name for the user",
+        )
+        parser.add_argument(
             "--password",
             type=str,
             help="Password for the user (will prompt if not provided)",
@@ -61,6 +73,8 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         email = options["email"].strip().lower()
         username = options.get("username") or email.split("@")[0]
+        first_name = options.get("first_name", "") or ""
+        last_name = options.get("last_name", "") or ""
         password = options.get("password")
         timezone = options["timezone"]
         language = options["language"]
@@ -94,6 +108,8 @@ class Command(BaseCommand):
                     email=email,
                     username=username,
                     password=password,
+                    first_name=first_name,
+                    last_name=last_name,
                     timezone=timezone,
                     language=language,
                     is_staff=is_staff,
@@ -107,6 +123,8 @@ class Command(BaseCommand):
                         f"Successfully created user:\n"
                         f"  Email: {user.email}\n"
                         f"  Username: {user.username}\n"
+                        f"  First name: {user.first_name}\n"
+                        f"  Last name: {user.last_name}\n"
                         f"  is_staff: {user.is_staff}\n"
                         f"  is_superuser: {user.is_superuser}\n"
                         f"  email_verified: {user.email_verified}\n"

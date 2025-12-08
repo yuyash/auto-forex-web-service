@@ -44,10 +44,19 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["email", "username", "password", "password_confirm"]
+        fields = [
+            "email",
+            "username",
+            "first_name",
+            "last_name",
+            "password",
+            "password_confirm",
+        ]
         extra_kwargs = {
             "email": {"required": True},
             "username": {"required": False},
+            "first_name": {"required": False},
+            "last_name": {"required": False},
         }
 
     def validate_username(self, value: str) -> str:
@@ -199,6 +208,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             email=validated_data["email"],
             username=validated_data["username"],
             password=validated_data["password"],
+            first_name=validated_data.get("first_name", ""),
+            last_name=validated_data.get("last_name", ""),
         )
 
         return user
@@ -346,7 +357,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
         """Serializer metadata."""
 
         model = User
-        fields = ["id", "email", "username", "timezone", "language", "email_verified"]
+        fields = [
+            "id",
+            "email",
+            "username",
+            "first_name",
+            "last_name",
+            "timezone",
+            "language",
+            "email_verified",
+        ]
         read_only_fields = ["id", "email", "email_verified"]
 
 
