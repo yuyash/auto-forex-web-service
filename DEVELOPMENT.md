@@ -135,12 +135,9 @@ npm install
 ```bash
 # Generate Django SECRET_KEY
 python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-
-# Generate ENCRYPTION_KEY
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-Update these values in `backend/.env`.
+Update this value in `backend/.env`.
 
 ### 6. Start Development Servers
 
@@ -159,14 +156,14 @@ Backend will be available at: http://localhost:8000
 
 ```bash
 cd backend
-uv run celery -A trading_system worker -l info --concurrency=4
+uv run celery -A config worker -l info --concurrency=4
 ```
 
 #### Terminal 3: Celery Beat (Scheduler)
 
 ```bash
 cd backend
-uv run celery -A trading_system beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+uv run celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
 ```
 
 #### Terminal 4: React Frontend
@@ -201,7 +198,6 @@ cp .env.example .env
 # Minimum required:
 # - DB_PASSWORD
 # - SECRET_KEY
-# - ENCRYPTION_KEY
 ```
 
 ### 2. Generate Security Keys
@@ -209,12 +205,9 @@ cp .env.example .env
 ```bash
 # Generate Django SECRET_KEY
 python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-
-# Generate ENCRYPTION_KEY
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-Update these values in `.env`.
+Update this value in `.env`.
 
 ### 3. Build and Start Services
 
@@ -584,7 +577,7 @@ cat .env
 # Check ALLOWED_HOSTS in backend/.env
 # Should include: localhost,127.0.0.1
 
-# Check Django CORS settings in backend/trading_system/settings.py
+# Check Django CORS settings in backend/config/settings.py
 # Make sure frontend URL is in CORS_ALLOWED_ORIGINS
 ```
 

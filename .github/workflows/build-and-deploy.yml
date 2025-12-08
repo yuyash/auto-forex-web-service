@@ -122,16 +122,10 @@ jobs:
           DB_HOST=postgres
           DB_PORT=5432
 
-          # Redis
-          REDIS_PASSWORD=dummy_redis_password
-
           # Django
           SECRET_KEY=dummy-secret-key-for-validation-only-min-50-chars-long
           DEBUG=False
           ALLOWED_HOSTS=localhost,127.0.0.1
-
-          # Security
-          ENCRYPTION_KEY=dummy-encryption-key-32-chars-min
 
           # OANDA API
           OANDA_PRACTICE_API=https://api-fxpractice.oanda.com
