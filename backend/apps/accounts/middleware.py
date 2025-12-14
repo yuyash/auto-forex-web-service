@@ -1,10 +1,12 @@
 """Security monitoring middleware and WebSocket authentication for authentication events."""
 
-import logging
-from typing import Any, Callable, Dict
+from datetime import timedelta
+from logging import getLogger
+from typing import Any, Callable, Dict, Optional, Tuple, cast
 from urllib.parse import parse_qs
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
@@ -12,20 +14,113 @@ from django.utils import timezone
 from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
 
+from .models import BlockedIP, User, UserSession
 from .jwt_utils import get_user_from_token
-from .models import User, UserSession
-from .rate_limiter import RateLimiter
 from .security_logger import SecurityEventLogger
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 UserModel = get_user_model()
 
 
-def _get_authenticated_user(user_obj: Any) -> User | None:
-    """Return the authenticated User instance when available."""
-    if isinstance(user_obj, User) and user_obj.is_authenticated:
-        return user_obj
+def _get_authenticated_user(user: Any) -> User | None:
+    """Return authenticated user when available.
+
+    Duck-typed for testability (unit tests use MagicMock and AnonymousUser).
+    """
+
+    if user is None:
+        return None
+
+    if bool(getattr(user, "is_authenticated", False)):
+        return cast(User, user)
+
     return None
+
+
+class RateLimiter:
+    """
+    Rate limiter for authentication endpoints.
+    """
+
+    MAX_ATTEMPTS = 5
+    LOCKOUT_DURATION_MINUTES = 15
+    ACCOUNT_LOCK_THRESHOLD = 10
+
+    @staticmethod
+    def get_cache_key(ip_address: str) -> str:
+        return f"login_attempts:{ip_address}"
+
+    @staticmethod
+    def get_failed_attempts(ip_address: str) -> int:
+        cache_key = RateLimiter.get_cache_key(ip_address)
+        attempts = cache.get(cache_key, 0)
+        return int(attempts)
+
+    @staticmethod
+    def increment_failed_attempts(ip_address: str) -> int:
+        cache_key = RateLimiter.get_cache_key(ip_address)
+        attempts = RateLimiter.get_failed_attempts(ip_address)
+        attempts += 1
+        timeout = RateLimiter.LOCKOUT_DURATION_MINUTES * 60
+        cache.set(cache_key, attempts, timeout)
+        return attempts
+
+    @staticmethod
+    def reset_failed_attempts(ip_address: str) -> None:
+        cache_key = RateLimiter.get_cache_key(ip_address)
+        cache.delete(cache_key)
+
+    @staticmethod
+    def is_ip_blocked(ip_address: str) -> Tuple[bool, Optional[str]]:
+        attempts = RateLimiter.get_failed_attempts(ip_address)
+        if attempts >= RateLimiter.MAX_ATTEMPTS:
+            return (
+                True,
+                f"Too many failed login attempts. "
+                f"Try again in {RateLimiter.LOCKOUT_DURATION_MINUTES} minutes.",
+            )
+        try:
+            blocked_ip = BlockedIP.objects.get(ip_address=ip_address)
+            if blocked_ip.is_active():
+                return True, blocked_ip.reason
+        except BlockedIP.DoesNotExist:
+            pass
+        return False, None
+
+    @staticmethod
+    def block_ip_address(ip_address: str, reason: str = "Excessive failed login attempts") -> None:
+        blocked_until = timezone.now() + timedelta(hours=1)
+        blocked_ip, created = BlockedIP.objects.get_or_create(
+            ip_address=ip_address,
+            defaults={
+                "reason": reason,
+                "failed_attempts": RateLimiter.get_failed_attempts(ip_address),
+                "blocked_until": blocked_until,
+                "is_permanent": False,
+            },
+        )
+        if not created:
+            blocked_ip.failed_attempts = RateLimiter.get_failed_attempts(ip_address)
+            blocked_ip.blocked_until = blocked_until
+            blocked_ip.reason = reason
+            blocked_ip.save()
+
+    @staticmethod
+    def check_account_lock(user: User) -> Tuple[bool, Optional[str]]:
+        if user.is_locked:
+            return (
+                True,
+                "Account is locked due to excessive failed login attempts. "
+                "Please contact support.",
+            )
+        if user.failed_login_attempts >= RateLimiter.ACCOUNT_LOCK_THRESHOLD:
+            user.lock_account()
+            return (
+                True,
+                "Account has been locked due to excessive failed login attempts. "
+                "Please contact support.",
+            )
+        return False, None
 
 
 class SecurityMonitoringMiddleware:
@@ -82,7 +177,7 @@ class SecurityMonitoringMiddleware:
         response = self.get_response(request)
 
         # Track session for authenticated users
-        auth_user = _get_authenticated_user(getattr(request, "user", None))
+        auth_user = self._get_authenticated_user(getattr(request, "user", None))
 
         if auth_user and response.status_code == 200:
             # Update or create session for authenticated requests
@@ -114,6 +209,10 @@ class SecurityMonitoringMiddleware:
         else:
             ip = str(request.META.get("REMOTE_ADDR", ""))
         return ip
+
+    def _get_authenticated_user(self, user: Any) -> User | None:
+        """Return the authenticated User instance when available."""
+        return _get_authenticated_user(user)
 
     def _is_blocked_ip(self, ip_address: str) -> bool:
         """
@@ -188,7 +287,7 @@ class SecurityMonitoringMiddleware:
 
         # Log login attempts
         elif path == "/api/auth/login" and method == "POST":
-            auth_user = _get_authenticated_user(getattr(request, "user", None))
+            auth_user = self._get_authenticated_user(getattr(request, "user", None))
             if status_code == 200 and auth_user:
                 # Successful login - get user from request
                 user_email = auth_user.email
@@ -263,7 +362,7 @@ class SecurityMonitoringMiddleware:
 
         # Log logout events
         elif path == "/api/auth/logout" and method == "POST" and status_code == 200:
-            auth_user = _get_authenticated_user(getattr(request, "user", None))
+            auth_user = self._get_authenticated_user(getattr(request, "user", None))
             if not auth_user:
                 return
             self.security_logger.log_security_event(
@@ -405,6 +504,10 @@ class HTTPAccessLoggingMiddleware:
 
         return response
 
+    def _get_authenticated_user(self, user: Any) -> User | None:
+        """Return the authenticated User instance when available."""
+        return _get_authenticated_user(user)
+
     def _get_client_ip(self, request: HttpRequest) -> str:
         """
         Get client IP address from request.
@@ -542,7 +645,7 @@ class HTTPAccessLoggingMiddleware:
 
         # Log admin endpoint access
         if path.startswith("/api/admin/"):
-            log_user = _get_authenticated_user(getattr(request, "user", None))
+            log_user = self._get_authenticated_user(getattr(request, "user", None))
             is_authenticated = log_user is not None
             is_staff = bool(log_user and log_user.is_staff)
 
