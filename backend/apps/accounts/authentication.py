@@ -6,14 +6,10 @@ This module provides JWT token authentication for API endpoints.
 
 from typing import Any, Optional, Tuple
 
-from django.contrib.auth import get_user_model
-
 from rest_framework import authentication, exceptions
 from rest_framework.request import Request
 
-from .jwt_utils import get_user_from_token
-
-User = get_user_model()
+from apps.accounts.services.jwt import JWTService
 
 
 class JWTAuthentication(authentication.BaseAuthentication):
@@ -63,7 +59,7 @@ class JWTAuthentication(authentication.BaseAuthentication):
         Raises:
             AuthenticationFailed: If token is invalid or expired
         """
-        user = get_user_from_token(token)
+        user = JWTService().get_user_from_token(token)
         if user is None:
             raise exceptions.AuthenticationFailed("Invalid or expired token.")
         if not user.is_active:

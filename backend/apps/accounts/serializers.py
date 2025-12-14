@@ -8,20 +8,15 @@ This module contains serializers for:
 """
 
 import re
-from typing import TYPE_CHECKING, Any, Dict
+from typing import Any, Dict
 
-from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from rest_framework import serializers
 
-if TYPE_CHECKING:
-    from apps.accounts.models import User as UserType
-else:
-    UserType = get_user_model()
-
-User = get_user_model()
+from .models import User
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -170,7 +165,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
         return attrs
 
-    def create(self, validated_data: Dict[str, Any]) -> "UserType":
+    def create(self, validated_data: Dict[str, Any]) -> "User":
         """
         Create a new user with hashed password.
 
@@ -368,73 +363,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "email_verified",
         ]
         read_only_fields = ["id", "email", "email_verified"]
-
-
-class TimezoneAwareDateTimeField(serializers.DateTimeField):
-    """
-    Custom DateTimeField that converts timestamps to user's timezone.
-
-    This field automatically converts datetime values to the user's preferred
-    timezone when serializing (output) and converts from user's timezone to UTC
-    when deserializing (input).
-    """
-
-    def to_representation(self, value: Any) -> Any:
-        """
-        Convert datetime to user's timezone for output.
-
-        Args:
-            value: Datetime value to convert
-
-        Returns:
-            ISO 8601 formatted datetime string in user's timezone
-        """
-        from apps.core.timezone_utils import (  # pylint: disable=import-outside-toplevel
-            convert_to_user_timezone,
-        )
-
-        if value is None:
-            return None
-
-        # Get user from context
-        request = self.context.get("request")
-        user_timezone = None
-
-        if request and hasattr(request, "user") and request.user.is_authenticated:
-            user_timezone = request.user.timezone
-
-        # Convert to user's timezone (defaults to UTC if not specified)
-        converted_value = convert_to_user_timezone(value, user_timezone)
-
-        # Use parent's to_representation to format as ISO 8601
-        return super().to_representation(converted_value)
-
-    def to_internal_value(self, value: Any) -> Any:
-        """
-        Convert datetime from user's timezone to UTC for storage.
-
-        Args:
-            value: Datetime value to convert
-
-        Returns:
-            Datetime in UTC
-        """
-        from apps.core.timezone_utils import (  # pylint: disable=import-outside-toplevel
-            convert_from_user_timezone,
-        )
-
-        # Use parent's to_internal_value to parse the datetime
-        dt = super().to_internal_value(value)
-
-        # Get user from context
-        request = self.context.get("request")
-        user_timezone = None
-
-        if request and hasattr(request, "user") and request.user.is_authenticated:
-            user_timezone = request.user.timezone
-
-        # Convert from user's timezone to UTC
-        return convert_from_user_timezone(dt, user_timezone)
 
 
 class WhitelistedEmailSerializer(serializers.ModelSerializer):

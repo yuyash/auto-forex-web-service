@@ -5,7 +5,6 @@ from logging import getLogger
 from typing import Any, Callable, Dict, Optional, Tuple, cast
 from urllib.parse import parse_qs
 
-from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest, HttpResponse
@@ -15,11 +14,10 @@ from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
 
 from .models import BlockedIP, User, UserSession
-from .jwt_utils import get_user_from_token
-from .security_logger import SecurityEventLogger
+from .services.jwt import JWTService
+from .services.events import SecurityEventService
 
 logger = getLogger(__name__)
-UserModel = get_user_model()
 
 
 def _get_authenticated_user(user: Any) -> User | None:
@@ -143,7 +141,8 @@ class SecurityMonitoringMiddleware:
             get_response: Next middleware or view in the chain
         """
         self.get_response = get_response
-        self.security_logger = SecurityEventLogger()
+        self.security_events = SecurityEventService()
+        self.security_logger = self.security_events
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         """
@@ -161,7 +160,7 @@ class SecurityMonitoringMiddleware:
         # Check if IP is blocked before processing
         if self._is_blocked_ip(ip_address):
             # Log blocked IP attempt
-            self.security_logger.log_security_event(
+            self.security_events.log_security_event(
                 event_type="blocked_ip_attempt",
                 description=f"Request from blocked IP: {ip_address}",
                 severity="warning",
@@ -250,7 +249,7 @@ class SecurityMonitoringMiddleware:
         if path == "/api/auth/register" and method == "POST":
             if status_code == 201:
                 # Successful registration
-                self.security_logger.log_security_event(
+                self.security_events.log_security_event(
                     event_type="user_registration",
                     description=f"New user registered from {ip_address}",
                     severity="info",
@@ -262,7 +261,7 @@ class SecurityMonitoringMiddleware:
                 )
             elif status_code == 503:
                 # Registration disabled
-                self.security_logger.log_security_event(
+                self.security_events.log_security_event(
                     event_type="registration_blocked",
                     description=(f"Registration attempt blocked " f"(disabled) from {ip_address}"),
                     severity="warning",
@@ -274,7 +273,7 @@ class SecurityMonitoringMiddleware:
                 )
             else:
                 # Failed registration
-                self.security_logger.log_security_event(
+                self.security_events.log_security_event(
                     event_type="registration_failed",
                     description=(f"Failed registration attempt from {ip_address}"),
                     severity="warning",
@@ -291,7 +290,7 @@ class SecurityMonitoringMiddleware:
             if status_code == 200 and auth_user:
                 # Successful login - get user from request
                 user_email = auth_user.email
-                self.security_logger.log_security_event(
+                self.security_events.log_security_event(
                     event_type="login_success",
                     description=(f"User {user_email} logged in from {ip_address}"),
                     severity="info",
@@ -311,7 +310,7 @@ class SecurityMonitoringMiddleware:
                 )
             elif status_code == 503:
                 # Login disabled
-                self.security_logger.log_security_event(
+                self.security_events.log_security_event(
                     event_type="login_blocked",
                     description=(f"Login attempt blocked (disabled) from {ip_address}"),
                     severity="warning",
@@ -323,7 +322,7 @@ class SecurityMonitoringMiddleware:
                 )
             elif status_code == 429:
                 # Too many attempts
-                self.security_logger.log_security_event(
+                self.security_events.log_security_event(
                     event_type="login_rate_limited",
                     description=(f"Login rate limited for IP {ip_address} " f"(too many attempts)"),
                     severity="warning",
@@ -336,7 +335,7 @@ class SecurityMonitoringMiddleware:
                 )
             elif status_code == 403:
                 # Account locked
-                self.security_logger.log_security_event(
+                self.security_events.log_security_event(
                     event_type="login_account_locked",
                     description=(f"Login attempt for locked account from {ip_address}"),
                     severity="error",
@@ -348,7 +347,7 @@ class SecurityMonitoringMiddleware:
                 )
             elif status_code == 401:
                 # Failed login
-                self.security_logger.log_security_event(
+                self.security_events.log_security_event(
                     event_type="login_failed",
                     description=f"Failed login attempt from {ip_address}",
                     severity="warning",
@@ -365,7 +364,7 @@ class SecurityMonitoringMiddleware:
             auth_user = self._get_authenticated_user(getattr(request, "user", None))
             if not auth_user:
                 return
-            self.security_logger.log_security_event(
+            self.security_events.log_security_event(
                 event_type="logout_success",
                 description=(f"User {auth_user.email} logged out from {ip_address}"),
                 severity="info",
@@ -466,7 +465,8 @@ class HTTPAccessLoggingMiddleware:
             get_response: Next middleware or view in the chain
         """
         self.get_response = get_response
-        self.security_logger = SecurityEventLogger()
+        self.security_events = SecurityEventService()
+        self.security_logger = self.security_events
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         """
@@ -571,7 +571,7 @@ class HTTPAccessLoggingMiddleware:
         # Check for SQL injection
         for pattern in sql_patterns:
             if pattern.lower() in path.lower() or pattern.lower() in query_string.lower():
-                self.security_logger.log_security_event(
+                self.security_events.log_security_event(
                     event_type="sql_injection_attempt",
                     description=(f"Potential SQL injection attempt from {ip_address}"),
                     severity="critical",
@@ -598,7 +598,7 @@ class HTTPAccessLoggingMiddleware:
         # Check for path traversal
         for pattern in path_traversal_patterns:
             if pattern in path or pattern in query_string:
-                self.security_logger.log_security_event(
+                self.security_events.log_security_event(
                     event_type="path_traversal_attempt",
                     description=(f"Potential path traversal attempt from {ip_address}"),
                     severity="critical",
@@ -649,7 +649,7 @@ class HTTPAccessLoggingMiddleware:
             is_authenticated = log_user is not None
             is_staff = bool(log_user and log_user.is_staff)
 
-            self.security_logger.log_security_event(
+            self.security_events.log_security_event(
                 event_type="admin_endpoint_access",
                 description=(f"Admin endpoint access: {method} {path} " f"from {ip_address}"),
                 severity="info" if is_staff else "warning",
@@ -753,7 +753,7 @@ class JWTAuthMiddleware(BaseMiddleware):
         Returns:
             User instance if token is valid, None otherwise
         """
-        return get_user_from_token(token)
+        return JWTService().get_user_from_token(token)
 
 
 def JWTAuthMiddlewareStack(inner: Any) -> Any:  # pylint: disable=invalid-name

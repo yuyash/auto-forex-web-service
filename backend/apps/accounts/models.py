@@ -392,6 +392,83 @@ class UserSession(models.Model):
         return timezone.now() > expiry_time
 
 
+class UserNotification(models.Model):
+    """Notification targeted to a specific user."""
+
+    SEVERITY_CHOICES = [
+        ("info", "Info"),
+        ("warning", "Warning"),
+        ("error", "Error"),
+        ("critical", "Critical"),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+        help_text="User who should receive this notification",
+    )
+    timestamp = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        help_text="Timestamp when the notification was created",
+    )
+    notification_type = models.CharField(
+        max_length=50,
+        db_index=True,
+        help_text="Type of notification (e.g., 'trade_closed', 'account_alert')",
+    )
+    title = models.CharField(
+        max_length=200,
+        help_text="Notification title",
+    )
+    message = models.TextField(
+        help_text="Notification message",
+    )
+    severity = models.CharField(
+        max_length=20,
+        choices=SEVERITY_CHOICES,
+        help_text="Notification severity level",
+    )
+    is_read = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Whether the notification has been read",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Optional additional notification payload",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp when the notification was created",
+    )
+
+    class Meta:
+        db_table = "user_notifications"
+        verbose_name = "User Notification"
+        verbose_name_plural = "User Notifications"
+        ordering = ["-timestamp"]
+        indexes = [
+            models.Index(fields=["user", "timestamp"]),
+            models.Index(fields=["user", "is_read", "timestamp"]),
+            models.Index(fields=["notification_type", "timestamp"]),
+        ]
+
+    def __str__(self) -> str:
+        status = "Read" if self.is_read else "Unread"
+        return f"{self.user_id}: [{self.severity.upper()}] {self.title} - {status}"
+
+    def mark_as_read(self) -> None:
+        self.is_read = True
+        self.save(update_fields=["is_read"])
+
+    def mark_as_unread(self) -> None:
+        self.is_read = False
+        self.save(update_fields=["is_read"])
+
+
 class BlockedIP(models.Model):
     """
     IP address blocking for security.
@@ -514,3 +591,82 @@ class PublicAccountSettings(models.Model):
         """Override save to ensure only one instance exists."""
         self.pk = 1
         super().save(*args, **kwargs)
+
+
+class AccountSecurityEvent(models.Model):
+    """Persisted security/auth events owned by the accounts app."""
+
+    SEVERITY_CHOICES = [
+        ("debug", "Debug"),
+        ("info", "Info"),
+        ("warning", "Warning"),
+        ("error", "Error"),
+        ("critical", "Critical"),
+    ]
+
+    event_type = models.CharField(
+        max_length=100,
+        db_index=True,
+        help_text="Type of event (e.g., login_success, login_failed, logout)",
+    )
+    category = models.CharField(
+        max_length=50,
+        default="security",
+        db_index=True,
+        help_text="Event category; defaults to 'security' for auth/security events",
+    )
+    severity = models.CharField(
+        max_length=20,
+        choices=SEVERITY_CHOICES,
+        default="info",
+        db_index=True,
+        help_text="Severity level",
+    )
+    description = models.TextField(
+        help_text="Human-readable event description",
+    )
+    user = models.ForeignKey(
+        "User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="security_events",
+        help_text="Associated user (if known)",
+    )
+    ip_address = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        help_text="IP address associated with the event",
+    )
+    user_agent = models.TextField(
+        null=True,
+        blank=True,
+        help_text="User agent string (if available)",
+    )
+    details = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Additional structured event details",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        help_text="Timestamp when the event was created",
+    )
+
+    class Meta:
+        db_table = "account_security_events"
+        verbose_name = "Account Security Event"
+        verbose_name_plural = "Account Security Events"
+        indexes = [
+            models.Index(fields=["event_type", "created_at"]),
+            models.Index(fields=["category", "created_at"]),
+            models.Index(fields=["severity", "created_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        base = f"{self.event_type} ({self.severity})"
+        if self.user_id:
+            return f"{base} user={self.user_id}"
+        return base

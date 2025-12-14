@@ -13,6 +13,9 @@ from .views import (
     TokenRefreshView,
     UserLoginView,
     UserLogoutView,
+    UserNotificationListView,
+    UserNotificationMarkAllReadView,
+    UserNotificationMarkReadView,
     UserRegistrationView,
     UserSettingsView,
     WhitelistedEmailDetailView,
@@ -43,10 +46,20 @@ urlpatterns = [
         name="whitelist_email_detail",
     ),
     path("settings/", UserSettingsView.as_view(), name="user_settings"),
-    # Account settings endpoints (moved from settings app)
     path(
         "settings/public",
         PublicAccountSettingsView.as_view(),
         name="public_account_settings",
+    ),
+    path("notifications", UserNotificationListView.as_view(), name="notifications"),
+    path(
+        "notifications/<int:notification_id>/read",
+        UserNotificationMarkReadView.as_view(),
+        name="notification_read",
+    ),
+    path(
+        "notifications/read-all",
+        UserNotificationMarkAllReadView.as_view(),
+        name="notifications_read_all",
     ),
 ]

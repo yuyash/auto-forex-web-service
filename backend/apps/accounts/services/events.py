@@ -1,44 +1,20 @@
-"""
-Security event signals for the accounts app.
+"""apps.accounts.services.events
 
-This module defines Django signals for security events that can be
-received by other apps (like the events app) for logging purposes.
+Accounts-owned security/auth events.
 
-This approach decouples the accounts app from the events app.
+Accounts must be self-contained: security/auth events are persisted to the
+database via the AccountSecurityEvent model.
 """
 
 from typing import Any
 
-import django.dispatch
-
-# Define security event signals
-security_event = django.dispatch.Signal()
-"""
-Signal sent when a security event occurs.
-
-Provides:
-    sender: The class sending the signal (SecurityEventLogger)
-    event_type: Type of security event (e.g., 'login_success', 'login_failed')
-    category: Always 'security' for security events
-    description: Human-readable event description
-    severity: Event severity (debug, info, warning, error, critical)
-    user: User associated with the event (optional)
-    ip_address: IP address associated with the event (optional)
-    user_agent: User agent string (optional)
-    details: Additional event details as dictionary (optional)
-"""
+from apps.accounts.models import AccountSecurityEvent
 
 
-class SecurityEventLogger:
-    """
-    Security event logger that sends signals instead of directly creating Event records.
+class SecurityEventService:
+    """Security event service that persists AccountSecurityEvent records."""
 
-    This decouples the accounts app from the events app by using Django signals.
-    The events app can register receivers to handle these signals and create
-    Event records as needed.
-    """
-
-    def _send_event(
+    def _write_event(
         self,
         event_type: str,
         description: str,
@@ -48,29 +24,25 @@ class SecurityEventLogger:
         user_agent: str | None = None,
         details: dict[str, Any] | None = None,
     ) -> None:
-        """
-        Send a security event signal.
+        """Persist a security event.
 
-        Args:
-            event_type: Type of security event
-            description: Human-readable event description
-            severity: Event severity (debug, info, warning, error, critical)
-            user: User associated with the event
-            ip_address: IP address associated with the event
-            user_agent: User agent string
-            details: Additional event details as dictionary
+        This method is intentionally side-effect-only and does not raise.
         """
-        security_event.send(
-            sender=self.__class__,
-            event_type=event_type,
-            category="security",
-            description=description,
-            severity=severity,
-            user=user,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            details=details or {},
-        )
+
+        try:
+            AccountSecurityEvent.objects.create(
+                event_type=event_type,
+                category="security",
+                severity=severity,
+                description=description,
+                user=user if getattr(user, "pk", None) else None,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                details=details or {},
+            )
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Never break request handling due to logging failures.
+            return
 
     def log_login_success(
         self,
@@ -80,7 +52,7 @@ class SecurityEventLogger:
         **kwargs: Any,
     ) -> None:
         """Log a successful login."""
-        self._send_event(
+        self._write_event(
             event_type="login_success",
             description=f"User '{user.username}' logged in successfully",
             severity="info",
@@ -104,7 +76,7 @@ class SecurityEventLogger:
             "reason": reason,
             **kwargs,
         }
-        self._send_event(
+        self._write_event(
             event_type="login_failed",
             description=f"Failed login attempt for '{username}': {reason}",
             severity="warning",
@@ -120,7 +92,7 @@ class SecurityEventLogger:
         **kwargs: Any,
     ) -> None:
         """Log a user logout."""
-        self._send_event(
+        self._write_event(
             event_type="logout",
             description=f"User '{user.username}' logged out",
             severity="info",
@@ -143,7 +115,7 @@ class SecurityEventLogger:
             **kwargs,
         }
         desc = f"Account '{username}' locked after {failed_attempts} failed login attempts"
-        self._send_event(
+        self._write_event(
             event_type="account_locked",
             description=desc,
             severity="error",
@@ -168,7 +140,7 @@ class SecurityEventLogger:
             f"IP address {ip_address} blocked for {duration_seconds}s "
             f"after {failed_attempts} failed attempts"
         )
-        self._send_event(
+        self._write_event(
             event_type="ip_blocked",
             description=desc,
             severity="warning",
@@ -189,7 +161,7 @@ class SecurityEventLogger:
             "email": email,
             **kwargs,
         }
-        self._send_event(
+        self._write_event(
             event_type="account_created",
             description=f"New account created: '{username}' ({email})",
             severity="info",
@@ -210,7 +182,7 @@ class SecurityEventLogger:
             "changed_parameters": changed_parameters,
             **kwargs,
         }
-        self._send_event(
+        self._write_event(
             event_type="config_changed",
             description=f"Configuration changed by '{user.username}': {config_type}",
             severity="info",
@@ -232,7 +204,7 @@ class SecurityEventLogger:
         }
         username = user.username if user else "anonymous"
         desc = f"Unauthorized access attempt by '{username}' to resource: {resource}"
-        self._send_event(
+        self._write_event(
             event_type="unauthorized_access_attempt",
             description=desc,
             severity="warning",
@@ -254,7 +226,7 @@ class SecurityEventLogger:
             "pattern_type": pattern_type,
             **kwargs,
         }
-        self._send_event(
+        self._write_event(
             event_type="suspicious_pattern",
             description=f"Suspicious pattern detected: {description}",
             severity="warning",
@@ -273,22 +245,8 @@ class SecurityEventLogger:
         user_agent: str | None = None,
         details: dict[str, Any] | None = None,
     ) -> None:
-        """
-        Log a generic security event.
-
-        This is a generic method for logging security events that don't fit
-        into the more specific methods above.
-
-        Args:
-            event_type: Type of security event
-            description: Human-readable event description
-            severity: Event severity (debug, info, warning, error, critical)
-            user: User associated with the event
-            ip_address: IP address associated with the event
-            user_agent: User agent string
-            details: Additional event details as dictionary
-        """
-        self._send_event(
+        """Log a generic security event."""
+        self._write_event(
             event_type=event_type,
             description=description,
             severity=severity,
