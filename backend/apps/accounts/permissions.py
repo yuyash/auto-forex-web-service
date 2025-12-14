@@ -5,7 +5,7 @@ This module provides permission classes for restricting access to admin-only
 endpoints.
 """
 
-from typing import Optional
+from typing import Optional, cast
 
 from rest_framework import permissions
 from rest_framework.request import Request
@@ -15,10 +15,19 @@ from apps.accounts.models import User
 
 
 def _get_request_user(request: Request) -> User | None:
-    """Return authenticated User instance when available."""
+    """Return authenticated user when available.
+
+    This is intentionally duck-typed (no `isinstance`) so unit tests can use
+    MagicMock user objects.
+    """
+
     user = getattr(request, "user", None)
-    if isinstance(user, User) and user.is_authenticated:
-        return user
+    if user is None:
+        return None
+
+    if bool(getattr(user, "is_authenticated", False)):
+        return cast(User, user)
+
     return None
 
 

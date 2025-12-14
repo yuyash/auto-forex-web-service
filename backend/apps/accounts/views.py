@@ -10,6 +10,7 @@ This module contains views for:
 import logging
 from typing import TYPE_CHECKING
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 
 from rest_framework import status
@@ -18,33 +19,23 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-# Import email notification signals - these may be handled by notification app if enabled
-try:
-    from apps.notification.signals import email_verification_requested, email_welcome_requested
-except ImportError:
-    # Notification app not installed - create dummy signals that do nothing
-    import django.dispatch
-
-    email_verification_requested = django.dispatch.Signal()
-    email_welcome_requested = django.dispatch.Signal()
-
-from apps.accounts.models import PublicAccountSettings
-
-from .jwt_utils import generate_jwt_token, get_user_from_token, refresh_jwt_token
-from .models import UserSession
-from .permissions import IsAdminUser
-from .rate_limiter import RateLimiter
-from .security_logger import SecurityEventLogger
-from .serializers import (
+from apps.accounts.models import PublicAccountSettings, UserSession, UserSettings, WhitelistedEmail
+from apps.accounts.jwt_utils import generate_jwt_token, get_user_from_token, refresh_jwt_token
+from apps.accounts.permissions import IsAdminUser
+from apps.accounts.middleware import RateLimiter
+from apps.accounts.security_logger import SecurityEventLogger
+from apps.accounts.serializers import (
+    PublicAccountSettingsSerializer,
     UserLoginSerializer,
     UserProfileSerializer,
     UserRegistrationSerializer,
     UserSettingsSerializer,
+    WhitelistedEmailSerializer,
 )
+from apps.core.notification_signals import email_verification_requested, email_welcome_requested
 
 if TYPE_CHECKING:
     from apps.accounts.models import User as UserType
-    from apps.accounts.models import WhitelistedEmail
 
     User = UserType
 else:
@@ -77,8 +68,6 @@ class UserRegistrationView(APIView):
         Returns:
             Full verification URL
         """
-        from django.conf import settings
-
         # Use FRONTEND_URL from settings if available, otherwise build from request
         if hasattr(settings, "FRONTEND_URL") and settings.FRONTEND_URL:
             base_url = settings.FRONTEND_URL
@@ -281,8 +270,6 @@ class ResendVerificationEmailView(APIView):
         Returns:
             Full verification URL
         """
-        from django.conf import settings
-
         # Use FRONTEND_URL from settings if available, otherwise build from request
         if hasattr(settings, "FRONTEND_URL") and settings.FRONTEND_URL:
             base_url = settings.FRONTEND_URL
@@ -349,7 +336,7 @@ class ResendVerificationEmailView(APIView):
                 "Verification email resent to %s",
                 user.email,
                 extra={
-                    "user_id": user.id,
+                    "user_id": user.pk,
                     "email": user.email,
                 },
             )
@@ -461,7 +448,7 @@ class UserLoginView(APIView):
                         extra={
                             "email": email,
                             "ip_address": ip_address,
-                            "user_id": user_check.id,
+                            "user_id": user_check.pk,
                         },
                     )
                     return Response(
@@ -534,7 +521,7 @@ class UserLoginView(APIView):
                             user.email,
                             user.failed_login_attempts,
                             extra={
-                                "user_id": user.id,
+                                "user_id": user.pk,
                                 "email": user.email,
                                 "failed_attempts": user.failed_login_attempts,
                             },
@@ -830,8 +817,6 @@ class UserSettingsView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        from apps.accounts.models import UserSettings  # pylint: disable=import-outside-toplevel
-
         # Get or create user settings
         user_settings, _ = UserSettings.objects.get_or_create(user=request.user)
 
@@ -873,8 +858,6 @@ class UserSettingsView(APIView):
                 {"error": "Authentication required."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
-
-        from apps.accounts.models import UserSettings  # pylint: disable=import-outside-toplevel
 
         # Get or create user settings
         user_settings, _ = UserSettings.objects.get_or_create(user=request.user)
@@ -959,11 +942,6 @@ class WhitelistedEmailListCreateView(APIView):
         Returns:
             Response with list of whitelisted emails
         """
-        from apps.accounts.models import WhitelistedEmail  # pylint: disable=import-outside-toplevel
-        from apps.accounts.serializers import (  # pylint: disable=import-outside-toplevel
-            WhitelistedEmailSerializer,
-        )
-
         # Get query parameters for filtering
         is_active = request.query_params.get("is_active")
 
@@ -1000,10 +978,6 @@ class WhitelistedEmailListCreateView(APIView):
         Returns:
             Response with created entry or validation errors
         """
-        from apps.accounts.serializers import (  # pylint: disable=import-outside-toplevel
-            WhitelistedEmailSerializer,
-        )
-
         serializer = WhitelistedEmailSerializer(data=request.data)
 
         if serializer.is_valid():
@@ -1053,8 +1027,6 @@ class WhitelistedEmailDetailView(APIView):
         Returns:
             WhitelistedEmail instance or None if not found
         """
-        from apps.accounts.models import WhitelistedEmail  # pylint: disable=import-outside-toplevel
-
         try:
             return WhitelistedEmail.objects.get(id=whitelist_id)
         except WhitelistedEmail.DoesNotExist:
@@ -1071,10 +1043,6 @@ class WhitelistedEmailDetailView(APIView):
         Returns:
             Response with whitelisted email details or error
         """
-        from apps.accounts.serializers import (  # pylint: disable=import-outside-toplevel
-            WhitelistedEmailSerializer,
-        )
-
         whitelist_entry = self.get_object(whitelist_id)
         if whitelist_entry is None:
             return Response(
@@ -1109,10 +1077,6 @@ class WhitelistedEmailDetailView(APIView):
         Returns:
             Response with updated entry or validation errors
         """
-        from apps.accounts.serializers import (  # pylint: disable=import-outside-toplevel
-            WhitelistedEmailSerializer,
-        )
-
         whitelist_entry = self.get_object(whitelist_id)
         if whitelist_entry is None:
             return Response(
@@ -1202,10 +1166,6 @@ class PublicAccountSettingsView(APIView):
         Returns:
             Response with registration_enabled and login_enabled flags
         """
-        from apps.accounts.serializers import (  # pylint: disable=import-outside-toplevel
-            PublicAccountSettingsSerializer,
-        )
-
         account_settings = PublicAccountSettings.get_settings()
         serializer = PublicAccountSettingsSerializer(account_settings)
 

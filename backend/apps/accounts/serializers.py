@@ -389,7 +389,7 @@ class TimezoneAwareDateTimeField(serializers.DateTimeField):
         Returns:
             ISO 8601 formatted datetime string in user's timezone
         """
-        from apps.timezone.timezone_utils import (  # pylint: disable=import-outside-toplevel
+        from apps.core.timezone_utils import (  # pylint: disable=import-outside-toplevel
             convert_to_user_timezone,
         )
 
@@ -419,7 +419,7 @@ class TimezoneAwareDateTimeField(serializers.DateTimeField):
         Returns:
             Datetime in UTC
         """
-        from apps.timezone.timezone_utils import (  # pylint: disable=import-outside-toplevel
+        from apps.core.timezone_utils import (  # pylint: disable=import-outside-toplevel
             convert_from_user_timezone,
         )
 

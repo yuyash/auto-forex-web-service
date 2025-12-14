@@ -5,7 +5,14 @@ Admin interface for accounts app.
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import BlockedIP, User, UserSession, UserSettings
+from .models import (
+    BlockedIP,
+    PublicAccountSettings,
+    User,
+    UserSession,
+    UserSettings,
+    WhitelistedEmail,
+)
 
 
 @admin.register(User)
@@ -103,3 +110,58 @@ class BlockedIPAdmin(admin.ModelAdmin):
     search_fields = ["ip_address", "reason"]
     readonly_fields = ["blocked_at"]
     ordering = ["-blocked_at"]
+
+
+@admin.register(WhitelistedEmail)
+class WhitelistedEmailAdmin(admin.ModelAdmin):
+    """Admin interface for WhitelistedEmail model."""
+
+    list_display = [
+        "email_pattern",
+        "is_active",
+        "description",
+        "created_by",
+        "created_at",
+        "updated_at",
+    ]
+    list_filter = ["is_active", "created_at", "updated_at"]
+    search_fields = ["email_pattern", "description", "created_by__email"]
+    readonly_fields = ["created_at", "updated_at"]
+    ordering = ["email_pattern"]
+
+
+@admin.register(PublicAccountSettings)
+class PublicAccountSettingsAdmin(admin.ModelAdmin):
+    """Admin interface for PublicAccountSettings singleton model."""
+
+    list_display = [
+        "registration_enabled",
+        "login_enabled",
+        "email_whitelist_enabled",
+        "updated_at",
+    ]
+    readonly_fields = ["updated_at"]
+    fieldsets = (
+        (
+            "Authentication",
+            {
+                "fields": (
+                    "registration_enabled",
+                    "login_enabled",
+                    "email_whitelist_enabled",
+                )
+            },
+        ),
+        (
+            "Timestamps",
+            {"fields": ("updated_at",)},
+        ),
+    )
+
+    def has_add_permission(self, request):  # type: ignore[no-untyped-def]
+        """Allow add only if the singleton doesn't exist yet."""
+        return not PublicAccountSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):  # type: ignore[no-untyped-def]
+        """Prevent deleting the singleton settings."""
+        return False
