@@ -1,13 +1,4 @@
-"""
-Unit tests for JWT utilities module.
-
-Tests cover:
-- JWT token generation
-- JWT token decoding
-- Token validation and expiry
-- User retrieval from token
-- Token refresh functionality
-"""
+"""Unit tests for apps.accounts.services.jwt (JWTService)."""
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
@@ -21,10 +12,9 @@ from apps.accounts.services.jwt import JWTService
 
 
 class TestGenerateJwtToken:
-    """Test cases for generate_jwt_token function."""
+    """Test cases for JWTService.generate_token."""
 
     def test_generate_token_returns_string(self) -> None:
-        """Test that generate_jwt_token returns a string."""
         mock_user = MagicMock()
         mock_user.id = 1
         mock_user.email = "test@example.com"
@@ -37,7 +27,6 @@ class TestGenerateJwtToken:
         assert len(token) > 0
 
     def test_generate_token_contains_user_data(self) -> None:
-        """Test that generated token contains correct user data."""
         mock_user = MagicMock()
         mock_user.id = 123
         mock_user.email = "user@example.com"
@@ -57,7 +46,6 @@ class TestGenerateJwtToken:
         assert payload["is_staff"] is True
 
     def test_generate_token_has_expiration(self) -> None:
-        """Test that generated token has correct expiration."""
         mock_user = MagicMock()
         mock_user.id = 1
         mock_user.email = "test@example.com"
@@ -74,7 +62,6 @@ class TestGenerateJwtToken:
             algorithms=[settings.JWT_ALGORITHM],
         )
 
-        # Check that exp is within expected range
         expected_exp_min = int(
             (before + timedelta(seconds=settings.JWT_EXPIRATION_DELTA)).timestamp()
         )
@@ -85,7 +72,6 @@ class TestGenerateJwtToken:
         assert expected_exp_min <= payload["exp"] <= expected_exp_max + 1
 
     def test_generate_token_has_issued_at(self) -> None:
-        """Test that generated token has iat (issued at) claim."""
         mock_user = MagicMock()
         mock_user.id = 1
         mock_user.email = "test@example.com"
@@ -107,10 +93,9 @@ class TestGenerateJwtToken:
 
 
 class TestDecodeJwtToken:
-    """Test cases for decode_jwt_token function."""
+    """Test cases for JWTService.decode_token."""
 
     def test_decode_valid_token(self) -> None:
-        """Test decoding a valid token."""
         mock_user = MagicMock()
         mock_user.id = 1
         mock_user.email = "test@example.com"
@@ -125,8 +110,6 @@ class TestDecodeJwtToken:
         assert payload["email"] == "test@example.com"
 
     def test_decode_expired_token_returns_none(self) -> None:
-        """Test that expired tokens return None."""
-        # Create an expired token
         now = datetime.now(timezone.utc)
         expired_time = now - timedelta(hours=1)
 
@@ -145,12 +128,10 @@ class TestDecodeJwtToken:
         assert result is None
 
     def test_decode_invalid_token_returns_none(self) -> None:
-        """Test that invalid tokens return None."""
         result = JWTService().decode_token("invalid.token.string")
         assert result is None
 
     def test_decode_tampered_token_returns_none(self) -> None:
-        """Test that tampered tokens return None."""
         mock_user = MagicMock()
         mock_user.id = 1
         mock_user.email = "test@example.com"
@@ -158,14 +139,12 @@ class TestDecodeJwtToken:
         mock_user.is_staff = False
 
         token = JWTService().generate_token(mock_user)
-        # Tamper with the token
         tampered_token = token[:-5] + "XXXXX"
 
         result = JWTService().decode_token(tampered_token)
         assert result is None
 
     def test_decode_token_wrong_secret_returns_none(self) -> None:
-        """Test that tokens signed with wrong secret return None."""
         payload = {
             "user_id": 1,
             "email": "test@example.com",
@@ -181,17 +160,15 @@ class TestDecodeJwtToken:
         assert result is None
 
     def test_decode_empty_token_returns_none(self) -> None:
-        """Test that empty token returns None."""
         result = JWTService().decode_token("")
         assert result is None
 
 
 @pytest.mark.django_db
 class TestGetUserFromToken:
-    """Test cases for get_user_from_token function."""
+    """Test cases for JWTService.get_user_from_token."""
 
     def test_get_user_from_valid_token(self) -> None:
-        """Test getting user from a valid token."""
         from apps.accounts.models import User
 
         user = User.objects.create_user(
@@ -208,12 +185,10 @@ class TestGetUserFromToken:
         assert retrieved_user.email == user.email
 
     def test_get_user_from_invalid_token_returns_none(self) -> None:
-        """Test that invalid token returns None."""
         result = JWTService().get_user_from_token("invalid.token.here")
         assert result is None
 
     def test_get_user_from_token_nonexistent_user(self) -> None:
-        """Test that token for deleted user returns None."""
         from apps.accounts.models import User
 
         user = User.objects.create_user(
@@ -223,15 +198,12 @@ class TestGetUserFromToken:
         )
 
         token = JWTService().generate_token(user)
-
-        # Delete the user
         user.delete()
 
         result = JWTService().get_user_from_token(token)
         assert result is None
 
     def test_get_user_from_expired_token_returns_none(self) -> None:
-        """Test that expired token returns None."""
         from apps.accounts.models import User
 
         user = User.objects.create_user(
@@ -240,7 +212,6 @@ class TestGetUserFromToken:
             password="testpass123",
         )
 
-        # Create an expired token
         now = datetime.now(timezone.utc)
         expired_time = now - timedelta(hours=1)
 
@@ -257,97 +228,3 @@ class TestGetUserFromToken:
         result = JWTService().get_user_from_token(token)
 
         assert result is None
-
-
-@pytest.mark.django_db
-class TestRefreshJwtToken:
-    """Test cases for refresh_jwt_token function."""
-
-    def test_refresh_valid_token(self) -> None:
-        """Test refreshing a valid token returns a valid token."""
-        from apps.accounts.models import User
-
-        user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123",
-        )
-
-        original_token = JWTService().generate_token(user)
-        new_token = JWTService().refresh_token(original_token)
-
-        assert new_token is not None
-        # Verify the new token is valid by decoding it
-        decoded = JWTService().decode_token(new_token)
-        assert decoded is not None
-        assert decoded["user_id"] == user.id
-
-        # Verify new token is valid
-        payload = JWTService().decode_token(new_token)
-        assert payload is not None
-        assert payload["user_id"] == user.id
-
-    def test_refresh_invalid_token_returns_none(self) -> None:
-        """Test that invalid token returns None."""
-        result = JWTService().refresh_token("invalid.token.here")
-        assert result is None
-
-    def test_refresh_token_inactive_user_returns_none(self) -> None:
-        """Test that inactive user's token cannot be refreshed."""
-        from apps.accounts.models import User
-
-        user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123",
-        )
-        user.is_active = False
-        user.save()
-
-        token = JWTService().generate_token(user)
-        result = JWTService().refresh_token(token)
-
-        assert result is None
-
-    def test_refresh_token_locked_user_returns_none(self) -> None:
-        """Test that locked user's token cannot be refreshed."""
-        from apps.accounts.models import User
-
-        user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123",
-        )
-        user.is_locked = True
-        user.save()
-
-        token = JWTService().generate_token(user)
-        result = JWTService().refresh_token(token)
-
-        assert result is None
-
-    def test_refresh_token_generates_new_expiration(self) -> None:
-        """Test that refreshed token has new expiration time."""
-        from apps.accounts.models import User
-
-        user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123",
-        )
-
-        original_token = JWTService().generate_token(user)
-        original_payload = JWTService().decode_token(original_token)
-
-        # Small delay to ensure different timestamps
-        import time
-
-        time.sleep(0.1)
-
-        new_token = JWTService().refresh_token(original_token)
-        new_payload = JWTService().decode_token(new_token)
-
-        assert new_payload is not None
-        assert original_payload is not None
-        # New token should have equal or later expiration
-        assert new_payload["exp"] >= original_payload["exp"]

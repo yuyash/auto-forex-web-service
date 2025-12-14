@@ -8,10 +8,8 @@ This module contains views for:
 """
 
 import logging
-from typing import TYPE_CHECKING
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -19,11 +17,19 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.models import PublicAccountSettings, UserSession, UserSettings, WhitelistedEmail
-from apps.accounts.jwt_utils import generate_jwt_token, get_user_from_token, refresh_jwt_token
+from apps.accounts.models import (
+    PublicAccountSettings,
+    User,
+    UserNotification,
+    UserSession,
+    UserSettings,
+    WhitelistedEmail,
+)
+from apps.accounts.services.jwt import JWTService
 from apps.accounts.permissions import IsAdminUser
 from apps.accounts.middleware import RateLimiter
-from apps.accounts.security_logger import SecurityEventLogger
+from apps.accounts.services.events import SecurityEventService
+from apps.accounts.services.email import AccountEmailService
 from apps.accounts.serializers import (
     PublicAccountSettingsSerializer,
     UserLoginSerializer,
@@ -32,17 +38,9 @@ from apps.accounts.serializers import (
     UserSettingsSerializer,
     WhitelistedEmailSerializer,
 )
-from apps.core.notification_signals import email_verification_requested, email_welcome_requested
-
-if TYPE_CHECKING:
-    from apps.accounts.models import User as UserType
-
-    User = UserType
-else:
-    User = get_user_model()
 
 logger = logging.getLogger(__name__)
-security_logger = SecurityEventLogger()
+security_events = SecurityEventService()
 
 
 class UserRegistrationView(APIView):
@@ -109,7 +107,7 @@ class UserRegistrationView(APIView):
             user = serializer.save()
 
             # Log account creation
-            security_logger.log_account_created(
+            security_events.log_account_created(
                 username=user.username,
                 email=user.email,
                 ip_address=self.get_client_ip(request),
@@ -119,13 +117,12 @@ class UserRegistrationView(APIView):
             token = user.generate_verification_token()
             verification_url = self.build_verification_url(request, token)
 
-            # Send verification email via signal
-            results = email_verification_requested.send(
+            email_service = AccountEmailService()
+            email_sent = email_service.send_verification_email(
+                user,
+                verification_url,
                 sender=self.__class__,
-                user=user,
-                verification_url=verification_url,
             )
-            email_sent = any(result for _, result in results)
 
             if not email_sent:
                 logger.warning(
@@ -215,10 +212,9 @@ class EmailVerificationView(APIView):
 
         # Verify email
         if user.verify_email(token):
-            # Send welcome email via signal
-            email_welcome_requested.send(
+            AccountEmailService().send_welcome_message(
+                user,
                 sender=self.__class__,
-                user=user,
             )
 
             logger.info(
@@ -324,12 +320,13 @@ class ResendVerificationEmailView(APIView):
         # Generate new token and send email via signal
         token = user.generate_verification_token()
         verification_url = self.build_verification_url(request, token)
-        results = email_verification_requested.send(
+
+        email_service = AccountEmailService()
+        email_sent = email_service.send_verification_email(
+            user,
+            verification_url,
             sender=self.__class__,
-            user=user,
-            verification_url=verification_url,
         )
-        email_sent = any(result for _, result in results)
 
         if email_sent:
             logger.info(
@@ -500,7 +497,7 @@ class UserLoginView(APIView):
             )
 
             # Log security event
-            security_logger.log_login_failed(
+            security_events.log_login_failed(
                 username=email,
                 ip_address=ip_address,
                 reason="Invalid credentials",
@@ -528,7 +525,7 @@ class UserLoginView(APIView):
                         )
 
                         # Log account locked event
-                        security_logger.log_account_locked(
+                        security_events.log_account_locked(
                             username=user.username,
                             ip_address=ip_address,
                             failed_attempts=user.failed_login_attempts,
@@ -550,7 +547,7 @@ class UserLoginView(APIView):
                     )
 
                 # Log IP blocked event
-                security_logger.log_ip_blocked(
+                security_events.log_ip_blocked(
                     ip_address=ip_address,
                     failed_attempts=ip_attempts,
                     duration_seconds=RateLimiter.LOCKOUT_DURATION_MINUTES * 60,
@@ -570,7 +567,7 @@ class UserLoginView(APIView):
         RateLimiter.reset_failed_attempts(ip_address)
 
         # Generate JWT token
-        token = generate_jwt_token(user)
+        token = JWTService().generate_token(user)
 
         # Log successful login
         logger.info(
@@ -586,7 +583,7 @@ class UserLoginView(APIView):
         )
 
         # Log security event
-        security_logger.log_login_success(
+        security_events.log_login_success(
             user=user,
             ip_address=ip_address,
             user_agent=request.META.get("HTTP_USER_AGENT"),
@@ -663,7 +660,7 @@ class UserLogoutView(APIView):
             )
 
         # Get user from token
-        user = get_user_from_token(token)
+        user = JWTService().get_user_from_token(token)
         if not user:
             return Response(
                 {"error": "Invalid or expired token."},
@@ -697,7 +694,7 @@ class UserLogoutView(APIView):
         )
 
         # Log security event
-        security_logger.log_logout(
+        security_events.log_logout(
             user=user,
             ip_address=ip_address,
         )
@@ -748,7 +745,7 @@ class TokenRefreshView(APIView):
             )
 
         # Refresh token
-        new_token = refresh_jwt_token(token)
+        new_token = JWTService().refresh_token(token)
         if not new_token:
             return Response(
                 {"error": "Invalid or expired token."},
@@ -756,7 +753,7 @@ class TokenRefreshView(APIView):
             )
 
         # Get user info for response
-        user = get_user_from_token(new_token)
+        user = JWTService().get_user_from_token(new_token)
         if not user:
             return Response(
                 {"error": "Failed to retrieve user information."},
@@ -1170,3 +1167,125 @@ class PublicAccountSettingsView(APIView):
         serializer = PublicAccountSettingsSerializer(account_settings)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class UserNotificationListView(APIView):
+    """List notifications for the authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        try:
+            user_id = getattr(request.user, "id", None)
+            if not user_id:
+                return Response(
+                    {"error": "Authentication required"},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            limit_raw = request.query_params.get("limit")
+            limit = 50
+            if limit_raw:
+                try:
+                    limit = max(1, min(int(limit_raw), 200))
+                except ValueError:
+                    limit = 50
+
+            unread_only = request.query_params.get("unread_only")
+            unread_only_bool = str(unread_only).lower() in {"1", "true", "yes"}
+
+            queryset = UserNotification.objects.filter(user_id=user_id).order_by("-timestamp")
+            if unread_only_bool:
+                queryset = queryset.filter(is_read=False)
+
+            notifications = list(queryset[:limit])
+
+            data = [
+                {
+                    "id": n.id,
+                    "title": n.title,
+                    "message": n.message,
+                    "severity": n.severity,
+                    "timestamp": n.timestamp.isoformat(),
+                    "read": n.is_read,
+                    "notification_type": n.notification_type,
+                    "extra_data": n.extra_data,
+                }
+                for n in notifications
+            ]
+            return Response(data, status=status.HTTP_200_OK)
+
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.error("Failed to list user notifications: %s", exc, exc_info=True)
+            return Response(
+                {"error": "Failed to retrieve notifications"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class UserNotificationMarkReadView(APIView):
+    """Mark a single notification as read for the authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, notification_id: int) -> Response:
+        try:
+            user_id = getattr(request.user, "id", None)
+            if not user_id:
+                return Response(
+                    {"error": "Authentication required"},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            notification = UserNotification.objects.get(id=notification_id, user_id=user_id)
+            if not notification.is_read:
+                notification.is_read = True
+                notification.save(update_fields=["is_read"])
+
+            return Response(
+                {"message": "Notification marked as read"},
+                status=status.HTTP_200_OK,
+            )
+
+        except UserNotification.DoesNotExist:
+            return Response(
+                {"error": "Notification not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.error("Failed to mark user notification as read: %s", exc, exc_info=True)
+            return Response(
+                {"error": "Failed to mark notification as read"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class UserNotificationMarkAllReadView(APIView):
+    """Mark all unread notifications as read for the authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request) -> Response:
+        try:
+            user_id = getattr(request.user, "id", None)
+            if not user_id:
+                return Response(
+                    {"error": "Authentication required"},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            count = UserNotification.objects.filter(user_id=user_id, is_read=False).update(
+                is_read=True
+            )
+
+            return Response(
+                {"message": f"{count} notifications marked as read", "count": count},
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.error("Failed to mark all user notifications as read: %s", exc, exc_info=True)
+            return Response(
+                {"error": "Failed to mark all notifications as read"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

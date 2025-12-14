@@ -74,8 +74,7 @@ class TestUserRegistrationView:
         assert url == "https://example.com/verify-email?token=test-token"
 
     @pytest.mark.django_db
-    @patch("apps.accounts.views.email_verification_requested")
-    def test_registration_disabled_returns_503(self, mock_signal: MagicMock) -> None:
+    def test_registration_disabled_returns_503(self) -> None:
         """Test registration returns 503 when disabled."""
         from apps.accounts.models import PublicAccountSettings
 
@@ -99,8 +98,8 @@ class TestUserRegistrationView:
         assert "disabled" in response.data["error"].lower()
 
     @pytest.mark.django_db
-    @patch("apps.accounts.views.email_verification_requested")
-    def test_registration_success(self, mock_signal: MagicMock) -> None:
+    @patch("apps.accounts.services.email.boto3.client")
+    def test_registration_success(self, mock_boto3_client: MagicMock) -> None:
         """Test successful registration."""
         from apps.accounts.models import PublicAccountSettings
 
@@ -108,7 +107,7 @@ class TestUserRegistrationView:
         settings.registration_enabled = True
         settings.save()
 
-        mock_signal.send.return_value = [(None, True)]
+        mock_boto3_client.return_value.send_email.return_value = {"MessageId": "test"}
 
         request = self.factory.post(
             "/api/auth/register",
@@ -185,10 +184,12 @@ class TestEmailVerificationView:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "invalid" in response.data["error"].lower()
 
-    @patch("apps.accounts.views.email_welcome_requested")
-    def test_valid_token_verifies_email(self, mock_signal: MagicMock) -> None:
+    @patch("apps.accounts.services.email.boto3.client")
+    def test_valid_token_verifies_email(self, mock_boto3_client: MagicMock) -> None:
         """Test valid token verifies user email."""
         from apps.accounts.models import User
+
+        mock_boto3_client.return_value.send_email.return_value = {"MessageId": "test"}
 
         user = User.objects.create_user(
             username="verifyuser",
@@ -378,7 +379,7 @@ class TestUserLogoutView:
 
     def test_logout_success_with_jwt_header(self) -> None:
         """Test successful logout with JWT in header."""
-        from apps.accounts.jwt_utils import generate_jwt_token
+        from apps.accounts.services.jwt import JWTService
         from apps.accounts.models import User
 
         user = User.objects.create_user(
@@ -387,7 +388,7 @@ class TestUserLogoutView:
             password="testpass123",
         )
 
-        token = generate_jwt_token(user)
+        token = JWTService().generate_token(user)
         request = self.factory.post("/api/auth/logout")
         request.META["HTTP_AUTHORIZATION"] = f"Bearer {token}"
 
@@ -434,7 +435,7 @@ class TestTokenRefreshView:
 
     def test_refresh_valid_token(self) -> None:
         """Test refresh with valid token."""
-        from apps.accounts.jwt_utils import generate_jwt_token
+        from apps.accounts.services.jwt import JWTService
         from apps.accounts.models import User
 
         user = User.objects.create_user(
@@ -443,7 +444,7 @@ class TestTokenRefreshView:
             password="testpass123",
         )
 
-        token = generate_jwt_token(user)
+        token = JWTService().generate_token(user)
 
         request = self.factory.post(
             "/api/auth/refresh",

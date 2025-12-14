@@ -68,7 +68,7 @@ class TestJWTAuthentication:
 
         assert result is None
 
-    @patch("apps.accounts.authentication.get_user_from_token")
+    @patch("apps.accounts.authentication.JWTService.get_user_from_token")
     def test_authenticate_valid_token(self, mock_get_user: MagicMock) -> None:
         """Test authentication with valid token."""
         mock_user = MagicMock()
@@ -86,7 +86,7 @@ class TestJWTAuthentication:
         assert result[1] == "valid_token"
         mock_get_user.assert_called_once_with("valid_token")
 
-    @patch("apps.accounts.authentication.get_user_from_token")
+    @patch("apps.accounts.authentication.JWTService.get_user_from_token")
     def test_authenticate_invalid_token(self, mock_get_user: MagicMock) -> None:
         """Test authentication with invalid token raises exception."""
         mock_get_user.return_value = None
@@ -99,7 +99,7 @@ class TestJWTAuthentication:
 
         assert "Invalid or expired token" in str(exc_info.value)
 
-    @patch("apps.accounts.authentication.get_user_from_token")
+    @patch("apps.accounts.authentication.JWTService.get_user_from_token")
     def test_authenticate_inactive_user(self, mock_get_user: MagicMock) -> None:
         """Test authentication with inactive user raises exception."""
         mock_user = MagicMock()
@@ -115,7 +115,7 @@ class TestJWTAuthentication:
 
         assert "disabled" in str(exc_info.value)
 
-    @patch("apps.accounts.authentication.get_user_from_token")
+    @patch("apps.accounts.authentication.JWTService.get_user_from_token")
     def test_authenticate_locked_user(self, mock_get_user: MagicMock) -> None:
         """Test authentication with locked user raises exception."""
         mock_user = MagicMock()
@@ -150,7 +150,7 @@ class TestAuthenticateCredentials:
         """Set up test fixtures."""
         self.auth = JWTAuthentication()
 
-    @patch("apps.accounts.authentication.get_user_from_token")
+    @patch("apps.accounts.authentication.JWTService.get_user_from_token")
     def test_credentials_valid(self, mock_get_user: MagicMock) -> None:
         """Test valid credentials return user and token."""
         mock_user = MagicMock()
@@ -163,7 +163,7 @@ class TestAuthenticateCredentials:
         assert user == mock_user
         assert token == "test_token"
 
-    @patch("apps.accounts.authentication.get_user_from_token")
+    @patch("apps.accounts.authentication.JWTService.get_user_from_token")
     def test_credentials_invalid_token(self, mock_get_user: MagicMock) -> None:
         """Test invalid token raises AuthenticationFailed."""
         mock_get_user.return_value = None
@@ -171,7 +171,7 @@ class TestAuthenticateCredentials:
         with pytest.raises(AuthenticationFailed):
             self.auth.authenticate_credentials("invalid_token")
 
-    @patch("apps.accounts.authentication.get_user_from_token")
+    @patch("apps.accounts.authentication.JWTService.get_user_from_token")
     def test_credentials_inactive_user_raises(self, mock_get_user: MagicMock) -> None:
         """Test inactive user raises AuthenticationFailed."""
         mock_user = MagicMock()
@@ -183,7 +183,7 @@ class TestAuthenticateCredentials:
 
         assert "disabled" in str(exc_info.value)
 
-    @patch("apps.accounts.authentication.get_user_from_token")
+    @patch("apps.accounts.authentication.JWTService.get_user_from_token")
     def test_credentials_locked_user_raises(self, mock_get_user: MagicMock) -> None:
         """Test locked user raises AuthenticationFailed."""
         mock_user = MagicMock()
@@ -203,7 +203,7 @@ class TestJWTAuthenticationIntegration:
 
     def test_full_authentication_flow(self) -> None:
         """Test complete authentication flow with real user."""
-        from apps.accounts.jwt_utils import generate_jwt_token
+        from apps.accounts.services.jwt import JWTService
         from apps.accounts.models import User
 
         # Create a real user
@@ -214,7 +214,7 @@ class TestJWTAuthenticationIntegration:
         )
 
         # Generate a token
-        token = generate_jwt_token(user)
+        token = JWTService().generate_token(user)
 
         # Authenticate with the token
         auth = JWTAuthentication()
@@ -231,7 +231,7 @@ class TestJWTAuthenticationIntegration:
 
     def test_authentication_after_user_locked(self) -> None:
         """Test authentication fails after user is locked."""
-        from apps.accounts.jwt_utils import generate_jwt_token
+        from apps.accounts.services.jwt import JWTService
         from apps.accounts.models import User
 
         user = User.objects.create_user(
@@ -240,7 +240,7 @@ class TestJWTAuthenticationIntegration:
             password="testpass123",
         )
 
-        token = generate_jwt_token(user)
+        token = JWTService().generate_token(user)
 
         # Lock the user
         user.is_locked = True
@@ -257,7 +257,7 @@ class TestJWTAuthenticationIntegration:
 
     def test_authentication_after_user_deactivated(self) -> None:
         """Test authentication fails after user is deactivated."""
-        from apps.accounts.jwt_utils import generate_jwt_token
+        from apps.accounts.services.jwt import JWTService
         from apps.accounts.models import User
 
         user = User.objects.create_user(
@@ -266,7 +266,7 @@ class TestJWTAuthenticationIntegration:
             password="testpass123",
         )
 
-        token = generate_jwt_token(user)
+        token = JWTService().generate_token(user)
 
         # Deactivate the user
         user.is_active = False
