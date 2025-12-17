@@ -229,16 +229,16 @@ const PositionsPage = () => {
 
     setClosingPosition(true);
     try {
-      const response = await fetch(
-        `/api/positions/${positionToClose.id}/close`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const response = await fetch(`/api/positions/${positionToClose.id}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          account_id: positionToClose.account_db_id,
+        }),
+      });
 
       if (!response.ok) {
         throw new Error('Failed to close position');

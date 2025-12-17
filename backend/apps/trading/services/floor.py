@@ -1,0 +1,669 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
+from enum import StrEnum
+from typing import Any
+
+from django.conf import settings
+
+from apps.trading.services.base import Strategy
+from apps.trading.services.registry import register_strategy
+
+
+class StrategyStatus(StrEnum):
+    RUNNING = "running"
+    PAUSED = "paused"
+    STOPPED = "stopped"
+
+
+class Direction(StrEnum):
+    LONG = "long"
+    SHORT = "short"
+
+
+class Progression(StrEnum):
+    EQUAL = "equal"
+    ADDITIVE = "additive"
+    EXPONENTIAL = "exponential"
+    INVERSE = "inverse"
+
+
+@dataclass(frozen=True)
+class FloorStrategyConfig:
+    instrument: str
+
+    base_lot_size: Decimal
+    scaling_mode: str
+    scaling_amount: Decimal
+
+    retracement_pips: Decimal
+    take_profit_pips: Decimal
+    max_layers: int
+    max_retracements_per_layer: int
+
+    volatility_lock_multiplier: Decimal
+
+    retracement_trigger_progression: Progression
+    retracement_trigger_increment: Decimal
+
+    lot_size_progression: Progression
+    lot_size_increment: Decimal
+
+    entry_signal_lookback_ticks: int
+    direction_method: str
+
+    sma_fast_period: int
+    sma_slow_period: int
+    ema_fast_period: int
+    ema_slow_period: int
+    rsi_period: int
+    rsi_overbought: int
+    rsi_oversold: int
+
+
+@dataclass
+class LayerState:
+    index: int
+    direction: Direction
+    entry_price: Decimal
+    lot_size: Decimal
+    retracements: int = 0
+
+
+@dataclass
+class FloorStrategyState:
+    status: StrategyStatus = StrategyStatus.RUNNING
+    initialized: bool = False
+
+    ticks_seen: int = 0
+    price_history: list[Decimal] = field(default_factory=list)
+
+    active_layers: list[LayerState] = field(default_factory=list)
+    volatility_locked: bool = False
+
+    last_mid: Decimal | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": str(self.status),
+            "initialized": bool(self.initialized),
+            "ticks_seen": int(self.ticks_seen),
+            "price_history": [str(x) for x in self.price_history],
+            "active_layers": [
+                {
+                    "index": int(l.index),
+                    "direction": str(l.direction),
+                    "entry_price": str(l.entry_price),
+                    "lot_size": str(l.lot_size),
+                    "retracements": int(l.retracements),
+                }
+                for l in self.active_layers
+            ],
+            "volatility_locked": bool(self.volatility_locked),
+            "last_mid": str(self.last_mid) if self.last_mid is not None else None,
+        }
+
+    @staticmethod
+    def from_dict(raw: dict[str, Any]) -> "FloorStrategyState":
+        status_raw = str(raw.get("status") or StrategyStatus.RUNNING)
+        try:
+            status = StrategyStatus(status_raw)
+        except Exception:
+            status = StrategyStatus.RUNNING
+
+        history_raw = raw.get("price_history")
+        history: list[Decimal] = []
+        if isinstance(history_raw, list):
+            for v in history_raw:
+                d = _to_decimal(v)
+                if d is not None:
+                    history.append(d)
+
+        layers: list[LayerState] = []
+        layers_raw = raw.get("active_layers")
+        if isinstance(layers_raw, list):
+            for item in layers_raw:
+                if not isinstance(item, dict):
+                    continue
+                direction_raw = str(item.get("direction") or Direction.LONG)
+                try:
+                    direction = Direction(direction_raw)
+                except Exception:
+                    direction = Direction.LONG
+
+                entry_price = _to_decimal(item.get("entry_price")) or Decimal("0")
+                lot_size = _to_decimal(item.get("lot_size")) or Decimal("0")
+                layers.append(
+                    LayerState(
+                        index=int(item.get("index") or 0),
+                        direction=direction,
+                        entry_price=entry_price,
+                        lot_size=lot_size,
+                        retracements=int(item.get("retracements") or 0),
+                    )
+                )
+
+        last_mid = _to_decimal(raw.get("last_mid"))
+
+        return FloorStrategyState(
+            status=status,
+            initialized=bool(raw.get("initialized") or False),
+            ticks_seen=int(raw.get("ticks_seen") or 0),
+            price_history=history,
+            active_layers=layers,
+            volatility_locked=bool(raw.get("volatility_locked") or False),
+            last_mid=last_mid,
+        )
+
+
+@dataclass(frozen=True)
+class StrategyEvent:
+    type: str
+    details: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": self.type, **({"details": self.details} if self.details else {})}
+
+
+def _to_decimal(value: Any) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+
+def _pip_size_for_instrument(instrument: str) -> Decimal:
+    inst = str(instrument).upper()
+    # Standard FX: JPY pairs have 0.01 pips, others 0.0001
+    if "JPY" in inst:
+        return Decimal("0.01")
+    return Decimal("0.0001")
+
+
+def _pips_between(price_a: Decimal, price_b: Decimal, pip_size: Decimal) -> Decimal:
+    return (price_b - price_a) / pip_size
+
+
+def _sma(values: list[Decimal]) -> Decimal:
+    return sum(values) / Decimal(len(values))
+
+
+def _ema(values: list[Decimal], period: int) -> Decimal:
+    if not values:
+        return Decimal("0")
+    k = Decimal("2") / (Decimal(period) + Decimal("1"))
+    ema_val = values[0]
+    for v in values[1:]:
+        ema_val = (v * k) + (ema_val * (Decimal("1") - k))
+    return ema_val
+
+
+def _rsi(values: list[Decimal], period: int) -> Decimal:
+    if len(values) < period + 1:
+        return Decimal("50")
+    gains: list[Decimal] = []
+    losses: list[Decimal] = []
+    for i in range(-period, 0):
+        delta = values[i] - values[i - 1]
+        if delta >= 0:
+            gains.append(delta)
+            losses.append(Decimal("0"))
+        else:
+            gains.append(Decimal("0"))
+            losses.append(-delta)
+
+    avg_gain = sum(gains) / Decimal(period)
+    avg_loss = sum(losses) / Decimal(period)
+    if avg_loss == 0:
+        return Decimal("100")
+    rs = avg_gain / avg_loss
+    return Decimal("100") - (Decimal("100") / (Decimal("1") + rs))
+
+
+def _progress_value(*, base: Decimal, index: int, mode: Progression, inc: Decimal) -> Decimal:
+    i = max(0, int(index))
+    if mode == Progression.EQUAL:
+        return base
+    if mode == Progression.INVERSE:
+        return base / Decimal(i + 1)
+    if mode == Progression.EXPONENTIAL:
+        return base * (inc ** Decimal(i))
+    # additive
+    return base + (inc * Decimal(i))
+
+
+FLOOR_STRATEGY_CONFIG_SCHEMA: dict[str, Any] = {
+    "display_name": "Floor Strategy",
+    "type": "object",
+    "properties": {
+        "instrument": {"type": "string", "title": "Instrument"},
+        "base_lot_size": {"type": "number", "title": "Base Lot Size"},
+        "scaling_mode": {"type": "string", "enum": ["additive", "multiplicative"]},
+        "scaling_amount": {"type": "number", "title": "Scaling Amount"},
+        "retracement_pips": {"type": "number", "title": "Retracement Pips"},
+        "take_profit_pips": {"type": "number", "title": "Take Profit Pips"},
+        "max_layers": {"type": "integer", "title": "Maximum Layers"},
+        "max_retracements_per_layer": {"type": "integer", "title": "Max Retracements Per Layer"},
+        "volatility_lock_multiplier": {"type": "number", "title": "Volatility Lock Multiplier"},
+        "retracement_trigger_progression": {
+            "type": "string",
+            "enum": ["equal", "additive", "exponential", "inverse"],
+        },
+        "retracement_trigger_increment": {"type": "number"},
+        "lot_size_progression": {
+            "type": "string",
+            "enum": ["equal", "additive", "exponential", "inverse"],
+        },
+        "lot_size_increment": {"type": "number"},
+        "entry_signal_lookback_ticks": {"type": "integer"},
+        "direction_method": {
+            "type": "string",
+            "enum": [
+                "momentum",
+                "sma_crossover",
+                "ema_crossover",
+                "price_vs_sma",
+                "rsi",
+                "ohlc_sma_crossover",
+                "ohlc_ema_crossover",
+                "ohlc_price_vs_sma",
+            ],
+        },
+        "sma_fast_period": {"type": "integer"},
+        "sma_slow_period": {"type": "integer"},
+        "ema_fast_period": {"type": "integer"},
+        "ema_slow_period": {"type": "integer"},
+        "rsi_period": {"type": "integer"},
+        "rsi_overbought": {"type": "integer"},
+        "rsi_oversold": {"type": "integer"},
+    },
+    "required": [
+        "instrument",
+        "base_lot_size",
+        "scaling_mode",
+        "retracement_pips",
+        "take_profit_pips",
+    ],
+}
+
+
+def _defaults() -> dict[str, Any]:
+    raw = getattr(settings, "TRADING_FLOOR_STRATEGY_DEFAULTS", {})
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def _config_value(config: dict[str, Any], key: str) -> Any:
+    if key in config and config.get(key) is not None:
+        return config.get(key)
+    return _defaults().get(key)
+
+
+def _parse_progression(value: Any) -> Progression:
+    v = str(value or "additive")
+    try:
+        return Progression(v)
+    except Exception:
+        return Progression.ADDITIVE
+
+
+def _parse_required_decimal(config: dict[str, Any], key: str) -> Decimal:
+    val = _config_value(config, key)
+    d = _to_decimal(val)
+    if d is None:
+        raise ValueError(f"Missing or invalid '{key}'")
+    return d
+
+
+def _parse_required_str(config: dict[str, Any], key: str) -> str:
+    val = _config_value(config, key)
+    s = str(val or "").strip()
+    if not s:
+        raise ValueError(f"Missing '{key}'")
+    return s
+
+
+def _parse_int(config: dict[str, Any], key: str, *, required: bool = False) -> int:
+    val = _config_value(config, key)
+    if val is None:
+        if required:
+            raise ValueError(f"Missing '{key}'")
+        return 0
+    try:
+        return int(val)
+    except Exception as exc:
+        raise ValueError(f"Invalid '{key}'") from exc
+
+
+def _parse_required_int(config: dict[str, Any], key: str) -> int:
+    return _parse_int(config, key, required=True)
+
+
+@register_strategy("floor", FLOOR_STRATEGY_CONFIG_SCHEMA, display_name="Floor Strategy")
+class FloorStrategyService(Strategy):
+    def __init__(self, config: dict[str, Any]) -> None:
+        super().__init__(config)
+        self.config = self._parse_config(config)
+        self.pip_size = _pip_size_for_instrument(self.config.instrument)
+
+    @staticmethod
+    def _parse_config(raw: dict[str, Any]) -> FloorStrategyConfig:
+        instrument = _parse_required_str(raw, "instrument")
+
+        base_lot_size = _parse_required_decimal(raw, "base_lot_size")
+        scaling_mode = _parse_required_str(raw, "scaling_mode")
+        scaling_amount = _parse_required_decimal(raw, "scaling_amount")
+
+        retracement_pips = _parse_required_decimal(raw, "retracement_pips")
+        take_profit_pips = _parse_required_decimal(raw, "take_profit_pips")
+        max_layers = _parse_required_int(raw, "max_layers")
+        max_retracements_per_layer = _parse_required_int(raw, "max_retracements_per_layer")
+
+        volatility_lock_multiplier = _parse_required_decimal(raw, "volatility_lock_multiplier")
+
+        retr_prog = _parse_progression(_config_value(raw, "retracement_trigger_progression"))
+        retr_inc = _parse_required_decimal(raw, "retracement_trigger_increment")
+
+        lot_prog = _parse_progression(_config_value(raw, "lot_size_progression"))
+        lot_inc = _parse_required_decimal(raw, "lot_size_increment")
+
+        entry_signal_lookback_ticks = _parse_required_int(raw, "entry_signal_lookback_ticks")
+        direction_method = _parse_required_str(raw, "direction_method")
+
+        sma_fast_period = _parse_required_int(raw, "sma_fast_period")
+        sma_slow_period = _parse_required_int(raw, "sma_slow_period")
+        ema_fast_period = _parse_required_int(raw, "ema_fast_period")
+        ema_slow_period = _parse_required_int(raw, "ema_slow_period")
+        rsi_period = _parse_required_int(raw, "rsi_period")
+        rsi_overbought = _parse_required_int(raw, "rsi_overbought")
+        rsi_oversold = _parse_required_int(raw, "rsi_oversold")
+
+        return FloorStrategyConfig(
+            instrument=instrument,
+            base_lot_size=base_lot_size,
+            scaling_mode=scaling_mode,
+            scaling_amount=scaling_amount,
+            retracement_pips=retracement_pips,
+            take_profit_pips=take_profit_pips,
+            max_layers=max_layers,
+            max_retracements_per_layer=max_retracements_per_layer,
+            volatility_lock_multiplier=volatility_lock_multiplier,
+            retracement_trigger_progression=retr_prog,
+            retracement_trigger_increment=retr_inc,
+            lot_size_progression=lot_prog,
+            lot_size_increment=lot_inc,
+            entry_signal_lookback_ticks=entry_signal_lookback_ticks,
+            direction_method=direction_method,
+            sma_fast_period=sma_fast_period,
+            sma_slow_period=sma_slow_period,
+            ema_fast_period=ema_fast_period,
+            ema_slow_period=ema_slow_period,
+            rsi_period=rsi_period,
+            rsi_overbought=rsi_overbought,
+            rsi_oversold=rsi_oversold,
+        )
+
+    def on_start(self, *, state: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        s = FloorStrategyState.from_dict(state)
+        if s.status != StrategyStatus.RUNNING:
+            s.status = StrategyStatus.RUNNING
+            return s.to_dict(), [StrategyEvent(type="strategy_started").to_dict()]
+        return s.to_dict(), []
+
+    def on_pause(self, *, state: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        s = FloorStrategyState.from_dict(state)
+        if s.status != StrategyStatus.PAUSED:
+            s.status = StrategyStatus.PAUSED
+            return s.to_dict(), [StrategyEvent(type="strategy_paused").to_dict()]
+        return s.to_dict(), []
+
+    def on_resume(self, *, state: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        s = FloorStrategyState.from_dict(state)
+        if s.status != StrategyStatus.RUNNING:
+            s.status = StrategyStatus.RUNNING
+            return s.to_dict(), [StrategyEvent(type="strategy_resumed").to_dict()]
+        return s.to_dict(), []
+
+    def on_stop(self, *, state: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        s = FloorStrategyState.from_dict(state)
+        if s.status != StrategyStatus.STOPPED:
+            s.status = StrategyStatus.STOPPED
+            return s.to_dict(), [StrategyEvent(type="strategy_stopped").to_dict()]
+        return s.to_dict(), []
+
+    def on_tick(
+        self, *, tick: dict[str, Any], state: dict[str, Any]
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        s = FloorStrategyState.from_dict(state)
+
+        mid = _to_decimal(tick.get("mid"))
+        if mid is None:
+            return s.to_dict(), []
+
+        s.last_mid = mid
+        s.ticks_seen += 1
+        s.price_history.append(mid)
+
+        # Keep enough history for indicators
+        max_needed = max(
+            self.config.entry_signal_lookback_ticks,
+            self.config.sma_slow_period,
+            self.config.ema_slow_period,
+            self.config.rsi_period + 1,
+        )
+        if len(s.price_history) > max_needed:
+            s.price_history = s.price_history[-max_needed:]
+
+        events: list[StrategyEvent] = []
+
+        # If paused/stopped, still track ticks but never trade
+        if s.status != StrategyStatus.RUNNING:
+            return s.to_dict(), [e.to_dict() for e in events]
+
+        # Initial entry
+        if not s.initialized and s.ticks_seen >= self.config.entry_signal_lookback_ticks:
+            direction = self._decide_direction(s.price_history)
+            layer = LayerState(
+                index=0,
+                direction=direction,
+                entry_price=mid,
+                lot_size=self._lot_size_for_layer(0),
+            )
+            s.active_layers = [layer]
+            s.initialized = True
+            events.append(
+                StrategyEvent(
+                    type="open",
+                    details={
+                        "layer": 0,
+                        "direction": str(direction),
+                        "entry_price": str(mid),
+                        "lot_size": str(layer.lot_size),
+                        "instrument": self.config.instrument,
+                    },
+                )
+            )
+            events.append(StrategyEvent(type="layer_opened", details={"layer": 0}))
+
+        if not s.active_layers:
+            return s.to_dict(), [e.to_dict() for e in events]
+
+        # Take profit check (close all)
+        total_pips = self._net_pips(s.active_layers, mid)
+        if total_pips >= self.config.take_profit_pips:
+            events.append(
+                StrategyEvent(
+                    type="close",
+                    details={
+                        "reason": "take_profit",
+                        "pips": str(total_pips),
+                        "instrument": self.config.instrument,
+                    },
+                )
+            )
+            events.append(StrategyEvent(type="take_profit_hit", details={"pips": str(total_pips)}))
+            s.active_layers = []
+            s.initialized = False
+            return s.to_dict(), [e.to_dict() for e in events]
+
+        # Scale-in logic per layer
+        for layer in list(s.active_layers):
+            if layer.retracements >= self.config.max_retracements_per_layer:
+                continue
+
+            against_pips = self._against_position_pips(layer, mid)
+            trigger_pips = self._retracement_trigger_for_layer(layer.index)
+            if against_pips >= trigger_pips and len(s.active_layers) <= self.config.max_layers:
+                # scale-in (as another open event)
+                layer.retracements += 1
+                lot_size = self._scaled_lot_size(layer.lot_size)
+                layer.lot_size = lot_size
+                events.append(
+                    StrategyEvent(
+                        type="open",
+                        details={
+                            "layer": int(layer.index),
+                            "direction": str(layer.direction),
+                            "entry_price": str(mid),
+                            "lot_size": str(lot_size),
+                            "instrument": self.config.instrument,
+                            "scale_in": True,
+                            "retracement": int(layer.retracements),
+                            "against_pips": str(against_pips),
+                            "trigger_pips": str(trigger_pips),
+                        },
+                    )
+                )
+                events.append(
+                    StrategyEvent(
+                        type="layer_scaled_in",
+                        details={"layer": int(layer.index), "retracement": int(layer.retracements)},
+                    )
+                )
+
+                # unlock next layer when max retracements reached
+                if (
+                    layer.retracements >= self.config.max_retracements_per_layer
+                    and len(s.active_layers) < self.config.max_layers
+                ):
+                    next_idx = len(s.active_layers)
+                    new_layer = LayerState(
+                        index=next_idx,
+                        direction=layer.direction,
+                        entry_price=mid,
+                        lot_size=self._lot_size_for_layer(next_idx),
+                    )
+                    s.active_layers.append(new_layer)
+                    events.append(
+                        StrategyEvent(
+                            type="open",
+                            details={
+                                "layer": int(next_idx),
+                                "direction": str(new_layer.direction),
+                                "entry_price": str(mid),
+                                "lot_size": str(new_layer.lot_size),
+                                "instrument": self.config.instrument,
+                            },
+                        )
+                    )
+                    events.append(
+                        StrategyEvent(type="layer_opened", details={"layer": int(next_idx)})
+                    )
+
+        return s.to_dict(), [e.to_dict() for e in events]
+
+    def _decide_direction(self, history: list[Decimal]) -> Direction:
+        method = str(self.config.direction_method)
+        if method in {"ohlc_sma_crossover", "ohlc_ema_crossover", "ohlc_price_vs_sma"}:
+            # Fallback to tick-based momentum if OHLC not provided
+            method = "momentum"
+
+        if method == "sma_crossover":
+            if len(history) < self.config.sma_slow_period:
+                return Direction.LONG
+            slow = history[-self.config.sma_slow_period :]
+            fast = history[-self.config.sma_fast_period :]
+            return Direction.LONG if _sma(fast) >= _sma(slow) else Direction.SHORT
+
+        if method == "ema_crossover":
+            if len(history) < self.config.ema_slow_period:
+                return Direction.LONG
+            slow = history[-self.config.ema_slow_period :]
+            fast = history[-self.config.ema_fast_period :]
+            return (
+                Direction.LONG
+                if _ema(fast, self.config.ema_fast_period)
+                >= _ema(slow, self.config.ema_slow_period)
+                else Direction.SHORT
+            )
+
+        if method == "price_vs_sma":
+            if len(history) < self.config.sma_slow_period:
+                return Direction.LONG
+            slow = history[-self.config.sma_slow_period :]
+            return Direction.LONG if history[-1] >= _sma(slow) else Direction.SHORT
+
+        if method == "rsi":
+            rsi = _rsi(history, self.config.rsi_period)
+            if rsi <= Decimal(self.config.rsi_oversold):
+                return Direction.LONG
+            if rsi >= Decimal(self.config.rsi_overbought):
+                return Direction.SHORT
+            # Neutral -> momentum
+
+        # momentum (default)
+        if len(history) < 2:
+            return Direction.LONG
+        return Direction.LONG if history[-1] >= history[0] else Direction.SHORT
+
+    def _lot_size_for_layer(self, layer_index: int) -> Decimal:
+        return _progress_value(
+            base=self.config.base_lot_size,
+            index=layer_index,
+            mode=self.config.lot_size_progression,
+            inc=self.config.lot_size_increment,
+        )
+
+    def _retracement_trigger_for_layer(self, layer_index: int) -> Decimal:
+        return _progress_value(
+            base=self.config.retracement_pips,
+            index=layer_index,
+            mode=self.config.retracement_trigger_progression,
+            inc=self.config.retracement_trigger_increment,
+        )
+
+    def _scaled_lot_size(self, current: Decimal) -> Decimal:
+        if str(self.config.scaling_mode) == "multiplicative":
+            return current * self.config.scaling_amount
+        return current + self.config.scaling_amount
+
+    def _against_position_pips(self, layer: LayerState, mid: Decimal) -> Decimal:
+        if layer.direction == Direction.LONG:
+            # losing if price < entry
+            if mid >= layer.entry_price:
+                return Decimal("0")
+            return abs(_pips_between(layer.entry_price, mid, self.pip_size))
+
+        # short
+        if mid <= layer.entry_price:
+            return Decimal("0")
+        return abs(_pips_between(layer.entry_price, mid, self.pip_size))
+
+    def _net_pips(self, layers: list[LayerState], mid: Decimal) -> Decimal:
+        # Weighted by lot size (proxy). Positive means profit.
+        total = Decimal("0")
+        weight = Decimal("0")
+        for l in layers:
+            if l.lot_size <= 0:
+                continue
+            if l.direction == Direction.LONG:
+                p = _pips_between(l.entry_price, mid, self.pip_size)
+            else:
+                p = _pips_between(mid, l.entry_price, self.pip_size)
+            total += p * l.lot_size
+            weight += l.lot_size
+        if weight == 0:
+            return Decimal("0")
+        return total / weight

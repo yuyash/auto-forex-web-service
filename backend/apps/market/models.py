@@ -11,11 +11,9 @@ import base64
 import hashlib
 from datetime import timedelta
 from decimal import Decimal
-from typing import ClassVar
 
 from django.conf import settings
 from django.db import models
-from django.db.models.manager import Manager
 from django.utils import timezone
 
 from cryptography.fernet import Fernet
@@ -391,7 +389,7 @@ class CeleryTaskStatus(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "market_managed_celery_tasks"
+        db_table = "market_celery_tasks"
         verbose_name = "Celery Task Status"
         verbose_name_plural = "Celery Task Statuses"
         constraints = [
