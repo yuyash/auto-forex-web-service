@@ -164,8 +164,9 @@ exclude_lines = [
 ]
 
 [tool.pylint.main]
-ignore = ["migrations", "tests"]
+ignore = ["migrations", "tests", ".venv", "venv"]
 ignore-patterns = ["test_.*?.py"]
+ignore-paths = [".*/\\.venv/.*", ".*/venv/.*"]
 extension-pkg-allow-list = ["psutil", "redis"]
 load-plugins = ["pylint_django"]
 django-settings-module = "config.settings"
