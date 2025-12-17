@@ -55,7 +55,6 @@ INSTALLED_APPS = [
     # Local apps
     "apps.accounts",
     "apps.market",
-    # "apps.monitoring",
     "apps.trading",
 ]
 
