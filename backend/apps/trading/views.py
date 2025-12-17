@@ -8,14 +8,10 @@ This module contains views for:
 - Task lifecycle operations (start, stop, pause, resume, rerun)
 """
 
-import csv
 import logging
-from datetime import datetime
-from typing import Type
+from typing import Any, Type, cast
 
-from django.core.cache import cache
-from django.db.models import Q, QuerySet
-from django.http import StreamingHttpResponse
+from django.db.models import Model, Q, QuerySet
 from django.utils import timezone
 
 from rest_framework import serializers as drf_serializers
@@ -29,18 +25,18 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.trading.enums import TaskStatus, TaskType
-from apps.market.models import TickData
-from .models import BacktestTask, TradingTask
-from .serializers import (
+from apps.trading.models import BacktestTask, TradingTask
+from apps.trading.serializers import (
     BacktestTaskCreateSerializer,
     BacktestTaskListSerializer,
     BacktestTaskSerializer,
     TaskExecutionSerializer,
-    TickDataSerializer,
     TradingTaskCreateSerializer,
     TradingTaskListSerializer,
     TradingTaskSerializer,
 )
+from apps.trading.services.lock import TaskLockManager
+from apps.trading.services.performance import LivePerformanceService
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +94,7 @@ class StrategyConfigView(APIView):
         strategy_type = request.query_params.get("strategy_type")
         search = request.query_params.get("search")
 
-        queryset = StrategyConfig.objects.filter(user=request.user.id)
+        queryset = StrategyConfig.objects.filter(user=request.user.pk)
         if strategy_type:
             queryset = queryset.filter(strategy_type=strategy_type)
         if search:
@@ -146,7 +142,7 @@ class StrategyConfigDetailView(APIView):
         from apps.trading.serializers import StrategyConfigDetailSerializer
 
         try:
-            config = StrategyConfig.objects.get(id=config_id, user=request.user.id)
+            config = StrategyConfig.objects.get(id=config_id, user=request.user.pk)
         except StrategyConfig.DoesNotExist:
             return Response({"error": "Configuration not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -161,7 +157,7 @@ class StrategyConfigDetailView(APIView):
         )
 
         try:
-            config = StrategyConfig.objects.get(id=config_id, user=request.user.id)
+            config = StrategyConfig.objects.get(id=config_id, user=request.user.pk)
         except StrategyConfig.DoesNotExist:
             return Response({"error": "Configuration not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -180,7 +176,7 @@ class StrategyConfigDetailView(APIView):
         from apps.trading.models import StrategyConfig
 
         try:
-            config = StrategyConfig.objects.get(id=config_id, user=request.user.id)
+            config = StrategyConfig.objects.get(id=config_id, user=request.user.pk)
         except StrategyConfig.DoesNotExist:
             return Response({"error": "Configuration not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -281,21 +277,18 @@ class TradingTaskDetailView(RetrieveUpdateDestroyAPIView):
             return TradingTaskCreateSerializer
         return TradingTaskSerializer
 
-    def get_queryset(self) -> QuerySet:
+    def get_queryset(self) -> QuerySet[Model]:
         """Get trading tasks for the authenticated user."""
         return TradingTask.objects.filter(user=self.request.user.pk).select_related(
             "config", "oanda_account", "user"
         )
 
-    def perform_destroy(self, instance: TradingTask) -> None:
-        """
-        Delete trading task.
-
-        Prevents deletion if task is running.
-        """
-        if instance.status == TaskStatus.RUNNING:
+    def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Delete trading task (disallow deletion while running)."""
+        task = self.get_object()
+        if task.status == TaskStatus.RUNNING:
             raise ValidationError("Cannot delete a running task. Stop it first.")
-        instance.delete()
+        return super().destroy(request, *args, **kwargs)
 
 
 class TradingTaskCopyView(APIView):
@@ -362,8 +355,6 @@ class TradingTaskStartView(APIView):
         before starting. Creates a new TaskExecution and queues the trading
         task for processing. Enforces one active task per account constraint.
         """
-        from apps.trading.services.lock import TaskLockManager
-
         # Get the task
         try:
             task = TradingTask.objects.get(id=task_id, user=request.user.pk)
@@ -428,7 +419,7 @@ class TradingTaskStartView(APIView):
         # Queue the trading task for execution
         from apps.trading.tasks import run_trading_task
 
-        run_trading_task.delay(task.pk)
+        cast(Any, run_trading_task).delay(task.pk)
 
         # Log lifecycle event
         logger.info(
@@ -475,7 +466,6 @@ class TradingTaskStopView(APIView):
                 Default: 'graceful'
         """
         from apps.trading.enums import StopMode
-        from apps.trading.services.lock import TaskLockManager
         from apps.trading.tasks import stop_trading_task
 
         # Get the task
@@ -543,8 +533,6 @@ class TradingTaskStopView(APIView):
             TaskStatus.RUNNING,
             TaskStatus.PAUSED,
         ]:
-            from django.utils import timezone
-
             latest_execution.status = TaskStatus.STOPPED
             latest_execution.completed_at = timezone.now()
             latest_execution.save(update_fields=["status", "completed_at"])
@@ -555,7 +543,7 @@ class TradingTaskStopView(APIView):
         # Queue the stop task with the specified mode to handle cleanup
         # (closing positions, releasing locks, etc.)
         if has_active_lock:
-            stop_trading_task.delay(task.pk, stop_mode.value)
+            cast(Any, stop_trading_task).delay(task.pk, stop_mode.value)
         else:
             # No active celery task, just clean up any stale locks
             if lock_info:
@@ -740,7 +728,7 @@ class TradingTaskRestartView(APIView):
         # Queue the trading task for execution
         from apps.trading.tasks import run_trading_task
 
-        run_trading_task.delay(task.pk)
+        cast(Any, run_trading_task).delay(task.pk)
 
         # Log lifecycle event
         state_info = "with state cleared" if clear_state else "preserving state"
@@ -948,10 +936,6 @@ class TradingTaskStatusView(APIView):
         Returns current status, progress percentage, and latest execution details.
         Also detects and auto-completes stale running/stopped tasks.
         """
-        from django.utils import timezone
-
-        from apps.trading.services.lock import TaskLockManager
-
         # Get the task
         try:
             task = TradingTask.objects.get(id=task_id, user=request.user.pk)
@@ -1141,17 +1125,18 @@ class BacktestTaskDetailView(RetrieveUpdateDestroyAPIView):
             return BacktestTaskCreateSerializer
         return BacktestTaskSerializer
 
-    def get_queryset(self) -> QuerySet:
+    def get_queryset(self) -> QuerySet[Model]:
         """Get backtest tasks for the authenticated user."""
         return BacktestTask.objects.filter(user=self.request.user.pk).select_related(
             "config", "user"
         )
 
-    def perform_destroy(self, instance: BacktestTask) -> None:
+    def perform_destroy(self, instance: Model) -> None:
         """Delete backtest task (disallow deletion while running)."""
-        if instance.status == TaskStatus.RUNNING:
-            raise ValidationError("Cannot delete running task. Stop it first.")
-        instance.delete()
+        task = cast(BacktestTask, instance)
+        if task.status == TaskStatus.RUNNING:
+            raise ValidationError("Cannot delete a running task. Stop it first.")
+        task.delete()
 
 
 class BacktestTaskCopyView(APIView):
@@ -1186,8 +1171,6 @@ class BacktestTaskStartView(APIView):
 
     def post(self, request: Request, task_id: int) -> Response:
         """Start backtest task execution."""
-        from apps.trading.services.lock import TaskLockManager
-
         try:
             task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
         except BacktestTask.DoesNotExist:
@@ -1205,9 +1188,7 @@ class BacktestTaskStartView(APIView):
         if lock_info is not None:
             if not lock_info.is_stale:
                 return Response(
-                    {
-                        "error": "Task has an active execution lock. A celery task may already be running."
-                    },
+                    {"error": "Task has an active lock. The task may already be running."},
                     status=status.HTTP_409_CONFLICT,
                 )
 
@@ -1236,7 +1217,7 @@ class BacktestTaskStartView(APIView):
 
         from apps.trading.tasks import run_backtest_task
 
-        run_backtest_task.delay(task.pk)
+        cast(Any, run_backtest_task).delay(task.pk)
 
         return Response(
             {"message": "Backtest task started successfully", "task_id": task.pk},
@@ -1251,8 +1232,6 @@ class BacktestTaskStopView(APIView):
 
     def post(self, request: Request, task_id: int) -> Response:
         """Stop backtest task execution."""
-        from apps.trading.services.lock import TaskLockManager
-
         try:
             task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
         except BacktestTask.DoesNotExist:
@@ -1287,21 +1266,6 @@ class BacktestTaskStopView(APIView):
             latest_execution.status = TaskStatus.STOPPED
             latest_execution.completed_at = timezone.now()
             latest_execution.save(update_fields=["status", "completed_at"])
-
-        execution_id = latest_execution.pk if latest_execution else None
-
-        from apps.trading.services.notifications import send_task_status_notification
-
-        assert request.user.pk is not None
-        send_task_status_notification(
-            user_id=request.user.pk,
-            task_id=task.pk,
-            task_name=task.name,
-            task_type="backtest",
-            status=TaskStatus.STOPPED,
-            execution_id=execution_id,
-        )
-
         return Response(
             {"id": task.pk, "status": TaskStatus.STOPPED, "message": "Task stop initiated"},
             status=status.HTTP_200_OK,
@@ -1315,8 +1279,6 @@ class BacktestTaskStatusView(APIView):
 
     def get(self, request: Request, task_id: int) -> Response:
         """Get current task status and execution details."""
-        from apps.trading.services.lock import TaskLockManager
-
         try:
             task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
         except BacktestTask.DoesNotExist:
@@ -1337,7 +1299,7 @@ class BacktestTaskStatusView(APIView):
 
             if execution_completed and is_stale:
                 logger.warning(
-                    "Detected stale running task %d (execution_status=%s, is_stale=%s), auto-completing",
+                    "Detected stale task %d (execution_status=%s, is_stale=%s), auto-completing",
                     task_id,
                     latest_execution.status,
                     is_stale,
@@ -1629,15 +1591,36 @@ class BacktestTaskLiveResultsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request, task_id: int) -> Response:
-        """Get cached live results from Redis (if available)."""
-        from apps.trading.services.notifications import get_backtest_intermediate_results
-
         try:
             BacktestTask.objects.get(id=task_id, user=request.user.pk)
         except BacktestTask.DoesNotExist:
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        live_results = get_backtest_intermediate_results(task_id)
+        live_results = LivePerformanceService.get_backtest_intermediate_results(task_id)
+
+        if live_results is None:
+            return Response(
+                {"task_id": task_id, "has_data": False, "message": "No live results available yet"},
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {"task_id": task_id, "has_data": True, **live_results}, status=status.HTTP_200_OK
+        )
+
+
+class TradingTaskLiveResultsView(APIView):
+    """Get live intermediate results for a running trading task."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, task_id: int) -> Response:
+        try:
+            TradingTask.objects.get(id=task_id, user=request.user.pk)
+        except TradingTask.DoesNotExist:
+            return Response({"error": "Trading task not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        live_results = LivePerformanceService.get_trading_intermediate_results(task_id)
 
         if live_results is None:
             return Response(
