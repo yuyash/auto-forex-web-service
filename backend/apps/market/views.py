@@ -718,10 +718,10 @@ class SupportedInstrumentsView(APIView):
     GET /api/trading/instruments/
     - Returns list of supported currency pairs from OANDA API
     - Data is cached for 24 hours
-    - No authentication required (public data)
+    - Requires authentication
     """
 
-    permission_classes = []  # Public endpoint
+    permission_classes = [IsAuthenticated]
 
     # Fallback list if OANDA API is unavailable
     FALLBACK_INSTRUMENTS = [
@@ -822,10 +822,10 @@ class SupportedGranularitiesView(APIView):
     GET /api/trading/granularities/
     - Returns list of supported OANDA granularities
     - Data is cached for 24 hours
-    - No authentication required (public data)
+    - Requires authentication
     """
 
-    permission_classes = []  # Public endpoint
+    permission_classes = [IsAuthenticated]
 
     # OANDA supported granularities (standard list, rarely changes)
     GRANULARITIES = [
@@ -934,10 +934,10 @@ class MarketStatusView(APIView):
     GET /api/market/status/
     - Returns current market status (open/closed)
     - Includes trading session information
-    - No authentication required (public data)
+    - Requires authentication
     """
 
-    permission_classes = []  # Public endpoint
+    permission_classes = [IsAuthenticated]
 
     # Forex market sessions (in UTC)
     MARKET_SESSIONS = {
