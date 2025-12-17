@@ -5,23 +5,8 @@ This module defines URL patterns for trading data and strategy endpoints.
 """
 
 from django.urls import path
-from apps.market.views import (
-    CandleDataView,
-    OrderDetailView,
-    OrderView,
-    PositionDetailView,
-    PositionView,
-    SupportedGranularitiesView,
-    SupportedInstrumentsView,
-)
-from apps.monitoring.views import (
-    health_check,
-    oanda_health_check,
-    simple_health_check,
-    uptime_check,
-)
 
-from .views import (  # noqa: E501
+from apps.trading.views import (
     BacktestTaskCopyView,
     BacktestTaskDetailView,
     BacktestTaskExecutionsView,
@@ -29,17 +14,16 @@ from .views import (  # noqa: E501
     BacktestTaskView,
     BacktestTaskLiveResultsView,
     BacktestTaskLogsView,
-    BacktestTaskRerunView,
     BacktestTaskStartView,
     BacktestTaskStatusView,
     BacktestTaskStopView,
     TradingTaskCopyView,
     TradingTaskDetailView,
     TradingTaskExecutionsView,
+    TradingTaskLiveResultsView,
     TradingTaskView,
     TradingTaskLogsView,
     TradingTaskPauseView,
-    TradingTaskRerunView,
     TradingTaskRestartView,
     TradingTaskResumeView,
     TradingTaskStartView,
@@ -65,6 +49,7 @@ urlpatterns = [
         StrategyConfigDetailView.as_view(),
         name="strategy_config_detail",
     ),
+    # Backtest task endpoints
     path(
         "backtest-tasks/",
         BacktestTaskView.as_view(),
@@ -91,11 +76,6 @@ urlpatterns = [
         name="backtest_task_stop",
     ),
     path(
-        "backtest-tasks/<int:task_id>/rerun/",
-        BacktestTaskRerunView.as_view(),
-        name="backtest_task_rerun",
-    ),
-    path(
         "backtest-tasks/<int:task_id>/status/",
         BacktestTaskStatusView.as_view(),
         name="backtest_task_status",
@@ -120,7 +100,7 @@ urlpatterns = [
         BacktestTaskLiveResultsView.as_view(),
         name="backtest_task_live_results",
     ),
-    # TradingTask endpoints (new task-based API)
+    # Trading task endpoints
     path(
         "trading-tasks/",
         TradingTaskView.as_view(),
@@ -157,11 +137,6 @@ urlpatterns = [
         name="trading_task_resume",
     ),
     path(
-        "trading-tasks/<int:task_id>/rerun/",
-        TradingTaskRerunView.as_view(),
-        name="trading_task_rerun",
-    ),
-    path(
         "trading-tasks/<int:task_id>/restart/",
         TradingTaskRestartView.as_view(),
         name="trading_task_restart",
@@ -180,5 +155,10 @@ urlpatterns = [
         "trading-tasks/<int:task_id>/logs/",
         TradingTaskLogsView.as_view(),
         name="trading_task_logs",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/live-results/",
+        TradingTaskLiveResultsView.as_view(),
+        name="trading_task_live_results",
     ),
 ]

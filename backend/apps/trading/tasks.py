@@ -21,6 +21,7 @@ from apps.trading.services.task import CeleryTaskService
 from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.models import BacktestTask, ExecutionMetrics, TaskExecution, TradingTask
 from apps.trading.services.registry import registry as strategy_registry
+from apps.trading.services.performance import LivePerformanceService
 
 logger = getLogger(__name__)
 
@@ -183,6 +184,7 @@ def run_trading_task(task_id: int) -> None:
     state: dict[str, Any] = dict(task.strategy_state or {})
     trade_log: list[dict[str, Any]] = []
     strategy_events: list[dict[str, Any]] = []
+    realized_pips = Decimal("0")
 
     state, start_events = strategy.on_start(state=state)
     if start_events:
@@ -223,7 +225,9 @@ def run_trading_task(task_id: int) -> None:
                         event_service.log_event(
                             event_type=(f"strategy_{e_type}"[:64] if e_type else "strategy_event"),
                             severity="info",
-                            description=f"Strategy event ({strategy_type}) for trading task {task_id}",
+                            description=(
+                                f"Strategy event ({strategy_type}) for trading task {task_id}"
+                            ),
                             user=task.user,
                             account=getattr(task, "oanda_account", None),
                             instrument=instrument,
@@ -276,7 +280,8 @@ def run_trading_task(task_id: int) -> None:
                                     ),
                                     severity="info",
                                     description=(
-                                        f"Strategy event ({strategy_type}) for trading task {task_id}"
+                                        f"Strategy event ({strategy_type}) "
+                                        f"for trading task {task_id}"
                                     ),
                                     user=task.user,
                                     account=getattr(task, "oanda_account", None),
@@ -332,6 +337,13 @@ def run_trading_task(task_id: int) -> None:
 
                 for e in events:
                     e_type = str(e.get("type") or "")
+                    if e_type == "close":
+                        details = e.get("details")
+                        if isinstance(details, dict) and details.get("pips") is not None:
+                            try:
+                                realized_pips += Decimal(str(details.get("pips")))
+                            except Exception:  # pylint: disable=broad-exception-caught
+                                pass
                     if e_type in {"open", "close"}:
                         event_type = f"trade_{e_type}"
                         description = f"Trade {e_type} event for trading task {task_id}"
@@ -361,6 +373,29 @@ def run_trading_task(task_id: int) -> None:
             if processed % 50 == 0:
                 task.strategy_state = state
                 task.save(update_fields=["strategy_state", "updated_at"])
+
+                # Persist best-effort live snapshot for frontend polling.
+                try:
+                    unrealized_pips: str | None = None
+                    if instrument and strategy_type == "floor":
+                        snap = LivePerformanceService.compute_floor_unrealized_snapshot(
+                            instrument=str(instrument), strategy_state=state
+                        )
+                        unrealized_pips = str(snap.unrealized_pips)
+
+                    LivePerformanceService.store_trading_intermediate_results(
+                        task_id,
+                        {
+                            "task_type": "trading",
+                            "processed": processed,
+                            "strategy_type": strategy_type,
+                            "instrument": instrument,
+                            "realized_pips": str(realized_pips),
+                            "unrealized_pips": unrealized_pips,
+                        },
+                    )
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
                 task_service.heartbeat(
                     status_message=f"processed={processed}",
                     meta_update={"processed": processed},
@@ -497,6 +532,7 @@ def run_backtest_task(task_id: int) -> None:
 
     state: dict[str, Any] = {}
     strategy_events: list[dict[str, Any]] = []
+    realized_pips = Decimal("0")
 
     instrument = str(config.get("instrument") or "")
 
@@ -616,6 +652,13 @@ def run_backtest_task(task_id: int) -> None:
 
                 for e in events:
                     e_type = str(e.get("type") or "")
+                    if e_type == "close":
+                        details = e.get("details")
+                        if isinstance(details, dict) and details.get("pips") is not None:
+                            try:
+                                realized_pips += Decimal(str(details.get("pips")))
+                            except Exception:  # pylint: disable=broad-exception-caught
+                                pass
                     if e_type in {"open", "close"}:
                         event_type = f"trade_{e_type}"
                         description = f"Trade {e_type} event for backtest task {task_id}"
@@ -647,13 +690,38 @@ def run_backtest_task(task_id: int) -> None:
                 # Best-effort progress estimate when total unknown.
                 if published_total and published_total > 0:
                     pct = int((processed / published_total) * 100)
-                    execution.update_progress(pct, user_id=int(task.user_id))
+                    execution.update_progress(pct)
+
+                # Persist best-effort live snapshot for frontend polling.
+                try:
+                    unrealized_pips: str | None = None
+                    if instrument and strategy_type == "floor":
+                        snap = LivePerformanceService.compute_floor_unrealized_snapshot(
+                            instrument=str(instrument), strategy_state=state
+                        )
+                        unrealized_pips = str(snap.unrealized_pips)
+
+                    LivePerformanceService.store_backtest_intermediate_results(
+                        task_id,
+                        {
+                            "task_type": "backtest",
+                            "processed": processed,
+                            "published_total": published_total,
+                            "strategy_type": strategy_type,
+                            "instrument": instrument,
+                            "realized_pips": str(realized_pips),
+                            "unrealized_pips": unrealized_pips,
+                            "progress": int(execution.progress or 0),
+                        },
+                    )
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
                 task_service.heartbeat(
                     status_message=f"processed={processed}", meta_update={"processed": processed}
                 )
 
         # final progress
-        execution.update_progress(100, user_id=int(task.user_id))
+        execution.update_progress(100)
 
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.exception("Backtest task crashed: %s", exc)

@@ -6,9 +6,8 @@ This module contains:
 - Django ORM models: TaskExecution, ExecutionMetrics, TradingEvent
 """
 
-from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Any, ClassVar
+from typing import Any
 import traceback
 
 from django.db import models
@@ -684,6 +683,159 @@ class TradingTask(models.Model):
         )
 
 
+class FloorSide(models.TextChoices):
+    """Side used by the floor strategy for layering."""
+
+    LONG = "long", "Long"
+    SHORT = "short", "Short"
+
+
+class FloorStrategyTaskState(models.Model):
+    """Persisted floor strategy state for a task (trading or backtest).
+
+    This model exists to persist strategy state across Celery restarts and task
+    lifecycle operations without relying on JSON/dict blobs.
+    """
+
+    trading_task = models.OneToOneField(
+        "trading.TradingTask",
+        on_delete=models.CASCADE,
+        related_name="floor_state",
+        null=True,
+        blank=True,
+        help_text="Associated live trading task (if applicable)",
+    )
+    backtest_task = models.OneToOneField(
+        "trading.BacktestTask",
+        on_delete=models.CASCADE,
+        related_name="floor_state",
+        null=True,
+        blank=True,
+        help_text="Associated backtest task (if applicable)",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        default=TaskStatus.CREATED,
+        choices=TaskStatus.choices,
+        db_index=True,
+        help_text="Persisted strategy lifecycle status",
+    )
+    side = models.CharField(
+        max_length=10,
+        choices=FloorSide.choices,
+        null=True,
+        blank=True,
+        help_text="Current floor strategy side (long/short)",
+    )
+    reference_price = models.DecimalField(
+        max_digits=15,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text="Reference price used to build/anchor floor layers",
+    )
+    last_tick_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp of the last processed tick (best-effort)",
+    )
+
+    started_at = models.DateTimeField(null=True, blank=True)
+    paused_at = models.DateTimeField(null=True, blank=True)
+    stopped_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "floor_strategy_task_states"
+        verbose_name = "Floor Strategy Task State"
+        verbose_name_plural = "Floor Strategy Task States"
+        constraints = [
+            models.CheckConstraint(
+                name="floor_state_exactly_one_task",
+                condition=(
+                    (models.Q(trading_task__isnull=False) & models.Q(backtest_task__isnull=True))
+                    | (models.Q(trading_task__isnull=True) & models.Q(backtest_task__isnull=False))
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["status", "updated_at"]),
+        ]
+
+    def __str__(self) -> str:
+        task = self.trading_task or self.backtest_task
+        task_name = getattr(task, "name", "<unknown>")
+        return f"FloorState({task_name}) - {self.status}"
+
+
+class FloorStrategyLayerState(models.Model):
+    """Persisted per-layer state for the floor strategy."""
+
+    floor_state = models.ForeignKey(
+        "trading.FloorStrategyTaskState",
+        on_delete=models.CASCADE,
+        related_name="layers",
+        help_text="Owning floor strategy task state",
+    )
+
+    layer_index = models.PositiveIntegerField(help_text="0-based layer index")
+    is_open = models.BooleanField(default=False)
+
+    entry_price = models.DecimalField(
+        max_digits=15,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text="Price where this layer was opened",
+    )
+    opened_at = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    close_price = models.DecimalField(
+        max_digits=15,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text="Price where this layer was closed",
+    )
+    units = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Units allocated to this layer",
+    )
+    realized_pnl = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Realized P&L when the layer is closed",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "floor_strategy_layer_states"
+        verbose_name = "Floor Strategy Layer State"
+        verbose_name_plural = "Floor Strategy Layer States"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["floor_state", "layer_index"],
+                name="unique_floor_layer_per_state",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["floor_state", "is_open"]),
+        ]
+
+    def __str__(self) -> str:
+        floor_state_id = getattr(self, "floor_state_id", None)
+        return f"FloorLayer(state={floor_state_id}, idx={self.layer_index}, open={self.is_open})"
+
+
 class ExecutionMetricsManager(models.Manager["ExecutionMetrics"]):
     """Custom manager for ExecutionMetrics model."""
 
@@ -1115,26 +1267,15 @@ class TaskExecution(models.Model):
         # Include logs in save to ensure they're persisted
         self.save(update_fields=["status", "completed_at", "progress", "logs"])
 
-    def update_progress(self, progress: int, user_id: int | None = None) -> None:
+    def update_progress(self, progress: int) -> None:
         """
         Update execution progress.
 
         Args:
             progress: Progress percentage (0-100)
-            user_id: Optional user ID for WebSocket notification
         """
         self.progress = max(0, min(100, progress))
         self.save(update_fields=["progress"])
-
-        # Send real-time progress update via WebSocket if user_id provided
-        if user_id is not None:
-            send_execution_progress_notification(
-                task_type=self.task_type,
-                task_id=self.task_id,
-                execution_id=self.pk,
-                progress=self.progress,
-                user_id=user_id,
-            )
 
     def add_log(self, level: str, message: str) -> None:
         """
@@ -1153,14 +1294,6 @@ class TaskExecution(models.Model):
             self.logs = []
         self.logs.append(log_entry)
         self.save(update_fields=["logs"])
-
-        send_execution_log_notification(
-            task_type=self.task_type,
-            task_id=self.task_id,
-            execution_id=self.pk,
-            execution_number=self.execution_number,
-            log_entry=log_entry,
-        )
 
     def mark_failed(self, error: Exception) -> None:
         """
@@ -1334,9 +1467,9 @@ class CeleryTaskStatus(models.Model):
             )
         ]
         indexes = [
-            models.Index(fields=["task_name", "status"], name="trading_mana_task_name_status_idx"),
-            models.Index(fields=["celery_task_id"], name="trading_mana_celery_task_id_idx"),
-            models.Index(fields=["last_heartbeat_at"], name="trading_mana_last_heartbeat_at_idx"),
+            models.Index(fields=["task_name", "status"], name="tcs_tn_st_idx"),
+            models.Index(fields=["celery_task_id"], name="tcs_celery_id_idx"),
+            models.Index(fields=["last_heartbeat_at"], name="tcs_hb_idx"),
         ]
 
     def __str__(self) -> str:

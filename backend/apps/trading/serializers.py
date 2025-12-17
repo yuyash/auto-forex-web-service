@@ -13,8 +13,7 @@ from rest_framework.request import Request
 
 from apps.trading.models import BacktestTask
 from apps.market.models import OandaAccount, TickData
-from apps.trading.models import ExecutionMetrics, TaskExecution
-from .models import StrategyConfig, TradingTask
+from apps.trading.models import ExecutionMetrics, TaskExecution, StrategyConfig, TradingTask
 from apps.trading.services.registry import registry
 
 
