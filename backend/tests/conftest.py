@@ -11,6 +11,31 @@ import pytest
 User = get_user_model()
 
 
+@pytest.fixture(autouse=True)
+def _mock_ses_email_sending(monkeypatch, settings):
+    """Prevent tests from making real AWS SES calls.
+
+    Integration tests hit live endpoints (via live_server) that trigger email sending.
+    We stub out the SES client used by apps.accounts.services.email.
+    """
+
+    if not getattr(settings, "DEFAULT_FROM_EMAIL", ""):
+        settings.DEFAULT_FROM_EMAIL = "noreply@example.com"
+
+    import apps.accounts.services.email as email_module
+
+    class _DummySesClient:
+        def send_email(self, **_kwargs):
+            return {"MessageId": "test-message-id"}
+
+    def _fake_boto3_client(service_name, *_args, **_kwargs):
+        if service_name == "ses":
+            return _DummySesClient()
+        raise AssertionError(f"Unexpected boto3 client requested in tests: {service_name}")
+
+    monkeypatch.setattr(email_module.boto3, "client", _fake_boto3_client)
+
+
 @pytest.fixture(scope="session")
 def django_db_modify_db_settings(django_db_modify_db_settings_parallel_suffix):
     """Use parallel suffix for database in parallel test execution."""
@@ -72,16 +97,16 @@ def locked_user(db):
 @pytest.fixture
 def auth_headers(test_user):
     """Generate authorization headers for authenticated requests."""
-    from apps.accounts.jwt_utils import generate_jwt_token
+    from apps.accounts.services.jwt import JWTService
 
-    token = generate_jwt_token(test_user)
+    token = JWTService().generate_token(test_user)
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
 def admin_auth_headers(admin_user):
     """Generate authorization headers for admin requests."""
-    from apps.accounts.jwt_utils import generate_jwt_token
+    from apps.accounts.services.jwt import JWTService
 
-    token = generate_jwt_token(admin_user)
+    token = JWTService().generate_token(admin_user)
     return {"Authorization": f"Bearer {token}"}

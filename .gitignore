@@ -169,6 +169,7 @@ config/production.yaml
 coverage/
 .nyc_output/
 htmlcov/
+frontend/playwright-report/
 
 # Build artifacts
 *.pyc

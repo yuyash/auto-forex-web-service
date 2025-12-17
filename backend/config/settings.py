@@ -12,7 +12,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-from celery.schedules import crontab
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -55,17 +54,9 @@ INSTALLED_APPS = [
     "django_celery_beat",
     # Local apps
     "apps.accounts",
-    # "apps.dashboard",
-    # "apps.backtest",
-    # "apps.events",
-    # "apps.market",
+    "apps.market",
     # "apps.monitoring",
-    # "apps.orders",
-    # "apps.positions",
-    # "apps.strategy",
-    # "apps.trading",
-    # "apps.notification",
-    # "apps.tasks",
+    "apps.trading",
 ]
 
 MIDDLEWARE = [
@@ -195,30 +186,94 @@ CHANNEL_LAYERS = {
 # Celery Configuration
 # =============================================================================
 
-CELERY_BROKER_URL = REDIS_URL.replace(f"/{REDIS_DB}", "/2")  # Use db 2 for celery
+CELERY_BROKER_URL = REDIS_URL.replace(f"/{REDIS_DB}", "/2")
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
 CELERY_ENABLE_UTC = True
-CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT", "1800"))  # 30 minutes
-CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "1500"))  # 25 minutes
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1
-CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
 
-# Celery Beat Schedule
-# https://docs.celeryq.dev/en/stable/userguide/periodic-tasks.html
-CELERY_BEAT_SCHEDULE = {
-    "daily-athena-import": {
-        "task": "apps.backtest.athena_import_task.schedule_daily_athena_import",
-        "schedule": crontab(hour=1, minute=0),  # Daily at 1:00 AM UTC
-        "options": {
-            "expires": 7200.0,  # Task expires after 2 hours if not executed
-        },
-    },
+
+# =============================================================================
+# Market Tick Pub/Sub
+# =============================================================================
+
+REDIS_MARKET_DB = int(os.getenv("REDIS_MARKET_DB", "3"))
+MARKET_REDIS_URL = (
+    f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_MARKET_DB}"
+    if REDIS_PASSWORD
+    else f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_MARKET_DB}"
+)
+
+MARKET_TICK_CHANNEL = os.getenv("MARKET_TICK_CHANNEL", "market:ticks")
+MARKET_TICK_INSTRUMENTS = [
+    x.strip() for x in os.getenv("MARKET_TICK_INSTRUMENTS", "EUR_USD").split(",") if x.strip()
+]
+
+MARKET_TICK_PUBSUB_INIT_KEY = os.getenv("MARKET_TICK_PUBSUB_INIT_KEY", "market:tick_pubsub:init")
+MARKET_TICK_ACCOUNT_KEY = os.getenv("MARKET_TICK_ACCOUNT_KEY", "market:tick_pubsub:account")
+MARKET_TICK_PUBLISHER_LOCK_KEY = os.getenv(
+    "MARKET_TICK_PUBLISHER_LOCK_KEY", "market:tick_publisher:lock"
+)
+MARKET_TICK_SUBSCRIBER_LOCK_KEY = os.getenv(
+    "MARKET_TICK_SUBSCRIBER_LOCK_KEY", "market:tick_subscriber:lock"
+)
+MARKET_TICK_SUPERVISOR_LOCK_KEY = os.getenv(
+    "MARKET_TICK_SUPERVISOR_LOCK_KEY", "market:tick_supervisor:lock"
+)
+MARKET_TICK_SUPERVISOR_INTERVAL = int(os.getenv("MARKET_TICK_SUPERVISOR_INTERVAL", "30"))
+MARKET_TICK_SUBSCRIBER_BATCH_SIZE = int(os.getenv("MARKET_TICK_SUBSCRIBER_BATCH_SIZE", "200"))
+MARKET_TICK_SUBSCRIBER_FLUSH_INTERVAL = int(os.getenv("MARKET_TICK_SUBSCRIBER_FLUSH_INTERVAL", "2"))
+
+
+# =============================================================================
+# Market Backtest Tick Pub/Sub
+# =============================================================================
+
+# Per-request channel is: f"{MARKET_BACKTEST_TICK_CHANNEL_PREFIX}{request_id}"
+MARKET_BACKTEST_TICK_CHANNEL_PREFIX = os.getenv(
+    "MARKET_BACKTEST_TICK_CHANNEL_PREFIX",
+    "market:backtest:ticks:",
+)
+
+# Controls how many rows Django fetches from DB per chunk during publishing.
+
+
+# =============================================================================
+# Trading Strategy Defaults
+# =============================================================================
+
+# Centralized defaults for Floor Strategy.
+# Strategy configs (StrategyConfig.parameters) can override any of these.
+TRADING_FLOOR_STRATEGY_DEFAULTS = {
+    "scaling_amount": float(os.getenv("TRADING_FLOOR_SCALING_AMOUNT", "1.0")),
+    "max_layers": int(os.getenv("TRADING_FLOOR_MAX_LAYERS", "3")),
+    "max_retracements_per_layer": int(os.getenv("TRADING_FLOOR_MAX_RETRACEMENTS_PER_LAYER", "10")),
+    "volatility_lock_multiplier": float(
+        os.getenv("TRADING_FLOOR_VOLATILITY_LOCK_MULTIPLIER", "5.0")
+    ),
+    "retracement_trigger_progression": os.getenv(
+        "TRADING_FLOOR_RETRACEMENT_TRIGGER_PROGRESSION", "additive"
+    ),
+    "retracement_trigger_increment": float(
+        os.getenv("TRADING_FLOOR_RETRACEMENT_TRIGGER_INCREMENT", "5")
+    ),
+    "lot_size_progression": os.getenv("TRADING_FLOOR_LOT_SIZE_PROGRESSION", "additive"),
+    "lot_size_increment": float(os.getenv("TRADING_FLOOR_LOT_SIZE_INCREMENT", "0.5")),
+    "entry_signal_lookback_ticks": int(
+        os.getenv("TRADING_FLOOR_ENTRY_SIGNAL_LOOKBACK_TICKS", "10")
+    ),
+    "direction_method": os.getenv("TRADING_FLOOR_DIRECTION_METHOD", "momentum"),
+    "sma_fast_period": int(os.getenv("TRADING_FLOOR_SMA_FAST_PERIOD", "10")),
+    "sma_slow_period": int(os.getenv("TRADING_FLOOR_SMA_SLOW_PERIOD", "30")),
+    "ema_fast_period": int(os.getenv("TRADING_FLOOR_EMA_FAST_PERIOD", "12")),
+    "ema_slow_period": int(os.getenv("TRADING_FLOOR_EMA_SLOW_PERIOD", "26")),
+    "rsi_period": int(os.getenv("TRADING_FLOOR_RSI_PERIOD", "14")),
+    "rsi_overbought": int(os.getenv("TRADING_FLOOR_RSI_OVERBOUGHT", "70")),
+    "rsi_oversold": int(os.getenv("TRADING_FLOOR_RSI_OVERSOLD", "30")),
 }
+MARKET_BACKTEST_PUBLISH_BATCH_SIZE = int(os.getenv("MARKET_BACKTEST_PUBLISH_BATCH_SIZE", "1000"))
 
 
 # Django REST Framework Configuration

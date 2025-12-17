@@ -16,6 +16,10 @@ os.environ.setdefault("DJANGO_ENV", "development")
 # Import all settings from the main settings module
 from config.settings import *  # noqa: E402, F401, F403
 
+# Use test-only URL routing so integration tests can hit market endpoints
+# without requiring production wiring changes.
+ROOT_URLCONF = "tests.urls_test"
+
 # =============================================================================
 # Test-specific Database Configuration
 # =============================================================================

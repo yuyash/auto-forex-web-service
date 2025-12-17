@@ -1,0 +1,184 @@
+"""
+URL configuration for trading app.
+
+This module defines URL patterns for trading data and strategy endpoints.
+"""
+
+from django.urls import path
+from apps.market.views import (
+    CandleDataView,
+    OrderDetailView,
+    OrderView,
+    PositionDetailView,
+    PositionView,
+    SupportedGranularitiesView,
+    SupportedInstrumentsView,
+)
+from apps.monitoring.views import (
+    health_check,
+    oanda_health_check,
+    simple_health_check,
+    uptime_check,
+)
+
+from .views import (  # noqa: E501
+    BacktestTaskCopyView,
+    BacktestTaskDetailView,
+    BacktestTaskExecutionsView,
+    BacktestTaskExportView,
+    BacktestTaskView,
+    BacktestTaskLiveResultsView,
+    BacktestTaskLogsView,
+    BacktestTaskRerunView,
+    BacktestTaskStartView,
+    BacktestTaskStatusView,
+    BacktestTaskStopView,
+    TradingTaskCopyView,
+    TradingTaskDetailView,
+    TradingTaskExecutionsView,
+    TradingTaskView,
+    TradingTaskLogsView,
+    TradingTaskPauseView,
+    TradingTaskRerunView,
+    TradingTaskRestartView,
+    TradingTaskResumeView,
+    TradingTaskStartView,
+    TradingTaskStatusView,
+    TradingTaskStopView,
+    StrategyConfigDetailView,
+    StrategyConfigView,
+    StrategyView,
+)
+
+app_name = "trading"
+
+urlpatterns = [
+    path("strategies/", StrategyView.as_view(), name="strategy_list"),
+    # Strategy configuration endpoints
+    path(
+        "strategy-configs/",
+        StrategyConfigView.as_view(),
+        name="strategy_config_list_create",
+    ),
+    path(
+        "strategy-configs/<int:config_id>/",
+        StrategyConfigDetailView.as_view(),
+        name="strategy_config_detail",
+    ),
+    path(
+        "backtest-tasks/",
+        BacktestTaskView.as_view(),
+        name="backtest_task_list_create",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/",
+        BacktestTaskDetailView.as_view(),
+        name="backtest_task_detail",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/copy/",
+        BacktestTaskCopyView.as_view(),
+        name="backtest_task_copy",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/start/",
+        BacktestTaskStartView.as_view(),
+        name="backtest_task_start",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/stop/",
+        BacktestTaskStopView.as_view(),
+        name="backtest_task_stop",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/rerun/",
+        BacktestTaskRerunView.as_view(),
+        name="backtest_task_rerun",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/status/",
+        BacktestTaskStatusView.as_view(),
+        name="backtest_task_status",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/executions/",
+        BacktestTaskExecutionsView.as_view(),
+        name="backtest_task_executions",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/logs/",
+        BacktestTaskLogsView.as_view(),
+        name="backtest_task_logs",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/export/",
+        BacktestTaskExportView.as_view(),
+        name="backtest_task_export",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/live-results/",
+        BacktestTaskLiveResultsView.as_view(),
+        name="backtest_task_live_results",
+    ),
+    # TradingTask endpoints (new task-based API)
+    path(
+        "trading-tasks/",
+        TradingTaskView.as_view(),
+        name="trading_task_list_create",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/",
+        TradingTaskDetailView.as_view(),
+        name="trading_task_detail",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/copy/",
+        TradingTaskCopyView.as_view(),
+        name="trading_task_copy",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/start/",
+        TradingTaskStartView.as_view(),
+        name="trading_task_start",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/stop/",
+        TradingTaskStopView.as_view(),
+        name="trading_task_stop",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/pause/",
+        TradingTaskPauseView.as_view(),
+        name="trading_task_pause",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/resume/",
+        TradingTaskResumeView.as_view(),
+        name="trading_task_resume",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/rerun/",
+        TradingTaskRerunView.as_view(),
+        name="trading_task_rerun",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/restart/",
+        TradingTaskRestartView.as_view(),
+        name="trading_task_restart",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/status/",
+        TradingTaskStatusView.as_view(),
+        name="trading_task_status",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/executions/",
+        TradingTaskExecutionsView.as_view(),
+        name="trading_task_executions",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/logs/",
+        TradingTaskLogsView.as_view(),
+        name="trading_task_logs",
+    ),
+]
