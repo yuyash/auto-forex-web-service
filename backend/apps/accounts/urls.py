@@ -18,8 +18,6 @@ from .views import (
     UserNotificationMarkReadView,
     UserRegistrationView,
     UserSettingsView,
-    WhitelistedEmailDetailView,
-    WhitelistedEmailListCreateView,
 )
 
 app_name = "accounts"
@@ -35,16 +33,6 @@ urlpatterns = [
     path("auth/login", UserLoginView.as_view(), name="login"),
     path("auth/logout", UserLogoutView.as_view(), name="logout"),
     path("auth/refresh", TokenRefreshView.as_view(), name="token_refresh"),
-    path(
-        "admin/whitelist/emails",
-        WhitelistedEmailListCreateView.as_view(),
-        name="whitelist_emails_list",
-    ),
-    path(
-        "admin/whitelist/emails/<int:whitelist_id>",
-        WhitelistedEmailDetailView.as_view(),
-        name="whitelist_email_detail",
-    ),
     path("settings/", UserSettingsView.as_view(), name="user_settings"),
     path(
         "settings/public",
