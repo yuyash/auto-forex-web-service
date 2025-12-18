@@ -1,7 +1,7 @@
 """
 Integration tests for user logout endpoint.
 
-Tests the POST /api/auth/logout endpoint using live_server.
+Tests the POST /api/accounts/auth/logout endpoint using live_server.
 """
 
 from django.contrib.auth import get_user_model
@@ -18,7 +18,7 @@ class TestUserLogout:
 
     def test_successful_logout(self, live_server, test_user, auth_headers):
         """Test successful logout with valid token."""
-        url = f"{live_server.url}/api/auth/logout"
+        url = f"{live_server.url}/api/accounts/auth/logout"
 
         response = requests.post(url, headers=auth_headers, timeout=10)
 
@@ -29,7 +29,7 @@ class TestUserLogout:
 
     def test_logout_without_token(self, live_server):
         """Test logout fails without authorization token."""
-        url = f"{live_server.url}/api/auth/logout"
+        url = f"{live_server.url}/api/accounts/auth/logout"
 
         response = requests.post(url, timeout=10)
 
@@ -37,7 +37,7 @@ class TestUserLogout:
 
     def test_logout_with_invalid_token(self, live_server):
         """Test logout fails with invalid token."""
-        url = f"{live_server.url}/api/auth/logout"
+        url = f"{live_server.url}/api/accounts/auth/logout"
         headers = {"Authorization": "Bearer invalid_token_here"}
 
         response = requests.post(url, headers=headers, timeout=10)
@@ -46,7 +46,7 @@ class TestUserLogout:
 
     def test_logout_with_malformed_header(self, live_server):
         """Test logout fails with malformed authorization header."""
-        url = f"{live_server.url}/api/auth/logout"
+        url = f"{live_server.url}/api/accounts/auth/logout"
         headers = {"Authorization": "NotBearer some_token"}
 
         response = requests.post(url, headers=headers, timeout=10)
@@ -65,7 +65,7 @@ class TestUserLogout:
             user_agent="test-agent",
         )
 
-        url = f"{live_server.url}/api/auth/logout"
+        url = f"{live_server.url}/api/accounts/auth/logout"
         response = requests.post(url, headers=auth_headers, timeout=10)
 
         assert response.status_code == 200
@@ -74,7 +74,7 @@ class TestUserLogout:
 
     def test_logout_response_structure(self, live_server, test_user, auth_headers):
         """Test logout response has expected structure."""
-        url = f"{live_server.url}/api/auth/logout"
+        url = f"{live_server.url}/api/accounts/auth/logout"
 
         response = requests.post(url, headers=auth_headers, timeout=10)
 

@@ -83,7 +83,7 @@ class TestUserRegistrationView:
         settings.save()
 
         request = self.factory.post(
-            "/api/auth/register",
+            "/api/accounts/auth/register",
             {
                 "email": "new@example.com",
                 "password": "TestPass123!",
@@ -110,7 +110,7 @@ class TestUserRegistrationView:
         mock_boto3_client.return_value.send_email.return_value = {"MessageId": "test"}
 
         request = self.factory.post(
-            "/api/auth/register",
+            "/api/accounts/auth/register",
             {
                 "email": "newuser@example.com",
                 "password": "TestPass123!",
@@ -135,7 +135,7 @@ class TestUserRegistrationView:
         settings.save()
 
         request = self.factory.post(
-            "/api/auth/register",
+            "/api/accounts/auth/register",
             {
                 "email": "invalid-email",
                 "password": "short",
@@ -161,7 +161,7 @@ class TestEmailVerificationView:
     def test_missing_token_returns_400(self) -> None:
         """Test missing token returns 400."""
         request = self.factory.post(
-            "/api/auth/verify-email",
+            "/api/accounts/auth/verify-email",
             {},
             format="json",
         )
@@ -174,7 +174,7 @@ class TestEmailVerificationView:
     def test_invalid_token_returns_400(self) -> None:
         """Test invalid token returns 400."""
         request = self.factory.post(
-            "/api/auth/verify-email",
+            "/api/accounts/auth/verify-email",
             {"token": "invalid-token"},
             format="json",
         )
@@ -199,7 +199,7 @@ class TestEmailVerificationView:
         token = user.generate_verification_token()
 
         request = self.factory.post(
-            "/api/auth/verify-email",
+            "/api/accounts/auth/verify-email",
             {"token": token},
             format="json",
         )
@@ -225,7 +225,7 @@ class TestResendVerificationEmailView:
     def test_missing_email_returns_400(self) -> None:
         """Test missing email returns 400."""
         request = self.factory.post(
-            "/api/auth/resend-verification",
+            "/api/accounts/auth/resend-verification",
             {},
             format="json",
         )
@@ -237,7 +237,7 @@ class TestResendVerificationEmailView:
     def test_nonexistent_email_returns_200(self) -> None:
         """Test nonexistent email returns 200 (security - don't reveal existence)."""
         request = self.factory.post(
-            "/api/auth/resend-verification",
+            "/api/accounts/auth/resend-verification",
             {"email": "nonexistent@example.com"},
             format="json",
         )
@@ -260,7 +260,7 @@ class TestResendVerificationEmailView:
         user.save()
 
         request = self.factory.post(
-            "/api/auth/resend-verification",
+            "/api/accounts/auth/resend-verification",
             {"email": "verified@example.com"},
             format="json",
         )
@@ -299,7 +299,7 @@ class TestUserLoginView:
         settings.save()
 
         request = self.factory.post(
-            "/api/auth/login",
+            "/api/accounts/auth/login",
             {"email": "test@example.com", "password": "testpass"},
             format="json",
         )
@@ -324,7 +324,7 @@ class TestUserLoginView:
         )
 
         request = self.factory.post(
-            "/api/auth/login",
+            "/api/accounts/auth/login",
             {"email": "login@example.com", "password": "TestPass123!"},
             format="json",
         )
@@ -350,7 +350,7 @@ class TestUserLoginView:
         )
 
         request = self.factory.post(
-            "/api/auth/login",
+            "/api/accounts/auth/login",
             {"email": "login@example.com", "password": "WrongPassword!"},
             format="json",
         )
@@ -371,7 +371,7 @@ class TestUserLogoutView:
 
     def test_logout_requires_authentication(self) -> None:
         """Test logout requires authentication."""
-        request = self.factory.post("/api/auth/logout")
+        request = self.factory.post("/api/accounts/auth/logout")
 
         response = self.view(request)
 
@@ -389,7 +389,7 @@ class TestUserLogoutView:
         )
 
         token = JWTService().generate_token(user)
-        request = self.factory.post("/api/auth/logout")
+        request = self.factory.post("/api/accounts/auth/logout")
         request.META["HTTP_AUTHORIZATION"] = f"Bearer {token}"
 
         response = self.view(request)
@@ -409,7 +409,7 @@ class TestTokenRefreshView:
     def test_refresh_missing_token_returns_401(self) -> None:
         """Test refresh with missing token returns 401 (unauthorized)."""
         request = self.factory.post(
-            "/api/auth/refresh",
+            "/api/accounts/auth/refresh",
             {},
             format="json",
         )
@@ -422,7 +422,7 @@ class TestTokenRefreshView:
     def test_refresh_invalid_token_returns_401(self) -> None:
         """Test refresh with invalid token returns 401."""
         request = self.factory.post(
-            "/api/auth/refresh",
+            "/api/accounts/auth/refresh",
             {"refresh_token": "invalid-token"},
             format="json",
         )
@@ -447,7 +447,7 @@ class TestTokenRefreshView:
         token = JWTService().generate_token(user)
 
         request = self.factory.post(
-            "/api/auth/refresh",
+            "/api/accounts/auth/refresh",
             {"refresh_token": token},
             format="json",
         )
@@ -471,7 +471,7 @@ class TestUserSettingsView:
 
     def test_get_settings_requires_authentication(self) -> None:
         """Test get settings requires authentication."""
-        request = self.factory.get("/api/settings")
+        request = self.factory.get("/api/accounts/settings")
 
         response = self.view(request)
 
@@ -487,7 +487,7 @@ class TestUserSettingsView:
             password="testpass123",
         )
 
-        request = self.factory.get("/api/settings")
+        request = self.factory.get("/api/accounts/settings")
         from rest_framework.test import force_authenticate
 
         force_authenticate(request, user=user)
@@ -510,7 +510,7 @@ class TestUserSettingsView:
         )
 
         request = self.factory.put(
-            "/api/settings",
+            "/api/accounts/settings",
             {"notification_enabled": False},
             format="json",
         )
@@ -536,7 +536,7 @@ class TestPublicAccountSettingsView:
 
     def test_get_public_settings_no_auth_required(self) -> None:
         """Test get public settings doesn't require authentication."""
-        request = self.factory.get("/api/settings/public")
+        request = self.factory.get("/api/accounts/settings/public")
 
         response = self.view(request)
 
@@ -544,7 +544,7 @@ class TestPublicAccountSettingsView:
 
     def test_get_public_settings_returns_expected_fields(self) -> None:
         """Test get public settings returns expected fields."""
-        request = self.factory.get("/api/settings/public")
+        request = self.factory.get("/api/accounts/settings/public")
 
         response = self.view(request)
 
@@ -554,7 +554,7 @@ class TestPublicAccountSettingsView:
 
     def test_get_public_settings_only_has_3_fields(self) -> None:
         """Test public settings only exposes 3 fields."""
-        request = self.factory.get("/api/settings/public")
+        request = self.factory.get("/api/accounts/settings/public")
 
         response = self.view(request)
 

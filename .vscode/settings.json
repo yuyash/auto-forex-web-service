@@ -160,5 +160,9 @@
   "python.useEnvironmentsExtension": true,
   "python-env.workspaceSearchPaths": ["${workspaceFolder}/backend/"],
   "typescript.autoClosingTags": false,
-  "workbench.colorTheme": "Visual Studio Light"
+  "workbench.colorTheme": "Visual Studio Light",
+  "playwright.reuseBrowser": false,
+  "playwright.pickLocatorCopyToClipboard": true,
+  "playwright.runGlobalSetupOnEachRun": true,
+  "playwright.showTrace": true
 }

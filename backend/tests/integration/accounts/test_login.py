@@ -1,7 +1,7 @@
 """
 Integration tests for user login endpoint.
 
-Tests the POST /api/auth/login endpoint using live_server.
+Tests the POST /api/accounts/auth/login endpoint using live_server.
 """
 
 from django.contrib.auth import get_user_model
@@ -18,7 +18,7 @@ class TestUserLogin:
 
     def test_successful_login(self, live_server, test_user):
         """Test successful login with valid credentials."""
-        url = f"{live_server.url}/api/auth/login"
+        url = f"{live_server.url}/api/accounts/auth/login"
         data = {
             "email": test_user.email,
             "password": "TestPass123!",
@@ -35,7 +35,7 @@ class TestUserLogin:
 
     def test_login_wrong_password(self, live_server, test_user):
         """Test login fails with wrong password."""
-        url = f"{live_server.url}/api/auth/login"
+        url = f"{live_server.url}/api/accounts/auth/login"
         data = {
             "email": test_user.email,
             "password": "WrongPassword123!",
@@ -49,7 +49,7 @@ class TestUserLogin:
 
     def test_login_nonexistent_user(self, live_server):
         """Test login fails with non-existent user."""
-        url = f"{live_server.url}/api/auth/login"
+        url = f"{live_server.url}/api/accounts/auth/login"
         data = {
             "email": "nonexistent@example.com",
             "password": "SomePassword123!",
@@ -63,7 +63,7 @@ class TestUserLogin:
 
     def test_login_missing_email(self, live_server):
         """Test login fails without email."""
-        url = f"{live_server.url}/api/auth/login"
+        url = f"{live_server.url}/api/accounts/auth/login"
         data = {
             "password": "SomePassword123!",
         }
@@ -74,7 +74,7 @@ class TestUserLogin:
 
     def test_login_missing_password(self, live_server, test_user):
         """Test login fails without password."""
-        url = f"{live_server.url}/api/auth/login"
+        url = f"{live_server.url}/api/accounts/auth/login"
         data = {
             "email": test_user.email,
         }
@@ -85,7 +85,7 @@ class TestUserLogin:
 
     def test_login_empty_request(self, live_server):
         """Test login fails with empty request body."""
-        url = f"{live_server.url}/api/auth/login"
+        url = f"{live_server.url}/api/accounts/auth/login"
 
         response = requests.post(url, json={}, timeout=10)
 
@@ -93,7 +93,7 @@ class TestUserLogin:
 
     def test_login_unverified_email(self, live_server, unverified_user):
         """Test login behavior with unverified email."""
-        url = f"{live_server.url}/api/auth/login"
+        url = f"{live_server.url}/api/accounts/auth/login"
         data = {
             "email": unverified_user.email,
             "password": "TestPass123!",
@@ -107,7 +107,7 @@ class TestUserLogin:
 
     def test_login_locked_account(self, live_server, locked_user):
         """Test login fails for locked account."""
-        url = f"{live_server.url}/api/auth/login"
+        url = f"{live_server.url}/api/accounts/auth/login"
         data = {
             "email": locked_user.email,
             "password": "TestPass123!",
@@ -122,7 +122,7 @@ class TestUserLogin:
 
     def test_login_case_insensitive_email(self, live_server, test_user):
         """Test login works with different email case."""
-        url = f"{live_server.url}/api/auth/login"
+        url = f"{live_server.url}/api/accounts/auth/login"
         data = {
             "email": test_user.email.upper(),
             "password": "TestPass123!",
@@ -136,7 +136,7 @@ class TestUserLogin:
 
     def test_login_returns_user_info(self, live_server, test_user):
         """Test login response contains expected user information."""
-        url = f"{live_server.url}/api/auth/login"
+        url = f"{live_server.url}/api/accounts/auth/login"
         data = {
             "email": test_user.email,
             "password": "TestPass123!",
@@ -156,7 +156,7 @@ class TestUserLogin:
 
     def test_login_admin_user(self, live_server, admin_user):
         """Test login works for admin users."""
-        url = f"{live_server.url}/api/auth/login"
+        url = f"{live_server.url}/api/accounts/auth/login"
         data = {
             "email": admin_user.email,
             "password": "AdminPass123!",

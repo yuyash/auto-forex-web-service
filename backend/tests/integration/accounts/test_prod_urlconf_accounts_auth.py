@@ -18,7 +18,7 @@ class TestAccountsProdUrlconfAuth:
         clear_url_caches()
 
         client = APIClient()
-        resp = client.get("/api/settings/")
+        resp = client.get("/api/accounts/settings/")
         assert resp.status_code in {401, 403}
 
     def test_settings_works_with_auth_in_prod_urlconf(self, settings, test_user):
@@ -28,7 +28,7 @@ class TestAccountsProdUrlconfAuth:
         client = APIClient()
         client.force_authenticate(user=test_user)
 
-        resp = client.get("/api/settings/")
+        resp = client.get("/api/accounts/settings/")
         assert resp.status_code == 200
         data = resp.json()
         assert "user" in data

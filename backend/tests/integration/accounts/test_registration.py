@@ -1,7 +1,7 @@
 """
 Integration tests for user registration endpoint.
 
-Tests the POST /api/auth/register endpoint using live_server.
+Tests the POST /api/accounts/auth/register endpoint using live_server.
 """
 
 from django.contrib.auth import get_user_model
@@ -18,7 +18,7 @@ class TestUserRegistration:
 
     def test_successful_registration(self, live_server):
         """Test successful user registration with valid data."""
-        url = f"{live_server.url}/api/auth/register"
+        url = f"{live_server.url}/api/accounts/auth/register"
         data = {
             "email": "newuser@example.com",
             "username": "newuser",
@@ -38,7 +38,7 @@ class TestUserRegistration:
 
     def test_registration_missing_email(self, live_server):
         """Test registration fails without email."""
-        url = f"{live_server.url}/api/auth/register"
+        url = f"{live_server.url}/api/accounts/auth/register"
         data = {
             "username": "newuser",
             "password": "SecurePass123!",
@@ -53,7 +53,7 @@ class TestUserRegistration:
 
     def test_registration_without_username_succeeds(self, live_server):
         """Test registration succeeds without username (username is optional)."""
-        url = f"{live_server.url}/api/auth/register"
+        url = f"{live_server.url}/api/accounts/auth/register"
         data = {
             "email": "newuser_no_username@example.com",
             "password": "SecurePass123!",
@@ -70,7 +70,7 @@ class TestUserRegistration:
 
     def test_registration_password_mismatch(self, live_server):
         """Test registration fails when passwords don't match."""
-        url = f"{live_server.url}/api/auth/register"
+        url = f"{live_server.url}/api/accounts/auth/register"
         data = {
             "email": "newuser@example.com",
             "username": "newuser",
@@ -86,7 +86,7 @@ class TestUserRegistration:
 
     def test_registration_weak_password(self, live_server):
         """Test registration fails with weak password."""
-        url = f"{live_server.url}/api/auth/register"
+        url = f"{live_server.url}/api/accounts/auth/register"
         data = {
             "email": "newuser@example.com",
             "username": "newuser",
@@ -100,7 +100,7 @@ class TestUserRegistration:
 
     def test_registration_duplicate_email(self, live_server, test_user):
         """Test registration fails with existing email."""
-        url = f"{live_server.url}/api/auth/register"
+        url = f"{live_server.url}/api/accounts/auth/register"
         data = {
             "email": test_user.email,
             "username": "anotheruser",
@@ -116,7 +116,7 @@ class TestUserRegistration:
 
     def test_registration_duplicate_username(self, live_server, test_user):
         """Test registration fails with existing username."""
-        url = f"{live_server.url}/api/auth/register"
+        url = f"{live_server.url}/api/accounts/auth/register"
         data = {
             "email": "different@example.com",
             "username": test_user.username,
@@ -132,7 +132,7 @@ class TestUserRegistration:
 
     def test_registration_invalid_email_format(self, live_server):
         """Test registration fails with invalid email format."""
-        url = f"{live_server.url}/api/auth/register"
+        url = f"{live_server.url}/api/accounts/auth/register"
         data = {
             "email": "not-an-email",
             "username": "newuser",
@@ -148,7 +148,7 @@ class TestUserRegistration:
 
     def test_registration_empty_request(self, live_server):
         """Test registration fails with empty request body."""
-        url = f"{live_server.url}/api/auth/register"
+        url = f"{live_server.url}/api/accounts/auth/register"
 
         response = requests.post(url, json={}, timeout=10)
 
@@ -156,7 +156,7 @@ class TestUserRegistration:
 
     def test_registration_with_first_and_last_name(self, live_server):
         """Test successful registration with first_name and last_name."""
-        url = f"{live_server.url}/api/auth/register"
+        url = f"{live_server.url}/api/accounts/auth/register"
         data = {
             "email": "nameduser@example.com",
             "username": "nameduser",
@@ -175,7 +175,7 @@ class TestUserRegistration:
 
     def test_registration_with_first_name_only(self, live_server):
         """Test registration with only first_name provided."""
-        url = f"{live_server.url}/api/auth/register"
+        url = f"{live_server.url}/api/accounts/auth/register"
         data = {
             "email": "firstname@example.com",
             "username": "firstname",
@@ -193,7 +193,7 @@ class TestUserRegistration:
 
     def test_registration_without_names(self, live_server):
         """Test registration without first_name and last_name defaults to empty."""
-        url = f"{live_server.url}/api/auth/register"
+        url = f"{live_server.url}/api/accounts/auth/register"
         data = {
             "email": "nonames@example.com",
             "username": "nonames",
