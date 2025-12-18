@@ -58,7 +58,8 @@
     "online": "Online",
     "offline": "Offline",
     "connected": "Connected",
-    "disconnected": "Disconnected"
+    "disconnected": "Disconnected",
+    "noOandaAccount": "No Account"
   },
   "messages": {
     "loading": "Loading...",
