@@ -2,8 +2,8 @@
 Integration tests for email verification endpoints.
 
 Tests the following endpoints using live_server:
-- POST /api/auth/verify-email
-- POST /api/auth/resend-verification
+- POST /api/accounts/auth/verify-email
+- POST /api/accounts/auth/resend-verification
 """
 
 from django.contrib.auth import get_user_model
@@ -23,7 +23,7 @@ class TestEmailVerification:
         # Generate verification token
         token = unverified_user.generate_verification_token()
 
-        url = f"{live_server.url}/api/auth/verify-email"
+        url = f"{live_server.url}/api/accounts/auth/verify-email"
         data = {"token": token}
 
         response = requests.post(url, json=data, timeout=10)
@@ -36,7 +36,7 @@ class TestEmailVerification:
 
     def test_verify_email_with_invalid_token(self, live_server):
         """Test email verification fails with invalid token."""
-        url = f"{live_server.url}/api/auth/verify-email"
+        url = f"{live_server.url}/api/accounts/auth/verify-email"
         data = {"token": "invalid_token_12345"}
 
         response = requests.post(url, json=data, timeout=10)
@@ -47,7 +47,7 @@ class TestEmailVerification:
 
     def test_verify_email_without_token(self, live_server):
         """Test email verification fails without token."""
-        url = f"{live_server.url}/api/auth/verify-email"
+        url = f"{live_server.url}/api/accounts/auth/verify-email"
         data = {}
 
         response = requests.post(url, json=data, timeout=10)
@@ -58,7 +58,7 @@ class TestEmailVerification:
 
     def test_verify_email_empty_token(self, live_server):
         """Test email verification fails with empty token."""
-        url = f"{live_server.url}/api/auth/verify-email"
+        url = f"{live_server.url}/api/accounts/auth/verify-email"
         data = {"token": ""}
 
         response = requests.post(url, json=data, timeout=10)
@@ -69,7 +69,7 @@ class TestEmailVerification:
         """Test verification response contains user information."""
         token = unverified_user.generate_verification_token()
 
-        url = f"{live_server.url}/api/auth/verify-email"
+        url = f"{live_server.url}/api/accounts/auth/verify-email"
         data = {"token": token}
 
         response = requests.post(url, json=data, timeout=10)
@@ -90,7 +90,7 @@ class TestResendVerification:
 
     def test_resend_verification_for_unverified_user(self, live_server, unverified_user):
         """Test resend verification email for unverified user."""
-        url = f"{live_server.url}/api/auth/resend-verification"
+        url = f"{live_server.url}/api/accounts/auth/resend-verification"
         data = {"email": unverified_user.email}
 
         response = requests.post(url, json=data, timeout=10)
@@ -101,7 +101,7 @@ class TestResendVerification:
 
     def test_resend_verification_for_verified_user(self, live_server, test_user):
         """Test resend verification fails for already verified user."""
-        url = f"{live_server.url}/api/auth/resend-verification"
+        url = f"{live_server.url}/api/accounts/auth/resend-verification"
         data = {"email": test_user.email}
 
         response = requests.post(url, json=data, timeout=10)
@@ -113,7 +113,7 @@ class TestResendVerification:
 
     def test_resend_verification_for_nonexistent_email(self, live_server):
         """Test resend verification for non-existent email (should not reveal existence)."""
-        url = f"{live_server.url}/api/auth/resend-verification"
+        url = f"{live_server.url}/api/accounts/auth/resend-verification"
         data = {"email": "nonexistent@example.com"}
 
         response = requests.post(url, json=data, timeout=10)
@@ -125,7 +125,7 @@ class TestResendVerification:
 
     def test_resend_verification_without_email(self, live_server):
         """Test resend verification fails without email."""
-        url = f"{live_server.url}/api/auth/resend-verification"
+        url = f"{live_server.url}/api/accounts/auth/resend-verification"
         data = {}
 
         response = requests.post(url, json=data, timeout=10)
@@ -136,7 +136,7 @@ class TestResendVerification:
 
     def test_resend_verification_empty_email(self, live_server):
         """Test resend verification fails with empty email."""
-        url = f"{live_server.url}/api/auth/resend-verification"
+        url = f"{live_server.url}/api/accounts/auth/resend-verification"
         data = {"email": ""}
 
         response = requests.post(url, json=data, timeout=10)
@@ -145,7 +145,7 @@ class TestResendVerification:
 
     def test_resend_verification_case_insensitive(self, live_server, unverified_user):
         """Test resend verification works with different email case."""
-        url = f"{live_server.url}/api/auth/resend-verification"
+        url = f"{live_server.url}/api/accounts/auth/resend-verification"
         data = {"email": unverified_user.email.upper()}
 
         response = requests.post(url, json=data, timeout=10)

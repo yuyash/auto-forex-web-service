@@ -184,7 +184,7 @@ class Command(BaseCommand):
                 f.write(json_output)
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"Successfully exported BacktestTask {task_id} execution {execution.pk} to {output_file}"
+                    f"Exported BacktestTask {task_id} execution {execution.pk} to {output_file}"
                 )
             )
         else:

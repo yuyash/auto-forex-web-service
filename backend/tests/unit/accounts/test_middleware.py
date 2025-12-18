@@ -418,7 +418,7 @@ class TestSecurityMonitoringMiddlewareLogging:
 
     def test_log_registration_success(self) -> None:
         """Test logging successful registration."""
-        request = self.factory.post("/api/auth/register")
+        request = self.factory.post("/api/accounts/auth/register")
         request.META["REMOTE_ADDR"] = "192.168.1.1"
         response = HttpResponse(status=201)
 
@@ -435,7 +435,7 @@ class TestSecurityMonitoringMiddlewareLogging:
 
     def test_log_registration_disabled(self) -> None:
         """Test logging registration disabled (503)."""
-        request = self.factory.post("/api/auth/register")
+        request = self.factory.post("/api/accounts/auth/register")
         request.META["REMOTE_ADDR"] = "192.168.1.1"
         response = HttpResponse(status=503)
 
@@ -452,7 +452,7 @@ class TestSecurityMonitoringMiddlewareLogging:
 
     def test_log_registration_failed(self) -> None:
         """Test logging failed registration."""
-        request = self.factory.post("/api/auth/register")
+        request = self.factory.post("/api/accounts/auth/register")
         request.META["REMOTE_ADDR"] = "192.168.1.1"
         response = HttpResponse(status=400)
 
@@ -469,7 +469,7 @@ class TestSecurityMonitoringMiddlewareLogging:
 
     def test_log_login_disabled(self) -> None:
         """Test logging login disabled (503)."""
-        request = self.factory.post("/api/auth/login")
+        request = self.factory.post("/api/accounts/auth/login")
         request.META["REMOTE_ADDR"] = "192.168.1.1"
         response = HttpResponse(status=503)
 
@@ -488,7 +488,7 @@ class TestSecurityMonitoringMiddlewareLogging:
         """Test logging rate limited login (429)."""
         mock_rate_limiter.get_failed_attempts.return_value = 5
 
-        request = self.factory.post("/api/auth/login")
+        request = self.factory.post("/api/accounts/auth/login")
         request.META["REMOTE_ADDR"] = "192.168.1.1"
         response = HttpResponse(status=429)
 
@@ -504,7 +504,7 @@ class TestSecurityMonitoringMiddlewareLogging:
 
     def test_log_account_locked(self) -> None:
         """Test logging account locked (403)."""
-        request = self.factory.post("/api/auth/login")
+        request = self.factory.post("/api/accounts/auth/login")
         request.META["REMOTE_ADDR"] = "192.168.1.1"
         response = HttpResponse(status=403)
 
@@ -521,7 +521,7 @@ class TestSecurityMonitoringMiddlewareLogging:
 
     def test_no_log_for_non_auth_endpoints(self) -> None:
         """Test no logging for non-auth endpoints."""
-        request = self.factory.get("/api/some/other/endpoint")
+        request = self.factory.get("/api/accounts/some/other/endpoint")
         request.META["REMOTE_ADDR"] = "192.168.1.1"
         response = HttpResponse(status=200)
 

@@ -18,7 +18,7 @@ class TestTradingProdUrlconfAuth:
         clear_url_caches()
 
         client = APIClient()
-        resp = client.get("/api/strategies/")
+        resp = client.get("/api/trading/strategies/")
         assert resp.status_code in {401, 403}
 
     def test_strategies_works_with_auth_in_prod_urlconf(self, settings, test_user):
@@ -28,7 +28,7 @@ class TestTradingProdUrlconfAuth:
         client = APIClient()
         client.force_authenticate(user=test_user)
 
-        resp = client.get("/api/strategies/")
+        resp = client.get("/api/trading/strategies/")
         assert resp.status_code == 200
         data = resp.json()
         assert "strategies" in data

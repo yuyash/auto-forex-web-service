@@ -1,9 +1,9 @@
 """Integration tests for user notification endpoints.
 
 Covers:
-- GET  /api/notifications
-- POST /api/notifications/<id>/read
-- POST /api/notifications/read-all
+- GET  /api/accounts/notifications
+- POST /api/accounts/notifications/<id>/read
+- POST /api/accounts/notifications/read-all
 """
 
 import pytest
@@ -28,12 +28,12 @@ def user_notification(db, test_user):
 @pytest.mark.django_db(transaction=True)
 class TestUserNotificationsList:
     def test_list_requires_auth(self, live_server):
-        url = f"{live_server.url}/api/notifications"
+        url = f"{live_server.url}/api/accounts/notifications"
         response = requests.get(url, timeout=10)
         assert response.status_code == 401
 
     def test_list_returns_notifications(self, live_server, auth_headers, user_notification):
-        url = f"{live_server.url}/api/notifications"
+        url = f"{live_server.url}/api/accounts/notifications"
         response = requests.get(url, headers=auth_headers, timeout=10)
 
         assert response.status_code == 200
@@ -71,7 +71,7 @@ class TestUserNotificationsList:
             is_read=True,
         )
 
-        url = f"{live_server.url}/api/notifications?unread_only=true"
+        url = f"{live_server.url}/api/accounts/notifications?unread_only=true"
         response = requests.get(url, headers=auth_headers, timeout=10)
 
         assert response.status_code == 200
@@ -84,7 +84,7 @@ class TestUserNotificationsList:
 @pytest.mark.django_db(transaction=True)
 class TestUserNotificationsMarkRead:
     def test_mark_read_sets_flag(self, live_server, auth_headers, user_notification):
-        url = f"{live_server.url}/api/notifications/{user_notification.id}/read"
+        url = f"{live_server.url}/api/accounts/notifications/{user_notification.id}/read"
         response = requests.post(url, headers=auth_headers, timeout=10)
 
         assert response.status_code == 200
@@ -94,7 +94,7 @@ class TestUserNotificationsMarkRead:
         assert user_notification.is_read is True
 
     def test_mark_read_not_found(self, live_server, auth_headers):
-        url = f"{live_server.url}/api/notifications/999999/read"
+        url = f"{live_server.url}/api/accounts/notifications/999999/read"
         response = requests.post(url, headers=auth_headers, timeout=10)
         assert response.status_code == 404
 
@@ -119,7 +119,7 @@ class TestUserNotificationsMarkRead:
             is_read=False,
         )
 
-        url = f"{live_server.url}/api/notifications/{other_notification.id}/read"
+        url = f"{live_server.url}/api/accounts/notifications/{other_notification.id}/read"
         response = requests.post(url, headers=auth_headers, timeout=10)
         assert response.status_code == 404
 
@@ -156,7 +156,7 @@ class TestUserNotificationsMarkAllRead:
             is_read=True,
         )
 
-        url = f"{live_server.url}/api/notifications/read-all"
+        url = f"{live_server.url}/api/accounts/notifications/read-all"
         response = requests.post(url, headers=auth_headers, timeout=10)
 
         assert response.status_code == 200
@@ -167,6 +167,6 @@ class TestUserNotificationsMarkAllRead:
         assert UserNotification.objects.filter(user=test_user, is_read=False).count() == 0
 
     def test_mark_all_read_requires_auth(self, live_server):
-        url = f"{live_server.url}/api/notifications/read-all"
+        url = f"{live_server.url}/api/accounts/notifications/read-all"
         response = requests.post(url, timeout=10)
         assert response.status_code == 401

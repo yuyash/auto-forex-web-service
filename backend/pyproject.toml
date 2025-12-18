@@ -69,6 +69,7 @@ addopts = [
     "--reuse-db",
     "--strict-markers",
     "--strict-config",
+    "--import-mode=importlib",
     "-n=auto",
     "--cov=.",
     "--cov-report=term-missing",
@@ -98,6 +99,7 @@ extend-exclude = '''
 
 [tool.mypy]
 python_version = "3.13"
+exclude = '(^|/)(\.venv|venv|tests)/'
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -110,6 +112,9 @@ warn_unused_ignores = true
 warn_no_return = true
 strict_equality = true
 plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+
+[tool.pyright]
+exclude = ["tests"]
 
 [[tool.mypy.overrides]]
 module = [
@@ -166,7 +171,7 @@ exclude_lines = [
 [tool.pylint.main]
 ignore = ["migrations", "tests", ".venv", "venv"]
 ignore-patterns = ["test_.*?.py"]
-ignore-paths = [".*/\\.venv/.*", ".*/venv/.*"]
+ignore-paths = [".*/\\.venv/.*", ".*/venv/.*", ".*/tests/.*"]
 extension-pkg-allow-list = ["psutil", "redis"]
 load-plugins = ["pylint_django"]
 django-settings-module = "config.settings"

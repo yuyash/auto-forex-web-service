@@ -246,7 +246,7 @@ class SecurityMonitoringMiddleware:
         user_agent = request.META.get("HTTP_USER_AGENT", "")
 
         # Log registration attempts
-        if path == "/api/auth/register" and method == "POST":
+        if path in ("/api/auth/register", "/api/accounts/auth/register") and method == "POST":
             if status_code == 201:
                 # Successful registration
                 self.security_events.log_security_event(
@@ -285,7 +285,7 @@ class SecurityMonitoringMiddleware:
                 )
 
         # Log login attempts
-        elif path == "/api/auth/login" and method == "POST":
+        elif path in ("/api/auth/login", "/api/accounts/auth/login") and method == "POST":
             auth_user = self._get_authenticated_user(getattr(request, "user", None))
             if status_code == 200 and auth_user:
                 # Successful login - get user from request
@@ -360,7 +360,11 @@ class SecurityMonitoringMiddleware:
                 )
 
         # Log logout events
-        elif path == "/api/auth/logout" and method == "POST" and status_code == 200:
+        elif (
+            path in ("/api/auth/logout", "/api/accounts/auth/logout")
+            and method == "POST"
+            and status_code == 200
+        ):
             auth_user = self._get_authenticated_user(getattr(request, "user", None))
             if not auth_user:
                 return

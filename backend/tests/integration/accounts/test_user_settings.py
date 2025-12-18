@@ -2,8 +2,8 @@
 Integration tests for user settings endpoint.
 
 Tests the following endpoints using live_server:
-- GET /api/settings/
-- PUT /api/settings/
+- GET /api/accounts/settings/
+- PUT /api/accounts/settings/
 """
 
 from django.contrib.auth import get_user_model
@@ -20,7 +20,7 @@ class TestUserSettingsGet:
 
     def test_get_settings_authenticated(self, live_server, test_user, auth_headers):
         """Test getting user settings when authenticated."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
 
         response = requests.get(url, headers=auth_headers, timeout=10)
 
@@ -31,7 +31,7 @@ class TestUserSettingsGet:
 
     def test_get_settings_unauthenticated(self, live_server):
         """Test getting user settings fails when not authenticated."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
 
         response = requests.get(url, timeout=10)
 
@@ -39,7 +39,7 @@ class TestUserSettingsGet:
 
     def test_get_settings_invalid_token(self, live_server):
         """Test getting user settings fails with invalid token."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
         headers = {"Authorization": "Bearer invalid_token"}
 
         response = requests.get(url, headers=headers, timeout=10)
@@ -48,7 +48,7 @@ class TestUserSettingsGet:
 
     def test_get_settings_returns_user_profile(self, live_server, test_user, auth_headers):
         """Test settings response includes user profile data."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
 
         response = requests.get(url, headers=auth_headers, timeout=10)
 
@@ -62,7 +62,7 @@ class TestUserSettingsGet:
 
     def test_get_settings_returns_settings_data(self, live_server, test_user, auth_headers):
         """Test settings response includes settings data."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
 
         response = requests.get(url, headers=auth_headers, timeout=10)
 
@@ -80,7 +80,7 @@ class TestUserSettingsUpdate:
 
     def test_update_settings_authenticated(self, live_server, test_user, auth_headers):
         """Test updating user settings when authenticated."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
         data = {
             "timezone": "America/New_York",
             "language": "ja",
@@ -95,7 +95,7 @@ class TestUserSettingsUpdate:
 
     def test_update_settings_unauthenticated(self, live_server):
         """Test updating user settings fails when not authenticated."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
         data = {"timezone": "America/New_York"}
 
         response = requests.put(url, json=data, timeout=10)
@@ -104,7 +104,7 @@ class TestUserSettingsUpdate:
 
     def test_update_notification_settings(self, live_server, test_user, auth_headers):
         """Test updating notification settings."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
         data = {
             "notification_enabled": True,
             "notification_email": True,
@@ -122,7 +122,7 @@ class TestUserSettingsUpdate:
 
     def test_update_timezone_only(self, live_server, test_user, auth_headers):
         """Test partial update - timezone only."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
         data = {"timezone": "Europe/London"}
 
         response = requests.put(url, json=data, headers=auth_headers, timeout=10)
@@ -133,7 +133,7 @@ class TestUserSettingsUpdate:
 
     def test_update_language_only(self, live_server, test_user, auth_headers):
         """Test partial update - language only."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
         data = {"language": "ja"}
 
         response = requests.put(url, json=data, headers=auth_headers, timeout=10)
@@ -144,7 +144,7 @@ class TestUserSettingsUpdate:
 
     def test_update_with_empty_body(self, live_server, test_user, auth_headers):
         """Test update with empty body (no changes)."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
 
         response = requests.put(url, json={}, headers=auth_headers, timeout=10)
 
@@ -152,7 +152,7 @@ class TestUserSettingsUpdate:
 
     def test_update_settings_invalid_language(self, live_server, test_user, auth_headers):
         """Test update fails with invalid language code."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
         data = {"language": "invalid_lang"}
 
         response = requests.put(url, json=data, headers=auth_headers, timeout=10)
@@ -162,7 +162,7 @@ class TestUserSettingsUpdate:
 
     def test_settings_persist_after_update(self, live_server, test_user, auth_headers):
         """Test that settings changes persist."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
 
         # Update settings
         update_data = {"timezone": "Asia/Tokyo"}
@@ -177,7 +177,7 @@ class TestUserSettingsUpdate:
 
     def test_update_first_name(self, live_server, test_user, auth_headers):
         """Test updating user first_name."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
         data = {"first_name": "UpdatedFirstName"}
 
         response = requests.put(url, json=data, headers=auth_headers, timeout=10)
@@ -188,7 +188,7 @@ class TestUserSettingsUpdate:
 
     def test_update_last_name(self, live_server, test_user, auth_headers):
         """Test updating user last_name."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
         data = {"last_name": "UpdatedLastName"}
 
         response = requests.put(url, json=data, headers=auth_headers, timeout=10)
@@ -199,7 +199,7 @@ class TestUserSettingsUpdate:
 
     def test_update_first_and_last_name(self, live_server, test_user, auth_headers):
         """Test updating both first_name and last_name."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
         data = {
             "first_name": "John",
             "last_name": "Doe",
@@ -214,7 +214,7 @@ class TestUserSettingsUpdate:
 
     def test_update_username(self, live_server, test_user, auth_headers):
         """Test updating username."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
         data = {"username": "newusername123"}
 
         response = requests.put(url, json=data, headers=auth_headers, timeout=10)
@@ -225,7 +225,7 @@ class TestUserSettingsUpdate:
 
     def test_get_settings_returns_first_and_last_name(self, live_server, test_user, auth_headers):
         """Test settings response includes first_name and last_name."""
-        url = f"{live_server.url}/api/settings/"
+        url = f"{live_server.url}/api/accounts/settings/"
 
         response = requests.get(url, headers=auth_headers, timeout=10)
 

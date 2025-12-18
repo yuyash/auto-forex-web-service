@@ -2,7 +2,7 @@
 Integration tests for public account settings endpoint.
 
 Tests the following endpoints using live_server:
-- GET /api/settings/public
+- GET /api/accounts/settings/public
 """
 
 import pytest
@@ -15,7 +15,7 @@ class TestPublicAccountSettingsGet:
 
     def test_get_public_settings_no_auth_required(self, live_server):
         """Test getting public settings works without authentication."""
-        url = f"{live_server.url}/api/settings/public"
+        url = f"{live_server.url}/api/accounts/settings/public"
 
         response = requests.get(url, timeout=10)
 
@@ -27,7 +27,7 @@ class TestPublicAccountSettingsGet:
 
     def test_get_public_settings_returns_boolean_values(self, live_server):
         """Test public settings returns boolean values."""
-        url = f"{live_server.url}/api/settings/public"
+        url = f"{live_server.url}/api/accounts/settings/public"
 
         response = requests.get(url, timeout=10)
 
@@ -39,7 +39,7 @@ class TestPublicAccountSettingsGet:
 
     def test_get_public_settings_default_values(self, live_server):
         """Test public settings returns expected default values."""
-        url = f"{live_server.url}/api/settings/public"
+        url = f"{live_server.url}/api/accounts/settings/public"
 
         response = requests.get(url, timeout=10)
 
@@ -52,7 +52,7 @@ class TestPublicAccountSettingsGet:
 
     def test_get_public_settings_authenticated_also_works(self, live_server, auth_headers):
         """Test public settings also works when authenticated."""
-        url = f"{live_server.url}/api/settings/public"
+        url = f"{live_server.url}/api/accounts/settings/public"
 
         response = requests.get(url, headers=auth_headers, timeout=10)
 
@@ -64,7 +64,7 @@ class TestPublicAccountSettingsGet:
 
     def test_get_public_settings_does_not_expose_extra_fields(self, live_server):
         """Test public settings only exposes the 3 public fields."""
-        url = f"{live_server.url}/api/settings/public"
+        url = f"{live_server.url}/api/accounts/settings/public"
 
         response = requests.get(url, timeout=10)
 
@@ -81,7 +81,7 @@ class TestPublicAccountSettingsModification:
 
     def test_post_not_allowed(self, live_server):
         """Test POST method is not allowed on public settings."""
-        url = f"{live_server.url}/api/settings/public"
+        url = f"{live_server.url}/api/accounts/settings/public"
         data = {"registration_enabled": False}
 
         response = requests.post(url, json=data, timeout=10)
@@ -90,7 +90,7 @@ class TestPublicAccountSettingsModification:
 
     def test_put_not_allowed(self, live_server):
         """Test PUT method is not allowed on public settings."""
-        url = f"{live_server.url}/api/settings/public"
+        url = f"{live_server.url}/api/accounts/settings/public"
         data = {"registration_enabled": False}
 
         response = requests.put(url, json=data, timeout=10)
@@ -99,7 +99,7 @@ class TestPublicAccountSettingsModification:
 
     def test_patch_not_allowed(self, live_server):
         """Test PATCH method is not allowed on public settings."""
-        url = f"{live_server.url}/api/settings/public"
+        url = f"{live_server.url}/api/accounts/settings/public"
         data = {"registration_enabled": False}
 
         response = requests.patch(url, json=data, timeout=10)
@@ -108,7 +108,7 @@ class TestPublicAccountSettingsModification:
 
     def test_delete_not_allowed(self, live_server):
         """Test DELETE method is not allowed on public settings."""
-        url = f"{live_server.url}/api/settings/public"
+        url = f"{live_server.url}/api/accounts/settings/public"
 
         response = requests.delete(url, timeout=10)
 
