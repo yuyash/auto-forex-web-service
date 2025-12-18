@@ -33,7 +33,12 @@ from apps.market.services.oanda import (
     Order,
     StopOrderRequest,
 )
-from apps.market.serializers import OandaAccountSerializer, PositionSerializer
+from apps.market.serializers import (
+    OandaAccountSerializer,
+    OandaApiHealthStatusSerializer,
+    PositionSerializer,
+)
+from apps.market.services.health import OandaHealthCheckService
 from apps.market.services.compliance import ComplianceViolationError
 
 logger = getLogger(__name__)
@@ -1040,6 +1045,82 @@ class MarketStatusView(APIView):
                 "time_utc": next_open.isoformat(),
                 "description": "Market opens for the week",
             }
+
+
+class OandaApiHealthView(APIView):
+    """API endpoint for OANDA API health checks.
+
+    GET /api/market/health/oanda/
+    - Returns latest persisted status for the selected account (or null if none yet)
+
+    POST /api/market/health/oanda/
+    - Performs a live check against OANDA and persists/returns the result
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_account(self, request: Request) -> OandaAccount | None:
+        account_id = request.query_params.get("account_id")
+
+        if account_id:
+            return OandaAccount.objects.filter(
+                account_id=account_id,
+                user=request.user.id,
+            ).first()
+
+        return (
+            OandaAccount.objects.filter(user=request.user.id, is_default=True).first()
+            or OandaAccount.objects.filter(user=request.user.id).first()
+        )
+
+    def get(self, request: Request) -> Response:
+        account = self._get_account(request)
+        if account is None:
+            return Response(
+                {
+                    "error": "No OANDA account found. Please configure an account first.",
+                    "error_code": "NO_OANDA_ACCOUNT",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        latest = account.api_health_statuses.order_by("-checked_at").first()
+
+        return Response(
+            {
+                "account": {
+                    "id": account.pk,
+                    "account_id": account.account_id,
+                    "api_type": account.api_type,
+                },
+                "status": OandaApiHealthStatusSerializer(latest).data if latest else None,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def post(self, request: Request) -> Response:
+        account = self._get_account(request)
+        if account is None:
+            return Response(
+                {
+                    "error": "No OANDA account found. Please configure an account first.",
+                    "error_code": "NO_OANDA_ACCOUNT",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        row = OandaHealthCheckService(account).check()
+        return Response(
+            {
+                "account": {
+                    "id": account.pk,
+                    "account_id": account.account_id,
+                    "api_type": account.api_type,
+                },
+                "status": OandaApiHealthStatusSerializer(row).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class InstrumentDetailView(APIView):
