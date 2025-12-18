@@ -42,7 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const fetchSystemSettings = useCallback(async () => {
     setSystemSettingsLoading(true);
     try {
-      const response = await fetch('/api/system/settings/public');
+      const response = await fetch('/api/accounts/settings/public');
       if (response.ok) {
         const data = await response.json();
         setSystemSettings(data);
@@ -73,7 +73,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Call logout API endpoint if token exists
     if (token) {
       try {
-        await fetch('/api/auth/logout', {
+        await fetch('/api/accounts/auth/logout', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -99,7 +99,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      const response = await fetch('/api/auth/refresh', {
+      const response = await fetch('/api/accounts/auth/refresh', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

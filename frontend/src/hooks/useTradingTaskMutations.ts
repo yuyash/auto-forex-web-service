@@ -182,11 +182,11 @@ export function useCopyTradingTask(options?: {
  * Hook to start a trading task
  */
 export function useStartTradingTask(options?: {
-  onSuccess?: (data: { execution_id: number; message: string }) => void;
+  onSuccess?: (data: { message: string; task_id: number }) => void;
   onError?: (error: Error) => void;
-}): MutationResult<{ execution_id: number; message: string }, number> {
+}): MutationResult<{ message: string; task_id: number }, number> {
   const [state, setState] = useState<
-    MutationState<{ execution_id: number; message: string }>
+    MutationState<{ message: string; task_id: number }>
   >({
     data: null,
     isLoading: false,
@@ -361,11 +361,18 @@ export function useResumeTradingTask(options?: {
  * Hook to rerun a trading task
  */
 export function useRerunTradingTask(options?: {
-  onSuccess?: (data: { execution_id: number; message: string }) => void;
+  onSuccess?: (data: {
+    message: string;
+    task_id: number;
+    state_cleared: boolean;
+  }) => void;
   onError?: (error: Error) => void;
-}): MutationResult<{ execution_id: number; message: string }, number> {
+}): MutationResult<
+  { message: string; task_id: number; state_cleared: boolean },
+  number
+> {
   const [state, setState] = useState<
-    MutationState<{ execution_id: number; message: string }>
+    MutationState<{ message: string; task_id: number; state_cleared: boolean }>
   >({
     data: null,
     isLoading: false,
@@ -376,7 +383,8 @@ export function useRerunTradingTask(options?: {
     async (id: number) => {
       try {
         setState({ data: null, isLoading: true, error: null });
-        const result = await tradingTasksApi.rerun(id);
+        // "Rerun" maps to restarting with fresh strategy state
+        const result = await tradingTasksApi.restart(id, true);
         setState({ data: result, isLoading: false, error: null });
         // Invalidate cache to force refetch
         invalidateTradingTasksCache();

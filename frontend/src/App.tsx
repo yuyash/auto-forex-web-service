@@ -20,17 +20,8 @@ import { QueryProvider } from './providers/QueryProvider';
 // Lazy load page components for code splitting
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
-const DashboardPage = lazy(() => import('./pages/DashboardPage'));
-const OrdersPage = lazy(() => import('./pages/OrdersPage'));
-const PositionsPage = lazy(() => import('./pages/PositionsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
-const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
-const AdminSystemSettingsPage = lazy(
-  () => import('./pages/AdminSystemSettingsPage')
-);
-const AdminWhitelistPage = lazy(() => import('./pages/AdminWhitelistPage'));
-const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const ConfigurationsPage = lazy(() => import('./pages/ConfigurationsPage'));
 const ConfigurationFormPage = lazy(
@@ -46,8 +37,8 @@ const TradingTaskFormPage = lazy(() => import('./pages/TradingTaskFormPage'));
 const TradingTaskDetailPage = lazy(
   () => import('./pages/TradingTaskDetailPage')
 );
-const CreateOrderPage = lazy(() => import('./pages/CreateOrderPage'));
-const ChartPOCPage = lazy(() => import('./pages/ChartPOCPage'));
+
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 
 // Loading fallback component
 function PageLoadingFallback() {
@@ -144,9 +135,6 @@ function AppRoutes() {
         <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/orders" element={<OrdersPage />} />
-            <Route path="/orders/new" element={<CreateOrderPage />} />
-            <Route path="/positions" element={<PositionsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/configurations" element={<ConfigurationsPage />} />
@@ -184,14 +172,6 @@ function AppRoutes() {
               path="/trading-tasks/:id/edit"
               element={<TradingTaskFormPage />}
             />
-            <Route path="/admin" element={<AdminDashboardPage />} />
-            <Route
-              path="/admin/settings"
-              element={<AdminSystemSettingsPage />}
-            />
-            <Route path="/admin/whitelist" element={<AdminWhitelistPage />} />
-            <Route path="/admin/users" element={<UserManagementPage />} />
-            <Route path="/chart-poc" element={<ChartPOCPage />} />
           </Route>
         </Route>
 

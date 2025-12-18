@@ -181,11 +181,11 @@ export function useCopyBacktestTask(options?: {
  * Hook to start a backtest task
  */
 export function useStartBacktestTask(options?: {
-  onSuccess?: (data: { execution_id: number; message: string }) => void;
+  onSuccess?: (data: { message: string; task_id: number }) => void;
   onError?: (error: Error) => void;
-}): MutationResult<{ execution_id: number; message: string }, number> {
+}): MutationResult<{ message: string; task_id: number }, number> {
   const [state, setState] = useState<
-    MutationState<{ execution_id: number; message: string }>
+    MutationState<{ message: string; task_id: number }>
   >({
     data: null,
     isLoading: false,
@@ -263,11 +263,11 @@ export function useStopBacktestTask(options?: {
  * Hook to rerun a backtest task
  */
 export function useRerunBacktestTask(options?: {
-  onSuccess?: (data: { execution_id: number; message: string }) => void;
+  onSuccess?: (data: { message: string; task_id: number }) => void;
   onError?: (error: Error) => void;
-}): MutationResult<{ execution_id: number; message: string }, number> {
+}): MutationResult<{ message: string; task_id: number }, number> {
   const [state, setState] = useState<
-    MutationState<{ execution_id: number; message: string }>
+    MutationState<{ message: string; task_id: number }>
   >({
     data: null,
     isLoading: false,
@@ -278,7 +278,8 @@ export function useRerunBacktestTask(options?: {
     async (id: number) => {
       try {
         setState({ data: null, isLoading: true, error: null });
-        const result = await backtestTasksApi.rerun(id);
+        // Backtests start a new execution via the same start endpoint
+        const result = await backtestTasksApi.start(id);
         setState({ data: result, isLoading: false, error: null });
         // Invalidate cache to force refetch
         invalidateBacktestTasksCache();

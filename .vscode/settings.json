@@ -136,6 +136,10 @@
     "which *"
   ],
   "mypy-type-checker.cwd": "${workspaceFolder}/backend",
+  "mypy-type-checker.args": [
+    "--config-file",
+    "${workspaceFolder}/backend/pyproject.toml"
+  ],
   "mypy-type-checker.interpreter": [
     "${workspaceFolder}/backend/.venv/bin/python"
   ],
@@ -144,7 +148,6 @@
   "pylint.cwd": "${workspaceFolder}/backend",
   "pylint.interpreter": ["${workspaceFolder}/backend/.venv/bin/python"],
   "pylint.path": ["${workspaceFolder}/backend/.venv/bin/pylint"],
-  "python.analysis.extraPaths": ["${workspaceFolder}/backend/"],
   "python.createEnvironment.contentButton": "show",
   "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
   "python-envs.defaultEnvManager": "ms-python.python:venv",

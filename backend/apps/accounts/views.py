@@ -50,6 +50,9 @@ class UserRegistrationView(APIView):
     """
 
     permission_classes = [AllowAny]
+    # This endpoint is intentionally public and JWT-based.
+    # Avoid SessionAuthentication's CSRF enforcement when a browser has a Django session cookie.
+    authentication_classes: list = []
     serializer_class = UserRegistrationSerializer
 
     def build_verification_url(self, request: Request, token: str) -> str:
@@ -179,6 +182,8 @@ class EmailVerificationView(APIView):
     """
 
     permission_classes = [AllowAny]
+    # Public endpoint; avoid CSRF enforcement via SessionAuthentication.
+    authentication_classes: list = []
 
     def post(self, request: Request) -> Response:
         """
@@ -251,6 +256,8 @@ class ResendVerificationEmailView(APIView):
     """
 
     permission_classes = [AllowAny]
+    # Public endpoint; avoid CSRF enforcement via SessionAuthentication.
+    authentication_classes: list = []
 
     def build_verification_url(self, request: Request, token: str) -> str:
         """
@@ -356,6 +363,8 @@ class UserLoginView(APIView):
     """
 
     permission_classes = [AllowAny]
+    # Public endpoint; avoid CSRF enforcement via SessionAuthentication.
+    authentication_classes: list = []
     serializer_class = UserLoginSerializer
 
     def get_client_ip(self, request: Request) -> str:
@@ -715,6 +724,8 @@ class TokenRefreshView(APIView):
     """
 
     permission_classes = [AllowAny]
+    # Public endpoint (token presented in Authorization header); avoid SessionAuthentication CSRF.
+    authentication_classes: list = []
 
     def post(self, request: Request) -> Response:
         """

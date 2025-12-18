@@ -181,7 +181,7 @@ describe('LoginPage', () => {
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/auth/login', {
+      expect(mockFetch).toHaveBeenCalledWith('/api/accounts/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -340,6 +340,90 @@ describe('LoginPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument();
+    });
+  });
+
+  it('displays error message when backend returns a detail field', async () => {
+    const user = userEvent.setup();
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          registration_enabled: true,
+          login_enabled: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+        json: async () => ({
+          detail: 'CSRF Failed: CSRF cookie not set.',
+        }),
+      });
+
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    });
+
+    await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+    await user.type(screen.getByLabelText(/password/i), 'wrongpassword');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/csrf failed/i)).toBeInTheDocument();
+    });
+  });
+
+  it('displays a generic error when the response is not JSON', async () => {
+    const user = userEvent.setup();
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          registration_enabled: true,
+          login_enabled: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+        json: async () => {
+          throw new Error('Unexpected token < in JSON');
+        },
+        text: async () =>
+          '<html><body>Forbidden (CSRF token missing or incorrect.)</body></html>',
+      });
+
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    });
+
+    await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+    await user.type(screen.getByLabelText(/password/i), 'wrongpassword');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/login failed/i)).toBeInTheDocument();
     });
   });
 

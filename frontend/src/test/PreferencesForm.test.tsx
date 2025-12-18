@@ -36,9 +36,9 @@ describe('PreferencesForm', () => {
     localStorage.setItem('token', mockToken);
     localStorage.setItem('user', JSON.stringify(mockUser));
 
-    // Mock system settings fetch
+    // Mock system settings fetch + user settings fetch
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((url) => {
-      if (url === '/api/system/settings/public') {
+      if (url === '/api/accounts/settings/public') {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -47,13 +47,17 @@ describe('PreferencesForm', () => {
           }),
         });
       }
-      if (url === '/api/settings') {
+      if (url === '/api/accounts/settings/') {
         return Promise.resolve({
           ok: true,
           json: async () => ({
-            timezone: 'UTC',
-            language: 'en',
-            notification_enabled: true,
+            user: {
+              timezone: 'UTC',
+              language: 'en',
+            },
+            settings: {
+              notification_enabled: true,
+            },
           }),
         });
       }
@@ -78,7 +82,7 @@ describe('PreferencesForm', () => {
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        '/api/settings',
+        '/api/accounts/settings/',
         expect.objectContaining({
           headers: expect.objectContaining({
             Authorization: `Bearer ${mockToken}`,
@@ -147,7 +151,7 @@ describe('PreferencesForm', () => {
 
   it('submits form with updated settings', async () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((url) => {
-      if (url === '/api/system/settings/public') {
+      if (url === '/api/accounts/settings/public') {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -156,14 +160,18 @@ describe('PreferencesForm', () => {
           }),
         });
       }
-      if (url === '/api/settings') {
+      if (url === '/api/accounts/settings/') {
         return Promise.resolve({
           ok: true,
           json: async () => ({
-            timezone: 'UTC',
-            language: 'en',
-            notification_enabled: true,
-            user: mockUser,
+            user: {
+              ...mockUser,
+              timezone: 'UTC',
+              language: 'en',
+            },
+            settings: {
+              notification_enabled: true,
+            },
           }),
         });
       }
@@ -189,7 +197,7 @@ describe('PreferencesForm', () => {
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        '/api/settings',
+        '/api/accounts/settings/',
         expect.objectContaining({
           method: 'PUT',
           headers: expect.objectContaining({
@@ -205,7 +213,7 @@ describe('PreferencesForm', () => {
   it('displays error message on save failure', async () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation(
       (url, options?: RequestInit) => {
-        if (url === '/api/system/settings/public') {
+        if (url === '/api/accounts/settings/public') {
           return Promise.resolve({
             ok: true,
             json: async () => ({
@@ -214,7 +222,7 @@ describe('PreferencesForm', () => {
             }),
           });
         }
-        if (url === '/api/settings') {
+        if (url === '/api/accounts/settings/') {
           const method = options?.method;
           if (method === 'PUT') {
             return Promise.resolve({
@@ -227,9 +235,13 @@ describe('PreferencesForm', () => {
           return Promise.resolve({
             ok: true,
             json: async () => ({
-              timezone: 'UTC',
-              language: 'en',
-              notification_enabled: true,
+              user: {
+                timezone: 'UTC',
+                language: 'en',
+              },
+              settings: {
+                notification_enabled: true,
+              },
             }),
           });
         }
@@ -253,7 +265,7 @@ describe('PreferencesForm', () => {
 
   it('displays loading state while fetching settings', () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((url) => {
-      if (url === '/api/system/settings/public') {
+      if (url === '/api/accounts/settings/public') {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -262,7 +274,7 @@ describe('PreferencesForm', () => {
           }),
         });
       }
-      if (url === '/api/settings') {
+      if (url === '/api/accounts/settings/') {
         return new Promise(() => {}); // Never resolves
       }
       return Promise.reject(new Error('Unknown URL'));

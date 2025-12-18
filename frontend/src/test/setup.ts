@@ -113,3 +113,36 @@ HTMLCanvasElement.prototype.getContext = function (
   }
   return originalGetContext?.call(this, contextId, options) || null;
 };
+
+const createJsonResponse = (data: unknown, init?: ResponseInit): Response => {
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    ...init,
+  });
+};
+
+// Provide a default response for AuthProvider's public settings fetch.
+// In Node test environments, the native fetch implementation may not accept
+// relative URLs (e.g. '/api/...'), which leads to noisy console errors.
+const originalFetch = globalThis.fetch;
+if (typeof originalFetch === 'function') {
+  globalThis.fetch = (async (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<Response> => {
+    if (
+      typeof input === 'string' &&
+      input === '/api/accounts/settings/public'
+    ) {
+      return createJsonResponse({
+        registration_enabled: true,
+        login_enabled: true,
+      });
+    }
+
+    return originalFetch(input as RequestInfo, init);
+  }) as typeof fetch;
+}

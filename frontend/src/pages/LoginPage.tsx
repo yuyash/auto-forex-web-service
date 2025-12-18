@@ -33,6 +33,8 @@ interface LoginResponse {
 
 interface ErrorResponse {
   error?: string;
+  detail?: string;
+  message?: string;
   email?: string[];
   password?: string[];
 }
@@ -92,7 +94,7 @@ const LoginPage = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/accounts/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -100,19 +102,74 @@ const LoginPage = () => {
         body: JSON.stringify(formData),
       });
 
-      const data: LoginResponse | ErrorResponse = await response.json();
+      const tryParseJson = async (): Promise<
+        LoginResponse | ErrorResponse | undefined
+      > => {
+        const maybeJson = (
+          response as unknown as { json?: () => Promise<unknown> }
+        ).json;
+        if (typeof maybeJson !== 'function') {
+          return undefined;
+        }
+        try {
+          return (await maybeJson()) as LoginResponse | ErrorResponse;
+        } catch {
+          return undefined;
+        }
+      };
+
+      const tryParseText = async (): Promise<string | undefined> => {
+        const maybeText = (
+          response as unknown as { text?: () => Promise<string> }
+        ).text;
+        if (typeof maybeText !== 'function') {
+          return undefined;
+        }
+        try {
+          return await maybeText();
+        } catch {
+          return undefined;
+        }
+      };
+
+      const data = await tryParseJson();
 
       if (!response.ok) {
-        // Handle error response
-        const errorData = data as ErrorResponse;
-        if (errorData.error) {
-          setErrors({ general: errorData.error });
-        } else {
-          setErrors({
-            email: errorData.email?.[0],
-            password: errorData.password?.[0],
-          });
+        const errorData = (data ?? {}) as ErrorResponse;
+        const emailError = errorData.email?.[0];
+        const passwordError = errorData.password?.[0];
+
+        let general =
+          errorData.error || errorData.detail || errorData.message || '';
+
+        if (!general) {
+          const text = await tryParseText();
+          const trimmed = (text ?? '').trim();
+          if (trimmed && !trimmed.includes('<')) {
+            general = trimmed;
+          }
         }
+
+        if (!general) {
+          const statusText =
+            `${response.status || ''} ${response.statusText || ''}`.trim();
+          general = statusText
+            ? `Login failed (${statusText}).`
+            : 'Login failed. Please try again.';
+        }
+
+        setErrors({
+          general,
+          email: emailError,
+          password: passwordError,
+        });
+        return;
+      }
+
+      if (!data) {
+        setErrors({
+          general: 'Login failed. Please try again.',
+        });
         return;
       }
 
@@ -120,7 +177,7 @@ const LoginPage = () => {
       const loginData = data as LoginResponse;
       login(loginData.token, loginData.user);
 
-      // Redirect to dashboard
+      // Redirect to default authenticated landing page
       navigate('/dashboard');
     } catch (error) {
       console.error('Login error:', error);

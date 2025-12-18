@@ -34,7 +34,14 @@ const toMethod = (method?: string) => (method ? method.toUpperCase() : 'GET');
 
 const normalizeUrl = (input: RequestInfo | URL): string => {
   if (typeof input === 'string') {
-    return input;
+    // ApiClient.get() uses absolute URLs (via new URL(..., window.location.origin)).
+    // For test matching, normalize absolute URLs back to path + search.
+    try {
+      const parsed = new URL(input);
+      return `${parsed.pathname}${parsed.search}`;
+    } catch {
+      return input;
+    }
   }
   if (input instanceof URL) {
     return input.toString();
@@ -129,16 +136,14 @@ const mockAccounts = [
 ];
 
 const queueAccountsResponse = (accounts: typeof mockAccounts | []) => {
-  queueJsonResponse({ method: 'GET', url: '/api/accounts/' }, accounts);
-};
-
-const queuePositionSettingsResponse = (
-  accountId: number,
-  settings: Record<string, unknown>
-) => {
   queueJsonResponse(
-    { method: 'GET', url: `/api/accounts/${accountId}/position-diff/` },
-    settings
+    { method: 'GET', url: '/api/market/accounts/' },
+    {
+      count: accounts.length,
+      next: null,
+      previous: null,
+      results: accounts,
+    }
   );
 };
 
@@ -181,7 +186,7 @@ describe('AccountManagement', () => {
       }
     );
     queueJsonResponse(
-      { method: 'GET', url: '/api/system/settings/public' },
+      { method: 'GET', url: '/api/accounts/settings/public' },
       mockSystemSettings
     );
     localStorage.setItem('token', 'test-token');
@@ -284,7 +289,10 @@ describe('AccountManagement', () => {
       } satisfies (typeof mockAccounts)[number];
 
       queueAccountsResponse(mockAccounts);
-      queueJsonResponse({ method: 'POST', url: '/api/accounts/' }, newAccount);
+      queueJsonResponse(
+        { method: 'POST', url: '/api/market/accounts/' },
+        newAccount
+      );
       queueAccountsResponse([...mockAccounts, newAccount]);
 
       const user = userEvent.setup();
@@ -321,24 +329,20 @@ describe('AccountManagement', () => {
 
       // Check that the POST request was made with correct data
       const postCalls = mockFetch.mock.calls.filter(
-        (call) => call[0] === '/api/accounts/' && call[1]?.method === 'POST'
+        (call) =>
+          call[0] === '/api/market/accounts/' && call[1]?.method === 'POST'
       );
       expect(postCalls.length).toBeGreaterThan(0);
 
       const postCall = postCalls[0];
-      expect(postCall[1]).toMatchObject({
-        method: 'POST',
-        headers: expect.objectContaining({
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer test-token',
-        }),
-      });
+      expect(postCall[1]).toMatchObject({ method: 'POST' });
 
       const body = JSON.parse(postCall[1].body);
       expect(body).toMatchObject({
         account_id: '001-001-9999999-003',
         api_token: 'test-api-token-123',
         api_type: 'practice',
+        is_default: false,
       });
     },
     LONG_TEST_TIMEOUT
@@ -390,7 +394,7 @@ describe('AccountManagement', () => {
 
   it('deletes account successfully', async () => {
     queueAccountsResponse(mockAccounts);
-    queueJsonResponse({ method: 'DELETE', url: '/api/accounts/1/' }, {});
+    queueJsonResponse({ method: 'DELETE', url: '/api/market/accounts/1/' }, {});
     queueAccountsResponse([mockAccounts[1]]);
 
     const user = userEvent.setup();
@@ -417,12 +421,9 @@ describe('AccountManagement', () => {
     await waitFor(() => {
       expect(mockShowSuccess).toHaveBeenCalled();
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/accounts/1/',
+        '/api/market/accounts/1/',
         expect.objectContaining({
           method: 'DELETE',
-          headers: expect.objectContaining({
-            Authorization: 'Bearer test-token',
-          }),
         })
       );
     });
@@ -430,7 +431,7 @@ describe('AccountManagement', () => {
 
   it('shows error when fetch fails', async () => {
     queueNetworkError(
-      { method: 'GET', url: '/api/accounts/' },
+      { method: 'GET', url: '/api/market/accounts/' },
       new Error('Network error')
     );
 
@@ -468,53 +469,5 @@ describe('AccountManagement', () => {
       const errors = screen.getAllByText(/This field is required/i);
       expect(errors.length).toBeGreaterThan(0);
     });
-  });
-
-  it('displays position differentiation button for each account', async () => {
-    queueAccountsResponse(mockAccounts);
-
-    renderComponent();
-
-    await waitFor(() => {
-      expect(screen.getByText('001-001-1234567-001')).toBeInTheDocument();
-    });
-
-    const positionDiffButtons = screen.getAllByLabelText(
-      /Position Differentiation/i
-    );
-    expect(positionDiffButtons).toHaveLength(2);
-  });
-
-  it('opens position differentiation dialog when settings button is clicked', async () => {
-    queueAccountsResponse(mockAccounts);
-
-    const user = userEvent.setup();
-    renderComponent();
-
-    await waitFor(() => {
-      expect(screen.getByText('001-001-1234567-001')).toBeInTheDocument();
-    });
-
-    queuePositionSettingsResponse(1, {
-      enable_position_differentiation: false,
-      position_diff_increment: 1,
-      position_diff_pattern: 'increment',
-    });
-
-    // Find and click position differentiation button for first account
-    const positionDiffButtons = screen.getAllByLabelText(
-      /Position Differentiation/i
-    );
-    await user.click(positionDiffButtons[0]);
-
-    // Wait for dialog to open - just check the title appears
-    await waitFor(
-      () => {
-        expect(
-          screen.getByText('Position Differentiation')
-        ).toBeInTheDocument();
-      },
-      { timeout: 5000 }
-    );
   });
 });

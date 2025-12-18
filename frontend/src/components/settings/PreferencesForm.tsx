@@ -74,7 +74,7 @@ const PreferencesForm = () => {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/settings', {
+      const response = await fetch('/api/accounts/settings/', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -85,10 +85,26 @@ const PreferencesForm = () => {
       }
 
       const data = await response.json();
+      const userData =
+        data && typeof data === 'object' && 'user' in data
+          ? (data as { user?: Partial<UserSettings> }).user
+          : undefined;
+      const settingsData =
+        data && typeof data === 'object' && 'settings' in data
+          ? (data as { settings?: Partial<UserSettings> }).settings
+          : undefined;
       setSettings({
-        timezone: data.timezone || user?.timezone || 'UTC',
-        language: data.language || user?.language || 'en',
-        notification_enabled: data.notification_enabled ?? true,
+        timezone:
+          (userData as { timezone?: string } | undefined)?.timezone ||
+          user?.timezone ||
+          'UTC',
+        language:
+          (userData as { language?: string } | undefined)?.language ||
+          user?.language ||
+          'en',
+        notification_enabled:
+          (settingsData as { notification_enabled?: boolean } | undefined)
+            ?.notification_enabled ?? true,
       });
     } catch (error) {
       console.error('Error fetching settings:', error);
@@ -110,7 +126,7 @@ const PreferencesForm = () => {
     setSubmitting(true);
 
     try {
-      const response = await fetch('/api/settings', {
+      const response = await fetch('/api/accounts/settings/', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

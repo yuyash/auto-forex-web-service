@@ -7,6 +7,8 @@ import type {
   StrategyConfigUpdateData,
   StrategyConfigListParams,
   ConfigurationTask,
+  TradingTask,
+  BacktestTask,
   PaginatedResponse,
 } from '../../types';
 
@@ -18,7 +20,7 @@ export const configurationsApi = {
     params?: StrategyConfigListParams
   ): Promise<PaginatedResponse<StrategyConfig>> => {
     return apiClient.get<PaginatedResponse<StrategyConfig>>(
-      '/strategy-configs/',
+      '/trading/strategy-configs/',
       params as Record<string, unknown>
     );
   },
@@ -27,14 +29,14 @@ export const configurationsApi = {
    * Get a single strategy configuration by ID
    */
   get: (id: number): Promise<StrategyConfig> => {
-    return apiClient.get<StrategyConfig>(`/strategy-configs/${id}/`);
+    return apiClient.get<StrategyConfig>(`/trading/strategy-configs/${id}/`);
   },
 
   /**
    * Create a new strategy configuration
    */
   create: (data: StrategyConfigCreateData): Promise<StrategyConfig> => {
-    return apiClient.post<StrategyConfig>('/strategy-configs/', data);
+    return apiClient.post<StrategyConfig>('/trading/strategy-configs/', data);
   },
 
   /**
@@ -44,7 +46,10 @@ export const configurationsApi = {
     id: number,
     data: StrategyConfigUpdateData
   ): Promise<StrategyConfig> => {
-    return apiClient.put<StrategyConfig>(`/strategy-configs/${id}/`, data);
+    return apiClient.put<StrategyConfig>(
+      `/trading/strategy-configs/${id}/`,
+      data
+    );
   },
 
   /**
@@ -52,13 +57,46 @@ export const configurationsApi = {
    * Note: Will fail if configuration is in use by active tasks
    */
   delete: (id: number): Promise<void> => {
-    return apiClient.delete<void>(`/strategy-configs/${id}/`);
+    return apiClient.delete<void>(`/trading/strategy-configs/${id}/`);
   },
 
   /**
-   * Get all tasks using this configuration
+   * List tasks using a strategy configuration.
+   * This is implemented by filtering both trading and backtest task lists.
    */
-  getTasks: (id: number): Promise<ConfigurationTask[]> => {
-    return apiClient.get<ConfigurationTask[]>(`/strategy-configs/${id}/tasks/`);
+  getTasks: async (id: number): Promise<ConfigurationTask[]> => {
+    const [tradingTasks, backtestTasks] = await Promise.all([
+      apiClient.get<PaginatedResponse<TradingTask>>('/trading/trading-tasks/', {
+        config_id: id,
+        page_size: 200,
+      }),
+      apiClient.get<PaginatedResponse<BacktestTask>>(
+        '/trading/backtest-tasks/',
+        {
+          config_id: id,
+          page_size: 200,
+        }
+      ),
+    ]);
+
+    const trading: ConfigurationTask[] = (tradingTasks.results ?? []).map(
+      (task) => ({
+        id: task.id,
+        task_type: 'trading',
+        name: task.name,
+        status: task.status,
+      })
+    );
+
+    const backtest: ConfigurationTask[] = (backtestTasks.results ?? []).map(
+      (task) => ({
+        id: task.id,
+        task_type: 'backtest',
+        name: task.name,
+        status: task.status,
+      })
+    );
+
+    return [...trading, ...backtest];
   },
 };

@@ -26,14 +26,12 @@ import {
   Delete as DeleteIcon,
   Visibility,
   VisibilityOff,
-  Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/useToast';
 import ConfirmDialog from '../common/ConfirmDialog';
-import PositionDifferentiationDialog from './PositionDifferentiationDialog';
 import type { Account } from '../../types/strategy';
+import { accountsApi } from '../../services/api/accounts';
 
 interface AccountFormData {
   account_id: string;
@@ -43,7 +41,6 @@ interface AccountFormData {
 
 const AccountManagement = () => {
   const { t } = useTranslation(['settings', 'common']);
-  const { token } = useAuth();
   const { showSuccess, showError } = useToast();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -54,8 +51,6 @@ const AccountManagement = () => {
   const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
   const [showApiToken, setShowApiToken] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [positionDiffDialogOpen, setPositionDiffDialogOpen] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
 
   const [formData, setFormData] = useState<AccountFormData>({
     account_id: '',
@@ -70,20 +65,8 @@ const AccountManagement = () => {
   const fetchAccounts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/accounts/', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch accounts');
-      }
-
-      const data = await response.json();
-      // Handle both paginated and non-paginated responses
-      const accountsData = data.results || data;
-      setAccounts(Array.isArray(accountsData) ? accountsData : []);
+      const data = await accountsApi.list();
+      setAccounts(Array.isArray(data.results) ? data.results : []);
     } catch (caughtError) {
       console.error('Error fetching accounts:', caughtError);
       showError(t('common:errors.fetchFailed', 'Failed to load data'));
@@ -95,7 +78,7 @@ const AccountManagement = () => {
   useEffect(() => {
     fetchAccounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, []);
 
   // Open dialog for adding new account
   const handleAddClick = () => {
@@ -170,11 +153,6 @@ const AccountManagement = () => {
     setSubmitting(true);
 
     try {
-      const url = editingAccount
-        ? `/api/accounts/${editingAccount.id}/`
-        : '/api/accounts/';
-      const method = editingAccount ? 'PUT' : 'POST';
-
       // Only include api_token if it's provided
       const payload: Partial<AccountFormData> & { is_default?: boolean } = {
         account_id: formData.account_id,
@@ -186,18 +164,17 @@ const AccountManagement = () => {
         payload.api_token = formData.api_token;
       }
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to save account');
+      if (editingAccount) {
+        await accountsApi.update(editingAccount.id, payload);
+      } else {
+        await accountsApi.create(
+          payload as {
+            account_id: string;
+            api_token: string;
+            api_type?: 'practice' | 'live';
+            is_default?: boolean;
+          }
+        );
       }
 
       showSuccess(
@@ -228,16 +205,7 @@ const AccountManagement = () => {
     if (!accountToDelete) return;
 
     try {
-      const response = await fetch(`/api/accounts/${accountToDelete.id}/`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete account');
-      }
+      await accountsApi.delete(accountToDelete.id);
 
       showSuccess(
         t('settings:messages.accountDeleted', 'Account deleted successfully')
@@ -249,23 +217,6 @@ const AccountManagement = () => {
       console.error('Error deleting account:', error);
       showError(t('common:errors.deleteFailed', 'Failed to delete'));
     }
-  };
-
-  // Open position differentiation dialog
-  const handlePositionDiffClick = (account: Account) => {
-    setSelectedAccount(account);
-    setPositionDiffDialogOpen(true);
-  };
-
-  // Close position differentiation dialog
-  const handlePositionDiffClose = () => {
-    setPositionDiffDialogOpen(false);
-    setSelectedAccount(null);
-  };
-
-  // Handle position differentiation save
-  const handlePositionDiffSave = () => {
-    fetchAccounts();
   };
 
   const DEFAULT_ACCOUNT_CURRENCY = 'USD';
@@ -480,17 +431,6 @@ const AccountManagement = () => {
                   </IconButton>
                   <IconButton
                     size="small"
-                    color="secondary"
-                    onClick={() => handlePositionDiffClick(account)}
-                    aria-label={t(
-                      'settings:accounts.positionDifferentiation',
-                      'Position Differentiation'
-                    )}
-                  >
-                    <SettingsIcon />
-                  </IconButton>
-                  <IconButton
-                    size="small"
                     color="error"
                     onClick={() => handleDeleteClick(account)}
                     aria-label={t(
@@ -656,16 +596,6 @@ const AccountManagement = () => {
           setAccountToDelete(null);
         }}
       />
-
-      {/* Position Differentiation Dialog */}
-      {selectedAccount && (
-        <PositionDifferentiationDialog
-          open={positionDiffDialogOpen}
-          account={selectedAccount}
-          onClose={handlePositionDiffClose}
-          onSave={handlePositionDiffSave}
-        />
-      )}
     </Box>
   );
 };

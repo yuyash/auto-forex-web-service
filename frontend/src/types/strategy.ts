@@ -81,13 +81,4 @@ export interface Account {
   is_active: boolean;
   is_default?: boolean;
   jurisdiction?: string;
-  enable_position_differentiation?: boolean;
-  position_diff_increment?: number;
-  position_diff_pattern?: 'increment' | 'decrement' | 'alternating';
-}
-
-export interface PositionDifferentiationSettings {
-  enable_position_differentiation: boolean;
-  position_diff_increment: number;
-  position_diff_pattern: 'increment' | 'decrement' | 'alternating';
 }

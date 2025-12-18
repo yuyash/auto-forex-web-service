@@ -7,10 +7,8 @@ import {
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
-  Receipt as OrdersIcon,
-  AccountBalance as PositionsIcon,
   Settings as SettingsIcon,
-  AdminPanelSettings as AdminIcon,
+  Tune as ConfigIcon,
   Assignment as TaskIcon,
   PlayCircleOutline as TradingTaskIcon,
 } from '@mui/icons-material';
@@ -30,14 +28,9 @@ const navigationItems: NavigationItem[] = [
     icon: <DashboardIcon />,
   },
   {
-    path: '/orders',
-    label: 'Orders',
-    icon: <OrdersIcon />,
-  },
-  {
-    path: '/positions',
-    label: 'Positions',
-    icon: <PositionsIcon />,
+    path: '/configurations',
+    label: 'Configurations',
+    icon: <ConfigIcon />,
   },
   {
     path: '/backtest-tasks',
@@ -54,12 +47,6 @@ const navigationItems: NavigationItem[] = [
     label: 'Settings',
     icon: <SettingsIcon />,
   },
-  {
-    path: '/admin',
-    label: 'Admin',
-    icon: <AdminIcon />,
-    adminOnly: true,
-  },
 ];
 
 const ResponsiveNavigation = () => {
@@ -71,10 +58,8 @@ const ResponsiveNavigation = () => {
   // Filter navigation items based on user role and exclude Settings/Admin from mobile
   const filteredItems = navigationItems.filter(
     (item) =>
-      // Exclude Settings and Admin from mobile bottom navigation
-      item.path !== '/settings' &&
-      item.path !== '/admin' &&
-      (!item.adminOnly || user?.is_staff)
+      // Exclude Settings from mobile bottom navigation
+      item.path !== '/settings' && (!item.adminOnly || user?.is_staff)
   );
 
   // Get current active path

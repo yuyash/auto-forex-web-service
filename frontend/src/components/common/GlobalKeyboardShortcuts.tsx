@@ -40,8 +40,8 @@ const GlobalKeyboardShortcuts = () => {
       // Navigation shortcuts
       {
         keys: ['g', 'd'],
-        description: 'Go to Dashboard',
-        action: () => navigate('/dashboard'),
+        description: 'Go to Trading Tasks',
+        action: () => navigate('/trading-tasks'),
         category: 'Navigation',
       },
       {
