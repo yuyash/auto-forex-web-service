@@ -13,8 +13,10 @@ interface StrategyStatus {
   strategyName?: string;
 }
 
+type OandaConnectionState = 'connected' | 'disconnected' | 'checking' | 'empty';
+
 interface OandaHealthStatus {
-  healthy: boolean;
+  state: OandaConnectionState;
   message: string;
   lastChecked?: Date;
 }
@@ -68,32 +70,184 @@ const AppFooter = () => {
       return;
     }
 
+    const fetchLatest = async () => {
+      const response = await fetch('/api/market/health/oanda/', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json().catch(() => null as unknown);
+
+      return { response, data };
+    };
+
+    const runCheck = async () => {
+      const response = await fetch('/api/market/health/oanda/', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json().catch(() => null as unknown);
+
+      return { response, data };
+    };
+
     const checkHealth = async () => {
       try {
-        const response = await fetch('/api/health/oanda/', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const { response: latestResp, data: latestData } = await fetchLatest();
 
-        if (response.ok) {
-          const data = await response.json();
+        // If no account is configured, show an explicit empty-account state.
+        if (
+          latestResp.status === 400 &&
+          latestData &&
+          typeof latestData === 'object' &&
+          'error_code' in latestData &&
+          (latestData as { error_code?: unknown }).error_code ===
+            'NO_OANDA_ACCOUNT'
+        ) {
           setOandaHealth({
-            healthy: data.healthy,
-            message: data.message,
-            lastChecked: new Date(),
+            state: 'empty',
+            message: t('status.noOandaAccount'),
           });
-        } else {
+          return;
+        }
+
+        if (!latestResp.ok) {
           setOandaHealth({
-            healthy: false,
+            state: 'disconnected',
             message: 'Failed to check OANDA health',
             lastChecked: new Date(),
           });
+          return;
         }
+
+        // Backend shape: { account: {...}, status: {...} | null }
+        const status =
+          latestData && typeof latestData === 'object' && 'status' in latestData
+            ? (latestData as { status?: unknown }).status
+            : null;
+
+        // If there's no prior status, trigger a live check via POST.
+        if (!status) {
+          const { response: checkResp, data: checkData } = await runCheck();
+          if (!checkResp.ok) {
+            setOandaHealth({
+              state: 'disconnected',
+              message: 'Failed to check OANDA health',
+              lastChecked: new Date(),
+            });
+            return;
+          }
+
+          const checkedStatus =
+            checkData && typeof checkData === 'object' && 'status' in checkData
+              ? (checkData as { status?: unknown }).status
+              : null;
+
+          if (!checkedStatus || typeof checkedStatus !== 'object') {
+            setOandaHealth({
+              state: 'disconnected',
+              message: 'Failed to check OANDA health',
+              lastChecked: new Date(),
+            });
+            return;
+          }
+
+          const isAvailable = Boolean(
+            (checkedStatus as { is_available?: unknown }).is_available
+          );
+          const checkedAtRaw = (checkedStatus as { checked_at?: unknown })
+            .checked_at;
+          const checkedAt =
+            typeof checkedAtRaw === 'string'
+              ? new Date(checkedAtRaw)
+              : new Date();
+          const errorMessage = String(
+            (checkedStatus as { error_message?: unknown }).error_message ?? ''
+          );
+
+          setOandaHealth({
+            state: isAvailable ? 'connected' : 'disconnected',
+            message: isAvailable
+              ? 'OANDA API is reachable'
+              : errorMessage || 'OANDA API is unavailable',
+            lastChecked: checkedAt,
+          });
+          return;
+        }
+
+        if (typeof status !== 'object') {
+          setOandaHealth({
+            state: 'disconnected',
+            message: 'Failed to check OANDA health',
+            lastChecked: new Date(),
+          });
+          return;
+        }
+
+        const checkedAtRaw = (status as { checked_at?: unknown }).checked_at;
+        const checkedAt =
+          typeof checkedAtRaw === 'string' ? new Date(checkedAtRaw) : undefined;
+        const isStale = checkedAt
+          ? Date.now() - checkedAt.getTime() > 30_000
+          : true;
+
+        if (isStale) {
+          // Refresh via POST when the latest saved status is stale.
+          const { response: checkResp, data: checkData } = await runCheck();
+          if (
+            checkResp.ok &&
+            checkData &&
+            typeof checkData === 'object' &&
+            'status' in checkData
+          ) {
+            const refreshed = (checkData as { status?: unknown }).status;
+            if (refreshed && typeof refreshed === 'object') {
+              const isAvailable = Boolean(
+                (refreshed as { is_available?: unknown }).is_available
+              );
+              const refreshedAtRaw = (refreshed as { checked_at?: unknown })
+                .checked_at;
+              const refreshedAt =
+                typeof refreshedAtRaw === 'string'
+                  ? new Date(refreshedAtRaw)
+                  : new Date();
+              const errorMessage = String(
+                (refreshed as { error_message?: unknown }).error_message ?? ''
+              );
+              setOandaHealth({
+                state: isAvailable ? 'connected' : 'disconnected',
+                message: isAvailable
+                  ? 'OANDA API is reachable'
+                  : errorMessage || 'OANDA API is unavailable',
+                lastChecked: refreshedAt,
+              });
+              return;
+            }
+          }
+        }
+
+        const isAvailable = Boolean(
+          (status as { is_available?: unknown }).is_available
+        );
+        const errorMessage = String(
+          (status as { error_message?: unknown }).error_message ?? ''
+        );
+
+        setOandaHealth({
+          state: isAvailable ? 'connected' : 'disconnected',
+          message: isAvailable
+            ? 'OANDA API is reachable'
+            : errorMessage || 'OANDA API is unavailable',
+          lastChecked: checkedAt,
+        });
       } catch (error) {
         console.error('Error checking OANDA health:', error);
         setOandaHealth({
-          healthy: false,
+          state: 'disconnected',
           message: 'Health check failed',
           lastChecked: new Date(),
         });
@@ -110,12 +264,8 @@ const AppFooter = () => {
   }, [token]);
 
   // Derive connection status from OANDA health
-  const derivedConnectionStatus: 'connected' | 'disconnected' | 'checking' =
-    oandaHealth === null
-      ? 'checking'
-      : oandaHealth.healthy
-        ? 'connected'
-        : 'disconnected';
+  const derivedConnectionStatus: OandaConnectionState =
+    oandaHealth === null ? 'checking' : oandaHealth.state;
 
   // Format last checked time for tooltip
   const formatLastChecked = (date?: Date): string => {
@@ -167,14 +317,18 @@ const AppFooter = () => {
                 ? t('status.connected')
                 : derivedConnectionStatus === 'checking'
                   ? 'Checking...'
-                  : t('status.disconnected')
+                  : derivedConnectionStatus === 'empty'
+                    ? t('status.noOandaAccount')
+                    : t('status.disconnected')
             }
             color={
               derivedConnectionStatus === 'connected'
                 ? 'success'
                 : derivedConnectionStatus === 'checking'
                   ? 'default'
-                  : 'error'
+                  : derivedConnectionStatus === 'empty'
+                    ? 'default'
+                    : 'error'
             }
             size="small"
             sx={{

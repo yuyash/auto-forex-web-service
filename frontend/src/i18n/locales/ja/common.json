@@ -58,7 +58,8 @@
     "online": "オンライン",
     "offline": "オフライン",
     "connected": "接続済み",
-    "disconnected": "切断済み"
+    "disconnected": "切断済み",
+    "noOandaAccount": "アカウント未設定"
   },
   "messages": {
     "loading": "読み込み中...",
