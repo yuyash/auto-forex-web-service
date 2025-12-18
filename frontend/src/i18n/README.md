@@ -13,12 +13,10 @@ i18n/
 │   │   ├── common.json
 │   │   ├── dashboard.json
 │   │   ├── strategy.json
-│   │   └── admin.json
 │   └── ja/             # Japanese translations
 │       ├── common.json
 │       ├── dashboard.json
 │       ├── strategy.json
-│       └── admin.json
 └── README.md
 ```
 
@@ -57,7 +55,6 @@ The translations are organized into four namespaces:
    - Control actions
    - Status messages
 
-4. **admin**: Admin dashboard translations
    - System health monitoring
    - User management
    - Strategy monitoring

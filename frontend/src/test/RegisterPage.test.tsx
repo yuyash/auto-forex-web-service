@@ -291,7 +291,7 @@ describe('RegisterPage', () => {
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/auth/register', {
+      expect(mockFetch).toHaveBeenCalledWith('/api/accounts/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

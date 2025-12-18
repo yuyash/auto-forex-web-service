@@ -3,16 +3,6 @@ export * from './auth';
 export * from './backtest';
 export * from './chart';
 
-// Export specific types from admin to avoid conflicts with auth
-export type {
-  SystemHealth,
-  UserSession,
-  RunningStrategy,
-  AdminEvent,
-  AdminDashboardData,
-  AdminNotification,
-} from './admin';
-
 // Export specific types from order to avoid conflicts with chart
 export type { OrderFilters, OrdersResponse } from './order';
 
@@ -28,7 +18,6 @@ export type {
   StrategyStartRequest,
   StrategyPerformance,
   Account,
-  PositionDifferentiationSettings,
 } from './strategy';
 
 // New task-based types

@@ -2,16 +2,8 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import commonEN from './locales/en/common.json';
 import commonJA from './locales/ja/common.json';
-import dashboardEN from './locales/en/dashboard.json';
-import dashboardJA from './locales/ja/dashboard.json';
 import strategyEN from './locales/en/strategy.json';
 import strategyJA from './locales/ja/strategy.json';
-import adminEN from './locales/en/admin.json';
-import adminJA from './locales/ja/admin.json';
-import ordersEN from './locales/en/orders.json';
-import ordersJA from './locales/ja/orders.json';
-import positionsEN from './locales/en/positions.json';
-import positionsJA from './locales/ja/positions.json';
 import backtestEN from './locales/en/backtest.json';
 import backtestJA from './locales/ja/backtest.json';
 import settingsEN from './locales/en/settings.json';
@@ -24,21 +16,13 @@ i18n
     resources: {
       en: {
         common: commonEN,
-        dashboard: dashboardEN,
         strategy: strategyEN,
-        admin: adminEN,
-        orders: ordersEN,
-        positions: positionsEN,
         backtest: backtestEN,
         settings: settingsEN,
       },
       ja: {
         common: commonJA,
-        dashboard: dashboardJA,
         strategy: strategyJA,
-        admin: adminJA,
-        orders: ordersJA,
-        positions: positionsJA,
         backtest: backtestJA,
         settings: settingsJA,
       },
@@ -46,16 +30,7 @@ i18n
     lng: 'en', // Default language
     fallbackLng: 'en', // Fallback language if translation is missing
     defaultNS: 'common', // Default namespace
-    ns: [
-      'common',
-      'dashboard',
-      'strategy',
-      'admin',
-      'orders',
-      'positions',
-      'backtest',
-      'settings',
-    ], // Available namespaces
+    ns: ['common', 'strategy', 'backtest', 'settings'], // Available namespaces
     interpolation: {
       escapeValue: false, // React already escapes values
     },

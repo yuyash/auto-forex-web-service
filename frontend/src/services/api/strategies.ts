@@ -18,6 +18,6 @@ export const strategiesApi = {
    * List all available strategies
    */
   list: async (): Promise<StrategyListResponse> => {
-    return apiClient.get<StrategyListResponse>('/strategies/');
+    return apiClient.get<StrategyListResponse>('/trading/strategies/');
   },
 };

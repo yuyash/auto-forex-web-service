@@ -200,7 +200,7 @@ export class TaskPollingService {
    * Fetch task status
    */
   private async fetchStatus(): Promise<TaskStatusResponse> {
-    const endpoint = `/${this.taskType}-tasks/${this.taskId}/status/`;
+    const endpoint = `/trading/${this.taskType}-tasks/${this.taskId}/status/`;
     return apiClient.get<TaskStatusResponse>(endpoint);
   }
 
@@ -208,7 +208,7 @@ export class TaskPollingService {
    * Fetch task details
    */
   private async fetchDetails(): Promise<TaskDetailsResponse> {
-    const endpoint = `/${this.taskType}-tasks/${this.taskId}/`;
+    const endpoint = `/trading/${this.taskType}-tasks/${this.taskId}/`;
     const task = await apiClient.get<BacktestTask | TradingTask>(endpoint);
 
     // Extract current execution from task
@@ -230,7 +230,7 @@ export class TaskPollingService {
     limit?: number;
     offset?: number;
   }): Promise<TaskLogsResponse> {
-    const endpoint = `/${this.taskType}-tasks/${this.taskId}/logs/`;
+    const endpoint = `/trading/${this.taskType}-tasks/${this.taskId}/logs/`;
     return apiClient.get<TaskLogsResponse>(endpoint, params);
   }
 

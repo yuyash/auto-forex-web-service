@@ -18,10 +18,8 @@ import {
   Person,
   Settings,
   Logout,
-  AdminPanelSettings,
   Menu as MenuIcon,
-  Receipt as OrdersIcon,
-  AccountBalance as PositionsIcon,
+  Tune as ConfigIcon,
   Assignment as BacktestTaskIcon,
   PlayCircleOutline as TradingTaskIcon,
   AccountBalanceWallet,
@@ -30,7 +28,6 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import LanguageSelector from '../common/LanguageSelector';
-import NotificationCenter from '../admin/NotificationCenter';
 import Typography from '@mui/material/Typography';
 
 interface AppHeaderProps {
@@ -68,11 +65,6 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
   const handleSettingsClick = () => {
     handleUserMenuClose();
     navigate('/settings');
-  };
-
-  const handleAdminClick = () => {
-    handleUserMenuClose();
-    navigate('/admin');
   };
 
   const handleLogout = async () => {
@@ -129,21 +121,12 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
           <Box sx={{ display: 'flex', gap: 1, mr: 2 }}>
             <Button
               color="inherit"
-              startIcon={<OrdersIcon />}
+              startIcon={<ConfigIcon />}
               component={RouterLink}
-              to="/orders"
+              to="/configurations"
               sx={{ textTransform: 'none' }}
             >
-              Orders
-            </Button>
-            <Button
-              color="inherit"
-              startIcon={<PositionsIcon />}
-              component={RouterLink}
-              to="/positions"
-              sx={{ textTransform: 'none' }}
-            >
-              Positions
+              Configurations
             </Button>
             <Button
               color="inherit"
@@ -185,10 +168,6 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
           />
 
           {/* Notification Center (Admin only) */}
-          <NotificationCenter
-            buttonSize="small"
-            buttonSx={{ p: { xs: 0.5, sm: 1 } }}
-          />
 
           {/* User Menu */}
           <IconButton
@@ -252,17 +231,6 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
               </ListItemIcon>
               <ListItemText>{t('navigation.settings')}</ListItemText>
             </MenuItem>
-            {user?.is_staff && (
-              <>
-                <Divider />
-                <MenuItem onClick={handleAdminClick}>
-                  <ListItemIcon>
-                    <AdminPanelSettings fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText>{t('navigation.admin')}</ListItemText>
-                </MenuItem>
-              </>
-            )}
             <Divider />
             <MenuItem onClick={handleLogout}>
               <ListItemIcon>

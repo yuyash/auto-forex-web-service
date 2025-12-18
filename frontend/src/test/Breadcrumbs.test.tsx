@@ -17,21 +17,9 @@ describe('Breadcrumbs', () => {
     );
   };
 
-  it('renders home breadcrumb for dashboard', () => {
-    renderBreadcrumbs('/dashboard');
+  it('renders home breadcrumb for trading tasks', () => {
+    renderBreadcrumbs('/trading-tasks');
     expect(screen.getByText('Home')).toBeInTheDocument();
-  });
-
-  it('renders breadcrumbs for orders page', () => {
-    renderBreadcrumbs('/orders');
-    expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Orders')).toBeInTheDocument();
-  });
-
-  it('renders breadcrumbs for positions page', () => {
-    renderBreadcrumbs('/positions');
-    expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Positions')).toBeInTheDocument();
   });
 
   it('renders breadcrumbs for configurations page', () => {
@@ -52,48 +40,21 @@ describe('Breadcrumbs', () => {
     expect(screen.getByText('Settings')).toBeInTheDocument();
   });
 
-  it('renders breadcrumbs for admin dashboard', () => {
-    renderBreadcrumbs('/admin');
-    expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
-  });
-
-  it('renders breadcrumbs for admin settings', () => {
-    renderBreadcrumbs('/admin/settings');
-    expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('System Settings')).toBeInTheDocument();
-  });
-
-  it('renders breadcrumbs for admin users', () => {
-    renderBreadcrumbs('/admin/users');
-    expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('User Management')).toBeInTheDocument();
-  });
-
-  it('renders breadcrumbs for admin whitelist', () => {
-    renderBreadcrumbs('/admin/whitelist');
-    expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Email Whitelist')).toBeInTheDocument();
-  });
-
   it('renders home icon for first breadcrumb', () => {
-    renderBreadcrumbs('/orders');
+    renderBreadcrumbs('/trading-tasks');
     const homeIcon = document.querySelector('[data-testid="HomeIcon"]');
     expect(homeIcon).toBeInTheDocument();
   });
 
   it('renders links for non-last breadcrumbs', () => {
-    renderBreadcrumbs('/admin/settings');
+    renderBreadcrumbs('/backtest-tasks/new');
     const links = screen.getAllByRole('link');
     expect(links.length).toBeGreaterThan(0);
   });
 
   it('renders last breadcrumb as text, not link', () => {
-    renderBreadcrumbs('/orders');
-    const ordersText = screen.getByText('Orders');
-    expect(ordersText.tagName).not.toBe('A');
+    renderBreadcrumbs('/backtest-tasks/new');
+    const newTaskText = screen.getByText('New Task');
+    expect(newTaskText.tagName).not.toBe('A');
   });
 });

@@ -32,10 +32,9 @@ describe('ResponsiveNavigation', () => {
       </BrowserRouter>
     );
 
-    // Check that navigation items are present (Settings and Admin removed from bottom nav)
+    // Mobile bottom nav excludes Settings; core tabs remain
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Orders')).toBeInTheDocument();
-    expect(screen.getByText('Positions')).toBeInTheDocument();
+    expect(screen.getByText('Configurations')).toBeInTheDocument();
     expect(screen.getByText('Backtest')).toBeInTheDocument();
     expect(screen.getByText('Trading')).toBeInTheDocument();
   });
@@ -54,14 +53,13 @@ describe('ResponsiveNavigation', () => {
       </BrowserRouter>
     );
 
-    // Check that main navigation items are present
+    // Core navigation items are present
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Orders')).toBeInTheDocument();
-    expect(screen.getByText('Positions')).toBeInTheDocument();
+    expect(screen.getByText('Configurations')).toBeInTheDocument();
     expect(screen.getByText('Backtest')).toBeInTheDocument();
     expect(screen.getByText('Trading')).toBeInTheDocument();
 
-    // Settings and Admin should not be in bottom navigation
+    // Settings (and any admin-only nav) are excluded from bottom navigation
     expect(screen.queryByText('Settings')).not.toBeInTheDocument();
     expect(screen.queryByText('Admin')).not.toBeInTheDocument();
   });

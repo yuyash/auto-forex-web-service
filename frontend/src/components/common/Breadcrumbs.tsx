@@ -22,79 +22,54 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
   const [searchParams] = useSearchParams();
   const { t } = useTranslation('common');
 
+  const homePath = '/dashboard';
+
   // Check if we came from a specific page (via query param)
   const fromPage = searchParams.get('from');
 
   // Route configuration for breadcrumbs
   const routeConfig: Record<string, BreadcrumbItem[]> = {
-    '/dashboard': [{ label: t('breadcrumbs.home'), path: '/dashboard' }],
-    '/orders': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
-      { label: t('breadcrumbs.orders') },
-    ],
-    '/positions': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
-      { label: t('breadcrumbs.positions') },
-    ],
-    '/settings': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
-      { label: t('breadcrumbs.settings') },
-    ],
-    '/admin': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
-      { label: t('breadcrumbs.admin') },
-    ],
-    '/admin/settings': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
-      { label: t('breadcrumbs.admin'), path: '/admin' },
-      { label: 'System Settings' },
-    ],
-    '/admin/whitelist': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
-      { label: t('breadcrumbs.admin'), path: '/admin' },
-      { label: 'Email Whitelist' },
-    ],
-    '/admin/users': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
-      { label: t('breadcrumbs.admin'), path: '/admin' },
-      { label: t('breadcrumbs.users') },
-    ],
     // Configuration routes - default without context
     '/configurations': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      { label: t('breadcrumbs.home'), path: homePath },
       { label: 'Configurations' },
     ],
     '/configurations/new': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      { label: t('breadcrumbs.home'), path: homePath },
       { label: 'Configurations', path: '/configurations' },
       { label: 'New Configuration' },
     ],
     // Backtest Task routes
     '/backtest-tasks': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      { label: t('breadcrumbs.home'), path: homePath },
       { label: 'Backtest Tasks' },
     ],
     '/backtest-tasks/new': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      { label: t('breadcrumbs.home'), path: homePath },
       { label: 'Backtest Tasks', path: '/backtest-tasks' },
       { label: 'New Task' },
     ],
     // Trading Task routes
     '/trading-tasks': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      { label: t('breadcrumbs.home'), path: homePath },
       { label: 'Trading Tasks' },
     ],
     '/trading-tasks/new': [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      { label: t('breadcrumbs.home'), path: homePath },
       { label: 'Trading Tasks', path: '/trading-tasks' },
       { label: 'New Task' },
+    ],
+    // Settings routes
+    '/settings': [
+      { label: t('breadcrumbs.home'), path: homePath },
+      { label: 'Settings' },
     ],
   };
 
   // If customPath is provided, use it directly
   if (customPath) {
     const breadcrumbs = [
-      { label: t('breadcrumbs.home'), path: '/dashboard' },
+      { label: t('breadcrumbs.home'), path: homePath },
       ...customPath,
       {
         label: location.pathname.includes('/edit')
@@ -152,13 +127,13 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
   if (location.pathname === '/configurations' && fromPage) {
     if (fromPage === 'backtest-tasks') {
       breadcrumbs = [
-        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: t('breadcrumbs.home'), path: homePath },
         { label: 'Backtest Tasks', path: '/backtest-tasks' },
         { label: 'Configurations' },
       ];
     } else if (fromPage === 'trading-tasks') {
       breadcrumbs = [
-        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: t('breadcrumbs.home'), path: homePath },
         { label: 'Trading Tasks', path: '/trading-tasks' },
         { label: 'Configurations' },
       ];
@@ -169,7 +144,7 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
   if (location.pathname === '/configurations/new' && fromPage) {
     if (fromPage === 'backtest-tasks') {
       breadcrumbs = [
-        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: t('breadcrumbs.home'), path: homePath },
         { label: 'Backtest Tasks', path: '/backtest-tasks' },
         {
           label: 'Configurations',
@@ -179,7 +154,7 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
       ];
     } else if (fromPage === 'trading-tasks') {
       breadcrumbs = [
-        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: t('breadcrumbs.home'), path: homePath },
         { label: 'Trading Tasks', path: '/trading-tasks' },
         { label: 'Configurations', path: '/configurations?from=trading-tasks' },
         { label: 'New Configuration' },
@@ -192,7 +167,7 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
     if (location.pathname.match(/^\/configurations\/\d+\/edit$/)) {
       if (fromPage === 'backtest-tasks') {
         breadcrumbs = [
-          { label: t('breadcrumbs.home'), path: '/dashboard' },
+          { label: t('breadcrumbs.home'), path: homePath },
           { label: 'Backtest Tasks', path: '/backtest-tasks' },
           {
             label: 'Configurations',
@@ -202,7 +177,7 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
         ];
       } else if (fromPage === 'trading-tasks') {
         breadcrumbs = [
-          { label: t('breadcrumbs.home'), path: '/dashboard' },
+          { label: t('breadcrumbs.home'), path: homePath },
           { label: 'Trading Tasks', path: '/trading-tasks' },
           {
             label: 'Configurations',
@@ -212,38 +187,38 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
         ];
       } else {
         breadcrumbs = [
-          { label: t('breadcrumbs.home'), path: '/dashboard' },
+          { label: t('breadcrumbs.home'), path: homePath },
           { label: 'Configurations', path: '/configurations' },
           { label: 'Edit Configuration' },
         ];
       }
     } else if (location.pathname.match(/^\/backtest-tasks\/\d+$/)) {
       breadcrumbs = [
-        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: t('breadcrumbs.home'), path: homePath },
         { label: 'Backtest Tasks', path: '/backtest-tasks' },
         { label: 'Task Details' },
       ];
     } else if (location.pathname.match(/^\/backtest-tasks\/\d+\/edit$/)) {
       breadcrumbs = [
-        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: t('breadcrumbs.home'), path: homePath },
         { label: 'Backtest Tasks', path: '/backtest-tasks' },
         { label: 'Edit Task' },
       ];
     } else if (location.pathname.match(/^\/trading-tasks\/\d+$/)) {
       breadcrumbs = [
-        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: t('breadcrumbs.home'), path: homePath },
         { label: 'Trading Tasks', path: '/trading-tasks' },
         { label: 'Task Details' },
       ];
     } else if (location.pathname.match(/^\/trading-tasks\/\d+\/edit$/)) {
       breadcrumbs = [
-        { label: t('breadcrumbs.home'), path: '/dashboard' },
+        { label: t('breadcrumbs.home'), path: homePath },
         { label: 'Trading Tasks', path: '/trading-tasks' },
         { label: 'Edit Task' },
       ];
     } else {
       // Default fallback
-      breadcrumbs = [{ label: t('breadcrumbs.home'), path: '/dashboard' }];
+      breadcrumbs = [{ label: t('breadcrumbs.home'), path: homePath }];
     }
   }
 

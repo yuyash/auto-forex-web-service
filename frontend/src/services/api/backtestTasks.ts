@@ -20,7 +20,7 @@ export const backtestTasksApi = {
     params?: BacktestTaskListParams
   ): Promise<PaginatedResponse<BacktestTask>> => {
     return apiClient.get<PaginatedResponse<BacktestTask>>(
-      '/backtest-tasks/',
+      '/trading/backtest-tasks/',
       params as Record<string, unknown>
     );
   },
@@ -29,7 +29,7 @@ export const backtestTasksApi = {
    * Get a single backtest task by ID
    */
   get: (id: number): Promise<BacktestTask> => {
-    return apiClient.get<BacktestTask>(`/backtest-tasks/${id}/`);
+    return apiClient.get<BacktestTask>(`/trading/backtest-tasks/${id}/`);
   },
 
   /**
@@ -42,7 +42,7 @@ export const backtestTasksApi = {
       ...rest,
       config: config_id,
     };
-    return apiClient.post<BacktestTask>('/backtest-tasks/', payload);
+    return apiClient.post<BacktestTask>('/trading/backtest-tasks/', payload);
   },
 
   /**
@@ -50,29 +50,32 @@ export const backtestTasksApi = {
    */
   update: (id: number, data: BacktestTaskUpdateData): Promise<BacktestTask> => {
     // No config_id in update data, so just pass through
-    return apiClient.put<BacktestTask>(`/backtest-tasks/${id}/`, data);
+    return apiClient.put<BacktestTask>(`/trading/backtest-tasks/${id}/`, data);
   },
 
   /**
    * Delete a backtest task
    */
   delete: (id: number): Promise<void> => {
-    return apiClient.delete<void>(`/backtest-tasks/${id}/`);
+    return apiClient.delete<void>(`/trading/backtest-tasks/${id}/`);
   },
 
   /**
    * Copy a backtest task with a new name
    */
   copy: (id: number, data: BacktestTaskCopyData): Promise<BacktestTask> => {
-    return apiClient.post<BacktestTask>(`/backtest-tasks/${id}/copy/`, data);
+    return apiClient.post<BacktestTask>(
+      `/trading/backtest-tasks/${id}/copy/`,
+      data
+    );
   },
 
   /**
    * Start a backtest task execution
    */
-  start: (id: number): Promise<{ execution_id: number; message: string }> => {
-    return apiClient.post<{ execution_id: number; message: string }>(
-      `/backtest-tasks/${id}/start/`
+  start: (id: number): Promise<{ message: string; task_id: number }> => {
+    return apiClient.post<{ message: string; task_id: number }>(
+      `/trading/backtest-tasks/${id}/start/`
     );
   },
 
@@ -80,15 +83,8 @@ export const backtestTasksApi = {
    * Stop a running backtest task
    */
   stop: (id: number): Promise<{ message: string }> => {
-    return apiClient.post<{ message: string }>(`/backtest-tasks/${id}/stop/`);
-  },
-
-  /**
-   * Rerun a backtest task from the beginning
-   */
-  rerun: (id: number): Promise<{ execution_id: number; message: string }> => {
-    return apiClient.post<{ execution_id: number; message: string }>(
-      `/backtest-tasks/${id}/rerun/`
+    return apiClient.post<{ message: string }>(
+      `/trading/backtest-tasks/${id}/stop/`
     );
   },
 
@@ -100,20 +96,8 @@ export const backtestTasksApi = {
     params?: { page?: number; page_size?: number }
   ): Promise<PaginatedResponse<TaskExecution>> => {
     return apiClient.get<PaginatedResponse<TaskExecution>>(
-      `/backtest-tasks/${id}/executions/`,
+      `/trading/backtest-tasks/${id}/executions/`,
       params
-    );
-  },
-
-  /**
-   * Get a specific execution by ID
-   */
-  getExecution: (
-    taskId: number,
-    executionId: number
-  ): Promise<TaskExecution> => {
-    return apiClient.get<TaskExecution>(
-      `/backtest-tasks/${taskId}/executions/${executionId}/`
     );
   },
 
@@ -127,10 +111,13 @@ export const backtestTasksApi = {
       ...(token && { Authorization: `Bearer ${token}` }),
     };
 
-    const response = await fetch(`/api/backtest-tasks/${taskId}/export/`, {
-      method: 'GET',
-      headers,
-    });
+    const response = await fetch(
+      `/api/trading/backtest-tasks/${taskId}/export/`,
+      {
+        method: 'GET',
+        headers,
+      }
+    );
 
     if (!response.ok) {
       throw new Error('Failed to export backtest results');
@@ -156,7 +143,7 @@ export const backtestTasksApi = {
    */
   getLiveResults: (taskId: number): Promise<BacktestLiveResults> => {
     return apiClient.get<BacktestLiveResults>(
-      `/backtest-tasks/${taskId}/live-results/`
+      `/trading/backtest-tasks/${taskId}/live-results/`
     );
   },
 };

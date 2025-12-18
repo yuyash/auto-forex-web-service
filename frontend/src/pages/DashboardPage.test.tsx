@@ -140,7 +140,7 @@ describe('DashboardPage Integration', () => {
 
     // Mock API responses
     mockFetch.mockImplementation((url: string) => {
-      if (url.includes('/api/system/settings/public')) {
+      if (url.includes('/api/accounts/settings/public')) {
         return Promise.resolve({
           ok: true,
           json: () =>

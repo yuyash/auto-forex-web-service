@@ -101,9 +101,22 @@ export function useTaskExecution(
   const { data, isLoading, error, refetch } = useQuery({
     queryKey,
     queryFn: async () => {
-      return taskType === TaskType.BACKTEST
-        ? await backtestTasksApi.getExecution(taskId, executionId)
-        : await tradingTasksApi.getExecution(taskId, executionId);
+      const pageSize = 1000;
+      const response =
+        taskType === TaskType.BACKTEST
+          ? await backtestTasksApi.getExecutions(taskId, {
+              page_size: pageSize,
+            })
+          : await tradingTasksApi.getExecutions(taskId, {
+              page_size: pageSize,
+            });
+
+      const execution = response.results?.find((e) => e.id === executionId);
+      if (!execution) {
+        throw new Error('Execution not found');
+      }
+
+      return execution;
     },
     staleTime: 10000, // Consider data fresh for 10 seconds
   });

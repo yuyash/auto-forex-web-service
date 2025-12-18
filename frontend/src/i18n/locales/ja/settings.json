@@ -19,20 +19,7 @@
     "live": "本番",
     "balance": "残高",
     "currency": "通貨",
-    "confirmDelete": "このアカウントを削除してもよろしいですか？",
-    "positionDifferentiation": "ポジション差別化",
-    "enablePositionDiff": "ポジション差別化を有効にする",
-    "positionDiffExplanation": "各ポジションを一意にして選択的なクローズを可能にします",
-    "positionDiffWarningUS": "FIFO準拠の柔軟性のために推奨",
-    "incrementAmount": "増分量",
-    "incrementAmountHelper": "追加/減算する単位（1-100）",
-    "pattern": "パターン",
-    "patternIncrement": "増分",
-    "patternDecrement": "減分",
-    "patternAlternating": "交互",
-    "currentPattern": "現在のパターン",
-    "nextOrderSize": "次の注文サイズ",
-    "baseSize": "基本サイズ"
+    "confirmDelete": "このアカウントを削除してもよろしいですか？"
   },
   "preferences": {
     "title": "ユーザー環境設定",

@@ -19,20 +19,7 @@
     "live": "Live",
     "balance": "Balance",
     "currency": "Currency",
-    "confirmDelete": "Are you sure you want to delete this account?",
-    "positionDifferentiation": "Position Differentiation",
-    "enablePositionDiff": "Enable Position Differentiation",
-    "positionDiffExplanation": "Makes each position unique to allow selective closing",
-    "positionDiffWarningUS": "Recommended for FIFO compliance flexibility",
-    "incrementAmount": "Increment Amount",
-    "incrementAmountHelper": "Units to add/subtract (1-100)",
-    "pattern": "Pattern",
-    "patternIncrement": "Increment",
-    "patternDecrement": "Decrement",
-    "patternAlternating": "Alternating",
-    "currentPattern": "Current Pattern",
-    "nextOrderSize": "Next Order Size",
-    "baseSize": "Base Size"
+    "confirmDelete": "Are you sure you want to delete this account?"
   },
   "preferences": {
     "title": "User Preferences",

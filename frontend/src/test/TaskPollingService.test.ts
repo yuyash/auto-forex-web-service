@@ -151,7 +151,9 @@ describe('TaskPollingService', () => {
       // Wait for immediate fetch
       await vi.runOnlyPendingTimersAsync();
 
-      expect(apiClient.get).toHaveBeenCalledWith('/backtest-tasks/1/status/');
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/trading/backtest-tasks/1/status/'
+      );
       expect(callbacks.onStatusUpdate).toHaveBeenCalledWith(mockStatusResponse);
     });
 
@@ -503,7 +505,9 @@ describe('TaskPollingService', () => {
       service.startPolling();
       await vi.runOnlyPendingTimersAsync();
 
-      expect(apiClient.get).toHaveBeenCalledWith('/backtest-tasks/123/status/');
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/trading/backtest-tasks/123/status/'
+      );
     });
 
     it('should use correct endpoint for trading tasks', async () => {
@@ -512,7 +516,9 @@ describe('TaskPollingService', () => {
       service.startPolling();
       await vi.runOnlyPendingTimersAsync();
 
-      expect(apiClient.get).toHaveBeenCalledWith('/trading-tasks/456/status/');
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/trading/trading-tasks/456/status/'
+      );
     });
   });
 });

@@ -19,7 +19,7 @@ export const tradingTasksApi = {
     params?: TradingTaskListParams
   ): Promise<PaginatedResponse<TradingTask>> => {
     return apiClient.get<PaginatedResponse<TradingTask>>(
-      '/trading-tasks/',
+      '/trading/trading-tasks/',
       params as Record<string, unknown>
     );
   },
@@ -28,7 +28,7 @@ export const tradingTasksApi = {
    * Get a single trading task by ID
    */
   get: (id: number): Promise<TradingTask> => {
-    return apiClient.get<TradingTask>(`/trading-tasks/${id}/`);
+    return apiClient.get<TradingTask>(`/trading/trading-tasks/${id}/`);
   },
 
   /**
@@ -42,7 +42,7 @@ export const tradingTasksApi = {
       config: config_id,
       oanda_account: account_id,
     };
-    return apiClient.post<TradingTask>('/trading-tasks/', payload);
+    return apiClient.post<TradingTask>('/trading/trading-tasks/', payload);
   },
 
   /**
@@ -52,29 +52,32 @@ export const tradingTasksApi = {
     // Transform account_id to oanda_account if present
     const { account_id, ...rest } = data;
     const payload = account_id ? { ...rest, oanda_account: account_id } : data;
-    return apiClient.put<TradingTask>(`/trading-tasks/${id}/`, payload);
+    return apiClient.put<TradingTask>(`/trading/trading-tasks/${id}/`, payload);
   },
 
   /**
    * Delete a trading task
    */
   delete: (id: number): Promise<void> => {
-    return apiClient.delete<void>(`/trading-tasks/${id}/`);
+    return apiClient.delete<void>(`/trading/trading-tasks/${id}/`);
   },
 
   /**
    * Copy a trading task with a new name
    */
   copy: (id: number, data: TradingTaskCopyData): Promise<TradingTask> => {
-    return apiClient.post<TradingTask>(`/trading-tasks/${id}/copy/`, data);
+    return apiClient.post<TradingTask>(
+      `/trading/trading-tasks/${id}/copy/`,
+      data
+    );
   },
 
   /**
    * Start a trading task execution
    */
-  start: (id: number): Promise<{ execution_id: number; message: string }> => {
-    return apiClient.post<{ execution_id: number; message: string }>(
-      `/trading-tasks/${id}/start/`
+  start: (id: number): Promise<{ message: string; task_id: number }> => {
+    return apiClient.post<{ message: string; task_id: number }>(
+      `/trading/trading-tasks/${id}/start/`
     );
   },
 
@@ -91,29 +94,24 @@ export const tradingTasksApi = {
       message: string;
       task_id: number;
       stop_mode: string;
-    }>(`/trading-tasks/${id}/stop/`, { mode });
+    }>(`/trading/trading-tasks/${id}/stop/`, { mode });
   },
 
   /**
    * Pause a running trading task
    */
   pause: (id: number): Promise<{ message: string }> => {
-    return apiClient.post<{ message: string }>(`/trading-tasks/${id}/pause/`);
+    return apiClient.post<{ message: string }>(
+      `/trading/trading-tasks/${id}/pause/`
+    );
   },
 
   /**
    * Resume a paused trading task
    */
   resume: (id: number): Promise<{ message: string }> => {
-    return apiClient.post<{ message: string }>(`/trading-tasks/${id}/resume/`);
-  },
-
-  /**
-   * Rerun a trading task from the beginning
-   */
-  rerun: (id: number): Promise<{ execution_id: number; message: string }> => {
-    return apiClient.post<{ execution_id: number; message: string }>(
-      `/trading-tasks/${id}/rerun/`
+    return apiClient.post<{ message: string }>(
+      `/trading/trading-tasks/${id}/resume/`
     );
   },
 
@@ -134,7 +132,7 @@ export const tradingTasksApi = {
       message: string;
       task_id: number;
       state_cleared: boolean;
-    }>(`/trading-tasks/${id}/restart/`, { clear_state: clearState });
+    }>(`/trading/trading-tasks/${id}/restart/`, { clear_state: clearState });
   },
 
   /**
@@ -145,20 +143,8 @@ export const tradingTasksApi = {
     params?: { page?: number; page_size?: number }
   ): Promise<PaginatedResponse<TaskExecution>> => {
     return apiClient.get<PaginatedResponse<TaskExecution>>(
-      `/trading-tasks/${id}/executions/`,
+      `/trading/trading-tasks/${id}/executions/`,
       params
-    );
-  },
-
-  /**
-   * Get a specific execution by ID
-   */
-  getExecution: (
-    taskId: number,
-    executionId: number
-  ): Promise<TaskExecution> => {
-    return apiClient.get<TaskExecution>(
-      `/trading-tasks/${taskId}/executions/${executionId}/`
     );
   },
 };

@@ -6,13 +6,20 @@
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/backend/manage.py",
-      "args": ["runserver", "0.0.0.0:8080"],
+      "args": ["runserver", "0.0.0.0:8000"],
       "django": true,
       "justMyCode": true,
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "DJANGO_SETTINGS_MODULE": "config.settings"
       }
+    },
+    {
+      "name": "Frontend: npm run dev",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}/frontend"
     }
   ]
 }

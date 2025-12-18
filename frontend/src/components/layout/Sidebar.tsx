@@ -14,10 +14,7 @@ import {
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
-  Receipt as OrdersIcon,
-  AccountBalance as PositionsIcon,
   Settings as SettingsIcon,
-  AdminPanelSettings as AdminIcon,
   Tune as ConfigIcon,
   Assignment as BacktestTaskIcon,
   PlayCircleOutline as TradingTaskIcon,
@@ -40,17 +37,6 @@ const navigationItems: NavigationItem[] = [
     icon: <DashboardIcon />,
   },
   {
-    path: '/orders',
-    label: 'Orders',
-    icon: <OrdersIcon />,
-  },
-  {
-    path: '/positions',
-    label: 'Positions',
-    icon: <PositionsIcon />,
-    dividerAfter: true,
-  },
-  {
     path: '/configurations',
     label: 'Configurations',
     icon: <ConfigIcon />,
@@ -70,12 +56,6 @@ const navigationItems: NavigationItem[] = [
     path: '/settings',
     label: 'Settings',
     icon: <SettingsIcon />,
-  },
-  {
-    path: '/admin',
-    label: 'Admin',
-    icon: <AdminIcon />,
-    adminOnly: true,
   },
 ];
 
@@ -106,9 +86,6 @@ const Sidebar = ({ id, mobileOpen = false, onMobileClose }: SidebarProps) => {
 
   // Check if current path matches or is a child of the nav item path
   const isActive = (path: string) => {
-    if (path === '/dashboard') {
-      return location.pathname === '/dashboard';
-    }
     return location.pathname.startsWith(path);
   };
 

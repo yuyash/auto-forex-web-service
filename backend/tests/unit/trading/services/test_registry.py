@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from apps.trading.services.base import Strategy
@@ -7,8 +9,13 @@ from apps.trading.services.registry import StrategyRegistry, register_all_strate
 
 
 class _DummyStrategy(Strategy):
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, config: dict[str, Any]) -> None:
+        super().__init__(config)
+
+    def on_tick(
+        self, *, tick: dict[str, Any], state: dict[str, Any]
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        return state, []
 
 
 class TestStrategyRegistry:
