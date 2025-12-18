@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 from rest_framework import serializers
-from apps.market.models import OandaAccount
+from apps.market.models import OandaAccount, OandaApiHealthStatus
 from apps.market.enums import ApiType, Jurisdiction
 
 
@@ -211,3 +211,23 @@ class OrderSerializer(serializers.Serializer):  # pylint: disable=abstract-metho
             )
 
         return attrs
+
+
+class OandaApiHealthStatusSerializer(serializers.ModelSerializer):
+    oanda_account_id = serializers.CharField(source="account.account_id", read_only=True)
+    api_type = serializers.CharField(source="account.api_type", read_only=True)
+
+    class Meta:
+        model = OandaApiHealthStatus
+        fields = [
+            "id",
+            "account",
+            "oanda_account_id",
+            "api_type",
+            "is_available",
+            "checked_at",
+            "latency_ms",
+            "http_status",
+            "error_message",
+        ]
+        read_only_fields = fields

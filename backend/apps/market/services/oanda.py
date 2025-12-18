@@ -437,7 +437,8 @@ class OandaService:
         self.event_service.log_trading_event(
             event_type=MarketEventType.ORDER_SUBMITTED,
             description=(
-                f"Limit order submitted: {direction.value} {abs_units} {request.instrument} @ {request.price}"
+                f"Limit order submitted: {direction.value} {abs_units} {request.instrument} "
+                f"@ {request.price}"
             ),
             severity=MarketEventSeverity.INFO,
             user=self.account.user,
@@ -506,7 +507,9 @@ class OandaService:
 
             self.event_service.log_trading_event(
                 event_type=MarketEventType.ORDER_SUBMITTED,
-                description=f"Market order submitted: {direction.value} {abs_units} {request.instrument}",
+                description=(
+                    f"Market order submitted: {direction.value} {abs_units} {request.instrument}"
+                ),
                 severity=MarketEventSeverity.INFO,
                 user=self.account.user,
                 account=self.account,
@@ -544,7 +547,9 @@ class OandaService:
 
         self.event_service.log_trading_event(
             event_type=MarketEventType.ORDER_REJECTED,
-            description=f"Market order rejected: {direction.value} {abs_units} {request.instrument}",
+            description=(
+                f"Market order rejected: {direction.value} {abs_units} {request.instrument}"
+            ),
             severity=MarketEventSeverity.ERROR,
             user=self.account.user,
             account=self.account,
@@ -594,7 +599,8 @@ class OandaService:
         self.event_service.log_trading_event(
             event_type=MarketEventType.ORDER_SUBMITTED,
             description=(
-                f"Stop order submitted: {direction.value} {abs_units} {request.instrument} @ {request.price}"
+                f"Stop order submitted: {direction.value} {abs_units} {request.instrument} "
+                f"@ {request.price}"
             ),
             severity=MarketEventSeverity.INFO,
             user=self.account.user,
