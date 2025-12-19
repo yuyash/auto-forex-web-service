@@ -397,12 +397,57 @@ if os.getenv("DJANGO_ENABLE_FILE_LOGGING", "True") == "True":
             "class": "logging.NullHandler",
         }
 
+CELERY_MARKET_LOG_FILE = os.getenv("CELERY_MARKET_LOG_FILE", "logs/celery_market.log")
+CELERY_TRADING_LOG_FILE = os.getenv("CELERY_TRADING_LOG_FILE", "logs/celery_trading.log")
+
+CELERY_MARKET_LOG_PATH = BASE_DIR / CELERY_MARKET_LOG_FILE
+CELERY_TRADING_LOG_PATH = BASE_DIR / CELERY_TRADING_LOG_FILE
+
+CELERY_MARKET_FILE_HANDLER: dict[str, Any] = {
+    "level": LOG_LEVEL,
+    "class": "logging.NullHandler",
+}
+
+CELERY_TRADING_FILE_HANDLER: dict[str, Any] = {
+    "level": LOG_LEVEL,
+    "class": "logging.NullHandler",
+}
+
+
+def _celery_rotating_file_handler(path: Path) -> dict[str, Any]:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8"):
+            pass
+        return {
+            "level": LOG_LEVEL,
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": path,
+            "maxBytes": LOG_MAX_SIZE,
+            "backupCount": LOG_BACKUP_COUNT,
+            "formatter": "celery_task",
+        }
+    except OSError:
+        return {
+            "level": "INFO",
+            "class": "logging.NullHandler",
+        }
+
+
+if os.getenv("DJANGO_ENABLE_FILE_LOGGING", "True") == "True":
+    CELERY_MARKET_FILE_HANDLER = _celery_rotating_file_handler(CELERY_MARKET_LOG_PATH)
+    CELERY_TRADING_FILE_HANDLER = _celery_rotating_file_handler(CELERY_TRADING_LOG_PATH)
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
             "format": "{asctime} {levelname} {module} {process:d} {thread:d} {message}",
+            "style": "{",
+        },
+        "celery_task": {
+            "format": "{asctime} {levelname} {name} {pathname}:{lineno} {process:d} {thread:d} {message}",
             "style": "{",
         },
         "simple": {
@@ -422,6 +467,8 @@ LOGGING = {
             "formatter": "verbose",
         },
         "file": LOG_FILE_HANDLER,
+        "celery_market_file": CELERY_MARKET_FILE_HANDLER,
+        "celery_trading_file": CELERY_TRADING_FILE_HANDLER,
     },
     "root": {
         "handlers": ["console", "file"],
@@ -455,6 +502,27 @@ LOGGING = {
             "handlers": ["console", "file"],
             "level": LOG_LEVEL,
             "propagate": False,
+        },
+        # Per-app Celery task logs (also propagate to root)
+        "apps.market.tasks": {
+            "handlers": ["celery_market_file"],
+            "level": LOG_LEVEL,
+            "propagate": True,
+        },
+        "apps.market.services.oanda": {
+            "handlers": ["celery_market_file"],
+            "level": LOG_LEVEL,
+            "propagate": True,
+        },
+        "apps.market.services.task": {
+            "handlers": ["celery_market_file"],
+            "level": LOG_LEVEL,
+            "propagate": True,
+        },
+        "apps.trading.tasks": {
+            "handlers": ["celery_trading_file"],
+            "level": LOG_LEVEL,
+            "propagate": True,
         },
         "channels": {
             "handlers": ["console", "file"],
