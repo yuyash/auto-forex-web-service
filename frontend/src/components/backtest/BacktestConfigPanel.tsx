@@ -10,9 +10,6 @@ import {
   Alert,
   Divider,
   FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   FormHelperText,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -65,7 +62,6 @@ const BacktestConfigPanel = ({
   const [strategyConfig, setStrategyConfig] = useState<StrategyConfig>({});
 
   // Backtest parameters
-  const [dataSource, setDataSource] = useState<string>('postgresql');
   const [instrument, setInstrument] = useState<string>('USD_JPY');
   const [startDate, setStartDate] = useState<Date | null>(() => {
     const date = new Date();
@@ -182,7 +178,7 @@ const BacktestConfigPanel = ({
       strategy_type: selectedStrategy,
       config: strategyConfig,
       instrument,
-      data_source: dataSource,
+      data_source: 'postgresql',
       start_date: startDate.toISOString().split('T')[0],
       end_date: endDate.toISOString().split('T')[0],
       initial_balance: initialBalance,
@@ -247,30 +243,14 @@ const BacktestConfigPanel = ({
         )}
 
         {/* Data Source Selector */}
-        <Box>
-          <Typography variant="subtitle2" gutterBottom>
-            {t('backtest:config.dataSource', 'Data Source')} *
-          </Typography>
-          <FormControl fullWidth disabled={disabled || loading}>
-            <InputLabel>
-              {t('backtest:config.dataSourceLabel', 'Select Data Source')}
-            </InputLabel>
-            <Select
-              value={dataSource}
-              label={t('backtest:config.dataSourceLabel', 'Select Data Source')}
-              onChange={(e) => setDataSource(e.target.value)}
-            >
-              <MenuItem value="postgresql">PostgreSQL</MenuItem>
-              <MenuItem value="s3">AWS S3 + Athena</MenuItem>
-            </Select>
-            <FormHelperText>
-              {t(
-                'backtest:config.dataSourceHelp',
-                'Source for historical tick data. PostgreSQL for local data, S3+Athena for large-scale historical data.'
-              )}
-            </FormHelperText>
-          </FormControl>
-        </Box>
+        <FormControl fullWidth disabled={disabled || loading}>
+          <FormHelperText>
+            {t(
+              'backtest:config.dataSourceHelp',
+              'Using PostgreSQL for backtesting'
+            )}
+          </FormHelperText>
+        </FormControl>
 
         {/* Instrument Selector */}
         <Box>

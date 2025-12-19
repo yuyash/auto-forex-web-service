@@ -449,8 +449,17 @@ def subscribe_ticks_to_db() -> None:
                     if len(buffer) >= buffer_max or (
                         buffer and now - last_flush >= flush_interval_seconds
                     ):
+                        unique_flush: dict[tuple[str, datetime], TickData] = {}
+                        for obj in buffer:
+                            unique_flush[(str(obj.instrument), obj.timestamp)] = obj
+                        buffer_to_flush = list(unique_flush.values())
+
                         TickData.objects.bulk_create(
-                            buffer, batch_size=min(len(buffer), buffer_max)
+                            buffer_to_flush,
+                            batch_size=min(len(buffer_to_flush), buffer_max),
+                            update_conflicts=True,
+                            update_fields=["bid", "ask", "mid"],
+                            unique_fields=["instrument", "timestamp"],
                         )
                         buffer.clear()
                         last_flush = now
@@ -473,8 +482,17 @@ def subscribe_ticks_to_db() -> None:
                 # Flush any buffered ticks best-effort.
                 try:
                     if buffer:
+                        unique_flush_retry: dict[tuple[str, datetime], TickData] = {}
+                        for obj in buffer:
+                            unique_flush_retry[(str(obj.instrument), obj.timestamp)] = obj
+                        buffer_to_flush = list(unique_flush_retry.values())
+
                         TickData.objects.bulk_create(
-                            buffer, batch_size=min(len(buffer), buffer_max)
+                            buffer_to_flush,
+                            batch_size=min(len(buffer_to_flush), buffer_max),
+                            update_conflicts=True,
+                            update_fields=["bid", "ask", "mid"],
+                            unique_fields=["instrument", "timestamp"],
                         )
                         buffer.clear()
                 except Exception:  # pylint: disable=broad-exception-caught
@@ -500,7 +518,18 @@ def subscribe_ticks_to_db() -> None:
         # Flush any buffered ticks best-effort.
         try:
             if buffer:
-                TickData.objects.bulk_create(buffer, batch_size=min(len(buffer), buffer_max))
+                unique_flush_final: dict[tuple[str, datetime], TickData] = {}
+                for obj in buffer:
+                    unique_flush_final[(str(obj.instrument), obj.timestamp)] = obj
+                buffer_to_flush = list(unique_flush_final.values())
+
+                TickData.objects.bulk_create(
+                    buffer_to_flush,
+                    batch_size=min(len(buffer_to_flush), buffer_max),
+                    update_conflicts=True,
+                    update_fields=["bid", "ask", "mid"],
+                    unique_fields=["instrument", "timestamp"],
+                )
                 buffer.clear()
         except Exception:  # pylint: disable=broad-exception-caught
             pass
@@ -573,7 +602,7 @@ def publish_ticks_for_backtest(*, instrument: str, start: str, end: str, request
                 timestamp__gte=start_dt,
                 timestamp__lte=end_dt,
             )
-            .order_by("timestamp", "id")
+            .order_by("timestamp")
             .values("timestamp", "bid", "ask", "mid")
         )
 

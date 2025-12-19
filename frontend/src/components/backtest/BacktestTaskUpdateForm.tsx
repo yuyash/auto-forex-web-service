@@ -19,7 +19,6 @@ import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { DateRangePicker } from '../tasks/forms/DateRangePicker';
 import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
-import { DataSourceSelector } from '../tasks/forms/DataSourceSelector';
 import { DataSource } from '../../types/common';
 import { useUpdateBacktestTask } from '../../hooks/useBacktestTaskMutations';
 import {
@@ -89,7 +88,7 @@ export default function BacktestTaskUpdateForm({
   } = useForm<BacktestTaskUpdateData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(backtestTaskUpdateSchema) as any,
-    defaultValues: initialData,
+    defaultValues: { ...initialData, data_source: DataSource.POSTGRESQL },
   });
 
   // Fetch all configurations and strategies
@@ -117,7 +116,7 @@ export default function BacktestTaskUpdateForm({
         id: taskId,
         data: {
           config: data.config_id,
-          data_source: data.data_source,
+          data_source: DataSource.POSTGRESQL,
           start_time: data.start_time,
           end_time: data.end_time,
           initial_balance: data.initial_balance.toString(),
@@ -255,21 +254,6 @@ export default function BacktestTaskUpdateForm({
         </Typography>
 
         <Grid container spacing={3}>
-          <Grid size={{ xs: 12 }}>
-            <Controller
-              name="data_source"
-              control={control}
-              render={({ field }) => (
-                <DataSourceSelector
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.data_source?.message}
-                  helperText={errors.data_source?.message}
-                />
-              )}
-            />
-          </Grid>
-
           <Grid size={{ xs: 12 }}>
             <Controller
               name="start_time"

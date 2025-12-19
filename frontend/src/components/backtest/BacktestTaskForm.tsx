@@ -20,7 +20,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { DateRangePicker } from '../tasks/forms/DateRangePicker';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
-import { DataSourceSelector } from '../tasks/forms/DataSourceSelector';
 import {
   backtestTaskSchema,
   type BacktestTaskSchemaOutput,
@@ -85,7 +84,6 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
   const {
     name,
     description,
-    data_source,
     start_time,
     end_time,
     initial_balance,
@@ -131,13 +129,7 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
         <Typography variant="subtitle2" color="text.secondary">
           Data Source
         </Typography>
-        <Typography variant="body1">
-          {data_source === DataSource.POSTGRESQL
-            ? 'PostgreSQL'
-            : data_source === DataSource.ATHENA
-              ? 'AWS Athena'
-              : 'AWS S3'}
-        </Typography>
+        <Typography variant="body1">PostgreSQL</Typography>
       </Grid>
 
       <Grid size={{ xs: 12, md: 6 }}>
@@ -211,7 +203,7 @@ export default function BacktestTaskForm({
       config_id: 0,
       name: '',
       description: '',
-      data_source: DataSource.ATHENA,
+      data_source: DataSource.POSTGRESQL,
       start_time: defaultDateRange.start_time,
       end_time: defaultDateRange.end_time,
       initial_balance: 10000,
@@ -299,12 +291,7 @@ export default function BacktestTaskForm({
         fieldsToValidate = ['config_id', 'name'];
         break;
       case 1: // Parameters step
-        fieldsToValidate = [
-          'data_source',
-          'start_time',
-          'end_time',
-          'initial_balance',
-        ];
+        fieldsToValidate = ['start_time', 'end_time', 'initial_balance'];
         break;
       default:
         // No validation needed for review step
@@ -349,7 +336,7 @@ export default function BacktestTaskForm({
       config_id: completeData.config_id,
       name: completeData.name,
       description: completeData.description,
-      data_source: completeData.data_source,
+      data_source: DataSource.POSTGRESQL,
       start_time: completeData.start_time,
       end_time: completeData.end_time,
       initial_balance: completeData.initial_balance,
@@ -508,21 +495,6 @@ export default function BacktestTaskForm({
             </Typography>
 
             <Grid container spacing={3}>
-              <Grid size={{ xs: 12 }}>
-                <Controller
-                  name="data_source"
-                  control={control}
-                  render={({ field }) => (
-                    <DataSourceSelector
-                      value={field.value}
-                      onChange={field.onChange}
-                      error={errors.data_source?.message}
-                      helperText={errors.data_source?.message}
-                    />
-                  )}
-                />
-              </Grid>
-
               <Grid size={{ xs: 12 }}>
                 <Controller
                   name="start_time"

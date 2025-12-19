@@ -68,30 +68,6 @@ class OandaAccountAdmin(admin.ModelAdmin):
     exclude = ["api_token"]
 
 
-@admin.register(TickData)
-class TickDataAdmin(admin.ModelAdmin):
-    """Admin interface for TickData model."""
-
-    list_display = [
-        "id",
-        "instrument",
-        "timestamp",
-        "bid",
-        "ask",
-        "mid",
-        "created_at",
-    ]
-    list_filter = ["instrument", "timestamp"]
-    search_fields = ["instrument"]
-    readonly_fields = ["created_at", "mid"]
-    date_hierarchy = "timestamp"
-    ordering = ["-timestamp"]
-
-    def has_add_permission(self, request):  # type: ignore[no-untyped-def]
-        """Disable manual addition of tick data through admin."""
-        return False
-
-
 @admin.register(MarketEvent)
 class MarketEventAdmin(admin.ModelAdmin):
     """Admin interface for MarketEvent model."""
