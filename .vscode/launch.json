@@ -20,6 +20,22 @@
       "request": "launch",
       "command": "npm run dev",
       "cwd": "${workspaceFolder}/frontend"
+    },
+    {
+      "name": "Frontend: Open Chrome (5173)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Frontend: dev + chrome",
+      "configurations": [
+        "Frontend: npm run dev",
+        "Frontend: Open Chrome (5173)"
+      ]
     }
   ]
 }
