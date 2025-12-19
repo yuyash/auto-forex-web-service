@@ -246,7 +246,12 @@ MARKET_BACKTEST_TICK_CHANNEL_PREFIX = os.getenv(
 # Centralized defaults for Floor Strategy.
 # Strategy configs (StrategyConfig.parameters) can override any of these.
 TRADING_FLOOR_STRATEGY_DEFAULTS = {
+    "instrument": os.getenv("TRADING_FLOOR_INSTRUMENT", "USD_JPY"),
+    "base_lot_size": float(os.getenv("TRADING_FLOOR_BASE_LOT_SIZE", "1.0")),
+    "scaling_mode": os.getenv("TRADING_FLOOR_SCALING_MODE", "additive"),
     "scaling_amount": float(os.getenv("TRADING_FLOOR_SCALING_AMOUNT", "1.0")),
+    "retracement_pips": float(os.getenv("TRADING_FLOOR_RETRACEMENT_PIPS", "30")),
+    "take_profit_pips": float(os.getenv("TRADING_FLOOR_TAKE_PROFIT_PIPS", "25")),
     "max_layers": int(os.getenv("TRADING_FLOOR_MAX_LAYERS", "3")),
     "max_retracements_per_layer": int(os.getenv("TRADING_FLOOR_MAX_RETRACEMENTS_PER_LAYER", "10")),
     "volatility_lock_multiplier": float(
@@ -428,6 +433,19 @@ LOGGING = {
             "level": LOG_LEVEL,
             "propagate": False,
         },
+        # Django can emit very noisy DEBUG stack traces from template variable resolution
+        # (e.g. the technical 404 page iterating URL resolver structures). Keep these
+        # at INFO+ even when LOG_LEVEL=DEBUG so real application logs remain readable.
+        "django.template": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.template.base": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "django.db.backends": {
             "handlers": ["console"],
             "level": "WARNING",
@@ -441,6 +459,13 @@ LOGGING = {
         "channels": {
             "handlers": ["console", "file"],
             "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        # Avoid noisy cancellation traces from asyncio when clients disconnect
+        # or requests are cancelled (common during local dev with hot reload).
+        "asyncio": {
+            "handlers": ["console", "file"],
+            "level": "WARNING",
             "propagate": False,
         },
     },

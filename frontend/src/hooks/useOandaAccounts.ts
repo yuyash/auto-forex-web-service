@@ -3,6 +3,18 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 
+const OANDA_ACCOUNTS_URL = '/api/market/accounts/';
+
+function isAbortError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const maybeError = err as { name?: unknown; message?: unknown };
+  return (
+    maybeError.name === 'AbortError' ||
+    (typeof maybeError.message === 'string' &&
+      maybeError.message.includes('signal is aborted'))
+  );
+}
+
 export interface OandaAccount {
   id: number;
   account_id: string;
@@ -84,6 +96,11 @@ export function useOandaAccounts(): UseOandaAccountsResult {
         setIsLoading(false);
         return;
       } catch (err) {
+        if (isAbortError(err)) {
+          setIsLoading(false);
+          return;
+        }
+
         console.error('[useOandaAccounts] Pending request failed', err);
         setError(err as Error);
         setIsLoading(false);
@@ -103,7 +120,7 @@ export function useOandaAccounts(): UseOandaAccountsResult {
       abortControllerRef.current = new AbortController();
 
       // Create and store the promise for request deduplication
-      cache.promise = fetch('/api/accounts/', {
+      cache.promise = fetch(OANDA_ACCOUNTS_URL, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -202,7 +219,7 @@ export function useOandaAccounts(): UseOandaAccountsResult {
 
       setAccounts(normalizedAccounts);
     } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
+      if (!isAbortError(err)) {
         const error = err as Error;
         console.error('[useOandaAccounts] Fetch failed', {
           error: error.message,

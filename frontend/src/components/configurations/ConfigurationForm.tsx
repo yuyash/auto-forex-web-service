@@ -21,6 +21,8 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import StrategyConfigForm from '../strategy/StrategyConfigForm';
+import { useStrategies } from '../../hooks/useStrategies';
+import { strategiesApi } from '../../services/api';
 import type { StrategyConfigCreateData } from '../../types/configuration';
 import type { StrategyConfig, ConfigSchema } from '../../types/strategy';
 
@@ -47,46 +49,6 @@ interface ConfigurationFormProps {
   onCancel: () => void;
   isLoading?: boolean;
 }
-
-// Available strategy types with descriptions
-// These must match the strategies registered in the backend
-const STRATEGY_TYPES = [
-  {
-    value: 'floor',
-    label: 'Floor Strategy',
-    description: 'Dynamic retracement strategy with ATR-based volatility lock',
-  },
-  {
-    value: 'rsi',
-    label: 'RSI Strategy',
-    description: 'Relative Strength Index with oversold/overbought signals',
-  },
-  {
-    value: 'macd',
-    label: 'MACD Strategy',
-    description: 'MACD with signal line crossovers and histogram analysis',
-  },
-  {
-    value: 'mean_reversion',
-    label: 'Mean Reversion',
-    description: 'Mean reversion using Bollinger Bands',
-  },
-  {
-    value: 'scalping',
-    label: 'Scalping Strategy',
-    description: 'High-frequency scalping strategy',
-  },
-  {
-    value: 'swing_trading',
-    label: 'Swing Trading',
-    description: 'Swing trading strategy for medium-term positions',
-  },
-  {
-    value: 'stochastic',
-    label: 'Stochastic Strategy',
-    description: 'Stochastic oscillator strategy',
-  },
-];
 
 const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
   type: 'object',
@@ -467,23 +429,29 @@ const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
   },
 };
 
-const getDefaultParameters = (strategyType: string): StrategyConfig => {
-  const schema = STRATEGY_CONFIG_SCHEMAS[strategyType];
+const getDefaultParameters = (
+  strategyType: string,
+  schema?: ConfigSchema,
+  apiDefaults?: StrategyConfig
+): StrategyConfig => {
+  const effectiveSchema = schema ?? STRATEGY_CONFIG_SCHEMAS[strategyType];
 
-  if (schema) {
+  if (effectiveSchema) {
     const defaults: StrategyConfig = {};
 
-    Object.entries(schema.properties).forEach(([key, property]) => {
+    Object.entries(effectiveSchema.properties).forEach(([key, property]) => {
       if (property.default !== undefined) {
         defaults[key] = property.default;
       }
     });
 
-    return defaults;
+    const merged = apiDefaults ? { ...defaults, ...apiDefaults } : defaults;
+    return merged;
   }
 
   const fallback = DEFAULT_PARAMETERS[strategyType];
-  return fallback ? { ...fallback } : {};
+  const base = fallback ? { ...fallback } : {};
+  return apiDefaults ? { ...base, ...apiDefaults } : base;
 };
 
 const ConfigurationForm = ({
@@ -493,11 +461,34 @@ const ConfigurationForm = ({
   onCancel,
   isLoading = false,
 }: ConfigurationFormProps) => {
+  const {
+    strategies,
+    isLoading: isStrategiesLoading,
+    error: strategiesError,
+  } = useStrategies();
+
   const isEditMode = mode === 'edit';
   const initialStrategyType = initialData?.strategy_type || '';
+  const initialStrategySchema = useMemo<ConfigSchema | undefined>(() => {
+    if (!initialStrategyType) return undefined;
+    const fromApi = strategies.find((s) => s.id === initialStrategyType)
+      ?.config_schema as unknown;
+
+    if (
+      fromApi &&
+      typeof fromApi === 'object' &&
+      fromApi !== null &&
+      'properties' in fromApi
+    ) {
+      return fromApi as ConfigSchema;
+    }
+
+    return STRATEGY_CONFIG_SCHEMAS[initialStrategyType];
+  }, [initialStrategyType, strategies]);
+
   const initialParameters = useMemo<StrategyConfig>(() => {
     const defaults = initialStrategyType
-      ? getDefaultParameters(initialStrategyType)
+      ? getDefaultParameters(initialStrategyType, initialStrategySchema)
       : {};
 
     if (initialData?.parameters) {
@@ -508,11 +499,16 @@ const ConfigurationForm = ({
     }
 
     return defaults;
-  }, [initialStrategyType, initialData]);
+  }, [initialStrategyType, initialData, initialStrategySchema]);
 
   const [activeStep, setActiveStep] = useState(0);
   const [parameters, setParameters] =
     useState<StrategyConfig>(initialParameters);
+  const [strategyDefaults, setStrategyDefaults] =
+    useState<StrategyConfig | null>(null);
+
+  const hasUserEditedParamsRef = useRef(false);
+  const lastDefaultsStrategyRef = useRef<string>('');
 
   const {
     control,
@@ -534,19 +530,68 @@ const ConfigurationForm = ({
   // eslint-disable-next-line react-hooks/incompatible-library
   const selectedStrategyType = watch('strategy_type');
 
-  const strategySchema = selectedStrategyType
-    ? STRATEGY_CONFIG_SCHEMAS[selectedStrategyType]
-    : undefined;
+  const selectedStrategy = useMemo(() => {
+    return strategies.find((s) => s.id === selectedStrategyType);
+  }, [strategies, selectedStrategyType]);
+
+  const strategySchema = useMemo<ConfigSchema | undefined>(() => {
+    if (!selectedStrategyType) return undefined;
+
+    const fromApi = selectedStrategy?.config_schema as unknown;
+    if (
+      fromApi &&
+      typeof fromApi === 'object' &&
+      fromApi !== null &&
+      'properties' in fromApi
+    ) {
+      return fromApi as ConfigSchema;
+    }
+
+    return STRATEGY_CONFIG_SCHEMAS[selectedStrategyType];
+  }, [selectedStrategy, selectedStrategyType]);
 
   const previousStrategyTypeRef = useRef<string>(initialStrategyType || '');
   const previousInitialDataRef =
     useRef<ConfigurationFormProps['initialData']>(initialData);
+
+  // Fetch defaults for selected strategy from backend.
+  useEffect(() => {
+    const strategyType = selectedStrategyType || '';
+    if (!strategyType) {
+      setStrategyDefaults(null);
+      lastDefaultsStrategyRef.current = '';
+      return;
+    }
+
+    let isCancelled = false;
+
+    (async () => {
+      try {
+        const resp = await strategiesApi.defaults(strategyType);
+        if (isCancelled) return;
+        setStrategyDefaults((resp.defaults ?? {}) as StrategyConfig);
+        lastDefaultsStrategyRef.current = strategyType;
+      } catch {
+        if (isCancelled) return;
+        setStrategyDefaults(null);
+        lastDefaultsStrategyRef.current = strategyType;
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedStrategyType]);
 
   // Update parameters when strategy type or initial data changes
   useEffect(() => {
     const currentType = selectedStrategyType || '';
     const previousType = previousStrategyTypeRef.current;
     const initialDataChanged = previousInitialDataRef.current !== initialData;
+
+    if (currentType && currentType !== previousType) {
+      hasUserEditedParamsRef.current = false;
+    }
 
     if (!currentType) {
       if (previousType) {
@@ -558,11 +603,31 @@ const ConfigurationForm = ({
       return;
     }
 
-    if (!initialDataChanged && currentType === previousType) {
+    const defaultsForCurrentTypeReady =
+      lastDefaultsStrategyRef.current === currentType;
+    const shouldApplyDefaultsUpdate =
+      !initialDataChanged &&
+      currentType === previousType &&
+      defaultsForCurrentTypeReady &&
+      !hasUserEditedParamsRef.current;
+
+    if (
+      !initialDataChanged &&
+      currentType === previousType &&
+      !shouldApplyDefaultsUpdate
+    ) {
       return;
     }
 
-    const defaults = getDefaultParameters(currentType);
+    const apiDefaults =
+      defaultsForCurrentTypeReady && strategyDefaults
+        ? strategyDefaults
+        : undefined;
+    const defaults = getDefaultParameters(
+      currentType,
+      strategySchema,
+      apiDefaults
+    );
     let nextParameters: StrategyConfig = { ...defaults };
 
     if (
@@ -581,7 +646,13 @@ const ConfigurationForm = ({
 
     previousStrategyTypeRef.current = currentType;
     previousInitialDataRef.current = initialData;
-  }, [selectedStrategyType, initialData, setValue]);
+  }, [
+    selectedStrategyType,
+    initialData,
+    setValue,
+    strategySchema,
+    strategyDefaults,
+  ]);
 
   const handleNext = (e?: React.MouseEvent) => {
     // Prevent form submission
@@ -596,12 +667,14 @@ const ConfigurationForm = ({
   };
 
   const handleParameterChange = (key: string, value: unknown) => {
+    hasUserEditedParamsRef.current = true;
     const newParameters: StrategyConfig = { ...parameters, [key]: value };
     setParameters(newParameters);
     setValue('parameters', newParameters);
   };
 
   const handleStrategyConfigChange = (config: StrategyConfig) => {
+    hasUserEditedParamsRef.current = true;
     setParameters(config);
     setValue('parameters', config);
   };
@@ -619,10 +692,6 @@ const ConfigurationForm = ({
   const steps = isEditMode
     ? ['Parameters', 'Review']
     : ['Basic Information', 'Strategy Type', 'Parameters', 'Review'];
-
-  const selectedStrategy = STRATEGY_TYPES.find(
-    (s) => s.value === selectedStrategyType
-  );
 
   const formatParameterLabel = (key: string): string => {
     const schemaLabel = strategySchema?.properties?.[key]?.title;
@@ -735,6 +804,13 @@ const ConfigurationForm = ({
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               Choose the trading strategy algorithm
             </Typography>
+
+            {strategiesError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                Failed to load strategies. Please try again.
+              </Alert>
+            )}
+
             <Controller<ConfigurationFormData>
               name="strategy_type"
               control={control}
@@ -744,20 +820,40 @@ const ConfigurationForm = ({
                   <Select
                     {...field}
                     label="Strategy Type"
-                    disabled={!!initialData?.strategy_type}
+                    disabled={
+                      !!initialData?.strategy_type || isStrategiesLoading
+                    }
                   >
-                    {STRATEGY_TYPES.map((strategy) => (
-                      <MenuItem key={strategy.value} value={strategy.value}>
-                        <Box>
-                          <Typography variant="body1">
-                            {strategy.label}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {strategy.description}
+                    {isStrategiesLoading ? (
+                      <MenuItem value="" disabled>
+                        <Box
+                          sx={{ display: 'flex', alignItems: 'center', gap: 2 }}
+                        >
+                          <CircularProgress size={16} />
+                          <Typography variant="body2">
+                            Loading strategies…
                           </Typography>
                         </Box>
                       </MenuItem>
-                    ))}
+                    ) : (
+                      strategies.map((strategy) => (
+                        <MenuItem key={strategy.id} value={strategy.id}>
+                          <Box>
+                            <Typography variant="body1">
+                              {strategy.name}
+                            </Typography>
+                            {!!strategy.description && (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {strategy.description}
+                              </Typography>
+                            )}
+                          </Box>
+                        </MenuItem>
+                      ))
+                    )}
                   </Select>
                   {errors.strategy_type && (
                     <Typography variant="caption" color="error" sx={{ mt: 1 }}>
@@ -780,7 +876,7 @@ const ConfigurationForm = ({
             {selectedStrategy && (
               <Alert severity="info" sx={{ mt: 3 }}>
                 <Typography variant="subtitle2" gutterBottom>
-                  {selectedStrategy.label}
+                  {selectedStrategy.name}
                 </Typography>
                 <Typography variant="body2">
                   {selectedStrategy.description}
@@ -798,8 +894,7 @@ const ConfigurationForm = ({
               Configure Parameters
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Set the parameters for your{' '}
-              {selectedStrategy?.label || 'strategy'}
+              Set the parameters for your {selectedStrategy?.name || 'strategy'}
             </Typography>
             {strategySchema ? (
               <StrategyConfigForm
@@ -891,7 +986,7 @@ const ConfigurationForm = ({
                       Strategy Type
                     </Typography>
                     <Typography variant="body1" sx={{ mb: 2 }}>
-                      {selectedStrategy?.label}
+                      {selectedStrategy?.name}
                     </Typography>
 
                     <Divider sx={{ my: 2 }} />
@@ -915,7 +1010,7 @@ const ConfigurationForm = ({
                       color="text.secondary"
                       sx={{ mb: 2 }}
                     >
-                      {selectedStrategy?.label}
+                      {selectedStrategy?.name}
                     </Typography>
 
                     <Divider sx={{ my: 2 }} />

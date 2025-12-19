@@ -60,6 +60,10 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
     navigate(`/backtest-tasks?config=${configuration.id}`);
   };
 
+  const handleOpenDetail = () => {
+    navigate(`/configurations/${configuration.id}`);
+  };
+
   const getDisplayName = (strategyId: string) => {
     return getStrategyDisplayName(strategies, strategyId);
   };
@@ -72,19 +76,24 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
     });
   };
 
-  // Count parameters
-  const parameterCount = configuration.parameters
-    ? Object.keys(configuration.parameters).length
-    : 0;
-
   return (
     <>
       <Card
         elevation={2}
+        onClick={handleOpenDetail}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleOpenDetail();
+          }
+        }}
         sx={{
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
+          cursor: 'pointer',
           transition: 'all 0.2s ease-in-out',
           '&:hover': {
             transform: 'translateY(-4px)',
@@ -120,7 +129,10 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
             </Typography>
             <IconButton
               size="small"
-              onClick={handleMenuOpen}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleMenuOpen(e);
+              }}
               sx={{ mt: -1, mr: -1 }}
             >
               <MoreVertIcon />
@@ -173,20 +185,6 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
               }}
             >
               <Typography variant="caption" color="text.secondary">
-                Parameters
-              </Typography>
-              <Typography variant="caption" fontWeight={500}>
-                {parameterCount}
-              </Typography>
-            </Box>
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <Typography variant="caption" color="text.secondary">
                 Created
               </Typography>
               <Typography variant="caption" fontWeight={500}>
@@ -212,7 +210,10 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
             <IconButton
               size="small"
               color="primary"
-              onClick={handleEdit}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEdit();
+              }}
               sx={{ mr: 1 }}
             >
               <EditIcon fontSize="small" />
@@ -222,7 +223,10 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
             <IconButton
               size="small"
               color="error"
-              onClick={handleDelete}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete();
+              }}
               disabled={configuration.is_in_use}
             >
               <DeleteIcon fontSize="small" />

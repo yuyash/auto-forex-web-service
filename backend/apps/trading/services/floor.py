@@ -29,6 +29,17 @@ class Progression(StrEnum):
     INVERSE = "inverse"
 
 
+class DirectionMethod(StrEnum):
+    MOMENTUM = "momentum"
+    SMA_CROSSOVER = "sma_crossover"
+    EMA_CROSSOVER = "ema_crossover"
+    PRICE_VS_SMA = "price_vs_sma"
+    RSI = "rsi"
+    OHLC_SMA_CROSSOVER = "ohlc_sma_crossover"
+    OHLC_EMA_CROSSOVER = "ohlc_ema_crossover"
+    OHLC_PRICE_VS_SMA = "ohlc_price_vs_sma"
+
+
 @dataclass(frozen=True)
 class FloorStrategyConfig:
     instrument: str
@@ -51,7 +62,7 @@ class FloorStrategyConfig:
     lot_size_increment: Decimal
 
     entry_signal_lookback_ticks: int
-    direction_method: str
+    direction_method: DirectionMethod
 
     sma_fast_period: int
     sma_slow_period: int
@@ -239,46 +250,139 @@ FLOOR_STRATEGY_CONFIG_SCHEMA: dict[str, Any] = {
     "display_name": "Floor Strategy",
     "type": "object",
     "properties": {
-        "instrument": {"type": "string", "title": "Instrument"},
-        "base_lot_size": {"type": "number", "title": "Base Lot Size"},
-        "scaling_mode": {"type": "string", "enum": ["additive", "multiplicative"]},
-        "scaling_amount": {"type": "number", "title": "Scaling Amount"},
-        "retracement_pips": {"type": "number", "title": "Retracement Pips"},
-        "take_profit_pips": {"type": "number", "title": "Take Profit Pips"},
-        "max_layers": {"type": "integer", "title": "Maximum Layers"},
-        "max_retracements_per_layer": {"type": "integer", "title": "Max Retracements Per Layer"},
-        "volatility_lock_multiplier": {"type": "number", "title": "Volatility Lock Multiplier"},
+        "instrument": {
+            "type": "string",
+            "title": "Instrument",
+            "description": "Trading instrument (currency pair) to trade.",
+        },
+        "base_lot_size": {
+            "type": "number",
+            "title": "Base Lot Size",
+            "description": "Initial lot size for the first entry.",
+        },
+        "scaling_mode": {
+            "type": "string",
+            "title": "Scaling Mode",
+            "enum": ["additive", "multiplicative"],
+            "description": "How lot size scales on each retracement.",
+        },
+        "scaling_amount": {
+            "type": "number",
+            "title": "Scaling Amount",
+            "description": "Amount to add/multiply by on each retracement scale-in.",
+        },
+        "retracement_pips": {
+            "type": "number",
+            "title": "Retracement Pips",
+            "description": "Adverse movement in pips required to trigger a scale-in.",
+        },
+        "take_profit_pips": {
+            "type": "number",
+            "title": "Take Profit Pips",
+            "description": "Profit in pips required to close the position.",
+        },
+        "max_layers": {
+            "type": "integer",
+            "title": "Maximum Layers",
+            "description": "Maximum number of layers that can be opened.",
+        },
+        "max_retracements_per_layer": {
+            "type": "integer",
+            "title": "Max Retracements Per Layer",
+            "description": "Max number of scale-ins allowed per layer before opening the next one.",
+        },
+        "volatility_lock_multiplier": {
+            "type": "number",
+            "title": "Volatility Lock Multiplier",
+            "description": "ATR multiplier threshold to trigger volatility lock.",
+        },
         "retracement_trigger_progression": {
             "type": "string",
+            "title": "Retracement Trigger Progression",
             "enum": ["equal", "additive", "exponential", "inverse"],
+            "description": "How retracement triggers progress across layers.",
         },
-        "retracement_trigger_increment": {"type": "number"},
+        "retracement_trigger_increment": {
+            "type": "number",
+            "title": "Retracement Trigger Increment",
+            "description": "Used for additive/exponential progression (ignored for equal/inverse).",
+            "dependsOn": {
+                "field": "retracement_trigger_progression",
+                "values": ["additive", "exponential"],
+            },
+        },
         "lot_size_progression": {
             "type": "string",
+            "title": "Lot Size Progression",
             "enum": ["equal", "additive", "exponential", "inverse"],
+            "description": "How base lot size changes across layers.",
         },
-        "lot_size_increment": {"type": "number"},
-        "entry_signal_lookback_ticks": {"type": "integer"},
+        "lot_size_increment": {
+            "type": "number",
+            "title": "Lot Size Increment",
+            "description": "Used for additive/exponential progression (ignored for equal/inverse).",
+            "dependsOn": {"field": "lot_size_progression", "values": ["additive", "exponential"]},
+        },
+        "entry_signal_lookback_ticks": {
+            "type": "integer",
+            "title": "Momentum Lookback Ticks",
+            "description": "Number of ticks to analyze when using momentum direction.",
+            "dependsOn": {"field": "direction_method", "values": ["momentum"]},
+        },
         "direction_method": {
             "type": "string",
+            "title": "Direction Decision Method",
+            "description": "Technical method used to decide long vs short.",
             "enum": [
                 "momentum",
                 "sma_crossover",
                 "ema_crossover",
                 "price_vs_sma",
                 "rsi",
-                "ohlc_sma_crossover",
-                "ohlc_ema_crossover",
-                "ohlc_price_vs_sma",
             ],
         },
-        "sma_fast_period": {"type": "integer"},
-        "sma_slow_period": {"type": "integer"},
-        "ema_fast_period": {"type": "integer"},
-        "ema_slow_period": {"type": "integer"},
-        "rsi_period": {"type": "integer"},
-        "rsi_overbought": {"type": "integer"},
-        "rsi_oversold": {"type": "integer"},
+        "sma_fast_period": {
+            "type": "integer",
+            "title": "SMA Fast Period",
+            "description": "Fast SMA window size (in ticks).",
+            "dependsOn": {"field": "direction_method", "values": ["sma_crossover"]},
+        },
+        "sma_slow_period": {
+            "type": "integer",
+            "title": "SMA Slow Period",
+            "description": "Slow SMA window size (in ticks).",
+            "dependsOn": {"field": "direction_method", "values": ["sma_crossover", "price_vs_sma"]},
+        },
+        "ema_fast_period": {
+            "type": "integer",
+            "title": "EMA Fast Period",
+            "description": "Fast EMA window size (in ticks).",
+            "dependsOn": {"field": "direction_method", "values": ["ema_crossover"]},
+        },
+        "ema_slow_period": {
+            "type": "integer",
+            "title": "EMA Slow Period",
+            "description": "Slow EMA window size (in ticks).",
+            "dependsOn": {"field": "direction_method", "values": ["ema_crossover"]},
+        },
+        "rsi_period": {
+            "type": "integer",
+            "title": "RSI Period",
+            "description": "RSI window size (in ticks).",
+            "dependsOn": {"field": "direction_method", "values": ["rsi"]},
+        },
+        "rsi_overbought": {
+            "type": "integer",
+            "title": "RSI Overbought",
+            "description": "RSI threshold above which to short.",
+            "dependsOn": {"field": "direction_method", "values": ["rsi"]},
+        },
+        "rsi_oversold": {
+            "type": "integer",
+            "title": "RSI Oversold",
+            "description": "RSI threshold below which to long.",
+            "dependsOn": {"field": "direction_method", "values": ["rsi"]},
+        },
     },
     "required": [
         "instrument",
@@ -307,6 +411,14 @@ def _parse_progression(value: Any) -> Progression:
         return Progression(v)
     except Exception:
         return Progression.ADDITIVE
+
+
+def _parse_direction_method(value: Any) -> DirectionMethod:
+    v = str(value or DirectionMethod.MOMENTUM).strip()
+    try:
+        return DirectionMethod(v)
+    except Exception:
+        return DirectionMethod.MOMENTUM
 
 
 def _parse_required_decimal(config: dict[str, Any], key: str) -> Decimal:
@@ -370,7 +482,7 @@ class FloorStrategyService(Strategy):
         lot_inc = _parse_required_decimal(raw, "lot_size_increment")
 
         entry_signal_lookback_ticks = _parse_required_int(raw, "entry_signal_lookback_ticks")
-        direction_method = _parse_required_str(raw, "direction_method")
+        direction_method = _parse_direction_method(_config_value(raw, "direction_method"))
 
         sma_fast_period = _parse_required_int(raw, "sma_fast_period")
         sma_slow_period = _parse_required_int(raw, "sma_slow_period")
@@ -575,19 +687,23 @@ class FloorStrategyService(Strategy):
         return s.to_dict(), [e.to_dict() for e in events]
 
     def _decide_direction(self, history: list[Decimal]) -> Direction:
-        method = str(self.config.direction_method)
-        if method in {"ohlc_sma_crossover", "ohlc_ema_crossover", "ohlc_price_vs_sma"}:
+        method = self.config.direction_method
+        if method in {
+            DirectionMethod.OHLC_SMA_CROSSOVER,
+            DirectionMethod.OHLC_EMA_CROSSOVER,
+            DirectionMethod.OHLC_PRICE_VS_SMA,
+        }:
             # Fallback to tick-based momentum if OHLC not provided
-            method = "momentum"
+            method = DirectionMethod.MOMENTUM
 
-        if method == "sma_crossover":
+        if method == DirectionMethod.SMA_CROSSOVER:
             if len(history) < self.config.sma_slow_period:
                 return Direction.LONG
             slow = history[-self.config.sma_slow_period :]
             fast = history[-self.config.sma_fast_period :]
             return Direction.LONG if _sma(fast) >= _sma(slow) else Direction.SHORT
 
-        if method == "ema_crossover":
+        if method == DirectionMethod.EMA_CROSSOVER:
             if len(history) < self.config.ema_slow_period:
                 return Direction.LONG
             slow = history[-self.config.ema_slow_period :]
@@ -599,13 +715,13 @@ class FloorStrategyService(Strategy):
                 else Direction.SHORT
             )
 
-        if method == "price_vs_sma":
+        if method == DirectionMethod.PRICE_VS_SMA:
             if len(history) < self.config.sma_slow_period:
                 return Direction.LONG
             slow = history[-self.config.sma_slow_period :]
             return Direction.LONG if history[-1] >= _sma(slow) else Direction.SHORT
 
-        if method == "rsi":
+        if method == DirectionMethod.RSI:
             rsi = _rsi(history, self.config.rsi_period)
             if rsi <= Decimal(self.config.rsi_oversold):
                 return Direction.LONG

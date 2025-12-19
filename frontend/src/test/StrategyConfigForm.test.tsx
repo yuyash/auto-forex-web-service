@@ -98,12 +98,22 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    expect(screen.getByLabelText(/Base Lot Size/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('spinbutton', { name: /Base Lot Size/i })
+    ).toBeInTheDocument();
     expect(screen.getAllByText(/Scaling Mode/i)[0]).toBeInTheDocument();
-    expect(screen.getByLabelText(/Retracement Pips/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Max Layers/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Take Profit Pips/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Enable Trailing Stop/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('spinbutton', { name: /Retracement Pips/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('spinbutton', { name: /Max Layers/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('spinbutton', { name: /Take Profit Pips/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: /Enable Trailing Stop/i })
+    ).toBeInTheDocument();
   });
 
   it('displays field descriptions as helper text', () => {
@@ -133,14 +143,14 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    const baseLotInput = screen.getByLabelText(
-      /Base Lot Size/i
-    ) as HTMLInputElement;
+    const baseLotInput = screen.getByRole('spinbutton', {
+      name: /Base Lot Size/i,
+    }) as HTMLInputElement;
     expect(baseLotInput.value).toBe('1');
 
-    const retracementInput = screen.getByLabelText(
-      /Retracement Pips/i
-    ) as HTMLInputElement;
+    const retracementInput = screen.getByRole('spinbutton', {
+      name: /Retracement Pips/i,
+    }) as HTMLInputElement;
     expect(retracementInput.value).toBe('30');
   });
 
@@ -153,7 +163,9 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    const baseLotInput = screen.getByLabelText(/Base Lot Size/i);
+    const baseLotInput = screen.getByRole('spinbutton', {
+      name: /Base Lot Size/i,
+    });
     fireEvent.change(baseLotInput, { target: { value: '2.5' } });
 
     await waitFor(() => {
@@ -200,7 +212,9 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    const trailingStopCheckbox = screen.getByLabelText(/Enable Trailing Stop/i);
+    const trailingStopCheckbox = screen.getByRole('checkbox', {
+      name: /Enable Trailing Stop/i,
+    });
     fireEvent.click(trailingStopCheckbox);
 
     await waitFor(() => {
@@ -279,7 +293,9 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    const retracementInput = screen.getByLabelText(/Retracement Pips/i);
+    const retracementInput = screen.getByRole('spinbutton', {
+      name: /Retracement Pips/i,
+    });
     fireEvent.change(retracementInput, { target: { value: '30.5' } });
 
     await waitFor(() => {
@@ -300,7 +316,9 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    const baseLotInput = screen.getByLabelText(/Base Lot Size/i);
+    const baseLotInput = screen.getByRole('spinbutton', {
+      name: /Base Lot Size/i,
+    });
     expect(baseLotInput).toBeDisabled();
 
     const scalingModeSelect = screen
@@ -308,7 +326,9 @@ describe('StrategyConfigForm', () => {
       .closest('div[role="combobox"]');
     expect(scalingModeSelect).toHaveAttribute('aria-disabled', 'true');
 
-    const trailingStopCheckbox = screen.getByLabelText(/Enable Trailing Stop/i);
+    const trailingStopCheckbox = screen.getByRole('checkbox', {
+      name: /Enable Trailing Stop/i,
+    });
     expect(trailingStopCheckbox).toBeDisabled();
   });
 
@@ -336,7 +356,9 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    const instrumentInput = screen.getByLabelText(/Instrument/i);
+    const instrumentInput = screen.getByRole('textbox', {
+      name: /Instrument/i,
+    });
     expect(instrumentInput).toHaveValue('EUR_USD, GBP_USD');
   });
 
@@ -364,7 +386,9 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    const instrumentInput = screen.getByLabelText(/Instrument/i);
+    const instrumentInput = screen.getByRole('textbox', {
+      name: /Instrument/i,
+    });
     fireEvent.change(instrumentInput, {
       target: { value: 'EUR_USD, GBP_USD, USD_JPY' },
     });
@@ -404,7 +428,9 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    const baseLotInput = screen.getByLabelText(/Base Lot Size/i);
+    const baseLotInput = screen.getByRole('spinbutton', {
+      name: /Base Lot Size/i,
+    });
     expect(baseLotInput).toHaveAttribute('required');
 
     expect(screen.getByText('* Required fields')).toBeInTheDocument();
@@ -433,8 +459,12 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    expect(screen.getByLabelText(/Max Position Size/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Stop Loss Pips/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('spinbutton', { name: /Max Position Size/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('spinbutton', { name: /Stop Loss Pips/i })
+    ).toBeInTheDocument();
   });
 
   it('formats enum values correctly', async () => {
@@ -480,14 +510,14 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    const baseLotInput = screen.getByLabelText(
-      /Base Lot Size/i
-    ) as HTMLInputElement;
+    const baseLotInput = screen.getByRole('spinbutton', {
+      name: /Base Lot Size/i,
+    }) as HTMLInputElement;
     expect(baseLotInput.value).toBe('1');
 
-    const maxLayersInput = screen.getByLabelText(
-      /Max Layers/i
-    ) as HTMLInputElement;
+    const maxLayersInput = screen.getByRole('spinbutton', {
+      name: /Max Layers/i,
+    }) as HTMLInputElement;
     expect(maxLayersInput.value).toBe('3');
   });
 
@@ -511,7 +541,7 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    const nameInput = screen.getByLabelText(/Strategy Name/i);
+    const nameInput = screen.getByRole('textbox', { name: /Strategy Name/i });
     expect(nameInput).toHaveValue('Floor Strategy');
   });
 
@@ -534,7 +564,7 @@ describe('StrategyConfigForm', () => {
       />
     );
 
-    const nameInput = screen.getByLabelText(/Strategy Name/i);
+    const nameInput = screen.getByRole('textbox', { name: /Strategy Name/i });
     fireEvent.change(nameInput, { target: { value: 'New Strategy' } });
 
     await waitFor(() => {
