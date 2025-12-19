@@ -22,8 +22,8 @@
       "cwd": "${workspaceFolder}/frontend"
     },
     {
-      "name": "Frontend: Open Chrome (5173)",
-      "type": "chrome",
+      "name": "Frontend: Open Edge (5173)",
+      "type": "msedge",
       "request": "launch",
       "url": "http://localhost:5173",
       "webRoot": "${workspaceFolder}/frontend"
@@ -31,8 +31,9 @@
   ],
   "compounds": [
     {
-      "name": "Frontend: dev + chrome",
+      "name": "Run Full Stack Application",
       "configurations": [
+        "Django: runserver",
         "Frontend: npm run dev",
         "Frontend: Open Chrome (5173)"
       ]
