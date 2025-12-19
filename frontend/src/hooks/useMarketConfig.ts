@@ -29,8 +29,9 @@ export const useSupportedInstruments = () => {
     const fetchInstruments = async () => {
       try {
         setIsLoading(true);
-        const response =
-          await apiClient.get<InstrumentsResponse>('/instruments/');
+        const response = await apiClient.get<InstrumentsResponse>(
+          '/market/instruments/'
+        );
         setInstruments(response.instruments);
         setError(null);
       } catch (err) {
@@ -77,8 +78,9 @@ export const useSupportedGranularities = () => {
     const fetchGranularities = async () => {
       try {
         setIsLoading(true);
-        const response =
-          await apiClient.get<GranularitiesResponse>('/granularities/');
+        const response = await apiClient.get<GranularitiesResponse>(
+          '/market/candles/granularities/'
+        );
         // Filter out second-based granularities (S5, S10, S15, S30)
         const filteredGranularities = response.granularities.filter(
           (g) => !g.value.startsWith('S')

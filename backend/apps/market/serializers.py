@@ -49,17 +49,33 @@ class OandaAccountSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def validate_account_id(self, value: str) -> str:
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:  # pylint: disable=arguments-differ
+        attrs = super().validate(attrs)
+
         request = self.context.get("request")
         user = request.user if request and hasattr(request, "user") else None
-        if (
-            user
-            and hasattr(user, "is_authenticated")
-            and user.is_authenticated
-            and OandaAccount.objects.filter(user=user, account_id=value).exists()
-        ):
-            raise serializers.ValidationError("You already have an account with this account ID.")
-        return value
+        if not (user and getattr(user, "is_authenticated", False)):
+            return attrs
+
+        # Enforce uniqueness on (user, account_id, api_type). Duplicates are allowed
+        # across different api_type values.
+        account_id = attrs.get("account_id") or getattr(self.instance, "account_id", None)
+        api_type = attrs.get("api_type") or getattr(self.instance, "api_type", None)
+
+        if account_id and api_type:
+            qs = OandaAccount.objects.filter(user=user, account_id=account_id, api_type=api_type)
+            if self.instance is not None and getattr(self.instance, "pk", None) is not None:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    {
+                        "account_id": [
+                            "You already have an account with this account ID for this API type."
+                        ]
+                    }
+                )
+
+        return attrs
 
     def validate_api_type(self, value: str) -> str:
         if value not in ApiType.values:

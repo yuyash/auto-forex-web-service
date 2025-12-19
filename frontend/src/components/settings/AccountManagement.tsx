@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -43,6 +43,8 @@ const AccountManagement = () => {
   const { t } = useTranslation(['settings', 'common']);
   const { showSuccess, showError } = useToast();
 
+  const isMountedRef = useRef(true);
+
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -62,23 +64,69 @@ const AccountManagement = () => {
   const [formErrors, setFormErrors] = useState<Partial<AccountFormData>>({});
 
   // Fetch accounts
-  const fetchAccounts = async () => {
-    try {
-      setLoading(true);
-      const data = await accountsApi.list();
-      setAccounts(Array.isArray(data.results) ? data.results : []);
-    } catch (caughtError) {
-      console.error('Error fetching accounts:', caughtError);
-      showError(t('common:errors.fetchFailed', 'Failed to load data'));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fetchAccounts = useCallback(
+    async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
+      try {
+        if (showLoading) {
+          setLoading(true);
+        }
+        const data = await accountsApi.list();
+
+        const listedAccounts = Array.isArray(data.results) ? data.results : [];
+        setAccounts(listedAccounts);
+
+        // Hydrate each account with live data (balance/margins/etc) from the detail endpoint.
+        // Do this after the list loads so the UI renders quickly.
+        if (listedAccounts.length > 0) {
+          void (async () => {
+            const results = await Promise.allSettled(
+              listedAccounts.map((account) => accountsApi.get(account.id))
+            );
+
+            if (!isMountedRef.current) {
+              return;
+            }
+
+            const hydratedAccounts = results
+              .filter(
+                (result): result is PromiseFulfilledResult<Account> =>
+                  result.status === 'fulfilled'
+              )
+              .map((result) => result.value);
+
+            if (hydratedAccounts.length === 0) {
+              return;
+            }
+
+            setAccounts((previousAccounts) =>
+              previousAccounts.map(
+                (account) =>
+                  hydratedAccounts.find(
+                    (hydrated) => hydrated.id === account.id
+                  ) ?? account
+              )
+            );
+          })();
+        }
+      } catch (caughtError) {
+        console.error('Error fetching accounts:', caughtError);
+        showError(t('common:errors.fetchFailed', 'Failed to load data'));
+      } finally {
+        if (showLoading) {
+          setLoading(false);
+        }
+      }
+    },
+    [showError, t]
+  );
 
   useEffect(() => {
+    isMountedRef.current = true;
     fetchAccounts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [fetchAccounts]);
 
   // Open dialog for adding new account
   const handleAddClick = () => {
@@ -177,11 +225,12 @@ const AccountManagement = () => {
         );
       }
 
+      // Close immediately; refresh balances in the background.
       showSuccess(
         t('settings:messages.accountAdded', 'Account saved successfully')
       );
       handleDialogClose();
-      fetchAccounts();
+      await fetchAccounts({ showLoading: false });
     } catch (error) {
       console.error('Error saving account:', error);
       showError(
@@ -212,7 +261,7 @@ const AccountManagement = () => {
       );
       setDeleteConfirmOpen(false);
       setAccountToDelete(null);
-      fetchAccounts();
+      await fetchAccounts({ showLoading: false });
     } catch (error) {
       console.error('Error deleting account:', error);
       showError(t('common:errors.deleteFailed', 'Failed to delete'));

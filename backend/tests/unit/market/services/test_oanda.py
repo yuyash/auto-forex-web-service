@@ -59,3 +59,57 @@ class TestOandaServiceUnit:
         svc.close_position(position, units=Decimal("10"))
         assert called["instrument"] == "EUR_USD"
         assert called["longUnits"] == "10"
+
+    def test_get_account_details_supports_v20_account_object(self, monkeypatch, test_user):
+        from apps.market.models import OandaAccount
+
+        account = OandaAccount.objects.create(
+            user=test_user,
+            account_id="101-001-36034971-001",
+            api_type="practice",
+            jurisdiction="OTHER",
+            currency="USD",
+            is_active=True,
+        )
+        account.set_api_token("token")
+        account.save(update_fields=["api_token"])
+
+        class DummyAccount:
+            currency = "USD"
+            balance = "1000.01"
+            unrealizedPL = "-1.23"
+            NAV = "998.78"
+            marginUsed = "10"
+            marginAvailable = "988.78"
+            positionValue = "0"
+            openTradeCount = 1
+            openPositionCount = 2
+            pendingOrderCount = 3
+            lastTransactionID = "42"
+
+        def _get(_account_id):
+            return SimpleNamespace(status=200, body={"account": DummyAccount()})
+
+        import apps.market.services.oanda as oanda_module
+
+        monkeypatch.setattr(
+            oanda_module.v20,
+            "Context",
+            lambda **_kwargs: SimpleNamespace(account=SimpleNamespace(get=_get)),
+        )
+
+        svc = OandaService(account)
+        details = svc.get_account_details()
+
+        assert details.account_id == "101-001-36034971-001"
+        assert details.currency == "USD"
+        assert details.balance == Decimal("1000.01")
+        assert details.unrealized_pl == Decimal("-1.23")
+        assert details.nav == Decimal("998.78")
+        assert details.margin_used == Decimal("10")
+        assert details.margin_available == Decimal("988.78")
+        assert details.position_value == Decimal("0")
+        assert details.open_trade_count == 1
+        assert details.open_position_count == 2
+        assert details.pending_order_count == 3
+        assert details.last_transaction_id == "42"

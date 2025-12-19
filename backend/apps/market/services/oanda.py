@@ -675,20 +675,37 @@ class OandaService:
             response = self.api.account.get(self.account.account_id)
             if response.status != 200:
                 raise OandaAPIError(f"Failed to fetch account details: status {response.status}")
-            account_data = response.body.get("account", {})
+
+            # Depending on v20 response parsing, `account` may be either a dict
+            # or a v20 account object with attributes (e.g. `balance`, `NAV`).
+            body = getattr(response, "body", {})
+            if hasattr(body, "get"):
+                account_data = body.get("account")
+            else:
+                account_data = getattr(body, "account", None)
+
+            def _read(key: str, default: Any) -> Any:
+                if account_data is None:
+                    return default
+                if isinstance(account_data, dict):
+                    value = account_data.get(key, default)
+                else:
+                    value = getattr(account_data, key, default)
+                return default if value is None else value
+
             return AccountDetails(
                 account_id=str(self.account.account_id),
-                currency=str(account_data.get("currency", "USD")),
-                balance=Decimal(str(account_data.get("balance", "0"))),
-                unrealized_pl=Decimal(str(account_data.get("unrealizedPL", "0"))),
-                nav=Decimal(str(account_data.get("NAV", "0"))),
-                margin_used=Decimal(str(account_data.get("marginUsed", "0"))),
-                margin_available=Decimal(str(account_data.get("marginAvailable", "0"))),
-                position_value=Decimal(str(account_data.get("positionValue", "0"))),
-                open_trade_count=int(account_data.get("openTradeCount", 0)),
-                open_position_count=int(account_data.get("openPositionCount", 0)),
-                pending_order_count=int(account_data.get("pendingOrderCount", 0)),
-                last_transaction_id=str(account_data.get("lastTransactionID", "")),
+                currency=str(_read("currency", "USD")),
+                balance=Decimal(str(_read("balance", "0"))),
+                unrealized_pl=Decimal(str(_read("unrealizedPL", "0"))),
+                nav=Decimal(str(_read("NAV", "0"))),
+                margin_used=Decimal(str(_read("marginUsed", "0"))),
+                margin_available=Decimal(str(_read("marginAvailable", "0"))),
+                position_value=Decimal(str(_read("positionValue", "0"))),
+                open_trade_count=int(_read("openTradeCount", 0) or 0),
+                open_position_count=int(_read("openPositionCount", 0) or 0),
+                pending_order_count=int(_read("pendingOrderCount", 0) or 0),
+                last_transaction_id=str(_read("lastTransactionID", "")),
             )
         except Exception as e:
             logger.error(
