@@ -194,12 +194,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       // Fill step 2 fields
       // Date fields are pre-filled via initialData
 
-      // Select data source
-      const postgresqlRadio = screen.getByRole('radio', {
-        name: /PostgreSQL/i,
-      });
-      fireEvent.click(postgresqlRadio);
-
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '50000' } });
 
@@ -279,12 +273,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       // Fill step 2
       // Date fields are pre-filled via initialData
 
-      // Select data source
-      const postgresqlRadio = screen.getByRole('radio', {
-        name: /PostgreSQL/i,
-      });
-      fireEvent.click(postgresqlRadio);
-
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '25000' } });
 
@@ -354,12 +342,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       });
 
       // Fill step 2
-      // Select data source
-      const postgresqlRadio = screen.getByRole('radio', {
-        name: /PostgreSQL/i,
-      });
-      fireEvent.click(postgresqlRadio);
-
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '30000' } });
 
@@ -485,12 +467,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       });
 
       // Fill step 2
-      // Select data source
-      const postgresqlRadio = screen.getByRole('radio', {
-        name: /PostgreSQL/i,
-      });
-      fireEvent.click(postgresqlRadio);
-
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '40000' } });
 
@@ -931,11 +907,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       });
 
       // Fill step 2 and check the checkbox
-      const postgresqlRadio = screen.getByRole('radio', {
-        name: /PostgreSQL/i,
-      });
-      fireEvent.click(postgresqlRadio);
-
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '10000' } });
 
@@ -989,11 +960,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       });
 
       // Fill step 2 and check the checkbox
-      const postgresqlRadio = screen.getByRole('radio', {
-        name: /PostgreSQL/i,
-      });
-      fireEvent.click(postgresqlRadio);
-
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '10000' } });
 
@@ -1049,11 +1015,6 @@ describe('BacktestTaskForm - Form State Persistence', () => {
       expect(checkbox.checked).toBe(true);
 
       // Navigate to review
-      const postgresqlRadio = screen.getByRole('radio', {
-        name: /PostgreSQL/i,
-      });
-      fireEvent.click(postgresqlRadio);
-
       const balanceInput = screen.getByLabelText(/Initial Balance/i);
       fireEvent.change(balanceInput, { target: { value: '10000' } });
 

@@ -203,6 +203,10 @@ class TickData(models.Model):
         db_index=True,
         help_text="Timestamp when the tick was received",
     )
+
+    # Django 5.2+ supports composite primary keys.
+    # Keep the canonical identity for ticks as (instrument, timestamp).
+    pk = models.CompositePrimaryKey("instrument", "timestamp")
     bid = models.DecimalField(
         max_digits=10,
         decimal_places=5,
@@ -231,8 +235,6 @@ class TickData(models.Model):
             # Single field indexes for basic queries
             models.Index(fields=["instrument"]),
             models.Index(fields=["timestamp"]),
-            # Composite index for efficient backtesting queries
-            models.Index(fields=["instrument", "timestamp"]),
             # Index for data retention cleanup
             models.Index(fields=["created_at"]),
         ]

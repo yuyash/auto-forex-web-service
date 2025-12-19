@@ -10,6 +10,11 @@ from django.core.management import execute_from_command_line
 def main() -> None:
     """Run administrative tasks."""
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+
+    # Django management commands are Python modules, so their canonical names can't contain '-'.
+    # We support a single alias here for ergonomics.
+    if len(sys.argv) > 1 and sys.argv[1] == "load-data":
+        sys.argv[1] = "load_data"
     try:
         execute_from_command_line(sys.argv)
     except ImportError as exc:
