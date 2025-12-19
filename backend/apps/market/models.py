@@ -106,7 +106,7 @@ class OandaAccount(models.Model):
         db_table = "oanda_accounts"
         verbose_name = "OANDA Account"
         verbose_name_plural = "OANDA Accounts"
-        unique_together = [["user", "account_id"]]
+        unique_together = [["user", "account_id", "api_type"]]
         indexes = [
             models.Index(fields=["user", "is_active"]),
             models.Index(fields=["account_id"]),
@@ -126,20 +126,31 @@ class OandaAccount(models.Model):
 
     def set_api_token(self, token: str) -> None:
         cipher = self._get_cipher()
+        token = token.strip()
         encrypted_token = cipher.encrypt(token.encode())
         self.api_token = encrypted_token.decode()
 
     def get_api_token(self) -> str:
         cipher = self._get_cipher()
         decrypted_token = cipher.decrypt(self.api_token.encode())
-        return decrypted_token.decode()
+        return decrypted_token.decode().strip()
 
     @property
     def api_hostname(self) -> str:
-        if self.api_type == "live":
+        # OANDA account IDs commonly encode environment:
+        # - Practice: 101-...
+        # - Live:     001-...
+        # Prefer this signal to avoid accidentally calling the wrong host.
+        account_id = (self.account_id or "").strip()
+        if account_id.startswith("101-"):
+            hostname = settings.OANDA_PRACTICE_API
+        elif account_id.startswith("001-"):
+            hostname = settings.OANDA_LIVE_API
+        elif self.api_type == "live":
             hostname = settings.OANDA_LIVE_API
         else:
             hostname = settings.OANDA_PRACTICE_API
+
         return hostname.replace("https://", "").replace("http://", "")
 
     def update_balance(

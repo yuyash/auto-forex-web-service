@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from apps.market.models import CeleryTaskStatus, TickData
+from apps.market.models import CeleryTaskStatus, OandaAccount, TickData
 
 
 @pytest.mark.django_db
@@ -23,3 +23,17 @@ class TestMarketModels:
             mid=Decimal("1.10005"),
         )
         assert tick.spread == Decimal("0.00010")
+
+    def test_oanda_account_token_strips_whitespace(self, test_user) -> None:
+        account = OandaAccount.objects.create(
+            user=test_user,
+            account_id="101-001-0000000-123",
+            api_type="practice",
+            jurisdiction="OTHER",
+            currency="USD",
+            is_active=True,
+        )
+        account.set_api_token(" token-with-newline\n")
+        account.save(update_fields=["api_token"])
+
+        assert account.get_api_token() == "token-with-newline"

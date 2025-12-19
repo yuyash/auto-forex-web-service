@@ -135,7 +135,10 @@ const mockAccounts = [
   },
 ];
 
-const queueAccountsResponse = (accounts: typeof mockAccounts | []) => {
+const queueAccountsResponse = (
+  accounts: typeof mockAccounts | [],
+  detailOverrides: Record<number, unknown> = {}
+) => {
   queueJsonResponse(
     { method: 'GET', url: '/api/market/accounts/' },
     {
@@ -145,6 +148,15 @@ const queueAccountsResponse = (accounts: typeof mockAccounts | []) => {
       results: accounts,
     }
   );
+
+  if (accounts.length > 0) {
+    for (const account of accounts) {
+      queueJsonResponse(
+        { method: 'GET', url: `/api/market/accounts/${account.id}/` },
+        detailOverrides[account.id] ?? account
+      );
+    }
+  }
 };
 
 const renderComponent = () => {
@@ -288,12 +300,21 @@ describe('AccountManagement', () => {
         is_active: true,
       } satisfies (typeof mockAccounts)[number];
 
+      const hydratedAccount = {
+        ...newAccount,
+        balance: 1234.56,
+        margin_used: 12.34,
+        margin_available: 1222.22,
+      } satisfies (typeof mockAccounts)[number];
+
       queueAccountsResponse(mockAccounts);
       queueJsonResponse(
         { method: 'POST', url: '/api/market/accounts/' },
         newAccount
       );
-      queueAccountsResponse([...mockAccounts, newAccount]);
+      queueAccountsResponse([...mockAccounts, newAccount], {
+        3: hydratedAccount,
+      });
 
       const user = userEvent.setup();
       renderComponent();
@@ -325,6 +346,23 @@ describe('AccountManagement', () => {
 
       await waitFor(() => {
         expect(mockShowSuccess).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        const detailCalls = mockFetch.mock.calls.filter((call) => {
+          const url = normalizeUrl(call[0]);
+          const method = toMethod(call[1]?.method);
+          return url === '/api/market/accounts/3/' && method === 'GET';
+        });
+        expect(detailCalls.length).toBeGreaterThan(0);
+      });
+
+      await waitFor(() => {
+        const newCard = screen
+          .getByText('001-001-9999999-003')
+          .closest('.MuiCard-root') as HTMLElement;
+        expect(newCard).toBeInTheDocument();
+        expect(within(newCard).getByText('$1,234.56')).toBeInTheDocument();
       });
 
       // Check that the POST request was made with correct data

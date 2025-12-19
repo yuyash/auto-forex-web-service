@@ -2,6 +2,18 @@
 
 import type { ApiError } from '../../types/common';
 
+export class ApiClientError extends Error {
+  status: number;
+  data: unknown;
+
+  constructor(status: number, data: unknown, message: string) {
+    super(message);
+    this.name = 'ApiClientError';
+    this.status = status;
+    this.data = data;
+  }
+}
+
 export class ApiClient {
   private baseURL: string;
 
@@ -17,35 +29,68 @@ export class ApiClient {
     };
   }
 
+  private extractErrorMessage(errorData: unknown, response: Response): string {
+    if (errorData && typeof errorData === 'object') {
+      const maybe = errorData as Record<string, unknown>;
+
+      const errorObj = maybe.error as
+        | { message?: unknown; details?: unknown }
+        | undefined;
+      if (errorObj && typeof errorObj === 'object') {
+        const msg = (errorObj as { message?: unknown }).message;
+        if (typeof msg === 'string' && msg.trim()) {
+          return msg;
+        }
+      }
+
+      if (typeof maybe.message === 'string' && maybe.message.trim()) {
+        return maybe.message;
+      }
+
+      if (typeof maybe.detail === 'string' && maybe.detail.trim()) {
+        return maybe.detail;
+      }
+
+      // DRF serializer validation errors often look like:
+      // { field: ["msg"], other_field: ["msg"] }
+      for (const [key, value] of Object.entries(maybe)) {
+        if (
+          Array.isArray(value) &&
+          typeof value[0] === 'string' &&
+          value[0].trim()
+        ) {
+          return `${key}: ${value[0]}`;
+        }
+        if (typeof value === 'string' && value.trim()) {
+          return `${key}: ${value}`;
+        }
+      }
+    }
+
+    return `HTTP ${response.status}: ${response.statusText}`;
+  }
+
   private async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
-      let errorData: ApiError;
+      let errorData: ApiError | unknown;
       try {
         errorData = await response.json();
       } catch {
-        errorData = {
-          message: `HTTP ${response.status}: ${response.statusText}`,
-        };
+        errorData = null;
       }
+
+      const message = this.extractErrorMessage(errorData, response);
 
       // Special handling for rate limiting
       if (response.status === 429) {
-        throw {
-          status: response.status,
-          data: errorData,
-          message: 'Too many requests. Please wait before trying again.',
-        };
+        throw new ApiClientError(
+          response.status,
+          errorData,
+          'Too many requests. Please wait before trying again.'
+        );
       }
 
-      throw {
-        status: response.status,
-        data: errorData,
-        message:
-          errorData.error?.message ||
-          errorData.message ||
-          errorData.detail ||
-          'An error occurred',
-      };
+      throw new ApiClientError(response.status, errorData, message);
     }
 
     // Handle 204 No Content
@@ -77,11 +122,11 @@ export class ApiClient {
     } catch (error) {
       // Handle network errors
       if (error instanceof TypeError) {
-        throw {
-          status: 0,
-          data: { message: 'Network error. Server may be unavailable.' },
-          message: 'Network error. Server may be unavailable.',
-        };
+        throw new ApiClientError(
+          0,
+          { message: 'Network error. Server may be unavailable.' },
+          'Network error. Server may be unavailable.'
+        );
       }
       throw error;
     }
@@ -99,11 +144,11 @@ export class ApiClient {
     } catch (error) {
       // Handle network errors
       if (error instanceof TypeError) {
-        throw {
-          status: 0,
-          data: { message: 'Network error. Server may be unavailable.' },
-          message: 'Network error. Server may be unavailable.',
-        };
+        throw new ApiClientError(
+          0,
+          { message: 'Network error. Server may be unavailable.' },
+          'Network error. Server may be unavailable.'
+        );
       }
       throw error;
     }
@@ -121,11 +166,11 @@ export class ApiClient {
     } catch (error) {
       // Handle network errors
       if (error instanceof TypeError) {
-        throw {
-          status: 0,
-          data: { message: 'Network error. Server may be unavailable.' },
-          message: 'Network error. Server may be unavailable.',
-        };
+        throw new ApiClientError(
+          0,
+          { message: 'Network error. Server may be unavailable.' },
+          'Network error. Server may be unavailable.'
+        );
       }
       throw error;
     }
@@ -143,11 +188,11 @@ export class ApiClient {
     } catch (error) {
       // Handle network errors
       if (error instanceof TypeError) {
-        throw {
-          status: 0,
-          data: { message: 'Network error. Server may be unavailable.' },
-          message: 'Network error. Server may be unavailable.',
-        };
+        throw new ApiClientError(
+          0,
+          { message: 'Network error. Server may be unavailable.' },
+          'Network error. Server may be unavailable.'
+        );
       }
       throw error;
     }
@@ -164,11 +209,11 @@ export class ApiClient {
     } catch (error) {
       // Handle network errors
       if (error instanceof TypeError) {
-        throw {
-          status: 0,
-          data: { message: 'Network error. Server may be unavailable.' },
-          message: 'Network error. Server may be unavailable.',
-        };
+        throw new ApiClientError(
+          0,
+          { message: 'Network error. Server may be unavailable.' },
+          'Network error. Server may be unavailable.'
+        );
       }
       throw error;
     }
