@@ -15,6 +15,26 @@
       }
     },
     {
+      "name": "Celery: worker",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "celery",
+      "args": [
+        "-A",
+        "config",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency=4",
+        "--max-tasks-per-child=10"
+      ],
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "config.settings"
+      }
+    },
+    {
       "name": "Frontend: npm run dev",
       "type": "node-terminal",
       "request": "launch",
@@ -34,8 +54,9 @@
       "name": "Run Full Stack Application",
       "configurations": [
         "Django: runserver",
+        "Celery: worker",
         "Frontend: npm run dev",
-        "Frontend: Open Chrome (5173)"
+        "Frontend: Open Edge (5173)"
       ]
     }
   ]
