@@ -27,6 +27,9 @@ const ConfigurationsPage = lazy(() => import('./pages/ConfigurationsPage'));
 const ConfigurationFormPage = lazy(
   () => import('./pages/ConfigurationFormPage')
 );
+const ConfigurationDetailPage = lazy(
+  () => import('./pages/ConfigurationDetailPage')
+);
 const BacktestTasksPage = lazy(() => import('./pages/BacktestTasksPage'));
 const BacktestTaskFormPage = lazy(() => import('./pages/BacktestTaskFormPage'));
 const BacktestTaskDetailPage = lazy(
@@ -138,6 +141,10 @@ function AppRoutes() {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/configurations" element={<ConfigurationsPage />} />
+            <Route
+              path="/configurations/:id"
+              element={<ConfigurationDetailPage />}
+            />
             <Route
               path="/configurations/new"
               element={<ConfigurationFormPage />}

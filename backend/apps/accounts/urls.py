@@ -5,6 +5,9 @@ This module defines URL patterns for authentication endpoints.
 """
 
 from django.urls import path
+from rest_framework.response import Response
+from rest_framework.request import Request
+from rest_framework.views import APIView
 
 from .views import (
     EmailVerificationView,
@@ -22,7 +25,30 @@ from .views import (
 
 app_name = "accounts"
 
+
+class AccountsApiRootView(APIView):
+    authentication_classes: list = []
+    permission_classes: list = []
+
+    def get(self, _request: Request) -> Response:
+        return Response(
+            {
+                "message": "Accounts API",
+                "endpoints": {
+                    "login": "/api/accounts/auth/login",
+                    "logout": "/api/accounts/auth/logout",
+                    "refresh": "/api/accounts/auth/refresh",
+                    "register": "/api/accounts/auth/register",
+                    "settings": "/api/accounts/settings/",
+                    "settings_public": "/api/accounts/settings/public",
+                    "notifications": "/api/accounts/notifications",
+                },
+            }
+        )
+
+
 urlpatterns = [
+    path("", AccountsApiRootView.as_view(), name="api_root"),
     path("auth/register", UserRegistrationView.as_view(), name="register"),
     path("auth/verify-email", EmailVerificationView.as_view(), name="verify_email"),
     path(

@@ -94,7 +94,7 @@ describe('AddAccountModal', () => {
     // Should call API with correct data
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/accounts/',
+        '/api/market/accounts/',
         expect.objectContaining({
           method: 'POST',
           headers: {
@@ -147,7 +147,7 @@ describe('AddAccountModal', () => {
     // Should submit with live API type
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/accounts/',
+        '/api/market/accounts/',
         expect.objectContaining({
           body: JSON.stringify({
             account_id: '001-001-1234567-001',

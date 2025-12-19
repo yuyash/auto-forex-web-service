@@ -192,6 +192,12 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
           { label: 'Edit Configuration' },
         ];
       }
+    } else if (location.pathname.match(/^\/configurations\/\d+$/)) {
+      breadcrumbs = [
+        { label: t('breadcrumbs.home'), path: homePath },
+        { label: 'Configurations', path: '/configurations' },
+        { label: 'Configuration Details' },
+      ];
     } else if (location.pathname.match(/^\/backtest-tasks\/\d+$/)) {
       breadcrumbs = [
         { label: t('breadcrumbs.home'), path: homePath },

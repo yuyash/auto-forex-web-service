@@ -31,6 +31,7 @@ from apps.trading.views import (
     TradingTaskStopView,
     StrategyConfigDetailView,
     StrategyConfigView,
+    StrategyDefaultsView,
     StrategyView,
 )
 
@@ -38,6 +39,11 @@ app_name = "trading"
 
 urlpatterns = [
     path("strategies/", StrategyView.as_view(), name="strategy_list"),
+    path(
+        "strategies/<str:strategy_id>/defaults/",
+        StrategyDefaultsView.as_view(),
+        name="strategy_defaults",
+    ),
     # Strategy configuration endpoints
     path(
         "strategy-configs/",

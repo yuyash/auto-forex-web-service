@@ -11,6 +11,7 @@ This module contains views for:
 import logging
 from typing import Any, Type, cast
 
+from django.conf import settings
 from django.db.models import Model, Q, QuerySet
 from django.utils import timezone
 
@@ -67,6 +68,52 @@ class StrategyView(APIView):
         strategies_list.sort(key=lambda x: x["name"])
         return Response(
             {"strategies": strategies_list, "count": len(strategies_list)},
+            status=status.HTTP_200_OK,
+        )
+
+
+class StrategyDefaultsView(APIView):
+    """API endpoint for returning default parameters for a strategy."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, _request: Request, strategy_id: str) -> Response:
+        from apps.trading.services.registry import registry
+
+        strategy_key = str(strategy_id or "").strip()
+        if not registry.is_registered(strategy_key):
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        strategies_info = registry.get_all_strategies_info()
+        config_schema = cast(
+            dict[str, Any],
+            (strategies_info.get(strategy_key) or {}).get("config_schema") or {},
+        )
+        properties = config_schema.get("properties")
+        schema_keys: set[str] = set(properties.keys()) if isinstance(properties, dict) else set()
+
+        defaults: dict[str, Any] = {}
+
+        # Strategy-specific defaults
+        if strategy_key == "floor":
+            raw = getattr(settings, "TRADING_FLOOR_STRATEGY_DEFAULTS", {})
+            if isinstance(raw, dict):
+                defaults.update(raw)
+
+        # If schema includes defaults, include them as a fallback.
+        if isinstance(properties, dict):
+            for key, prop in properties.items():
+                if not isinstance(prop, dict):
+                    continue
+                if "default" in prop and prop.get("default") is not None:
+                    defaults.setdefault(key, prop.get("default"))
+
+        # Only return keys that are part of the schema (if schema keys are known).
+        if schema_keys:
+            defaults = {k: v for k, v in defaults.items() if k in schema_keys}
+
+        return Response(
+            {"strategy_id": strategy_key, "defaults": defaults},
             status=status.HTTP_200_OK,
         )
 

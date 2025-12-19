@@ -13,7 +13,10 @@ import {
   Checkbox,
   FormControlLabel,
   Stack,
+  Tooltip,
+  IconButton,
 } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useTranslation } from 'react-i18next';
 import type {
   ConfigSchema,
@@ -201,12 +204,30 @@ const StrategyConfigForm = ({
     onChange(updatedConfig);
   };
 
+  const renderLabel = (label: string, description?: string) => {
+    if (!description) return label;
+    return (
+      <Box
+        component="span"
+        sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+      >
+        <span>{label}</span>
+        <Tooltip title={description} placement="top" arrow>
+          <IconButton size="small" aria-label={`${label} help`}>
+            <InfoOutlinedIcon fontSize="inherit" />
+          </IconButton>
+        </Tooltip>
+      </Box>
+    );
+  };
+
   // Render field based on schema type
   const renderField = (fieldName: string, fieldSchema: ConfigProperty) => {
     const value = config[fieldName] ?? fieldSchema.default ?? '';
     const error = validationErrors[fieldName];
     const isRequired = configSchema.required?.includes(fieldName);
     const label = fieldSchema.title ?? formatFieldLabel(fieldName);
+    const labelNode = renderLabel(label, fieldSchema.description);
 
     // Enum field (dropdown)
     if (fieldSchema.enum) {
@@ -248,6 +269,12 @@ const StrategyConfigForm = ({
       const showOptionDescriptions =
         isProgressionField || isDirectionMethodField;
 
+      const enumOptions = (fieldSchema.enum || []).filter((option) => {
+        if (!isDirectionMethodField) return true;
+        // Hide unsupported OHLC-based options until the UI provides candle inputs.
+        return !String(option).startsWith('ohlc_');
+      });
+
       return (
         <FormControl
           fullWidth
@@ -255,7 +282,7 @@ const StrategyConfigForm = ({
           error={!!error}
           disabled={disabled}
         >
-          <InputLabel required={isRequired}>{label}</InputLabel>
+          <InputLabel required={isRequired}>{labelNode}</InputLabel>
           <Select
             value={isNumericEnum ? Number(value) : String(value)}
             label={label}
@@ -266,7 +293,7 @@ const StrategyConfigForm = ({
               handleFieldChange(fieldName, newValue);
             }}
           >
-            {fieldSchema.enum.map((option) => (
+            {enumOptions.map((option) => (
               <MenuItem key={String(option)} value={option}>
                 <Box>
                   <Typography variant="body2">
@@ -314,7 +341,7 @@ const StrategyConfigForm = ({
           label={
             <Box>
               <Typography variant="body1">
-                {label}
+                {renderLabel(label, fieldSchema.description)}
                 {isRequired && (
                   <Typography component="span" color="error">
                     {' '}
@@ -322,11 +349,6 @@ const StrategyConfigForm = ({
                   </Typography>
                 )}
               </Typography>
-              {fieldSchema.description && (
-                <Typography variant="caption" color="text.secondary">
-                  {fieldSchema.description}
-                </Typography>
-              )}
             </Box>
           }
         />
@@ -339,7 +361,7 @@ const StrategyConfigForm = ({
         <TextField
           key={fieldName}
           fullWidth
-          label={label}
+          label={labelNode}
           type="number"
           value={value}
           onChange={(e) => {
@@ -369,7 +391,7 @@ const StrategyConfigForm = ({
         <TextField
           key={fieldName}
           fullWidth
-          label={label}
+          label={labelNode}
           value={arrayValue}
           onChange={(e) => {
             const items = e.target.value
@@ -393,7 +415,7 @@ const StrategyConfigForm = ({
       <TextField
         key={fieldName}
         fullWidth
-        label={label}
+        label={labelNode}
         value={value}
         onChange={(e) => handleFieldChange(fieldName, e.target.value)}
         helperText={error || fieldSchema.description}

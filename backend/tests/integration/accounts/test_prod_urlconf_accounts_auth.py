@@ -13,6 +13,18 @@ from rest_framework.test import APIClient
 
 @pytest.mark.django_db
 class TestAccountsProdUrlconfAuth:
+    def test_api_root_is_mounted_in_prod_urlconf(self, settings):
+        settings.ROOT_URLCONF = "config.urls"
+        clear_url_caches()
+
+        client = APIClient()
+        resp = client.get("/api/accounts/")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data.get("message") == "Accounts API"
+        assert "endpoints" in data
+        assert "login" in data["endpoints"]
+
     def test_settings_requires_auth_in_prod_urlconf(self, settings):
         settings.ROOT_URLCONF = "config.urls"
         clear_url_caches()
