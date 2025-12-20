@@ -76,7 +76,10 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
     volumes:
-      - ./backend/config:/app/config
+      # Do NOT mount ./backend/config over /app/config in production.
+      # /app/config is the Django project package (config/settings.py, asgi.py, etc).
+      # Mounting a host directory here can shadow the package and cause:
+      #   ModuleNotFoundError: No module named 'config.settings'
       - ./logs:/app/logs
       - static_volume:/app/staticfiles
       - media_volume:/app/media
@@ -108,7 +111,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
     volumes:
-      - ./backend/config:/app/config
+      # See note in backend service: avoid shadowing the Django `config` package.
       - ./logs:/app/logs
       - ${HOME}/.aws:/root/.aws:ro
     command: celery -A config worker -l info --concurrency=8
@@ -134,7 +137,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
     volumes:
-      - ./backend/config:/app/config
+      # See note in backend service: avoid shadowing the Django `config` package.
       - ./logs:/app/logs
       - ${HOME}/.aws:/root/.aws:ro
     command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler --pidfile=/tmp/celerybeat.pid
