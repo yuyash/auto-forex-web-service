@@ -80,9 +80,6 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
       return;
     }
 
-    if (import.meta.env.DEV) {
-      console.log('[BacktestChart] Fetching candles for backtest period');
-    }
     setLoading(true);
     setError(null);
 
@@ -91,20 +88,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
       const fromTime = new Date(startDate).toISOString();
       const toTime = new Date(endDate).toISOString();
 
-      if (import.meta.env.DEV) {
-        console.log('[BacktestChart] Request params', {
-          startDate,
-          endDate,
-          fromTime,
-          toTime,
-        });
-      }
-
       const url = `/api/market/candles/?instrument=${instrument}&granularity=${granularity}&from_time=${encodeURIComponent(fromTime)}&to_time=${encodeURIComponent(toTime)}`;
-
-      if (import.meta.env.DEV) {
-        console.log('[BacktestChart] Fetching URL:', url);
-      }
 
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -116,18 +100,6 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
 
       const data = await response.json();
       const transformedCandles = transformCandles(data.candles || []);
-
-      if (import.meta.env.DEV) {
-        console.log('[BacktestChart] Loaded candles', {
-          count: transformedCandles.length,
-          firstDate: transformedCandles[0]?.date.toISOString(),
-          lastDate:
-            transformedCandles[
-              transformedCandles.length - 1
-            ]?.date.toISOString(),
-          backtestPeriod: `${startDate} to ${endDate}`,
-        });
-      }
 
       setCandles(transformedCandles);
 
@@ -154,9 +126,6 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
 
   // Handle reset view
   const handleResetView = useCallback(() => {
-    if (import.meta.env.DEV) {
-      console.log('[BacktestChart] Reset view');
-    }
     fetchAllCandles();
   }, [fetchAllCandles]);
 
@@ -174,18 +143,14 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
   const tradeMarkers = useMemo<ChartMarker[]>(() => {
     const markers: ChartMarker[] = [];
 
-    console.log('[BacktestChart] Candles:', candles);
-
     // Add strategy event markers only (no trade markers to avoid overlap)
     if (strategyEvents && strategyEvents.length > 0) {
       const eventMarkers = createFloorStrategyMarkers(strategyEvents);
       markers.push(...eventMarkers);
     }
 
-    console.log('[BacktestChart] Filtered markers:', markers);
-
     return markers;
-  }, [strategyEvents, candles]);
+  }, [strategyEvents]);
 
   // Handle marker click
   const handleMarkerClick = useCallback(

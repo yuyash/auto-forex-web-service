@@ -104,7 +104,19 @@ DATABASES = {
         "PASSWORD": os.getenv("DB_PASSWORD", "postgres"),
         "HOST": os.getenv("DB_HOST", "postgres"),
         "PORT": os.getenv("DB_PORT", "5432"),
-        "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "600")),
+        # In development we default to non-persistent DB connections to avoid
+        # exhausting Postgres max_connections when running multiple local processes.
+        "CONN_MAX_AGE": int(
+            os.getenv(
+                "DB_CONN_MAX_AGE",
+                (
+                    "0"
+                    if os.getenv("DJANGO_ENV", "development").strip().lower()
+                    in {"development", "dev", "local"}
+                    else "600"
+                ),
+            )
+        ),
         "OPTIONS": {
             "connect_timeout": 10,
         },

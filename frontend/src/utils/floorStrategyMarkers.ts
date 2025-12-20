@@ -32,18 +32,9 @@ const COLORS = {
   START_END: '#757575', // Gray - start/end markers
 };
 
-// Event types that should be plotted as markers
-const PLOTTABLE_EVENT_TYPES = new Set([
-  'initial_entry',
-  'scale_in',
-  'strategy_close',
-  'start_strategy',
-  'end_strategy',
-  'take_profit',
-  'new_layer_created',
-  'margin_protection',
-  'volatility_lock',
-]);
+// Note: backend currently stores raw strategy events with keys like:
+// { "type": "open"|"close"|"layer_opened"|..., "details": {...}, "timestamp": "..." }
+// Frontend types call this field "event_type" but we accept both.
 
 /**
  * Create floor strategy event markers
@@ -56,12 +47,7 @@ export function createFloorStrategyMarkers(
 ): ChartMarker[] {
   const markers: ChartMarker[] = [];
 
-  // Filter to only plottable event types
-  const plottableEvents = events.filter((event) =>
-    PLOTTABLE_EVENT_TYPES.has(event.event_type)
-  );
-
-  plottableEvents.forEach((event, index) => {
+  events.forEach((event, index) => {
     const marker = createMarkerFromEvent(event, index);
     if (marker) {
       markers.push(marker);
@@ -94,28 +80,82 @@ function createMarkerFromEvent(
   event: BacktestStrategyEvent,
   index: number
 ): ChartMarker | null {
-  if (!event.timestamp) return null;
+  const raw = event as unknown as Record<string, unknown>;
 
-  // Round timestamp to nearest hour to align with H1 candles
-  const eventDate = new Date(event.timestamp);
-  const roundedDate = new Date(eventDate);
-  roundedDate.setMinutes(0, 0, 0);
+  const isDev =
+    typeof import.meta !== 'undefined' &&
+    typeof import.meta.env !== 'undefined' &&
+    Boolean(import.meta.env.DEV);
+
+  const timestamp =
+    (typeof event.timestamp === 'string' && event.timestamp) ||
+    (typeof raw.timestamp === 'string' && raw.timestamp) ||
+    (typeof raw.ts === 'string' && raw.ts) ||
+    '';
+
+  if (!timestamp) {
+    if (isDev) {
+      // eslint-disable-next-line no-console
+      console.warn('[floorStrategyMarkers] Dropping event: missing timestamp', {
+        index,
+        event_type:
+          (raw.event_type as string | undefined) ||
+          (raw.type as string | undefined),
+        raw,
+      });
+    }
+    return null;
+  }
+
+  const eventDate = new Date(timestamp);
+  if (isNaN(eventDate.getTime())) {
+    if (isDev) {
+      // eslint-disable-next-line no-console
+      console.warn('[floorStrategyMarkers] Dropping event: invalid timestamp', {
+        index,
+        timestamp,
+        event_type:
+          (raw.event_type as string | undefined) ||
+          (raw.type as string | undefined),
+        raw,
+      });
+    }
+    return null;
+  }
+
+  const details = (event.details ||
+    (raw.details as Record<string, unknown>) ||
+    {}) as Record<string, unknown>;
 
   // Extract price from various possible fields
   const price =
-    event.details.price ||
-    event.details.current_price ||
-    event.details.exit_price ||
-    event.details.entry_price;
+    details.price ??
+    details.current_price ??
+    details.exit_price ??
+    details.entry_price;
 
-  if (!price) return null;
+  if (price === null || price === undefined || price === '') {
+    if (isDev) {
+      // eslint-disable-next-line no-console
+      console.warn('[floorStrategyMarkers] Dropping event: missing price', {
+        index,
+        timestamp,
+        event_type:
+          (raw.event_type as string | undefined) ||
+          (raw.type as string | undefined),
+        details,
+        raw,
+      });
+    }
+    return null;
+  }
 
   // Get marker configuration based on event type and direction
   const markerConfig = getMarkerConfig(event);
 
   return {
     id: `event-${index}`,
-    date: roundedDate,
+    date: eventDate,
     price: parseFloat(String(price)),
     type: markerConfig.type,
     color: markerConfig.color,
@@ -134,45 +174,58 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
   shape?: ChartMarker['shape'];
   label: string;
 } {
-  const { event_type, details } = event;
+  const raw = event as unknown as Record<string, unknown>;
+  const details = (event.details ||
+    (raw.details as Record<string, unknown>) ||
+    {}) as Record<string, unknown>;
+
+  const eventType = String(
+    (raw.event_type as string | undefined) ||
+      (raw.type as string | undefined) ||
+      ''
+  );
+
   const direction = details.direction as string | undefined;
-  const units = formatUnits(details.units);
-  const layerNumber = details.layer_number;
+  const scaleIn = Boolean(details.scale_in);
+  const units = formatUnits(details.units ?? details.lot_size);
+  const layerNumber = details.layer_number ?? details.layer;
 
-  switch (event_type) {
-    // Initial entry - Blue triangle for long, Pink inverted for short
-    case 'initial_entry': {
-      const isLong = direction === 'long';
-      return {
-        type: 'initial_entry',
-        color: isLong ? COLORS.LONG_INITIAL : COLORS.SHORT,
-        shape: isLong ? 'triangleUp' : 'triangleDown',
-        label: units
-          ? `${isLong ? 'L' : 'S'} ${units}`
-          : isLong
-            ? 'Long'
-            : 'Short',
-      };
-    }
-
-    // Scale-in (retracement) - Dark green triangle for long, Pink inverted for short
+  switch (eventType) {
+    // Backend: trade open marker
+    case 'open':
+    // Legacy frontend event names
+    case 'initial_entry':
     case 'scale_in': {
       const isLong = direction === 'long';
+      const isScaleIn = eventType === 'scale_in' || scaleIn;
+
+      // Short entries always render as "Short" markers (pink inverted triangle)
+      if (!isLong) {
+        return {
+          type: 'sell',
+          color: COLORS.SHORT,
+          shape: 'triangleDown',
+          label: units ? `S ${units}` : 'Short',
+        };
+      }
+
       return {
-        type: 'buy',
-        color: isLong ? COLORS.LONG_SCALE_IN : COLORS.SHORT,
-        shape: isLong ? 'triangleUp' : 'triangleDown',
+        type: isScaleIn ? 'buy' : 'initial_entry',
+        color: isScaleIn ? COLORS.LONG_SCALE_IN : COLORS.LONG_INITIAL,
+        shape: 'triangleUp',
         label: units
-          ? `${isLong ? 'L' : 'S'} ${units}`
-          : isLong
-            ? 'Long'
-            : 'Short',
+          ? `L ${units}`
+          : isScaleIn
+            ? 'Long (Scale-in)'
+            : 'Long (Initial)',
       };
     }
 
-    // Close events - Gray circle with unit size
+    // Backend: trade close marker
+    case 'close':
     case 'strategy_close':
-    case 'take_profit': {
+    case 'take_profit':
+    case 'take_profit_hit': {
       return {
         type: 'info',
         color: COLORS.CLOSE,
@@ -181,7 +234,8 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
       };
     }
 
-    // New layer - Purple circle with layer number
+    // Backend: layer created marker
+    case 'layer_opened':
     case 'new_layer_created': {
       return {
         type: 'info',
@@ -191,7 +245,7 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
       };
     }
 
-    // Volatility lock - Orange circle
+    // Volatility lock / Margin protection
     case 'volatility_lock': {
       return {
         type: 'info',
@@ -201,7 +255,6 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
       };
     }
 
-    // Margin protection - Red circle
     case 'margin_protection': {
       return {
         type: 'info',
@@ -212,6 +265,7 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
     }
 
     // Start/End strategy
+    case 'strategy_started':
     case 'start_strategy': {
       return {
         type: 'start_strategy',
@@ -221,6 +275,7 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
       };
     }
 
+    case 'strategy_stopped':
     case 'end_strategy': {
       return {
         type: 'end_strategy',
@@ -245,26 +300,49 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
  * Format tooltip text for event
  */
 function formatTooltip(event: BacktestStrategyEvent): string {
-  const lines: string[] = [event.description];
-  const entryEventTypes = ['initial_entry', 'scale_in'];
-  const isEntryEvent = entryEventTypes.includes(event.event_type);
+  const raw = event as unknown as Record<string, unknown>;
+  const details = (event.details ||
+    (raw.details as Record<string, unknown>) ||
+    {}) as Record<string, unknown>;
+  const eventType = String(
+    (raw.event_type as string | undefined) ||
+      (raw.type as string | undefined) ||
+      ''
+  );
+  const description =
+    (typeof event.description === 'string' && event.description) ||
+    eventType ||
+    'Strategy event';
+
+  const lines: string[] = [description];
+  const entryEventTypes = ['open', 'initial_entry', 'scale_in'];
+  const isEntryEvent = entryEventTypes.includes(eventType);
 
   // Add relevant details
-  if (event.details.price) {
-    lines.push(`Price: ${parseFloat(String(event.details.price)).toFixed(5)}`);
+  if (
+    details.price ??
+    details.current_price ??
+    details.entry_price ??
+    details.exit_price
+  ) {
+    const p = (details.price ??
+      details.current_price ??
+      details.entry_price ??
+      details.exit_price) as unknown;
+    lines.push(`Price: ${parseFloat(String(p)).toFixed(5)}`);
   }
-  if (event.details.layer_number !== undefined) {
-    lines.push(`Layer: ${event.details.layer_number}`);
+  if (details.layer_number !== undefined || details.layer !== undefined) {
+    lines.push(`Layer: ${details.layer_number ?? details.layer}`);
   }
-  if (event.details.entry_retracement_count !== undefined) {
-    lines.push(`Entry Retracement: ${event.details.entry_retracement_count}`);
+  if (details.entry_retracement_count !== undefined) {
+    lines.push(`Entry Retracement: ${details.entry_retracement_count}`);
   }
-  if (event.details.retracement_count !== undefined) {
+  if (details.retracement_count !== undefined) {
     const label = isEntryEvent ? 'Retracement' : 'Remaining Retracements';
-    lines.push(`${label}: ${event.details.retracement_count}`);
+    lines.push(`${label}: ${details.retracement_count}`);
   }
-  if (event.details.units) {
-    lines.push(`Units: ${event.details.units}`);
+  if (details.units ?? details.lot_size) {
+    lines.push(`Units: ${details.units ?? details.lot_size}`);
   }
 
   return lines.join('\n');

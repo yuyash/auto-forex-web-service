@@ -327,6 +327,7 @@ export default function BacktestTaskDetailPage() {
   }
 
   const statusForActions = currentStatus ?? task.status;
+  const taskForTabs = { ...task, status: statusForActions };
   const canStart =
     statusForActions === TaskStatus.CREATED ||
     statusForActions === TaskStatus.STOPPED;
@@ -445,7 +446,7 @@ export default function BacktestTaskDetailPage() {
 
         <TabPanel value={tabValue} index={0}>
           <TaskOverviewTab
-            task={task}
+            task={taskForTabs}
             liveResults={
               liveResults?.has_data
                 ? {
@@ -465,7 +466,7 @@ export default function BacktestTaskDetailPage() {
 
         <TabPanel value={tabValue} index={1}>
           <TaskResultsTab
-            task={task}
+            task={taskForTabs}
             liveResults={
               liveResults?.has_data
                 ? {
@@ -487,7 +488,7 @@ export default function BacktestTaskDetailPage() {
         <TabPanel value={tabValue} index={2}>
           <TaskExecutionsTab
             taskId={taskId}
-            taskStatus={task.status}
+            taskStatus={statusForActions}
             task={{
               start_time: task.start_time,
               end_time: task.end_time,
@@ -496,7 +497,7 @@ export default function BacktestTaskDetailPage() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={3}>
-          <TaskConfigTab task={task} />
+          <TaskConfigTab task={taskForTabs} />
         </TabPanel>
       </Paper>
 
