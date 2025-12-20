@@ -13,7 +13,7 @@ Usage:
 
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.accounts.models import SystemSettings, WhitelistedEmail
+from apps.accounts.models import PublicAccountSettings, WhitelistedEmail
 
 
 class Command(BaseCommand):
@@ -132,14 +132,14 @@ class Command(BaseCommand):
 
     def enable_whitelist(self) -> None:
         """Enable email whitelist enforcement."""
-        settings = SystemSettings.get_settings()
+        settings = PublicAccountSettings.get_settings()
         settings.email_whitelist_enabled = True
         settings.save()
         self.stdout.write(self.style.SUCCESS("✓ Email whitelist enforcement enabled"))
 
     def disable_whitelist(self) -> None:
         """Disable email whitelist enforcement."""
-        settings = SystemSettings.get_settings()
+        settings = PublicAccountSettings.get_settings()
         settings.email_whitelist_enabled = False
         settings.save()
         self.stdout.write(self.style.SUCCESS("✓ Email whitelist enforcement disabled"))
@@ -155,7 +155,7 @@ class Command(BaseCommand):
 
     def show_status(self) -> None:
         """Show whitelist status."""
-        settings = SystemSettings.get_settings()
+        settings = PublicAccountSettings.get_settings()
         active_count = WhitelistedEmail.objects.filter(is_active=True).count()
         total_count = WhitelistedEmail.objects.count()
 
