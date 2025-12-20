@@ -171,7 +171,8 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
     displayXAccessor,
   } = useMemo(() => xScaleProvider(data), [data, xScaleProvider]);
 
-  const margin = { left: 50, right: 50, top: 10, bottom: 30 };
+  // Extra bottom margin to support two stacked X axes (time + date).
+  const margin = { left: 50, right: 50, top: 10, bottom: 75 };
 
   // Calculate initial x extents
   const initialXExtents = useMemo(() => {
@@ -416,6 +417,62 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
     return calculateOptimalTicks(width);
   }, [width, calculateOptimalTicks]);
 
+  const getTimezoneDayKey = useCallback(
+    (date: Date) => {
+      // A stable day identifier in the configured timezone.
+      if (timezone && timezone !== 'UTC') {
+        return formatInTimeZone(date, timezone, 'yyyy-MM-dd');
+      }
+      return timeFormat('%Y-%m-%d')(date);
+    },
+    [timezone]
+  );
+
+  const formatDateUnderTick = useCallback(
+    (tickValue: number) => {
+      const idx = Math.round(Number(tickValue));
+      const d = chartData?.[idx];
+      if (!d?.date) return '';
+
+      if (timezone && timezone !== 'UTC') {
+        return formatInTimeZone(d.date, timezone, 'MMM d');
+      }
+      return timeFormat('%b %-d')(d.date);
+    },
+    [chartData, timezone]
+  );
+
+  const dateTickValues = useMemo(() => {
+    if (!chartData || chartData.length === 0) return undefined;
+
+    const dayStartIndices: number[] = [];
+    let lastDayKey: string | null = null;
+
+    for (let i = 0; i < chartData.length; i++) {
+      const d = chartData[i];
+      const key = getTimezoneDayKey(d.date);
+      if (key !== lastDayKey) {
+        dayStartIndices.push(i);
+        lastDayKey = key;
+      }
+    }
+
+    if (dayStartIndices.length <= 2) return dayStartIndices;
+
+    // Sample day labels so they don't overlap on long ranges.
+    const maxLabels = Math.max(2, Math.floor(width / 140));
+    if (dayStartIndices.length <= maxLabels) return dayStartIndices;
+
+    const sampled: number[] = [];
+    for (let j = 0; j < maxLabels; j++) {
+      const idx = Math.round(
+        (j * (dayStartIndices.length - 1)) / (maxLabels - 1)
+      );
+      sampled.push(dayStartIndices[idx]);
+    }
+    return Array.from(new Set(sampled));
+  }, [chartData, getTimezoneDayKey, width]);
+
   // We need to look up the actual date from the data array
   const formatTime = useCallback(
     (index: number) => {
@@ -447,63 +504,10 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
         const oneDay = 24 * 60 * 60 * 1000;
         const isIntradayData = avgInterval < oneDay;
 
-        // For intraday data, show date only at day boundaries (midnight or first tick of day)
+        // For intraday data, keep axis ticks as *time only*.
+        // If we want to show a date label once per day, we draw it separately on the axis canvas
+        // (see "Custom X-axis tick labels" below).
         if (isIntradayData && visibleRange > oneDay) {
-          const hours = date.getHours();
-          const minutes = date.getMinutes();
-
-          // Check if this is the first data point
-          const isFirstPoint = index === 0;
-
-          // Check if this is a day boundary (00:00)
-          const isDayBoundary = hours === 0 && minutes === 0;
-
-          // For hourly or less granularity (1 hour or less), only show date at 00:00
-          // For minute granularity, also show date when day changes (even if not at 00:00)
-          const oneHour = 60 * 60 * 1000;
-          const isHourlyOrLess = avgInterval <= oneHour;
-
-          let showDate = false;
-
-          if (isFirstPoint) {
-            // Always show date on first point
-            showDate = true;
-          } else if (isDayBoundary) {
-            // Always show date at midnight (00:00)
-            showDate = true;
-          } else if (!isHourlyOrLess && index > 0 && chartData[index - 1]) {
-            // For minute granularity, also show date when day changes
-            const prevDate = chartData[index - 1].date;
-            const isDayChange =
-              date.getDate() !== prevDate.getDate() ||
-              date.getMonth() !== prevDate.getMonth() ||
-              date.getFullYear() !== prevDate.getFullYear();
-            showDate = isDayChange;
-          }
-
-          // Show date + time if needed
-          if (showDate) {
-            // Use 'MMM d' format (e.g., 'Nov 7') for short ranges, 'yyyy MMM d' for long ranges
-            const dateFormat =
-              visibleRange > 180 * oneDay ? 'yyyy MMM d' : 'MMM d';
-            const timeStr =
-              timezone && timezone !== 'UTC'
-                ? formatInTimeZone(date, timezone, 'HH:mm')
-                : timeFormat('%H:%M')(date);
-            const dateStr =
-              timezone && timezone !== 'UTC'
-                ? formatInTimeZone(date, timezone, dateFormat)
-                : timeFormat(
-                    dateFormat
-                      .replace('yyyy', '%Y')
-                      .replace('MMM', '%b')
-                      .replace('d', '%-d')
-                  )(date);
-
-            return `${dateStr} ${timeStr}`;
-          }
-
-          // Otherwise, show only time
           if (timezone && timezone !== 'UTC') {
             return formatInTimeZone(date, timezone, 'HH:mm');
           }
@@ -685,6 +689,21 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                 gridLinesStrokeStyle="#e0e0e0"
                 tickFormat={formatTime}
                 ticks={optimalTicks}
+              />
+
+              {/* Date line under time ticks */}
+              <XAxis
+                showGridLines={false}
+                showDomain={false}
+                tickFormat={formatDateUnderTick}
+                tickValues={dateTickValues}
+                showTicks={true}
+                innerTickSize={0}
+                outerTickSize={0}
+                tickStrokeStyle="transparent"
+                tickLabelFill="#666"
+                fontSize={11}
+                tickPadding={24}
               />
               <YAxis
                 ticks={10}
