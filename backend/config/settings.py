@@ -59,7 +59,7 @@ INSTALLED_APPS = [
     # Local apps
     "apps.accounts",
     "apps.health",
-p    "apps.market",
+    "apps.market",
     "apps.trading",
 ]
 
