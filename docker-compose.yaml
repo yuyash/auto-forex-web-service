@@ -176,7 +176,7 @@ services:
       - backend
       - frontend
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/api/health/ > /dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3

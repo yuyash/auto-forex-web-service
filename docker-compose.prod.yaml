@@ -75,6 +75,9 @@ services:
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
+      # IMPORTANT: include your public domain(s) here to avoid DisallowedHost.
+      # Override via .env if needed.
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-auto-forex.com,www.auto-forex.com}
     volumes:
       # Do NOT mount ./backend/config over /app/config in production.
       # /app/config is the Django project package (config/settings.py, asgi.py, etc).
@@ -170,7 +173,7 @@ services:
       - backend
       - frontend
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fkSs https://localhost:443/api/health/ > /dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
