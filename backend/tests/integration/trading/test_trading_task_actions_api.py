@@ -37,11 +37,11 @@ class TestTradingTaskActionsApi:
             "status/",
             "executions/",
             "logs/",
-            "live-results/",
+            "results/",
             "copy/",
         ]:
             url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/{suffix}"
-            if suffix in {"status/", "executions/", "logs/", "live-results/"}:
+            if suffix in {"status/", "executions/", "logs/", "results/"}:
                 resp = requests.get(url, timeout=10)
             else:
                 resp = requests.post(url, json={}, timeout=10)
@@ -107,12 +107,14 @@ class TestTradingTaskActionsApi:
         logs_data = logs_resp.json()
         assert set(logs_data.keys()) >= {"count", "next", "previous", "results"}
 
-        live_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/live-results/"
-        live_resp = requests.get(live_url, headers=auth_headers, timeout=10)
-        assert live_resp.status_code == 200
-        live_data = live_resp.json()
-        assert live_data["task_id"] == task.id
-        assert live_data["has_data"] in {True, False}
+        results_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/results/"
+        results_resp = requests.get(results_url, headers=auth_headers, timeout=10)
+        assert results_resp.status_code == 200
+        results_data = results_resp.json()
+        assert results_data["task_id"] == task.id
+        assert results_data["task_type"] == "trading"
+        assert "has_live" in results_data
+        assert "has_metrics" in results_data
 
     def test_copy_requires_new_name(self, live_server, auth_headers, test_user, oanda_account):
         config = StrategyConfig.objects.create(

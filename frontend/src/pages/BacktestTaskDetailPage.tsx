@@ -36,7 +36,7 @@ import {
 } from '../hooks/useBacktestTaskMutations';
 import { useTaskPolling } from '../hooks/useTaskPolling';
 import { useInvalidateExecutions } from '../hooks/useTaskExecutions';
-import { useBacktestLiveResults } from '../hooks/useBacktestLiveResults';
+import { useBacktestResults } from '../hooks/useTaskResults';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
 import { TaskActionButtons } from '../components/tasks/actions/TaskActionButtons';
@@ -112,7 +112,7 @@ export default function BacktestTaskDetailPage() {
       : task?.status;
 
   // Poll for live results when task is running
-  const { liveResults } = useBacktestLiveResults(taskId, currentStatus, {
+  const { results } = useBacktestResults(taskId, currentStatus, {
     interval: 5000, // Poll every 5 seconds for live results
   });
 
@@ -300,7 +300,7 @@ export default function BacktestTaskDetailPage() {
 
   if (isLoading) {
     return (
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Container maxWidth={false} sx={{ py: 4 }}>
         <Box
           sx={{
             display: 'flex',
@@ -317,7 +317,7 @@ export default function BacktestTaskDetailPage() {
 
   if (error || !task) {
     return (
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Container maxWidth={false} sx={{ py: 4 }}>
         <ErrorDisplay
           error={error || new Error('Task not found')}
           title="Failed to load task"
@@ -336,7 +336,7 @@ export default function BacktestTaskDetailPage() {
   const canDelete = statusForActions !== TaskStatus.RUNNING;
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth={false} sx={{ py: 4 }}>
       {/* Breadcrumbs */}
       <Breadcrumbs sx={{ mb: 2 }}>
         <Link
@@ -445,44 +445,11 @@ export default function BacktestTaskDetailPage() {
         </Tabs>
 
         <TabPanel value={tabValue} index={0}>
-          <TaskOverviewTab
-            task={taskForTabs}
-            liveResults={
-              liveResults?.has_data
-                ? {
-                    day_date: liveResults.day_date || '',
-                    progress: liveResults.progress || 0,
-                    days_processed: liveResults.days_processed || 0,
-                    total_days: liveResults.total_days || 0,
-                    balance: liveResults.balance || 0,
-                    total_trades: liveResults.total_trades || 0,
-                    metrics: liveResults.metrics || {},
-                    equity_curve: liveResults.equity_curve || [],
-                  }
-                : null
-            }
-          />
+          <TaskOverviewTab task={taskForTabs} results={results} />
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
-          <TaskResultsTab
-            task={taskForTabs}
-            liveResults={
-              liveResults?.has_data
-                ? {
-                    day_date: liveResults.day_date || '',
-                    progress: liveResults.progress || 0,
-                    days_processed: liveResults.days_processed || 0,
-                    total_days: liveResults.total_days || 0,
-                    balance: liveResults.balance || 0,
-                    total_trades: liveResults.total_trades || 0,
-                    metrics: liveResults.metrics || {},
-                    trade_log: liveResults.trade_log || [],
-                    strategy_events: liveResults.strategy_events || [],
-                  }
-                : null
-            }
-          />
+          <TaskResultsTab task={taskForTabs} results={results} />
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>

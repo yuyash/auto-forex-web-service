@@ -19,76 +19,21 @@ import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
 import { BacktestChart } from '../BacktestChart';
 import { FloorLayerLog } from '../FloorLayerLog';
 import type { BacktestTask } from '../../../types/backtestTask';
-import { TaskStatus, TaskType } from '../../../types/common';
+import { TaskStatus } from '../../../types/common';
 import type { Trade } from '../../../types/execution';
-import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
+import type { TaskResults } from '../../../types/results';
 import type { ChartMarker } from '../../../utils/chartMarkers';
-import type { BacktestStrategyEvent } from '../../../types/execution';
-
-interface LiveMetrics {
-  total_return?: number;
-  total_pnl?: number;
-  win_rate?: number;
-  winning_trades?: number;
-  losing_trades?: number;
-  max_drawdown?: number;
-  sharpe_ratio?: number;
-  profit_factor?: number;
-  average_win?: number;
-  average_loss?: number;
-  [key: string]: string | number | undefined;
-}
-
-interface LiveTrade {
-  timestamp?: string;
-  entry_time?: string;
-  exit_time?: string;
-  instrument?: string;
-  direction?: string;
-  entry_price?: number;
-  exit_price?: number;
-  units?: number;
-  pnl?: number;
-  realized_pnl?: number;
-  duration?: number | string;
-  layer_number?: number;
-  is_first_lot?: boolean;
-  retracement_count?: number;
-  entry_retracement_count?: number;
-  [key: string]: string | number | boolean | undefined;
-}
-
-interface LiveResults {
-  day_date: string;
-  progress: number;
-  days_processed: number;
-  total_days: number;
-  balance: number;
-  total_trades: number;
-  metrics: LiveMetrics;
-  trade_log?: LiveTrade[];
-  strategy_events?: BacktestStrategyEvent[];
-}
 
 interface TaskResultsTabProps {
   task: BacktestTask;
-  liveResults?: LiveResults | null;
+  results?: TaskResults | null;
 }
 
-export function TaskResultsTab({ task, liveResults }: TaskResultsTabProps) {
-  // Fetch latest execution with full metrics
-  const { data: executionsData, isLoading: executionsLoading } =
-    useTaskExecutions(task.id, TaskType.BACKTEST, {
-      page: 1,
-      page_size: 1,
-      include_metrics: true,
-    });
-
-  const latestExecution = executionsData?.results?.[0];
-  const metrics = latestExecution?.metrics;
+export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
+  const metrics = results?.metrics ?? null;
 
   // Check if task has completed execution with metrics
-  const hasMetrics = task.status === TaskStatus.COMPLETED && metrics;
+  const hasMetrics = task.status === TaskStatus.COMPLETED && !!metrics;
 
   // Debug logging for strategy events (ALWAYS LOG)
   React.useEffect(() => {}, [metrics]);
@@ -279,7 +224,7 @@ export function TaskResultsTab({ task, liveResults }: TaskResultsTabProps) {
     return new Date(dateString).toLocaleString();
   };
 
-  if (executionsLoading) {
+  if (!results && task.status !== TaskStatus.CREATED) {
     return (
       <Box
         sx={{
@@ -305,269 +250,53 @@ export function TaskResultsTab({ task, liveResults }: TaskResultsTabProps) {
   }
 
   if (task.status === TaskStatus.RUNNING) {
-    // Show live progress/results if available
-    if (liveResults) {
-      const liveMetrics = liveResults.metrics;
+    const live = (results?.live ?? null) as Record<string, unknown> | null;
+    const progress = Number(live?.progress ?? 0);
+    const processed = Number(live?.processed ?? 0);
 
-      return (
-        <Box sx={{ px: 3 }}>
-          {/* Running Status Banner */}
-          <Alert severity="info" sx={{ mb: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CircularProgress size={16} />
-              <Typography variant="body2">
-                Task is running... {liveResults.progress}% complete
-              </Typography>
-            </Box>
-          </Alert>
-
-          {/* Live Backtest Period */}
-          <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              Backtest Period (Live Data up to {liveResults.day_date})
-            </Typography>
-            <Typography variant="body1">
-              {formatDate(task.start_time)} → {formatDate(task.end_time)}
-            </Typography>
-          </Paper>
-
-          {/* Live Performance Metrics */}
-          {liveResults.total_trades > 0 && (
-            <Paper sx={{ p: 3, mb: 3 }}>
-              <Typography variant="h6" sx={{ mb: 3 }}>
-                Live Performance Metrics
-              </Typography>
-
-              <Grid container spacing={3}>
-                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                  <Paper
-                    sx={{
-                      p: 2,
-                      textAlign: 'center',
-                      bgcolor: 'background.default',
-                    }}
-                  >
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Current Balance
-                    </Typography>
-                    <Typography variant="h6">
-                      $
-                      {liveResults.balance.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </Typography>
-                  </Paper>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                  <Paper
-                    sx={{
-                      p: 2,
-                      textAlign: 'center',
-                      bgcolor: 'background.default',
-                    }}
-                  >
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Total Return
-                    </Typography>
-                    <Typography
-                      variant="h6"
-                      sx={{
-                        color:
-                          (liveMetrics.total_return || 0) >= 0
-                            ? 'success.main'
-                            : 'error.main',
-                      }}
-                    >
-                      {(liveMetrics.total_return || 0).toFixed(2)}%
-                    </Typography>
-                  </Paper>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                  <Paper
-                    sx={{
-                      p: 2,
-                      textAlign: 'center',
-                      bgcolor: 'background.default',
-                    }}
-                  >
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Total Trades
-                    </Typography>
-                    <Typography variant="h6">
-                      {liveResults.total_trades}
-                    </Typography>
-                  </Paper>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                  <Paper
-                    sx={{
-                      p: 2,
-                      textAlign: 'center',
-                      bgcolor: 'background.default',
-                    }}
-                  >
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Win Rate
-                    </Typography>
-                    <Typography variant="h6">
-                      {(liveMetrics.win_rate || 0).toFixed(1)}%
-                    </Typography>
-                  </Paper>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                  <Paper
-                    sx={{
-                      p: 2,
-                      textAlign: 'center',
-                      bgcolor: 'background.default',
-                    }}
-                  >
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Total P&L
-                    </Typography>
-                    <Typography
-                      variant="h6"
-                      sx={{
-                        color:
-                          (liveMetrics.total_pnl || 0) >= 0
-                            ? 'success.main'
-                            : 'error.main',
-                      }}
-                    >
-                      $
-                      {(liveMetrics.total_pnl || 0).toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </Typography>
-                  </Paper>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                  <Paper
-                    sx={{
-                      p: 2,
-                      textAlign: 'center',
-                      bgcolor: 'background.default',
-                    }}
-                  >
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Max Drawdown
-                    </Typography>
-                    <Typography variant="h6" sx={{ color: 'error.main' }}>
-                      {(liveMetrics.max_drawdown || 0).toFixed(2)}%
-                    </Typography>
-                  </Paper>
-                </Grid>
-              </Grid>
-            </Paper>
-          )}
-
-          {/* Live OHLC Chart with Trading Events */}
-          {liveResults.trade_log && liveResults.trade_log.length > 0 && (
-            <Paper sx={{ p: 3, mb: 3 }}>
-              <Typography variant="h6" sx={{ mb: 3 }}>
-                Price Chart with Trading Events (Live)
-              </Typography>
-
-              <BacktestChart
-                instrument={task.instrument}
-                startDate={task.start_time}
-                endDate={liveResults.day_date}
-                strategyEvents={liveResults.strategy_events}
-                timezone="UTC"
-                height={500}
-                onTradeClick={handleMarkerClick}
-              />
-            </Paper>
-          )}
-
-          {/* Live Floor Layer Log (for floor strategy) */}
-          {task.strategy_type === 'floor' &&
-            liveResults.trade_log &&
-            liveResults.trade_log.length > 0 && (
-              <Paper sx={{ p: 3, mb: 3 }}>
-                <FloorLayerLog
-                  trades={liveResults.trade_log.map((t) => ({
-                    entry_time: t.entry_time || t.timestamp || '',
-                    exit_time: t.exit_time || '',
-                    instrument: t.instrument || task.instrument,
-                    direction: (t.direction?.toLowerCase() === 'short'
-                      ? 'short'
-                      : 'long') as 'long' | 'short',
-                    units: t.units || 0,
-                    entry_price: t.entry_price || 0,
-                    exit_price: t.exit_price || 0,
-                    pnl: t.pnl || 0,
-                    realized_pnl: t.realized_pnl || t.pnl || 0,
-                    duration: t.duration?.toString() || '',
-                    layer_number: t.layer_number,
-                    is_first_lot: t.is_first_lot,
-                    retracement_count: t.retracement_count,
-                    entry_retracement_count: t.entry_retracement_count,
-                  }))}
-                />
-              </Paper>
-            )}
-
-          {/* Live Trade Log Table */}
-          {liveResults.trade_log && liveResults.trade_log.length > 0 && (
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 3 }}>
-                Trade Log (Live - {liveResults.trade_log.length} trades)
-              </Typography>
-              <TradeLogTable
-                trades={liveResults.trade_log.map((t) => ({
-                  entry_time: t.entry_time || t.timestamp || '',
-                  exit_time: t.exit_time || '',
-                  instrument: t.instrument || task.instrument,
-                  direction: (t.direction?.toLowerCase() === 'short'
-                    ? 'short'
-                    : 'long') as 'long' | 'short',
-                  units: t.units || 0,
-                  entry_price: t.entry_price || 0,
-                  exit_price: t.exit_price || 0,
-                  pnl: t.pnl || 0,
-                  realized_pnl: t.realized_pnl || t.pnl || 0,
-                  duration: t.duration?.toString() || '',
-                  layer_number: t.layer_number,
-                  is_first_lot: t.is_first_lot,
-                  retracement_count: t.retracement_count,
-                  entry_retracement_count: t.entry_retracement_count,
-                }))}
-                selectedTradeIndex={selectedTradeIndex}
-              />
-            </Paper>
-          )}
-        </Box>
-      );
-    }
-
-    // No live results yet - show waiting message
     return (
       <Box sx={{ px: 3 }}>
-        <Alert severity="info">
+        <Alert severity="info" sx={{ mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CircularProgress size={16} />
             <Typography variant="body2">
-              This task is currently running. Live results will appear here
-              shortly...
+              Task is running...
+              {Number.isFinite(progress) && progress > 0
+                ? ` ${progress}% complete.`
+                : ''}
+              {Number.isFinite(processed) && processed > 0
+                ? ` Processed ticks: ${processed}.`
+                : ''}
             </Typography>
           </Box>
+        </Alert>
+
+        <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
+          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+            Backtest Period
+          </Typography>
+          <Typography variant="body1">
+            {formatDate(task.start_time)} → {formatDate(task.end_time)}
+          </Typography>
+        </Paper>
+
+        <Alert severity="info">
+          Results will be available once the execution completes.
         </Alert>
       </Box>
     );
   }
 
   if (task.status === TaskStatus.FAILED) {
+    const errorMessage = results?.execution?.error_message;
     return (
       <Box sx={{ px: 3 }}>
         <Alert severity="error">
           This task execution failed.{' '}
-          {latestExecution?.error_message && (
+          {errorMessage && (
             <>
               <br />
-              Error: {latestExecution.error_message}
+              Error: {errorMessage}
             </>
           )}
         </Alert>

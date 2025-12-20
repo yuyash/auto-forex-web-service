@@ -995,6 +995,14 @@ class ExecutionMetrics(models.Model):
             self.win_rate = Decimal("0")
             self.total_pnl = Decimal("0")
             self.total_return = Decimal("0")
+            # Still emit a single equity point with a usable timestamp so charts render.
+            self.equity_curve = [
+                {
+                    "timestamp": timezone.now().isoformat(),
+                    "balance": float(initial_balance),
+                }
+            ]
+            self.trade_log = []
             return
 
         # Calculate basic statistics
@@ -1051,15 +1059,50 @@ class ExecutionMetrics(models.Model):
         else:
             self.profit_factor = None if gross_profit == Decimal("0") else Decimal("999.9999")
 
-        # Calculate equity curve
+        # Calculate equity curve.
+        # NOTE: The frontend chart expects a valid timestamp; if we store null/None,
+        # Recharts will collapse points onto the epoch and it can look like "1 point".
+        from django.utils.dateparse import parse_datetime
+
+        def _to_iso(value: Any) -> str | None:
+            if value is None:
+                return None
+            if hasattr(value, "isoformat"):
+                try:
+                    return value.isoformat()
+                except Exception:  # pylint: disable=broad-exception-caught
+                    return str(value)
+            return str(value)
+
+        def _pick_initial_ts(trades_list: list[dict[str, Any]]) -> str:
+            candidates: list[str] = []
+            for t in trades_list:
+                for key in ("entry_time", "exit_time", "timestamp"):
+                    raw = t.get(key)
+                    if raw:
+                        candidates.append(str(raw))
+            # Use earliest parseable datetime if possible; otherwise just use "now".
+            parsed = [parse_datetime(c) for c in candidates]
+            parsed_valid = [p for p in parsed if p is not None]
+            if parsed_valid:
+                return min(parsed_valid).isoformat()
+            return timezone.now().isoformat()
+
+        initial_ts = _pick_initial_ts(trades)
         balance = initial_balance
-        equity_points = [{"timestamp": None, "balance": float(balance)}]
+        equity_points = [{"timestamp": initial_ts, "balance": float(balance)}]
 
         for trade in trades:
             balance += Decimal(str(trade.get("pnl", 0)))
+            point_ts = (
+                _to_iso(trade.get("exit_time"))
+                or _to_iso(trade.get("entry_time"))
+                or _to_iso(trade.get("timestamp"))
+                or initial_ts
+            )
             equity_points.append(
                 {
-                    "timestamp": trade.get("exit_time"),
+                    "timestamp": point_ts,
                     "balance": float(balance),
                 }
             )

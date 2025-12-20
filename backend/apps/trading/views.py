@@ -31,14 +31,14 @@ from apps.trading.serializers import (
     BacktestTaskCreateSerializer,
     BacktestTaskListSerializer,
     BacktestTaskSerializer,
-    TaskExecutionDetailSerializer,
-    TaskExecutionSerializer,
     TradingTaskCreateSerializer,
     TradingTaskListSerializer,
     TradingTaskSerializer,
 )
+from apps.trading.services.equity import EquityService
 from apps.trading.services.lock import TaskLockManager
 from apps.trading.services.performance import LivePerformanceService
+
 
 logger = logging.getLogger(__name__)
 
@@ -826,22 +826,9 @@ class TradingTaskExecutionsView(APIView):
         # Get execution history
         executions = task.get_execution_history()
 
-        include_metrics_raw = (request.query_params.get("include_metrics") or "").lower()
-        include_metrics = include_metrics_raw in {"1", "true", "yes"}
+        from apps.trading.serializers import TaskExecutionListSerializer
 
-        # Serialize and return
-        if include_metrics:
-            executions = executions.select_related("metrics")
-            detail_serializer = TaskExecutionDetailSerializer(executions, many=True)
-            return Response(
-                {
-                    "count": executions.count(),
-                    "results": detail_serializer.data,
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        serializer = TaskExecutionSerializer(executions, many=True)
+        serializer = TaskExecutionListSerializer(executions, many=True)
         return Response(
             {
                 "count": executions.count(),
@@ -1460,18 +1447,9 @@ class BacktestTaskExecutionsView(APIView):
 
         executions = task.get_execution_history()
 
-        include_metrics_raw = (request.query_params.get("include_metrics") or "").lower()
-        include_metrics = include_metrics_raw in {"1", "true", "yes"}
+        from apps.trading.serializers import TaskExecutionListSerializer
 
-        if include_metrics:
-            executions = executions.select_related("metrics")
-            detail_serializer = TaskExecutionDetailSerializer(executions, many=True)
-            return Response(
-                {"count": executions.count(), "results": detail_serializer.data},
-                status=status.HTTP_200_OK,
-            )
-
-        serializer = TaskExecutionSerializer(executions, many=True)
+        serializer = TaskExecutionListSerializer(executions, many=True)
         return Response(
             {"count": executions.count(), "results": serializer.data},
             status=status.HTTP_200_OK,
@@ -1705,4 +1683,152 @@ class TradingTaskLiveResultsView(APIView):
 
         return Response(
             {"task_id": task_id, "has_data": True, **live_results}, status=status.HTTP_200_OK
+        )
+
+
+class BacktestTaskResultsView(APIView):
+    """Unified results endpoint for a backtest task.
+
+    Returns live Redis snapshot when running and latest execution metrics when available.
+    Equity curve is downsampled so the returned point count does not exceed 500.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, task_id: int) -> Response:
+        try:
+            task = BacktestTask.objects.select_related("config", "user").get(
+                id=task_id, user=request.user.pk
+            )
+        except BacktestTask.DoesNotExist:
+            return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        latest_execution = task.get_latest_execution()
+        execution_payload = None
+        metrics_payload = None
+        equity_curve_granularity_seconds = None
+        equity_service = EquityService()
+
+        if latest_execution:
+            execution_payload = {
+                "id": latest_execution.pk,
+                "execution_number": latest_execution.execution_number,
+                "status": latest_execution.status,
+                "progress": latest_execution.progress,
+                "started_at": (
+                    latest_execution.started_at.isoformat() if latest_execution.started_at else None
+                ),
+                "completed_at": (
+                    latest_execution.completed_at.isoformat()
+                    if latest_execution.completed_at
+                    else None
+                ),
+                "error_message": latest_execution.error_message or None,
+            }
+
+            if hasattr(latest_execution, "metrics") and latest_execution.metrics:
+                from apps.trading.serializers import ExecutionMetricsSerializer
+
+                metrics_payload = ExecutionMetricsSerializer(latest_execution.metrics).data
+
+                ds = equity_service.downsample_equity_curve(
+                    metrics_payload.get("equity_curve"),
+                    max_points=500,
+                    start_dt=task.start_time,
+                    end_dt=task.end_time,
+                )
+                metrics_payload["equity_curve"] = ds.points
+                equity_curve_granularity_seconds = ds.granularity_seconds
+
+        live = LivePerformanceService.get_backtest_intermediate_results(task_id)
+        has_live = live is not None
+        has_metrics = metrics_payload is not None
+
+        return Response(
+            {
+                "task_id": task_id,
+                "task_type": "backtest",
+                "has_live": has_live,
+                "live": live,
+                "has_metrics": has_metrics,
+                "metrics": metrics_payload,
+                "execution": execution_payload,
+                "equity_curve_granularity_seconds": equity_curve_granularity_seconds,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class TradingTaskResultsView(APIView):
+    """Unified results endpoint for a trading task.
+
+    Returns live Redis snapshot when running and latest execution metrics when available.
+    Equity curve is downsampled so the returned point count does not exceed 500.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, task_id: int) -> Response:
+        try:
+            task = TradingTask.objects.select_related("config", "user", "oanda_account").get(
+                id=task_id, user=request.user.pk
+            )
+        except TradingTask.DoesNotExist:
+            return Response({"error": "Trading task not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        latest_execution = task.get_latest_execution()
+        execution_payload = None
+        metrics_payload = None
+        equity_curve_granularity_seconds = None
+        equity_service = EquityService()
+
+        if latest_execution:
+            execution_payload = {
+                "id": latest_execution.pk,
+                "execution_number": latest_execution.execution_number,
+                "status": latest_execution.status,
+                "progress": latest_execution.progress,
+                "started_at": (
+                    latest_execution.started_at.isoformat() if latest_execution.started_at else None
+                ),
+                "completed_at": (
+                    latest_execution.completed_at.isoformat()
+                    if latest_execution.completed_at
+                    else None
+                ),
+                "error_message": latest_execution.error_message or None,
+            }
+
+            if hasattr(latest_execution, "metrics") and latest_execution.metrics:
+                from apps.trading.serializers import ExecutionMetricsSerializer
+
+                metrics_payload = ExecutionMetricsSerializer(latest_execution.metrics).data
+
+                started_at = latest_execution.started_at
+                completed_at = latest_execution.completed_at
+                ds = equity_service.downsample_equity_curve(
+                    metrics_payload.get("equity_curve"),
+                    max_points=500,
+                    start_dt=started_at,
+                    end_dt=completed_at,
+                )
+                metrics_payload["equity_curve"] = ds.points
+                equity_curve_granularity_seconds = ds.granularity_seconds
+
+        live = LivePerformanceService.get_trading_intermediate_results(task_id)
+        has_live = live is not None
+        has_metrics = metrics_payload is not None
+
+        return Response(
+            {
+                "task_id": task_id,
+                "task_type": "trading",
+                "has_live": has_live,
+                "live": live,
+                "has_metrics": has_metrics,
+                "metrics": metrics_payload,
+                "execution": execution_payload,
+                "equity_curve_granularity_seconds": equity_curve_granularity_seconds,
+            },
+            status=status.HTTP_200_OK,
         )
