@@ -155,10 +155,11 @@ export const TradingTaskChart: React.FC<TradingTaskChartProps> = ({
     const attemptFetch = async (attempt: number): Promise<void> => {
       try {
         // Build API URL - fetch from start time to current time
-        const fromTimestamp = Math.floor(parsedStartDate.getTime() / 1000);
-        const toTimestamp = Math.floor(Date.now() / 1000);
+        // Backend expects RFC3339 via from_time/to_time
+        const fromTime = parsedStartDate.toISOString();
+        const toTime = new Date().toISOString();
 
-        const url = `/api/candles?instrument=${instrument}&granularity=${currentGranularity}&from=${fromTimestamp}&to=${toTimestamp}&count=${CHART_CONFIG.DEFAULT_FETCH_COUNT}`;
+        const url = `/api/market/candles/?instrument=${instrument}&granularity=${currentGranularity}&from_time=${encodeURIComponent(fromTime)}&to_time=${encodeURIComponent(toTime)}&count=${CHART_CONFIG.DEFAULT_FETCH_COUNT}`;
 
         const response = await fetch(url, {
           headers: {

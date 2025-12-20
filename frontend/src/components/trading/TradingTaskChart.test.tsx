@@ -184,7 +184,7 @@ describe('TradingTaskChart', () => {
       });
 
       const callUrl = fetchMock.mock.calls[0][0];
-      expect(callUrl).toContain('/api/candles');
+      expect(callUrl).toContain('/api/market/candles/');
       expect(callUrl).toContain('instrument=EUR_USD');
       expect(callUrl).toContain('granularity=');
     });
@@ -212,8 +212,8 @@ describe('TradingTaskChart', () => {
       });
 
       const callUrl = fetchMock.mock.calls[0][0];
-      expect(callUrl).toContain('from=');
-      expect(callUrl).toContain('to=');
+      expect(callUrl).toContain('from_time=');
+      expect(callUrl).toContain('to_time=');
     });
   });
 

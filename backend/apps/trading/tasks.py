@@ -26,6 +26,57 @@ from apps.trading.services.performance import LivePerformanceService
 logger = getLogger(__name__)
 
 
+def _safe_json(value: Any, *, max_len: int = 600) -> str:
+    try:
+        s = json.dumps(value, default=str, ensure_ascii=False)
+    except Exception:  # pylint: disable=broad-exception-caught
+        s = str(value)
+    if len(s) > max_len:
+        return s[: max_len - 3] + "..."
+    return s
+
+
+def _format_strategy_event(*, event: dict[str, Any], tick_ts: str | None = None) -> str:
+    e_type = str(event.get("type") or "")
+    details_raw = event.get("details")
+    details: dict[str, Any] = details_raw if isinstance(details_raw, dict) else {}
+
+    prefix = f"[{tick_ts}] " if tick_ts else ""
+
+    if e_type == "open":
+        layer = details.get("layer")
+        direction = details.get("direction")
+        entry_price = details.get("entry_price")
+        lot_size = details.get("lot_size")
+        scale_in = " scale_in" if details.get("scale_in") else ""
+        against_pips = details.get("against_pips")
+        trigger_pips = details.get("trigger_pips")
+        retr = details.get("retracement")
+        extra = ""
+        if details.get("scale_in"):
+            extra = f" (retracement={retr} against_pips={against_pips} trigger_pips={trigger_pips})"
+        return f"{prefix}Trade OPEN: layer={layer} dir={direction} price={entry_price} lot={lot_size}{scale_in}{extra}"
+
+    if e_type == "close":
+        reason = details.get("reason")
+        pips = details.get("pips")
+        return f"{prefix}Trade CLOSE: reason={reason} pips={pips}"
+
+    if e_type in {
+        "layer_opened",
+        "layer_scaled_in",
+        "take_profit_hit",
+        "strategy_started",
+        "strategy_paused",
+        "strategy_resumed",
+        "strategy_stopped",
+    }:
+        return f"{prefix}{e_type}: { _safe_json(details) if details else '' }".rstrip()
+
+    # Default: include details so debugging is possible.
+    return f"{prefix}strategy_event type={e_type} details={_safe_json(details)}"
+
+
 def _current_task_id() -> str | None:
     try:
         return str(getattr(getattr(current_task, "request", None), "id", None) or "") or None
@@ -191,6 +242,15 @@ def run_trading_task(task_id: int) -> None:
         strategy_events.extend(start_events)
         for e in start_events:
             e_type = str(e.get("type") or "")
+            # Persist to execution logs and echo to Celery stdout.
+            try:
+                msg = _format_strategy_event(event=e, tick_ts=None)
+                execution.add_log("INFO", msg)
+                logger.info(
+                    "Trading strategy event (task_id=%s, type=%s): %s", task_id, e_type, msg
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
             event_service.log_event(
                 event_type=(f"strategy_{e_type}"[:64] if e_type else "strategy_event"),
                 severity="info",
@@ -222,6 +282,17 @@ def run_trading_task(task_id: int) -> None:
                     strategy_events.extend(stop_events)
                     for e in stop_events:
                         e_type = str(e.get("type") or "")
+                        try:
+                            msg = _format_strategy_event(event=e, tick_ts=None)
+                            execution.add_log("INFO", msg)
+                            logger.info(
+                                "Trading strategy event (task_id=%s, type=%s): %s",
+                                task_id,
+                                e_type,
+                                msg,
+                            )
+                        except Exception:  # pylint: disable=broad-exception-caught
+                            pass
                         event_service.log_event(
                             event_type=(f"strategy_{e_type}"[:64] if e_type else "strategy_event"),
                             severity="info",
@@ -274,6 +345,17 @@ def run_trading_task(task_id: int) -> None:
                             strategy_events.extend(ctrl_events)
                             for e in ctrl_events:
                                 e_type = str(e.get("type") or "")
+                                try:
+                                    msg = _format_strategy_event(event=e, tick_ts=None)
+                                    execution.add_log("INFO", msg)
+                                    logger.info(
+                                        "Trading strategy event (task_id=%s, type=%s): %s",
+                                        task_id,
+                                        e_type,
+                                        msg,
+                                    )
+                                except Exception:  # pylint: disable=broad-exception-caught
+                                    pass
                                 event_service.log_event(
                                     event_type=(
                                         f"strategy_{e_type}"[:64] if e_type else "strategy_event"
@@ -321,29 +403,57 @@ def run_trading_task(task_id: int) -> None:
                 continue
 
             # Normalize tick
+            bid_s = str(payload.get("bid") or "")
+            ask_s = str(payload.get("ask") or "")
+            mid_s = str(payload.get("mid") or "")
+
+            def _is_missing_num(s: str) -> bool:
+                x = (s or "").strip().lower()
+                return x == "" or x in {"none", "null", "nan"}
+
+            if _is_missing_num(mid_s):
+                try:
+                    if not _is_missing_num(bid_s) and not _is_missing_num(ask_s):
+                        mid_s = str((Decimal(bid_s) + Decimal(ask_s)) / Decimal("2"))
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
+
             tick = {
                 "instrument": str(payload.get("instrument") or ""),
                 "timestamp": str(payload.get("timestamp") or ""),
-                "bid": str(payload.get("bid") or ""),
-                "ask": str(payload.get("ask") or ""),
-                "mid": str(payload.get("mid") or ""),
+                "bid": bid_s,
+                "ask": ask_s,
+                "mid": mid_s,
             }
 
             state, events = strategy.on_tick(tick=tick, state=state)
             if events:
                 strategy_events.extend(events)
                 trade_log.extend([e for e in events if e.get("type") in {"open", "close"}])
-                execution.add_log("INFO", f"events={len(events)}")
-
                 for e in events:
                     e_type = str(e.get("type") or "")
+
+                    # Persist all strategy events (not just open/close).
+                    try:
+                        msg = _format_strategy_event(event=e, tick_ts=tick.get("timestamp"))
+                        execution.add_log("INFO", msg)
+                        logger.info(
+                            "Trading strategy event (task_id=%s, type=%s): %s",
+                            task_id,
+                            e_type,
+                            msg,
+                        )
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        pass
+
                     if e_type == "close":
-                        details = e.get("details")
-                        if isinstance(details, dict) and details.get("pips") is not None:
+                        details_raw = e.get("details")
+                        if isinstance(details_raw, dict) and details_raw.get("pips") is not None:
                             try:
-                                realized_pips += Decimal(str(details.get("pips")))
+                                realized_pips += Decimal(str(details_raw.get("pips")))
                             except Exception:  # pylint: disable=broad-exception-caught
                                 pass
+
                     if e_type in {"open", "close"}:
                         event_type = f"trade_{e_type}"
                         description = f"Trade {e_type} event for trading task {task_id}"
@@ -438,6 +548,14 @@ def run_trading_task(task_id: int) -> None:
         strategy_events.extend(final_stop_events)
         for e in final_stop_events:
             e_type = str(e.get("type") or "")
+            try:
+                msg = _format_strategy_event(event=e, tick_ts=None)
+                execution.add_log("INFO", msg)
+                logger.info(
+                    "Trading strategy event (task_id=%s, type=%s): %s", task_id, e_type, msg
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
             event_service.log_event(
                 event_type=(f"strategy_{e_type}"[:64] if e_type else "strategy_event"),
                 severity="info",
@@ -506,6 +624,12 @@ def run_backtest_task(task_id: int) -> None:
         meta={"kind": "backtest", "task_id": task_id},
     )
 
+    logger.info(
+        "Backtest task started (task_id=%s, celery_task_id=%s)",
+        task_id,
+        _current_task_id(),
+    )
+
     event_service = TradingEventService()
 
     try:
@@ -530,6 +654,16 @@ def run_backtest_task(task_id: int) -> None:
     config = dict(task.config.parameters or {})
     strategy = strategy_registry.create(identifier=strategy_type, config=config)
 
+    logger.info(
+        "Backtest strategy created (task_id=%s, strategy_type=%s)",
+        task_id,
+        strategy_type,
+    )
+    try:
+        execution.add_log("INFO", f"Strategy created: {strategy_type}")
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
     state: dict[str, Any] = {}
     strategy_events: list[dict[str, Any]] = []
     realized_pips = Decimal("0")
@@ -537,10 +671,24 @@ def run_backtest_task(task_id: int) -> None:
     instrument = str(config.get("instrument") or "")
 
     state, start_events = strategy.on_start(state=state)
+    logger.info(
+        "Backtest strategy on_start completed (task_id=%s, strategy_type=%s, start_events=%s)",
+        task_id,
+        strategy_type,
+        len(start_events or []),
+    )
     if start_events:
         strategy_events.extend(start_events)
         for e in start_events:
             e_type = str(e.get("type") or "")
+            try:
+                msg = _format_strategy_event(event=e, tick_ts=None)
+                execution.add_log("INFO", msg)
+                logger.info(
+                    "Backtest strategy event (task_id=%s, type=%s): %s", task_id, e_type, msg
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
             event_service.log_event(
                 event_type=(f"strategy_{e_type}"[:64] if e_type else "strategy_event"),
                 severity="info",
@@ -577,6 +725,25 @@ def run_backtest_task(task_id: int) -> None:
         },
     )
 
+    client = _redis_client()
+    pubsub = client.pubsub(ignore_subscribe_messages=True)
+
+    # Subscribe before triggering the publisher task.
+    # Redis pub/sub does not replay messages, so if the publisher starts first
+    # we can miss initial ticks and/or the EOF marker and hang.
+    pubsub.subscribe(channel)
+
+    logger.info(
+        "Backtest subscribed to tick channel (task_id=%s, request_id=%s, channel=%s)",
+        task_id,
+        request_id,
+        channel,
+    )
+    try:
+        execution.add_log("INFO", f"Subscribed to tick channel: {channel}")
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
     from apps.market.tasks import publish_ticks_for_backtest
 
     cast(Any, getattr(publish_ticks_for_backtest, "delay"))(
@@ -586,16 +753,35 @@ def run_backtest_task(task_id: int) -> None:
         request_id=request_id,
     )
 
-    client = _redis_client()
-    pubsub = client.pubsub(ignore_subscribe_messages=True)
+    logger.info(
+        "Backtest enqueued tick publisher (task_id=%s, request_id=%s, instrument=%s, start=%s, end=%s)",
+        task_id,
+        request_id,
+        instrument,
+        start,
+        end,
+    )
+    try:
+        execution.add_log("INFO", f"Enqueued tick publisher (request_id={request_id})")
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
 
     trade_log: list[dict[str, Any]] = []
+
+    entry_signal_lookback_ticks = int(config.get("entry_signal_lookback_ticks") or 0)
+    ticks_missing_mid = 0
 
     processed = 0
     published_total: int | None = None
 
+    summary_emitted = False
+
+    last_message_monotonic = time.monotonic()
+    last_tick_timestamp: str | None = None
+    next_idle_log_at = last_message_monotonic + 30.0
+    next_progress_log_at = last_message_monotonic + 15.0
+
     try:
-        pubsub.subscribe(channel)
         while True:
             if task_service.should_stop():
                 execution.add_log("INFO", "Stop requested via CeleryTaskStatus")
@@ -612,53 +798,189 @@ def run_backtest_task(task_id: int) -> None:
                 )
                 break
 
-            msg = pubsub.get_message(timeout=1.0)
-            if not msg:
+            redis_msg = pubsub.get_message(timeout=1.0)
+            if not redis_msg:
+                now_mono = time.monotonic()
+                if now_mono >= next_idle_log_at:
+                    idle_for = int(max(0.0, now_mono - last_message_monotonic))
+                    logger.warning(
+                        "Backtest waiting for ticks (task_id=%s, request_id=%s, idle_for_s=%s, processed=%s, last_tick_ts=%s)",
+                        task_id,
+                        request_id,
+                        idle_for,
+                        processed,
+                        last_tick_timestamp,
+                    )
+                    next_idle_log_at = now_mono + 30.0
                 task_service.heartbeat(
-                    status_message=f"processed={processed}", meta_update={"processed": processed}
+                    status_message=(
+                        f"processed={processed} last_tick={last_tick_timestamp or 'n/a'}"
+                    ),
+                    meta_update={"processed": processed, "last_tick": last_tick_timestamp},
                 )
                 continue
 
-            if msg.get("type") != "message":
+            if redis_msg.get("type") != "message":
                 continue
 
-            raw = msg.get("data")
+            raw = redis_msg.get("data")
             try:
                 payload = json.loads(raw) if isinstance(raw, str) else {}
             except Exception:  # pylint: disable=broad-exception-caught
                 continue
 
+            last_message_monotonic = time.monotonic()
+            # After receiving something, delay the idle warning window.
+            next_idle_log_at = last_message_monotonic + 30.0
+
             kind = str(payload.get("type") or "tick")
             if kind == "eof":
                 published_total = int(payload.get("count") or processed)
+                logger.info(
+                    "Backtest received EOF (task_id=%s, request_id=%s, processed=%s, published_total=%s)",
+                    task_id,
+                    request_id,
+                    processed,
+                    published_total,
+                )
+                try:
+                    execution.add_log(
+                        "INFO",
+                        f"EOF received: processed={processed} published_total={published_total}",
+                    )
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
+
+                # Emit a strategy summary *immediately* at EOF so it shows up in
+                # Celery stdout even if the worker exits quickly or logs are tailed.
+                try:
+                    s_initialized = bool(state.get("initialized") or False)
+                    s_ticks_seen = int(state.get("ticks_seen") or 0)
+                    s_active_layers_raw = state.get("active_layers")
+                    s_active_layers: list[Any] = (
+                        s_active_layers_raw if isinstance(s_active_layers_raw, list) else []
+                    )
+                    logger.info(
+                        "Backtest summary (task_id=%s, processed=%s, ticks_seen=%s, initialized=%s, active_layers=%s, trades=%s, entry_lookback=%s, mid_missing=%s)",
+                        task_id,
+                        processed,
+                        s_ticks_seen,
+                        s_initialized,
+                        len(s_active_layers),
+                        len(trade_log),
+                        entry_signal_lookback_ticks,
+                        ticks_missing_mid,
+                    )
+                    summary_emitted = True
+                    execution.add_log(
+                        "INFO",
+                        "Backtest summary: processed=%s ticks_seen=%s initialized=%s active_layers=%s trades=%s entry_lookback=%s mid_missing=%s"
+                        % (
+                            processed,
+                            s_ticks_seen,
+                            s_initialized,
+                            len(s_active_layers),
+                            len(trade_log),
+                            entry_signal_lookback_ticks,
+                            ticks_missing_mid,
+                        ),
+                    )
+                    if len(trade_log) == 0:
+                        execution.add_log(
+                            "WARNING",
+                            "No trades produced. Common causes: not enough ticks to satisfy entry_signal_lookback_ticks, mid price missing/invalid, or thresholds too strict for the chosen window.",
+                        )
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
                 break
             if kind in {"stopped", "error"}:
+                logger.warning(
+                    "Backtest received terminal message (task_id=%s, request_id=%s, type=%s, message=%s)",
+                    task_id,
+                    request_id,
+                    kind,
+                    payload.get("message"),
+                )
+                try:
+                    execution.add_log(
+                        "WARNING",
+                        f"Terminal message received: type={kind} message={payload.get('message')}",
+                    )
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
                 break
             if kind != "tick":
                 continue
 
+            bid_s = str(payload.get("bid") or "")
+            ask_s = str(payload.get("ask") or "")
+            mid_s = str(payload.get("mid") or "")
+
+            def _is_missing_num(s: str) -> bool:
+                x = (s or "").strip().lower()
+                return x == "" or x in {"none", "null", "nan"}
+
+            # Strategy expects mid; compute it if missing.
+            if _is_missing_num(mid_s):
+                try:
+                    if not _is_missing_num(bid_s) and not _is_missing_num(ask_s):
+                        mid_s = str((Decimal(bid_s) + Decimal(ask_s)) / Decimal("2"))
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
+
+            if _is_missing_num(mid_s):
+                ticks_missing_mid += 1
+
             tick = {
                 "instrument": str(payload.get("instrument") or ""),
                 "timestamp": str(payload.get("timestamp") or ""),
-                "bid": str(payload.get("bid") or ""),
-                "ask": str(payload.get("ask") or ""),
-                "mid": str(payload.get("mid") or ""),
+                "bid": bid_s,
+                "ask": ask_s,
+                "mid": mid_s,
             }
+
+            if not last_tick_timestamp and tick.get("timestamp"):
+                logger.info(
+                    "Backtest received first tick (task_id=%s, request_id=%s, ts=%s)",
+                    task_id,
+                    request_id,
+                    tick.get("timestamp"),
+                )
+                try:
+                    execution.add_log("INFO", f"First tick received: {tick.get('timestamp')}")
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
+            if tick.get("timestamp"):
+                last_tick_timestamp = str(tick.get("timestamp"))
 
             state, events = strategy.on_tick(tick=tick, state=state)
             if events:
                 strategy_events.extend(events)
                 trade_log.extend([e for e in events if e.get("type") in {"open", "close"}])
-
                 for e in events:
                     e_type = str(e.get("type") or "")
+
+                    # Persist all strategy events (layer opens/scales, take-profit hits, etc).
+                    try:
+                        msg = _format_strategy_event(event=e, tick_ts=tick.get("timestamp"))
+                        execution.add_log("INFO", msg)
+                        logger.info(
+                            "Backtest strategy event (task_id=%s, type=%s): %s",
+                            task_id,
+                            e_type,
+                            msg,
+                        )
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        pass
+
                     if e_type == "close":
-                        details = e.get("details")
-                        if isinstance(details, dict) and details.get("pips") is not None:
+                        details_raw = e.get("details")
+                        if isinstance(details_raw, dict) and details_raw.get("pips") is not None:
                             try:
-                                realized_pips += Decimal(str(details.get("pips")))
+                                realized_pips += Decimal(str(details_raw.get("pips")))
                             except Exception:  # pylint: disable=broad-exception-caught
                                 pass
+
                     if e_type in {"open", "close"}:
                         event_type = f"trade_{e_type}"
                         description = f"Trade {e_type} event for backtest task {task_id}"
@@ -686,6 +1008,18 @@ def run_backtest_task(task_id: int) -> None:
                     )
 
             processed += 1
+
+            now_mono = time.monotonic()
+            if now_mono >= next_progress_log_at:
+                logger.info(
+                    "Backtest processing progress (task_id=%s, request_id=%s, processed=%s, last_tick_ts=%s)",
+                    task_id,
+                    request_id,
+                    processed,
+                    last_tick_timestamp,
+                )
+                next_progress_log_at = now_mono + 15.0
+
             if processed % 250 == 0:
                 # Best-effort progress estimate when total unknown.
                 if published_total and published_total > 0:
@@ -760,6 +1094,49 @@ def run_backtest_task(task_id: int) -> None:
         metrics.calculate_from_trades(trade_log, initial_balance=Decimal(str(task.initial_balance)))
         metrics.strategy_events = strategy_events
         metrics.save()
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
+    # End-of-run diagnostics to help explain "strategy did nothing" cases.
+    try:
+        if summary_emitted:
+            raise RuntimeError("summary already emitted")
+        s_initialized = bool(state.get("initialized") or False)
+        s_ticks_seen = int(state.get("ticks_seen") or 0)
+        s_active_layers_raw = state.get("active_layers")
+        s_active_layers_end: list[Any] = (
+            s_active_layers_raw if isinstance(s_active_layers_raw, list) else []
+        )
+
+        logger.info(
+            "Backtest summary (task_id=%s, processed=%s, ticks_seen=%s, initialized=%s, active_layers=%s, trades=%s, entry_lookback=%s, mid_missing=%s)",
+            task_id,
+            processed,
+            s_ticks_seen,
+            s_initialized,
+            len(s_active_layers_end),
+            len(trade_log),
+            entry_signal_lookback_ticks,
+            ticks_missing_mid,
+        )
+        execution.add_log(
+            "INFO",
+            "Backtest summary: processed=%s ticks_seen=%s initialized=%s active_layers=%s trades=%s entry_lookback=%s mid_missing=%s"
+            % (
+                processed,
+                s_ticks_seen,
+                s_initialized,
+                len(s_active_layers_end),
+                len(trade_log),
+                entry_signal_lookback_ticks,
+                ticks_missing_mid,
+            ),
+        )
+        if len(trade_log) == 0:
+            execution.add_log(
+                "WARNING",
+                "No trades produced. Common causes: not enough ticks to satisfy entry_signal_lookback_ticks, mid price missing/invalid, or thresholds too strict for the chosen window.",
+            )
     except Exception:  # pylint: disable=broad-exception-caught
         pass
 

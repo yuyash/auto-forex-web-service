@@ -182,6 +182,50 @@ describe('TaskResultsTab Integration', () => {
     });
   });
 
+  it('renders $0.00 for P&L fields when values are invalid', async () => {
+    const executionWithInvalidPnL: TaskExecution = {
+      ...mockExecution,
+      metrics: {
+        ...mockExecution.metrics,
+        total_pnl: 'NaN',
+        realized_pnl: 'NaN',
+        unrealized_pnl: '0.00',
+        total_trades: 1,
+        winning_trades: 0,
+        losing_trades: 0,
+        trade_log: [
+          {
+            ...(mockTrades[0] as Trade),
+            pnl: undefined as unknown as number,
+            realized_pnl: undefined as unknown as number,
+          } as unknown as Trade,
+        ],
+      },
+    };
+
+    vi.mocked(useTaskExecutions).mockReturnValue({
+      data: {
+        results: [executionWithInvalidPnL],
+        count: 1,
+        next: null,
+        previous: null,
+      },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    renderWithProviders(<TaskResultsTab task={mockTask} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Trade Statistics')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Total P&L')).toBeInTheDocument();
+    expect(screen.getAllByText('$0.00').length).toBeGreaterThanOrEqual(3);
+    expect(screen.getByText('Average P&L per Trade')).toBeInTheDocument();
+  });
+
   it('renders metrics grid', async () => {
     renderWithProviders(<TaskResultsTab task={mockTask} />);
 

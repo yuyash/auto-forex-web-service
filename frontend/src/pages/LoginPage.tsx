@@ -98,41 +98,22 @@ const LoginPage = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Accept: 'application/json',
         },
         body: JSON.stringify(formData),
       });
 
-      const tryParseJson = async (): Promise<
-        LoginResponse | ErrorResponse | undefined
-      > => {
-        const maybeJson = (
-          response as unknown as { json?: () => Promise<unknown> }
-        ).json;
-        if (typeof maybeJson !== 'function') {
-          return undefined;
-        }
-        try {
-          return (await maybeJson()) as LoginResponse | ErrorResponse;
-        } catch {
-          return undefined;
-        }
-      };
+      // Always keep a clone so we can fall back to text if JSON parsing fails.
+      const responseForText = response.clone();
 
-      const tryParseText = async (): Promise<string | undefined> => {
-        const maybeText = (
-          response as unknown as { text?: () => Promise<string> }
-        ).text;
-        if (typeof maybeText !== 'function') {
-          return undefined;
-        }
-        try {
-          return await maybeText();
-        } catch {
-          return undefined;
-        }
-      };
+      const data = await response
+        .json()
+        .catch(() => undefined as LoginResponse | ErrorResponse | undefined);
 
-      const data = await tryParseJson();
+      const responseText =
+        data === undefined
+          ? await responseForText.text().catch(() => undefined)
+          : undefined;
 
       if (!response.ok) {
         const errorData = (data ?? {}) as ErrorResponse;
@@ -143,8 +124,7 @@ const LoginPage = () => {
           errorData.error || errorData.detail || errorData.message || '';
 
         if (!general) {
-          const text = await tryParseText();
-          const trimmed = (text ?? '').trim();
+          const trimmed = (responseText ?? '').trim();
           if (trimmed && !trimmed.includes('<')) {
             general = trimmed;
           }
@@ -167,14 +147,31 @@ const LoginPage = () => {
       }
 
       if (!data) {
+        const trimmed = (responseText ?? '').trim();
+        const statusText =
+          `${response.status || ''} ${response.statusText || ''}`.trim();
+
         setErrors({
-          general: 'Login failed. Please try again.',
+          general:
+            trimmed && !trimmed.includes('<')
+              ? `Login failed (${statusText || 'unexpected response'}): ${trimmed}`
+              : statusText
+                ? `Login failed (${statusText}).`
+                : 'Login failed. Please try again.',
         });
         return;
       }
 
       // Success - store token and redirect
       const loginData = data as LoginResponse;
+
+      if (!loginData.token || !loginData.user) {
+        setErrors({
+          general: 'Login failed (invalid response shape). Please try again.',
+        });
+        return;
+      }
+
       login(loginData.token, loginData.user);
 
       // Redirect to default authenticated landing page

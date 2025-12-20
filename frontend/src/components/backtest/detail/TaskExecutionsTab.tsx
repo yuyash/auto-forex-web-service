@@ -27,6 +27,7 @@ import {
   PlayArrow as PlayArrowIcon,
 } from '@mui/icons-material';
 import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
+import { useTaskLogs } from '../../../hooks/useTaskLogs';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
 import { ErrorDisplay } from '../../tasks/display/ErrorDisplay';
 import { TaskStatus, TaskType } from '../../../types/common';
@@ -164,7 +165,6 @@ export function TaskExecutionsTab({
 }: TaskExecutionsTabProps) {
   const [selectedExecution, setSelectedExecution] =
     useState<TaskExecution | null>(null);
-  const [liveLogs, setLiveLogs] = useState<ExecutionLog[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const logsContainerRef = useRef<HTMLDivElement>(null);
@@ -203,15 +203,27 @@ export function TaskExecutionsTab({
   // Note: WebSocket log streaming has been removed.
   // Logs are now fetched via HTTP API and stored in the database.
 
-  // Track the last known log count to avoid infinite loops
-  const lastLogCountRef = useRef<number>(0);
+  const logInitialParams = useMemo(
+    () => ({
+      limit: 500,
+      offset: 0,
+      execution_id: selectedExecution?.id,
+    }),
+    [selectedExecution?.id]
+  );
 
-  // Combine stored logs with live logs
-  const allLogs = selectedExecution
-    ? selectedExecution.status === TaskStatus.RUNNING
-      ? [...(selectedExecution.logs || []), ...liveLogs]
-      : selectedExecution.logs || []
-    : [];
+  const {
+    logs: allLogs,
+    totalCount: totalLogsCount,
+    isLoading: isLogsLoading,
+    error: logsError,
+    refresh: refreshLogs,
+  } = useTaskLogs(taskId, taskType as unknown as 'backtest' | 'trading', {
+    enabled: Boolean(selectedExecution?.id),
+    autoRefresh: selectedExecution?.status === TaskStatus.RUNNING,
+    refreshInterval: 3000,
+    initialParams: logInitialParams,
+  });
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
@@ -236,14 +248,7 @@ export function TaskExecutionsTab({
     }
   };
 
-  // Reset live logs when selection changes (using execution ID as key)
-  const executionId = selectedExecution?.id;
-  useEffect(() => {
-    setLiveLogs([]);
-    lastLogCountRef.current = selectedExecution?.logs?.length || 0;
-  }, [executionId, selectedExecution?.logs?.length]);
-
-  // Update selectedExecution when executions data changes (to get latest logs from API)
+  // Keep the selected execution details up to date (status/progress/etc)
   useEffect(() => {
     const currentExecutionId = selectedExecution?.id;
     if (currentExecutionId && executions.length > 0) {
@@ -251,15 +256,7 @@ export function TaskExecutionsTab({
         (exec) => exec.id === currentExecutionId
       );
       if (updatedExecution) {
-        // Check if logs have been updated from the API
-        const apiLogCount = updatedExecution.logs?.length || 0;
-
-        if (apiLogCount > lastLogCountRef.current) {
-          // API has new logs, update selectedExecution and clear liveLogs to avoid duplicates
-          lastLogCountRef.current = apiLogCount;
-          setSelectedExecution(updatedExecution);
-          setLiveLogs([]);
-        }
+        setSelectedExecution(updatedExecution);
       }
     }
   }, [executions, selectedExecution?.id]);
@@ -364,16 +361,6 @@ export function TaskExecutionsTab({
                   <Box>
                     <Typography variant="h6">
                       Execution #{selectedExecution.execution_number} Logs
-                      {selectedExecution.status === TaskStatus.RUNNING &&
-                        liveLogs.length > 0 && (
-                          <Typography
-                            component="span"
-                            variant="caption"
-                            sx={{ ml: 1, color: 'success.main' }}
-                          >
-                            • Live
-                          </Typography>
-                        )}
                     </Typography>
                     <Box
                       sx={{
@@ -413,15 +400,18 @@ export function TaskExecutionsTab({
                     <Tooltip title="Refresh logs">
                       <IconButton
                         size="small"
-                        onClick={() => refetchExecutions()}
+                        onClick={() => {
+                          refetchExecutions();
+                          refreshLogs();
+                        }}
                         aria-label="Refresh logs"
                       >
                         <RefreshIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
                     <Typography variant="caption" color="text.secondary">
-                      {allLogs.length}{' '}
-                      {allLogs.length === 1 ? 'entry' : 'entries'}
+                      {totalLogsCount}{' '}
+                      {totalLogsCount === 1 ? 'entry' : 'entries'}
                     </Typography>
                   </Box>
                 </Box>
@@ -448,7 +438,14 @@ export function TaskExecutionsTab({
                   },
                 }}
               >
-                {allLogs.length > 0 ? (
+                {logsError ? (
+                  <Box sx={{ p: 2 }}>
+                    <ErrorDisplay
+                      error={logsError}
+                      title="Failed to load logs"
+                    />
+                  </Box>
+                ) : allLogs.length > 0 ? (
                   <TableContainer>
                     <Table size="small" stickyHeader>
                       <TableHead>
@@ -545,9 +542,11 @@ export function TaskExecutionsTab({
                     }}
                   >
                     <Typography variant="body2" color="text.secondary">
-                      {selectedExecution.status === TaskStatus.RUNNING
-                        ? 'Waiting for logs...'
-                        : 'No logs available for this execution'}
+                      {isLogsLoading
+                        ? 'Loading logs...'
+                        : selectedExecution.status === TaskStatus.RUNNING
+                          ? 'Waiting for logs...'
+                          : 'No logs available for this execution'}
                     </Typography>
                   </Box>
                 )}

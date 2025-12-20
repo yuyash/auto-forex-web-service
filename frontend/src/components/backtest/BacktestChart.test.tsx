@@ -120,7 +120,7 @@ describe('BacktestChart', () => {
 
       await waitFor(() => {
         expect(globalThis.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/candles'),
+          expect.stringContaining('/api/market/candles/'),
           expect.objectContaining({
             headers: { Authorization: 'Bearer mock-token' },
           })

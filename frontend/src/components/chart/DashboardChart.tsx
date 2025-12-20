@@ -73,7 +73,7 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({
     setError(null);
 
     try {
-      const url = `/api/candles?instrument=${instrument}&granularity=${currentGranularity}&count=5000`;
+      const url = `/api/market/candles/?instrument=${instrument}&granularity=${currentGranularity}&count=5000`;
 
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },

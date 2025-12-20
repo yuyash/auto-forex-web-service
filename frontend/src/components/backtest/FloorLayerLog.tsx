@@ -70,14 +70,16 @@ const getEventTypeDisplay = (eventType: string) => {
   return displays[eventType] || { label: eventType, color: 'default' as const };
 };
 
-const formatPrice = (price: number | undefined): string => {
-  if (price === undefined) return '-';
-  return price.toFixed(5);
+const formatPrice = (price: unknown): string => {
+  const parsed = parseNumber(price);
+  if (parsed === undefined) return '-';
+  return parsed.toFixed(5);
 };
 
-const formatCurrency = (value: number | undefined): string => {
-  if (value === undefined) return '-';
-  return `$${value.toFixed(2)}`;
+const formatCurrency = (value: unknown): string => {
+  const parsed = parseNumber(value);
+  if (parsed === undefined) return '-';
+  return `$${parsed.toFixed(2)}`;
 };
 
 const formatDate = (dateString: string): string => {
@@ -197,8 +199,8 @@ export function FloorLayerLog({
             entryRetracementCount ?? trade.retracement_count,
           isFirstLot: trade.is_first_lot,
           description: trade.is_first_lot
-            ? `Initial ${trade.direction?.toUpperCase()} entry @ ${trade.entry_price.toFixed(5)}`
-            : `Retracement ${trade.direction?.toUpperCase()} entry @ ${trade.entry_price.toFixed(5)}`,
+            ? `Initial ${trade.direction?.toUpperCase()} entry @ ${formatPrice(trade.entry_price)}`
+            : `Retracement ${trade.direction?.toUpperCase()} entry @ ${formatPrice(trade.entry_price)}`,
           tradeIndex: idx,
           source: 'trade',
         });
@@ -235,7 +237,7 @@ export function FloorLayerLog({
           entryRetracementCount:
             entryRetracementCount ?? trade.retracement_count,
           isFirstLot: trade.is_first_lot,
-          description: `Take Profit: ${trade.direction?.toUpperCase()} ${trade.units} units closed @ ${trade.exit_price.toFixed(5)} | P&L: $${trade.pnl.toFixed(2)}`,
+          description: `Take Profit: ${trade.direction?.toUpperCase()} ${trade.units} units closed @ ${formatPrice(trade.exit_price)} | P&L: ${formatCurrency(trade.pnl)}`,
           tradeIndex: idx,
           source: 'trade',
         });
@@ -520,7 +522,10 @@ export function FloorLayerLog({
                     )}
                   </TableCell>
                   <TableCell align="right">
-                    {event.units !== undefined ? event.units.toFixed(1) : '-'}
+                    {(() => {
+                      const units = parseNumber(event.units);
+                      return units !== undefined ? units.toFixed(1) : '-';
+                    })()}
                   </TableCell>
                   <TableCell align="right">
                     {isClose && event.exitPrice !== undefined

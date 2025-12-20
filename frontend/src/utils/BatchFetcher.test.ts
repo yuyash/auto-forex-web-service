@@ -110,7 +110,7 @@ describe('BatchFetcher', () => {
 
       expect(result).toEqual(mockCandles);
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        '/api/candles?instrument=EUR_USD&granularity=M5&count=5000',
+        '/api/market/candles/?instrument=EUR_USD&granularity=M5&count=5000',
         {
           headers: {
             Authorization: `Bearer ${mockToken}`,
@@ -195,7 +195,7 @@ describe('BatchFetcher', () => {
 
       expect(result).toEqual(mockCandles);
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        `/api/candles?instrument=EUR_USD&granularity=M5&count=5000&before=${beforeTimestamp}`,
+        `/api/market/candles/?instrument=EUR_USD&granularity=M5&count=5000&before=${beforeTimestamp}`,
         {
           headers: {
             Authorization: `Bearer ${mockToken}`,
@@ -248,7 +248,7 @@ describe('BatchFetcher', () => {
 
       expect(result).toEqual(mockCandles);
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        '/api/candles?instrument=EUR_USD&granularity=M5&count=5000',
+        '/api/market/candles/?instrument=EUR_USD&granularity=M5&count=5000',
         {
           headers: {
             Authorization: `Bearer ${mockToken}`,

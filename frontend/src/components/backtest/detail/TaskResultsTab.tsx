@@ -78,7 +78,11 @@ interface TaskResultsTabProps {
 export function TaskResultsTab({ task, liveResults }: TaskResultsTabProps) {
   // Fetch latest execution with full metrics
   const { data: executionsData, isLoading: executionsLoading } =
-    useTaskExecutions(task.id, TaskType.BACKTEST, { page: 1, page_size: 1 });
+    useTaskExecutions(task.id, TaskType.BACKTEST, {
+      page: 1,
+      page_size: 1,
+      include_metrics: true,
+    });
 
   const latestExecution = executionsData?.results?.[0];
   const metrics = latestExecution?.metrics;
@@ -192,40 +196,68 @@ export function TaskResultsTab({ task, liveResults }: TaskResultsTabProps) {
   const getTradeStatistics = () => {
     if (!metrics?.trade_log) return null;
 
-    const trades = metrics.trade_log;
-    const winningTrades = trades.filter((t: Trade) => t.pnl > 0);
-    const losingTrades = trades.filter((t: Trade) => t.pnl < 0);
+    const safeNumber = (value: unknown, fallback = 0): number => {
+      if (value === null || value === undefined) return fallback;
+      const num = typeof value === 'number' ? value : Number(value);
+      return Number.isFinite(num) ? num : fallback;
+    };
 
-    const totalPnL = trades.reduce((sum: number, t: Trade) => sum + t.pnl, 0);
-    const realizedPnL = trades.reduce(
-      (sum: number, t: Trade) => sum + (t.realized_pnl ?? t.pnl),
+    const trades = metrics.trade_log;
+    const tradePnl = (trade: Trade) =>
+      safeNumber((trade as Trade & { pnl?: unknown }).pnl);
+    const tradeRealizedPnl = (trade: Trade) =>
+      safeNumber(
+        (trade as Trade & { realized_pnl?: unknown }).realized_pnl ??
+          (trade as Trade & { pnl?: unknown }).pnl
+      );
+
+    const winningTrades = trades.filter((t: Trade) => tradePnl(t) > 0);
+    const losingTrades = trades.filter((t: Trade) => tradePnl(t) < 0);
+
+    const tradeLogTotalPnL = trades.reduce(
+      (sum: number, t: Trade) => sum + tradePnl(t),
       0
     );
-    const unrealizedPnL = metrics.unrealized_pnl
-      ? parseFloat(metrics.unrealized_pnl)
-      : 0;
-    const avgPnL = trades.length > 0 ? totalPnL / trades.length : 0;
+    const tradeLogRealizedPnL = trades.reduce(
+      (sum: number, t: Trade) => sum + tradeRealizedPnl(t),
+      0
+    );
+
+    const unrealizedPnL = safeNumber(
+      (metrics as { unrealized_pnl?: unknown }).unrealized_pnl
+    );
+    const realizedPnL = safeNumber(
+      (metrics as { realized_pnl?: unknown }).realized_pnl,
+      tradeLogRealizedPnL
+    );
+    const totalPnL = safeNumber(
+      (metrics as { total_pnl?: unknown }).total_pnl,
+      tradeLogTotalPnL
+    );
+    const avgPnL = trades.length > 0 ? realizedPnL / trades.length : 0;
 
     const avgWin =
       winningTrades.length > 0
-        ? winningTrades.reduce((sum: number, t: Trade) => sum + t.pnl, 0) /
-          winningTrades.length
+        ? winningTrades.reduce(
+            (sum: number, t: Trade) => sum + tradePnl(t),
+            0
+          ) / winningTrades.length
         : 0;
 
     const avgLoss =
       losingTrades.length > 0
-        ? losingTrades.reduce((sum: number, t: Trade) => sum + t.pnl, 0) /
+        ? losingTrades.reduce((sum: number, t: Trade) => sum + tradePnl(t), 0) /
           losingTrades.length
         : 0;
 
     const largestWin =
       winningTrades.length > 0
-        ? Math.max(...winningTrades.map((t: Trade) => t.pnl))
+        ? Math.max(...winningTrades.map((t: Trade) => tradePnl(t)))
         : 0;
 
     const largestLoss =
       losingTrades.length > 0
-        ? Math.min(...losingTrades.map((t: Trade) => t.pnl))
+        ? Math.min(...losingTrades.map((t: Trade) => tradePnl(t)))
         : 0;
 
     return {
