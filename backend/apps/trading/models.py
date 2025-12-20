@@ -1069,7 +1069,9 @@ class ExecutionMetrics(models.Model):
                 return None
             if hasattr(value, "isoformat"):
                 try:
-                    return value.isoformat()
+                    # `value` is Any and so is `value.isoformat()`. Coerce to `str`
+                    # to satisfy type checkers and to guarantee JSON-serializable output.
+                    return str(value.isoformat())
                 except Exception:  # pylint: disable=broad-exception-caught
                     return str(value)
             return str(value)
