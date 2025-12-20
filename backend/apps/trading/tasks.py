@@ -708,6 +708,21 @@ def run_backtest_task(task_id: int) -> None:
     start = _isoformat(task.start_time)
     end = _isoformat(task.end_time)
 
+    # Progress tracking: tick counts are only known at EOF, so estimate progress
+    # during the run using tick timestamps within the requested time window.
+    backtest_start_dt: datetime | None = None
+    backtest_end_dt: datetime | None = None
+    backtest_total_seconds: float | None = None
+    try:
+        backtest_start_dt = _parse_iso_datetime(start)
+        backtest_end_dt = _parse_iso_datetime(end)
+        total = (backtest_end_dt - backtest_start_dt).total_seconds()
+        backtest_total_seconds = total if total > 0 else None
+    except Exception:  # pylint: disable=broad-exception-caught
+        backtest_start_dt = None
+        backtest_end_dt = None
+        backtest_total_seconds = None
+
     event_service.log_event(
         event_type="backtest_task_started",
         severity="info",
@@ -780,6 +795,49 @@ def run_backtest_task(task_id: int) -> None:
     last_tick_timestamp: str | None = None
     next_idle_log_at = last_message_monotonic + 30.0
     next_progress_log_at = last_message_monotonic + 15.0
+    last_progress_update_monotonic = 0.0
+
+    def _compute_progress_pct() -> int | None:
+        if published_total and published_total > 0:
+            return max(0, min(100, int((processed / published_total) * 100)))
+
+        if not (backtest_start_dt and backtest_end_dt and backtest_total_seconds):
+            return None
+
+        if not last_tick_timestamp:
+            return None
+
+        try:
+            tick_dt = _parse_iso_datetime(str(last_tick_timestamp))
+        except Exception:  # pylint: disable=broad-exception-caught
+            return None
+
+        elapsed = (tick_dt - backtest_start_dt).total_seconds()
+        # Clamp to [0, total]
+        if elapsed < 0:
+            elapsed = 0
+        if elapsed > backtest_total_seconds:
+            elapsed = backtest_total_seconds
+
+        # Avoid showing 0 forever once we have at least one tick.
+        pct = int((elapsed / backtest_total_seconds) * 100)
+        return max(1, min(99, pct))
+
+    def _maybe_update_execution_progress(*, now_mono: float, force: bool = False) -> None:
+        nonlocal last_progress_update_monotonic
+        if not force and (now_mono - last_progress_update_monotonic) < 5.0:
+            return
+
+        pct = _compute_progress_pct()
+        if pct is None:
+            return
+
+        try:
+            if int(execution.progress or 0) != int(pct):
+                execution.update_progress(int(pct))
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+        last_progress_update_monotonic = now_mono
 
     try:
         while True:
@@ -801,6 +859,7 @@ def run_backtest_task(task_id: int) -> None:
             redis_msg = pubsub.get_message(timeout=1.0)
             if not redis_msg:
                 now_mono = time.monotonic()
+                _maybe_update_execution_progress(now_mono=now_mono)
                 if now_mono >= next_idle_log_at:
                     idle_for = int(max(0.0, now_mono - last_message_monotonic))
                     logger.warning(
@@ -816,7 +875,11 @@ def run_backtest_task(task_id: int) -> None:
                     status_message=(
                         f"processed={processed} last_tick={last_tick_timestamp or 'n/a'}"
                     ),
-                    meta_update={"processed": processed, "last_tick": last_tick_timestamp},
+                    meta_update={
+                        "processed": processed,
+                        "last_tick": last_tick_timestamp,
+                        "progress": int(execution.progress or 0),
+                    },
                 )
                 continue
 
@@ -1021,10 +1084,9 @@ def run_backtest_task(task_id: int) -> None:
                 next_progress_log_at = now_mono + 15.0
 
             if processed % 250 == 0:
-                # Best-effort progress estimate when total unknown.
-                if published_total and published_total > 0:
-                    pct = int((processed / published_total) * 100)
-                    execution.update_progress(pct)
+                # Update progress periodically. Prefer count-based when available,
+                # otherwise use timestamp-based estimation.
+                _maybe_update_execution_progress(now_mono=time.monotonic(), force=True)
 
                 # Persist best-effort live snapshot for frontend polling.
                 try:
@@ -1051,7 +1113,13 @@ def run_backtest_task(task_id: int) -> None:
                 except Exception:  # pylint: disable=broad-exception-caught
                     pass
                 task_service.heartbeat(
-                    status_message=f"processed={processed}", meta_update={"processed": processed}
+                    status_message=f"processed={processed}",
+                    meta_update={
+                        "processed": processed,
+                        "last_tick": last_tick_timestamp,
+                        "progress": int(execution.progress or 0),
+                        "published_total": published_total,
+                    },
                 )
 
         # final progress
