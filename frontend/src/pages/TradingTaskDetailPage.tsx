@@ -342,7 +342,7 @@ export default function TradingTaskDetailPage() {
 
   if (isLoading) {
     return (
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Container maxWidth={false} sx={{ py: 4 }}>
         <Box
           sx={{
             display: 'flex',
@@ -359,7 +359,7 @@ export default function TradingTaskDetailPage() {
 
   if (error || !task) {
     return (
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Container maxWidth={false} sx={{ py: 4 }}>
         <ErrorDisplay
           error={error || new Error('Task not found')}
           title="Failed to load task"
@@ -386,7 +386,7 @@ export default function TradingTaskDetailPage() {
     currentStatus !== TaskStatus.RUNNING && currentStatus !== TaskStatus.PAUSED;
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth={false} sx={{ py: 4 }}>
       {/* Breadcrumbs */}
       <Breadcrumbs sx={{ mb: 2 }}>
         <Link

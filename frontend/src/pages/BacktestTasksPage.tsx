@@ -154,7 +154,7 @@ export default function BacktestTasksPage() {
   const totalPages = data ? Math.ceil(data.count / pageSize) : 0;
 
   return (
-    <Container maxWidth="xl">
+    <Container maxWidth={false}>
       <Box sx={{ py: 4 }}>
         <Breadcrumbs />
 

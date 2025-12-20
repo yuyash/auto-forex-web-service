@@ -42,11 +42,11 @@ class TestBacktestTaskActionsApi:
             "executions/",
             "logs/",
             "export/",
-            "live-results/",
+            "results/",
             "copy/",
         ]:
             url = f"{live_server.url}/api/trading/backtest-tasks/{task.id}/{suffix}"
-            if suffix in {"status/", "executions/", "logs/", "export/", "live-results/"}:
+            if suffix in {"status/", "executions/", "logs/", "export/", "results/"}:
                 resp = requests.get(url, timeout=10)
             else:
                 resp = requests.post(url, json={}, timeout=10)
@@ -91,13 +91,17 @@ class TestBacktestTaskActionsApi:
         assert logs.status_code == 200
         assert set(logs.json().keys()) >= {"count", "next", "previous", "results"}
 
-        live = requests.get(
-            f"{live_server.url}/api/trading/backtest-tasks/{task.id}/live-results/",
+        results = requests.get(
+            f"{live_server.url}/api/trading/backtest-tasks/{task.id}/results/",
             headers=auth_headers,
             timeout=10,
         )
-        assert live.status_code == 200
-        assert live.json()["task_id"] == task.id
+        assert results.status_code == 200
+        results_data = results.json()
+        assert results_data["task_id"] == task.id
+        assert results_data["task_type"] == "backtest"
+        assert "has_live" in results_data
+        assert "has_metrics" in results_data
 
         export = requests.get(
             f"{live_server.url}/api/trading/backtest-tasks/{task.id}/export/",

@@ -312,6 +312,35 @@ class TaskExecutionSerializer(serializers.ModelSerializer):
         return obj.get_duration()
 
 
+class TaskExecutionListSerializer(serializers.ModelSerializer):
+    """Serializer for execution list endpoints.
+
+    Per API contract, this omits heavy fields like logs and nested metrics.
+    """
+
+    duration = serializers.SerializerMethodField()
+
+    class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
+        model = TaskExecution
+        fields = [
+            "id",
+            "task_type",
+            "task_id",
+            "execution_number",
+            "status",
+            "progress",
+            "started_at",
+            "completed_at",
+            "error_message",
+            "duration",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_duration(self, obj: TaskExecution) -> str | None:
+        return obj.get_duration()
+
+
 class TaskExecutionDetailSerializer(serializers.ModelSerializer):
     """
     Serializer for detailed task execution view with nested metrics.

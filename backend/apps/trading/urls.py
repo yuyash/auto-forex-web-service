@@ -13,6 +13,7 @@ from apps.trading.views import (
     BacktestTaskExportView,
     BacktestTaskView,
     BacktestTaskLiveResultsView,
+    BacktestTaskResultsView,
     BacktestTaskLogsView,
     BacktestTaskStartView,
     BacktestTaskStatusView,
@@ -21,6 +22,7 @@ from apps.trading.views import (
     TradingTaskDetailView,
     TradingTaskExecutionsView,
     TradingTaskLiveResultsView,
+    TradingTaskResultsView,
     TradingTaskView,
     TradingTaskLogsView,
     TradingTaskPauseView,
@@ -102,9 +104,9 @@ urlpatterns = [
         name="backtest_task_export",
     ),
     path(
-        "backtest-tasks/<int:task_id>/live-results/",
-        BacktestTaskLiveResultsView.as_view(),
-        name="backtest_task_live_results",
+        "backtest-tasks/<int:task_id>/results/",
+        BacktestTaskResultsView.as_view(),
+        name="backtest_task_results",
     ),
     # Trading task endpoints
     path(
@@ -163,8 +165,8 @@ urlpatterns = [
         name="trading_task_logs",
     ),
     path(
-        "trading-tasks/<int:task_id>/live-results/",
-        TradingTaskLiveResultsView.as_view(),
-        name="trading_task_live_results",
+        "trading-tasks/<int:task_id>/results/",
+        TradingTaskResultsView.as_view(),
+        name="trading_task_results",
     ),
 ]

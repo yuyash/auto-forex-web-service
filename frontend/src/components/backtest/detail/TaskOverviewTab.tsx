@@ -16,8 +16,8 @@ import Grid from '@mui/material/Grid';
 import { MetricCard } from '../../tasks/display/MetricCard';
 import { EquityCurveChart } from '../../tasks/charts/EquityCurveChart';
 import type { BacktestTask } from '../../../types/backtestTask';
-import { TaskStatus, TaskType } from '../../../types/common';
-import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
+import { TaskStatus } from '../../../types/common';
+import type { TaskResults } from '../../../types/results';
 import {
   TrendingUp as TrendingUpIcon,
   ShowChart as ShowChartIcon,
@@ -30,51 +30,17 @@ interface EquityPoint {
   balance: number;
 }
 
-interface LiveMetrics {
-  total_return?: number;
-  total_pnl?: number;
-  win_rate?: number;
-  winning_trades?: number;
-  losing_trades?: number;
-  max_drawdown?: number;
-  sharpe_ratio?: number;
-  profit_factor?: number;
-  average_win?: number;
-  average_loss?: number;
-  [key: string]: string | number | undefined;
-}
-
-interface LiveResults {
-  day_date: string;
-  progress: number;
-  days_processed: number;
-  total_days: number;
-  balance: number;
-  total_trades: number;
-  metrics: LiveMetrics;
-  equity_curve: EquityPoint[];
-}
-
 interface TaskOverviewTabProps {
   task: BacktestTask;
-  liveResults?: LiveResults | null;
+  results?: TaskResults | null;
 }
 
 type DateRange = 'all' | '1m' | '3m' | '6m' | '1y';
 
-export function TaskOverviewTab({ task, liveResults }: TaskOverviewTabProps) {
+export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
   const [dateRange, setDateRange] = useState<DateRange>('all');
 
-  // Fetch latest execution with full metrics
-  const { data: executionsData, isLoading: executionsLoading } =
-    useTaskExecutions(task.id, TaskType.BACKTEST, {
-      page: 1,
-      page_size: 1,
-      include_metrics: true,
-    });
-
-  const latestExecution = executionsData?.results?.[0];
-  const metrics = latestExecution?.metrics;
+  const metrics = results?.metrics ?? null;
 
   const handleDateRangeChange = (event: SelectChangeEvent<DateRange>) => {
     setDateRange(event.target.value as DateRange);
@@ -85,18 +51,18 @@ export function TaskOverviewTab({ task, liveResults }: TaskOverviewTabProps) {
   };
 
   // Check if task has completed execution with metrics
-  const hasMetrics = task.status === TaskStatus.COMPLETED && metrics;
+  const hasMetrics = task.status === TaskStatus.COMPLETED && !!metrics;
 
   // Filter equity curve data based on selected date range
   const getFilteredEquityCurve = () => {
     if (!metrics?.equity_curve) return [];
 
     if (dateRange === 'all') {
-      return metrics.equity_curve;
+      return metrics.equity_curve as unknown as EquityPoint[];
     }
 
     const now = new Date();
-    const cutoffDate = new Date();
+    const cutoffDate = new Date(now);
 
     switch (dateRange) {
       case '1m':
@@ -113,225 +79,56 @@ export function TaskOverviewTab({ task, liveResults }: TaskOverviewTabProps) {
         break;
     }
 
-    return metrics.equity_curve.filter(
+    return (metrics.equity_curve as unknown as EquityPoint[]).filter(
       (point) => new Date(point.timestamp) >= cutoffDate
     );
   };
-
-  if (executionsLoading) {
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '200px',
-        }}
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
 
   if (task.status === TaskStatus.CREATED) {
     return (
       <Box sx={{ px: 3 }}>
         <Alert severity="info">
-          This task has not been executed yet. Start the task to see results.
+          This task has not been started yet. Start the task to see results.
         </Alert>
       </Box>
     );
   }
 
   if (task.status === TaskStatus.RUNNING) {
-    // Show live results if available
-    if (liveResults && liveResults.metrics) {
-      const liveMetrics = liveResults.metrics;
+    const live = (results?.live ?? null) as Record<string, unknown> | null;
+    const progress = Number(live?.progress ?? 0);
+    const processed = Number(live?.processed ?? 0);
 
-      return (
-        <Box sx={{ px: 3 }}>
-          <Alert severity="info" sx={{ mb: 3 }}>
-            <Typography variant="body2">
-              <strong>Backtest in progress:</strong> Day{' '}
-              {liveResults.days_processed} of {liveResults.total_days} (
-              {liveResults.progress}%)
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              Current date: {liveResults.day_date} • Balance: $
-              {liveResults.balance.toFixed(2)} • Trades:{' '}
-              {liveResults.total_trades}
-            </Typography>
-          </Alert>
-
-          {/* Live Key Metrics Grid */}
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <MetricCard
-                title="Total Return (Live)"
-                value={`${parseFloat(String(liveMetrics.total_return || 0)).toFixed(2)}%`}
-                icon={<TrendingUpIcon />}
-                color={
-                  parseFloat(String(liveMetrics.total_return || 0)) >= 0
-                    ? 'success'
-                    : 'error'
-                }
-              />
-            </Grid>
-
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <MetricCard
-                title="Win Rate (Live)"
-                value={`${parseFloat(String(liveMetrics.win_rate || 0)).toFixed(2)}%`}
-                icon={<ShowChartIcon />}
-                color="primary"
-              />
-            </Grid>
-
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <MetricCard
-                title="Total Trades (Live)"
-                value={liveResults.total_trades.toString()}
-                icon={<SwapHorizIcon />}
-                color="info"
-              />
-            </Grid>
-
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <MetricCard
-                title="Max Drawdown (Live)"
-                value={`${parseFloat(String(liveMetrics.max_drawdown || 0)).toFixed(2)}%`}
-                icon={<TrendingDownIcon />}
-                color="warning"
-              />
-            </Grid>
-          </Grid>
-
-          {/* Live Equity Curve Chart */}
-          {liveResults.equity_curve && liveResults.equity_curve.length > 0 && (
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 3 }}>
-                Equity Curve (Live - Last 100 points)
-              </Typography>
-              <EquityCurveChart data={liveResults.equity_curve} height={400} />
-            </Paper>
-          )}
-
-          {/* Live Additional Metrics */}
-          {(liveMetrics.sharpe_ratio || liveMetrics.profit_factor) && (
-            <Paper sx={{ p: 3, mt: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Additional Metrics (Live)
-              </Typography>
-
-              <Grid container spacing={3}>
-                {liveMetrics.sharpe_ratio && (
-                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        Sharpe Ratio
-                      </Typography>
-                      <Typography variant="h5">
-                        {parseFloat(String(liveMetrics.sharpe_ratio)).toFixed(
-                          2
-                        )}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                )}
-
-                {liveMetrics.profit_factor && (
-                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        Profit Factor
-                      </Typography>
-                      <Typography variant="h5">
-                        {parseFloat(String(liveMetrics.profit_factor)).toFixed(
-                          2
-                        )}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                )}
-
-                {liveMetrics.average_win && (
-                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        Average Win
-                      </Typography>
-                      <Typography variant="h5">
-                        $
-                        {parseFloat(String(liveMetrics.average_win)).toFixed(2)}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                )}
-
-                {liveMetrics.average_loss && (
-                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        Average Loss
-                      </Typography>
-                      <Typography variant="h5" color="error.main">
-                        $
-                        {parseFloat(String(liveMetrics.average_loss)).toFixed(
-                          2
-                        )}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                )}
-
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">
-                      Winning Trades
-                    </Typography>
-                    <Typography variant="h5" color="success.main">
-                      {liveMetrics.winning_trades || 0}
-                    </Typography>
-                  </Box>
-                </Grid>
-
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">
-                      Losing Trades
-                    </Typography>
-                    <Typography variant="h5" color="error.main">
-                      {liveMetrics.losing_trades || 0}
-                    </Typography>
-                  </Box>
-                </Grid>
-              </Grid>
-            </Paper>
-          )}
-        </Box>
-      );
-    }
-
-    // No live results yet
     return (
       <Box sx={{ px: 3 }}>
         <Alert severity="info">
-          This task is currently running. Live results will appear here as the
-          backtest progresses.
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CircularProgress size={16} />
+            <Typography variant="body2">
+              Backtest is running.
+              {Number.isFinite(progress) && progress > 0
+                ? ` Progress: ${progress}%.`
+                : ''}
+              {Number.isFinite(processed) && processed > 0
+                ? ` Processed ticks: ${processed}.`
+                : ''}
+            </Typography>
+          </Box>
         </Alert>
       </Box>
     );
   }
 
   if (task.status === TaskStatus.FAILED) {
+    const errorMessage = results?.execution?.error_message;
     return (
       <Box sx={{ px: 3 }}>
         <Alert severity="error">
           This task execution failed.{' '}
-          {latestExecution?.error_message && (
+          {errorMessage && (
             <>
               <br />
-              Error: {latestExecution.error_message}
+              Error: {errorMessage}
             </>
           )}
         </Alert>

@@ -9,6 +9,7 @@ import type {
   TradingTaskCopyData,
   TaskExecution,
   PaginatedResponse,
+  TaskResults,
 } from '../../types';
 
 export const tradingTasksApi = {
@@ -145,6 +146,15 @@ export const tradingTasksApi = {
     return apiClient.get<PaginatedResponse<TaskExecution>>(
       `/trading/trading-tasks/${id}/executions/`,
       params
+    );
+  },
+
+  /**
+   * Get unified results for a trading task (running or completed)
+   */
+  getResults: (taskId: number): Promise<TaskResults> => {
+    return apiClient.get<TaskResults>(
+      `/trading/trading-tasks/${taskId}/results/`
     );
   },
 };

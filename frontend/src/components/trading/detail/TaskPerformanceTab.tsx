@@ -19,8 +19,8 @@ import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
 import { FloorLayerLog } from '../../backtest/FloorLayerLog';
 import { TradingTaskChart } from '../TradingTaskChart';
 import type { TradingTask } from '../../../types/tradingTask';
-import { TaskStatus, TaskType } from '../../../types/common';
-import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
+import { TaskStatus } from '../../../types/common';
+import { useTradingResults } from '../../../hooks/useTaskResults';
 import {
   TrendingUp as TrendingUpIcon,
   ShowChart as ShowChartIcon,
@@ -44,25 +44,20 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
   // Ref for trade log table to scroll to selected trade
   const tradeLogTableRef = useRef<HTMLDivElement>(null);
 
-  // Fetch latest execution with full metrics
-  const { data: executionsData, isLoading: executionsLoading } =
-    useTaskExecutions(task.id, TaskType.TRADING, { page: 1, page_size: 1 });
+  const {
+    results,
+    isLoading: resultsLoading,
+    error: resultsError,
+  } = useTradingResults(task.id, task.status, { interval: 10000 });
 
-  const latestExecution = executionsData?.results?.[0];
-  const metrics = latestExecution?.metrics;
+  const execution = results?.execution;
+  const metrics = results?.metrics;
 
-  // Auto-refresh every 10 seconds for running tasks
   useEffect(() => {
-    if (task.status !== TaskStatus.RUNNING) {
-      return;
-    }
-
-    const interval = setInterval(() => {
+    if (results) {
       setLastUpdate(new Date());
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [task.status]);
+    }
+  }, [results]);
 
   const handleDateRangeChange = (event: SelectChangeEvent<DateRange>) => {
     setDateRange(event.target.value as DateRange);
@@ -120,7 +115,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
     );
   };
 
-  if (executionsLoading) {
+  if (resultsLoading) {
     return (
       <Box
         sx={{
@@ -131,6 +126,14 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
         }}
       >
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (resultsError) {
+    return (
+      <Box sx={{ px: 3 }}>
+        <Alert severity="error">Failed to load performance data.</Alert>
       </Box>
     );
   }
@@ -147,14 +150,15 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
   }
 
   if (task.status === TaskStatus.FAILED) {
+    const errorMessage = execution?.error_message;
     return (
       <Box sx={{ px: 3 }}>
         <Alert severity="error">
           This task execution failed.{' '}
-          {latestExecution?.error_message && (
+          {errorMessage && (
             <>
               <br />
-              Error: {latestExecution.error_message}
+              Error: {errorMessage}
             </>
           )}
         </Alert>
@@ -283,11 +287,11 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
 
         <TradingTaskChart
           instrument={task.instrument || 'EUR_USD'}
-          startDate={latestExecution?.started_at || task.created_at}
+          startDate={execution?.started_at || task.created_at}
           stopDate={
             task.status === TaskStatus.STOPPED ||
             task.status === TaskStatus.COMPLETED
-              ? latestExecution?.completed_at
+              ? (execution?.completed_at ?? undefined)
               : undefined
           }
           trades={metrics?.trade_log || []}

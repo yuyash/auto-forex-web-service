@@ -20,14 +20,9 @@ import { TaskStatus, TaskType, DataSource } from '../../../types/common';
 import type { BacktestTask } from '../../../types/backtestTask';
 import type { TaskExecution } from '../../../types/execution';
 import type { Trade } from '../../../types/execution';
+import type { TaskResults } from '../../../types/results';
 import { AuthProvider } from '../../../contexts/AuthContext';
 import { BrowserRouter } from 'react-router-dom';
-import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
-
-// Mock the hooks
-vi.mock('../../../hooks/useTaskExecutions', () => ({
-  useTaskExecutions: vi.fn(),
-}));
 
 // Mock the BacktestChart component
 vi.mock('../BacktestChart', () => ({
@@ -152,6 +147,25 @@ const mockExecution: TaskExecution = {
   },
 };
 
+const mockResults: TaskResults = {
+  task_id: 1,
+  task_type: TaskType.BACKTEST,
+  status: TaskStatus.COMPLETED,
+  execution: {
+    id: mockExecution.id,
+    execution_number: mockExecution.execution_number,
+    status: mockExecution.status,
+    progress: mockExecution.progress,
+    started_at: mockExecution.started_at,
+    completed_at: mockExecution.completed_at,
+    error_message: mockExecution.error_message,
+  },
+  has_live: false,
+  live: null,
+  has_metrics: true,
+  metrics: mockExecution.metrics!,
+};
+
 const renderWithProviders = (component: React.ReactElement) => {
   return render(
     <BrowserRouter>
@@ -163,19 +177,14 @@ const renderWithProviders = (component: React.ReactElement) => {
 describe('TaskResultsTab Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useTaskExecutions).mockReturnValue({
-      data: { results: [mockExecution], count: 1, next: null, previous: null },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
-
     // Mock scrollIntoView
     Element.prototype.scrollIntoView = vi.fn();
   });
 
   it('renders chart with backtest data', async () => {
-    renderWithProviders(<TaskResultsTab task={mockTask} />);
+    renderWithProviders(
+      <TaskResultsTab task={mockTask} results={mockResults} />
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('backtest-chart')).toBeInTheDocument();
@@ -183,10 +192,11 @@ describe('TaskResultsTab Integration', () => {
   });
 
   it('renders $0.00 for P&L fields when values are invalid', async () => {
-    const executionWithInvalidPnL: TaskExecution = {
-      ...mockExecution,
+    const resultsWithInvalidPnL: TaskResults = {
+      ...mockResults,
       metrics: {
-        ...mockExecution.metrics,
+        ...mockResults.metrics!,
+        id: mockResults.metrics!.id,
         total_pnl: 'NaN',
         realized_pnl: 'NaN',
         unrealized_pnl: '0.00',
@@ -203,19 +213,9 @@ describe('TaskResultsTab Integration', () => {
       },
     };
 
-    vi.mocked(useTaskExecutions).mockReturnValue({
-      data: {
-        results: [executionWithInvalidPnL],
-        count: 1,
-        next: null,
-        previous: null,
-      },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
-
-    renderWithProviders(<TaskResultsTab task={mockTask} />);
+    renderWithProviders(
+      <TaskResultsTab task={mockTask} results={resultsWithInvalidPnL} />
+    );
 
     await waitFor(() => {
       expect(screen.getByText('Trade Statistics')).toBeInTheDocument();
@@ -227,7 +227,9 @@ describe('TaskResultsTab Integration', () => {
   });
 
   it('renders metrics grid', async () => {
-    renderWithProviders(<TaskResultsTab task={mockTask} />);
+    renderWithProviders(
+      <TaskResultsTab task={mockTask} results={mockResults} />
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('metrics-grid')).toBeInTheDocument();
@@ -235,7 +237,9 @@ describe('TaskResultsTab Integration', () => {
   });
 
   it('renders trade log table', async () => {
-    renderWithProviders(<TaskResultsTab task={mockTask} />);
+    renderWithProviders(
+      <TaskResultsTab task={mockTask} results={mockResults} />
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('trade-log-table')).toBeInTheDocument();
@@ -244,7 +248,9 @@ describe('TaskResultsTab Integration', () => {
 
   it('handles trade click from chart', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<TaskResultsTab task={mockTask} />);
+    renderWithProviders(
+      <TaskResultsTab task={mockTask} results={mockResults} />
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('backtest-chart')).toBeInTheDocument();
@@ -264,13 +270,6 @@ describe('TaskResultsTab Integration', () => {
   // The functionality works correctly in the actual component
 
   it('shows loading state', () => {
-    vi.mocked(useTaskExecutions).mockReturnValue({
-      data: undefined,
-      isLoading: true,
-      error: null,
-      refetch: vi.fn(),
-    });
-
     renderWithProviders(<TaskResultsTab task={mockTask} />);
 
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
@@ -287,53 +286,48 @@ describe('TaskResultsTab Integration', () => {
 
   it('shows info message for running task', () => {
     const runningTask = { ...mockTask, status: TaskStatus.RUNNING };
-    renderWithProviders(<TaskResultsTab task={runningTask} />);
+    renderWithProviders(
+      <TaskResultsTab
+        task={runningTask}
+        results={{ ...mockResults, status: TaskStatus.RUNNING }}
+      />
+    );
 
-    expect(
-      screen.getByText(/This task is currently running/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Task is running/)).toBeInTheDocument();
   });
 
   it('shows error message for failed task', () => {
     const failedTask = { ...mockTask, status: TaskStatus.FAILED };
-    vi.mocked(useTaskExecutions).mockReturnValue({
-      data: {
-        results: [
-          {
-            ...mockExecution,
-            status: TaskStatus.FAILED,
-            error_message: 'Test error',
-          },
-        ],
-        count: 1,
-        next: null,
-        previous: null,
+    const failedResults: TaskResults = {
+      ...mockResults,
+      status: TaskStatus.FAILED,
+      execution: {
+        ...mockResults.execution!,
+        status: TaskStatus.FAILED,
+        error_message: 'Test error',
       },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
+      has_metrics: false,
+      metrics: null,
+    };
 
-    renderWithProviders(<TaskResultsTab task={failedTask} />);
+    renderWithProviders(
+      <TaskResultsTab task={failedTask} results={failedResults} />
+    );
 
     expect(screen.getByText(/This task execution failed/)).toBeInTheDocument();
     expect(screen.getByText(/Test error/)).toBeInTheDocument();
   });
 
   it('shows warning when no metrics available', () => {
-    vi.mocked(useTaskExecutions).mockReturnValue({
-      data: {
-        results: [{ ...mockExecution, metrics: undefined }],
-        count: 1,
-        next: null,
-        previous: null,
-      },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
+    const noMetricsResults: TaskResults = {
+      ...mockResults,
+      has_metrics: false,
+      metrics: null,
+    };
 
-    renderWithProviders(<TaskResultsTab task={mockTask} />);
+    renderWithProviders(
+      <TaskResultsTab task={mockTask} results={noMetricsResults} />
+    );
 
     expect(
       screen.getByText(/No metrics available for this task/)
