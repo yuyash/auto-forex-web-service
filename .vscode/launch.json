@@ -40,13 +40,6 @@
       "request": "launch",
       "command": "npm run dev",
       "cwd": "${workspaceFolder}/frontend"
-    },
-    {
-      "name": "Frontend: Open Edge (5173)",
-      "type": "msedge",
-      "request": "launch",
-      "url": "http://localhost:5173",
-      "webRoot": "${workspaceFolder}/frontend"
     }
   ],
   "compounds": [
@@ -55,8 +48,7 @@
       "configurations": [
         "Django: runserver",
         "Celery: worker",
-        "Frontend: npm run dev",
-        "Frontend: Open Edge (5173)"
+        "Frontend: npm run dev"
       ]
     }
   ]

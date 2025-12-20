@@ -797,6 +797,45 @@ def run_backtest_task(task_id: int) -> None:
     next_progress_log_at = last_message_monotonic + 15.0
     last_progress_update_monotonic = 0.0
 
+    def _enrich_event_from_tick(*, event: dict[str, Any], tick: dict[str, Any]) -> dict[str, Any]:
+        """Ensure strategy events are plottable by attaching timestamp and price.
+
+        Frontend chart markers require:
+        - event["timestamp"] for time placement
+        - a price-like field under event["details"] (price/current_price/entry_price/exit_price)
+        """
+        enriched = dict(event)
+
+        tick_ts = str(tick.get("timestamp") or "")
+        if tick_ts and not enriched.get("timestamp"):
+            enriched["timestamp"] = tick_ts
+
+        details_raw = enriched.get("details")
+        details: dict[str, Any] = details_raw if isinstance(details_raw, dict) else {}
+        tick_mid = tick.get("mid")
+
+        # Add a generic current price if no price is present.
+        if tick_mid and not any(
+            k in details and details.get(k) not in {None, ""}
+            for k in {"price", "current_price", "entry_price", "exit_price"}
+        ):
+            details = dict(details)
+            details["current_price"] = tick_mid
+
+        # Close events are easier to plot with an explicit exit price.
+        if (
+            str(enriched.get("type") or "") == "close"
+            and tick_mid
+            and not details.get("exit_price")
+        ):
+            details = dict(details)
+            details["exit_price"] = tick_mid
+
+        if details:
+            enriched["details"] = details
+
+        return enriched
+
     def _compute_progress_pct() -> int | None:
         if published_total and published_total > 0:
             return max(0, min(100, int((processed / published_total) * 100)))
@@ -1018,9 +1057,15 @@ def run_backtest_task(task_id: int) -> None:
 
             state, events = strategy.on_tick(tick=tick, state=state)
             if events:
-                strategy_events.extend(events)
-                trade_log.extend([e for e in events if e.get("type") in {"open", "close"}])
-                for e in events:
+                enriched_events = [
+                    _enrich_event_from_tick(event=e, tick=tick)
+                    for e in events
+                    if isinstance(e, dict)
+                ]
+
+                strategy_events.extend(enriched_events)
+                trade_log.extend([e for e in enriched_events if e.get("type") in {"open", "close"}])
+                for e in enriched_events:
                     e_type = str(e.get("type") or "")
 
                     # Persist all strategy events (layer opens/scales, take-profit hits, etc).

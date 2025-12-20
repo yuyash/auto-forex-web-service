@@ -305,8 +305,8 @@ export function TaskResultsTab({ task, liveResults }: TaskResultsTabProps) {
   }
 
   if (task.status === TaskStatus.RUNNING) {
-    // Show live results if available
-    if (liveResults && liveResults.total_trades > 0) {
+    // Show live progress/results if available
+    if (liveResults) {
       const liveMetrics = liveResults.metrics;
 
       return (
@@ -316,8 +316,7 @@ export function TaskResultsTab({ task, liveResults }: TaskResultsTabProps) {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CircularProgress size={16} />
               <Typography variant="body2">
-                Task is running... Day {liveResults.days_processed} of{' '}
-                {liveResults.total_days} ({liveResults.progress}% complete)
+                Task is running... {liveResults.progress}% complete
               </Typography>
             </Box>
           </Alert>
@@ -333,134 +332,136 @@ export function TaskResultsTab({ task, liveResults }: TaskResultsTabProps) {
           </Paper>
 
           {/* Live Performance Metrics */}
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 3 }}>
-              Live Performance Metrics
-            </Typography>
+          {liveResults.total_trades > 0 && (
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" sx={{ mb: 3 }}>
+                Live Performance Metrics
+              </Typography>
 
-            <Grid container spacing={3}>
-              <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                <Paper
-                  sx={{
-                    p: 2,
-                    textAlign: 'center',
-                    bgcolor: 'background.default',
-                  }}
-                >
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Current Balance
-                  </Typography>
-                  <Typography variant="h6">
-                    $
-                    {liveResults.balance.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </Typography>
-                </Paper>
-              </Grid>
-              <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                <Paper
-                  sx={{
-                    p: 2,
-                    textAlign: 'center',
-                    bgcolor: 'background.default',
-                  }}
-                >
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Total Return
-                  </Typography>
-                  <Typography
-                    variant="h6"
+              <Grid container spacing={3}>
+                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+                  <Paper
                     sx={{
-                      color:
-                        (liveMetrics.total_return || 0) >= 0
-                          ? 'success.main'
-                          : 'error.main',
+                      p: 2,
+                      textAlign: 'center',
+                      bgcolor: 'background.default',
                     }}
                   >
-                    {(liveMetrics.total_return || 0).toFixed(2)}%
-                  </Typography>
-                </Paper>
-              </Grid>
-              <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                <Paper
-                  sx={{
-                    p: 2,
-                    textAlign: 'center',
-                    bgcolor: 'background.default',
-                  }}
-                >
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Total Trades
-                  </Typography>
-                  <Typography variant="h6">
-                    {liveResults.total_trades}
-                  </Typography>
-                </Paper>
-              </Grid>
-              <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                <Paper
-                  sx={{
-                    p: 2,
-                    textAlign: 'center',
-                    bgcolor: 'background.default',
-                  }}
-                >
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Win Rate
-                  </Typography>
-                  <Typography variant="h6">
-                    {(liveMetrics.win_rate || 0).toFixed(1)}%
-                  </Typography>
-                </Paper>
-              </Grid>
-              <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                <Paper
-                  sx={{
-                    p: 2,
-                    textAlign: 'center',
-                    bgcolor: 'background.default',
-                  }}
-                >
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Total P&L
-                  </Typography>
-                  <Typography
-                    variant="h6"
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Current Balance
+                    </Typography>
+                    <Typography variant="h6">
+                      $
+                      {liveResults.balance.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+                  <Paper
                     sx={{
-                      color:
-                        (liveMetrics.total_pnl || 0) >= 0
-                          ? 'success.main'
-                          : 'error.main',
+                      p: 2,
+                      textAlign: 'center',
+                      bgcolor: 'background.default',
                     }}
                   >
-                    $
-                    {(liveMetrics.total_pnl || 0).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </Typography>
-                </Paper>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Total Return
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        color:
+                          (liveMetrics.total_return || 0) >= 0
+                            ? 'success.main'
+                            : 'error.main',
+                      }}
+                    >
+                      {(liveMetrics.total_return || 0).toFixed(2)}%
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+                  <Paper
+                    sx={{
+                      p: 2,
+                      textAlign: 'center',
+                      bgcolor: 'background.default',
+                    }}
+                  >
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Total Trades
+                    </Typography>
+                    <Typography variant="h6">
+                      {liveResults.total_trades}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+                  <Paper
+                    sx={{
+                      p: 2,
+                      textAlign: 'center',
+                      bgcolor: 'background.default',
+                    }}
+                  >
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Win Rate
+                    </Typography>
+                    <Typography variant="h6">
+                      {(liveMetrics.win_rate || 0).toFixed(1)}%
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+                  <Paper
+                    sx={{
+                      p: 2,
+                      textAlign: 'center',
+                      bgcolor: 'background.default',
+                    }}
+                  >
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Total P&L
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        color:
+                          (liveMetrics.total_pnl || 0) >= 0
+                            ? 'success.main'
+                            : 'error.main',
+                      }}
+                    >
+                      $
+                      {(liveMetrics.total_pnl || 0).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+                  <Paper
+                    sx={{
+                      p: 2,
+                      textAlign: 'center',
+                      bgcolor: 'background.default',
+                    }}
+                  >
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Max Drawdown
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: 'error.main' }}>
+                      {(liveMetrics.max_drawdown || 0).toFixed(2)}%
+                    </Typography>
+                  </Paper>
+                </Grid>
               </Grid>
-              <Grid size={{ xs: 6, sm: 4, md: 3 }}>
-                <Paper
-                  sx={{
-                    p: 2,
-                    textAlign: 'center',
-                    bgcolor: 'background.default',
-                  }}
-                >
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Max Drawdown
-                  </Typography>
-                  <Typography variant="h6" sx={{ color: 'error.main' }}>
-                    {(liveMetrics.max_drawdown || 0).toFixed(2)}%
-                  </Typography>
-                </Paper>
-              </Grid>
-            </Grid>
-          </Paper>
+            </Paper>
+          )}
 
           {/* Live OHLC Chart with Trading Events */}
           {liveResults.trade_log && liveResults.trade_log.length > 0 && (

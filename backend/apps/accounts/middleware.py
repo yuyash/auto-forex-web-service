@@ -7,6 +7,7 @@ from urllib.parse import parse_qs
 
 from django.core.cache import cache
 from django.contrib.auth.models import AnonymousUser
+from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
 
@@ -83,6 +84,10 @@ class RateLimiter:
                 return True, blocked_ip.reason
         except BlockedIP.DoesNotExist:
             pass
+        except DatabaseError:
+            # If the DB is unavailable/overloaded (e.g. too many clients), fail open.
+            # This prevents unrelated endpoints (market data, health checks, etc.) from 500'ing.
+            logger.exception("BlockedIP lookup failed; allowing request (ip=%s)", ip_address)
         return False, None
 
     @staticmethod

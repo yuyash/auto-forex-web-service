@@ -22,6 +22,7 @@ import {
   ChartCanvas,
   GenericChartComponent,
 } from 'react-financial-charts';
+import { getAxisCanvas } from '@react-financial-charts/core';
 import { CandlestickSeries } from '@react-financial-charts/series';
 import { XAxis, YAxis } from '@react-financial-charts/axes';
 import { discontinuousTimeScaleProviderBuilder } from '@react-financial-charts/scales';
@@ -219,14 +220,6 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
       return true; // Show other marker types by default
     });
 
-    console.log('[FinancialChart] Marker visibility:', {
-      total_markers: markers.length,
-      visible_markers: filtered.length,
-      showBuySellMarkers,
-      showStartEndMarkers,
-      marker_types: markers.map((m) => m.type),
-    });
-
     return filtered;
   }, [markers, showBuySellMarkers, showStartEndMarkers]);
 
@@ -257,21 +250,6 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
       avgInterval = (interval1 + interval2) / 2;
     }
 
-    if (import.meta.env.DEV) {
-      console.log('[DataGaps] Detection parameters:', {
-        avgInterval: avgInterval / 1000 / 60, // minutes
-        candleCount: chartData.length,
-        requestedRange: {
-          from: initialVisibleRange.from.toISOString(),
-          to: initialVisibleRange.to.toISOString(),
-        },
-        actualRange: {
-          from: chartData[0].date.toISOString(),
-          to: chartData[chartData.length - 1].date.toISOString(),
-        },
-      });
-    }
-
     // Check for gap at the beginning (before first candle)
     const requestedStart = initialVisibleRange.from;
     const firstCandle = chartData[0].date;
@@ -280,14 +258,6 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
     // For start gaps, use 2x threshold to avoid flagging small timing differences
     // This is more lenient because market data often starts slightly after requested time
     if (timeDiffStart > avgInterval * 2) {
-      if (import.meta.env.DEV) {
-        console.log('[DataGaps] ✓ Gap at start detected:', {
-          requestedStart: requestedStart.toISOString(),
-          firstCandle: firstCandle.toISOString(),
-          timeDiff: (timeDiffStart / 1000 / 60 / 60).toFixed(1) + ' hours',
-          threshold: ((avgInterval * 2) / 1000 / 60 / 60).toFixed(1) + ' hours',
-        });
-      }
       gaps.push({
         start: requestedStart,
         end: firstCandle,
@@ -303,15 +273,6 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
     // For end gaps, use a lower threshold (0.5x) to show when backtest ends before next candle
     // This helps visualize that there's no data after the last candle until the requested end time
     if (timeDiffEnd > avgInterval * 0.5) {
-      if (import.meta.env.DEV) {
-        console.log('[DataGaps] ✓ Gap at end detected:', {
-          lastCandle: lastCandle.toISOString(),
-          requestedEnd: requestedEnd.toISOString(),
-          timeDiff: (timeDiffEnd / 1000 / 60 / 60).toFixed(1) + ' hours',
-          threshold:
-            ((avgInterval * 0.5) / 1000 / 60 / 60).toFixed(1) + ' hours',
-        });
-      }
       gaps.push({
         start: lastCandle,
         end: requestedEnd,
@@ -323,49 +284,18 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
     // Use 1.5x threshold for middle gaps to catch weekend closures
     const gapThreshold = avgInterval * 1.5;
 
-    if (import.meta.env.DEV) {
-      console.log(
-        '[DataGaps] Scanning for middle gaps (threshold: ' +
-          (gapThreshold / 1000 / 60 / 60).toFixed(1) +
-          ' hours)...'
-      );
-    }
-
     for (let i = 0; i < chartData.length - 1; i++) {
       const current = chartData[i].date;
       const next = chartData[i + 1].date;
       const timeDiff = next.getTime() - current.getTime();
 
       if (timeDiff > gapThreshold) {
-        if (import.meta.env.DEV) {
-          console.log('[DataGaps] ✓ Gap in middle detected:', {
-            index: i,
-            from: current.toISOString(),
-            to: next.toISOString(),
-            duration: (timeDiff / 1000 / 60 / 60).toFixed(1) + ' hours',
-          });
-        }
         gaps.push({
           start: current,
           end: next,
           type: 'middle',
         });
       }
-    }
-
-    if (import.meta.env.DEV) {
-      console.log('[DataGaps] ========================================');
-      console.log('[DataGaps] Total gaps found:', gaps.length);
-      gaps.forEach((gap, i) => {
-        const duration =
-          (gap.end.getTime() - gap.start.getTime()) / 1000 / 60 / 60;
-        console.log(
-          `[DataGaps] Gap ${i + 1}: ${gap.type} - ${duration.toFixed(1)} hours`
-        );
-        console.log(`  From: ${gap.start.toISOString()}`);
-        console.log(`  To:   ${gap.end.toISOString()}`);
-      });
-      console.log('[DataGaps] ========================================');
     }
 
     return gaps;
@@ -700,6 +630,20 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
     }
   };
 
+  // Tolerance for matching a marker timestamp to a candle timestamp.
+  // Many event sources emit timestamps that fall within the candle, not exactly on its boundary.
+  // NOTE: Keep this as a non-hook calculation because this component has early returns
+  // (loading/error/empty/width=0) and adding hooks below them can break hook ordering.
+  const markerMatchToleranceMs = (() => {
+    if (!chartData || chartData.length < 2) return 0;
+    const a = chartData[0]?.date?.getTime();
+    const b = chartData[1]?.date?.getTime();
+    if (!a || !b) return 0;
+    const interval = Math.abs(b - a);
+    if (!interval || isNaN(interval)) return 0;
+    return Math.max(1, Math.floor(interval / 2));
+  })();
+
   // Render chart with error boundary
   const renderChart = () => {
     try {
@@ -763,7 +707,8 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
               {/* Data gap shading overlay */}
               {dataGaps.length > 0 && (
                 <GenericChartComponent
-                  drawOn={['pan', 'mousemove', 'zoom']}
+                  drawOn={['draw', 'pan', 'mousemove', 'zoom']}
+                  canvasToDraw={getAxisCanvas}
                   canvasDraw={(
                     ctx: CanvasRenderingContext2D,
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -781,7 +726,7 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                     const yMax = Math.max(...yRange);
                     const height = yMax - yMin;
 
-                    dataGaps.forEach((gap, index) => {
+                    dataGaps.forEach((gap) => {
                       let x1, x2;
 
                       // Handle different gap types with appropriate positioning
@@ -806,12 +751,6 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                         );
 
                         if (startIndex === -1 || endIndex === -1) {
-                          if (import.meta.env.DEV) {
-                            console.log(
-                              'Cannot find gap boundaries in plotData:',
-                              { gap, startIndex, endIndex }
-                            );
-                          }
                           return;
                         }
 
@@ -831,37 +770,14 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                         x1 === undefined ||
                         x2 === undefined
                       ) {
-                        if (import.meta.env.DEV) {
-                          console.log('Invalid gap coordinates:', {
-                            x1,
-                            x2,
-                            gap,
-                          });
-                        }
                         return;
                       }
 
                       const width = Math.abs(x2 - x1);
                       const x = Math.min(x1, x2);
 
-                      if (import.meta.env.DEV) {
-                        console.log('Rendering gap on canvas:', {
-                          index,
-                          gap,
-                          x,
-                          width,
-                          x1,
-                          x2,
-                          yMin,
-                          height,
-                        });
-                      }
-
                       // Skip if width is too small to render meaningfully (less than 5 pixels)
                       if (width < 5) {
-                        if (import.meta.env.DEV) {
-                          console.log('Skipping gap - too narrow:', { width });
-                        }
                         return;
                       }
 
@@ -1063,14 +979,20 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                   marker.type === 'start_strategy' ||
                   marker.type === 'end_strategy';
 
+                const matchesCandle = (d: OHLCData) => {
+                  const dt = d.date?.getTime();
+                  const mt = marker.date?.getTime();
+                  if (!dt || !mt) return false;
+                  if (!markerMatchToleranceMs) return dt === mt;
+                  return Math.abs(dt - mt) <= markerMatchToleranceMs;
+                };
+
                 return (
                   <React.Fragment key={`marker-group-${marker.id || idx}`}>
                     {/* Marker shape with hover effect */}
                     <Annotate
                       with={SvgPathAnnotation}
-                      when={(d: OHLCData) =>
-                        d.date.getTime() === marker.date.getTime()
-                      }
+                      when={matchesCandle}
                       usingProps={{
                         path: markerPath,
                         pathWidth: isStartEnd ? 10 : 20,
@@ -1109,9 +1031,7 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                     {marker.label && (
                       <Annotate
                         with={LabelAnnotation}
-                        when={(d: OHLCData) =>
-                          d.date.getTime() === marker.date.getTime()
-                        }
+                        when={matchesCandle}
                         usingProps={{
                           text: marker.label,
                           y: ({

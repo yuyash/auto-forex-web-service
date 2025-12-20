@@ -103,16 +103,6 @@ export function FloorLayerLog({
   const displayEvents = useMemo(() => {
     const events: DisplayEvent[] = [];
 
-    // Debug: log what we receive
-    if (import.meta.env.DEV) {
-      console.log(
-        '[FloorLayerLog] strategyEvents:',
-        strategyEvents?.length,
-        strategyEvents?.slice(0, 3)
-      );
-      console.log('[FloorLayerLog] trades:', trades?.length);
-    }
-
     // Add strategy events
     strategyEvents.forEach((event, idx) => {
       const details = event.details || {};
