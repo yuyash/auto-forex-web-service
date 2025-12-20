@@ -140,7 +140,7 @@ export const tradingTasksApi = {
    */
   getExecutions: (
     id: number,
-    params?: { page?: number; page_size?: number }
+    params?: { page?: number; page_size?: number; include_metrics?: boolean }
   ): Promise<PaginatedResponse<TaskExecution>> => {
     return apiClient.get<PaginatedResponse<TaskExecution>>(
       `/trading/trading-tasks/${id}/executions/`,

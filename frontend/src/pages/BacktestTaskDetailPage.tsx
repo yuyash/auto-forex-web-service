@@ -103,8 +103,16 @@ export default function BacktestTaskDetailPage() {
     interval: 3000, // Poll every 3 seconds for active tasks
   });
 
+  // Merge status sources (detail endpoint vs /status/ polling).
+  // Prefer the polled status when it disagrees so the UI updates immediately
+  // on stop/complete/fail transitions.
+  const currentStatus =
+    task && polledStatus && polledStatus.status !== task.status
+      ? polledStatus.status
+      : task?.status;
+
   // Poll for live results when task is running
-  const { liveResults } = useBacktestLiveResults(taskId, task?.status, {
+  const { liveResults } = useBacktestLiveResults(taskId, currentStatus, {
     interval: 5000, // Poll every 5 seconds for live results
   });
 
@@ -318,11 +326,13 @@ export default function BacktestTaskDetailPage() {
     );
   }
 
+  const statusForActions = currentStatus ?? task.status;
   const canStart =
-    task.status === TaskStatus.CREATED || task.status === TaskStatus.STOPPED;
-  const canStop = task.status === TaskStatus.RUNNING;
-  const canEdit = task.status !== TaskStatus.RUNNING;
-  const canDelete = task.status !== TaskStatus.RUNNING;
+    statusForActions === TaskStatus.CREATED ||
+    statusForActions === TaskStatus.STOPPED;
+  const canStop = statusForActions === TaskStatus.RUNNING;
+  const canEdit = statusForActions !== TaskStatus.RUNNING;
+  const canDelete = statusForActions !== TaskStatus.RUNNING;
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -351,7 +361,7 @@ export default function BacktestTaskDetailPage() {
               <Typography variant="h4" component="h1">
                 {task.name}
               </Typography>
-              <StatusBadge status={task.status} />
+              <StatusBadge status={statusForActions} />
             </Box>
 
             <Typography variant="body2" color="text.secondary">
@@ -374,7 +384,7 @@ export default function BacktestTaskDetailPage() {
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {/* Use TaskActionButtons component (Requirement 4.5) */}
               <TaskActionButtons
-                status={task.status}
+                status={statusForActions}
                 onStart={handleStart}
                 onStop={handleStop}
                 onRerun={handleRerun}

@@ -67,7 +67,11 @@ export function TaskOverviewTab({ task, liveResults }: TaskOverviewTabProps) {
 
   // Fetch latest execution with full metrics
   const { data: executionsData, isLoading: executionsLoading } =
-    useTaskExecutions(task.id, TaskType.BACKTEST, { page: 1, page_size: 1 });
+    useTaskExecutions(task.id, TaskType.BACKTEST, {
+      page: 1,
+      page_size: 1,
+      include_metrics: true,
+    });
 
   const latestExecution = executionsData?.results?.[0];
   const metrics = latestExecution?.metrics;

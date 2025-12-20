@@ -31,6 +31,7 @@ from apps.trading.serializers import (
     BacktestTaskCreateSerializer,
     BacktestTaskListSerializer,
     BacktestTaskSerializer,
+    TaskExecutionDetailSerializer,
     TaskExecutionSerializer,
     TradingTaskCreateSerializer,
     TradingTaskListSerializer,
@@ -825,7 +826,21 @@ class TradingTaskExecutionsView(APIView):
         # Get execution history
         executions = task.get_execution_history()
 
+        include_metrics_raw = (request.query_params.get("include_metrics") or "").lower()
+        include_metrics = include_metrics_raw in {"1", "true", "yes"}
+
         # Serialize and return
+        if include_metrics:
+            executions = executions.select_related("metrics")
+            detail_serializer = TaskExecutionDetailSerializer(executions, many=True)
+            return Response(
+                {
+                    "count": executions.count(),
+                    "results": detail_serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
         serializer = TaskExecutionSerializer(executions, many=True)
         return Response(
             {
@@ -854,7 +869,7 @@ class TradingTaskLogsView(APIView):
         level: str | None,
     ) -> str:
         """Build pagination URL with query parameters."""
-        url = f"/api/trading-tasks/{task_id}/logs/?offset={offset}&limit={limit}"
+        url = f"/api/trading/trading-tasks/{task_id}/logs/?offset={offset}&limit={limit}"
         if execution_id:
             url += f"&execution_id={execution_id}"
         if level:
@@ -1444,9 +1459,22 @@ class BacktestTaskExecutionsView(APIView):
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         executions = task.get_execution_history()
+
+        include_metrics_raw = (request.query_params.get("include_metrics") or "").lower()
+        include_metrics = include_metrics_raw in {"1", "true", "yes"}
+
+        if include_metrics:
+            executions = executions.select_related("metrics")
+            detail_serializer = TaskExecutionDetailSerializer(executions, many=True)
+            return Response(
+                {"count": executions.count(), "results": detail_serializer.data},
+                status=status.HTTP_200_OK,
+            )
+
         serializer = TaskExecutionSerializer(executions, many=True)
         return Response(
-            {"count": executions.count(), "results": serializer.data}, status=status.HTTP_200_OK
+            {"count": executions.count(), "results": serializer.data},
+            status=status.HTTP_200_OK,
         )
 
 
@@ -1545,7 +1573,7 @@ class BacktestTaskLogsView(APIView):
         execution_id: str | None,
         level: str | None,
     ) -> str:
-        url = f"/api/backtest-tasks/{task_id}/logs/?offset={offset}&limit={limit}"
+        url = f"/api/trading/backtest-tasks/{task_id}/logs/?offset={offset}&limit={limit}"
         if execution_id:
             url += f"&execution_id={execution_id}"
         if level:

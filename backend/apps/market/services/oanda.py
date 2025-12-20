@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from logging import getLogger
@@ -18,6 +18,8 @@ from urllib.parse import parse_qs, urlparse
 
 import v20
 from v20.transaction import StopLossDetails, TakeProfitDetails
+
+from django.conf import settings
 
 from apps.market.models import OandaAccount, TickData
 from apps.market.services.compliance import ComplianceService, ComplianceViolationError
@@ -214,15 +216,48 @@ class OandaService:
             account: OandaAccount instance with API credentials
         """
         self.account = account
+        rest_hostname = str(account.api_hostname)
+        stream_hostname = self._to_stream_hostname(rest_hostname)
+
         self.api = v20.Context(
-            hostname=account.api_hostname,
+            hostname=rest_hostname,
             token=account.get_api_token(),
             poll_timeout=10,
         )
+
+        # v20 Context uses a single hostname for both REST and streaming.
+        # OANDA streams live on a different hostname (stream-*) than REST (api-*).
+        # If we use the REST host for pricing.stream, OANDA returns 404.
+        self.stream_hostname = stream_hostname
+        self.stream_api = v20.Context(
+            hostname=stream_hostname,
+            token=account.get_api_token(),
+            stream_timeout=int(getattr(settings, "OANDA_STREAM_TIMEOUT", 30)),
+            poll_timeout=10,
+        )
+
         self.max_retries = 3
         self.retry_delay = 0.5  # seconds
         self.compliance_manager = ComplianceService(account)
         self.event_service = MarketEventService()
+
+        logger.info(
+            "OANDA service initialized (account_id=%s, api_hostname=%s, stream_hostname=%s)",
+            str(getattr(account, "account_id", "")),
+            rest_hostname,
+            stream_hostname,
+        )
+
+    @staticmethod
+    def _to_stream_hostname(hostname: str) -> str:
+        host = (hostname or "").strip()
+        if not host:
+            return host
+        if host.startswith("stream-"):
+            return host
+        if host.startswith("api-"):
+            return "stream-" + host[len("api-") :]
+        return host
 
     def cancel_order(self, order: Order) -> CancelledOrder:
         try:
@@ -970,36 +1005,116 @@ class OandaService:
         include_heartbeats: bool = False,
     ) -> Iterator[TickData]:
         instruments_param = instruments if isinstance(instruments, str) else ",".join(instruments)
-        response = self.api.pricing.stream(
+
+        response = self.stream_api.pricing.stream(
             self.account.account_id,
             snapshot=snapshot,
             instruments=instruments_param,
         )
 
-        for msg in response:
-            if not isinstance(msg, dict):
+        # For non-200 responses, v20 returns a Response with a status code
+        # but no stream lines.
+        if getattr(response, "status", 200) != 200:
+            body = getattr(response, "body", None)
+            body_preview: object | None = None
+            try:
+                if isinstance(body, (dict, list)):
+                    body_preview = body
+                elif body is not None:
+                    body_preview = str(body)[:500]
+            except Exception:  # pylint: disable=broad-exception-caught
+                body_preview = None
+
+            raise OandaAPIError(
+                "Failed to start pricing stream: "
+                f"status {getattr(response, 'status', None)} "
+                f"(account_id={self.account.account_id}, "
+                f"stream_hostname={self.stream_hostname or 'n/a'}, "
+                f"instruments={instruments_param}) "
+                + (f" body={body_preview}" if body_preview is not None else "")
+            )
+
+        # v20 returns a Response object for streams; the stream messages are
+        # yielded via response.parts() as (type, obj) tuples.
+        parts_iter = getattr(response, "parts", None)
+        if callable(parts_iter):
+            stream_iter = parts_iter() or []
+        else:
+            # Best-effort fallback for older/mocked implementations.
+            stream_iter = response
+
+        for part in stream_iter:
+            # v20: ("pricing.ClientPrice", ClientPrice(...)) or ("pricing.PricingHeartbeat", ...)
+            msg = None
+            msg_type = None
+            if isinstance(part, tuple) and len(part) == 2:
+                msg_type, msg = part
+            else:
+                msg = part
+
+            # Heartbeats: skip (this generator yields only price ticks).
+            if (
+                (isinstance(msg_type, str) and "Heartbeat" in msg_type)
+                or getattr(msg, "type", None) == "HEARTBEAT"
+                or (isinstance(msg, dict) and msg.get("type") == "HEARTBEAT")
+            ):
+                _ = include_heartbeats
                 continue
-            msg_type = msg.get("type")
-            if msg_type == "HEARTBEAT":
-                if include_heartbeats:
-                    # Heartbeats have time but no prices; skip unless explicitly requested.
+
+            # Dict-style messages (older mocks).
+            if isinstance(msg, dict):
+                if msg.get("type") != "PRICE":
                     continue
-                continue
-            if msg_type != "PRICE":
+
+                instrument = str(msg.get("instrument", ""))
+                time_value = self._parse_iso_datetime(msg.get("time"))
+                if not time_value:
+                    continue
+
+                bids = msg.get("bids") or []
+                asks = msg.get("asks") or []
+                if not bids or not asks:
+                    continue
+
+                bid = Decimal(str(bids[0].get("price")))
+                ask = Decimal(str(asks[0].get("price")))
+                mid = (bid + ask) / Decimal("2")
+                yield TickData(
+                    instrument=instrument,
+                    timestamp=time_value,
+                    bid=bid,
+                    ask=ask,
+                    mid=mid,
+                )
                 continue
 
-            instrument = str(msg.get("instrument", ""))
-            time_value = self._parse_iso_datetime(msg.get("time"))
-            if not time_value:
+            # v20 ClientPrice object messages.
+            instrument = str(getattr(msg, "instrument", "") or "")
+            if not instrument:
                 continue
 
-            bids = msg.get("bids") or []
-            asks = msg.get("asks") or []
+            time_raw = getattr(msg, "time", None)
+            if isinstance(time_raw, datetime):
+                time_value = time_raw
+                if time_value.tzinfo is None:
+                    time_value = time_value.replace(tzinfo=timezone.utc)
+            else:
+                time_value = self._parse_iso_datetime(time_raw)
+                if not time_value:
+                    continue
+
+            bids = getattr(msg, "bids", None) or []
+            asks = getattr(msg, "asks", None) or []
             if not bids or not asks:
                 continue
 
-            bid = Decimal(str(bids[0].get("price")))
-            ask = Decimal(str(asks[0].get("price")))
+            bid_price = getattr(bids[0], "price", None)
+            ask_price = getattr(asks[0], "price", None)
+            if bid_price is None or ask_price is None:
+                continue
+
+            bid = Decimal(str(bid_price))
+            ask = Decimal(str(ask_price))
             mid = (bid + ask) / Decimal("2")
             yield TickData(
                 instrument=instrument,

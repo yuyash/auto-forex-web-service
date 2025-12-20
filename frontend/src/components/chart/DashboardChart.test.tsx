@@ -121,7 +121,7 @@ describe('DashboardChart', () => {
 
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalledWith(
-          expect.stringContaining('/api/candles'),
+          expect.stringContaining('/api/market/candles/'),
           expect.objectContaining({
             headers: expect.objectContaining({
               Authorization: 'Bearer test-token',
@@ -402,7 +402,7 @@ describe('DashboardChart', () => {
       await waitFor(
         () => {
           expect(fetchMock).toHaveBeenCalledWith(
-            expect.stringContaining('/api/candles'),
+            expect.stringContaining('/api/market/candles/'),
             expect.any(Object)
           );
         },
@@ -680,7 +680,7 @@ describe('DashboardChart', () => {
       await waitFor(
         () => {
           expect(fetchMock).toHaveBeenCalledWith(
-            expect.stringContaining('/api/candles'),
+            expect.stringContaining('/api/market/candles/'),
             expect.any(Object)
           );
         },

@@ -70,6 +70,19 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
     );
   }, [trades, searchTerm]);
 
+  const safeDateMs = (value: unknown): number => {
+    const d = new Date(String(value ?? ''));
+    const ms = d.getTime();
+    return Number.isNaN(ms) ? 0 : ms;
+  };
+
+  const calculateDurationMs = (trade: Trade): number | undefined => {
+    const entry = safeDateMs(trade.entry_time);
+    const exit = safeDateMs(trade.exit_time);
+    if (!entry || !exit) return undefined;
+    return exit - entry;
+  };
+
   // Sort trades
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const sortedTrades = React.useMemo(() => {
@@ -79,12 +92,12 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
 
       switch (sortField) {
         case 'entry_time':
-          aValue = new Date(a.entry_time).getTime();
-          bValue = new Date(b.entry_time).getTime();
+          aValue = safeDateMs(a.entry_time);
+          bValue = safeDateMs(b.entry_time);
           break;
         case 'exit_time':
-          aValue = new Date(a.exit_time).getTime();
-          bValue = new Date(b.exit_time).getTime();
+          aValue = safeDateMs(a.exit_time);
+          bValue = safeDateMs(b.exit_time);
           break;
         case 'instrument':
           aValue = a.instrument;
@@ -95,8 +108,8 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
           bValue = b.pnl;
           break;
         case 'duration':
-          aValue = calculateDuration(a);
-          bValue = calculateDuration(b);
+          aValue = calculateDurationMs(a) ?? 0;
+          bValue = calculateDurationMs(b) ?? 0;
           break;
         default:
           return 0;
@@ -151,27 +164,38 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
     setPage(0);
   };
 
-  const formatCurrency = (value: number): string => {
+  const toNumber = (value: unknown): number | undefined => {
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  const formatCurrency = (value: unknown): string => {
+    const n = toNumber(value);
+    if (n === undefined) return '-';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(value);
+    }).format(n);
   };
 
-  const formatDateTime = (dateString: string): string => {
-    return format(new Date(dateString), 'MMM dd, yyyy HH:mm');
+  const formatPrice = (value: unknown): string => {
+    const n = toNumber(value);
+    if (n === undefined) return '-';
+    return n.toFixed(5);
   };
 
-  const calculateDuration = (trade: Trade): number => {
-    const entry = new Date(trade.entry_time).getTime();
-    const exit = new Date(trade.exit_time).getTime();
-    return exit - entry;
+  const formatDateTime = (dateString: unknown): string => {
+    if (!dateString) return '-';
+    const d = new Date(String(dateString));
+    if (Number.isNaN(d.getTime())) return '-';
+    return format(d, 'MMM dd, yyyy HH:mm');
   };
 
   const formatDuration = (trade: Trade): string => {
-    const durationMs = calculateDuration(trade);
+    const durationMs = calculateDurationMs(trade);
+    if (durationMs === undefined) return '-';
     const hours = Math.floor(durationMs / (1000 * 60 * 60));
     const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
 
@@ -347,6 +371,15 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
               const actualIndex = sortedTrades.findIndex((t) => t === trade);
               const isSelected = selectedTradeIndex === actualIndex;
 
+              const directionRaw = (trade as unknown as { direction?: unknown })
+                .direction;
+              const direction =
+                typeof directionRaw === 'string' ? directionRaw : '';
+              const directionLabel = direction ? direction.toUpperCase() : '-';
+              const pnlValue = toNumber(
+                (trade as unknown as { pnl?: unknown }).pnl
+              );
+
               return (
                 <TableRow
                   key={paginatedIndex}
@@ -359,29 +392,40 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
                 >
                   <TableCell>{formatDateTime(trade.entry_time)}</TableCell>
                   <TableCell>{formatDateTime(trade.exit_time)}</TableCell>
-                  <TableCell>{trade.instrument}</TableCell>
+                  <TableCell>{trade.instrument || '-'}</TableCell>
                   <TableCell>
                     <Chip
-                      label={trade.direction.toUpperCase()}
+                      label={directionLabel}
                       size="small"
-                      color={trade.direction === 'long' ? 'success' : 'error'}
+                      color={
+                        direction === 'long'
+                          ? 'success'
+                          : direction === 'short'
+                            ? 'error'
+                            : 'default'
+                      }
                       variant="outlined"
                     />
                   </TableCell>
                   <TableCell align="right">
-                    {trade.units.toLocaleString()}
+                    {toNumber(trade.units)?.toLocaleString() ?? '-'}
                   </TableCell>
                   <TableCell align="right">
-                    {trade.entry_price.toFixed(5)}
+                    {formatPrice(trade.entry_price)}
                   </TableCell>
                   <TableCell align="right">
-                    {trade.exit_price.toFixed(5)}
+                    {formatPrice(trade.exit_price)}
                   </TableCell>
                   <TableCell
                     align="right"
                     sx={{
                       fontWeight: 600,
-                      color: trade.pnl >= 0 ? 'success.main' : 'error.main',
+                      color:
+                        pnlValue === undefined
+                          ? undefined
+                          : pnlValue >= 0
+                            ? 'success.main'
+                            : 'error.main',
                     }}
                   >
                     {formatCurrency(trade.pnl)}

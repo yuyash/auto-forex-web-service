@@ -302,6 +302,7 @@ class TaskExecutionSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "error_message",
+            "logs",
             "duration",
             "created_at",
         ]

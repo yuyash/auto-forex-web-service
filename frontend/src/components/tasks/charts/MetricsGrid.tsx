@@ -23,13 +23,22 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({
   isLoading = false,
   columns = 3,
 }) => {
+  const safeNumber = (
+    value: string | number | null | undefined,
+    fallback = 0
+  ): number => {
+    if (value === null || value === undefined) return fallback;
+    const num = typeof value === 'string' ? Number(value) : value;
+    return Number.isFinite(num) ? num : fallback;
+  };
+
   const formatPercentage = (value: string | number): string => {
-    const num = typeof value === 'string' ? parseFloat(value) : value;
+    const num = safeNumber(value, 0);
     return `${num >= 0 ? '+' : ''}${num.toFixed(2)}%`;
   };
 
   const formatCurrency = (value: string | number): string => {
-    const num = typeof value === 'string' ? parseFloat(value) : value;
+    const num = safeNumber(value, 0);
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -43,18 +52,17 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({
   };
 
   const getTrend = (value: string | number): 'up' | 'down' | 'neutral' => {
-    const num = typeof value === 'string' ? parseFloat(value) : value;
+    const num = safeNumber(value, 0);
     if (num > 0) return 'up';
     if (num < 0) return 'down';
     return 'neutral';
   };
 
-  const realizedPnl = metrics.realized_pnl
-    ? parseFloat(metrics.realized_pnl)
-    : parseFloat(metrics.total_pnl.toString());
-  const unrealizedPnl = metrics.unrealized_pnl
-    ? parseFloat(metrics.unrealized_pnl)
-    : 0;
+  const realizedPnl = safeNumber(
+    metrics.realized_pnl,
+    safeNumber(metrics.total_pnl, 0)
+  );
+  const unrealizedPnl = safeNumber(metrics.unrealized_pnl, 0);
 
   const metricsData = [
     {
@@ -62,7 +70,9 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({
       value: formatPercentage(metrics.total_return),
       icon: <TrendingUp />,
       color:
-        parseFloat(metrics.total_return.toString()) >= 0 ? 'success' : 'error',
+        safeNumber(metrics.total_return.toString(), 0) >= 0
+          ? 'success'
+          : 'error',
       trend: getTrend(metrics.total_return),
     },
     {
@@ -70,7 +80,7 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({
       value: formatCurrency(metrics.total_pnl),
       icon: <AccountBalance />,
       color:
-        parseFloat(metrics.total_pnl.toString()) >= 0 ? 'success' : 'error',
+        safeNumber(metrics.total_pnl.toString(), 0) >= 0 ? 'success' : 'error',
       trend: getTrend(metrics.total_pnl),
     },
     {
@@ -99,7 +109,9 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({
       value: formatPercentage(metrics.win_rate),
       icon: <ShowChart />,
       color:
-        parseFloat(metrics.win_rate.toString()) >= 50 ? 'success' : 'warning',
+        safeNumber(metrics.win_rate.toString(), 0) >= 50
+          ? 'success'
+          : 'warning',
     },
     {
       title: 'Max Drawdown',

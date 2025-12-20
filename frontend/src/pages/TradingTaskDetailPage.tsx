@@ -368,12 +368,15 @@ export default function TradingTaskDetailPage() {
     );
   }
 
-  // Use task.status as the authoritative source. The polledStatus is mainly
-  // for detecting external changes between refetches. After any mutation,
-  // refetch() gets the latest data from the server which is authoritative.
-  // If polledStatus shows a different status than task.status, prefer task.status
-  // since it's from a direct API call, not a polling interval that might be stale.
-  const currentStatus = task.status;
+  // Merge status sources:
+  // - task.status comes from the detail endpoint (react-query cached)
+  // - polledStatus.status comes from the /status/ endpoint (more “real-time”)
+  // If they disagree, prefer the polled status for terminal/stop transitions so
+  // the UI doesn't stay stuck showing RUNNING.
+  const currentStatus =
+    polledStatus && polledStatus.status !== task.status
+      ? polledStatus.status
+      : task.status;
 
   const canStop =
     currentStatus === TaskStatus.RUNNING || currentStatus === TaskStatus.PAUSED;

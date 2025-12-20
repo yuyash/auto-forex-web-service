@@ -30,7 +30,7 @@ interface UseTaskExecutionsResult {
 export function useTaskExecutions(
   taskId: number,
   taskType: TaskType,
-  params?: { page?: number; page_size?: number },
+  params?: { page?: number; page_size?: number; include_metrics?: boolean },
   options?: { enablePolling?: boolean; pollingInterval?: number }
 ): UseTaskExecutionsResult {
   const queryKey =
@@ -43,7 +43,11 @@ export function useTaskExecutions(
     queryFn: async () => {
       const fetchParams =
         params?.page || params?.page_size
-          ? { page: params.page, page_size: params.page_size }
+          ? {
+              page: params.page,
+              page_size: params.page_size,
+              include_metrics: params.include_metrics,
+            }
           : undefined;
 
       return taskType === TaskType.BACKTEST

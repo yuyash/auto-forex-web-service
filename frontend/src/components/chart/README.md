@@ -43,7 +43,7 @@ async function loadHistoricalData(
   granularity: string
 ): Promise<OHLCData[]> {
   const response = await fetch(
-    `/api/candles?instrument=${instrument}&granularity=${granularity}`
+    `/api/market/candles/?instrument=${instrument}&granularity=${granularity}`
   );
   return response.json();
 }

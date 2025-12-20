@@ -96,7 +96,8 @@ export function useTaskLogs(
       setError(null);
 
       try {
-        const endpoint = `/${taskType}-tasks/${taskId}/logs/`;
+        // Backend routes are namespaced under /trading/...
+        const endpoint = `/trading/${taskType}-tasks/${taskId}/logs/`;
         const queryParams = params || currentParams;
 
         const response = await apiClient.get<TaskLogsResponse>(

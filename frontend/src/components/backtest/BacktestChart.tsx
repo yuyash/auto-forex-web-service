@@ -100,7 +100,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
         });
       }
 
-      const url = `/api/candles?instrument=${instrument}&granularity=${granularity}&from_time=${encodeURIComponent(fromTime)}&to_time=${encodeURIComponent(toTime)}`;
+      const url = `/api/market/candles/?instrument=${instrument}&granularity=${granularity}&from_time=${encodeURIComponent(fromTime)}&to_time=${encodeURIComponent(toTime)}`;
 
       if (import.meta.env.DEV) {
         console.log('[BacktestChart] Fetching URL:', url);
@@ -230,7 +230,10 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
               ) : null
             }
           >
-            {granularities.map((gran) => (
+            {(granularities.length > 0
+              ? granularities
+              : [{ value: granularity, label: granularity }]
+            ).map((gran) => (
               <MenuItem
                 key={gran.value}
                 value={gran.value}

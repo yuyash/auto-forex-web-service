@@ -159,7 +159,7 @@ export class BatchFetcher {
     }
 
     // Build URL with query parameters
-    let url = `/api/candles?instrument=${options.instrument}&granularity=${options.granularity}&count=${options.count}`;
+    let url = `/api/market/candles/?instrument=${options.instrument}&granularity=${options.granularity}&count=${options.count}`;
     if (options.before) {
       url += `&before=${options.before}`;
     }
