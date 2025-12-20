@@ -72,6 +72,8 @@ services:
     environment:
       # Environment selection (production loads config.yaml)
       DJANGO_ENV: production
+      # Redis auth (must match the redis service requirepass when set)
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
@@ -110,6 +112,8 @@ services:
     environment:
       # Environment selection (production loads config.yaml)
       DJANGO_ENV: production
+      # Redis auth (must match the redis service requirepass when set)
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
@@ -136,6 +140,8 @@ services:
     environment:
       # Environment selection (production loads config.yaml)
       DJANGO_ENV: production
+      # Redis auth (must match the redis service requirepass when set)
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}

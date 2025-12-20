@@ -52,8 +52,14 @@ class RateLimiter:
     @staticmethod
     def get_failed_attempts(ip_address: str) -> int:
         cache_key = RateLimiter.get_cache_key(ip_address)
-        attempts = cache.get(cache_key, 0)
-        return int(attempts)
+        try:
+            attempts = cache.get(cache_key, 0)
+            return int(attempts)
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Fail open if cache/redis is unavailable or misconfigured.
+            # This prevents unrelated endpoints (market data, health checks, etc.) from 500'ing.
+            logger.exception("RateLimiter cache.get failed; allowing request (ip=%s)", ip_address)
+            return 0
 
     @staticmethod
     def increment_failed_attempts(ip_address: str) -> int:
@@ -61,13 +67,19 @@ class RateLimiter:
         attempts = RateLimiter.get_failed_attempts(ip_address)
         attempts += 1
         timeout = RateLimiter.LOCKOUT_DURATION_MINUTES * 60
-        cache.set(cache_key, attempts, timeout)
+        try:
+            cache.set(cache_key, attempts, timeout)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception("RateLimiter cache.set failed (ip=%s)", ip_address)
         return attempts
 
     @staticmethod
     def reset_failed_attempts(ip_address: str) -> None:
         cache_key = RateLimiter.get_cache_key(ip_address)
-        cache.delete(cache_key)
+        try:
+            cache.delete(cache_key)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception("RateLimiter cache.delete failed (ip=%s)", ip_address)
 
     @staticmethod
     def is_ip_blocked(ip_address: str) -> Tuple[bool, Optional[str]]:
