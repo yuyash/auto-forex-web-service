@@ -1638,54 +1638,6 @@ class BacktestTaskLogsView(APIView):
         )
 
 
-class BacktestTaskLiveResultsView(APIView):
-    """Get live intermediate results for a running backtest task."""
-
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request: Request, task_id: int) -> Response:
-        try:
-            BacktestTask.objects.get(id=task_id, user=request.user.pk)
-        except BacktestTask.DoesNotExist:
-            return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        live_results = LivePerformanceService.get_backtest_intermediate_results(task_id)
-
-        if live_results is None:
-            return Response(
-                {"task_id": task_id, "has_data": False, "message": "No live results available yet"},
-                status=status.HTTP_200_OK,
-            )
-
-        return Response(
-            {"task_id": task_id, "has_data": True, **live_results}, status=status.HTTP_200_OK
-        )
-
-
-class TradingTaskLiveResultsView(APIView):
-    """Get live intermediate results for a running trading task."""
-
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request: Request, task_id: int) -> Response:
-        try:
-            TradingTask.objects.get(id=task_id, user=request.user.pk)
-        except TradingTask.DoesNotExist:
-            return Response({"error": "Trading task not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        live_results = LivePerformanceService.get_trading_intermediate_results(task_id)
-
-        if live_results is None:
-            return Response(
-                {"task_id": task_id, "has_data": False, "message": "No live results available yet"},
-                status=status.HTTP_200_OK,
-            )
-
-        return Response(
-            {"task_id": task_id, "has_data": True, **live_results}, status=status.HTTP_200_OK
-        )
-
-
 class BacktestTaskResultsView(APIView):
     """Unified results endpoint for a backtest task.
 
