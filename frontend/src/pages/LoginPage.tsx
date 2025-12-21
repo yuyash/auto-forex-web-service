@@ -103,8 +103,12 @@ const LoginPage = () => {
         body: JSON.stringify(formData),
       });
 
-      // Always keep a clone so we can fall back to text if JSON parsing fails.
-      const responseForText = response.clone();
+      // Keep a clone when available so we can fall back to text if JSON parsing fails.
+      // In unit tests, fetch may be mocked with a plain object lacking clone().
+      const responseForText =
+        typeof (response as Response).clone === 'function'
+          ? (response as Response).clone()
+          : response;
 
       const data = await response
         .json()
@@ -136,6 +140,22 @@ const LoginPage = () => {
           general = statusText
             ? `Login failed (${statusText}).`
             : 'Login failed. Please try again.';
+        }
+
+        // Prefer localized/friendlier messages for known login failures.
+        // Keep backend-provided message when it contains specific details.
+        if (response.status === 503) {
+          general = t('auth.loginDisabled');
+        } else if (response.status === 429) {
+          general = general || t('auth.loginBlocked');
+        } else if (response.status === 403) {
+          const normalized = general.toLowerCase();
+          if (
+            normalized.includes('not authorized') ||
+            normalized.includes('not whitelisted')
+          ) {
+            general = t('auth.emailNotWhitelisted');
+          }
         }
 
         setErrors({

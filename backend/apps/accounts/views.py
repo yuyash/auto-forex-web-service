@@ -10,6 +10,7 @@ This module contains views for:
 import logging
 
 from django.conf import settings
+from django.contrib.auth import authenticate
 
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -23,6 +24,7 @@ from apps.accounts.models import (
     UserNotification,
     UserSession,
     UserSettings,
+    WhitelistedEmail,
 )
 from apps.accounts.services.jwt import JWTService
 from apps.accounts.middleware import RateLimiter
@@ -470,10 +472,38 @@ class UserLoginView(APIView):
         serializer = self.serializer_class(data=request.data)
 
         if not serializer.is_valid():
+            blocked_by_whitelist = False
+            credentials_valid = False
+
+            if email and request.data.get("password") and system_settings.email_whitelist_enabled:
+                is_whitelisted = WhitelistedEmail.is_email_whitelisted(email)
+                if not is_whitelisted:
+                    blocked_by_whitelist = True
+                    credentials_valid = (
+                        authenticate(username=email, password=request.data.get("password"))
+                        is not None
+                    )
+                    logger.warning(
+                        "Authentication blocked - email not whitelisted for %s from %s (credentials_valid=%s)",
+                        email,
+                        ip_address,
+                        credentials_valid,
+                        extra={
+                            "email": email,
+                            "ip_address": ip_address,
+                            "credentials_valid": credentials_valid,
+                            "is_admin": is_admin_user,
+                        },
+                    )
+
             # Admin users bypass rate limiting but still log attempts
             if not is_admin_user:
-                # Increment IP-based failed attempts
-                ip_attempts = RateLimiter.increment_failed_attempts(ip_address)
+                # Increment IP-based failed attempts (skip for whitelist blocks)
+                ip_attempts = (
+                    RateLimiter.get_failed_attempts(ip_address)
+                    if blocked_by_whitelist
+                    else RateLimiter.increment_failed_attempts(ip_address)
+                )
             else:
                 ip_attempts = 0
                 logger.info(
@@ -506,12 +536,19 @@ class UserLoginView(APIView):
             security_events.log_login_failed(
                 username=email,
                 ip_address=ip_address,
-                reason="Invalid credentials",
+                reason=(
+                    "Email not whitelisted (credentials valid)"
+                    if blocked_by_whitelist and credentials_valid
+                    else (
+                        "Email not whitelisted" if blocked_by_whitelist else "Invalid credentials"
+                    )
+                ),
                 user_agent=request.META.get("HTTP_USER_AGENT"),
             )
 
-            # Increment user-level failed attempts if user exists (skip for admin users)
-            if not is_admin_user:
+            # Increment user-level failed attempts if user exists.
+            # Skip for admin users and for whitelist blocks (avoid locking accounts when creds are correct).
+            if not is_admin_user and not blocked_by_whitelist:
                 try:
                     user = User.objects.get(email__iexact=email)
                     user.increment_failed_login()
@@ -557,6 +594,17 @@ class UserLoginView(APIView):
                     ip_address=ip_address,
                     failed_attempts=ip_attempts,
                     duration_seconds=RateLimiter.LOCKOUT_DURATION_MINUTES * 60,
+                )
+
+            if blocked_by_whitelist and credentials_valid:
+                return Response(
+                    {
+                        "error": (
+                            "This email address is not authorized to login. "
+                            "Please contact the administrator."
+                        )
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
                 )
 
             # Return generic error message

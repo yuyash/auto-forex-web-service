@@ -27,7 +27,9 @@
     "signInHere": "こちらからサインイン",
     "signUpHere": "こちらからサインアップ",
     "registrationDisabled": "登録は現在無効になっています",
-    "loginDisabled": "ログインは現在無効になっています"
+    "loginDisabled": "ログインは現在無効になっています",
+    "loginBlocked": "ログイン試行回数が多すぎます。しばらくしてから再度お試しください。",
+    "emailNotWhitelisted": "このメールアドレスはログインが許可されていません。管理者に連絡してください。"
   },
   "actions": {
     "submit": "送信",

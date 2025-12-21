@@ -359,6 +359,38 @@ class TestUserLoginView:
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
+    def test_login_whitelist_blocks_logs_when_credentials_valid(self, caplog) -> None:
+        """Test whitelist block logs a clear message even when password is correct."""
+        import logging
+
+        from apps.accounts.models import PublicAccountSettings, User
+
+        settings = PublicAccountSettings.get_settings()
+        settings.login_enabled = True
+        settings.email_whitelist_enabled = True
+        settings.save()
+
+        User.objects.create_user(
+            username="logintest",
+            email="login@example.com",
+            password="TestPass123!",
+            is_staff=True,
+            is_superuser=True,
+        )
+
+        with caplog.at_level(logging.WARNING):
+            request = self.factory.post(
+                "/api/accounts/auth/login",
+                {"email": "login@example.com", "password": "TestPass123!"},
+                format="json",
+            )
+
+            response = self.view(request)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert "Authentication blocked - email not whitelisted" in caplog.text
+        assert "credentials_valid=True" in caplog.text
+
 
 @pytest.mark.django_db
 class TestUserLogoutView:
