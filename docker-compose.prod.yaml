@@ -89,8 +89,8 @@ services:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
       - ${HOME}/.aws:/root/.aws:ro
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p 8000 config.asgi:application"
     restart: unless-stopped
     networks:
