@@ -261,6 +261,36 @@ def _iter_ticks_from_athena_results(
             )
 
 
+def _create_athena_client(*, profile: str | None, role_arn: str | None):
+    base_session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+
+    role_arn_str = (role_arn or "").strip()
+    if not role_arn_str:
+        return base_session.client("athena")
+
+    sts = base_session.client("sts")
+    response = sts.assume_role(
+        RoleArn=role_arn_str,
+        RoleSessionName="auto-forex-load-data",
+    )
+
+    credentials = response.get("Credentials") or {}
+    access_key_id = credentials.get("AccessKeyId")
+    secret_access_key = credentials.get("SecretAccessKey")
+    session_token = credentials.get("SessionToken")
+
+    if not access_key_id or not secret_access_key or not session_token:
+        raise ValueError("AssumeRole did not return usable credentials")
+
+    assumed_session = boto3.Session(
+        aws_access_key_id=access_key_id,
+        aws_secret_access_key=secret_access_key,
+        aws_session_token=session_token,
+        region_name=getattr(base_session, "region_name", None),
+    )
+    return assumed_session.client("athena")
+
+
 class Command(BaseCommand):
     help = "Load historical tick data from AWS Athena into TickData."
 
@@ -291,6 +321,15 @@ class Command(BaseCommand):
             help="AWS profile name (optional).",
         )
         parser.add_argument(
+            "--role-arn",
+            default=None,
+            help=(
+                "Role ARN to assume before running Athena queries (optional). "
+                "When provided, the command calls STS AssumeRole and uses the assumed "
+                "credentials for Athena."
+            ),
+        )
+        parser.add_argument(
             "--output-bucket",
             default=None,
             help=(
@@ -310,6 +349,7 @@ class Command(BaseCommand):
         database: str = options["database"]
         table: str = options["table"]
         profile: str | None = options.get("profile")
+        role_arn: str | None = options.get("role_arn")
         output_bucket: str | None = options.get("output_bucket")
         instrument_filter: str = str(options.get("instrument") or "C:USD-JPY")
 
@@ -328,8 +368,14 @@ class Command(BaseCommand):
 
         quoted_ticker = f"'{instrument_filter_str.replace("'", "''")}'"
 
-        session = boto3.Session(profile_name=profile) if profile else boto3.Session()
-        athena = session.client("athena")
+        role_arn_str = (role_arn or "").strip() or None
+        if role_arn is not None and not role_arn_str:
+            raise CommandError("--role-arn must not be empty")
+
+        try:
+            athena = _create_athena_client(profile=profile, role_arn=role_arn_str)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            raise CommandError(f"Failed to create Athena client: {exc}") from exc
 
         total_created = 0
 

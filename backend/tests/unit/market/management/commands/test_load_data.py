@@ -41,13 +41,32 @@ class _FakeAthenaClient:
         return _FakePaginator(self._pages)
 
 
+class _FakeStsClient:
+    def __init__(self, *, assume_role_calls: list[dict[str, Any]]):
+        self._assume_role_calls = assume_role_calls
+
+    def assume_role(self, **kwargs) -> dict[str, Any]:  # noqa: ARG002
+        self._assume_role_calls.append(dict(kwargs))
+        return {
+            "Credentials": {
+                "AccessKeyId": "ASIAXXX",
+                "SecretAccessKey": "SECRET",
+                "SessionToken": "TOKEN",
+            }
+        }
+
+
 class _FakeSession:
-    def __init__(self, *, pages: list[dict[str, Any]]):
+    def __init__(self, *, pages: list[dict[str, Any]], assume_role_calls: list[dict[str, Any]]):
         self._pages = pages
+        self._assume_role_calls = assume_role_calls
 
     def client(self, name: str):
-        assert name == "athena"
-        return _FakeAthenaClient(pages=self._pages)
+        if name == "athena":
+            return _FakeAthenaClient(pages=self._pages)
+        if name == "sts":
+            return _FakeStsClient(assume_role_calls=self._assume_role_calls)
+        raise AssertionError(f"Unexpected boto3 client: {name}")
 
 
 def _make_athena_page(
@@ -127,7 +146,13 @@ def test_load_tick_data_athena_inserts_rows(monkeypatch) -> None:
         )
     ]
 
-    monkeypatch.setattr(boto3, "Session", lambda *args, **kwargs: _FakeSession(pages=pages))
+    assume_role_calls: list[dict[str, Any]] = []
+
+    monkeypatch.setattr(
+        boto3,
+        "Session",
+        lambda *args, **kwargs: _FakeSession(pages=pages, assume_role_calls=assume_role_calls),
+    )
 
     call_command(
         "load_data",
@@ -149,9 +174,47 @@ def test_load_tick_data_athena_inserts_rows(monkeypatch) -> None:
 
 
 @pytest.mark.django_db
+def test_load_tick_data_athena_assumes_role_when_role_arn_provided(monkeypatch) -> None:
+    pages = [
+        _make_athena_page(
+            ticker="C:EURUSD",
+            participant_timestamp="1704067200000000000",
+            bid_price="1.10000",
+            ask_price="1.10010",
+        )
+    ]
+
+    assume_role_calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        boto3,
+        "Session",
+        lambda *args, **kwargs: _FakeSession(pages=pages, assume_role_calls=assume_role_calls),
+    )
+
+    call_command(
+        "load_data",
+        start="2024-01-01",
+        end="2024-01-02",
+        database="db",
+        table="tbl",
+        role_arn="arn:aws:iam::123456789012:role/TestRole",
+        instrument="C:EURUSD",
+    )
+
+    assert len(assume_role_calls) == 1
+    assert assume_role_calls[0]["RoleArn"] == "arn:aws:iam::123456789012:role/TestRole"
+    assert TickData.objects.count() == 1
+
+
+@pytest.mark.django_db
 def test_load_tick_data_athena_rejects_invalid_range(monkeypatch) -> None:
     pages: list[dict[str, Any]] = []
-    monkeypatch.setattr(boto3, "Session", lambda *args, **kwargs: _FakeSession(pages=pages))
+    assume_role_calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        boto3,
+        "Session",
+        lambda *args, **kwargs: _FakeSession(pages=pages, assume_role_calls=assume_role_calls),
+    )
 
     with pytest.raises(CommandError):
         call_command(
@@ -166,7 +229,12 @@ def test_load_tick_data_athena_rejects_invalid_range(monkeypatch) -> None:
 @pytest.mark.django_db
 def test_load_tick_data_athena_dedupes_conflicting_rows_in_batch(monkeypatch) -> None:
     pages = [_make_athena_page_with_duplicate_ticks(ticker="C:EURUSD")]
-    monkeypatch.setattr(boto3, "Session", lambda *args, **kwargs: _FakeSession(pages=pages))
+    assume_role_calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        boto3,
+        "Session",
+        lambda *args, **kwargs: _FakeSession(pages=pages, assume_role_calls=assume_role_calls),
+    )
 
     call_command(
         "load_data",
