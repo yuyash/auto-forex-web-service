@@ -2,9 +2,105 @@ from __future__ import annotations
 
 import importlib
 
+from datetime import timedelta
+
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.trading.views import StrategyDefaultsView, StrategyView
+
+
+class TestBacktestTaskStatusView:
+    def _create_task_and_completed_execution(self, *, user):
+        from django.utils import timezone
+
+        from apps.trading.enums import TaskStatus, TaskType
+        from apps.trading.models import BacktestTask, StrategyConfig, TaskExecution
+
+        config = StrategyConfig.objects.create(
+            user=user,
+            name="cfg-bt-status",
+            strategy_type="floor",
+            parameters={"instrument": "EUR_USD"},
+            description="",
+        )
+        now = timezone.now()
+        task = BacktestTask.objects.create(
+            user=user,
+            config=config,
+            name="bt-status",
+            description="",
+            data_source="postgresql",
+            start_time=now - timedelta(days=3),
+            end_time=now - timedelta(days=2),
+            status=TaskStatus.RUNNING,
+        )
+        TaskExecution.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_number=1,
+            status=TaskStatus.COMPLETED,
+            progress=100,
+            started_at=now - timedelta(days=2, minutes=5),
+            completed_at=now - timedelta(days=2),
+        )
+        task.refresh_from_db()
+        return task
+
+    def test_recently_started_task_is_not_auto_completed(self, monkeypatch, test_user):
+        from apps.trading.enums import TaskStatus
+        from apps.trading import views as trading_views
+        from apps.trading.views import BacktestTaskStatusView
+
+        task = self._create_task_and_completed_execution(user=test_user)
+
+        # No lock info yet (Celery hasn't started), but task was updated recently.
+        monkeypatch.setattr(
+            trading_views.TaskLockManager,
+            "get_lock_info",
+            lambda *_args, **_kwargs: None,
+        )
+
+        factory = APIRequestFactory()
+        req = factory.get(f"/api/trading/backtest-tasks/{task.pk}/status/")
+        force_authenticate(req, user=test_user)
+        resp = BacktestTaskStatusView.as_view()(req, task_id=task.pk)
+        assert resp.status_code == 200
+        data = resp.data
+
+        assert data["status"] == TaskStatus.RUNNING
+        assert data["pending_new_execution"] is True
+        assert data["progress"] == 0
+
+    def test_old_stale_task_is_auto_completed(self, monkeypatch, test_user):
+        from django.utils import timezone
+
+        from apps.trading.enums import TaskStatus
+        from apps.trading import views as trading_views
+        from apps.trading.views import BacktestTaskStatusView
+        from apps.trading.models import BacktestTask
+
+        task = self._create_task_and_completed_execution(user=test_user)
+
+        # Make the RUNNING status look old so it can be treated as stale.
+        BacktestTask.objects.filter(pk=task.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=10)
+        )
+
+        monkeypatch.setattr(
+            trading_views.TaskLockManager,
+            "get_lock_info",
+            lambda *_args, **_kwargs: None,
+        )
+
+        factory = APIRequestFactory()
+        req = factory.get(f"/api/trading/backtest-tasks/{task.pk}/status/")
+        force_authenticate(req, user=test_user)
+        resp = BacktestTaskStatusView.as_view()(req, task_id=task.pk)
+        assert resp.status_code == 200
+        data = resp.data
+
+        assert data["status"] == TaskStatus.COMPLETED
+        assert data["pending_new_execution"] is False
 
 
 class TestTradingViews:

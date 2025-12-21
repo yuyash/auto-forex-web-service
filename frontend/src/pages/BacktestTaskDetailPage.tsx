@@ -14,6 +14,7 @@ import {
   Button,
   Menu,
   MenuItem,
+  Alert,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
@@ -92,16 +93,21 @@ export default function BacktestTaskDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const { data: task, isLoading, error, refetch } = useBacktestTask(taskId);
   const { strategies } = useStrategies();
 
   // Use HTTP polling for task status updates (Requirements 1.2, 1.3, 4.3, 4.4)
-  const { status: polledStatus } = useTaskPolling(taskId, 'backtest', {
-    enabled: !!taskId,
-    pollStatus: true,
-    interval: 3000, // Poll every 3 seconds for active tasks
-  });
+  const { status: polledStatus, refetch: refetchPolledStatus } = useTaskPolling(
+    taskId,
+    'backtest',
+    {
+      enabled: !!taskId,
+      pollStatus: true,
+      interval: 3000, // Poll every 3 seconds for active tasks
+    }
+  );
 
   // Merge status sources (detail endpoint vs /status/ polling).
   // Prefer the polled status when it disagrees so the UI updates immediately
@@ -205,16 +211,18 @@ export default function BacktestTaskDetailPage() {
       taskName: task?.name,
     });
     try {
+      setActionError(null);
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
       setProgress(0); // Reset progress when starting
       const result = await startTask.mutate(taskId);
       console.log('[BacktestTask] Start task response:', result);
       await refetch(); // Force immediate refetch to show updated status
+      refetchPolledStatus(); // Ensure /status/ polling reflects the new run
       invalidateBacktestExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch (error) {
       console.error('[BacktestTask] Failed to start task:', error);
-      // Error handled by mutation hook
+      setActionError((error as Error).message);
     } finally {
       setIsTransitioning(false);
     }
@@ -226,15 +234,17 @@ export default function BacktestTaskDetailPage() {
       taskName: task?.name,
     });
     try {
+      setActionError(null);
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
       const result = await stopTask.mutate(taskId);
       console.log('[BacktestTask] Stop task response:', result);
       await refetch(); // Force immediate refetch to show updated status
+      refetchPolledStatus();
       invalidateBacktestExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch (error) {
       console.error('[BacktestTask] Failed to stop task:', error);
-      // Error handled by mutation hook
+      setActionError((error as Error).message);
     } finally {
       setIsTransitioning(false);
     }
@@ -246,17 +256,19 @@ export default function BacktestTaskDetailPage() {
       taskName: task?.name,
     });
     try {
+      setActionError(null);
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
       setProgress(0); // Reset progress when rerunning
       const result = await rerunTask.mutate(taskId);
       console.log('[BacktestTask] Rerun task response:', result);
       // Force immediate refetch after mutation completes
       await refetch();
+      refetchPolledStatus();
       invalidateBacktestExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch (error) {
       console.error('[BacktestTask] Failed to rerun task:', error);
-      // Error handled by mutation hook
+      setActionError((error as Error).message);
     } finally {
       setIsTransitioning(false);
     }
@@ -332,6 +344,9 @@ export default function BacktestTaskDetailPage() {
     statusForActions === TaskStatus.CREATED ||
     statusForActions === TaskStatus.STOPPED;
   const canStop = statusForActions === TaskStatus.RUNNING;
+  const canRerun =
+    statusForActions === TaskStatus.COMPLETED ||
+    statusForActions === TaskStatus.FAILED;
   const canEdit = statusForActions !== TaskStatus.RUNNING;
   const canDelete = statusForActions !== TaskStatus.RUNNING;
 
@@ -375,6 +390,18 @@ export default function BacktestTaskDetailPage() {
                 {task.description}
               </Typography>
             )}
+
+            {actionError && (
+              <Box sx={{ mt: 2 }}>
+                <Alert
+                  severity="error"
+                  onClose={() => setActionError(null)}
+                  aria-label="Task action error"
+                >
+                  {actionError}
+                </Alert>
+              </Box>
+            )}
           </Box>
 
           {isMobile ? (
@@ -417,9 +444,21 @@ export default function BacktestTaskDetailPage() {
           open={Boolean(anchorEl)}
           onClose={handleMenuClose}
         >
-          {canStart && <MenuItem onClick={handleStart}>Start</MenuItem>}
-          {canStop && <MenuItem onClick={handleStop}>Stop</MenuItem>}
-          <MenuItem onClick={handleRerun}>Rerun</MenuItem>
+          {canStart && (
+            <MenuItem onClick={handleStart} disabled={isTransitioning}>
+              Start
+            </MenuItem>
+          )}
+          {canStop && (
+            <MenuItem onClick={handleStop} disabled={isTransitioning}>
+              Stop
+            </MenuItem>
+          )}
+          {canRerun && (
+            <MenuItem onClick={handleRerun} disabled={isTransitioning}>
+              Rerun
+            </MenuItem>
+          )}
           <MenuItem onClick={handleCopy}>Copy</MenuItem>
           {canEdit && <MenuItem onClick={handleEdit}>Edit</MenuItem>}
           {canDelete && (

@@ -33,8 +33,6 @@ export interface TaskResults {
 
   has_metrics: boolean;
   metrics?: ExecutionMetrics | null;
-
-  equity_curve_granularity_seconds?: number | null;
 }
 
 export interface TaskEquityCurveResponse {

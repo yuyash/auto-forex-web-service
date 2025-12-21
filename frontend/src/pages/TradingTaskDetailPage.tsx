@@ -97,16 +97,21 @@ export default function TradingTaskDetailPage() {
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
   const [restartDialogOpen, setRestartDialogOpen] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
   const { strategies } = useStrategies();
 
   // Use HTTP polling for task status updates (Requirements 1.2, 1.3, 4.3, 4.4)
-  const { status: polledStatus } = useTaskPolling(taskId, 'trading', {
-    enabled: !!taskId,
-    pollStatus: true,
-    interval: 3000, // Poll every 3 seconds for active tasks
-  });
+  const { status: polledStatus, refetch: refetchPolledStatus } = useTaskPolling(
+    taskId,
+    'trading',
+    {
+      enabled: !!taskId,
+      pollStatus: true,
+      interval: 3000, // Poll every 3 seconds for active tasks
+    }
+  );
 
   // Refetch when status changes
   const prevStatusRef = useRef<string | undefined>(undefined);
@@ -201,15 +206,17 @@ export default function TradingTaskDetailPage() {
       taskName: task?.name,
     });
     try {
+      setActionError(null);
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
       const result = await startTask.mutate(taskId);
       console.log('[TradingTask] Start task response:', result);
       await refetch(); // Force immediate refetch to show updated status
+      refetchPolledStatus();
       invalidateTradingExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch (error) {
       console.error('[TradingTask] Failed to start task:', error);
-      // Error handled by mutation hook
+      setActionError((error as Error).message);
     } finally {
       setIsTransitioning(false);
     }
@@ -221,14 +228,17 @@ export default function TradingTaskDetailPage() {
       taskName: task?.name,
     });
     try {
+      setActionError(null);
       setIsTransitioning(true);
       const result = await resumeTask.mutate(taskId);
       console.log('[TradingTask] Resume task response:', result);
       await refetch();
+      refetchPolledStatus();
       invalidateTradingExecutions(taskId);
       handleMenuClose();
     } catch (error) {
       console.error('[TradingTask] Failed to resume task:', error);
+      setActionError((error as Error).message);
     } finally {
       setIsTransitioning(false);
     }
@@ -246,14 +256,17 @@ export default function TradingTaskDetailPage() {
       clearState,
     });
     try {
+      setActionError(null);
       setIsTransitioning(true);
       const result = await restartTask.mutate({ id: taskId, clearState });
       console.log('[TradingTask] Restart task response:', result);
       await refetch();
+      refetchPolledStatus();
       invalidateTradingExecutions(taskId);
       setRestartDialogOpen(false);
     } catch (error) {
       console.error('[TradingTask] Failed to restart task:', error);
+      setActionError((error as Error).message);
     } finally {
       setIsTransitioning(false);
     }
@@ -265,16 +278,18 @@ export default function TradingTaskDetailPage() {
       taskName: task?.name,
     });
     try {
+      setActionError(null);
       setIsTransitioning(true); // Optimistic update (Requirement 3.1)
       const result = await rerunTask.mutate(taskId);
       console.log('[TradingTask] Rerun task response:', result);
       // Force immediate refetch after mutation completes
       await refetch();
+      refetchPolledStatus();
       invalidateTradingExecutions(taskId); // Refresh executions list
       handleMenuClose();
     } catch (error) {
       console.error('[TradingTask] Failed to rerun task:', error);
-      // Error handled by mutation hook
+      setActionError((error as Error).message);
     } finally {
       setIsTransitioning(false);
     }
@@ -326,15 +341,17 @@ export default function TradingTaskDetailPage() {
       stopMode: option,
     });
     try {
+      setActionError(null);
       setIsTransitioning(true);
       const result = await stopTask.mutate({ id: taskId, mode: option });
       console.log('[TradingTask] Stop task response:', result);
       await refetch(); // Force immediate refetch to show updated status
+      refetchPolledStatus();
       invalidateTradingExecutions(taskId); // Refresh executions list
       setStopDialogOpen(false);
     } catch (error) {
       console.error('[TradingTask] Failed to stop task:', error);
-      // Error handled by mutation hook
+      setActionError((error as Error).message);
     } finally {
       setIsTransitioning(false);
     }
@@ -377,6 +394,18 @@ export default function TradingTaskDetailPage() {
     polledStatus && polledStatus.status !== task.status
       ? polledStatus.status
       : task.status;
+
+  const canStart = currentStatus === TaskStatus.CREATED;
+  const canResume = Boolean(task.can_resume);
+  const canRestart =
+    currentStatus === TaskStatus.STOPPED ||
+    currentStatus === TaskStatus.PAUSED ||
+    currentStatus === TaskStatus.FAILED;
+  const canRerun =
+    (currentStatus === TaskStatus.COMPLETED ||
+      currentStatus === TaskStatus.FAILED) &&
+    !canResume &&
+    !canRestart;
 
   const canStop =
     currentStatus === TaskStatus.RUNNING || currentStatus === TaskStatus.PAUSED;
@@ -449,6 +478,18 @@ export default function TradingTaskDetailPage() {
                 {task.description}
               </Typography>
             )}
+
+            {actionError && (
+              <Box sx={{ mt: 2 }}>
+                <Alert
+                  severity="error"
+                  onClose={() => setActionError(null)}
+                  aria-label="Task action error"
+                >
+                  {actionError}
+                </Alert>
+              </Box>
+            )}
           </Box>
 
           {isMobile ? (
@@ -499,25 +540,39 @@ export default function TradingTaskDetailPage() {
           open={Boolean(anchorEl)}
           onClose={handleMenuClose}
         >
-          {currentStatus === TaskStatus.CREATED && (
-            <MenuItem onClick={handleStart}>Start</MenuItem>
+          {canStart && (
+            <MenuItem onClick={handleStart} disabled={isTransitioning}>
+              Start
+            </MenuItem>
           )}
-          {task.can_resume && (
-            <MenuItem onClick={handleResume}>Resume</MenuItem>
+          {canResume && (
+            <MenuItem onClick={handleResume} disabled={isTransitioning}>
+              Resume
+            </MenuItem>
           )}
-          {(currentStatus === TaskStatus.STOPPED ||
-            currentStatus === TaskStatus.PAUSED ||
-            currentStatus === TaskStatus.FAILED) && (
-            <MenuItem onClick={handleRestart} sx={{ color: 'warning.main' }}>
+          {canRestart && (
+            <MenuItem
+              onClick={handleRestart}
+              sx={{ color: 'warning.main' }}
+              disabled={isTransitioning}
+            >
               Restart
             </MenuItem>
           )}
           {canStop && (
-            <MenuItem onClick={handleStop} sx={{ color: 'error.main' }}>
+            <MenuItem
+              onClick={handleStop}
+              sx={{ color: 'error.main' }}
+              disabled={isTransitioning}
+            >
               Stop
             </MenuItem>
           )}
-          <MenuItem onClick={handleRerun}>Rerun</MenuItem>
+          {canRerun && (
+            <MenuItem onClick={handleRerun} disabled={isTransitioning}>
+              Rerun
+            </MenuItem>
+          )}
           <MenuItem onClick={handleCopy}>Copy</MenuItem>
           {canEdit && <MenuItem onClick={handleEdit}>Edit</MenuItem>}
           {canDelete && (

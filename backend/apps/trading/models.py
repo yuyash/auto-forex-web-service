@@ -1005,17 +1005,26 @@ class ExecutionMetrics(models.Model):
             self.trade_log = []
             return
 
+        def _trade_pnl(t: dict[str, Any]) -> Decimal:
+            direct = t.get("pnl")
+            if direct is not None:
+                return Decimal(str(direct))
+            details_raw = t.get("details")
+            if isinstance(details_raw, dict) and details_raw.get("pnl") is not None:
+                return Decimal(str(details_raw.get("pnl")))
+            return Decimal("0")
+
         # Calculate basic statistics
         self.total_trades = len(trades)
-        self.total_pnl = sum(Decimal(str(trade.get("pnl", 0))) for trade in trades)
+        self.total_pnl = sum((_trade_pnl(trade) for trade in trades), Decimal("0"))
 
         # Calculate realized P&L (from closed trades with exit_time)
         closed_trades = [t for t in trades if t.get("exit_time")]
-        self.realized_pnl = sum(Decimal(str(t.get("pnl", 0))) for t in closed_trades)
+        self.realized_pnl = sum((_trade_pnl(t) for t in closed_trades), Decimal("0"))
 
         # Calculate unrealized P&L (from open positions without exit_time)
         open_trades = [t for t in trades if not t.get("exit_time")]
-        self.unrealized_pnl = sum(Decimal(str(t.get("pnl", 0))) for t in open_trades)
+        self.unrealized_pnl = sum((_trade_pnl(t) for t in open_trades), Decimal("0"))
 
         # Calculate return percentage
         if initial_balance > 0:
@@ -1024,8 +1033,8 @@ class ExecutionMetrics(models.Model):
             self.total_return = Decimal("0")
 
         # Calculate win/loss statistics
-        winning = [t for t in trades if Decimal(str(t.get("pnl", 0))) > 0]
-        losing = [t for t in trades if Decimal(str(t.get("pnl", 0))) < 0]
+        winning = [t for t in trades if _trade_pnl(t) > 0]
+        losing = [t for t in trades if _trade_pnl(t) < 0]
 
         self.winning_trades = len(winning)
         self.losing_trades = len(losing)
@@ -1039,20 +1048,20 @@ class ExecutionMetrics(models.Model):
 
         # Calculate average win/loss
         if winning:
-            total_wins = sum(Decimal(str(t.get("pnl", 0))) for t in winning)
+            total_wins = sum((_trade_pnl(t) for t in winning), Decimal("0"))
             self.average_win = total_wins / Decimal(len(winning))
         else:
             self.average_win = Decimal("0")
 
         if losing:
-            total_losses = sum(Decimal(str(t.get("pnl", 0))) for t in losing)
+            total_losses = sum((_trade_pnl(t) for t in losing), Decimal("0"))
             self.average_loss = total_losses / Decimal(len(losing))
         else:
             self.average_loss = Decimal("0")
 
         # Calculate profit factor
-        gross_profit = sum((Decimal(str(t.get("pnl", 0))) for t in winning), Decimal("0"))
-        gross_loss = abs(sum((Decimal(str(t.get("pnl", 0))) for t in losing), Decimal("0")))
+        gross_profit = sum((_trade_pnl(t) for t in winning), Decimal("0"))
+        gross_loss = abs(sum((_trade_pnl(t) for t in losing), Decimal("0")))
 
         if gross_loss > Decimal("0"):
             self.profit_factor = gross_profit / gross_loss
@@ -1095,7 +1104,7 @@ class ExecutionMetrics(models.Model):
         equity_points = [{"timestamp": initial_ts, "balance": float(balance)}]
 
         for trade in trades:
-            balance += Decimal(str(trade.get("pnl", 0)))
+            balance += _trade_pnl(trade)
             point_ts = (
                 _to_iso(trade.get("exit_time"))
                 or _to_iso(trade.get("entry_time"))
@@ -1128,7 +1137,7 @@ class ExecutionMetrics(models.Model):
 
         # Calculate Sharpe ratio (simplified version)
         if len(trades) > 1:
-            returns = [Decimal(str(t.get("pnl", 0))) for t in trades]
+            returns = [_trade_pnl(t) for t in trades]
             mean_return = sum(returns) / Decimal(len(returns))
 
             # Calculate variance

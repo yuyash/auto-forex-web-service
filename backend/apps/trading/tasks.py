@@ -83,6 +83,50 @@ def _format_strategy_event(*, event: dict[str, Any], tick_ts: str | None = None)
     return f"{prefix}strategy_event type={e_type} details={_safe_json(details)}"
 
 
+def _extract_trade_from_strategy_event(event: dict[str, Any]) -> dict[str, Any] | None:
+    """Extract a completed trade record from a strategy event.
+
+    ExecutionMetrics.calculate_from_trades expects each item to include a usable `pnl`.
+    For the floor strategy, completed trades are represented by `type == 'close'` events
+    with pnl embedded in `details`.
+    """
+    if not isinstance(event, dict):
+        return None
+
+    # Already in trade-log shape (some strategies may emit this directly).
+    if event.get("pnl") is not None and (event.get("exit_time") or event.get("timestamp")):
+        return event
+
+    e_type = str(event.get("type") or "")
+    if e_type != "close":
+        return None
+
+    details_raw = event.get("details")
+    details: dict[str, Any] = details_raw if isinstance(details_raw, dict) else {}
+
+    pnl = details.get("pnl")
+    if pnl is None:
+        return None
+
+    # Prefer explicit entry/exit times. Fall back to event timestamp.
+    ts = event.get("timestamp")
+    entry_time = details.get("entry_time") or ts
+    exit_time = details.get("exit_time") or ts
+
+    return {
+        "entry_time": entry_time,
+        "exit_time": exit_time,
+        "instrument": details.get("instrument"),
+        "direction": details.get("direction"),
+        "units": details.get("units"),
+        "entry_price": details.get("entry_price"),
+        "exit_price": details.get("exit_price"),
+        "pnl": pnl,
+        "pips": details.get("pips"),
+        "reason": details.get("reason"),
+    }
+
+
 def _current_task_id() -> str | None:
     try:
         return str(getattr(getattr(current_task, "request", None), "id", None) or "") or None
@@ -435,7 +479,10 @@ def run_trading_task(task_id: int) -> None:
             state, events = strategy.on_tick(tick=tick, state=state)
             if events:
                 strategy_events.extend(events)
-                trade_log.extend([e for e in events if e.get("type") in {"open", "close"}])
+                for e in events:
+                    trade = _extract_trade_from_strategy_event(e)
+                    if trade is not None:
+                        trade_log.append(trade)
                 for e in events:
                     e_type = str(e.get("type") or "")
 
@@ -1070,7 +1117,10 @@ def run_backtest_task(task_id: int) -> None:
                 ]
 
                 strategy_events.extend(enriched_events)
-                trade_log.extend([e for e in enriched_events if e.get("type") in {"open", "close"}])
+                for e in enriched_events:
+                    trade = _extract_trade_from_strategy_event(e)
+                    if trade is not None:
+                        trade_log.append(trade)
                 for e in enriched_events:
                     e_type = str(e.get("type") or "")
 
