@@ -53,6 +53,8 @@ export const MarkerTooltip: React.FC<MarkerTooltipProps> = ({
     }
   };
 
+  const markerColor = marker.color || getMarkerColor(marker.type);
+
   return (
     <Paper
       sx={{
@@ -63,7 +65,7 @@ export const MarkerTooltip: React.FC<MarkerTooltipProps> = ({
         pointerEvents: 'none',
         maxWidth: 300,
         boxShadow: 3,
-        border: `2px solid ${getMarkerColor(marker.type)}`,
+        border: `2px solid ${markerColor}`,
       }}
     >
       <Box sx={{ p: 1.5 }}>
@@ -71,7 +73,7 @@ export const MarkerTooltip: React.FC<MarkerTooltipProps> = ({
           variant="subtitle2"
           sx={{
             fontWeight: 'bold',
-            color: getMarkerColor(marker.type),
+            color: markerColor,
             mb: 0.5,
           }}
         >

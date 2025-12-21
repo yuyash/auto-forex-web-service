@@ -13,6 +13,8 @@ from typing import Any, Type, cast
 
 from django.conf import settings
 from django.db.models import Model, Q, QuerySet
+from datetime import timedelta
+
 from django.utils import timezone
 
 from rest_framework import serializers as drf_serializers
@@ -1373,7 +1375,18 @@ class BacktestTaskStatusView(APIView):
                 TaskStatus.STOPPED,
             ]
 
-            if execution_completed and is_stale:
+            # When a task is (re)started, there's a short window where:
+            # - DB status is RUNNING (set by /start/)
+            # - The new TaskExecution isn't created yet (created by Celery)
+            # - The Celery lock isn't acquired yet
+            # Treat that as "pending new execution" rather than "stale".
+            grace_period_seconds = 30
+            recently_updated = (
+                task.updated_at is not None
+                and timezone.now() - task.updated_at < timedelta(seconds=grace_period_seconds)
+            )
+
+            if execution_completed and is_stale and not recently_updated:
                 logger.warning(
                     "Detected stale task %d (execution_status=%s, is_stale=%s), auto-completing",
                     task_id,
@@ -1653,7 +1666,6 @@ class BacktestTaskResultsView(APIView):
         latest_execution = task.get_latest_execution()
         execution_payload = None
         metrics_payload = None
-        equity_curve_granularity_seconds = None
 
         if latest_execution:
             execution_payload = {
@@ -1676,7 +1688,6 @@ class BacktestTaskResultsView(APIView):
                 from apps.trading.serializers import ExecutionMetricsSummarySerializer
 
                 metrics_payload = ExecutionMetricsSummarySerializer(latest_execution.metrics).data
-                equity_curve_granularity_seconds = None
 
         live = LivePerformanceService.get_backtest_intermediate_results(task_id)
         has_live = live is not None
@@ -1691,7 +1702,6 @@ class BacktestTaskResultsView(APIView):
                 "has_metrics": has_metrics,
                 "metrics": metrics_payload,
                 "execution": execution_payload,
-                "equity_curve_granularity_seconds": equity_curve_granularity_seconds,
             },
             status=status.HTTP_200_OK,
         )
@@ -1898,7 +1908,6 @@ class TradingTaskResultsView(APIView):
         latest_execution = task.get_latest_execution()
         execution_payload = None
         metrics_payload = None
-        equity_curve_granularity_seconds = None
 
         if latest_execution:
             execution_payload = {
@@ -1921,7 +1930,6 @@ class TradingTaskResultsView(APIView):
                 from apps.trading.serializers import ExecutionMetricsSummarySerializer
 
                 metrics_payload = ExecutionMetricsSummarySerializer(latest_execution.metrics).data
-                equity_curve_granularity_seconds = None
 
         live = LivePerformanceService.get_trading_intermediate_results(task_id)
         has_live = live is not None
@@ -1936,7 +1944,6 @@ class TradingTaskResultsView(APIView):
                 "has_metrics": has_metrics,
                 "metrics": metrics_payload,
                 "execution": execution_payload,
-                "equity_curve_granularity_seconds": equity_curve_granularity_seconds,
             },
             status=status.HTTP_200_OK,
         )

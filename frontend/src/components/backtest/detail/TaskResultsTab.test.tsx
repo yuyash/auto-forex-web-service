@@ -197,6 +197,9 @@ describe('TaskResultsTab Integration', () => {
       execution_id: 1,
       has_metrics: true,
       trade_logs: mockTrades,
+      count: mockTrades.length,
+      next: null,
+      previous: null,
     });
 
     vi.mocked(backtestTasksApi.getStrategyEvents).mockResolvedValue({
@@ -205,6 +208,9 @@ describe('TaskResultsTab Integration', () => {
       execution_id: 1,
       has_metrics: true,
       strategy_events: [],
+      count: 0,
+      next: null,
+      previous: null,
     });
   });
 
@@ -252,6 +258,9 @@ describe('TaskResultsTab Integration', () => {
           realized_pnl: undefined as unknown as number,
         } as unknown as Trade,
       ],
+      count: 1,
+      next: null,
+      previous: null,
     });
 
     renderWithProviders(

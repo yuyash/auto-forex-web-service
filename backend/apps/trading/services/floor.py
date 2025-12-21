@@ -88,6 +88,10 @@ class FloorStrategyState:
     status: StrategyStatus = StrategyStatus.RUNNING
     initialized: bool = False
 
+    # Track the start of a "trade cycle" so we can emit entry/exit times
+    # when the strategy closes all layers.
+    cycle_entry_time: str | None = None
+
     ticks_seen: int = 0
     price_history: list[Decimal] = field(default_factory=list)
 
@@ -103,6 +107,7 @@ class FloorStrategyState:
         return {
             "status": str(self.status),
             "initialized": bool(self.initialized),
+            "cycle_entry_time": self.cycle_entry_time,
             "ticks_seen": int(self.ticks_seen),
             "price_history": [str(x) for x in self.price_history],
             "active_layers": [
@@ -165,9 +170,13 @@ class FloorStrategyState:
         last_bid = _to_decimal(raw.get("last_bid"))
         last_ask = _to_decimal(raw.get("last_ask"))
 
+        cycle_entry_time_raw = raw.get("cycle_entry_time")
+        cycle_entry_time = str(cycle_entry_time_raw) if cycle_entry_time_raw else None
+
         return FloorStrategyState(
             status=status,
             initialized=bool(raw.get("initialized") or False),
+            cycle_entry_time=cycle_entry_time,
             ticks_seen=int(raw.get("ticks_seen") or 0),
             price_history=history,
             active_layers=layers,
@@ -590,6 +599,7 @@ class FloorStrategyService(Strategy):
 
         # Initial entry
         if not s.initialized and s.ticks_seen >= self.config.entry_signal_lookback_ticks:
+            tick_ts = str(tick.get("timestamp") or "")
             direction = self._decide_direction(s.price_history)
             entry_price = ask if direction == Direction.LONG else bid
             layer = LayerState(
@@ -600,6 +610,8 @@ class FloorStrategyService(Strategy):
             )
             s.active_layers = [layer]
             s.initialized = True
+            if tick_ts:
+                s.cycle_entry_time = tick_ts
             events.append(
                 StrategyEvent(
                     type="open",
@@ -620,12 +632,48 @@ class FloorStrategyService(Strategy):
         # Take profit check (close all)
         total_pips = self._net_pips(s.active_layers, bid=bid, ask=ask)
         if total_pips >= self.config.take_profit_pips:
+            # Compute realized P&L in quote currency using current bid/ask.
+            # Assumption: lot_size is treated as units.
+            exit_ts = str(tick.get("timestamp") or "")
+            cycle_entry_time = s.cycle_entry_time
+
+            total_units = sum((l.lot_size for l in s.active_layers), Decimal("0"))
+            weighted_entry = Decimal("0")
+            if total_units > 0:
+                weighted_entry = (
+                    sum(
+                        (l.entry_price * l.lot_size for l in s.active_layers if l.lot_size > 0),
+                        Decimal("0"),
+                    )
+                    / total_units
+                )
+
+            # Strategy models a single direction per cycle (layers inherit direction).
+            overall_direction = s.active_layers[0].direction if s.active_layers else Direction.LONG
+            exit_price = bid if overall_direction == Direction.LONG else ask
+
+            total_pnl = Decimal("0")
+            for l in s.active_layers:
+                if l.lot_size <= 0:
+                    continue
+                if l.direction == Direction.LONG:
+                    total_pnl += (bid - l.entry_price) * l.lot_size
+                else:
+                    total_pnl += (l.entry_price - ask) * l.lot_size
+
             events.append(
                 StrategyEvent(
                     type="close",
                     details={
                         "reason": "take_profit",
                         "pips": str(total_pips),
+                        "pnl": str(total_pnl),
+                        "entry_time": cycle_entry_time,
+                        "exit_time": exit_ts or None,
+                        "direction": str(overall_direction),
+                        "units": str(total_units) if total_units > 0 else None,
+                        "entry_price": str(weighted_entry) if total_units > 0 else None,
+                        "exit_price": str(exit_price),
                         "instrument": self.config.instrument,
                     },
                 )
@@ -633,6 +681,7 @@ class FloorStrategyService(Strategy):
             events.append(StrategyEvent(type="take_profit_hit", details={"pips": str(total_pips)}))
             s.active_layers = []
             s.initialized = False
+            s.cycle_entry_time = None
             return s.to_dict(), [e.to_dict() for e in events]
 
         # Retracement logic per layer

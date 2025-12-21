@@ -64,3 +64,35 @@ def test_floor_strategy_does_not_open_multiple_retracements_at_same_price(monkey
     entry_price = Decimal(str(active_layers[0]["entry_price"]))
     assert entry_price == Decimal("99.85")
     assert int(active_layers[0]["retracements"]) == 1
+
+
+def test_floor_strategy_close_event_includes_pnl(monkeypatch):
+    monkeypatch.setattr(
+        "apps.trading.services.floor.get_pip_size",
+        lambda *, instrument: Decimal("0.01"),
+    )
+    # Make take-profit easy to hit.
+    svc = FloorStrategyService(_base_config(take_profit_pips=Decimal("1")))
+    state: dict[str, object] = {}
+
+    # Tick 1 opens initial long at 100.00 (direction defaults to LONG with short history).
+    state, events = svc.on_tick(
+        tick={"bid": "100.00", "ask": "100.00", "timestamp": "2025-12-21T00:00:00Z"},
+        state=state,
+    )
+    assert any(e["type"] == "open" for e in events)
+
+    # Tick 2 moves into profit enough to trigger close.
+    state, events = svc.on_tick(
+        tick={"bid": "100.50", "ask": "100.50", "timestamp": "2025-12-21T00:01:00Z"},
+        state=state,
+    )
+    close_events = [e for e in events if e["type"] == "close"]
+    assert len(close_events) == 1
+
+    details = close_events[0].get("details")
+    assert isinstance(details, dict)
+    assert details.get("pnl") is not None
+    assert Decimal(str(details.get("pnl"))) > 0
+    assert details.get("entry_time") == "2025-12-21T00:00:00Z"
+    assert details.get("exit_time") == "2025-12-21T00:01:00Z"

@@ -160,7 +160,6 @@ describe('TaskPerformanceTab Integration Tests', () => {
       ],
       created_at: '2024-01-01T00:00:00Z',
     },
-    equity_curve_granularity_seconds: null,
   };
 
   beforeEach(() => {
@@ -172,6 +171,9 @@ describe('TaskPerformanceTab Integration Tests', () => {
       execution_id: 1,
       has_metrics: true,
       equity_curve: mockResults.metrics?.equity_curve ?? [],
+      count: mockResults.metrics?.equity_curve?.length ?? 0,
+      next: null,
+      previous: null,
       equity_curve_granularity_seconds: null,
     });
 
@@ -181,6 +183,9 @@ describe('TaskPerformanceTab Integration Tests', () => {
       execution_id: 1,
       has_metrics: true,
       trade_logs: mockResults.metrics?.trade_log ?? [],
+      count: mockResults.metrics?.trade_log?.length ?? 0,
+      next: null,
+      previous: null,
     });
 
     vi.mocked(tradingTasksApi.getStrategyEvents).mockResolvedValue({
@@ -189,6 +194,9 @@ describe('TaskPerformanceTab Integration Tests', () => {
       execution_id: 1,
       has_metrics: true,
       strategy_events: [],
+      count: 0,
+      next: null,
+      previous: null,
     });
 
     vi.mocked(useTradingResults).mockReturnValue({

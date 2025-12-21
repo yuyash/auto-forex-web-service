@@ -185,7 +185,48 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
       ''
   );
 
-  const direction = details.direction as string | undefined;
+  const description =
+    (typeof event.description === 'string' && event.description) ||
+    (typeof raw.description === 'string' && raw.description) ||
+    '';
+
+  const normalizeDirection = (value: unknown): 'long' | 'short' | undefined => {
+    if (typeof value !== 'string') return undefined;
+    const normalized = value.toLowerCase();
+    if (normalized === 'long' || normalized === 'short') return normalized;
+    return undefined;
+  };
+
+  const directionFromDetails = normalizeDirection(details.direction);
+  const directionFromRaw = normalizeDirection(raw.direction);
+  const directionFromDescription = /\bshort\b/i.test(description)
+    ? 'short'
+    : /\blong\b/i.test(description)
+      ? 'long'
+      : undefined;
+
+  const unitsRaw = details.units ?? details.lot_size;
+  const unitsNum =
+    typeof unitsRaw === 'number'
+      ? unitsRaw
+      : typeof unitsRaw === 'string'
+        ? Number(unitsRaw)
+        : undefined;
+  const directionFromUnits =
+    typeof unitsNum === 'number' && Number.isFinite(unitsNum)
+      ? unitsNum < 0
+        ? 'short'
+        : unitsNum > 0
+          ? 'long'
+          : undefined
+      : undefined;
+
+  const inferredDirection =
+    directionFromDetails ??
+    directionFromRaw ??
+    directionFromDescription ??
+    directionFromUnits;
+  const isShort = inferredDirection === 'short';
   const retracementOpen = Boolean(details.retracement_open);
   const units = formatUnits(details.units ?? details.lot_size);
   const layerNumber = details.layer_number ?? details.layer;
@@ -196,11 +237,25 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
     // Frontend event names
     case 'initial_entry':
     case 'retracement': {
-      const isLong = direction === 'long';
       const isRetracement = eventType === 'retracement' || retracementOpen;
 
+      // Preserve the semantic event type for initial entry, but render direction
+      // via shape/color/label.
+      if (eventType === 'initial_entry') {
+        return {
+          type: 'initial_entry',
+          color: isShort ? COLORS.SHORT : COLORS.LONG_INITIAL,
+          shape: isShort ? 'triangleDown' : 'triangleUp',
+          label: units
+            ? `${isShort ? 'S' : 'L'} ${units}`
+            : isShort
+              ? 'Short (Initial)'
+              : 'Long (Initial)',
+        };
+      }
+
       // Short entries always render as "Short" markers (pink inverted triangle)
-      if (!isLong) {
+      if (isShort) {
         return {
           type: 'sell',
           color: COLORS.SHORT,
