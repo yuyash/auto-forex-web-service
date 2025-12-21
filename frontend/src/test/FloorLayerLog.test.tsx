@@ -57,7 +57,7 @@ describe('FloorLayerLog Component', () => {
       },
     },
     {
-      event_type: 'scale_in',
+      event_type: 'retracement',
       timestamp: '2024-01-15T10:30:00Z',
       description: 'Retracement LONG entry @ 149.30000',
       details: {

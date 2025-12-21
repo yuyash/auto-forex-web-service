@@ -17,7 +17,7 @@ import { useToast } from '../common/useToast';
 
 interface StrategyDefaultSettings {
   default_lot_size: number;
-  default_scaling_mode: string;
+  default_retracement_lot_mode: string;
   default_retracement_pips: number;
   default_take_profit_pips: number;
 }
@@ -31,7 +31,7 @@ const StrategyDefaults = () => {
   const [submitting, setSubmitting] = useState(false);
   const [settings, setSettings] = useState<StrategyDefaultSettings>({
     default_lot_size: 1.0,
-    default_scaling_mode: 'additive',
+    default_retracement_lot_mode: 'additive',
     default_retracement_pips: 30,
     default_take_profit_pips: 25,
   });
@@ -54,11 +54,26 @@ const StrategyDefaults = () => {
       }
 
       const data = await response.json();
+
+      // Backend currently returns { user, settings } where settings.settings_json stores
+      // strategy defaults. Tests and some older clients expect a flat object.
+      const flat =
+        data && typeof data === 'object' && 'settings' in data
+          ? ((data.settings?.settings_json as
+              | Record<string, unknown>
+              | undefined) ?? {})
+          : (data as Record<string, unknown>);
+
+      const mode =
+        (flat.default_retracement_lot_mode as string | undefined) ?? 'additive';
+
       setSettings({
-        default_lot_size: data.default_lot_size ?? 1.0,
-        default_scaling_mode: data.default_scaling_mode ?? 'additive',
-        default_retracement_pips: data.default_retracement_pips ?? 30,
-        default_take_profit_pips: data.default_take_profit_pips ?? 25,
+        default_lot_size: (flat.default_lot_size as number | undefined) ?? 1.0,
+        default_retracement_lot_mode: mode,
+        default_retracement_pips:
+          (flat.default_retracement_pips as number | undefined) ?? 30,
+        default_take_profit_pips:
+          (flat.default_take_profit_pips as number | undefined) ?? 25,
       });
     } catch (error) {
       console.error('Error fetching settings:', error);
@@ -114,13 +129,24 @@ const StrategyDefaults = () => {
     setSubmitting(true);
 
     try {
+      // Server expects settings_json inside the user settings object; send both the new key
+      // and the legacy one for safe compatibility.
+      const payload = {
+        settings_json: {
+          default_lot_size: settings.default_lot_size,
+          default_retracement_lot_mode: settings.default_retracement_lot_mode,
+          default_retracement_pips: settings.default_retracement_pips,
+          default_take_profit_pips: settings.default_take_profit_pips,
+        },
+      };
+
       const response = await fetch('/api/settings', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -155,8 +181,8 @@ const StrategyDefaults = () => {
   };
 
   // Handle retracement mode change
-  const handleScalingModeChange = (value: string) => {
-    setSettings({ ...settings, default_scaling_mode: value });
+  const handleRetracementLotModeChange = (value: string) => {
+    setSettings({ ...settings, default_retracement_lot_mode: value });
   };
 
   // Handle retracement pips change
@@ -217,20 +243,20 @@ const StrategyDefaults = () => {
 
         {/* Default Retracement Mode */}
         <FormControl fullWidth margin="normal">
-          <InputLabel id="scaling-mode-label">
+          <InputLabel id="retracement-lot-mode-label">
             {t(
               'settings:strategyDefaults.defaultScalingMode',
               'Default Retracement Mode'
             )}
           </InputLabel>
           <Select
-            labelId="scaling-mode-label"
-            value={settings.default_scaling_mode}
+            labelId="retracement-lot-mode-label"
+            value={settings.default_retracement_lot_mode}
             label={t(
               'settings:strategyDefaults.defaultScalingMode',
               'Default Retracement Mode'
             )}
-            onChange={(e) => handleScalingModeChange(e.target.value)}
+            onChange={(e) => handleRetracementLotModeChange(e.target.value)}
           >
             <MenuItem value="additive">Additive</MenuItem>
             <MenuItem value="multiplicative">Multiplicative</MenuItem>

@@ -240,6 +240,7 @@ class OandaService:
         self.retry_delay = 0.5  # seconds
         self.compliance_manager = ComplianceService(account)
         self.event_service = MarketEventService()
+        self._account_resource_cache: Optional[Dict[str, Any]] = None
 
         logger.info(
             "OANDA service initialized (account_id=%s, api_hostname=%s, stream_hostname=%s)",
@@ -258,6 +259,88 @@ class OandaService:
         if host.startswith("api-"):
             return "stream-" + host[len("api-") :]
         return host
+
+    @staticmethod
+    def _make_jsonable(value: Any) -> Any:
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+
+        if isinstance(value, Decimal):
+            return str(value)
+
+        if isinstance(value, datetime):
+            return value.isoformat()
+
+        if isinstance(value, dict):
+            return {str(k): OandaService._make_jsonable(v) for k, v in value.items()}
+
+        if isinstance(value, (list, tuple, set)):
+            return [OandaService._make_jsonable(v) for v in value]
+
+        return str(value)
+
+    @staticmethod
+    def make_jsonable(value: Any) -> Any:
+        return OandaService._make_jsonable(value)
+
+    @staticmethod
+    def _account_object_to_dict(account_data: Any) -> Dict[str, Any]:
+        if account_data is None:
+            return {}
+
+        if isinstance(account_data, dict):
+            return account_data
+
+        properties = getattr(account_data, "_properties", None)
+        if isinstance(properties, dict):
+            return dict(properties)
+
+        as_dict = getattr(account_data, "dict", None)
+        if callable(as_dict):
+            try:
+                maybe_dict = as_dict()
+                if isinstance(maybe_dict, dict):
+                    return maybe_dict
+            except Exception:
+                pass
+
+        try:
+            return dict(vars(account_data))
+        except Exception:
+            return {"value": str(account_data)}
+
+    def get_account_resource(self, *, refresh: bool = False) -> Dict[str, Any]:
+        """Fetch the raw OANDA account resource as a dict.
+
+        This is used to expose broker flags/parameters (e.g. `hedgingEnabled`) and
+        to avoid repeated network calls by caching within this service instance.
+        """
+
+        if not refresh and self._account_resource_cache is not None:
+            return self._account_resource_cache
+
+        try:
+            response = self.api.account.get(self.account.account_id)
+            if response.status != 200:
+                raise OandaAPIError(f"Failed to fetch account resource: status {response.status}")
+
+            body = getattr(response, "body", {})
+            if hasattr(body, "get"):
+                account_data = body.get("account")
+            else:
+                account_data = getattr(body, "account", None)
+
+            account_resource = self._account_object_to_dict(account_data)
+            self._account_resource_cache = account_resource
+            return account_resource
+        except Exception as e:
+            logger.error(
+                "Error fetching account resource for %s: %s",
+                self.account.account_id,
+                str(e),
+                exc_info=True,
+            )
+            raise OandaAPIError(f"Error fetching account resource: {str(e)}") from e
 
     def cancel_order(self, order: Order) -> CancelledOrder:
         try:
@@ -707,25 +790,10 @@ class OandaService:
             OandaAPIError: If API call fails
         """
         try:
-            response = self.api.account.get(self.account.account_id)
-            if response.status != 200:
-                raise OandaAPIError(f"Failed to fetch account details: status {response.status}")
-
-            # Depending on v20 response parsing, `account` may be either a dict
-            # or a v20 account object with attributes (e.g. `balance`, `NAV`).
-            body = getattr(response, "body", {})
-            if hasattr(body, "get"):
-                account_data = body.get("account")
-            else:
-                account_data = getattr(body, "account", None)
+            account_data = self.get_account_resource()
 
             def _read(key: str, default: Any) -> Any:
-                if account_data is None:
-                    return default
-                if isinstance(account_data, dict):
-                    value = account_data.get(key, default)
-                else:
-                    value = getattr(account_data, key, default)
+                value = account_data.get(key, default)
                 return default if value is None else value
 
             return AccountDetails(
@@ -750,6 +818,35 @@ class OandaService:
                 exc_info=True,
             )
             raise OandaAPIError(f"Error fetching account details: {str(e)}") from e
+
+    def get_account_hedging_enabled(self) -> bool:
+        """Return whether the OANDA account has hedging enabled.
+
+        OANDA v20 exposes this as the boolean field `hedgingEnabled` on the
+        account resource. In common OANDA configurations:
+        - `True`  => hedging mode (multiple trades can exist per instrument)
+        - `False` => netting mode (positions are effectively aggregated per instrument)
+
+        Raises:
+            OandaAPIError: If the API call fails
+        """
+
+        try:
+            account_data = self.get_account_resource()
+            return bool(account_data.get("hedgingEnabled", False))
+        except Exception as e:
+            logger.error(
+                "Error fetching account hedging mode for %s: %s",
+                self.account.account_id,
+                str(e),
+                exc_info=True,
+            )
+            raise OandaAPIError(f"Error fetching account configuration: {str(e)}") from e
+
+    def get_account_position_mode(self) -> str:
+        """Return `hedging` or `netting` based on the account configuration."""
+
+        return "hedging" if self.get_account_hedging_enabled() else "netting"
 
     def get_open_positions(self, instrument: Optional[str] = None) -> List[Position]:
         """

@@ -20,7 +20,7 @@ const mockActiveStatus: StrategyStatus = {
   strategy_type: 'floor',
   config: {
     base_lot_size: 1.0,
-    scaling_mode: 'additive',
+    retracement_lot_mode: 'additive',
   },
   instrument: 'EUR_USD',
   state: {

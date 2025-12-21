@@ -47,11 +47,17 @@ const mockFetchSettings = (settingsData: Record<string, unknown> = {}) => {
       return Promise.resolve({
         ok: true,
         json: async () => ({
-          default_lot_size: 1.0,
-          default_scaling_mode: 'additive',
-          default_retracement_pips: 30,
-          default_take_profit_pips: 25,
-          ...settingsData,
+          user: mockUser,
+          settings: {
+            id: 1,
+            settings_json: {
+              default_lot_size: 1.0,
+              default_retracement_lot_mode: 'additive',
+              default_retracement_pips: 30,
+              default_take_profit_pips: 25,
+              ...settingsData,
+            },
+          },
         }),
       });
     }
@@ -81,7 +87,7 @@ describe('StrategyDefaults', () => {
   it('fetches and displays current settings', async () => {
     mockFetchSettings({
       default_lot_size: 2.5,
-      default_scaling_mode: 'multiplicative',
+      default_retracement_lot_mode: 'multiplicative',
       default_retracement_pips: 50,
       default_take_profit_pips: 40,
     });
@@ -176,10 +182,16 @@ describe('StrategyDefaults', () => {
           return Promise.resolve({
             ok: true,
             json: async () => ({
-              default_lot_size: 1.0,
-              default_scaling_mode: 'additive',
-              default_retracement_pips: 30,
-              default_take_profit_pips: 25,
+              user: mockUser,
+              settings: {
+                id: 1,
+                settings_json: {
+                  default_lot_size: 1.0,
+                  default_retracement_lot_mode: 'additive',
+                  default_retracement_pips: 30,
+                  default_take_profit_pips: 25,
+                },
+              },
             }),
           });
         }
@@ -313,10 +325,16 @@ describe('StrategyDefaults', () => {
           return Promise.resolve({
             ok: true,
             json: async () => ({
-              default_lot_size: 1.0,
-              default_scaling_mode: 'additive',
-              default_retracement_pips: 30,
-              default_take_profit_pips: 25,
+              user: mockUser,
+              settings: {
+                id: 1,
+                settings_json: {
+                  default_lot_size: 1.0,
+                  default_retracement_lot_mode: 'additive',
+                  default_retracement_pips: 30,
+                  default_take_profit_pips: 25,
+                },
+              },
             }),
           });
         }

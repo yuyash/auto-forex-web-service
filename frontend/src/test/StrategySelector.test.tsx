@@ -20,7 +20,7 @@ const mockStrategies: Strategy[] = [
           default: 1.0,
           minimum: 0.01,
         },
-        scaling_mode: {
+        retracement_lot_mode: {
           type: 'string',
           enum: ['additive', 'multiplicative'],
           default: 'additive',

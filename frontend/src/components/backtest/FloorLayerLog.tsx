@@ -62,7 +62,7 @@ const getEventTypeDisplay = (eventType: string) => {
     }
   > = {
     initial_entry: { label: 'Initial Entry', color: 'primary' },
-    scale_in: { label: 'Retracement', color: 'info' },
+    retracement: { label: 'Retracement', color: 'info' },
     take_profit: { label: 'Take Profit', color: 'success' },
     volatility_lock: { label: 'Volatility Lock', color: 'error' },
     margin_protection: { label: 'Margin Protection', color: 'error' },
@@ -164,7 +164,7 @@ export function FloorLayerLog({
       const hasMatchingEntryEvent = events.some(
         (e) =>
           e.source === 'event' &&
-          ['initial_entry', 'scale_in'].includes(e.eventType) &&
+          ['initial_entry', 'retracement'].includes(e.eventType) &&
           e.entryPrice === trade.entry_price &&
           e.units === trade.units &&
           Math.abs(
@@ -177,7 +177,7 @@ export function FloorLayerLog({
         events.push({
           id: `trade-entry-${idx}`,
           timestamp: trade.entry_time,
-          eventType: trade.is_first_lot ? 'initial_entry' : 'scale_in',
+          eventType: trade.is_first_lot ? 'initial_entry' : 'retracement',
           layerNumber: layerNum,
           direction: trade.direction,
           units: trade.units,
@@ -244,10 +244,10 @@ export function FloorLayerLog({
   // Filter and sort all events (merged across all layers)
   const sortedFilteredEvents = useMemo(() => {
     // Note: 'retracement_detected' and 'strategy_close' are excluded as they're redundant
-    // with 'scale_in' (Add Layer) and 'take_profit' respectively
+    // with 'retracement' (add) and 'take_profit' respectively
     const meaningfulEventTypes = [
       'initial_entry',
-      'scale_in',
+      'retracement',
       'take_profit',
       'volatility_lock',
       'margin_protection',
@@ -402,7 +402,7 @@ export function FloorLayerLog({
                 event.tradeIndex !== undefined &&
                 selectedTradeIndex === event.tradeIndex;
               const eventDisplay = getEventTypeDisplay(event.eventType);
-              const isEntry = ['initial_entry', 'scale_in'].includes(
+              const isEntry = ['initial_entry', 'retracement'].includes(
                 event.eventType
               );
               const isClose = [

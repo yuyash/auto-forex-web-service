@@ -90,18 +90,18 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
       default: 1000,
       minimum: 1,
     },
-    scaling_mode: {
+    retracement_lot_mode: {
       type: 'string',
       title: 'Retracement Mode',
-      description: 'Mode for retracement position size on retracements',
+      description: 'How position size changes on each retracement entry',
       enum: ['additive', 'multiplicative'],
       default: 'additive',
     },
-    scaling_amount: {
+    retracement_lot_amount: {
       type: 'number',
       title: 'Retracement Amount',
       description:
-        'Amount to add (additive) or multiply by (multiplicative) on each retracement',
+        'Amount to add (additive) or multiply by (multiplicative) on each retracement entry',
       default: 1.0,
       minimum: 0.01,
     },
@@ -130,7 +130,7 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
       type: 'integer',
       title: 'Max Retracements Per Layer',
       description:
-        'Upper bound on how many retracement scale-ins a layer can perform before it must reset or close.',
+        'Upper bound on how many retracement entries a layer can perform before it must reset or close.',
       default: 10,
       minimum: 1,
     },
@@ -333,7 +333,8 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
   },
   required: [
     'base_lot_size',
-    'scaling_mode',
+    'retracement_lot_mode',
+    'retracement_lot_amount',
     'retracement_pips',
     'take_profit_pips',
   ],
@@ -350,8 +351,8 @@ const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
     instrument: 'USD_JPY',
     base_lot_size: 1.0,
     base_unit_size: 1000,
-    scaling_mode: 'additive',
-    scaling_amount: 1.0,
+    retracement_lot_mode: 'additive',
+    retracement_lot_amount: 1.0,
     retracement_pips: 30,
     take_profit_pips: 25,
     max_layers: 3,

@@ -7,6 +7,7 @@ from typing import Any
 
 from django.conf import settings
 
+from apps.market.services.instruments import get_pip_size
 from apps.trading.services.base import Strategy
 from apps.trading.services.registry import register_strategy
 
@@ -45,8 +46,8 @@ class FloorStrategyConfig:
     instrument: str
 
     base_lot_size: Decimal
-    scaling_mode: str
-    scaling_amount: Decimal
+    retracement_lot_mode: str
+    retracement_lot_amount: Decimal
 
     retracement_pips: Decimal
     take_profit_pips: Decimal
@@ -93,7 +94,10 @@ class FloorStrategyState:
     active_layers: list[LayerState] = field(default_factory=list)
     volatility_locked: bool = False
 
+    # Derived mid (from bid/ask) for indicator history/plotting.
     last_mid: Decimal | None = None
+    last_bid: Decimal | None = None
+    last_ask: Decimal | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -113,6 +117,8 @@ class FloorStrategyState:
             ],
             "volatility_locked": bool(self.volatility_locked),
             "last_mid": str(self.last_mid) if self.last_mid is not None else None,
+            "last_bid": str(self.last_bid) if self.last_bid is not None else None,
+            "last_ask": str(self.last_ask) if self.last_ask is not None else None,
         }
 
     @staticmethod
@@ -156,6 +162,8 @@ class FloorStrategyState:
                 )
 
         last_mid = _to_decimal(raw.get("last_mid"))
+        last_bid = _to_decimal(raw.get("last_bid"))
+        last_ask = _to_decimal(raw.get("last_ask"))
 
         return FloorStrategyState(
             status=status,
@@ -165,6 +173,8 @@ class FloorStrategyState:
             active_layers=layers,
             volatility_locked=bool(raw.get("volatility_locked") or False),
             last_mid=last_mid,
+            last_bid=last_bid,
+            last_ask=last_ask,
         )
 
 
@@ -184,14 +194,6 @@ def _to_decimal(value: Any) -> Decimal | None:
         return Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError):
         return None
-
-
-def _pip_size_for_instrument(instrument: str) -> Decimal:
-    inst = str(instrument).upper()
-    # Standard FX: JPY pairs have 0.01 pips, others 0.0001
-    if "JPY" in inst:
-        return Decimal("0.01")
-    return Decimal("0.0001")
 
 
 def _pips_between(price_a: Decimal, price_b: Decimal, pip_size: Decimal) -> Decimal:
@@ -260,21 +262,21 @@ FLOOR_STRATEGY_CONFIG_SCHEMA: dict[str, Any] = {
             "title": "Base Lot Size",
             "description": "Initial lot size for the first entry.",
         },
-        "scaling_mode": {
+        "retracement_lot_mode": {
             "type": "string",
-            "title": "Scaling Mode",
+            "title": "Retracement Lot Mode",
             "enum": ["additive", "multiplicative"],
-            "description": "How lot size scales on each retracement.",
+            "description": "How lot size changes on each retracement entry.",
         },
-        "scaling_amount": {
+        "retracement_lot_amount": {
             "type": "number",
-            "title": "Scaling Amount",
-            "description": "Amount to add/multiply by on each retracement scale-in.",
+            "title": "Retracement Lot Amount",
+            "description": "Amount to add/multiply by on each retracement entry.",
         },
         "retracement_pips": {
             "type": "number",
             "title": "Retracement Pips",
-            "description": "Adverse movement in pips required to trigger a scale-in.",
+            "description": "Adverse movement in pips required to trigger a retracement entry.",
         },
         "take_profit_pips": {
             "type": "number",
@@ -289,7 +291,7 @@ FLOOR_STRATEGY_CONFIG_SCHEMA: dict[str, Any] = {
         "max_retracements_per_layer": {
             "type": "integer",
             "title": "Max Retracements Per Layer",
-            "description": "Max number of scale-ins allowed per layer before opening the next one.",
+            "description": "Max number of retracement entries allowed per layer before opening the next one.",
         },
         "volatility_lock_multiplier": {
             "type": "number",
@@ -387,7 +389,8 @@ FLOOR_STRATEGY_CONFIG_SCHEMA: dict[str, Any] = {
     "required": [
         "instrument",
         "base_lot_size",
-        "scaling_mode",
+        "retracement_lot_mode",
+        "retracement_lot_amount",
         "retracement_pips",
         "take_profit_pips",
     ],
@@ -458,15 +461,15 @@ class FloorStrategyService(Strategy):
     def __init__(self, config: dict[str, Any]) -> None:
         super().__init__(config)
         self.config = self._parse_config(config)
-        self.pip_size = _pip_size_for_instrument(self.config.instrument)
+        self.pip_size = get_pip_size(instrument=self.config.instrument)
 
     @staticmethod
     def _parse_config(raw: dict[str, Any]) -> FloorStrategyConfig:
         instrument = _parse_required_str(raw, "instrument")
 
         base_lot_size = _parse_required_decimal(raw, "base_lot_size")
-        scaling_mode = _parse_required_str(raw, "scaling_mode")
-        scaling_amount = _parse_required_decimal(raw, "scaling_amount")
+        retracement_lot_mode = _parse_required_str(raw, "retracement_lot_mode")
+        retracement_lot_amount = _parse_required_decimal(raw, "retracement_lot_amount")
 
         retracement_pips = _parse_required_decimal(raw, "retracement_pips")
         take_profit_pips = _parse_required_decimal(raw, "take_profit_pips")
@@ -495,8 +498,8 @@ class FloorStrategyService(Strategy):
         return FloorStrategyConfig(
             instrument=instrument,
             base_lot_size=base_lot_size,
-            scaling_mode=scaling_mode,
-            scaling_amount=scaling_amount,
+            retracement_lot_mode=retracement_lot_mode,
+            retracement_lot_amount=retracement_lot_amount,
             retracement_pips=retracement_pips,
             take_profit_pips=take_profit_pips,
             max_layers=max_layers,
@@ -550,13 +553,24 @@ class FloorStrategyService(Strategy):
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         s = FloorStrategyState.from_dict(state)
 
+        bid = _to_decimal(tick.get("bid"))
+        ask = _to_decimal(tick.get("ask"))
         mid = _to_decimal(tick.get("mid"))
-        if mid is None:
-            return s.to_dict(), []
 
-        s.last_mid = mid
+        # Prefer bid/ask for trade decisions.
+        # If only mid is available (older backtests), treat it as both bid and ask.
+        if bid is None or ask is None:
+            if mid is None:
+                return s.to_dict(), []
+            bid = mid
+            ask = mid
+
+        derived_mid = (bid + ask) / Decimal("2")
+        s.last_bid = bid
+        s.last_ask = ask
+        s.last_mid = derived_mid
         s.ticks_seen += 1
-        s.price_history.append(mid)
+        s.price_history.append(derived_mid)
 
         # Keep enough history for indicators
         max_needed = max(
@@ -577,10 +591,11 @@ class FloorStrategyService(Strategy):
         # Initial entry
         if not s.initialized and s.ticks_seen >= self.config.entry_signal_lookback_ticks:
             direction = self._decide_direction(s.price_history)
+            entry_price = ask if direction == Direction.LONG else bid
             layer = LayerState(
                 index=0,
                 direction=direction,
-                entry_price=mid,
+                entry_price=entry_price,
                 lot_size=self._lot_size_for_layer(0),
             )
             s.active_layers = [layer]
@@ -591,7 +606,7 @@ class FloorStrategyService(Strategy):
                     details={
                         "layer": 0,
                         "direction": str(direction),
-                        "entry_price": str(mid),
+                        "entry_price": str(entry_price),
                         "lot_size": str(layer.lot_size),
                         "instrument": self.config.instrument,
                     },
@@ -603,7 +618,7 @@ class FloorStrategyService(Strategy):
             return s.to_dict(), [e.to_dict() for e in events]
 
         # Take profit check (close all)
-        total_pips = self._net_pips(s.active_layers, mid)
+        total_pips = self._net_pips(s.active_layers, bid=bid, ask=ask)
         if total_pips >= self.config.take_profit_pips:
             events.append(
                 StrategyEvent(
@@ -620,17 +635,29 @@ class FloorStrategyService(Strategy):
             s.initialized = False
             return s.to_dict(), [e.to_dict() for e in events]
 
-        # Scale-in logic per layer
+        # Retracement logic per layer
         for layer in list(s.active_layers):
             if layer.retracements >= self.config.max_retracements_per_layer:
                 continue
 
-            against_pips = self._against_position_pips(layer, mid)
+            against_pips = self._against_position_pips(layer, bid=bid, ask=ask)
             trigger_pips = self._retracement_trigger_for_layer(layer.index)
             if against_pips >= trigger_pips and len(s.active_layers) <= self.config.max_layers:
-                # scale-in (as another open event)
+                # retracement entry (as another open event)
                 layer.retracements += 1
-                lot_size = self._scaled_lot_size(layer.lot_size)
+                prev_lot_size = layer.lot_size
+                lot_size = self._retracement_lot_size(prev_lot_size)
+                added_lot = lot_size - prev_lot_size
+
+                fill_price = ask if layer.direction == Direction.LONG else bid
+
+                # This strategy models each layer as an aggregated position.
+                # When adding a retracement entry, update the layer entry price to the weighted
+                # average, so further retracement entries require additional adverse movement.
+                if lot_size > 0 and added_lot > 0 and prev_lot_size > 0:
+                    layer.entry_price = (
+                        (layer.entry_price * prev_lot_size) + (fill_price * added_lot)
+                    ) / lot_size
                 layer.lot_size = lot_size
                 events.append(
                     StrategyEvent(
@@ -638,10 +665,10 @@ class FloorStrategyService(Strategy):
                         details={
                             "layer": int(layer.index),
                             "direction": str(layer.direction),
-                            "entry_price": str(mid),
+                            "entry_price": str(fill_price),
                             "lot_size": str(lot_size),
                             "instrument": self.config.instrument,
-                            "scale_in": True,
+                            "retracement_open": True,
                             "retracement": int(layer.retracements),
                             "against_pips": str(against_pips),
                             "trigger_pips": str(trigger_pips),
@@ -650,7 +677,7 @@ class FloorStrategyService(Strategy):
                 )
                 events.append(
                     StrategyEvent(
-                        type="layer_scaled_in",
+                        type="layer_retracement_opened",
                         details={"layer": int(layer.index), "retracement": int(layer.retracements)},
                     )
                 )
@@ -664,7 +691,7 @@ class FloorStrategyService(Strategy):
                     new_layer = LayerState(
                         index=next_idx,
                         direction=layer.direction,
-                        entry_price=mid,
+                        entry_price=fill_price,
                         lot_size=self._lot_size_for_layer(next_idx),
                     )
                     s.active_layers.append(new_layer)
@@ -674,7 +701,7 @@ class FloorStrategyService(Strategy):
                             details={
                                 "layer": int(next_idx),
                                 "direction": str(new_layer.direction),
-                                "entry_price": str(mid),
+                                "entry_price": str(fill_price),
                                 "lot_size": str(new_layer.lot_size),
                                 "instrument": self.config.instrument,
                             },
@@ -750,24 +777,25 @@ class FloorStrategyService(Strategy):
             inc=self.config.retracement_trigger_increment,
         )
 
-    def _scaled_lot_size(self, current: Decimal) -> Decimal:
-        if str(self.config.scaling_mode) == "multiplicative":
-            return current * self.config.scaling_amount
-        return current + self.config.scaling_amount
+    def _retracement_lot_size(self, current: Decimal) -> Decimal:
+        if str(self.config.retracement_lot_mode) == "multiplicative":
+            return current * self.config.retracement_lot_amount
+        return current + self.config.retracement_lot_amount
 
-    def _against_position_pips(self, layer: LayerState, mid: Decimal) -> Decimal:
+    def _against_position_pips(self, layer: LayerState, *, bid: Decimal, ask: Decimal) -> Decimal:
+        mark = bid if layer.direction == Direction.LONG else ask
         if layer.direction == Direction.LONG:
             # losing if price < entry
-            if mid >= layer.entry_price:
+            if mark >= layer.entry_price:
                 return Decimal("0")
-            return abs(_pips_between(layer.entry_price, mid, self.pip_size))
+            return abs(_pips_between(layer.entry_price, mark, self.pip_size))
 
         # short
-        if mid <= layer.entry_price:
+        if mark <= layer.entry_price:
             return Decimal("0")
-        return abs(_pips_between(layer.entry_price, mid, self.pip_size))
+        return abs(_pips_between(layer.entry_price, mark, self.pip_size))
 
-    def _net_pips(self, layers: list[LayerState], mid: Decimal) -> Decimal:
+    def _net_pips(self, layers: list[LayerState], *, bid: Decimal, ask: Decimal) -> Decimal:
         # Weighted by lot size (proxy). Positive means profit.
         total = Decimal("0")
         weight = Decimal("0")
@@ -775,9 +803,9 @@ class FloorStrategyService(Strategy):
             if l.lot_size <= 0:
                 continue
             if l.direction == Direction.LONG:
-                p = _pips_between(l.entry_price, mid, self.pip_size)
+                p = _pips_between(l.entry_price, bid, self.pip_size)
             else:
-                p = _pips_between(mid, l.entry_price, self.pip_size)
+                p = _pips_between(ask, l.entry_price, self.pip_size)
             total += p * l.lot_size
             weight += l.lot_size
         if weight == 0:

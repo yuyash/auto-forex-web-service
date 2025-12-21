@@ -150,6 +150,10 @@ class OandaAccountDetailView(APIView):
         try:
             client = OandaService(account)
             live_data = client.get_account_details()
+
+            account_resource = client.get_account_resource()
+            hedging_enabled = bool(account_resource.get("hedgingEnabled", False))
+
             response_data["balance"] = str(live_data.balance)
             response_data["margin_used"] = str(live_data.margin_used)
             response_data["margin_available"] = str(live_data.margin_available)
@@ -158,6 +162,10 @@ class OandaAccountDetailView(APIView):
             response_data["open_trade_count"] = live_data.open_trade_count
             response_data["open_position_count"] = live_data.open_position_count
             response_data["pending_order_count"] = live_data.pending_order_count
+
+            response_data["hedging_enabled"] = hedging_enabled
+            response_data["position_mode"] = "hedging" if hedging_enabled else "netting"
+            response_data["oanda_account"] = client.make_jsonable(account_resource)
             response_data["live_data"] = True
         except Exception as e:
             logger.warning(

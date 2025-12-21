@@ -14,7 +14,7 @@ import type { BacktestStrategyEvent } from '../types/execution';
 // Event types that the component filters for display
 const meaningfulEventTypes = [
   'initial_entry',
-  'scale_in',
+  'retracement',
   'take_profit',
   'volatility_lock',
   'margin_protection',

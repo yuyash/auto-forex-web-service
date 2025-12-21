@@ -40,11 +40,18 @@ describe('StrategyConfigForm', () => {
         minimum: 0.01,
         maximum: 100.0,
       },
-      scaling_mode: {
+      retracement_lot_mode: {
         type: 'string',
-        description: 'Position scaling method',
+        description: 'How position size changes on each retracement entry',
         enum: ['additive', 'multiplicative'],
         default: 'additive',
+      },
+      retracement_lot_amount: {
+        type: 'number',
+        description: 'Amount to add (additive) or multiply by (multiplicative)',
+        default: 1.0,
+        minimum: 0.01,
+        maximum: 100.0,
       },
       retracement_pips: {
         type: 'integer',
@@ -73,12 +80,18 @@ describe('StrategyConfigForm', () => {
         default: false,
       },
     },
-    required: ['base_lot_size', 'scaling_mode', 'retracement_pips'],
+    required: [
+      'base_lot_size',
+      'retracement_lot_mode',
+      'retracement_lot_amount',
+      'retracement_pips',
+    ],
   };
 
   const defaultConfig: StrategyConfig = {
     base_lot_size: 1.0,
-    scaling_mode: 'additive',
+    retracement_lot_mode: 'additive',
+    retracement_lot_amount: 1.0,
     retracement_pips: 30,
     max_layers: 3,
     take_profit_pips: 25,
@@ -101,7 +114,10 @@ describe('StrategyConfigForm', () => {
     expect(
       screen.getByRole('spinbutton', { name: /Base Lot Size/i })
     ).toBeInTheDocument();
-    expect(screen.getAllByText(/Scaling Mode/i)[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/Retracement Lot Mode/i)[0]).toBeInTheDocument();
+    expect(
+      screen.getByRole('spinbutton', { name: /Retracement Lot Amount/i })
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('spinbutton', { name: /Retracement Pips/i })
     ).toBeInTheDocument();
@@ -128,7 +144,9 @@ describe('StrategyConfigForm', () => {
     expect(
       screen.getByText('Initial lot size for first position')
     ).toBeInTheDocument();
-    expect(screen.getByText('Position scaling method')).toBeInTheDocument();
+    expect(
+      screen.getByText('How position size changes on each retracement entry')
+    ).toBeInTheDocument();
     expect(
       screen.getByText('Pips retracement before adding position')
     ).toBeInTheDocument();
@@ -186,19 +204,21 @@ describe('StrategyConfigForm', () => {
     );
 
     // Find the select by its displayed value
-    const scalingModeSelect = screen
+    const retracementLotModeSelect = screen
       .getByText('Additive')
       .closest('div[role="combobox"]');
-    expect(scalingModeSelect).toBeInTheDocument();
-    fireEvent.mouseDown(scalingModeSelect!);
+    expect(retracementLotModeSelect).toBeInTheDocument();
+    fireEvent.mouseDown(retracementLotModeSelect!);
 
-    const multiplicativeOption = await screen.findByText(/Multiplicative/i);
+    const multiplicativeOption = await screen.findByRole('option', {
+      name: /^Multiplicative$/i,
+    });
     fireEvent.click(multiplicativeOption);
 
     await waitFor(() => {
       expect(mockOnChange).toHaveBeenCalledWith({
         ...defaultConfig,
-        scaling_mode: 'multiplicative',
+        retracement_lot_mode: 'multiplicative',
       });
     });
   });
@@ -240,7 +260,7 @@ describe('StrategyConfigForm', () => {
     expect(
       screen.getByText('Please fix the errors below before proceeding.')
     ).toBeInTheDocument();
-    expect(screen.getAllByText('This field is required')).toHaveLength(3);
+    expect(screen.getAllByText('This field is required')).toHaveLength(4);
   });
 
   it('validates minimum value constraint', async () => {

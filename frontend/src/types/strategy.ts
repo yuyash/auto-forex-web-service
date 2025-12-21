@@ -78,6 +78,15 @@ export interface Account {
   margin_used: string; // Decimal field from backend, serialized as string
   margin_available: string; // Decimal field from backend, serialized as string
   unrealized_pnl: string; // Decimal field from backend, serialized as string
+  nav?: string;
+  open_trade_count?: number;
+  open_position_count?: number;
+  pending_order_count?: number;
+  live_data?: boolean;
+  live_data_error?: string;
+  hedging_enabled?: boolean;
+  position_mode?: 'hedging' | 'netting';
+  oanda_account?: Record<string, unknown>;
   is_active: boolean;
   is_default?: boolean;
   jurisdiction?: string;

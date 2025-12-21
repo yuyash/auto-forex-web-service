@@ -265,8 +265,8 @@ MARKET_BACKTEST_TICK_CHANNEL_PREFIX = os.getenv(
 TRADING_FLOOR_STRATEGY_DEFAULTS = {
     "instrument": os.getenv("TRADING_FLOOR_INSTRUMENT", "USD_JPY"),
     "base_lot_size": float(os.getenv("TRADING_FLOOR_BASE_LOT_SIZE", "1.0")),
-    "scaling_mode": os.getenv("TRADING_FLOOR_SCALING_MODE", "additive"),
-    "scaling_amount": float(os.getenv("TRADING_FLOOR_SCALING_AMOUNT", "1.0")),
+    "retracement_lot_mode": os.getenv("TRADING_FLOOR_RETRACEMENT_LOT_MODE", "additive"),
+    "retracement_lot_amount": float(os.getenv("TRADING_FLOOR_RETRACEMENT_LOT_AMOUNT", "1.0")),
     "retracement_pips": float(os.getenv("TRADING_FLOOR_RETRACEMENT_PIPS", "30")),
     "take_profit_pips": float(os.getenv("TRADING_FLOOR_TAKE_PROFIT_PIPS", "25")),
     "max_layers": int(os.getenv("TRADING_FLOOR_MAX_LAYERS", "3")),
