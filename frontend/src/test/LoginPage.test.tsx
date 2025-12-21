@@ -181,10 +181,11 @@ describe('LoginPage', () => {
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/accounts/auth/login', {
+      expect(mockFetch).toHaveBeenNthCalledWith(2, '/api/accounts/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Accept: 'application/json',
         },
         body: JSON.stringify({
           email: 'test@example.com',
@@ -381,6 +382,48 @@ describe('LoginPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/csrf failed/i)).toBeInTheDocument();
+    });
+  });
+
+  it('displays not-whitelisted message when backend returns 403 authorization error', async () => {
+    const user = userEvent.setup();
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          registration_enabled: true,
+          login_enabled: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+        json: async () => ({
+          error:
+            'This email address is not authorized to login. Please contact the administrator.',
+        }),
+      });
+
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    });
+
+    await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+    await user.type(screen.getByLabelText(/password/i), 'password123');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/not authorized to login/i)).toBeInTheDocument();
     });
   });
 

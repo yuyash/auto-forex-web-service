@@ -27,7 +27,9 @@
     "signInHere": "Sign in here",
     "signUpHere": "Sign up here",
     "registrationDisabled": "Registration is currently disabled",
-    "loginDisabled": "Login is currently disabled"
+    "loginDisabled": "Login is currently disabled",
+    "loginBlocked": "Too many failed login attempts. Please try again later.",
+    "emailNotWhitelisted": "This email address is not authorized to login. Please contact the administrator."
   },
   "actions": {
     "submit": "Submit",
