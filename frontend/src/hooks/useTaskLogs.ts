@@ -8,8 +8,9 @@ import type { TaskType } from '../services/polling/TaskPollingService';
 export interface TaskLogsParams {
   execution_id?: number;
   level?: 'INFO' | 'WARNING' | 'ERROR' | 'DEBUG';
-  limit?: number;
-  offset?: number;
+  // Pagination mode: page/page_size
+  page?: number;
+  page_size?: number;
 }
 
 export interface TaskLogsResponse {
@@ -31,9 +32,7 @@ export interface UseTaskLogsResult {
   totalCount: number;
   isLoading: boolean;
   error: Error | null;
-  hasMore: boolean;
   fetchLogs: (params?: TaskLogsParams) => Promise<void>;
-  loadMore: () => Promise<void>;
   refresh: () => Promise<void>;
   setFilter: (level?: string) => void;
   currentFilter: string | undefined;
@@ -50,10 +49,10 @@ export interface UseTaskLogsResult {
  *
  * @example
  * ```tsx
- * const { logs, isLoading, loadMore, hasMore } = useTaskLogs(
+ * const { logs, isLoading, refresh } = useTaskLogs(
  *   taskId,
  *   'backtest',
- *   { enabled: true, initialParams: { limit: 100 } }
+ *   { enabled: true, initialParams: { page: 1, page_size: 100 } }
  * );
  * ```
  */
@@ -66,7 +65,7 @@ export function useTaskLogs(
     enabled = true,
     autoRefresh = false,
     refreshInterval = 5000,
-    initialParams = { limit: 100, offset: 0 },
+    initialParams = { page: 1, page_size: 100 },
   } = options;
 
   const [logs, setLogs] = useState<ExecutionLog[]>([]);
@@ -75,7 +74,6 @@ export function useTaskLogs(
   const [error, setError] = useState<Error | null>(null);
   const [currentParams, setCurrentParams] =
     useState<TaskLogsParams>(initialParams);
-  const [hasMore, setHasMore] = useState<boolean>(false);
   const [currentFilter, setCurrentFilter] = useState<string | undefined>(
     initialParams.level
   );
@@ -109,15 +107,10 @@ export function useTaskLogs(
           return;
         }
 
-        // If offset is 0, replace logs; otherwise append
-        if (queryParams.offset === 0) {
-          setLogs(response.results);
-        } else {
-          setLogs((prevLogs) => [...prevLogs, ...response.results]);
-        }
+        // Always replace in page/page_size mode.
+        setLogs(response.results);
 
         setTotalCount(response.count);
-        setHasMore(response.next !== null);
         setCurrentParams(queryParams);
       } catch (err) {
         if (!isMountedRef.current) {
@@ -134,28 +127,11 @@ export function useTaskLogs(
   );
 
   /**
-   * Load more logs (pagination)
-   */
-  const loadMore = useCallback(async (): Promise<void> => {
-    if (!hasMore || isLoading) {
-      return;
-    }
-
-    const nextOffset =
-      (currentParams.offset || 0) + (currentParams.limit || 100);
-    await fetchLogs({
-      ...currentParams,
-      offset: nextOffset,
-    });
-  }, [hasMore, isLoading, currentParams, fetchLogs]);
-
-  /**
    * Refresh logs from the beginning
    */
   const refresh = useCallback(async (): Promise<void> => {
     await fetchLogs({
       ...currentParams,
-      offset: 0,
     });
   }, [currentParams, fetchLogs]);
 
@@ -168,13 +144,13 @@ export function useTaskLogs(
       setCurrentParams((prev) => ({
         ...prev,
         level: level as 'INFO' | 'WARNING' | 'ERROR' | 'DEBUG' | undefined,
-        offset: 0, // Reset to first page when filtering
+        page: 1, // Reset to first page when filtering
       }));
       // Fetch with new filter
       fetchLogs({
         ...currentParams,
         level: level as 'INFO' | 'WARNING' | 'ERROR' | 'DEBUG' | undefined,
-        offset: 0,
+        page: 1,
       });
     },
     [currentParams, fetchLogs]
@@ -222,9 +198,7 @@ export function useTaskLogs(
     totalCount,
     isLoading,
     error,
-    hasMore,
     fetchLogs,
-    loadMore,
     refresh,
     setFilter,
     currentFilter,

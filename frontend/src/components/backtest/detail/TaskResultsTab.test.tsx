@@ -15,6 +15,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+// Mock the backtestTasksApi split endpoints (must be declared before importing the module under test)
+vi.mock('../../../services/api/backtestTasks', () => ({
+  backtestTasksApi: {
+    getTradeLogs: vi.fn(),
+    getStrategyEvents: vi.fn(),
+    exportResults: vi.fn(),
+  },
+}));
+
 import { TaskResultsTab } from './TaskResultsTab';
 import { TaskStatus, TaskType, DataSource } from '../../../types/common';
 import type { BacktestTask } from '../../../types/backtestTask';
@@ -23,6 +33,7 @@ import type { Trade } from '../../../types/execution';
 import type { TaskResults } from '../../../types/results';
 import { AuthProvider } from '../../../contexts/AuthContext';
 import { BrowserRouter } from 'react-router-dom';
+import { backtestTasksApi } from '../../../services/api/backtestTasks';
 
 // Mock the BacktestChart component
 vi.mock('../BacktestChart', () => ({
@@ -179,6 +190,22 @@ describe('TaskResultsTab Integration', () => {
     vi.clearAllMocks();
     // Mock scrollIntoView
     Element.prototype.scrollIntoView = vi.fn();
+
+    vi.mocked(backtestTasksApi.getTradeLogs).mockResolvedValue({
+      task_id: 1,
+      task_type: 'backtest',
+      execution_id: 1,
+      has_metrics: true,
+      trade_logs: mockTrades,
+    });
+
+    vi.mocked(backtestTasksApi.getStrategyEvents).mockResolvedValue({
+      task_id: 1,
+      task_type: 'backtest',
+      execution_id: 1,
+      has_metrics: true,
+      strategy_events: [],
+    });
   });
 
   it('renders chart with backtest data', async () => {
@@ -212,6 +239,20 @@ describe('TaskResultsTab Integration', () => {
         ],
       },
     };
+
+    vi.mocked(backtestTasksApi.getTradeLogs).mockResolvedValue({
+      task_id: 1,
+      task_type: 'backtest',
+      execution_id: 1,
+      has_metrics: true,
+      trade_logs: [
+        {
+          ...(mockTrades[0] as Trade),
+          pnl: undefined as unknown as number,
+          realized_pnl: undefined as unknown as number,
+        } as unknown as Trade,
+      ],
+    });
 
     renderWithProviders(
       <TaskResultsTab task={mockTask} results={resultsWithInvalidPnL} />

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   Box,
@@ -15,6 +15,7 @@ import {
 import Grid from '@mui/material/Grid';
 import { MetricCard } from '../../tasks/display/MetricCard';
 import { EquityCurveChart } from '../../tasks/charts/EquityCurveChart';
+import { backtestTasksApi } from '../../../services/api/backtestTasks';
 import type { BacktestTask } from '../../../types/backtestTask';
 import { TaskStatus } from '../../../types/common';
 import type { TaskResults } from '../../../types/results';
@@ -39,6 +40,9 @@ type DateRange = 'all' | '1m' | '3m' | '6m' | '1y';
 
 export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
   const [dateRange, setDateRange] = useState<DateRange>('all');
+  const [equityCurve, setEquityCurve] = useState<EquityPoint[]>([]);
+  const [equityCurveLoading, setEquityCurveLoading] = useState(false);
+  const [equityCurveError, setEquityCurveError] = useState<string | null>(null);
 
   const metrics = results?.metrics ?? null;
 
@@ -53,12 +57,49 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
   // Check if task has completed execution with metrics
   const hasMetrics = task.status === TaskStatus.COMPLETED && !!metrics;
 
+  useEffect(() => {
+    if (!hasMetrics) {
+      setEquityCurve([]);
+      setEquityCurveLoading(false);
+      setEquityCurveError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setEquityCurveLoading(true);
+    setEquityCurveError(null);
+
+    backtestTasksApi
+      .getEquityCurve(task.id)
+      .then((resp) => {
+        if (cancelled) return;
+        setEquityCurve(
+          Array.isArray(resp.equity_curve) ? resp.equity_curve : []
+        );
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setEquityCurveError(
+          err instanceof Error ? err.message : 'Failed to load equity curve'
+        );
+        setEquityCurve([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setEquityCurveLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasMetrics, task.id, results?.execution?.id]);
+
   // Filter equity curve data based on selected date range
   const getFilteredEquityCurve = () => {
-    if (!metrics?.equity_curve) return [];
+    if (!equityCurve || equityCurve.length === 0) return [];
 
     if (dateRange === 'all') {
-      return metrics.equity_curve as unknown as EquityPoint[];
+      return equityCurve;
     }
 
     const now = new Date();
@@ -79,7 +120,7 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
         break;
     }
 
-    return (metrics.equity_curve as unknown as EquityPoint[]).filter(
+    return equityCurve.filter(
       (point) => new Date(point.timestamp) >= cutoffDate
     );
   };
@@ -227,6 +268,21 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
             </Select>
           </FormControl>
         </Box>
+
+        {equityCurveLoading && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CircularProgress size={16} />
+              <Typography variant="body2">Loading equity curve…</Typography>
+            </Box>
+          </Alert>
+        )}
+
+        {equityCurveError && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Failed to load equity curve. {equityCurveError}
+          </Alert>
+        )}
 
         <EquityCurveChart data={getFilteredEquityCurve()} height={400} />
       </Paper>

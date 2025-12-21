@@ -16,6 +16,16 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+// Mock split endpoints used by TaskPerformanceTab (must be declared before importing the module under test)
+vi.mock('../../../services/api/tradingTasks', () => ({
+  tradingTasksApi: {
+    getEquityCurve: vi.fn(),
+    getTradeLogs: vi.fn(),
+    getStrategyEvents: vi.fn(),
+  },
+}));
+
 import { TaskPerformanceTab } from './TaskPerformanceTab';
 import { TaskStatus, TaskType } from '../../../types/common';
 import type { TradingTask } from '../../../types/tradingTask';
@@ -62,6 +72,7 @@ vi.mock('../../tasks/display/MetricCard', () => ({
 // Import mocked modules
 import { useTradingResults } from '../../../hooks/useTaskResults';
 import { TradingTaskChart } from '../TradingTaskChart';
+import { tradingTasksApi } from '../../../services/api/tradingTasks';
 
 describe('TaskPerformanceTab Integration Tests', () => {
   // Mock scrollIntoView
@@ -155,6 +166,31 @@ describe('TaskPerformanceTab Integration Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
+    vi.mocked(tradingTasksApi.getEquityCurve).mockResolvedValue({
+      task_id: 1,
+      task_type: 'trading',
+      execution_id: 1,
+      has_metrics: true,
+      equity_curve: mockResults.metrics?.equity_curve ?? [],
+      equity_curve_granularity_seconds: null,
+    });
+
+    vi.mocked(tradingTasksApi.getTradeLogs).mockResolvedValue({
+      task_id: 1,
+      task_type: 'trading',
+      execution_id: 1,
+      has_metrics: true,
+      trade_logs: mockResults.metrics?.trade_log ?? [],
+    });
+
+    vi.mocked(tradingTasksApi.getStrategyEvents).mockResolvedValue({
+      task_id: 1,
+      task_type: 'trading',
+      execution_id: 1,
+      has_metrics: true,
+      strategy_events: [],
+    });
+
     vi.mocked(useTradingResults).mockReturnValue({
       results: mockResults,
       isLoading: false,
@@ -171,16 +207,19 @@ describe('TaskPerformanceTab Integration Tests', () => {
       expect(screen.getByTestId('trading-task-chart')).toBeInTheDocument();
     });
 
-    // Verify TradingTaskChart was called with correct props
-    const chartCall = vi.mocked(TradingTaskChart).mock.calls[0][0];
-    expect(chartCall).toMatchObject({
-      instrument: 'EUR_USD',
-      startDate: mockResults.execution?.started_at,
-      stopDate: undefined, // Running task has no stop date
-      trades: mockResults.metrics?.trade_log,
-      timezone: 'UTC',
-      autoRefresh: true, // Running task has auto-refresh enabled
-      refreshInterval: 60000,
+    await waitFor(() => {
+      const calls = vi.mocked(TradingTaskChart).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const lastCall = calls[calls.length - 1][0];
+      expect(lastCall).toMatchObject({
+        instrument: 'EUR_USD',
+        startDate: mockResults.execution?.started_at,
+        stopDate: undefined, // Running task has no stop date
+        trades: mockResults.metrics?.trade_log,
+        timezone: 'UTC',
+        autoRefresh: true, // Running task has auto-refresh enabled
+        refreshInterval: 60000,
+      });
     });
   });
 
@@ -244,9 +283,12 @@ describe('TaskPerformanceTab Integration Tests', () => {
       expect(screen.getByTestId('trading-task-chart')).toBeInTheDocument();
     });
 
-    // Verify chart was called with trades
-    const chartCall = vi.mocked(TradingTaskChart).mock.calls[0][0];
-    expect(chartCall.trades).toEqual(mockResults.metrics?.trade_log);
+    await waitFor(() => {
+      const calls = vi.mocked(TradingTaskChart).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const lastCall = calls[calls.length - 1][0];
+      expect(lastCall.trades).toEqual(mockResults.metrics?.trade_log);
+    });
   });
 
   it('enables auto-refresh for running tasks', async () => {

@@ -18,6 +18,7 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
+  TablePagination,
   Chip,
   Tooltip,
 } from '@mui/material';
@@ -99,6 +100,8 @@ export function FloorLayerLog({
 }: FloorLayerLogProps) {
   const [sortField, setSortField] = useState<SortField>('timestamp');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   const displayEvents = useMemo(() => {
     const events: DisplayEvent[] = [];
@@ -292,7 +295,13 @@ export function FloorLayerLog({
     const isAsc = sortField === field && sortOrder === 'asc';
     setSortOrder(isAsc ? 'desc' : 'asc');
     setSortField(field);
+    setPage(0);
   };
+
+  const paginatedEvents = useMemo(() => {
+    const start = page * rowsPerPage;
+    return sortedFilteredEvents.slice(start, start + rowsPerPage);
+  }, [sortedFilteredEvents, page, rowsPerPage]);
 
   // Calculate total P&L across all events
   const totalPnL = useMemo(() => {
@@ -397,7 +406,7 @@ export function FloorLayerLog({
             </TableRow>
           </TableHead>
           <TableBody>
-            {sortedFilteredEvents.map((event) => {
+            {paginatedEvents.map((event) => {
               const isSelected =
                 event.tradeIndex !== undefined &&
                 selectedTradeIndex === event.tradeIndex;
@@ -606,6 +615,19 @@ export function FloorLayerLog({
           </TableBody>
         </Table>
       </TableContainer>
+
+      <TablePagination
+        component="div"
+        count={sortedFilteredEvents.length}
+        page={page}
+        onPageChange={(_e, newPage) => setPage(newPage)}
+        rowsPerPage={rowsPerPage}
+        onRowsPerPageChange={(e) => {
+          setRowsPerPage(parseInt(e.target.value, 10));
+          setPage(0);
+        }}
+        rowsPerPageOptions={[10, 25, 50, 100]}
+      />
     </Paper>
   );
 }

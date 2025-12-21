@@ -8,6 +8,9 @@ import type {
   BacktestTaskListParams,
   BacktestTaskCopyData,
   TaskResults,
+  TaskEquityCurveResponse,
+  TaskStrategyEventsResponse,
+  TaskTradeLogsResponse,
   TaskExecution,
   PaginatedResponse,
 } from '../../types';
@@ -144,5 +147,125 @@ export const backtestTasksApi = {
     return apiClient.get<TaskResults>(
       `/trading/backtest-tasks/${taskId}/results/`
     );
+  },
+
+  /**
+   * Get equity curve for the latest backtest execution
+   */
+  getEquityCurve: (
+    taskId: number,
+    params?: { page?: number; page_size?: number }
+  ): Promise<TaskEquityCurveResponse> => {
+    return apiClient.get<TaskEquityCurveResponse>(
+      `/trading/backtest-tasks/${taskId}/equity-curve/`,
+      params
+    );
+  },
+
+  /**
+   * Get strategy events for the latest backtest execution
+   */
+  getStrategyEvents: async (
+    taskId: number,
+    params?: { page?: number; page_size?: number }
+  ): Promise<TaskStrategyEventsResponse> => {
+    const pageSize = params?.page_size ?? 1000;
+    let page = params?.page ?? 1;
+
+    const allEvents: TaskStrategyEventsResponse['strategy_events'] = [];
+    let lastResp: TaskStrategyEventsResponse | null = null;
+
+    // Fetch all pages by default. Hard cap prevents infinite loops.
+    for (let i = 0; i < 200; i += 1) {
+      const resp = await apiClient.get<TaskStrategyEventsResponse>(
+        `/trading/backtest-tasks/${taskId}/strategy-events/`,
+        { page, page_size: pageSize }
+      );
+
+      lastResp = resp;
+      allEvents.push(
+        ...(Array.isArray(resp.strategy_events) ? resp.strategy_events : [])
+      );
+
+      if (!resp.next) {
+        break;
+      }
+
+      page += 1;
+    }
+
+    if (!lastResp) {
+      return {
+        task_id: taskId,
+        task_type: 'backtest',
+        execution_id: null,
+        has_metrics: false,
+        strategy_events: [],
+        count: 0,
+        next: null,
+        previous: null,
+      };
+    }
+
+    return {
+      ...lastResp,
+      strategy_events: allEvents,
+      next: null,
+      previous: null,
+      count: lastResp.count,
+    };
+  },
+
+  /**
+   * Get trade logs for the latest backtest execution
+   */
+  getTradeLogs: async (
+    taskId: number,
+    params?: { page?: number; page_size?: number }
+  ): Promise<TaskTradeLogsResponse> => {
+    const pageSize = params?.page_size ?? 1000;
+    let page = params?.page ?? 1;
+
+    const allTrades: TaskTradeLogsResponse['trade_logs'] = [];
+    let lastResp: TaskTradeLogsResponse | null = null;
+
+    for (let i = 0; i < 200; i += 1) {
+      const resp = await apiClient.get<TaskTradeLogsResponse>(
+        `/trading/backtest-tasks/${taskId}/trade-logs/`,
+        { page, page_size: pageSize }
+      );
+
+      lastResp = resp;
+      allTrades.push(
+        ...(Array.isArray(resp.trade_logs) ? resp.trade_logs : [])
+      );
+
+      if (!resp.next) {
+        break;
+      }
+
+      page += 1;
+    }
+
+    if (!lastResp) {
+      return {
+        task_id: taskId,
+        task_type: 'backtest',
+        execution_id: null,
+        has_metrics: false,
+        trade_logs: [],
+        count: 0,
+        next: null,
+        previous: null,
+      };
+    }
+
+    return {
+      ...lastResp,
+      trade_logs: allTrades,
+      next: null,
+      previous: null,
+      count: lastResp.count,
+    };
   },
 };

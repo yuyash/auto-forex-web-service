@@ -40,8 +40,8 @@ export interface ExecutionMetrics {
   profit_factor?: string;
   average_win?: string;
   average_loss?: string;
-  equity_curve: EquityPoint[];
-  trade_log: Trade[];
+  equity_curve?: EquityPoint[];
+  trade_log?: Trade[];
   strategy_events?: BacktestStrategyEvent[];
   created_at: string;
 }
