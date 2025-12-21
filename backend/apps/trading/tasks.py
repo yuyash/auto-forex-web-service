@@ -48,14 +48,20 @@ def _format_strategy_event(*, event: dict[str, Any], tick_ts: str | None = None)
         direction = details.get("direction")
         entry_price = details.get("entry_price")
         lot_size = details.get("lot_size")
-        scale_in = " scale_in" if details.get("scale_in") else ""
         against_pips = details.get("against_pips")
         trigger_pips = details.get("trigger_pips")
         retr = details.get("retracement")
+        retracement_open = " retracement" if details.get("retracement_open") else ""
         extra = ""
-        if details.get("scale_in"):
-            extra = f" (retracement={retr} against_pips={against_pips} trigger_pips={trigger_pips})"
-        return f"{prefix}Trade OPEN: layer={layer} dir={direction} price={entry_price} lot={lot_size}{scale_in}{extra}"
+        if details.get("retracement_open"):
+            extra = (
+                f" (retracement={retr} against_pips={against_pips} " f"trigger_pips={trigger_pips})"
+            )
+
+        return (
+            f"{prefix}Trade OPEN: layer={layer} dir={direction} "
+            f"price={entry_price} lot={lot_size}{retracement_open}{extra}"
+        )
 
     if e_type == "close":
         reason = details.get("reason")
@@ -64,7 +70,7 @@ def _format_strategy_event(*, event: dict[str, Any], tick_ts: str | None = None)
 
     if e_type in {
         "layer_opened",
-        "layer_scaled_in",
+        "layer_retracement_opened",
         "take_profit_hit",
         "strategy_started",
         "strategy_paused",

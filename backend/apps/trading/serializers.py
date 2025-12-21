@@ -183,6 +183,8 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
         """Drop unused floor strategy fields based on progression choices."""
         normalized = dict(parameters)
 
+        # Rename legacy scaling fields to retracement lot fields.
+
         # retracement_trigger_base is deprecated; always derive from max retracements
         normalized.pop("retracement_trigger_base", None)
 

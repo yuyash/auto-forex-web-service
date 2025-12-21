@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Card,
+  CardActionArea,
   CardContent,
   CardActions,
   Typography,
@@ -28,6 +29,7 @@ import {
   VisibilityOff,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { useToast } from '../common/useToast';
 import ConfirmDialog from '../common/ConfirmDialog';
 import type { Account } from '../../types/strategy';
@@ -368,109 +370,125 @@ const AccountManagement = () => {
           {accounts.map((account) => (
             <Box key={account.id}>
               <Card>
-                <CardContent>
-                  <Box
-                    display="flex"
-                    justifyContent="space-between"
-                    alignItems="flex-start"
-                    mb={2}
-                  >
-                    <Typography variant="h6" component="div" noWrap>
-                      {account.account_id}
-                    </Typography>
-                    <Chip
-                      label={
-                        account.api_type === 'practice'
-                          ? t('settings:accounts.practice', 'Practice')
-                          : t('settings:accounts.live', 'Live')
-                      }
-                      color={
-                        account.api_type === 'practice' ? 'default' : 'warning'
-                      }
-                      size="small"
-                    />
-                  </Box>
-
-                  <Box mb={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('settings:accounts.balance', 'Balance')}
-                    </Typography>
-                    <Typography variant="h6">
-                      {formatBalance(account.balance, account.currency)}
-                    </Typography>
-                  </Box>
-
-                  <Box mb={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('settings:accounts.marginUsed', 'Margin Used')}
-                    </Typography>
-                    <Typography variant="body1">
-                      {formatBalance(account.margin_used, account.currency)}
-                    </Typography>
-                  </Box>
-
-                  <Box mb={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      {t(
-                        'settings:accounts.marginAvailable',
-                        'Margin Available'
-                      )}
-                    </Typography>
-                    <Typography variant="body1">
-                      {formatBalance(
-                        account.margin_available,
-                        account.currency
-                      )}
-                    </Typography>
-                  </Box>
-
-                  <Box mb={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('settings:accounts.unrealizedPnL', 'Unrealized P&L')}
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      sx={{
-                        color:
-                          parseFloat(account.unrealized_pnl) >= 0
-                            ? 'success.main'
-                            : 'error.main',
-                        fontWeight: 500,
-                      }}
+                <CardActionArea
+                  component={Link}
+                  to={`/settings/accounts/${account.id}`}
+                  aria-label={`View account ${account.account_id}`}
+                >
+                  <CardContent>
+                    <Box
+                      display="flex"
+                      justifyContent="space-between"
+                      alignItems="flex-start"
+                      mb={2}
                     >
-                      {parseFloat(account.unrealized_pnl) >= 0 ? '+' : ''}
-                      {formatBalance(account.unrealized_pnl, account.currency)}
-                    </Typography>
-                  </Box>
-
-                  <Box mb={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('settings:accounts.currency', 'Currency')}
-                    </Typography>
-                    <Typography variant="body1">{account.currency}</Typography>
-                  </Box>
-
-                  <Box display="flex" gap={1}>
-                    <Chip
-                      label={account.is_active ? 'Active' : 'Inactive'}
-                      color={account.is_active ? 'success' : 'default'}
-                      size="small"
-                    />
-                    {account.is_default && (
+                      <Typography variant="h6" component="div" noWrap>
+                        {account.account_id}
+                      </Typography>
                       <Chip
-                        label="Default"
-                        color="primary"
+                        label={
+                          account.api_type === 'practice'
+                            ? t('settings:accounts.practice', 'Practice')
+                            : t('settings:accounts.live', 'Live')
+                        }
+                        color={
+                          account.api_type === 'practice'
+                            ? 'default'
+                            : 'warning'
+                        }
                         size="small"
-                        variant="outlined"
                       />
-                    )}
-                  </Box>
-                </CardContent>
+                    </Box>
+
+                    <Box mb={1}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('settings:accounts.balance', 'Balance')}
+                      </Typography>
+                      <Typography variant="h6">
+                        {formatBalance(account.balance, account.currency)}
+                      </Typography>
+                    </Box>
+
+                    <Box mb={1}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('settings:accounts.marginUsed', 'Margin Used')}
+                      </Typography>
+                      <Typography variant="body1">
+                        {formatBalance(account.margin_used, account.currency)}
+                      </Typography>
+                    </Box>
+
+                    <Box mb={1}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t(
+                          'settings:accounts.marginAvailable',
+                          'Margin Available'
+                        )}
+                      </Typography>
+                      <Typography variant="body1">
+                        {formatBalance(
+                          account.margin_available,
+                          account.currency
+                        )}
+                      </Typography>
+                    </Box>
+
+                    <Box mb={1}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('settings:accounts.unrealizedPnL', 'Unrealized P&L')}
+                      </Typography>
+                      <Typography
+                        variant="body1"
+                        sx={{
+                          color:
+                            parseFloat(account.unrealized_pnl) >= 0
+                              ? 'success.main'
+                              : 'error.main',
+                          fontWeight: 500,
+                        }}
+                      >
+                        {parseFloat(account.unrealized_pnl) >= 0 ? '+' : ''}
+                        {formatBalance(
+                          account.unrealized_pnl,
+                          account.currency
+                        )}
+                      </Typography>
+                    </Box>
+
+                    <Box mb={1}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('settings:accounts.currency', 'Currency')}
+                      </Typography>
+                      <Typography variant="body1">
+                        {account.currency}
+                      </Typography>
+                    </Box>
+
+                    <Box display="flex" gap={1}>
+                      <Chip
+                        label={account.is_active ? 'Active' : 'Inactive'}
+                        color={account.is_active ? 'success' : 'default'}
+                        size="small"
+                      />
+                      {account.is_default && (
+                        <Chip
+                          label="Default"
+                          color="primary"
+                          size="small"
+                          variant="outlined"
+                        />
+                      )}
+                    </Box>
+                  </CardContent>
+                </CardActionArea>
                 <CardActions>
                   <IconButton
                     size="small"
                     color="primary"
-                    onClick={() => handleEditClick(account)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleEditClick(account);
+                    }}
                     aria-label={t(
                       'settings:accounts.editAccount',
                       'Edit Account'
@@ -481,7 +499,10 @@ const AccountManagement = () => {
                   <IconButton
                     size="small"
                     color="error"
-                    onClick={() => handleDeleteClick(account)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDeleteClick(account);
+                    }}
                     aria-label={t(
                       'settings:accounts.deleteAccount',
                       'Delete Account'

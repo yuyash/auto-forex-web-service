@@ -4,7 +4,7 @@
  * Creates chart markers for floor strategy events (retracements, layer creation, etc.)
  *
  * Marker Types:
- * - Long (Dark green triangle + Unit size) - scale_in with direction=long
+ * - Long (Dark green triangle + Unit size) - retracement entry with direction=long
  * - Long (Blue triangle + Unit size) - initial_entry with direction=long
  * - Short (Pink inverted triangle + Unit size) - entries with direction=short
  * - Close (Gray circle + Unit size) - strategy_close, take_profit
@@ -20,7 +20,7 @@ import type { BacktestStrategyEvent } from '../types/execution';
 const COLORS = {
   // Entry colors
   LONG_INITIAL: '#2196f3', // Blue - initial entry long
-  LONG_SCALE_IN: '#1b5e20', // Dark green - scale-in long
+  LONG_RETRACEMENT: '#1b5e20', // Dark green - retracement long
   SHORT: '#e91e63', // Pink - short positions
   // Close colors
   CLOSE: '#757575', // Gray - close/take profit
@@ -186,18 +186,18 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
   );
 
   const direction = details.direction as string | undefined;
-  const scaleIn = Boolean(details.scale_in);
+  const retracementOpen = Boolean(details.retracement_open);
   const units = formatUnits(details.units ?? details.lot_size);
   const layerNumber = details.layer_number ?? details.layer;
 
   switch (eventType) {
     // Backend: trade open marker
     case 'open':
-    // Legacy frontend event names
+    // Frontend event names
     case 'initial_entry':
-    case 'scale_in': {
+    case 'retracement': {
       const isLong = direction === 'long';
-      const isScaleIn = eventType === 'scale_in' || scaleIn;
+      const isRetracement = eventType === 'retracement' || retracementOpen;
 
       // Short entries always render as "Short" markers (pink inverted triangle)
       if (!isLong) {
@@ -210,13 +210,13 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
       }
 
       return {
-        type: isScaleIn ? 'buy' : 'initial_entry',
-        color: isScaleIn ? COLORS.LONG_SCALE_IN : COLORS.LONG_INITIAL,
+        type: isRetracement ? 'buy' : 'initial_entry',
+        color: isRetracement ? COLORS.LONG_RETRACEMENT : COLORS.LONG_INITIAL,
         shape: 'triangleUp',
         label: units
           ? `L ${units}`
-          : isScaleIn
-            ? 'Long (Scale-in)'
+          : isRetracement
+            ? 'Long (Retracement)'
             : 'Long (Initial)',
       };
     }
@@ -315,7 +315,7 @@ function formatTooltip(event: BacktestStrategyEvent): string {
     'Strategy event';
 
   const lines: string[] = [description];
-  const entryEventTypes = ['open', 'initial_entry', 'scale_in'];
+  const entryEventTypes = ['open', 'initial_entry', 'retracement'];
   const isEntryEvent = entryEventTypes.includes(eventType);
 
   // Add relevant details

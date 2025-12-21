@@ -41,6 +41,10 @@ const TradingTaskDetailPage = lazy(
   () => import('./pages/TradingTaskDetailPage')
 );
 
+const OandaAccountDetailPage = lazy(
+  () => import('./pages/OandaAccountDetailPage')
+);
+
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 
 // Loading fallback component
@@ -140,6 +144,10 @@ function AppRoutes() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route
+              path="/settings/accounts/:id"
+              element={<OandaAccountDetailPage />}
+            />
             <Route path="/configurations" element={<ConfigurationsPage />} />
             <Route
               path="/configurations/:id"

@@ -62,15 +62,9 @@ const matchesRequest = (matcher: FetchMatcher, method: string, url: string) => {
 
 const enqueueFetch = (
   matcher: FetchMatcher,
-  resolver: PendingFetch['resolver']
+  resolver: () => Promise<MockFetchResponse>
 ) => {
-  pendingFetches.push({
-    matcher: {
-      method: matcher.method ? toMethod(matcher.method) : undefined,
-      url: matcher.url,
-    },
-    resolver,
-  });
+  pendingFetches.push({ matcher, resolver });
 };
 
 const jsonResponse = (
@@ -223,7 +217,18 @@ describe('AccountManagement', () => {
   });
 
   it('fetches and displays accounts', async () => {
-    queueAccountsResponse(mockAccounts);
+    queueAccountsResponse(mockAccounts, {
+      1: {
+        ...mockAccounts[0],
+        position_mode: 'netting',
+        hedging_enabled: false,
+        oanda_account: {
+          hedgingEnabled: false,
+          marginRate: '0.02',
+          alias: 'Test Account',
+        },
+      },
+    });
 
     renderComponent();
 
@@ -241,6 +246,12 @@ describe('AccountManagement', () => {
       expect(within(practiceCard).getByText('Practice')).toBeInTheDocument();
       expect(within(practiceCard).getByText('$10,000.00')).toBeInTheDocument();
       expect(within(practiceCard).getByText('Active')).toBeInTheDocument();
+
+      expect(
+        within(practiceCard).getByRole('link', {
+          name: /view account 001-001-1234567-001/i,
+        })
+      ).toBeInTheDocument();
     }
 
     // Check live account
@@ -252,6 +263,12 @@ describe('AccountManagement', () => {
       expect(within(liveCard).getByText('Live')).toBeInTheDocument();
       expect(within(liveCard).getByText('$5,000.00')).toBeInTheDocument();
       expect(within(liveCard).getByText('Inactive')).toBeInTheDocument();
+
+      expect(
+        within(liveCard).getByRole('link', {
+          name: /view account 001-001-7654321-002/i,
+        })
+      ).toBeInTheDocument();
     }
   });
 

@@ -421,7 +421,11 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
     (date: Date) => {
       // A stable day identifier in the configured timezone.
       if (timezone && timezone !== 'UTC') {
-        return formatInTimeZone(date, timezone, 'yyyy-MM-dd');
+        try {
+          return formatInTimeZone(date, timezone, 'yyyy-MM-dd');
+        } catch (err) {
+          console.warn('Invalid timezone; falling back to UTC:', timezone, err);
+        }
       }
       return timeFormat('%Y-%m-%d')(date);
     },
@@ -435,7 +439,11 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
       if (!d?.date) return '';
 
       if (timezone && timezone !== 'UTC') {
-        return formatInTimeZone(d.date, timezone, 'MMM d');
+        try {
+          return formatInTimeZone(d.date, timezone, 'MMM d');
+        } catch (err) {
+          console.warn('Invalid timezone; falling back to UTC:', timezone, err);
+        }
       }
       return timeFormat('%b %-d')(d.date);
     },
@@ -509,14 +517,30 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
         // (see "Custom X-axis tick labels" below).
         if (isIntradayData && visibleRange > oneDay) {
           if (timezone && timezone !== 'UTC') {
-            return formatInTimeZone(date, timezone, 'HH:mm');
+            try {
+              return formatInTimeZone(date, timezone, 'HH:mm');
+            } catch (err) {
+              console.warn(
+                'Invalid timezone; falling back to UTC:',
+                timezone,
+                err
+              );
+            }
           }
           return timeFormat('%H:%M')(date);
         }
 
         // For daily+ data or single-day view, use the standard format
         if (timezone && timezone !== 'UTC') {
-          return formatInTimeZone(date, timezone, format);
+          try {
+            return formatInTimeZone(date, timezone, format);
+          } catch (err) {
+            console.warn(
+              'Invalid timezone; falling back to UTC:',
+              timezone,
+              err
+            );
+          }
         }
 
         // Convert format to d3-time-format syntax
@@ -918,22 +942,41 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                       const candle = currentItem as OHLCData;
 
                       // Format timestamp
-                      const timestamp =
-                        timezone && timezone !== 'UTC'
-                          ? formatInTimeZone(
-                              candle.date,
-                              timezone,
-                              'yyyy-MM-dd HH:mm:ss'
-                            )
-                          : candle.date.toLocaleString('en-US', {
-                              timeZone: 'UTC',
-                              year: 'numeric',
-                              month: '2-digit',
-                              day: '2-digit',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              second: '2-digit',
-                            });
+                      let timestamp: string;
+                      if (timezone && timezone !== 'UTC') {
+                        try {
+                          timestamp = formatInTimeZone(
+                            candle.date,
+                            timezone,
+                            'yyyy-MM-dd HH:mm:ss'
+                          );
+                        } catch (err) {
+                          console.warn(
+                            'Invalid timezone; falling back to UTC:',
+                            timezone,
+                            err
+                          );
+                          timestamp = candle.date.toLocaleString('en-US', {
+                            timeZone: 'UTC',
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          });
+                        }
+                      } else {
+                        timestamp = candle.date.toLocaleString('en-US', {
+                          timeZone: 'UTC',
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                        });
+                      }
 
                       // Draw timestamp above OHLC values
                       ctx.fillStyle = '#666';

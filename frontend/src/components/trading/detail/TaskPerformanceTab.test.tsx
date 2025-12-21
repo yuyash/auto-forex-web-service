@@ -19,10 +19,10 @@ import userEvent from '@testing-library/user-event';
 import { TaskPerformanceTab } from './TaskPerformanceTab';
 import { TaskStatus, TaskType } from '../../../types/common';
 import type { TradingTask } from '../../../types/tradingTask';
-import type { TaskExecution } from '../../../types/execution';
+import type { TaskResults } from '../../../types/results';
 
 // Mock dependencies
-vi.mock('../../../hooks/useTaskExecutions');
+vi.mock('../../../hooks/useTaskResults');
 vi.mock('../TradingTaskChart', () => ({
   TradingTaskChart: vi.fn(({ onTradeClick }) => (
     <div data-testid="trading-task-chart">
@@ -60,7 +60,7 @@ vi.mock('../../tasks/display/MetricCard', () => ({
 }));
 
 // Import mocked modules
-import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
+import { useTradingResults } from '../../../hooks/useTaskResults';
 import { TradingTaskChart } from '../TradingTaskChart';
 
 describe('TaskPerformanceTab Integration Tests', () => {
@@ -91,15 +91,22 @@ describe('TaskPerformanceTab Integration Tests', () => {
     updated_at: '2024-01-01T00:00:00Z',
   };
 
-  const mockExecution: TaskExecution = {
-    id: 1,
-    task_type: TaskType.TRADING,
+  const mockResults: TaskResults = {
     task_id: 1,
-    execution_number: 1,
+    task_type: TaskType.TRADING,
     status: TaskStatus.RUNNING,
-    progress: 50,
-    started_at: '2024-01-01T00:00:00Z',
-    created_at: '2024-01-01T00:00:00Z',
+    execution: {
+      id: 1,
+      execution_number: 1,
+      status: TaskStatus.RUNNING,
+      progress: 50,
+      started_at: '2024-01-01T00:00:00Z',
+      completed_at: null,
+      error_message: null,
+    },
+    has_live: false,
+    live: null,
+    has_metrics: true,
     metrics: {
       id: 1,
       execution_id: 1,
@@ -142,21 +149,17 @@ describe('TaskPerformanceTab Integration Tests', () => {
       ],
       created_at: '2024-01-01T00:00:00Z',
     },
+    equity_curve_granularity_seconds: null,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Mock useTaskExecutions
-    vi.mocked(useTaskExecutions).mockReturnValue({
-      data: {
-        results: [mockExecution],
-        count: 1,
-        next: null,
-        previous: null,
-      },
+    vi.mocked(useTradingResults).mockReturnValue({
+      results: mockResults,
       isLoading: false,
       error: null,
+      isPolling: false,
       refetch: vi.fn(),
     });
   });
@@ -172,9 +175,9 @@ describe('TaskPerformanceTab Integration Tests', () => {
     const chartCall = vi.mocked(TradingTaskChart).mock.calls[0][0];
     expect(chartCall).toMatchObject({
       instrument: 'EUR_USD',
-      startDate: mockExecution.started_at,
+      startDate: mockResults.execution?.started_at,
       stopDate: undefined, // Running task has no stop date
-      trades: mockExecution.metrics?.trade_log,
+      trades: mockResults.metrics?.trade_log,
       timezone: 'UTC',
       autoRefresh: true, // Running task has auto-refresh enabled
       refreshInterval: 60000,
@@ -190,7 +193,7 @@ describe('TaskPerformanceTab Integration Tests', () => {
 
     // Verify chart was called with startDate
     const chartCall = vi.mocked(TradingTaskChart).mock.calls[0][0];
-    expect(chartCall.startDate).toBe(mockExecution.started_at);
+    expect(chartCall.startDate).toBe(mockResults.execution?.started_at);
   });
 
   it('renders stop vertical line when task is stopped', async () => {
@@ -199,21 +202,26 @@ describe('TaskPerformanceTab Integration Tests', () => {
       status: TaskStatus.STOPPED,
     };
 
-    const stoppedExecution = {
-      ...mockExecution,
+    const stoppedResults: TaskResults = {
+      ...mockResults,
       status: TaskStatus.STOPPED,
-      completed_at: '2024-01-02T00:00:00Z',
+      execution: {
+        ...(mockResults.execution ?? {
+          id: 1,
+          execution_number: 1,
+          status: TaskStatus.STOPPED,
+          progress: 100,
+        }),
+        status: TaskStatus.STOPPED,
+        completed_at: '2024-01-02T00:00:00Z',
+      },
     };
 
-    vi.mocked(useTaskExecutions).mockReturnValue({
-      data: {
-        results: [stoppedExecution],
-        count: 1,
-        next: null,
-        previous: null,
-      },
+    vi.mocked(useTradingResults).mockReturnValue({
+      results: stoppedResults,
       isLoading: false,
       error: null,
+      isPolling: false,
       refetch: vi.fn(),
     });
 
@@ -225,7 +233,7 @@ describe('TaskPerformanceTab Integration Tests', () => {
 
     // Verify chart was called with stopDate
     const chartCall = vi.mocked(TradingTaskChart).mock.calls[0][0];
-    expect(chartCall.stopDate).toBe(stoppedExecution.completed_at);
+    expect(chartCall.stopDate).toBe(stoppedResults.execution?.completed_at);
     expect(chartCall.autoRefresh).toBe(false); // Stopped task has auto-refresh disabled
   });
 
@@ -238,7 +246,7 @@ describe('TaskPerformanceTab Integration Tests', () => {
 
     // Verify chart was called with trades
     const chartCall = vi.mocked(TradingTaskChart).mock.calls[0][0];
-    expect(chartCall.trades).toEqual(mockExecution.metrics?.trade_log);
+    expect(chartCall.trades).toEqual(mockResults.metrics?.trade_log);
   });
 
   it('enables auto-refresh for running tasks', async () => {
@@ -259,6 +267,29 @@ describe('TaskPerformanceTab Integration Tests', () => {
       ...mockTask,
       status: TaskStatus.STOPPED,
     };
+
+    const stoppedResults: TaskResults = {
+      ...mockResults,
+      status: TaskStatus.STOPPED,
+      execution: {
+        ...(mockResults.execution ?? {
+          id: 1,
+          execution_number: 1,
+          status: TaskStatus.STOPPED,
+          progress: 100,
+        }),
+        status: TaskStatus.STOPPED,
+        completed_at: '2024-01-02T00:00:00Z',
+      },
+    };
+
+    vi.mocked(useTradingResults).mockReturnValue({
+      results: stoppedResults,
+      isLoading: false,
+      error: null,
+      isPolling: false,
+      refetch: vi.fn(),
+    });
 
     render(<TaskPerformanceTab task={stoppedTask} />);
 
@@ -320,20 +351,17 @@ describe('TaskPerformanceTab Integration Tests', () => {
   });
 
   it('handles task with no metrics', async () => {
-    const executionWithoutMetrics = {
-      ...mockExecution,
-      metrics: undefined,
+    const noMetricsResults: TaskResults = {
+      ...mockResults,
+      has_metrics: false,
+      metrics: null,
     };
 
-    vi.mocked(useTaskExecutions).mockReturnValue({
-      data: {
-        results: [executionWithoutMetrics],
-        count: 1,
-        next: null,
-        previous: null,
-      },
+    vi.mocked(useTradingResults).mockReturnValue({
+      results: noMetricsResults,
       isLoading: false,
       error: null,
+      isPolling: false,
       refetch: vi.fn(),
     });
 
@@ -373,21 +401,26 @@ describe('TaskPerformanceTab Integration Tests', () => {
       status: TaskStatus.FAILED,
     };
 
-    const failedExecution = {
-      ...mockExecution,
+    const failedResults: TaskResults = {
+      ...mockResults,
       status: TaskStatus.FAILED,
-      error_message: 'Test error message',
+      execution: {
+        ...(mockResults.execution ?? {
+          id: 1,
+          execution_number: 1,
+          status: TaskStatus.FAILED,
+          progress: 0,
+        }),
+        status: TaskStatus.FAILED,
+        error_message: 'Test error message',
+      },
     };
 
-    vi.mocked(useTaskExecutions).mockReturnValue({
-      data: {
-        results: [failedExecution],
-        count: 1,
-        next: null,
-        previous: null,
-      },
+    vi.mocked(useTradingResults).mockReturnValue({
+      results: failedResults,
       isLoading: false,
       error: null,
+      isPolling: false,
       refetch: vi.fn(),
     });
 
@@ -405,10 +438,11 @@ describe('TaskPerformanceTab Integration Tests', () => {
   });
 
   it('shows loading state', async () => {
-    vi.mocked(useTaskExecutions).mockReturnValue({
-      data: undefined,
+    vi.mocked(useTradingResults).mockReturnValue({
+      results: null,
       isLoading: true,
       error: null,
+      isPolling: false,
       refetch: vi.fn(),
     });
 

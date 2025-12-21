@@ -251,7 +251,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
             Long (Initial)
           </Typography>
         </Box>
-        {/* Long Scale-in - Dark Green Triangle */}
+        {/* Long Retracement - Dark Green Triangle */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box
             sx={{
@@ -263,7 +263,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
             }}
           />
           <Typography variant="caption" sx={{ fontWeight: 500 }}>
-            Long (Scale-in)
+            Long (Retracement)
           </Typography>
         </Box>
         {/* Short - Pink Inverted Triangle */}

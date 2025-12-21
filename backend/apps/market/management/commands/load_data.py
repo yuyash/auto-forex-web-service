@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any, Iterable
 
 import boto3
+from botocore.exceptions import ClientError
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
@@ -261,34 +262,133 @@ def _iter_ticks_from_athena_results(
             )
 
 
-def _create_athena_client(*, profile: str | None, role_arn: str | None):
-    base_session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+@dataclass
+class _AthenaClientManager:
+    profile: str | None
+    role_arn: str | None
+    role_session_name: str = "auto-forex-load-data"
+    refresh_window: timedelta = timedelta(minutes=2)
 
-    role_arn_str = (role_arn or "").strip()
-    if not role_arn_str:
-        return base_session.client("athena")
+    _base_session: boto3.Session | None = None
+    _assumed_session: boto3.Session | None = None
+    _expiration: datetime | None = None
+    _client: Any | None = None
 
-    sts = base_session.client("sts")
-    response = sts.assume_role(
-        RoleArn=role_arn_str,
-        RoleSessionName="auto-forex-load-data",
-    )
+    def _get_base_session(self) -> boto3.Session:
+        if self._base_session is None:
+            self._base_session = (
+                boto3.Session(profile_name=self.profile) if self.profile else boto3.Session()
+            )
+        return self._base_session
 
-    credentials = response.get("Credentials") or {}
-    access_key_id = credentials.get("AccessKeyId")
-    secret_access_key = credentials.get("SecretAccessKey")
-    session_token = credentials.get("SessionToken")
+    def _assume_role(self) -> None:
+        base_session = self._get_base_session()
+        role_arn_str = (self.role_arn or "").strip()
+        if not role_arn_str:
+            self._assumed_session = None
+            self._expiration = None
+            self._client = base_session.client("athena")
+            return
 
-    if not access_key_id or not secret_access_key or not session_token:
-        raise ValueError("AssumeRole did not return usable credentials")
+        sts = base_session.client("sts")
+        response = sts.assume_role(
+            RoleArn=role_arn_str,
+            RoleSessionName=self.role_session_name,
+        )
 
-    assumed_session = boto3.Session(
-        aws_access_key_id=access_key_id,
-        aws_secret_access_key=secret_access_key,
-        aws_session_token=session_token,
-        region_name=getattr(base_session, "region_name", None),
-    )
-    return assumed_session.client("athena")
+        credentials = response.get("Credentials") or {}
+        access_key_id = credentials.get("AccessKeyId")
+        secret_access_key = credentials.get("SecretAccessKey")
+        session_token = credentials.get("SessionToken")
+        expiration = credentials.get("Expiration")
+
+        if not access_key_id or not secret_access_key or not session_token:
+            raise ValueError("AssumeRole did not return usable credentials")
+
+        expiration_dt: datetime | None = expiration if isinstance(expiration, datetime) else None
+
+        region_name = getattr(base_session, "region_name", None)
+        self._assumed_session = boto3.Session(
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
+            aws_session_token=session_token,
+            region_name=region_name,
+        )
+        self._expiration = expiration_dt
+        self._client = self._assumed_session.client("athena")
+
+    def ensure_valid(self) -> None:
+        role_arn_str = (self.role_arn or "").strip()
+
+        if self._client is None:
+            self._assume_role()
+            return
+
+        if not role_arn_str:
+            return
+
+        if self._expiration is None:
+            return
+
+        now = datetime.now(timezone.utc)
+        expiration_utc = (
+            self._expiration
+            if self._expiration.tzinfo is not None
+            else self._expiration.replace(tzinfo=timezone.utc)
+        ).astimezone(timezone.utc)
+
+        if now >= (expiration_utc - self.refresh_window):
+            self._assume_role()
+
+    @staticmethod
+    def _is_expired_token_error(exc: BaseException) -> bool:
+        if not isinstance(exc, ClientError):
+            return False
+        error = exc.response.get("Error", {}) if hasattr(exc, "response") else {}
+        code = str(error.get("Code") or "")
+        return code in {"ExpiredToken", "ExpiredTokenException", "RequestExpired"}
+
+    def _call(self, method_name: str, **kwargs: Any) -> Any:
+        self.ensure_valid()
+        assert self._client is not None
+        method = getattr(self._client, method_name)
+        try:
+            return method(**kwargs)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            if not self._is_expired_token_error(exc):
+                raise
+            # Force refresh and retry once.
+            self._assume_role()
+            assert self._client is not None
+            method = getattr(self._client, method_name)
+            return method(**kwargs)
+
+    def start_query_execution(self, **kwargs: Any) -> Any:
+        return self._call("start_query_execution", **kwargs)
+
+    def get_query_execution(self, **kwargs: Any) -> Any:
+        return self._call("get_query_execution", **kwargs)
+
+    def get_query_results(self, **kwargs: Any) -> Any:
+        return self._call("get_query_results", **kwargs)
+
+    def iter_query_results_pages(self, *, query_execution_id: str) -> Iterable[dict[str, Any]]:
+        next_token: str | None = None
+        while True:
+            kwargs: dict[str, Any] = {"QueryExecutionId": query_execution_id}
+            if next_token:
+                kwargs["NextToken"] = next_token
+
+            page = self.get_query_results(**kwargs)
+            yield page
+
+            next_token = page.get("NextToken")
+            if not next_token:
+                break
+
+
+def _create_athena_client(*, profile: str | None, role_arn: str | None) -> _AthenaClientManager:
+    return _AthenaClientManager(profile=profile, role_arn=role_arn)
 
 
 class Command(BaseCommand):
@@ -481,8 +581,7 @@ class Command(BaseCommand):
                     f"Athena query {query_execution_id} did not succeed (state={state}): {reason}"
                 )
 
-            paginator = athena.get_paginator("get_query_results")
-            pages = paginator.paginate(QueryExecutionId=query_execution_id)
+            pages = athena.iter_query_results_pages(query_execution_id=query_execution_id)
 
             created_count = 0
             batch: list[TickData] = []

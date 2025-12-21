@@ -52,7 +52,7 @@ describe('SettingsPage', () => {
           ok: true,
           json: async () => ({
             default_lot_size: 1.0,
-            default_scaling_mode: 'additive',
+            default_retracement_lot_mode: 'additive',
             default_retracement_pips: 30,
             default_take_profit_pips: 25,
           }),
