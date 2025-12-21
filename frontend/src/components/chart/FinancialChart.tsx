@@ -105,6 +105,7 @@ export interface FinancialChartProps {
   timezone?: string; // IANA timezone (e.g., 'America/New_York', 'UTC')
   latestPrice?: number | null; // Latest mid price to display on right Y-axis
   showDataGaps?: boolean; // Show visual indicators for missing data periods
+  dataGapFillOpacity?: number; // Background fill opacity for missing-data overlay (0 disables fill)
 
   // Loading and error states
   loading?: boolean;
@@ -135,6 +136,7 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
   timezone = 'UTC',
   latestPrice = null,
   showDataGaps = false,
+  dataGapFillOpacity = 0.2,
   loading = false,
   error = null,
 }) => {
@@ -824,22 +826,28 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
                         return;
                       }
 
-                      // Draw semi-transparent orange rectangle
-                      ctx.fillStyle = 'rgba(255, 152, 0, 0.2)';
-                      ctx.fillRect(x, yMin, width, height);
+                      // Draw semi-transparent orange rectangle (optional)
+                      if (dataGapFillOpacity > 0) {
+                        ctx.fillStyle = `rgba(255, 152, 0, ${dataGapFillOpacity})`;
+                        ctx.fillRect(x, yMin, width, height);
+                      }
 
                       // Draw dashed border
                       ctx.strokeStyle = '#ff9800';
-                      ctx.lineWidth = 2;
+                      ctx.lineWidth = 1;
                       ctx.setLineDash([8, 4]);
                       ctx.strokeRect(x, yMin, width, height);
                       ctx.setLineDash([]);
 
-                      // Draw diagonal stripes (only if gap is wide enough)
+                      // Draw diagonal stripes (hatch fill). When the solid fill is disabled,
+                      // stripes become the primary visual fill.
                       if (width > 20) {
                         ctx.save();
-                        ctx.strokeStyle = 'rgba(255, 152, 0, 0.4)';
-                        ctx.lineWidth = 2;
+                        ctx.strokeStyle =
+                          dataGapFillOpacity > 0
+                            ? 'rgba(255, 152, 0, 0.4)'
+                            : 'rgba(255, 152, 0, 0.6)';
+                        ctx.lineWidth = 1;
                         const stripeSpacing = 15;
 
                         // Clip to the gap rectangle to prevent stripes from extending beyond
@@ -879,14 +887,14 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
 
                       // Draw exclamation mark
                       ctx.fillStyle = 'white';
-                      ctx.font = 'bold 12px sans-serif';
+                      ctx.font = '12px sans-serif';
                       ctx.textAlign = 'center';
                       ctx.textBaseline = 'middle';
                       ctx.fillText('!', centerX, centerY - 14);
 
                       // Draw "Missing Data" text
                       ctx.fillStyle = '#e65100';
-                      ctx.font = 'bold 12px sans-serif';
+                      ctx.font = '12px sans-serif';
                       ctx.fillText('Missing Data', centerX, centerY + 8);
 
                       // Draw gap type

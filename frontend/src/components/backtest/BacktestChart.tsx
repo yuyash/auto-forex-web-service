@@ -247,9 +247,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
               borderBottom: '10px solid #2196f3',
             }}
           />
-          <Typography variant="caption" sx={{ fontWeight: 500 }}>
-            Long (Initial)
-          </Typography>
+          <Typography variant="caption">Long (Initial)</Typography>
         </Box>
         {/* Long Retracement - Dark Green Triangle */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -262,9 +260,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
               borderBottom: '10px solid #1b5e20',
             }}
           />
-          <Typography variant="caption" sx={{ fontWeight: 500 }}>
-            Long (Retracement)
-          </Typography>
+          <Typography variant="caption">Long (Retracement)</Typography>
         </Box>
         {/* Short - Pink Inverted Triangle */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -277,9 +273,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
               borderTop: '10px solid #e91e63',
             }}
           />
-          <Typography variant="caption" sx={{ fontWeight: 500 }}>
-            Short
-          </Typography>
+          <Typography variant="caption">Short</Typography>
         </Box>
         {/* Close - Gray Circle */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -291,9 +285,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
               bgcolor: '#757575',
             }}
           />
-          <Typography variant="caption" sx={{ fontWeight: 500 }}>
-            Close
-          </Typography>
+          <Typography variant="caption">Close</Typography>
         </Box>
         {/* New Layer - Purple Circle */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -305,9 +297,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
               bgcolor: '#9c27b0',
             }}
           />
-          <Typography variant="caption" sx={{ fontWeight: 500 }}>
-            New Layer
-          </Typography>
+          <Typography variant="caption">New Layer</Typography>
         </Box>
         {/* Volatility Lock - Orange Circle */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -319,9 +309,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
               bgcolor: '#ff9800',
             }}
           />
-          <Typography variant="caption" sx={{ fontWeight: 500 }}>
-            Volatility Lock
-          </Typography>
+          <Typography variant="caption">Volatility Lock</Typography>
         </Box>
         {/* Margin Protection - Red Circle */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -333,9 +321,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
               bgcolor: '#f44336',
             }}
           />
-          <Typography variant="caption" sx={{ fontWeight: 500 }}>
-            Margin Protection
-          </Typography>
+          <Typography variant="caption">Margin Protection</Typography>
         </Box>
         <Box sx={{ flex: 1 }} />
         <Typography
@@ -360,6 +346,7 @@ export const BacktestChart: React.FC<BacktestChartProps> = ({
         showCrosshair={true}
         showOHLCTooltip={true}
         showDataGaps={true}
+        dataGapFillOpacity={0}
         latestPrice={latestPrice}
         markers={tradeMarkers}
         onMarkerClick={handleMarkerClick}
