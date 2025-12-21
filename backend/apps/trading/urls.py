@@ -9,8 +9,11 @@ from django.urls import path
 from apps.trading.views import (
     BacktestTaskCopyView,
     BacktestTaskDetailView,
+    BacktestTaskEquityCurveView,
     BacktestTaskExecutionsView,
     BacktestTaskExportView,
+    BacktestTaskStrategyEventsView,
+    BacktestTaskTradeLogsView,
     BacktestTaskView,
     BacktestTaskResultsView,
     BacktestTaskLogsView,
@@ -19,8 +22,11 @@ from apps.trading.views import (
     BacktestTaskStopView,
     TradingTaskCopyView,
     TradingTaskDetailView,
+    TradingTaskEquityCurveView,
     TradingTaskExecutionsView,
     TradingTaskResultsView,
+    TradingTaskStrategyEventsView,
+    TradingTaskTradeLogsView,
     TradingTaskView,
     TradingTaskLogsView,
     TradingTaskPauseView,
@@ -106,6 +112,21 @@ urlpatterns = [
         BacktestTaskResultsView.as_view(),
         name="backtest_task_results",
     ),
+    path(
+        "backtest-tasks/<int:task_id>/equity-curve/",
+        BacktestTaskEquityCurveView.as_view(),
+        name="backtest_task_equity_curve",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/strategy-events/",
+        BacktestTaskStrategyEventsView.as_view(),
+        name="backtest_task_strategy_events",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/trade-logs/",
+        BacktestTaskTradeLogsView.as_view(),
+        name="backtest_task_trade_logs",
+    ),
     # Trading task endpoints
     path(
         "trading-tasks/",
@@ -166,5 +187,20 @@ urlpatterns = [
         "trading-tasks/<int:task_id>/results/",
         TradingTaskResultsView.as_view(),
         name="trading_task_results",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/equity-curve/",
+        TradingTaskEquityCurveView.as_view(),
+        name="trading_task_equity_curve",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/strategy-events/",
+        TradingTaskStrategyEventsView.as_view(),
+        name="trading_task_strategy_events",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/trade-logs/",
+        TradingTaskTradeLogsView.as_view(),
+        name="trading_task_trade_logs",
     ),
 ]

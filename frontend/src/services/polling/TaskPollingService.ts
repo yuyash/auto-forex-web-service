@@ -227,11 +227,15 @@ export class TaskPollingService {
   private async fetchLogs(params?: {
     execution_id?: number;
     level?: string;
-    limit?: number;
-    offset?: number;
+    page?: number;
+    page_size?: number;
   }): Promise<TaskLogsResponse> {
     const endpoint = `/trading/${this.taskType}-tasks/${this.taskId}/logs/`;
-    return apiClient.get<TaskLogsResponse>(endpoint, params);
+    return apiClient.get<TaskLogsResponse>(endpoint, {
+      page: 1,
+      page_size: 100,
+      ...params,
+    });
   }
 
   /**

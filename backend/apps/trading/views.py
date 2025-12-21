@@ -180,6 +180,73 @@ class StrategyConfigView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class TaskExecutionPagination(PageNumberPagination):
+    """Pagination for task execution history endpoints."""
+
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
+def _paginate_list_by_page(
+    *,
+    request: Request,
+    items: list,
+    base_url: str,
+    page_param: str = "page",
+    page_size_param: str = "page_size",
+    default_page_size: int = 100,
+    max_page_size: int = 1000,
+    extra_query: dict[str, str | None] | None = None,
+) -> dict[str, object]:
+    """Paginate an in-memory list using page/page_size.
+
+    Returns a dict with keys: count, next, previous, results.
+    """
+
+    def _to_int(value: str | None, default: int) -> int:
+        if value is None or value == "":
+            return default
+        return int(value)
+
+    raw_page = request.query_params.get(page_param)
+    raw_page_size = request.query_params.get(page_size_param)
+
+    page = _to_int(raw_page, 1)
+    page_size = _to_int(raw_page_size, default_page_size)
+
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = default_page_size
+    page_size = min(page_size, max_page_size)
+
+    count = len(items)
+    start = (page - 1) * page_size
+    end = start + page_size
+    results = items[start:end]
+
+    extra_query = extra_query or {}
+    query_parts = [f"{page_size_param}={page_size}"] + [
+        f"{k}={v}" for k, v in extra_query.items() if v is not None
+    ]
+
+    next_url = None
+    if end < count:
+        next_url = f"{base_url}?{page_param}={page + 1}&" + "&".join(query_parts)
+
+    previous_url = None
+    if page > 1:
+        previous_url = f"{base_url}?{page_param}={page - 1}&" + "&".join(query_parts)
+
+    return {
+        "count": count,
+        "next": next_url,
+        "previous": previous_url,
+        "results": results,
+    }
+
+
 class StrategyConfigDetailView(APIView):
     """Retrieve, update, and delete a strategy configuration."""
 
@@ -807,6 +874,7 @@ class TradingTaskExecutionsView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    pagination_class = TaskExecutionPagination
 
     def get(self, request: Request, task_id: int) -> Response:
         """
@@ -828,14 +896,10 @@ class TradingTaskExecutionsView(APIView):
 
         from apps.trading.serializers import TaskExecutionListSerializer
 
-        serializer = TaskExecutionListSerializer(executions, many=True)
-        return Response(
-            {
-                "count": executions.count(),
-                "results": serializer.data,
-            },
-            status=status.HTTP_200_OK,
-        )
+        paginator = self.pagination_class()
+        paginated = paginator.paginate_queryset(executions, request)
+        serializer = TaskExecutionListSerializer(paginated, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
 
 class TradingTaskLogsView(APIView):
@@ -846,22 +910,6 @@ class TradingTaskLogsView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-
-    def _build_pagination_url(
-        self,
-        task_id: int,
-        offset: int,
-        limit: int,
-        execution_id: str | None,
-        level: str | None,
-    ) -> str:
-        """Build pagination URL with query parameters."""
-        url = f"/api/trading/trading-tasks/{task_id}/logs/?offset={offset}&limit={limit}"
-        if execution_id:
-            url += f"&execution_id={execution_id}"
-        if level:
-            url += f"&level={level}"
-        return url
 
     def _collect_logs(
         self, executions_query: QuerySet, level: str | None
@@ -892,8 +940,8 @@ class TradingTaskLogsView(APIView):
         Query parameters:
         - execution_id: Filter logs for specific execution (optional)
         - level: Filter by log level (INFO, WARNING, ERROR, DEBUG) (optional)
-        - limit: Number of logs to return (default: 100, max: 1000)
-        - offset: Pagination offset (default: 0)
+        - page: Page number (default: 1)
+        - page_size: Page size (default: 100, max: 1000)
 
         Returns:
             Paginated log entries with execution_number included
@@ -910,14 +958,6 @@ class TradingTaskLogsView(APIView):
         # Get and validate query parameters
         execution_id = request.query_params.get("execution_id")
         level = request.query_params.get("level")
-        try:
-            limit = min(int(request.query_params.get("limit", 100)), 1000)
-            offset = int(request.query_params.get("offset", 0))
-        except ValueError:
-            return Response(
-                {"error": "Invalid limit or offset value"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         # Import and query executions
         from apps.trading.models import TaskExecution
@@ -940,32 +980,19 @@ class TradingTaskLogsView(APIView):
         all_logs = self._collect_logs(executions_query, level)
         all_logs.sort(key=lambda x: str(x.get("timestamp") or ""), reverse=True)
 
-        # Paginate results
-        total_count = len(all_logs)
-        paginated_logs = all_logs[offset : offset + limit]
-
-        # Build pagination URLs
-        next_url = (
-            self._build_pagination_url(task_id, offset + limit, limit, execution_id, level)
-            if offset + limit < total_count
-            else None
-        )
-        previous_url = (
-            self._build_pagination_url(task_id, max(0, offset - limit), limit, execution_id, level)
-            if offset > 0
-            else None
-        )
-
-        # Return paginated response
-        return Response(
-            {
-                "count": total_count,
-                "next": next_url,
-                "previous": previous_url,
-                "results": paginated_logs,
+        pagination = _paginate_list_by_page(
+            request=request,
+            items=all_logs,
+            base_url=f"/api/trading/trading-tasks/{task_id}/logs/",
+            default_page_size=100,
+            max_page_size=1000,
+            extra_query={
+                "execution_id": execution_id,
+                "level": level,
             },
-            status=status.HTTP_200_OK,
         )
+
+        return Response(pagination, status=status.HTTP_200_OK)
 
 
 class TradingTaskStatusView(APIView):
@@ -1437,6 +1464,7 @@ class BacktestTaskExecutionsView(APIView):
     """Get execution history for a backtest task."""
 
     permission_classes = [IsAuthenticated]
+    pagination_class = TaskExecutionPagination
 
     def get(self, request: Request, task_id: int) -> Response:
         """Get execution history for backtest task."""
@@ -1449,11 +1477,10 @@ class BacktestTaskExecutionsView(APIView):
 
         from apps.trading.serializers import TaskExecutionListSerializer
 
-        serializer = TaskExecutionListSerializer(executions, many=True)
-        return Response(
-            {"count": executions.count(), "results": serializer.data},
-            status=status.HTTP_200_OK,
-        )
+        paginator = self.pagination_class()
+        paginated = paginator.paginate_queryset(executions, request)
+        serializer = TaskExecutionListSerializer(paginated, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
 
 class BacktestTaskExportView(APIView):
@@ -1543,21 +1570,6 @@ class BacktestTaskLogsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def _build_pagination_url(
-        self,
-        task_id: int,
-        offset: int,
-        limit: int,
-        execution_id: str | None,
-        level: str | None,
-    ) -> str:
-        url = f"/api/trading/backtest-tasks/{task_id}/logs/?offset={offset}&limit={limit}"
-        if execution_id:
-            url += f"&execution_id={execution_id}"
-        if level:
-            url += f"&level={level}"
-        return url
-
     def _collect_logs(
         self, executions_query: QuerySet, level: str | None
     ) -> list[dict[str, str | int | None]]:
@@ -1588,13 +1600,6 @@ class BacktestTaskLogsView(APIView):
 
         execution_id = request.query_params.get("execution_id")
         level = request.query_params.get("level")
-        try:
-            limit = min(int(request.query_params.get("limit", 100)), 1000)
-            offset = int(request.query_params.get("offset", 0))
-        except ValueError:
-            return Response(
-                {"error": "Invalid limit or offset value"}, status=status.HTTP_400_BAD_REQUEST
-            )
 
         from apps.trading.models import TaskExecution
 
@@ -1613,29 +1618,19 @@ class BacktestTaskLogsView(APIView):
         all_logs = self._collect_logs(executions_query, level)
         all_logs.sort(key=lambda x: str(x.get("timestamp") or ""), reverse=True)
 
-        total_count = len(all_logs)
-        paginated_logs = all_logs[offset : offset + limit]
-
-        next_url = (
-            self._build_pagination_url(task_id, offset + limit, limit, execution_id, level)
-            if offset + limit < total_count
-            else None
-        )
-        previous_url = (
-            self._build_pagination_url(task_id, max(0, offset - limit), limit, execution_id, level)
-            if offset > 0
-            else None
-        )
-
-        return Response(
-            {
-                "count": total_count,
-                "next": next_url,
-                "previous": previous_url,
-                "results": paginated_logs,
+        pagination = _paginate_list_by_page(
+            request=request,
+            items=all_logs,
+            base_url=f"/api/trading/backtest-tasks/{task_id}/logs/",
+            default_page_size=100,
+            max_page_size=1000,
+            extra_query={
+                "execution_id": execution_id,
+                "level": level,
             },
-            status=status.HTTP_200_OK,
         )
+
+        return Response(pagination, status=status.HTTP_200_OK)
 
 
 class BacktestTaskResultsView(APIView):
@@ -1659,7 +1654,6 @@ class BacktestTaskResultsView(APIView):
         execution_payload = None
         metrics_payload = None
         equity_curve_granularity_seconds = None
-        equity_service = EquityService()
 
         if latest_execution:
             execution_payload = {
@@ -1679,18 +1673,10 @@ class BacktestTaskResultsView(APIView):
             }
 
             if hasattr(latest_execution, "metrics") and latest_execution.metrics:
-                from apps.trading.serializers import ExecutionMetricsSerializer
+                from apps.trading.serializers import ExecutionMetricsSummarySerializer
 
-                metrics_payload = ExecutionMetricsSerializer(latest_execution.metrics).data
-
-                ds = equity_service.downsample_equity_curve(
-                    metrics_payload.get("equity_curve"),
-                    max_points=500,
-                    start_dt=task.start_time,
-                    end_dt=task.end_time,
-                )
-                metrics_payload["equity_curve"] = ds.points
-                equity_curve_granularity_seconds = ds.granularity_seconds
+                metrics_payload = ExecutionMetricsSummarySerializer(latest_execution.metrics).data
+                equity_curve_granularity_seconds = None
 
         live = LivePerformanceService.get_backtest_intermediate_results(task_id)
         has_live = live is not None
@@ -1706,6 +1692,187 @@ class BacktestTaskResultsView(APIView):
                 "metrics": metrics_payload,
                 "execution": execution_payload,
                 "equity_curve_granularity_seconds": equity_curve_granularity_seconds,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class BacktestTaskEquityCurveView(APIView):
+    """Equity curve for the latest backtest execution.
+
+    This is split out from the unified results endpoint to keep the main payload light.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, task_id: int) -> Response:
+        try:
+            task = BacktestTask.objects.select_related("config", "user").get(
+                id=task_id, user=request.user.pk
+            )
+        except BacktestTask.DoesNotExist:
+            return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        latest_execution = task.get_latest_execution()
+        if not latest_execution or not getattr(latest_execution, "metrics", None):
+            return Response(
+                {
+                    "task_id": task_id,
+                    "task_type": "backtest",
+                    "execution_id": latest_execution.pk if latest_execution else None,
+                    "has_metrics": False,
+                    "equity_curve": [],
+                    "count": 0,
+                    "next": None,
+                    "previous": None,
+                    "equity_curve_granularity_seconds": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        equity_service = EquityService()
+        ds = equity_service.downsample_equity_curve(
+            latest_execution.metrics.equity_curve,
+            max_points=500,
+            start_dt=task.start_time,
+            end_dt=task.end_time,
+        )
+
+        pagination = _paginate_list_by_page(
+            request=request,
+            items=list(ds.points),
+            base_url=f"/api/trading/backtest-tasks/{task_id}/equity-curve/",
+            default_page_size=500,
+            max_page_size=1000,
+        )
+
+        return Response(
+            {
+                "task_id": task_id,
+                "task_type": "backtest",
+                "execution_id": latest_execution.pk,
+                "has_metrics": True,
+                "equity_curve": pagination["results"],
+                "count": pagination["count"],
+                "next": pagination["next"],
+                "previous": pagination["previous"],
+                "equity_curve_granularity_seconds": ds.granularity_seconds,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class BacktestTaskStrategyEventsView(APIView):
+    """Strategy events for the latest backtest execution."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, task_id: int) -> Response:
+        try:
+            task = BacktestTask.objects.select_related("config", "user").get(
+                id=task_id, user=request.user.pk
+            )
+        except BacktestTask.DoesNotExist:
+            return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        latest_execution = task.get_latest_execution()
+        if not latest_execution or not getattr(latest_execution, "metrics", None):
+            return Response(
+                {
+                    "task_id": task_id,
+                    "task_type": "backtest",
+                    "execution_id": latest_execution.pk if latest_execution else None,
+                    "has_metrics": False,
+                    "strategy_events": [],
+                    "count": 0,
+                    "next": None,
+                    "previous": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        events = (
+            latest_execution.metrics.strategy_events
+            if isinstance(latest_execution.metrics.strategy_events, list)
+            else []
+        )
+
+        pagination = _paginate_list_by_page(
+            request=request,
+            items=list(events),
+            base_url=f"/api/trading/backtest-tasks/{task_id}/strategy-events/",
+            default_page_size=1000,
+            max_page_size=1000,
+        )
+
+        return Response(
+            {
+                "task_id": task_id,
+                "task_type": "backtest",
+                "execution_id": latest_execution.pk,
+                "has_metrics": True,
+                "strategy_events": pagination["results"],
+                "count": pagination["count"],
+                "next": pagination["next"],
+                "previous": pagination["previous"],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class BacktestTaskTradeLogsView(APIView):
+    """Trade logs for the latest backtest execution."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, task_id: int) -> Response:
+        try:
+            task = BacktestTask.objects.select_related("config", "user").get(
+                id=task_id, user=request.user.pk
+            )
+        except BacktestTask.DoesNotExist:
+            return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        latest_execution = task.get_latest_execution()
+        if not latest_execution or not getattr(latest_execution, "metrics", None):
+            return Response(
+                {
+                    "task_id": task_id,
+                    "task_type": "backtest",
+                    "execution_id": latest_execution.pk if latest_execution else None,
+                    "has_metrics": False,
+                    "trade_logs": [],
+                    "count": 0,
+                    "next": None,
+                    "previous": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        trades = (
+            latest_execution.metrics.trade_log
+            if isinstance(latest_execution.metrics.trade_log, list)
+            else []
+        )
+
+        pagination = _paginate_list_by_page(
+            request=request,
+            items=list(trades),
+            base_url=f"/api/trading/backtest-tasks/{task_id}/trade-logs/",
+            default_page_size=1000,
+            max_page_size=1000,
+        )
+
+        return Response(
+            {
+                "task_id": task_id,
+                "task_type": "backtest",
+                "execution_id": latest_execution.pk,
+                "has_metrics": True,
+                "trade_logs": pagination["results"],
+                "count": pagination["count"],
+                "next": pagination["next"],
+                "previous": pagination["previous"],
             },
             status=status.HTTP_200_OK,
         )
@@ -1732,7 +1899,6 @@ class TradingTaskResultsView(APIView):
         execution_payload = None
         metrics_payload = None
         equity_curve_granularity_seconds = None
-        equity_service = EquityService()
 
         if latest_execution:
             execution_payload = {
@@ -1752,20 +1918,10 @@ class TradingTaskResultsView(APIView):
             }
 
             if hasattr(latest_execution, "metrics") and latest_execution.metrics:
-                from apps.trading.serializers import ExecutionMetricsSerializer
+                from apps.trading.serializers import ExecutionMetricsSummarySerializer
 
-                metrics_payload = ExecutionMetricsSerializer(latest_execution.metrics).data
-
-                started_at = latest_execution.started_at
-                completed_at = latest_execution.completed_at
-                ds = equity_service.downsample_equity_curve(
-                    metrics_payload.get("equity_curve"),
-                    max_points=500,
-                    start_dt=started_at,
-                    end_dt=completed_at,
-                )
-                metrics_payload["equity_curve"] = ds.points
-                equity_curve_granularity_seconds = ds.granularity_seconds
+                metrics_payload = ExecutionMetricsSummarySerializer(latest_execution.metrics).data
+                equity_curve_granularity_seconds = None
 
         live = LivePerformanceService.get_trading_intermediate_results(task_id)
         has_live = live is not None
@@ -1781,6 +1937,184 @@ class TradingTaskResultsView(APIView):
                 "metrics": metrics_payload,
                 "execution": execution_payload,
                 "equity_curve_granularity_seconds": equity_curve_granularity_seconds,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class TradingTaskEquityCurveView(APIView):
+    """Equity curve for the latest trading execution."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, task_id: int) -> Response:
+        try:
+            task = TradingTask.objects.select_related("config", "user", "oanda_account").get(
+                id=task_id, user=request.user.pk
+            )
+        except TradingTask.DoesNotExist:
+            return Response({"error": "Trading task not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        latest_execution = task.get_latest_execution()
+        if not latest_execution or not getattr(latest_execution, "metrics", None):
+            return Response(
+                {
+                    "task_id": task_id,
+                    "task_type": "trading",
+                    "execution_id": latest_execution.pk if latest_execution else None,
+                    "has_metrics": False,
+                    "equity_curve": [],
+                    "count": 0,
+                    "next": None,
+                    "previous": None,
+                    "equity_curve_granularity_seconds": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        equity_service = EquityService()
+        ds = equity_service.downsample_equity_curve(
+            latest_execution.metrics.equity_curve,
+            max_points=500,
+            start_dt=latest_execution.started_at,
+            end_dt=latest_execution.completed_at,
+        )
+
+        pagination = _paginate_list_by_page(
+            request=request,
+            items=list(ds.points),
+            base_url=f"/api/trading/trading-tasks/{task_id}/equity-curve/",
+            default_page_size=500,
+            max_page_size=1000,
+        )
+
+        return Response(
+            {
+                "task_id": task_id,
+                "task_type": "trading",
+                "execution_id": latest_execution.pk,
+                "has_metrics": True,
+                "equity_curve": pagination["results"],
+                "count": pagination["count"],
+                "next": pagination["next"],
+                "previous": pagination["previous"],
+                "equity_curve_granularity_seconds": ds.granularity_seconds,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class TradingTaskStrategyEventsView(APIView):
+    """Strategy events for the latest trading execution."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, task_id: int) -> Response:
+        try:
+            task = TradingTask.objects.select_related("config", "user", "oanda_account").get(
+                id=task_id, user=request.user.pk
+            )
+        except TradingTask.DoesNotExist:
+            return Response({"error": "Trading task not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        latest_execution = task.get_latest_execution()
+        if not latest_execution or not getattr(latest_execution, "metrics", None):
+            return Response(
+                {
+                    "task_id": task_id,
+                    "task_type": "trading",
+                    "execution_id": latest_execution.pk if latest_execution else None,
+                    "has_metrics": False,
+                    "strategy_events": [],
+                    "count": 0,
+                    "next": None,
+                    "previous": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        events = (
+            latest_execution.metrics.strategy_events
+            if isinstance(latest_execution.metrics.strategy_events, list)
+            else []
+        )
+
+        pagination = _paginate_list_by_page(
+            request=request,
+            items=list(events),
+            base_url=f"/api/trading/trading-tasks/{task_id}/strategy-events/",
+            default_page_size=1000,
+            max_page_size=1000,
+        )
+
+        return Response(
+            {
+                "task_id": task_id,
+                "task_type": "trading",
+                "execution_id": latest_execution.pk,
+                "has_metrics": True,
+                "strategy_events": pagination["results"],
+                "count": pagination["count"],
+                "next": pagination["next"],
+                "previous": pagination["previous"],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class TradingTaskTradeLogsView(APIView):
+    """Trade logs for the latest trading execution."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, task_id: int) -> Response:
+        try:
+            task = TradingTask.objects.select_related("config", "user", "oanda_account").get(
+                id=task_id, user=request.user.pk
+            )
+        except TradingTask.DoesNotExist:
+            return Response({"error": "Trading task not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        latest_execution = task.get_latest_execution()
+        if not latest_execution or not getattr(latest_execution, "metrics", None):
+            return Response(
+                {
+                    "task_id": task_id,
+                    "task_type": "trading",
+                    "execution_id": latest_execution.pk if latest_execution else None,
+                    "has_metrics": False,
+                    "trade_logs": [],
+                    "count": 0,
+                    "next": None,
+                    "previous": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        trades = (
+            latest_execution.metrics.trade_log
+            if isinstance(latest_execution.metrics.trade_log, list)
+            else []
+        )
+
+        pagination = _paginate_list_by_page(
+            request=request,
+            items=list(trades),
+            base_url=f"/api/trading/trading-tasks/{task_id}/trade-logs/",
+            default_page_size=1000,
+            max_page_size=1000,
+        )
+
+        return Response(
+            {
+                "task_id": task_id,
+                "task_type": "trading",
+                "execution_id": latest_execution.pk,
+                "has_metrics": True,
+                "trade_logs": pagination["results"],
+                "count": pagination["count"],
+                "next": pagination["next"],
+                "previous": pagination["previous"],
             },
             status=status.HTTP_200_OK,
         )

@@ -18,9 +18,15 @@ import { EquityCurveChart } from '../../tasks/charts/EquityCurveChart';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
 import { FloorLayerLog } from '../../backtest/FloorLayerLog';
 import { TradingTaskChart } from '../TradingTaskChart';
+import { tradingTasksApi } from '../../../services/api/tradingTasks';
 import type { TradingTask } from '../../../types/tradingTask';
 import { TaskStatus } from '../../../types/common';
 import { useTradingResults } from '../../../hooks/useTaskResults';
+import type {
+  BacktestStrategyEvent,
+  EquityPoint,
+  Trade,
+} from '../../../types/execution';
 import {
   TrendingUp as TrendingUpIcon,
   ShowChart as ShowChartIcon,
@@ -53,6 +59,22 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
   const execution = results?.execution;
   const metrics = results?.metrics;
 
+  const [equityCurve, setEquityCurve] = useState<EquityPoint[]>([]);
+  const [equityCurveLoading, setEquityCurveLoading] = useState(false);
+  const [equityCurveError, setEquityCurveError] = useState<string | null>(null);
+
+  const [tradeLogs, setTradeLogs] = useState<Trade[]>([]);
+  const [tradeLogsLoading, setTradeLogsLoading] = useState(false);
+  const [tradeLogsError, setTradeLogsError] = useState<string | null>(null);
+
+  const [strategyEvents, setStrategyEvents] = useState<BacktestStrategyEvent[]>(
+    []
+  );
+  const [strategyEventsLoading, setStrategyEventsLoading] = useState(false);
+  const [strategyEventsError, setStrategyEventsError] = useState<string | null>(
+    null
+  );
+
   useEffect(() => {
     if (results) {
       setLastUpdate(new Date());
@@ -84,12 +106,97 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
       task.status === TaskStatus.COMPLETED) &&
     metrics;
 
+  useEffect(() => {
+    if (!task.id || !hasMetrics) {
+      setEquityCurve([]);
+      setEquityCurveLoading(false);
+      setEquityCurveError(null);
+      setTradeLogs([]);
+      setTradeLogsLoading(false);
+      setTradeLogsError(null);
+      setStrategyEvents([]);
+      setStrategyEventsLoading(false);
+      setStrategyEventsError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    setEquityCurveLoading(true);
+    setEquityCurveError(null);
+    tradingTasksApi
+      .getEquityCurve(task.id)
+      .then((resp) => {
+        if (cancelled) return;
+        setEquityCurve(
+          Array.isArray(resp.equity_curve) ? resp.equity_curve : []
+        );
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setEquityCurveError(
+          err instanceof Error ? err.message : 'Failed to load equity curve'
+        );
+        setEquityCurve([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setEquityCurveLoading(false);
+      });
+
+    setTradeLogsLoading(true);
+    setTradeLogsError(null);
+    tradingTasksApi
+      .getTradeLogs(task.id)
+      .then((resp) => {
+        if (cancelled) return;
+        setTradeLogs(Array.isArray(resp.trade_logs) ? resp.trade_logs : []);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setTradeLogsError(
+          err instanceof Error ? err.message : 'Failed to load trade logs'
+        );
+        setTradeLogs([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setTradeLogsLoading(false);
+      });
+
+    setStrategyEventsLoading(true);
+    setStrategyEventsError(null);
+    tradingTasksApi
+      .getStrategyEvents(task.id)
+      .then((resp) => {
+        if (cancelled) return;
+        setStrategyEvents(
+          Array.isArray(resp.strategy_events) ? resp.strategy_events : []
+        );
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setStrategyEventsError(
+          err instanceof Error ? err.message : 'Failed to load strategy events'
+        );
+        setStrategyEvents([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setStrategyEventsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [task.id, hasMetrics, execution?.id]);
+
   // Filter equity curve data based on selected date range
   const getFilteredEquityCurve = () => {
-    if (!metrics?.equity_curve) return [];
+    if (!equityCurve || equityCurve.length === 0) return [];
 
     if (dateRange === 'all') {
-      return metrics.equity_curve;
+      return equityCurve;
     }
 
     const now = new Date();
@@ -110,7 +217,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
         break;
     }
 
-    return metrics.equity_curve.filter(
+    return equityCurve.filter(
       (point) => new Date(point.timestamp) >= cutoffDate
     );
   };
@@ -276,6 +383,17 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           </FormControl>
         </Box>
 
+        {equityCurveLoading && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Loading equity curve…
+          </Alert>
+        )}
+        {equityCurveError && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Failed to load equity curve. {equityCurveError}
+          </Alert>
+        )}
+
         <EquityCurveChart data={getFilteredEquityCurve()} height={400} />
       </Paper>
 
@@ -294,7 +412,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
               ? (execution?.completed_at ?? undefined)
               : undefined
           }
-          trades={metrics?.trade_log || []}
+          trades={tradeLogs}
           strategyLayers={[]} // TODO: Add strategy layers if available
           height={500}
           timezone="UTC"
@@ -305,22 +423,34 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
       </Paper>
 
       {/* Floor Strategy Layer Log (for floor strategy only) */}
-      {task.strategy_type === 'floor' &&
-        metrics?.trade_log &&
-        metrics.trade_log.length > 0 && (
-          <Paper sx={{ p: 3, mt: 3 }}>
-            <FloorLayerLog
-              trades={metrics.trade_log}
-              strategyEvents={metrics.strategy_events}
-              selectedTradeIndex={selectedTradeIndex}
-            />
-          </Paper>
-        )}
+      {task.strategy_type === 'floor' && tradeLogs.length > 0 && (
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <FloorLayerLog
+            trades={tradeLogs}
+            strategyEvents={strategyEvents}
+            selectedTradeIndex={selectedTradeIndex}
+          />
+        </Paper>
+      )}
 
       {/* Trade Log Table */}
       <Box ref={tradeLogTableRef} sx={{ mt: 3 }}>
+        {(tradeLogsLoading || strategyEventsLoading) && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Loading trade details…
+          </Alert>
+        )}
+        {(tradeLogsError || strategyEventsError) && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Failed to load some trade details.
+            {tradeLogsError ? ` Trade logs: ${tradeLogsError}.` : ''}
+            {strategyEventsError
+              ? ` Strategy events: ${strategyEventsError}.`
+              : ''}
+          </Alert>
+        )}
         <TradeLogTable
-          trades={metrics?.trade_log || []}
+          trades={tradeLogs}
           title="Trade Log"
           selectedTradeIndex={selectedTradeIndex}
         />

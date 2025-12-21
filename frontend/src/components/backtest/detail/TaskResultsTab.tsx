@@ -20,7 +20,7 @@ import { BacktestChart } from '../BacktestChart';
 import { FloorLayerLog } from '../FloorLayerLog';
 import type { BacktestTask } from '../../../types/backtestTask';
 import { TaskStatus } from '../../../types/common';
-import type { Trade } from '../../../types/execution';
+import type { BacktestStrategyEvent, Trade } from '../../../types/execution';
 import type { TaskResults } from '../../../types/results';
 import type { ChartMarker } from '../../../utils/chartMarkers';
 
@@ -31,9 +31,82 @@ interface TaskResultsTabProps {
 
 export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
   const metrics = results?.metrics ?? null;
+  const [tradeLogs, setTradeLogs] = React.useState<Trade[]>([]);
+  const [tradeLogsLoading, setTradeLogsLoading] = React.useState(false);
+  const [tradeLogsError, setTradeLogsError] = React.useState<string | null>(
+    null
+  );
+  const [strategyEvents, setStrategyEvents] = React.useState<
+    BacktestStrategyEvent[]
+  >([]);
+  const [strategyEventsLoading, setStrategyEventsLoading] =
+    React.useState(false);
+  const [strategyEventsError, setStrategyEventsError] = React.useState<
+    string | null
+  >(null);
 
   // Check if task has completed execution with metrics
   const hasMetrics = task.status === TaskStatus.COMPLETED && !!metrics;
+
+  React.useEffect(() => {
+    if (!hasMetrics) {
+      setTradeLogs([]);
+      setTradeLogsLoading(false);
+      setTradeLogsError(null);
+      setStrategyEvents([]);
+      setStrategyEventsLoading(false);
+      setStrategyEventsError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    setTradeLogsLoading(true);
+    setTradeLogsError(null);
+    backtestTasksApi
+      .getTradeLogs(task.id)
+      .then((resp) => {
+        if (cancelled) return;
+        setTradeLogs(Array.isArray(resp.trade_logs) ? resp.trade_logs : []);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setTradeLogsError(
+          err instanceof Error ? err.message : 'Failed to load trade logs'
+        );
+        setTradeLogs([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setTradeLogsLoading(false);
+      });
+
+    setStrategyEventsLoading(true);
+    setStrategyEventsError(null);
+    backtestTasksApi
+      .getStrategyEvents(task.id)
+      .then((resp) => {
+        if (cancelled) return;
+        setStrategyEvents(
+          Array.isArray(resp.strategy_events) ? resp.strategy_events : []
+        );
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setStrategyEventsError(
+          err instanceof Error ? err.message : 'Failed to load strategy events'
+        );
+        setStrategyEvents([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setStrategyEventsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasMetrics, task.id, results?.execution?.id]);
 
   // Debug logging for strategy events (ALWAYS LOG)
   React.useEffect(() => {}, [metrics]);
@@ -79,7 +152,7 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
   const [isExporting, setIsExporting] = React.useState(false);
 
   const handleExportCSV = () => {
-    if (!metrics?.trade_log) return;
+    if (!tradeLogs || tradeLogs.length === 0) return;
 
     // Create CSV content
     const headers = [
@@ -95,7 +168,7 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
       'Duration',
     ];
 
-    const rows = metrics.trade_log.map((trade: Trade) => [
+    const rows = tradeLogs.map((trade: Trade) => [
       trade.entry_time,
       trade.exit_time,
       trade.instrument,
@@ -139,7 +212,7 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
   };
 
   const getTradeStatistics = () => {
-    if (!metrics?.trade_log) return null;
+    if (!tradeLogs || tradeLogs.length === 0) return null;
 
     const safeNumber = (value: unknown, fallback = 0): number => {
       if (value === null || value === undefined) return fallback;
@@ -147,7 +220,7 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
       return Number.isFinite(num) ? num : fallback;
     };
 
-    const trades = metrics.trade_log;
+    const trades = tradeLogs;
     const tradePnl = (trade: Trade) =>
       safeNumber((trade as Trade & { pnl?: unknown }).pnl);
     const tradeRealizedPnl = (trade: Trade) =>
@@ -338,8 +411,27 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
         <MetricsGrid metrics={metrics} />
       </Paper>
 
+      {(tradeLogsLoading || strategyEventsLoading) && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CircularProgress size={16} />
+            <Typography variant="body2">Loading results details…</Typography>
+          </Box>
+        </Alert>
+      )}
+
+      {(tradeLogsError || strategyEventsError) && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Failed to load some result details.
+          {tradeLogsError ? ` Trade logs: ${tradeLogsError}.` : ''}
+          {strategyEventsError
+            ? ` Strategy events: ${strategyEventsError}.`
+            : ''}
+        </Alert>
+      )}
+
       {/* OHLC Chart with Trading Events */}
-      {metrics.trade_log && metrics.trade_log.length > 0 && (
+      {tradeLogs.length > 0 && (
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" sx={{ mb: 3 }}>
             Price Chart with Trading Events
@@ -349,7 +441,7 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
             instrument={task.instrument}
             startDate={task.start_time}
             endDate={task.end_time}
-            strategyEvents={metrics.strategy_events}
+            strategyEvents={strategyEvents}
             timezone="UTC"
             height={500}
             onTradeClick={handleMarkerClick}
@@ -493,24 +585,22 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
       )}
 
       {/* Floor Strategy Layer Log */}
-      {task.strategy_type === 'floor' &&
-        metrics.trade_log &&
-        metrics.trade_log.length > 0 && (
-          <>
-            {import.meta.env.DEV &&
-              console.log('[TaskResultsTab] Rendering FloorLayerLog', {
-                strategy_type: task.strategy_type,
-                trade_count: metrics.trade_log.length,
-                first_trade: metrics.trade_log[0],
-                strategy_events_count: metrics.strategy_events?.length || 0,
-              })}
-            <FloorLayerLog
-              trades={metrics.trade_log}
-              strategyEvents={metrics.strategy_events}
-              selectedTradeIndex={selectedTradeIndex}
-            />
-          </>
-        )}
+      {task.strategy_type === 'floor' && tradeLogs.length > 0 && (
+        <>
+          {import.meta.env.DEV &&
+            console.log('[TaskResultsTab] Rendering FloorLayerLog', {
+              strategy_type: task.strategy_type,
+              trade_count: tradeLogs.length,
+              first_trade: tradeLogs[0],
+              strategy_events_count: strategyEvents.length,
+            })}
+          <FloorLayerLog
+            trades={tradeLogs}
+            strategyEvents={strategyEvents}
+            selectedTradeIndex={selectedTradeIndex}
+          />
+        </>
+      )}
 
       <Divider sx={{ my: 3 }} />
 
@@ -537,7 +627,7 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
         </Box>
 
         <TradeLogTable
-          trades={metrics.trade_log}
+          trades={tradeLogs}
           showExport={false}
           selectedTradeIndex={selectedTradeIndex}
         />

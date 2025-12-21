@@ -8,6 +8,8 @@ import {
   List,
   ListItemButton,
   CircularProgress,
+  Pagination,
+  Button,
   Table,
   TableBody,
   TableCell,
@@ -165,20 +167,31 @@ export function TaskExecutionsTab({
 }: TaskExecutionsTabProps) {
   const [selectedExecution, setSelectedExecution] =
     useState<TaskExecution | null>(null);
+  const [executionsPage, setExecutionsPage] = useState(1);
+  const executionsPageSize = 20;
+
   const [autoScroll, setAutoScroll] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const logsContainerRef = useRef<HTMLDivElement>(null);
   const isUserScrollingRef = useRef(false);
+
+  const [logsPage, setLogsPage] = useState(1);
+  const logsPageSize = 100;
 
   const {
     data: executionsData,
     isLoading,
     error,
     refetch: refetchExecutions,
-  } = useTaskExecutions(taskId, taskType, undefined, {
-    enablePolling: true,
-    pollingInterval: 3000, // Poll every 3 seconds for running executions
-  });
+  } = useTaskExecutions(
+    taskId,
+    taskType,
+    { page: executionsPage, page_size: executionsPageSize },
+    {
+      enablePolling: true,
+      pollingInterval: 3000, // Poll every 3 seconds for running executions
+    }
+  );
 
   const executions = useMemo(
     () => executionsData?.results || [],
@@ -205,11 +218,11 @@ export function TaskExecutionsTab({
 
   const logInitialParams = useMemo(
     () => ({
-      limit: 500,
-      offset: 0,
+      page: logsPage,
+      page_size: logsPageSize,
       execution_id: selectedExecution?.id,
     }),
-    [selectedExecution?.id]
+    [selectedExecution?.id, logsPage, logsPageSize]
   );
 
   const {
@@ -224,6 +237,11 @@ export function TaskExecutionsTab({
     refreshInterval: 3000,
     initialParams: logInitialParams,
   });
+
+  // Reset logs pagination when changing execution
+  useEffect(() => {
+    setLogsPage(1);
+  }, [selectedExecution?.id]);
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
@@ -298,6 +316,14 @@ export function TaskExecutionsTab({
     return new Date(dateString).toLocaleString();
   };
 
+  const totalExecutionPages = executionsData
+    ? Math.ceil(executionsData.count / executionsPageSize)
+    : 0;
+
+  const totalLogPages = totalLogsCount
+    ? Math.ceil(totalLogsCount / logsPageSize)
+    : 0;
+
   return (
     <Box sx={{ px: 3 }}>
       {/* Backtest Period */}
@@ -336,6 +362,20 @@ export function TaskExecutionsTab({
               />
             ))}
           </List>
+
+          {totalExecutionPages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+              <Pagination
+                count={totalExecutionPages}
+                page={executionsPage}
+                onChange={(_e, value) => {
+                  setExecutionsPage(value);
+                  setSelectedExecution(null);
+                }}
+                size="small"
+              />
+            </Box>
+          )}
         </Grid>
 
         {/* Logs Panel */}
@@ -415,6 +455,47 @@ export function TaskExecutionsTab({
                     </Typography>
                   </Box>
                 </Box>
+
+                {totalLogPages > 1 && (
+                  <Box
+                    sx={{
+                      mt: 1,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: 1,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={logsPage <= 1 || isLogsLoading}
+                        onClick={() => setLogsPage((p) => Math.max(1, p - 1))}
+                      >
+                        Newer
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={logsPage >= totalLogPages || isLogsLoading}
+                        onClick={() =>
+                          setLogsPage((p) => Math.min(totalLogPages, p + 1))
+                        }
+                      >
+                        Older
+                      </Button>
+                    </Box>
+
+                    <Pagination
+                      count={totalLogPages}
+                      page={logsPage}
+                      onChange={(_e, value) => setLogsPage(value)}
+                      size="small"
+                    />
+                  </Box>
+                )}
               </Box>
 
               <Box
