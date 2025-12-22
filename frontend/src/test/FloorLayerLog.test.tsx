@@ -46,44 +46,32 @@ describe('FloorLayerLog Component', () => {
     {
       event_type: 'initial_entry',
       timestamp: '2024-01-15T10:00:00Z',
-      description: 'Initial LONG entry @ 149.50000',
-      details: {
-        layer: 1,
-        retracement_count: 0,
-        direction: 'long',
-        units: 1000,
-        entry_price: 149.5,
-        entry_retracement_count: 0,
-      },
+      layer_number: 1,
+      retracement_count: 0,
+      direction: 'long',
+      units: 1000,
+      entry_price: 149.5,
+      price: 149.5,
     },
     {
       event_type: 'retracement',
       timestamp: '2024-01-15T10:30:00Z',
-      description: 'Retracement LONG entry @ 149.30000',
-      details: {
-        layer: 1,
-        retracement_count: 1,
-        direction: 'long',
-        units: 1500,
-        entry_price: 149.3,
-        entry_retracement_count: 1,
-      },
+      layer_number: 1,
+      retracement_count: 1,
+      direction: 'long',
+      units: 1500,
+      entry_price: 149.3,
+      price: 149.3,
     },
     {
       event_type: 'take_profit',
       timestamp: '2024-01-15T11:00:00Z',
-      description:
-        'Take Profit: LONG 1000 units closed @ 149.75000 | P&L: 250.00',
-      details: {
-        layer: 1,
-        retracement_count: 0,
-        direction: 'long',
-        units: 1000,
-        entry_price: 149.5,
-        exit_price: 149.75,
-        pnl: 250.0,
-        entry_retracement_count: 1,
-      },
+      layer_number: 1,
+      direction: 'long',
+      units: 1000,
+      entry_price: 149.5,
+      exit_price: 149.75,
+      pnl: 250.0,
     },
   ];
 
@@ -241,11 +229,9 @@ describe('FloorLayerLog Component', () => {
       (row) => !row.textContent?.includes('Total')
     );
 
-    // Add Layer event has retracement_count = 1, should show in details
-    const scaleInRow = rows[1];
-    expect(scaleInRow?.textContent).toContain('Retracement #1');
-    const takeProfitRow = rows[2];
-    expect(takeProfitRow?.textContent).toContain('Remaining Retracements: 0');
+    // Retracement entry should show the annotation in details
+    const retracementRow = rows[1];
+    expect(retracementRow?.textContent).toContain('Retracement #1');
   });
 
   it('handles empty state correctly', () => {
@@ -261,26 +247,22 @@ describe('FloorLayerLog Component', () => {
       {
         event_type: 'initial_entry',
         timestamp: '2024-01-15T10:00:00Z',
-        description: 'Initial LONG entry @ 149.50000',
-        details: {
-          layer: 1,
-          retracement_count: 0,
-          direction: 'long',
-          units: 1000,
-          entry_price: 149.5,
-        },
+        layer_number: 1,
+        retracement_count: 0,
+        direction: 'long',
+        units: 1000,
+        entry_price: 149.5,
+        price: 149.5,
       },
       {
         event_type: 'initial_entry',
         timestamp: '2024-01-15T10:05:00Z',
-        description: 'Initial LONG entry @ 149.00000',
-        details: {
-          layer: 2,
-          retracement_count: 0,
-          direction: 'long',
-          units: 1000,
-          entry_price: 149.0,
-        },
+        layer_number: 2,
+        retracement_count: 0,
+        direction: 'long',
+        units: 1000,
+        entry_price: 149.0,
+        price: 149.0,
       },
     ];
 

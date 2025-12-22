@@ -27,7 +27,7 @@
         "info",
         "-Q",
         "trading,default",
-        "--concurrency=4",
+        "--concurrency=8",
         "--max-tasks-per-child=10"
       ],
       "justMyCode": true,

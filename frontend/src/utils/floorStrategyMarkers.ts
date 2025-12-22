@@ -32,9 +32,9 @@ const COLORS = {
   START_END: '#757575', // Gray - start/end markers
 };
 
-// Note: backend currently stores raw strategy events with keys like:
-// { "type": "open"|"close"|"layer_opened"|..., "details": {...}, "timestamp": "..." }
-// Frontend types call this field "event_type" but we accept both.
+// Note: canonical events are flat objects like:
+// { "event_type": "initial_entry"|"retracement"|"take_profit"|"add_layer"|..., "timestamp": "...", "price"?: ..., ... }
+// We still accept legacy keys like `type` when present to avoid hard crashes on old DB rows.
 
 /**
  * Create floor strategy event markers
@@ -123,18 +123,34 @@ function createMarkerFromEvent(
     return null;
   }
 
-  const details = (event.details ||
-    (raw.details as Record<string, unknown>) ||
-    {}) as Record<string, unknown>;
-
-  // Extract price from various possible fields
+  // Extract price from canonical fields (fallbacks only to keep old rows from breaking).
   const price =
-    details.price ??
-    details.current_price ??
-    details.exit_price ??
-    details.entry_price;
+    (raw.price as unknown) ??
+    (raw.entry_price as unknown) ??
+    (raw.exit_price as unknown) ??
+    (raw.bid as unknown);
 
   if (price === null || price === undefined || price === '') {
+    // If we have bid+ask, use mid.
+    const bidNum = Number(raw.bid);
+    const askNum = Number(raw.ask);
+    const mid =
+      Number.isFinite(bidNum) && Number.isFinite(askNum)
+        ? (bidNum + askNum) / 2
+        : null;
+    if (mid !== null) {
+      const markerConfig = getMarkerConfig(event);
+      return {
+        id: `event-${index}`,
+        date: eventDate,
+        price: mid,
+        type: markerConfig.type,
+        color: markerConfig.color,
+        shape: markerConfig.shape,
+        label: markerConfig.label,
+        tooltip: formatTooltip(event),
+      };
+    }
     if (isDev) {
       // eslint-disable-next-line no-console
       console.warn('[floorStrategyMarkers] Dropping event: missing price', {
@@ -143,7 +159,6 @@ function createMarkerFromEvent(
         event_type:
           (raw.event_type as string | undefined) ||
           (raw.type as string | undefined),
-        details,
         raw,
       });
     }
@@ -175,20 +190,12 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
   label?: string;
 } {
   const raw = event as unknown as Record<string, unknown>;
-  const details = (event.details ||
-    (raw.details as Record<string, unknown>) ||
-    {}) as Record<string, unknown>;
 
   const eventType = String(
     (raw.event_type as string | undefined) ||
       (raw.type as string | undefined) ||
       ''
   );
-
-  const description =
-    (typeof event.description === 'string' && event.description) ||
-    (typeof raw.description === 'string' && raw.description) ||
-    '';
 
   const normalizeDirection = (value: unknown): 'long' | 'short' | undefined => {
     if (typeof value !== 'string') return undefined;
@@ -197,15 +204,10 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
     return undefined;
   };
 
-  const directionFromDetails = normalizeDirection(details.direction);
   const directionFromRaw = normalizeDirection(raw.direction);
-  const directionFromDescription = /\bshort\b/i.test(description)
-    ? 'short'
-    : /\blong\b/i.test(description)
-      ? 'long'
-      : undefined;
+  const directionFromDescription = undefined;
 
-  const unitsRaw = details.units ?? details.lot_size;
+  const unitsRaw = raw.units;
   const unitsNum =
     typeof unitsRaw === 'number'
       ? unitsRaw
@@ -222,14 +224,10 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
       : undefined;
 
   const inferredDirection =
-    directionFromDetails ??
-    directionFromRaw ??
-    directionFromDescription ??
-    directionFromUnits;
+    directionFromRaw ?? directionFromDescription ?? directionFromUnits;
   const isShort = inferredDirection === 'short';
-  const retracementOpen = Boolean(details.retracement_open);
-  const units = formatUnits(details.units ?? details.lot_size);
-  const layerNumber = details.layer_number ?? details.layer;
+  const units = formatUnits(raw.units);
+  const layerNumber = raw.layer_number;
 
   switch (eventType) {
     // Backend: trade open marker
@@ -237,7 +235,7 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
     // Frontend event names
     case 'initial_entry':
     case 'retracement': {
-      const isRetracement = eventType === 'retracement' || retracementOpen;
+      const isRetracement = eventType === 'retracement';
 
       // Preserve the semantic event type for initial entry, but render direction
       // via shape/color/label.
@@ -278,6 +276,8 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
     }
 
     // Backend: layer created marker
+    case 'add_layer':
+    case 'remove_layer':
     case 'layer_opened':
     case 'new_layer_created': {
       return {
@@ -339,48 +339,39 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
  */
 function formatTooltip(event: BacktestStrategyEvent): string {
   const raw = event as unknown as Record<string, unknown>;
-  const details = (event.details ||
-    (raw.details as Record<string, unknown>) ||
-    {}) as Record<string, unknown>;
   const eventType = String(
     (raw.event_type as string | undefined) ||
       (raw.type as string | undefined) ||
       ''
   );
-  const description =
-    (typeof event.description === 'string' && event.description) ||
-    eventType ||
-    'Strategy event';
 
-  const lines: string[] = [description];
-  const entryEventTypes = ['open', 'initial_entry', 'retracement'];
-  const isEntryEvent = entryEventTypes.includes(eventType);
+  const lines: string[] = [eventType || 'Strategy event'];
 
-  // Add relevant details
-  if (
-    details.price ??
-    details.current_price ??
-    details.entry_price ??
-    details.exit_price
-  ) {
-    const p = (details.price ??
-      details.current_price ??
-      details.entry_price ??
-      details.exit_price) as unknown;
-    lines.push(`Price: ${parseFloat(String(p)).toFixed(5)}`);
+  const price =
+    (raw.price as unknown) ??
+    (raw.entry_price as unknown) ??
+    (raw.exit_price as unknown);
+  if (price !== null && price !== undefined && price !== '') {
+    const p = Number(price);
+    if (Number.isFinite(p)) {
+      lines.push(`Price: ${p.toFixed(5)}`);
+    }
   }
-  if (details.layer_number !== undefined || details.layer !== undefined) {
-    lines.push(`Layer: ${details.layer_number ?? details.layer}`);
+
+  if (raw.layer_number !== undefined) {
+    lines.push(`Layer: ${String(raw.layer_number)}`);
   }
-  if (details.entry_retracement_count !== undefined) {
-    lines.push(`Entry Retracement: ${details.entry_retracement_count}`);
+  if (raw.retracement_count !== undefined) {
+    lines.push(`Retracement: ${String(raw.retracement_count)}`);
   }
-  if (details.retracement_count !== undefined) {
-    const label = isEntryEvent ? 'Retracement' : 'Remaining Retracements';
-    lines.push(`${label}: ${details.retracement_count}`);
+  if (raw.units !== undefined) {
+    lines.push(`Units: ${String(raw.units)}`);
   }
-  if (details.units ?? details.lot_size) {
-    lines.push(`Units: ${details.units ?? details.lot_size}`);
+  if (raw.pips !== undefined) {
+    lines.push(`Pips: ${String(raw.pips)}`);
+  }
+  if (raw.pnl !== undefined) {
+    lines.push(`P&L: ${String(raw.pnl)}`);
   }
 
   return lines.join('\n');

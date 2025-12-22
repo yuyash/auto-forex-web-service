@@ -37,15 +37,10 @@ interface DisplayEvent {
   entryPrice?: number;
   exitPrice?: number;
   pnl?: number;
-  realizedPnl?: number;
-  unrealizedPnl?: number;
   retracementCount?: number;
-  entryRetracementCount?: number;
   maxRetracements?: number;
-  isFirstLot?: boolean;
   description: string;
-  tradeIndex?: number;
-  source: 'trade' | 'event';
+  source: 'event';
 }
 
 interface FloorLayerLogProps {
@@ -65,6 +60,8 @@ const getEventTypeDisplay = (eventType: string) => {
     initial_entry: { label: 'Initial Entry', color: 'primary' },
     retracement: { label: 'Retracement', color: 'info' },
     take_profit: { label: 'Take Profit', color: 'success' },
+    add_layer: { label: 'Add Layer', color: 'warning' },
+    remove_layer: { label: 'Remove Layer', color: 'warning' },
     volatility_lock: { label: 'Volatility Lock', color: 'error' },
     margin_protection: { label: 'Margin Protection', color: 'error' },
   };
@@ -93,11 +90,7 @@ const parseNumber = (value: unknown): number | undefined => {
   return Number.isFinite(parsedValue) ? parsedValue : undefined;
 };
 
-export function FloorLayerLog({
-  trades,
-  strategyEvents = [],
-  selectedTradeIndex,
-}: FloorLayerLogProps) {
+export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
   const [sortField, setSortField] = useState<SortField>('timestamp');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [page, setPage] = useState(0);
@@ -106,135 +99,72 @@ export function FloorLayerLog({
   const displayEvents = useMemo(() => {
     const events: DisplayEvent[] = [];
 
-    // Add strategy events
     strategyEvents.forEach((event, idx) => {
-      const details = event.details || {};
+      const ts = event.timestamp || '';
       const layerNumber =
-        (details.layer as number) || (details.layer_number as number) || 1;
-      const entryRetracementCount = parseNumber(
-        details.entry_retracement_count
-      );
-      const retracementCount = parseNumber(details.retracement_count);
+        typeof event.layer_number === 'number' &&
+        Number.isFinite(event.layer_number)
+          ? event.layer_number
+          : 1;
+      const unitsNum = parseNumber(event.units);
+      const entryPriceNum =
+        event.entry_price !== undefined
+          ? parseNumber(event.entry_price)
+          : event.price !== undefined
+            ? parseNumber(event.price)
+            : undefined;
+      const exitPriceNum =
+        event.exit_price !== undefined
+          ? parseNumber(event.exit_price)
+          : event.price !== undefined
+            ? parseNumber(event.price)
+            : undefined;
+      const pnlNum = parseNumber(event.pnl);
 
-      // Normalize strategy_close to take_profit (they're the same thing)
-      const eventType =
-        event.event_type === 'strategy_close'
-          ? 'take_profit'
-          : event.event_type;
+      const direction =
+        typeof event.direction === 'string'
+          ? (event.direction as string)
+          : undefined;
+
+      const retracementCount =
+        typeof event.retracement_count === 'number'
+          ? event.retracement_count
+          : parseNumber(event.retracement_count);
+
+      const descriptionParts: string[] = [];
+      descriptionParts.push(event.event_type);
+      if (typeof direction === 'string' && direction) {
+        descriptionParts.push(direction.toUpperCase());
+      }
+      if (unitsNum !== undefined) {
+        descriptionParts.push(`${unitsNum} units`);
+      }
+      if (event.price !== undefined) {
+        const p = parseNumber(event.price);
+        if (p !== undefined) descriptionParts.push(`@ ${formatPrice(p)}`);
+      }
+      if (pnlNum !== undefined) {
+        descriptionParts.push(`P&L: ${formatCurrency(pnlNum)}`);
+      }
 
       events.push({
         id: `event-${idx}`,
-        timestamp: event.timestamp || (details.timestamp as string) || '',
-        eventType,
+        timestamp: ts,
+        eventType: event.event_type,
         layerNumber,
-        direction: details.direction as string | undefined,
-        units: details.units ? parseFloat(String(details.units)) : undefined,
-        entryPrice: details.entry_price
-          ? parseFloat(String(details.entry_price))
-          : details.price
-            ? parseFloat(String(details.price))
-            : undefined,
-        exitPrice: details.exit_price
-          ? parseFloat(String(details.exit_price))
-          : undefined,
-        pnl: details.pnl ? parseFloat(String(details.pnl)) : undefined,
-        realizedPnl: details.realized_pnl
-          ? parseFloat(String(details.realized_pnl))
-          : details.pnl
-            ? parseFloat(String(details.pnl))
-            : undefined,
-        unrealizedPnl: details.unrealized_pnl
-          ? parseFloat(String(details.unrealized_pnl))
-          : undefined,
+        direction,
+        units: unitsNum,
+        entryPrice: entryPriceNum,
+        exitPrice: exitPriceNum,
+        pnl: pnlNum,
         retracementCount,
-        entryRetracementCount,
-        maxRetracements: parseNumber(details.max_retracements),
-        isFirstLot: details.is_first_lot as boolean | undefined,
-        description: event.description,
+        maxRetracements:
+          typeof event.max_retracements_per_layer === 'number'
+            ? event.max_retracements_per_layer
+            : undefined,
+        description: descriptionParts.join(' '),
         source: 'event',
       });
-    });
-
-    // Add entry events from trades (if not already in strategy events)
-    trades.forEach((trade, idx) => {
-      const layerNum = trade.layer_number ?? 1;
-      const entryRetracementCount =
-        typeof trade.entry_retracement_count === 'number'
-          ? trade.entry_retracement_count
-          : undefined;
-
-      // Check if we already have an entry event for this trade
-      const hasMatchingEntryEvent = events.some(
-        (e) =>
-          e.source === 'event' &&
-          ['initial_entry', 'retracement'].includes(e.eventType) &&
-          e.entryPrice === trade.entry_price &&
-          e.units === trade.units &&
-          Math.abs(
-            new Date(e.timestamp).getTime() -
-              new Date(trade.entry_time).getTime()
-          ) < 1000
-      );
-
-      if (!hasMatchingEntryEvent) {
-        events.push({
-          id: `trade-entry-${idx}`,
-          timestamp: trade.entry_time,
-          eventType: trade.is_first_lot ? 'initial_entry' : 'retracement',
-          layerNumber: layerNum,
-          direction: trade.direction,
-          units: trade.units,
-          entryPrice: trade.entry_price,
-          exitPrice: trade.exit_price,
-          pnl: undefined, // Entry doesn't have P&L yet
-          retracementCount: trade.retracement_count,
-          entryRetracementCount:
-            entryRetracementCount ?? trade.retracement_count,
-          isFirstLot: trade.is_first_lot,
-          description: trade.is_first_lot
-            ? `Initial ${trade.direction?.toUpperCase()} entry @ ${formatPrice(trade.entry_price)}`
-            : `Retracement ${trade.direction?.toUpperCase()} entry @ ${formatPrice(trade.entry_price)}`,
-          tradeIndex: idx,
-          source: 'trade',
-        });
-      }
-
-      // Add close event from trade (take profit) - only if no matching close event exists
-      const hasMatchingCloseEvent = events.some(
-        (e) =>
-          e.source === 'event' &&
-          ['take_profit', 'volatility_lock', 'margin_protection'].includes(
-            e.eventType
-          ) &&
-          e.units === trade.units &&
-          Math.abs(
-            new Date(e.timestamp).getTime() -
-              new Date(trade.exit_time).getTime()
-          ) < 2000
-      );
-
-      if (!hasMatchingCloseEvent && trade.exit_time) {
-        events.push({
-          id: `trade-close-${idx}`,
-          timestamp: trade.exit_time,
-          eventType: 'take_profit',
-          layerNumber: layerNum,
-          direction: trade.direction,
-          units: trade.units,
-          entryPrice: trade.entry_price,
-          exitPrice: trade.exit_price,
-          pnl: trade.pnl,
-          realizedPnl: trade.realized_pnl ?? trade.pnl,
-          unrealizedPnl: trade.unrealized_pnl,
-          retracementCount: trade.retracement_count,
-          entryRetracementCount:
-            entryRetracementCount ?? trade.retracement_count,
-          isFirstLot: trade.is_first_lot,
-          description: `Take Profit: ${trade.direction?.toUpperCase()} ${trade.units} units closed @ ${formatPrice(trade.exit_price)} | P&L: ${formatCurrency(trade.pnl)}`,
-          tradeIndex: idx,
-          source: 'trade',
-        });
-      }
     });
 
     return events.sort((a, b) => {
@@ -242,16 +172,16 @@ export function FloorLayerLog({
       const timeB = new Date(b.timestamp).getTime();
       return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
     });
-  }, [trades, strategyEvents, sortOrder]);
+  }, [strategyEvents, sortOrder]);
 
   // Filter and sort all events (merged across all layers)
   const sortedFilteredEvents = useMemo(() => {
-    // Note: 'retracement_detected' and 'strategy_close' are excluded as they're redundant
-    // with 'retracement' (add) and 'take_profit' respectively
     const meaningfulEventTypes = [
       'initial_entry',
       'retracement',
       'take_profit',
+      'add_layer',
+      'remove_layer',
       'volatility_lock',
       'margin_protection',
     ];
@@ -310,6 +240,8 @@ export function FloorLayerLog({
       .reduce((sum, e) => sum + (e.pnl || 0), 0);
   }, [sortedFilteredEvents]);
 
+  const shouldShowTotalPnL = Number.isFinite(totalPnL);
+
   if (displayEvents.length === 0) {
     return (
       <Paper sx={{ p: 3, mb: 3 }}>
@@ -334,20 +266,35 @@ export function FloorLayerLog({
         }}
       >
         <Typography variant="h6">Floor Strategy Execution Log</Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            fontWeight: 'bold',
-            color: totalPnL >= 0 ? 'success.main' : 'error.main',
-          }}
-        >
-          Total P&L: {formatCurrency(totalPnL)}
-        </Typography>
+        {shouldShowTotalPnL && (
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 'bold',
+              color: totalPnL >= 0 ? 'success.main' : 'error.main',
+            }}
+          >
+            Total P&L: {formatCurrency(totalPnL)}
+          </Typography>
+        )}
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         Detailed execution log showing initial positions, layer additions,
         retracements, and take profits with buy/sell details.
       </Typography>
+
+      <TablePagination
+        component="div"
+        count={sortedFilteredEvents.length}
+        page={page}
+        onPageChange={(_e, newPage) => setPage(newPage)}
+        rowsPerPage={rowsPerPage}
+        onRowsPerPageChange={(e) => {
+          setRowsPerPage(parseInt(e.target.value, 10));
+          setPage(0);
+        }}
+        rowsPerPageOptions={[10, 25, 50, 100]}
+      />
 
       <TableContainer>
         <Table size="small">
@@ -407,9 +354,6 @@ export function FloorLayerLog({
           </TableHead>
           <TableBody>
             {paginatedEvents.map((event) => {
-              const isSelected =
-                event.tradeIndex !== undefined &&
-                selectedTradeIndex === event.tradeIndex;
               const eventDisplay = getEventTypeDisplay(event.eventType);
               const isEntry = ['initial_entry', 'retracement'].includes(
                 event.eventType
@@ -419,26 +363,30 @@ export function FloorLayerLog({
                 'volatility_lock',
                 'margin_protection',
               ].includes(event.eventType);
-              const entryRetracementValue =
-                event.entryRetracementCount ??
-                (isEntry ? event.retracementCount : undefined);
-              const remainingRetracementValue = !isEntry
+
+              const retracementValue = isEntry
                 ? event.retracementCount
                 : undefined;
+
+              const isLayerChange = ['add_layer', 'remove_layer'].includes(
+                event.eventType
+              );
 
               let action = '-';
               if (isEntry && event.direction)
                 action = event.direction === 'long' ? 'LONG' : 'SHORT';
               else if (isClose) action = 'CLOSE';
+              else if (event.eventType === 'add_layer') action = 'ADD';
+              else if (event.eventType === 'remove_layer') action = 'REMOVE';
+              else if (isLayerChange) action = 'LAYER';
 
               return (
                 <TableRow
                   key={event.id}
                   id={event.id}
                   sx={{
-                    bgcolor: isSelected
-                      ? 'primary.light'
-                      : event.isFirstLot
+                    bgcolor:
+                      event.eventType === 'initial_entry'
                         ? 'action.hover'
                         : undefined,
                     transition: 'background-color 0.3s',
@@ -479,8 +427,7 @@ export function FloorLayerLog({
                     )}
                   </TableCell>
                   <TableCell align="right">
-                    {entryRetracementValue !== undefined ||
-                    remainingRetracementValue !== undefined ? (
+                    {retracementValue !== undefined ? (
                       <Tooltip
                         title={
                           event.maxRetracements
@@ -497,21 +444,13 @@ export function FloorLayerLog({
                             gap: 0.5,
                           }}
                         >
-                          {entryRetracementValue !== undefined && (
+                          {retracementValue !== undefined && (
                             <Typography
                               component="span"
                               variant="body2"
                               sx={{ fontWeight: 'bold' }}
                             >
-                              {entryRetracementValue}
-                            </Typography>
-                          )}
-                          {remainingRetracementValue !== undefined && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              Remaining: {remainingRetracementValue}
+                              {retracementValue}
                             </Typography>
                           )}
                         </Box>
@@ -535,37 +474,20 @@ export function FloorLayerLog({
                     align="right"
                     sx={{
                       color:
-                        event.realizedPnl !== undefined &&
-                        event.realizedPnl >= 0
+                        event.pnl !== undefined && event.pnl >= 0
                           ? 'success.main'
-                          : event.realizedPnl !== undefined
+                          : event.pnl !== undefined
                             ? 'error.main'
                             : undefined,
-                      fontWeight:
-                        event.realizedPnl !== undefined ? 'bold' : undefined,
+                      fontWeight: event.pnl !== undefined ? 'bold' : undefined,
                     }}
                   >
-                    {isClose && event.realizedPnl !== undefined
-                      ? formatCurrency(event.realizedPnl)
+                    {isClose && event.pnl !== undefined
+                      ? formatCurrency(event.pnl)
                       : '-'}
                   </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{
-                      color:
-                        event.unrealizedPnl !== undefined &&
-                        event.unrealizedPnl >= 0
-                          ? 'success.main'
-                          : event.unrealizedPnl !== undefined
-                            ? 'error.main'
-                            : undefined,
-                      fontWeight:
-                        event.unrealizedPnl !== undefined ? 'bold' : undefined,
-                    }}
-                  >
-                    {event.unrealizedPnl !== undefined
-                      ? formatCurrency(event.unrealizedPnl)
-                      : '-'}
+                  <TableCell align="right" sx={{}}>
+                    -
                   </TableCell>
                   <TableCell sx={{ maxWidth: 300 }}>
                     <Tooltip title={event.description} arrow>
@@ -581,15 +503,9 @@ export function FloorLayerLog({
                         {event.description}
                       </Typography>
                     </Tooltip>
-                    {entryRetracementValue !== undefined &&
-                      entryRetracementValue > 0 && (
-                        <Typography variant="caption" color="text.secondary">
-                          Retracement #{entryRetracementValue}
-                        </Typography>
-                      )}
-                    {remainingRetracementValue !== undefined && (
+                    {retracementValue !== undefined && retracementValue > 0 && (
                       <Typography variant="caption" color="text.secondary">
-                        Remaining Retracements: {remainingRetracementValue}
+                        Retracement #{retracementValue}
                       </Typography>
                     )}
                   </TableCell>
@@ -615,19 +531,6 @@ export function FloorLayerLog({
           </TableBody>
         </Table>
       </TableContainer>
-
-      <TablePagination
-        component="div"
-        count={sortedFilteredEvents.length}
-        page={page}
-        onPageChange={(_e, newPage) => setPage(newPage)}
-        rowsPerPage={rowsPerPage}
-        onRowsPerPageChange={(e) => {
-          setRowsPerPage(parseInt(e.target.value, 10));
-          setPage(0);
-        }}
-        rowsPerPageOptions={[10, 25, 50, 100]}
-      />
     </Paper>
   );
 }

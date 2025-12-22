@@ -9,12 +9,10 @@ describe('createFloorStrategyMarkers', () => {
       {
         event_type: 'initial_entry',
         timestamp: '2024-01-15T10:00:00Z',
-        description: 'Initial SHORT entry @ 149.50000',
-        details: {
-          direction: 'short',
-          entry_price: 149.5,
-          units: 1000,
-        },
+        direction: 'short',
+        entry_price: 149.5,
+        price: 149.5,
+        units: 1000,
       },
     ];
 
@@ -32,11 +30,9 @@ describe('createFloorStrategyMarkers', () => {
       {
         event_type: 'initial_entry',
         timestamp: '2024-01-15T10:00:00Z',
-        description: 'Initial LONG entry @ 149.50000',
-        details: {
-          entry_price: 149.5,
-          units: 1000,
-        },
+        entry_price: 149.5,
+        price: 149.5,
+        units: 1000,
       },
     ];
 

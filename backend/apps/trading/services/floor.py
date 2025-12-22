@@ -111,6 +111,7 @@ class FloorStrategyState:
 
     active_layers: list[LayerState] = field(default_factory=list)
     volatility_locked: bool = False
+    margin_protection: bool = False
 
     # Derived mid (from bid/ask) for indicator history/plotting.
     last_mid: Decimal | None = None
@@ -144,6 +145,7 @@ class FloorStrategyState:
                 for l in self.active_layers
             ],
             "volatility_locked": bool(self.volatility_locked),
+            "margin_protection": bool(self.margin_protection),
             "last_mid": str(self.last_mid) if self.last_mid is not None else None,
             "last_bid": str(self.last_bid) if self.last_bid is not None else None,
             "last_ask": str(self.last_ask) if self.last_ask is not None else None,
@@ -225,6 +227,7 @@ class FloorStrategyState:
             current_candle_close=current_candle_close,
             active_layers=layers,
             volatility_locked=bool(raw.get("volatility_locked") or False),
+            margin_protection=bool(raw.get("margin_protection") or False),
             last_mid=last_mid,
             last_bid=last_bid,
             last_ask=last_ask,
@@ -263,13 +266,13 @@ def _tick_bucket_start_epoch_seconds(*, tick_ts: str, granularity_seconds: int) 
     return epoch - (epoch % int(granularity_seconds))
 
 
-@dataclass(frozen=True)
-class StrategyEvent:
-    type: str
-    details: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"type": self.type, **({"details": self.details} if self.details else {})}
+def _canonical_event(event_type: str, **fields: Any) -> dict[str, Any]:
+    out: dict[str, Any] = {"event_type": str(event_type)}
+    for k, v in fields.items():
+        if v is None:
+            continue
+        out[str(k)] = v
+    return out
 
 
 def _to_decimal(value: Any) -> Decimal | None:
@@ -729,32 +732,126 @@ class FloorStrategyService(Strategy):
         # For non-momentum methods keep existing behavior.
         return int(s.ticks_seen) >= int(self.config.entry_signal_lookback_ticks)
 
+    def _volatility_series(self, s: FloorStrategyState) -> list[Decimal]:
+        # Prefer candle closes when available (more stable), otherwise fall back to tick mid history.
+        if s.current_candle_bucket_start_epoch is not None:
+            out = list(s.candle_closes)
+            if s.current_candle_close is not None:
+                out.append(s.current_candle_close)
+            if len(out) >= 2:
+                return out
+        return s.price_history
+
+    def _atr_and_current_range_pips(
+        self, s: FloorStrategyState
+    ) -> tuple[Decimal | None, Decimal | None]:
+        series = self._volatility_series(s)
+        if len(series) < 3:
+            return None, None
+
+        diffs_pips: list[Decimal] = []
+        for i in range(1, len(series)):
+            diffs_pips.append(abs(series[i] - series[i - 1]) / self.pip_size)
+
+        if len(diffs_pips) < 2:
+            return None, None
+
+        current_range_pips = diffs_pips[-1]
+        prior = diffs_pips[:-1]
+        lookback = prior[-min(14, len(prior)) :]
+        if not lookback:
+            return None, None
+        atr_pips = sum(lookback) / Decimal(len(lookback))
+        return atr_pips, current_range_pips
+
+    def _maybe_emit_volatility_lock(
+        self,
+        *,
+        s: FloorStrategyState,
+        tick: dict[str, Any],
+        bid: Decimal,
+        ask: Decimal,
+        price: Decimal,
+    ) -> dict[str, Any] | None:
+        atr_pips, current_range_pips = self._atr_and_current_range_pips(s)
+        if atr_pips is None or current_range_pips is None:
+            return None
+        if atr_pips <= 0:
+            return None
+
+        should_lock = current_range_pips > (atr_pips * self.config.volatility_lock_multiplier)
+        if should_lock and not s.volatility_locked:
+            s.volatility_locked = True
+            tick_ts = str(tick.get("timestamp") or "")
+            return _canonical_event(
+                "volatility_lock",
+                timestamp=tick_ts or None,
+                instrument=self.config.instrument,
+                layer_number=(len(s.active_layers) if s.active_layers else None),
+                bid=str(bid),
+                ask=str(ask),
+                price=str(price),
+                atr_pips=str(atr_pips),
+                current_range_pips=str(current_range_pips),
+                volatility_lock_multiplier=str(self.config.volatility_lock_multiplier),
+            )
+
+        if (not should_lock) and s.volatility_locked:
+            # Unlock silently; we only emit when entering the locked state.
+            s.volatility_locked = False
+        return None
+
+    def _maybe_emit_margin_protection(
+        self,
+        *,
+        s: FloorStrategyState,
+        tick: dict[str, Any],
+        bid: Decimal,
+        ask: Decimal,
+        price: Decimal,
+    ) -> dict[str, Any] | None:
+        if len(s.active_layers) < int(self.config.max_layers):
+            s.margin_protection = False
+            return None
+        if s.margin_protection:
+            return None
+
+        s.margin_protection = True
+        tick_ts = str(tick.get("timestamp") or "")
+        return _canonical_event(
+            "margin_protection",
+            timestamp=tick_ts or None,
+            instrument=self.config.instrument,
+            layer_number=(len(s.active_layers) if s.active_layers else None),
+            bid=str(bid),
+            ask=str(ask),
+            price=str(price),
+            current_layers=int(len(s.active_layers)),
+            max_layers=int(self.config.max_layers),
+        )
+
     def on_start(self, *, state: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         s = FloorStrategyState.from_dict(state)
         if s.status != StrategyStatus.RUNNING:
             s.status = StrategyStatus.RUNNING
-            return s.to_dict(), [StrategyEvent(type="strategy_started").to_dict()]
         return s.to_dict(), []
 
     def on_pause(self, *, state: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         s = FloorStrategyState.from_dict(state)
         if s.status != StrategyStatus.PAUSED:
             s.status = StrategyStatus.PAUSED
-            return s.to_dict(), [StrategyEvent(type="strategy_paused").to_dict()]
         return s.to_dict(), []
 
     def on_resume(self, *, state: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         s = FloorStrategyState.from_dict(state)
         if s.status != StrategyStatus.RUNNING:
             s.status = StrategyStatus.RUNNING
-            return s.to_dict(), [StrategyEvent(type="strategy_resumed").to_dict()]
         return s.to_dict(), []
 
     def on_stop(self, *, state: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         s = FloorStrategyState.from_dict(state)
         if s.status != StrategyStatus.STOPPED:
             s.status = StrategyStatus.STOPPED
-            return s.to_dict(), [StrategyEvent(type="strategy_stopped").to_dict()]
         return s.to_dict(), []
 
     def on_tick(
@@ -794,11 +891,18 @@ class FloorStrategyService(Strategy):
         if len(s.price_history) > max_needed:
             s.price_history = s.price_history[-max_needed:]
 
-        events: list[StrategyEvent] = []
+        events: list[dict[str, Any]] = []
+
+        # Volatility lock (transition-based event).
+        vol_event = self._maybe_emit_volatility_lock(
+            s=s, tick=tick, bid=bid, ask=ask, price=derived_mid
+        )
+        if vol_event is not None:
+            events.append(vol_event)
 
         # If paused/stopped, still track ticks but never trade
         if s.status != StrategyStatus.RUNNING:
-            return s.to_dict(), [e.to_dict() for e in events]
+            return s.to_dict(), list(events)
 
         # Initial entry
         if not s.initialized and self._has_enough_history_for_initial_entry(s):
@@ -821,21 +925,43 @@ class FloorStrategyService(Strategy):
             if tick_ts:
                 s.cycle_entry_time = tick_ts
             events.append(
-                StrategyEvent(
-                    type="open",
-                    details={
-                        "layer": 0,
-                        "direction": str(direction),
-                        "entry_price": str(entry_price),
-                        "lot_size": str(layer.lot_size),
-                        "instrument": self.config.instrument,
-                    },
+                _canonical_event(
+                    "add_layer",
+                    timestamp=tick_ts or None,
+                    instrument=self.config.instrument,
+                    layer_number=1,
+                    direction=str(direction),
+                    bid=str(bid),
+                    ask=str(ask),
+                    price=str(derived_mid),
                 )
             )
-            events.append(StrategyEvent(type="layer_opened", details={"layer": 0}))
+            events.append(
+                _canonical_event(
+                    "initial_entry",
+                    timestamp=tick_ts or None,
+                    instrument=self.config.instrument,
+                    layer_number=1,
+                    retracement_count=0,
+                    direction=str(direction),
+                    units=str(layer.lot_size),
+                    bid=str(bid),
+                    ask=str(ask),
+                    price=str(entry_price),
+                    entry_price=str(entry_price),
+                    max_retracements_per_layer=int(self.config.max_retracements_per_layer),
+                )
+            )
+
+            # Margin protection becomes active when reaching max layers.
+            mp_event = self._maybe_emit_margin_protection(
+                s=s, tick=tick, bid=bid, ask=ask, price=derived_mid
+            )
+            if mp_event is not None:
+                events.append(mp_event)
 
         if not s.active_layers:
-            return s.to_dict(), [e.to_dict() for e in events]
+            return s.to_dict(), list(events)
 
         # Take profit check (close all)
         total_pips = self._net_pips(s.active_layers, bid=bid, ask=ask)
@@ -878,28 +1004,44 @@ class FloorStrategyService(Strategy):
                 else:
                     total_pnl += (l.entry_price - ask) * l.lot_size
 
+            max_layer_number = max((int(l.index) + 1 for l in s.active_layers), default=1)
             events.append(
-                StrategyEvent(
-                    type="close",
-                    details={
-                        "reason": "take_profit",
-                        "pips": str(total_pips),
-                        "pnl": str(total_pnl),
-                        "entry_time": cycle_entry_time,
-                        "exit_time": exit_ts or None,
-                        "direction": direction_out,
-                        "units": str(total_units) if total_units > 0 else None,
-                        "entry_price": str(weighted_entry) if total_units > 0 else None,
-                        "exit_price": str(exit_price),
-                        "instrument": self.config.instrument,
-                    },
+                _canonical_event(
+                    "take_profit",
+                    timestamp=exit_ts or None,
+                    instrument=self.config.instrument,
+                    layer_number=max_layer_number,
+                    retracement_count=0,
+                    direction=direction_out,
+                    units=str(total_units) if total_units > 0 else None,
+                    bid=str(bid),
+                    ask=str(ask),
+                    price=str(exit_price),
+                    entry_price=str(weighted_entry) if total_units > 0 else None,
+                    exit_price=str(exit_price),
+                    pips=str(total_pips),
+                    pnl=str(total_pnl),
+                    entry_time=cycle_entry_time,
+                    exit_time=exit_ts or None,
                 )
             )
-            events.append(StrategyEvent(type="take_profit_hit", details={"pips": str(total_pips)}))
+            events.append(
+                _canonical_event(
+                    "remove_layer",
+                    timestamp=exit_ts or None,
+                    instrument=self.config.instrument,
+                    layer_number=1,
+                    bid=str(bid),
+                    ask=str(ask),
+                    price=str(exit_price),
+                )
+            )
             s.active_layers = []
             s.initialized = False
             s.cycle_entry_time = None
-            return s.to_dict(), [e.to_dict() for e in events]
+            s.volatility_locked = False
+            s.margin_protection = False
+            return s.to_dict(), list(events)
 
         # Retracement logic per layer
         for layer in list(s.active_layers):
@@ -908,7 +1050,11 @@ class FloorStrategyService(Strategy):
 
             against_pips = self._against_position_pips(layer, bid=bid, ask=ask)
             trigger_pips = self._retracement_trigger_for_layer(layer.index)
-            if against_pips >= trigger_pips and len(s.active_layers) <= self.config.max_layers:
+            if (
+                against_pips >= trigger_pips
+                and len(s.active_layers) <= self.config.max_layers
+                and not s.volatility_locked
+            ):
                 # retracement entry (as another open event)
                 layer.retracements += 1
                 prev_lot_size = layer.lot_size
@@ -925,26 +1071,21 @@ class FloorStrategyService(Strategy):
                         (layer.entry_price * prev_lot_size) + (fill_price * added_lot)
                     ) / lot_size
                 layer.lot_size = lot_size
+                tick_ts = str(tick.get("timestamp") or "")
                 events.append(
-                    StrategyEvent(
-                        type="open",
-                        details={
-                            "layer": int(layer.index),
-                            "direction": str(layer.direction),
-                            "entry_price": str(fill_price),
-                            "lot_size": str(lot_size),
-                            "instrument": self.config.instrument,
-                            "retracement_open": True,
-                            "retracement": int(layer.retracements),
-                            "against_pips": str(against_pips),
-                            "trigger_pips": str(trigger_pips),
-                        },
-                    )
-                )
-                events.append(
-                    StrategyEvent(
-                        type="layer_retracement_opened",
-                        details={"layer": int(layer.index), "retracement": int(layer.retracements)},
+                    _canonical_event(
+                        "retracement",
+                        timestamp=tick_ts or None,
+                        instrument=self.config.instrument,
+                        layer_number=int(layer.index) + 1,
+                        retracement_count=int(layer.retracements),
+                        direction=str(layer.direction),
+                        units=str(lot_size),
+                        bid=str(bid),
+                        ask=str(ask),
+                        price=str(fill_price),
+                        entry_price=str(fill_price),
+                        max_retracements_per_layer=int(self.config.max_retracements_per_layer),
                     )
                 )
 
@@ -952,6 +1093,7 @@ class FloorStrategyService(Strategy):
                 if (
                     layer.retracements >= self.config.max_retracements_per_layer
                     and len(s.active_layers) < self.config.max_layers
+                    and not s.volatility_locked
                 ):
                     next_idx = len(s.active_layers)
 
@@ -973,26 +1115,44 @@ class FloorStrategyService(Strategy):
                         lot_size=self._lot_size_for_layer(next_idx),
                     )
                     s.active_layers.append(new_layer)
+                    tick_ts = str(tick.get("timestamp") or "")
                     events.append(
-                        StrategyEvent(
-                            type="open",
-                            details={
-                                "layer": int(next_idx),
-                                "direction": str(new_layer.direction),
-                                "entry_price": str(new_fill_price),
-                                "lot_size": str(new_layer.lot_size),
-                                "instrument": self.config.instrument,
-                            },
+                        _canonical_event(
+                            "add_layer",
+                            timestamp=tick_ts or None,
+                            instrument=self.config.instrument,
+                            layer_number=int(next_idx) + 1,
+                            direction=str(new_layer.direction),
+                            bid=str(bid),
+                            ask=str(ask),
+                            price=str(derived_mid),
                         )
                     )
                     events.append(
-                        StrategyEvent(
-                            type="layer_opened",
-                            details={"layer": int(next_idx), "direction": str(new_layer.direction)},
+                        _canonical_event(
+                            "initial_entry",
+                            timestamp=tick_ts or None,
+                            instrument=self.config.instrument,
+                            layer_number=int(next_idx) + 1,
+                            retracement_count=0,
+                            direction=str(new_layer.direction),
+                            units=str(new_layer.lot_size),
+                            bid=str(bid),
+                            ask=str(ask),
+                            price=str(new_fill_price),
+                            entry_price=str(new_fill_price),
+                            max_retracements_per_layer=int(self.config.max_retracements_per_layer),
                         )
                     )
 
-        return s.to_dict(), [e.to_dict() for e in events]
+                    # Margin protection becomes active when reaching max layers.
+                    mp_event = self._maybe_emit_margin_protection(
+                        s=s, tick=tick, bid=bid, ask=ask, price=derived_mid
+                    )
+                    if mp_event is not None:
+                        events.append(mp_event)
+
+        return s.to_dict(), list(events)
 
     def _decide_direction(self, history: list[Decimal]) -> Direction:
         method = self.config.direction_method

@@ -21,6 +21,7 @@ vi.mock('../../../services/api/backtestTasks', () => ({
   backtestTasksApi: {
     getTradeLogs: vi.fn(),
     getStrategyEvents: vi.fn(),
+    getMetricsCheckpoint: vi.fn(),
     exportResults: vi.fn(),
   },
 }));
@@ -191,6 +192,10 @@ describe('TaskResultsTab Integration', () => {
     // Mock scrollIntoView
     Element.prototype.scrollIntoView = vi.fn();
 
+    vi.mocked(backtestTasksApi.getMetricsCheckpoint).mockResolvedValue({
+      checkpoint: null,
+    });
+
     vi.mocked(backtestTasksApi.getTradeLogs).mockResolvedValue({
       task_id: 1,
       task_type: 'backtest',
@@ -222,6 +227,9 @@ describe('TaskResultsTab Integration', () => {
     await waitFor(() => {
       expect(screen.getByTestId('backtest-chart')).toBeInTheDocument();
     });
+
+    expect(screen.getByText(/Duration:/i)).toBeInTheDocument();
+    expect(screen.getByText(/1d\s*0h/i)).toBeInTheDocument();
   });
 
   it('renders $0.00 for P&L fields when values are invalid', async () => {
@@ -382,6 +390,45 @@ describe('TaskResultsTab Integration', () => {
     expect(
       screen.getByText(/No metrics available for this task/)
     ).toBeInTheDocument();
+  });
+
+  it('does not crash when metrics is null but trade logs exist (running)', async () => {
+    const runningTask = { ...mockTask, status: TaskStatus.RUNNING };
+    const resultsWithNullMetrics: TaskResults = {
+      ...mockResults,
+      status: TaskStatus.RUNNING,
+      has_metrics: false,
+      metrics: null,
+    };
+
+    vi.mocked(backtestTasksApi.getTradeLogs).mockResolvedValue({
+      task_id: 1,
+      task_type: 'backtest',
+      execution_id: 1,
+      has_metrics: true,
+      trade_logs: mockTrades,
+      count: mockTrades.length,
+      next: null,
+      previous: null,
+    });
+    vi.mocked(backtestTasksApi.getStrategyEvents).mockResolvedValue({
+      task_id: 1,
+      task_type: 'backtest',
+      execution_id: 1,
+      has_metrics: true,
+      strategy_events: [],
+      count: 0,
+      next: null,
+      previous: null,
+    });
+
+    renderWithProviders(
+      <TaskResultsTab task={runningTask} results={resultsWithNullMetrics} />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('trade-log-table')).toBeInTheDocument();
+    });
   });
 
   // Note: Test for verifying props passed to BacktestChart removed due to module import complexity

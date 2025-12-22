@@ -69,26 +69,18 @@ const strategyEventArbitrary = fc
       exit_price,
       pnl,
     ]): BacktestStrategyEvent => {
-      const entryRetracement =
-        event_type === 'initial_entry' ? 0 : retracement_count;
-      const remainingRetracement = isCloseEvent(event_type)
-        ? Math.max(0, entryRetracement - 1)
-        : entryRetracement;
-
       return {
         event_type,
         timestamp,
-        description: `${event_type} event`,
-        details: {
-          layer,
-          retracement_count: remainingRetracement,
-          entry_retracement_count: entryRetracement,
-          direction,
-          units,
-          entry_price,
-          exit_price: isCloseEvent(event_type) ? exit_price : null,
-          pnl: isCloseEvent(event_type) ? pnl : null,
-        },
+        layer_number: layer,
+        retracement_count:
+          event_type === 'initial_entry' ? 0 : retracement_count,
+        direction,
+        units,
+        entry_price,
+        price: entry_price,
+        exit_price: isCloseEvent(event_type) ? exit_price : undefined,
+        pnl: isCloseEvent(event_type) ? pnl : undefined,
       };
     }
   );
@@ -159,7 +151,7 @@ describe('FloorLayerLog Property-Based Tests', () => {
           // Calculate expected total from all close events
           const closeEvents = events.filter((e) => isCloseEvent(e.event_type));
           const expectedTotal = closeEvents.reduce((sum, e) => {
-            const pnl = e.details.pnl;
+            const pnl = e.pnl;
             return sum + (typeof pnl === 'number' ? pnl : 0);
           }, 0);
 

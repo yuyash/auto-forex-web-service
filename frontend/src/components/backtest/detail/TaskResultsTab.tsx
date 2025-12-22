@@ -21,6 +21,7 @@ import { BacktestChart } from '../BacktestChart';
 import { FloorLayerLog } from '../FloorLayerLog';
 import type { BacktestTask } from '../../../types/backtestTask';
 import { TaskStatus } from '../../../types/common';
+import { durationMsBetween, formatDurationMs } from '../../../utils/duration';
 import type {
   BacktestStrategyEvent,
   ExecutionMetricsCheckpoint,
@@ -335,17 +336,17 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
       0
     );
 
-    const unrealizedPnL = safeNumber(
-      (metrics as { unrealized_pnl?: unknown }).unrealized_pnl
-    );
+    const metricsSafe: Record<string, unknown> =
+      metrics && typeof metrics === 'object'
+        ? (metrics as Record<string, unknown>)
+        : {};
+
+    const unrealizedPnL = safeNumber(metricsSafe.unrealized_pnl);
     const realizedPnL = safeNumber(
-      (metrics as { realized_pnl?: unknown }).realized_pnl,
+      metricsSafe.realized_pnl,
       tradeLogRealizedPnL
     );
-    const totalPnL = safeNumber(
-      (metrics as { total_pnl?: unknown }).total_pnl,
-      tradeLogTotalPnL
-    );
+    const totalPnL = safeNumber(metricsSafe.total_pnl, tradeLogTotalPnL);
     const avgPnL = trades.length > 0 ? realizedPnL / trades.length : 0;
 
     const avgWin =
@@ -391,6 +392,18 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
     return new Date(dateString).toLocaleString();
   };
 
+  const startedAt =
+    results?.execution?.started_at ?? task.latest_execution?.started_at ?? null;
+  const completedAt =
+    results?.execution?.completed_at ??
+    task.latest_execution?.completed_at ??
+    null;
+
+  const durationMs =
+    task.status === TaskStatus.RUNNING
+      ? durationMsBetween(startedAt, new Date().toISOString())
+      : durationMsBetween(startedAt, completedAt);
+
   if (!results && task.status !== TaskStatus.CREATED) {
     // While running, show the live layout even if the first poll hasn't returned yet.
     if (task.status === TaskStatus.RUNNING) {
@@ -409,6 +422,10 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
             </Typography>
             <Typography variant="body1">
               {formatDate(task.start_time)} → {formatDate(task.end_time)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Elapsed:{' '}
+              {durationMs !== null ? formatDurationMs(durationMs) : '—'}
             </Typography>
           </Paper>
 
@@ -471,6 +488,9 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
           </Typography>
           <Typography variant="body1">
             {formatDate(task.start_time)} → {formatDate(task.end_time)}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Elapsed: {durationMs !== null ? formatDurationMs(durationMs) : '—'}
           </Typography>
         </Paper>
 
@@ -665,6 +685,9 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
         </Typography>
         <Typography variant="body1">
           {formatDate(task.start_time)} → {formatDate(task.end_time)}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Duration: {durationMs !== null ? formatDurationMs(durationMs) : '—'}
         </Typography>
       </Paper>
 
