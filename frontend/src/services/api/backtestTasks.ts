@@ -11,6 +11,7 @@ import type {
   TaskEquityCurveResponse,
   TaskStrategyEventsResponse,
   TaskTradeLogsResponse,
+  TaskMetricsCheckpointResponse,
   TaskExecution,
   PaginatedResponse,
 } from '../../types';
@@ -46,6 +47,17 @@ export const backtestTasksApi = {
       config: config_id,
     };
     return apiClient.post<BacktestTask>('/trading/backtest-tasks/', payload);
+  },
+
+  /**
+   * Get latest metrics checkpoint for the latest backtest execution (best-effort)
+   */
+  getMetricsCheckpoint: (
+    taskId: number
+  ): Promise<TaskMetricsCheckpointResponse> => {
+    return apiClient.get<TaskMetricsCheckpointResponse>(
+      `/trading/backtest-tasks/${taskId}/metrics-checkpoint/`
+    );
   },
 
   /**

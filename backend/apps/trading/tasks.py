@@ -13,13 +13,24 @@ import redis
 from celery import current_task, shared_task
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Max
+from django.utils.dateparse import parse_datetime
 from django.utils import timezone as dj_timezone
 
 from apps.trading.models import CeleryTaskStatus
 from apps.trading.services.events import TradingEventService
 from apps.trading.services.task import CeleryTaskService
 from apps.trading.enums import TaskStatus, TaskType
-from apps.trading.models import BacktestTask, ExecutionMetrics, TaskExecution, TradingTask
+from apps.trading.models import (
+    BacktestTask,
+    ExecutionEquityPoint,
+    ExecutionMetrics,
+    ExecutionMetricsCheckpoint,
+    ExecutionStrategyEvent,
+    ExecutionTradeLogEntry,
+    TaskExecution,
+    TradingTask,
+)
 from apps.trading.services.registry import registry as strategy_registry
 from apps.trading.services.performance import LivePerformanceService
 
@@ -136,6 +147,135 @@ def _current_task_id() -> str | None:
 
 def _lock_value() -> str:
     return f"{socket.gethostname()}:{os.getpid()}"
+
+
+def _next_sequence_for_execution(*, model: Any, execution: TaskExecution) -> int:
+    """Return next monotonic sequence integer for an execution-scoped stream."""
+    try:
+        existing = model.objects.filter(execution=execution).aggregate(m=Max("sequence")).get("m")
+        if existing is None:
+            return 0
+        return int(existing) + 1
+    except Exception:  # pylint: disable=broad-exception-caught
+        return 0
+
+
+def _parse_dt_best_effort(value: Any) -> tuple[datetime | None, str]:
+    raw = str(value or "")
+    if not raw:
+        return None, ""
+    try:
+        dt = parse_datetime(raw)
+    except Exception:  # pylint: disable=broad-exception-caught
+        dt = None
+    # Keep a bounded raw string for debugging.
+    if len(raw) > 64:
+        raw = raw[:64]
+    return dt, raw
+
+
+def _bulk_persist_strategy_events(
+    *, execution: TaskExecution, start_sequence: int, events: list[dict[str, Any]]
+) -> int:
+    if not events:
+        return start_sequence
+    rows: list[ExecutionStrategyEvent] = []
+    seq = start_sequence
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        e_type = str(event.get("type") or "")
+        rows.append(
+            ExecutionStrategyEvent(
+                execution=execution,
+                sequence=seq,
+                event_type=e_type[:64],
+                event=event,
+            )
+        )
+        seq += 1
+    if rows:
+        ExecutionStrategyEvent.objects.bulk_create(rows, ignore_conflicts=True)
+    return seq
+
+
+def _bulk_persist_trade_logs(
+    *, execution: TaskExecution, start_sequence: int, trades: list[dict[str, Any]]
+) -> int:
+    if not trades:
+        return start_sequence
+    rows: list[ExecutionTradeLogEntry] = []
+    seq = start_sequence
+    for trade in trades:
+        if not isinstance(trade, dict):
+            continue
+        rows.append(ExecutionTradeLogEntry(execution=execution, sequence=seq, trade=trade))
+        seq += 1
+    if rows:
+        ExecutionTradeLogEntry.objects.bulk_create(rows, ignore_conflicts=True)
+    return seq
+
+
+def _bulk_persist_equity_points(
+    *, execution: TaskExecution, start_sequence: int, points: list[dict[str, Any]]
+) -> int:
+    if not points:
+        return start_sequence
+    rows: list[ExecutionEquityPoint] = []
+    seq = start_sequence
+    for point in points:
+        if not isinstance(point, dict):
+            continue
+        dt, raw = _parse_dt_best_effort(point.get("timestamp"))
+        try:
+            balance = Decimal(str(point.get("balance")))
+        except Exception:  # pylint: disable=broad-exception-caught
+            continue
+        rows.append(
+            ExecutionEquityPoint(
+                execution=execution,
+                sequence=seq,
+                timestamp=dt,
+                timestamp_raw=raw,
+                balance=balance,
+            )
+        )
+        seq += 1
+    if rows:
+        ExecutionEquityPoint.objects.bulk_create(rows, ignore_conflicts=True)
+    return seq
+
+
+def _persist_metrics_checkpoint(
+    *,
+    execution: TaskExecution,
+    trades: list[dict[str, Any]],
+    initial_balance: Decimal,
+    processed: int | None,
+) -> None:
+    """Persist a best-effort metrics checkpoint (summary-only)."""
+    try:
+        metrics_tmp = ExecutionMetrics(execution=execution)
+        metrics_tmp.calculate_from_trades(trades, initial_balance=initial_balance)
+        ExecutionMetricsCheckpoint.objects.create(
+            execution=execution,
+            processed=processed,
+            total_return=metrics_tmp.total_return,
+            total_pnl=metrics_tmp.total_pnl,
+            realized_pnl=metrics_tmp.realized_pnl,
+            unrealized_pnl=metrics_tmp.unrealized_pnl,
+            total_trades=metrics_tmp.total_trades,
+            winning_trades=metrics_tmp.winning_trades,
+            losing_trades=metrics_tmp.losing_trades,
+            win_rate=metrics_tmp.win_rate,
+            max_drawdown=metrics_tmp.max_drawdown,
+            sharpe_ratio=metrics_tmp.sharpe_ratio,
+            profit_factor=metrics_tmp.profit_factor,
+            average_win=metrics_tmp.average_win,
+            average_loss=metrics_tmp.average_loss,
+        )
+    except Exception:  # pylint: disable=broad-exception-caught
+        return
 
 
 def _redis_client() -> redis.Redis:
@@ -304,9 +444,25 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
     strategy_events: list[dict[str, Any]] = []
     realized_pips = Decimal("0")
 
+    # Incremental DB persistence buffers/state
+    pending_events: list[dict[str, Any]] = []
+    pending_trades: list[dict[str, Any]] = []
+    pending_equity_points: list[dict[str, Any]] = []
+    next_event_seq = _next_sequence_for_execution(model=ExecutionStrategyEvent, execution=execution)
+    next_trade_seq = _next_sequence_for_execution(model=ExecutionTradeLogEntry, execution=execution)
+    next_equity_seq = _next_sequence_for_execution(model=ExecutionEquityPoint, execution=execution)
+
+    initial_balance = Decimal(str(getattr(task.oanda_account, "balance", "0") or "0"))
+    current_balance = initial_balance
+    # Seed equity curve with a first point.
+    pending_equity_points.append(
+        {"timestamp": dj_timezone.now().isoformat(), "balance": str(current_balance)}
+    )
+
     state, start_events = strategy.on_start(state=state)
     if start_events:
         strategy_events.extend(start_events)
+        pending_events.extend([e for e in start_events if isinstance(e, dict)])
         for e in start_events:
             e_type = str(e.get("type") or "")
             # Persist to execution logs and echo to Celery stdout.
@@ -330,6 +486,27 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
                 execution=execution,
                 details={"event": e, "strategy_type": strategy_type},
             )
+
+    # Flush initial buffers early so live UI can show markers immediately.
+    try:
+        with transaction.atomic():
+            next_event_seq = _bulk_persist_strategy_events(
+                execution=execution, start_sequence=next_event_seq, events=pending_events
+            )
+            next_equity_seq = _bulk_persist_equity_points(
+                execution=execution, start_sequence=next_equity_seq, points=pending_equity_points
+            )
+        pending_events = []
+        pending_equity_points = []
+        _persist_metrics_checkpoint(
+            execution=execution,
+            trades=trade_log,
+            initial_balance=initial_balance,
+            processed=0,
+        )
+    except Exception:  # pylint: disable=broad-exception-caught
+        pending_events = []
+        pending_equity_points = []
 
     client = _redis_client()
     channel = getattr(settings, "MARKET_TICK_CHANNEL")
@@ -496,10 +673,23 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
             state, events = strategy.on_tick(tick=tick, state=state)
             if events:
                 strategy_events.extend(events)
+                pending_events.extend([e for e in events if isinstance(e, dict)])
                 for e in events:
                     trade = _extract_trade_from_strategy_event(e)
                     if trade is not None:
                         trade_log.append(trade)
+                        pending_trades.append(trade)
+                        # Update equity curve on realized P&L.
+                        try:
+                            pnl = trade.get("pnl")
+                            if pnl is not None:
+                                current_balance += Decimal(str(pnl))
+                                ts_for_point = trade.get("exit_time") or trade.get("timestamp")
+                                pending_equity_points.append(
+                                    {"timestamp": ts_for_point, "balance": str(current_balance)}
+                                )
+                        except Exception:  # pylint: disable=broad-exception-caught
+                            pass
                 for e in events:
                     e_type = str(e.get("type") or "")
 
@@ -581,6 +771,38 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
                     meta_update={"processed": processed},
                 )
 
+                # Persist incremental artifacts periodically.
+                try:
+                    with transaction.atomic():
+                        next_event_seq = _bulk_persist_strategy_events(
+                            execution=execution,
+                            start_sequence=next_event_seq,
+                            events=pending_events,
+                        )
+                        next_trade_seq = _bulk_persist_trade_logs(
+                            execution=execution,
+                            start_sequence=next_trade_seq,
+                            trades=pending_trades,
+                        )
+                        next_equity_seq = _bulk_persist_equity_points(
+                            execution=execution,
+                            start_sequence=next_equity_seq,
+                            points=pending_equity_points,
+                        )
+                    pending_events = []
+                    pending_trades = []
+                    pending_equity_points = []
+                    _persist_metrics_checkpoint(
+                        execution=execution,
+                        trades=trade_log,
+                        initial_balance=initial_balance,
+                        processed=processed,
+                    )
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pending_events = []
+                    pending_trades = []
+                    pending_equity_points = []
+
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.exception("Trading task crashed: %s", exc)
 
@@ -616,6 +838,7 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
     state, final_stop_events = strategy.on_stop(state=state)
     if final_stop_events:
         strategy_events.extend(final_stop_events)
+        pending_events.extend([e for e in final_stop_events if isinstance(e, dict)])
         for e in final_stop_events:
             e_type = str(e.get("type") or "")
             try:
@@ -639,6 +862,27 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
                 details={"event": e, "strategy_type": strategy_type},
             )
 
+    # Best-effort flush of any remaining incremental artifacts.
+    try:
+        with transaction.atomic():
+            next_event_seq = _bulk_persist_strategy_events(
+                execution=execution, start_sequence=next_event_seq, events=pending_events
+            )
+            next_trade_seq = _bulk_persist_trade_logs(
+                execution=execution, start_sequence=next_trade_seq, trades=pending_trades
+            )
+            next_equity_seq = _bulk_persist_equity_points(
+                execution=execution, start_sequence=next_equity_seq, points=pending_equity_points
+            )
+        _persist_metrics_checkpoint(
+            execution=execution,
+            trades=trade_log,
+            initial_balance=initial_balance,
+            processed=processed,
+        )
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
     # Persist final state
     task.strategy_state = state
     task.status = TaskStatus.STOPPED
@@ -660,7 +904,6 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
     # Metrics snapshot for this execution (immutable record)
     try:
         metrics = ExecutionMetrics(execution=execution)
-        initial_balance = Decimal(str(getattr(task.oanda_account, "balance", "0") or "0"))
         metrics.calculate_from_trades(trade_log, initial_balance=initial_balance)
         metrics.strategy_events = strategy_events
         metrics.save()
@@ -787,6 +1030,41 @@ def run_backtest_task(task_id: int, execution_id: int | None = None) -> None:
                 execution=execution,
                 details={"event": e, "strategy_type": strategy_type},
             )
+
+    # Incremental DB persistence buffers/state
+    pending_events: list[dict[str, Any]] = [e for e in (start_events or []) if isinstance(e, dict)]
+    pending_trades: list[dict[str, Any]] = []
+    pending_equity_points: list[dict[str, Any]] = []
+    next_event_seq = _next_sequence_for_execution(model=ExecutionStrategyEvent, execution=execution)
+    next_trade_seq = _next_sequence_for_execution(model=ExecutionTradeLogEntry, execution=execution)
+    next_equity_seq = _next_sequence_for_execution(model=ExecutionEquityPoint, execution=execution)
+
+    initial_balance = Decimal(str(task.initial_balance))
+    current_balance = initial_balance
+    pending_equity_points.append(
+        {"timestamp": _isoformat(task.start_time), "balance": str(current_balance)}
+    )
+
+    # Flush initial buffers early so the RUNNING UI can show markers promptly.
+    try:
+        with transaction.atomic():
+            next_event_seq = _bulk_persist_strategy_events(
+                execution=execution, start_sequence=next_event_seq, events=pending_events
+            )
+            next_equity_seq = _bulk_persist_equity_points(
+                execution=execution, start_sequence=next_equity_seq, points=pending_equity_points
+            )
+        pending_events = []
+        pending_equity_points = []
+        _persist_metrics_checkpoint(
+            execution=execution,
+            trades=[],
+            initial_balance=initial_balance,
+            processed=0,
+        )
+    except Exception:  # pylint: disable=broad-exception-caught
+        pending_events = []
+        pending_equity_points = []
 
     # Request market to publish bounded historical ticks
     request_id = f"backtest:{task_id}:{int(time.time())}"
@@ -1151,10 +1429,23 @@ def run_backtest_task(task_id: int, execution_id: int | None = None) -> None:
                 ]
 
                 strategy_events.extend(enriched_events)
+                pending_events.extend(enriched_events)
                 for e in enriched_events:
                     trade = _extract_trade_from_strategy_event(e)
                     if trade is not None:
                         trade_log.append(trade)
+                        pending_trades.append(trade)
+                        # Update equity curve on realized P&L.
+                        try:
+                            pnl = trade.get("pnl")
+                            if pnl is not None:
+                                current_balance += Decimal(str(pnl))
+                                ts_for_point = trade.get("exit_time") or trade.get("timestamp")
+                                pending_equity_points.append(
+                                    {"timestamp": ts_for_point, "balance": str(current_balance)}
+                                )
+                        except Exception:  # pylint: disable=broad-exception-caught
+                            pass
                 for e in enriched_events:
                     e_type = str(e.get("type") or "")
 
@@ -1257,6 +1548,38 @@ def run_backtest_task(task_id: int, execution_id: int | None = None) -> None:
                     },
                 )
 
+                # Persist incremental artifacts periodically.
+                try:
+                    with transaction.atomic():
+                        next_event_seq = _bulk_persist_strategy_events(
+                            execution=execution,
+                            start_sequence=next_event_seq,
+                            events=pending_events,
+                        )
+                        next_trade_seq = _bulk_persist_trade_logs(
+                            execution=execution,
+                            start_sequence=next_trade_seq,
+                            trades=pending_trades,
+                        )
+                        next_equity_seq = _bulk_persist_equity_points(
+                            execution=execution,
+                            start_sequence=next_equity_seq,
+                            points=pending_equity_points,
+                        )
+                    pending_events = []
+                    pending_trades = []
+                    pending_equity_points = []
+                    _persist_metrics_checkpoint(
+                        execution=execution,
+                        trades=trade_log,
+                        initial_balance=initial_balance,
+                        processed=processed,
+                    )
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pending_events = []
+                    pending_trades = []
+                    pending_equity_points = []
+
         # final progress
         execution.update_progress(100)
 
@@ -1290,6 +1613,27 @@ def run_backtest_task(task_id: int, execution_id: int | None = None) -> None:
             client.close()
         except Exception:  # pylint: disable=broad-exception-caught
             pass
+
+    # Flush remaining incremental artifacts before writing immutable metrics.
+    try:
+        with transaction.atomic():
+            next_event_seq = _bulk_persist_strategy_events(
+                execution=execution, start_sequence=next_event_seq, events=pending_events
+            )
+            next_trade_seq = _bulk_persist_trade_logs(
+                execution=execution, start_sequence=next_trade_seq, trades=pending_trades
+            )
+            next_equity_seq = _bulk_persist_equity_points(
+                execution=execution, start_sequence=next_equity_seq, points=pending_equity_points
+            )
+        _persist_metrics_checkpoint(
+            execution=execution,
+            trades=trade_log,
+            initial_balance=initial_balance,
+            processed=processed,
+        )
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
 
     # Persist metrics & final status
     try:

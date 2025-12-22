@@ -16,6 +16,7 @@ from apps.trading.views import (
     BacktestTaskTradeLogsView,
     BacktestTaskView,
     BacktestTaskResultsView,
+    BacktestTaskMetricsCheckpointView,
     BacktestTaskLogsView,
     BacktestTaskStartView,
     BacktestTaskStatusView,
@@ -28,6 +29,7 @@ from apps.trading.views import (
     TradingTaskStrategyEventsView,
     TradingTaskTradeLogsView,
     TradingTaskView,
+    TradingTaskMetricsCheckpointView,
     TradingTaskLogsView,
     TradingTaskPauseView,
     TradingTaskRestartView,
@@ -127,6 +129,11 @@ urlpatterns = [
         BacktestTaskTradeLogsView.as_view(),
         name="backtest_task_trade_logs",
     ),
+    path(
+        "backtest-tasks/<int:task_id>/metrics-checkpoint/",
+        BacktestTaskMetricsCheckpointView.as_view(),
+        name="backtest_task_metrics_checkpoint",
+    ),
     # Trading task endpoints
     path(
         "trading-tasks/",
@@ -202,5 +209,10 @@ urlpatterns = [
         "trading-tasks/<int:task_id>/trade-logs/",
         TradingTaskTradeLogsView.as_view(),
         name="trading_task_trade_logs",
+    ),
+    path(
+        "trading-tasks/<int:task_id>/metrics-checkpoint/",
+        TradingTaskMetricsCheckpointView.as_view(),
+        name="trading_task_metrics_checkpoint",
     ),
 ]

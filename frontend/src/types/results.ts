@@ -3,6 +3,7 @@ import type {
   BacktestStrategyEvent,
   EquityPoint,
   ExecutionMetrics,
+  ExecutionMetricsCheckpoint,
   Trade,
 } from './execution';
 
@@ -67,4 +68,12 @@ export interface TaskTradeLogsResponse {
   count: number;
   next: string | null;
   previous: string | null;
+}
+
+export interface TaskMetricsCheckpointResponse {
+  task_id: number;
+  task_type: TaskType | 'trading' | 'backtest';
+  execution_id?: number | null;
+  has_checkpoint: boolean;
+  checkpoint: ExecutionMetricsCheckpoint | null;
 }

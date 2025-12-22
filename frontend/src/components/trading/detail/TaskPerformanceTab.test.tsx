@@ -418,13 +418,16 @@ describe('TaskPerformanceTab Integration Tests', () => {
     render(<TaskPerformanceTab task={mockTask} />);
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/No performance metrics available yet/i)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Waiting for metrics/i)).toBeInTheDocument();
     });
 
-    // Chart should not be rendered
-    expect(screen.queryByTestId('trading-task-chart')).not.toBeInTheDocument();
+    // Live sections should still be rendered (equity curve + chart + trade log)
+    expect(screen.getByTestId('equity-curve-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('trading-task-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('trade-log-table')).toBeInTheDocument();
+
+    // Metrics-only cards should not be rendered
+    expect(screen.queryByTestId('metric-total-return')).not.toBeInTheDocument();
   });
 
   it('handles created task status', async () => {

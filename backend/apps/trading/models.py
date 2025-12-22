@@ -1190,6 +1190,172 @@ class ExecutionMetrics(models.Model):
         }
 
 
+class ExecutionStrategyEvent(models.Model):
+    """Incrementally persisted strategy events during an execution.
+
+    These rows enable live strategy markers/timelines while an execution is RUNNING.
+    The final immutable `ExecutionMetrics.strategy_events` remains the canonical
+    completed payload.
+    """
+
+    execution = models.ForeignKey(
+        "trading.TaskExecution",
+        on_delete=models.CASCADE,
+        related_name="strategy_event_rows",
+        help_text="Owning task execution",
+    )
+    sequence = models.PositiveIntegerField(help_text="Monotonic per-execution sequence")
+    event_type = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Best-effort event['type'] for filtering/debug",
+    )
+    event = models.JSONField(default=dict, help_text="Raw strategy event payload")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "execution_strategy_events"
+        verbose_name = "Execution Strategy Event"
+        verbose_name_plural = "Execution Strategy Events"
+        indexes = [
+            models.Index(fields=["execution", "sequence"]),
+            models.Index(fields=["execution", "created_at"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["execution", "sequence"],
+                name="uniq_execution_strategy_event_sequence",
+            )
+        ]
+        ordering = ["sequence", "id"]
+
+    def __str__(self) -> str:
+        return f"ExecutionStrategyEvent(exec={self.execution_id}, seq={self.sequence}, type={self.event_type})"
+
+
+class ExecutionTradeLogEntry(models.Model):
+    """Incrementally persisted trade log entries during an execution."""
+
+    execution = models.ForeignKey(
+        "trading.TaskExecution",
+        on_delete=models.CASCADE,
+        related_name="trade_log_rows",
+        help_text="Owning task execution",
+    )
+    sequence = models.PositiveIntegerField(help_text="Monotonic per-execution sequence")
+    trade = models.JSONField(default=dict, help_text="Raw trade payload")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "execution_trade_logs"
+        verbose_name = "Execution Trade Log Entry"
+        verbose_name_plural = "Execution Trade Log Entries"
+        indexes = [
+            models.Index(fields=["execution", "sequence"]),
+            models.Index(fields=["execution", "created_at"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["execution", "sequence"],
+                name="uniq_execution_trade_log_sequence",
+            )
+        ]
+        ordering = ["sequence", "id"]
+
+    def __str__(self) -> str:
+        return f"ExecutionTradeLogEntry(exec={self.execution_id}, seq={self.sequence})"
+
+
+class ExecutionEquityPoint(models.Model):
+    """Incrementally persisted equity curve points during an execution."""
+
+    execution = models.ForeignKey(
+        "trading.TaskExecution",
+        on_delete=models.CASCADE,
+        related_name="equity_point_rows",
+        help_text="Owning task execution",
+    )
+    sequence = models.PositiveIntegerField(help_text="Monotonic per-execution sequence")
+    timestamp = models.DateTimeField(
+        null=True, blank=True, help_text="Point timestamp (best-effort)"
+    )
+    timestamp_raw = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Original timestamp string when parsing fails",
+    )
+    balance = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        help_text="Account balance after applying realized P&L",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "execution_equity_points"
+        verbose_name = "Execution Equity Point"
+        verbose_name_plural = "Execution Equity Points"
+        indexes = [
+            models.Index(fields=["execution", "sequence"]),
+            models.Index(fields=["execution", "timestamp"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["execution", "sequence"],
+                name="uniq_execution_equity_point_sequence",
+            )
+        ]
+        ordering = ["sequence", "id"]
+
+    def __str__(self) -> str:
+        return f"ExecutionEquityPoint(exec={self.execution_id}, seq={self.sequence})"
+
+
+class ExecutionMetricsCheckpoint(models.Model):
+    """Mutable, periodic metrics snapshots during an execution.
+
+    Unlike `ExecutionMetrics` (immutable, completed-only), checkpoints are
+    append-only and intended for live UI updates.
+    """
+
+    execution = models.ForeignKey(
+        "trading.TaskExecution",
+        on_delete=models.CASCADE,
+        related_name="metrics_checkpoints",
+        help_text="Owning task execution",
+    )
+    processed = models.IntegerField(null=True, blank=True, help_text="Best-effort ticks processed")
+    total_return = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_pnl = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    realized_pnl = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    unrealized_pnl = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_trades = models.IntegerField(default=0)
+    winning_trades = models.IntegerField(default=0)
+    losing_trades = models.IntegerField(default=0)
+    win_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    max_drawdown = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    sharpe_ratio = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    profit_factor = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    average_win = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    average_loss = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "execution_metrics_checkpoints"
+        verbose_name = "Execution Metrics Checkpoint"
+        verbose_name_plural = "Execution Metrics Checkpoints"
+        indexes = [
+            models.Index(fields=["execution", "created_at"]),
+        ]
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"ExecutionMetricsCheckpoint(exec={self.execution_id}, created_at={self.created_at})"
+
+
 class TaskExecutionManager(models.Manager["TaskExecution"]):
     """Custom manager for TaskExecution model."""
 
