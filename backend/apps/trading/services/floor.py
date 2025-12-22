@@ -648,9 +648,18 @@ class FloorStrategyService(Strategy):
                     / total_units
                 )
 
-            # Strategy models a single direction per cycle (layers inherit direction).
-            overall_direction = s.active_layers[0].direction if s.active_layers else Direction.LONG
-            exit_price = bid if overall_direction == Direction.LONG else ask
+            # Historically this strategy assumed a single direction per cycle.
+            # If layers contain mixed directions (possible when direction is re-evaluated
+            # on new layer creation), report a neutral/mixed direction and use mid for
+            # display-only exit_price.
+            directions = {l.direction for l in s.active_layers}
+            if len(directions) == 1:
+                overall_direction = next(iter(directions))
+                exit_price = bid if overall_direction == Direction.LONG else ask
+                direction_out: str | None = str(overall_direction)
+            else:
+                exit_price = derived_mid
+                direction_out = "mixed"
 
             total_pnl = Decimal("0")
             for l in s.active_layers:
@@ -670,7 +679,7 @@ class FloorStrategyService(Strategy):
                         "pnl": str(total_pnl),
                         "entry_time": cycle_entry_time,
                         "exit_time": exit_ts or None,
-                        "direction": str(overall_direction),
+                        "direction": direction_out,
                         "units": str(total_units) if total_units > 0 else None,
                         "entry_price": str(weighted_entry) if total_units > 0 else None,
                         "exit_price": str(exit_price),
@@ -737,10 +746,17 @@ class FloorStrategyService(Strategy):
                     and len(s.active_layers) < self.config.max_layers
                 ):
                     next_idx = len(s.active_layers)
+
+                    # Re-evaluate direction when creating a new layer (instead of inheriting).
+                    # This matches the expectation that each layer's direction is decided at
+                    # creation time from the latest indicator history.
+                    new_direction = self._decide_direction(s.price_history)
+                    new_fill_price = ask if new_direction == Direction.LONG else bid
+
                     new_layer = LayerState(
                         index=next_idx,
-                        direction=layer.direction,
-                        entry_price=fill_price,
+                        direction=new_direction,
+                        entry_price=new_fill_price,
                         lot_size=self._lot_size_for_layer(next_idx),
                     )
                     s.active_layers.append(new_layer)
@@ -750,14 +766,17 @@ class FloorStrategyService(Strategy):
                             details={
                                 "layer": int(next_idx),
                                 "direction": str(new_layer.direction),
-                                "entry_price": str(fill_price),
+                                "entry_price": str(new_fill_price),
                                 "lot_size": str(new_layer.lot_size),
                                 "instrument": self.config.instrument,
                             },
                         )
                     )
                     events.append(
-                        StrategyEvent(type="layer_opened", details={"layer": int(next_idx)})
+                        StrategyEvent(
+                            type="layer_opened",
+                            details={"layer": int(next_idx), "direction": str(new_layer.direction)},
+                        )
                     )
 
         return s.to_dict(), [e.to_dict() for e in events]

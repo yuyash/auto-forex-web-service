@@ -15,7 +15,7 @@
       }
     },
     {
-      "name": "Celery: worker",
+      "name": "Celery: trading worker",
       "type": "debugpy",
       "request": "launch",
       "module": "celery",
@@ -25,6 +25,8 @@
         "worker",
         "-l",
         "info",
+        "-Q",
+        "trading,default",
         "--concurrency=4",
         "--max-tasks-per-child=10"
       ],
@@ -32,6 +34,29 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "DJANGO_SETTINGS_MODULE": "config.settings"
+      }
+    },
+    {
+      "name": "Celery: market worker",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "celery",
+      "args": [
+        "-A",
+        "config",
+        "worker",
+        "-l",
+        "info",
+        "-Q",
+        "market",
+        "--concurrency=8",
+        "--max-tasks-per-child=10"
+      ],
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "config.settings",
+        "CELERY_START_MARKET_TICK_SUPERVISOR": "1"
       }
     },
     {
@@ -47,7 +72,8 @@
       "name": "Run Full Stack Application",
       "configurations": [
         "Django: runserver",
-        "Celery: worker",
+        "Celery: trading worker",
+        "Celery: market worker",
         "Frontend: npm run dev"
       ]
     }

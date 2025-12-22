@@ -4,11 +4,11 @@
  * Creates chart markers for floor strategy events (retracements, layer creation, etc.)
  *
  * Marker Types:
- * - Long (Dark green triangle + Unit size) - retracement entry with direction=long
- * - Long (Blue triangle + Unit size) - initial_entry with direction=long
- * - Short (Pink inverted triangle + Unit size) - entries with direction=short
- * - Close (Gray circle + Unit size) - strategy_close, take_profit
- * - New Layer (Purple circle + Layer number)
+ * - Long (Dark green triangle) - retracement entry with direction=long
+ * - Long (Blue triangle) - initial_entry with direction=long
+ * - Short (Pink inverted triangle) - entries with direction=short
+ * - Close (Gray circle) - strategy_close, take_profit
+ * - New Layer (Purple circle + Layer number label: L#)
  * - Volatility Lock (Orange circle)
  * - Margin Protection (Red circle)
  */
@@ -172,7 +172,7 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
   type: ChartMarker['type'];
   color: string;
   shape?: ChartMarker['shape'];
-  label: string;
+  label?: string;
 } {
   const raw = event as unknown as Record<string, unknown>;
   const details = (event.details ||
@@ -246,11 +246,6 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
           type: 'initial_entry',
           color: isShort ? COLORS.SHORT : COLORS.LONG_INITIAL,
           shape: isShort ? 'triangleDown' : 'triangleUp',
-          label: units
-            ? `${isShort ? 'S' : 'L'} ${units}`
-            : isShort
-              ? 'Short (Initial)'
-              : 'Long (Initial)',
         };
       }
 
@@ -260,7 +255,6 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
           type: 'sell',
           color: COLORS.SHORT,
           shape: 'triangleDown',
-          label: units ? `S ${units}` : 'Short',
         };
       }
 
@@ -268,11 +262,6 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
         type: isRetracement ? 'buy' : 'initial_entry',
         color: isRetracement ? COLORS.LONG_RETRACEMENT : COLORS.LONG_INITIAL,
         shape: 'triangleUp',
-        label: units
-          ? `L ${units}`
-          : isRetracement
-            ? 'Long (Retracement)'
-            : 'Long (Initial)',
       };
     }
 
@@ -285,7 +274,6 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
         type: 'info',
         color: COLORS.CLOSE,
         shape: 'circle',
-        label: units ? `C ${units}` : 'Close',
       };
     }
 
@@ -306,7 +294,6 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
         type: 'info',
         color: COLORS.VOLATILITY_LOCK,
         shape: 'circle',
-        label: 'VLock',
       };
     }
 
@@ -315,7 +302,6 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
         type: 'info',
         color: COLORS.MARGIN_PROTECTION,
         shape: 'circle',
-        label: 'Margin',
       };
     }
 
@@ -326,7 +312,6 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
         type: 'start_strategy',
         color: COLORS.START_END,
         shape: 'doubleCircle',
-        label: 'START',
       };
     }
 
@@ -336,7 +321,6 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
         type: 'end_strategy',
         color: COLORS.START_END,
         shape: 'doubleCircle',
-        label: 'END',
       };
     }
 
@@ -346,7 +330,6 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
         type: 'info',
         color: '#666',
         shape: 'circle',
-        label: '?',
       };
   }
 }

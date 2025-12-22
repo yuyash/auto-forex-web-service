@@ -210,6 +210,21 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
 CELERY_ENABLE_UTC = True
 
+# Avoid starvation from long-running tick publisher/subscriber tasks.
+# Route market tick jobs to a dedicated queue and trading/backtest jobs to another.
+CELERY_TASK_DEFAULT_QUEUE = os.getenv("CELERY_TASK_DEFAULT_QUEUE", "default")
+CELERY_TASK_ROUTES = {
+    # Market (long-running)
+    "market.tasks.ensure_tick_pubsub_running": {"queue": "market"},
+    "market.tasks.publish_oanda_ticks": {"queue": "market"},
+    "market.tasks.subscribe_ticks_to_db": {"queue": "market"},
+    "market.tasks.publish_ticks_for_backtest": {"queue": "market"},
+    # Trading / backtest executions
+    "trading.tasks.run_trading_task": {"queue": "trading"},
+    "trading.tasks.stop_trading_task": {"queue": "trading"},
+    "trading.tasks.run_backtest_task": {"queue": "trading"},
+}
+
 
 # =============================================================================
 # Market Tick Pub/Sub

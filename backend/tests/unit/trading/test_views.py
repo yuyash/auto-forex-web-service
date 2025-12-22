@@ -71,6 +71,10 @@ class TestBacktestTaskStatusView:
         assert data["pending_new_execution"] is True
         assert data["progress"] == 0
 
+        assert isinstance(data.get("execution"), dict)
+        assert data["execution"].get("id") is not None
+        assert data["execution"].get("execution_number") == 1
+
     def test_old_stale_task_is_auto_completed(self, monkeypatch, test_user):
         from django.utils import timezone
 
@@ -101,6 +105,10 @@ class TestBacktestTaskStatusView:
 
         assert data["status"] == TaskStatus.COMPLETED
         assert data["pending_new_execution"] is False
+
+        assert isinstance(data.get("execution"), dict)
+        assert data["execution"].get("id") is not None
+        assert data["execution"].get("execution_number") == 1
 
 
 class TestTradingViews:
