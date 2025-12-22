@@ -30,6 +30,10 @@ export interface ConfigProperty {
   dependsOn?: {
     field: string;
     values: string[];
+    and?: Array<{
+      field: string;
+      values: string[];
+    }>;
   };
 }
 
