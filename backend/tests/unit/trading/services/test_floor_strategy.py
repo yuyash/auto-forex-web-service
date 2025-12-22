@@ -96,3 +96,51 @@ def test_floor_strategy_close_event_includes_pnl(monkeypatch):
     assert Decimal(str(details.get("pnl"))) > 0
     assert details.get("entry_time") == "2025-12-21T00:00:00Z"
     assert details.get("exit_time") == "2025-12-21T00:01:00Z"
+
+
+def test_floor_strategy_re_evaluates_direction_when_opening_new_layer(monkeypatch):
+    monkeypatch.setattr(
+        "apps.trading.services.floor.get_pip_size",
+        lambda *, instrument: Decimal("0.01"),
+    )
+
+    # Ensure the strategy can open a new layer, and that direction can flip.
+    svc = FloorStrategyService(
+        _base_config(
+            entry_signal_lookback_ticks=2,
+            max_layers=2,
+            max_retracements_per_layer=1,
+            retracement_pips=Decimal("1"),
+            take_profit_pips=Decimal("9999"),
+        )
+    )
+    state: dict[str, object] = {}
+
+    # Tick 1: build history
+    state, events = svc.on_tick(tick={"bid": "100.00", "ask": "100.00"}, state=state)
+    assert events == []
+
+    # Tick 2: up move -> initial layer should be long
+    state, events = svc.on_tick(tick={"bid": "101.00", "ask": "101.00"}, state=state)
+    open0 = [
+        e for e in events if e.get("type") == "open" and e.get("details", {}).get("layer") == 0
+    ]
+    assert len(open0) == 1
+    assert open0[0]["details"]["direction"] == "long"
+
+    # Tick 3: big down move triggers retracement on layer 0 and unlocks layer 1.
+    # History now trends down vs first element, so new layer should be short.
+    state, events = svc.on_tick(tick={"bid": "99.00", "ask": "99.00"}, state=state)
+    open1 = [
+        e for e in events if e.get("type") == "open" and e.get("details", {}).get("layer") == 1
+    ]
+    assert len(open1) == 1
+    assert open1[0]["details"]["direction"] == "short"
+
+    layer_opened_1 = [
+        e
+        for e in events
+        if e.get("type") == "layer_opened" and e.get("details", {}).get("layer") == 1
+    ]
+    assert len(layer_opened_1) == 1
+    assert layer_opened_1[0]["details"]["direction"] == "short"

@@ -221,7 +221,7 @@ def stop_trading_task(task_id: int, mode: str = "graceful") -> None:
 
 
 @shared_task(name="trading.tasks.run_trading_task")
-def run_trading_task(task_id: int) -> None:
+def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
     """Run a live trading task by subscribing to Market ticks."""
 
     _ensure_strategies_registered()
@@ -257,7 +257,24 @@ def run_trading_task(task_id: int) -> None:
         )
         return
 
-    execution = _create_execution(task_type=TaskType.TRADING, task_id=task_id)
+    execution: TaskExecution
+    if execution_id is not None:
+        try:
+            execution = TaskExecution.objects.get(
+                pk=int(execution_id),
+                task_type=TaskType.TRADING,
+                task_id=task_id,
+            )
+            if execution.status != TaskStatus.RUNNING or execution.progress != 0:
+                execution.status = TaskStatus.RUNNING
+                execution.progress = 0
+            if execution.started_at is None:
+                execution.started_at = dj_timezone.now()
+            execution.save(update_fields=["status", "progress", "started_at"])
+        except Exception:  # pylint: disable=broad-exception-caught
+            execution = _create_execution(task_type=TaskType.TRADING, task_id=task_id)
+    else:
+        execution = _create_execution(task_type=TaskType.TRADING, task_id=task_id)
     execution.add_log("INFO", "=== Trading execution started ===")
 
     instrument = str((task.config.parameters or {}).get("instrument") or "") or None
@@ -658,7 +675,7 @@ def run_trading_task(task_id: int) -> None:
 
 
 @shared_task(name="trading.tasks.run_backtest_task")
-def run_backtest_task(task_id: int) -> None:
+def run_backtest_task(task_id: int, execution_id: int | None = None) -> None:
     """Run a backtest task by subscribing to the Market backtest tick channel."""
 
     _ensure_strategies_registered()
@@ -700,7 +717,24 @@ def run_backtest_task(task_id: int) -> None:
         )
         return
 
-    execution = _create_execution(task_type=TaskType.BACKTEST, task_id=task_id)
+    execution: TaskExecution
+    if execution_id is not None:
+        try:
+            execution = TaskExecution.objects.get(
+                pk=int(execution_id),
+                task_type=TaskType.BACKTEST,
+                task_id=task_id,
+            )
+            if execution.status != TaskStatus.RUNNING or execution.progress != 0:
+                execution.status = TaskStatus.RUNNING
+                execution.progress = 0
+            if execution.started_at is None:
+                execution.started_at = dj_timezone.now()
+            execution.save(update_fields=["status", "progress", "started_at"])
+        except Exception:  # pylint: disable=broad-exception-caught
+            execution = _create_execution(task_type=TaskType.BACKTEST, task_id=task_id)
+    else:
+        execution = _create_execution(task_type=TaskType.BACKTEST, task_id=task_id)
     execution.add_log("INFO", "=== Backtest execution started ===")
 
     strategy_type = str(task.config.strategy_type)

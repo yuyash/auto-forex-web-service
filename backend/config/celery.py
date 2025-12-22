@@ -25,11 +25,23 @@ app.autodiscover_tasks()
 
 @worker_ready.connect
 def _start_market_tick_supervisor(**_kwargs: object) -> None:
+    # Only start the long-running market pub/sub supervisor in a worker that is
+    # explicitly dedicated to the market queue. This prevents it from consuming
+    # all concurrency and starving trading/backtest executions.
+    if str(os.getenv("CELERY_START_MARKET_TICK_SUPERVISOR", "0")).strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return
+
     # Import lazily to avoid any Django setup ordering issues.
     try:
         from apps.market.tasks import ensure_tick_pubsub_running
 
-        ensure_tick_pubsub_running.apply_async(countdown=5)
+        # Route to the market queue explicitly (also covered by CELERY_TASK_ROUTES).
+        ensure_tick_pubsub_running.apply_async(countdown=5, queue="market")
     except Exception:
         # Avoid blocking worker startup.
         return

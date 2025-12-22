@@ -408,6 +408,7 @@ export function TaskExecutionsTab({
                         display: 'flex',
                         gap: 1,
                         alignItems: 'center',
+                        flexWrap: 'wrap',
                       }}
                     >
                       <StatusBadge
@@ -419,6 +420,10 @@ export function TaskExecutionsTab({
                         {new Date(
                           selectedExecution.started_at
                         ).toLocaleString()}
+                      </Typography>
+
+                      <Typography variant="caption" color="text.secondary">
+                        Execution ID: {selectedExecution.id}
                       </Typography>
                     </Box>
                   </Box>

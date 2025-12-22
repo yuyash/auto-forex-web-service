@@ -12,6 +12,7 @@ import logging
 from typing import Any, Type, cast
 
 from django.conf import settings
+from django.db import IntegrityError, transaction
 from django.db.models import Model, Q, QuerySet
 from datetime import timedelta
 
@@ -28,7 +29,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.trading.enums import TaskStatus, TaskType
-from apps.trading.models import BacktestTask, TradingTask
+from apps.trading.models import BacktestTask, TaskExecution, TradingTask
 from apps.trading.serializers import (
     BacktestTaskCreateSerializer,
     BacktestTaskListSerializer,
@@ -533,10 +534,42 @@ class TradingTaskStartView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        now = timezone.now()
+        execution: TaskExecution | None
+        try:
+            with transaction.atomic():
+                last_num = (
+                    TaskExecution.objects.select_for_update()
+                    .filter(task_type=TaskType.TRADING, task_id=task_id)
+                    .order_by("-execution_number")
+                    .values_list("execution_number", flat=True)
+                    .first()
+                )
+                next_num = int(last_num or 0) + 1
+                execution = TaskExecution.objects.create(
+                    task_type=TaskType.TRADING,
+                    task_id=task_id,
+                    execution_number=next_num,
+                    status=TaskStatus.RUNNING,
+                    progress=0,
+                    started_at=now,
+                    logs=[
+                        {
+                            "timestamp": now.isoformat(),
+                            "level": "INFO",
+                            "message": "Execution queued",
+                        }
+                    ],
+                )
+        except IntegrityError:
+            # Concurrent starts should be prevented by the RUNNING status, but
+            # if it races, fall back to whichever execution was created.
+            execution = task.get_latest_execution()
+
         # Queue the trading task for execution
         from apps.trading.tasks import run_trading_task
 
-        cast(Any, run_trading_task).delay(task.pk)
+        cast(Any, run_trading_task).delay(task.pk, execution_id=execution.pk if execution else None)
 
         # Log lifecycle event
         logger.info(
@@ -842,10 +875,40 @@ class TradingTaskRestartView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        now = timezone.now()
+        execution: TaskExecution | None
+        try:
+            with transaction.atomic():
+                last_num = (
+                    TaskExecution.objects.select_for_update()
+                    .filter(task_type=TaskType.TRADING, task_id=task_id)
+                    .order_by("-execution_number")
+                    .values_list("execution_number", flat=True)
+                    .first()
+                )
+                next_num = int(last_num or 0) + 1
+                execution = TaskExecution.objects.create(
+                    task_type=TaskType.TRADING,
+                    task_id=task_id,
+                    execution_number=next_num,
+                    status=TaskStatus.RUNNING,
+                    progress=0,
+                    started_at=now,
+                    logs=[
+                        {
+                            "timestamp": now.isoformat(),
+                            "level": "INFO",
+                            "message": "Execution queued",
+                        }
+                    ],
+                )
+        except IntegrityError:
+            execution = task.get_latest_execution()
+
         # Queue the trading task for execution
         from apps.trading.tasks import run_trading_task
 
-        cast(Any, run_trading_task).delay(task.pk)
+        cast(Any, run_trading_task).delay(task.pk, execution_id=execution.pk if execution else None)
 
         # Log lifecycle event
         state_info = "with state cleared" if clear_state else "preserving state"
@@ -1067,6 +1130,39 @@ class TradingTaskStatusView(APIView):
                 task.save(update_fields=["status", "updated_at"])
                 task.refresh_from_db()
 
+        # If the API queued an execution but no worker ever started it (no lock acquired),
+        # fail the execution so the UI doesn't look "completed" with missing logs.
+        if (
+            task.status == TaskStatus.RUNNING
+            and latest_execution
+            and latest_execution.status == TaskStatus.RUNNING
+        ):
+            lock_info = lock_manager.get_lock_info(TaskType.TRADING, task_id)
+            started_at = latest_execution.started_at
+            startup_timeout_seconds = 120
+            if (
+                lock_info is None
+                and started_at is not None
+                and (timezone.now() - started_at) > timedelta(seconds=startup_timeout_seconds)
+                and int(latest_execution.progress or 0) == 0
+            ):
+                msg = "Execution did not start (no worker lock acquired)"
+                try:
+                    latest_execution.add_log("ERROR", msg)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
+
+                latest_execution.status = TaskStatus.FAILED
+                latest_execution.completed_at = timezone.now()
+                latest_execution.error_message = msg
+                latest_execution.save(
+                    update_fields=["status", "completed_at", "error_message", "logs"]
+                )
+
+                task.status = TaskStatus.FAILED
+                task.save(update_fields=["status", "updated_at"])
+                task.refresh_from_db()
+
         # When task is stopped but execution is still running, update execution immediately
         # The task status being STOPPED is authoritative - user requested stop
         if (
@@ -1110,6 +1206,8 @@ class TradingTaskStatusView(APIView):
         execution_data = None
         if latest_execution:
             execution_data = {
+                "id": latest_execution.pk,
+                "execution_number": latest_execution.execution_number,
                 "status": latest_execution.status,
                 "progress": latest_execution.progress,
                 "started_at": (
@@ -1293,9 +1391,39 @@ class BacktestTaskStartView(APIView):
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_409_CONFLICT)
 
+        now = timezone.now()
+        execution: TaskExecution | None
+        try:
+            with transaction.atomic():
+                last_num = (
+                    TaskExecution.objects.select_for_update()
+                    .filter(task_type=TaskType.BACKTEST, task_id=task_id)
+                    .order_by("-execution_number")
+                    .values_list("execution_number", flat=True)
+                    .first()
+                )
+                next_num = int(last_num or 0) + 1
+                execution = TaskExecution.objects.create(
+                    task_type=TaskType.BACKTEST,
+                    task_id=task_id,
+                    execution_number=next_num,
+                    status=TaskStatus.RUNNING,
+                    progress=0,
+                    started_at=now,
+                    logs=[
+                        {
+                            "timestamp": now.isoformat(),
+                            "level": "INFO",
+                            "message": "Execution queued",
+                        }
+                    ],
+                )
+        except IntegrityError:
+            execution = task.get_latest_execution()
+
         from apps.trading.tasks import run_backtest_task
 
-        cast(Any, run_backtest_task).delay(task.pk)
+        cast(Any, run_backtest_task).delay(task.pk, execution_id=execution.pk if execution else None)
 
         return Response(
             {"message": "Backtest task started successfully", "task_id": task.pk},
@@ -1401,6 +1529,39 @@ class BacktestTaskStatusView(APIView):
                 task.save(update_fields=["status", "updated_at"])
                 task.refresh_from_db()
 
+        # If the API queued an execution but no worker ever started it (no lock acquired),
+        # fail the execution so users see a clear error instead of missing logs.
+        if (
+            task.status == TaskStatus.RUNNING
+            and latest_execution
+            and latest_execution.status == TaskStatus.RUNNING
+        ):
+            lock_info = lock_manager.get_lock_info(TaskType.BACKTEST, task_id)
+            started_at = latest_execution.started_at
+            startup_timeout_seconds = 120
+            if (
+                lock_info is None
+                and started_at is not None
+                and (timezone.now() - started_at) > timedelta(seconds=startup_timeout_seconds)
+                and int(latest_execution.progress or 0) == 0
+            ):
+                msg = "Execution did not start (no worker lock acquired)"
+                try:
+                    latest_execution.add_log("ERROR", msg)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
+
+                latest_execution.status = TaskStatus.FAILED
+                latest_execution.completed_at = timezone.now()
+                latest_execution.error_message = msg
+                latest_execution.save(
+                    update_fields=["status", "completed_at", "error_message", "logs"]
+                )
+
+                task.status = TaskStatus.FAILED
+                task.save(update_fields=["status", "updated_at"])
+                task.refresh_from_db()
+
         if (
             task.status == TaskStatus.STOPPED
             and latest_execution
@@ -1437,6 +1598,8 @@ class BacktestTaskStatusView(APIView):
         execution_data = None
         if latest_execution:
             execution_data = {
+                "id": latest_execution.pk,
+                "execution_number": latest_execution.execution_number,
                 "status": latest_execution.status,
                 "progress": latest_execution.progress,
                 "started_at": (

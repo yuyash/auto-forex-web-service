@@ -24,7 +24,7 @@ describe('createFloorStrategyMarkers', () => {
     const marker = markers[0];
     expect(marker?.type).toBe('initial_entry');
     expect(marker?.shape).toBe('triangleDown');
-    expect(marker?.label).toContain('S');
+    expect(marker?.label).toBeUndefined();
   });
 
   it('does not default missing direction to short', () => {
@@ -46,6 +46,6 @@ describe('createFloorStrategyMarkers', () => {
     const marker = markers[0];
     expect(marker?.type).toBe('initial_entry');
     expect(marker?.shape).toBe('triangleUp');
-    expect(marker?.label).toContain('L');
+    expect(marker?.label).toBeUndefined();
   });
 });
