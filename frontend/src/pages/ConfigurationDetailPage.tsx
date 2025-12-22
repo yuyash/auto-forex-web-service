@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
   Box,
+  Button,
   Chip,
   CircularProgress,
   Container,
@@ -10,6 +11,7 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
+import { Edit as EditIcon } from '@mui/icons-material';
 import { Breadcrumbs } from '../components/common';
 import { useConfiguration } from '../hooks/useConfigurations';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
@@ -39,6 +41,7 @@ function formatValue(value: unknown): string {
 export default function ConfigurationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const configId = useMemo(() => Number(id), [id]);
+  const navigate = useNavigate();
 
   const { data: configuration, isLoading, error } = useConfiguration(configId);
   const { strategies } = useStrategies();
@@ -67,13 +70,34 @@ export default function ConfigurationDetailPage() {
 
       {!isLoading && !error && configuration && (
         <>
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="h4" gutterBottom>
-              {configuration.name}
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Strategy configuration details
-            </Typography>
+          <Box
+            sx={{
+              mb: 3,
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 2,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="h4" gutterBottom>
+                {configuration.name}
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                Strategy configuration details
+              </Typography>
+            </Box>
+
+            <Button
+              variant="contained"
+              startIcon={<EditIcon />}
+              onClick={() =>
+                navigate(`/configurations/${configuration.id}/edit`)
+              }
+            >
+              Edit
+            </Button>
           </Box>
 
           <Paper elevation={2} sx={{ p: 3 }}>

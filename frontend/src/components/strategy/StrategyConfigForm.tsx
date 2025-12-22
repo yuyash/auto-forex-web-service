@@ -48,6 +48,23 @@ const StrategyConfigForm = ({
     {}
   );
 
+  const matchesDependsOn = (
+    currentConfig: StrategyConfig,
+    dependsOn: NonNullable<ConfigProperty['dependsOn']>
+  ): boolean => {
+    const raw = currentConfig[dependsOn.field];
+    const value = raw === undefined || raw === null ? '' : String(raw);
+    if (!dependsOn.values.includes(value)) return false;
+
+    if (!dependsOn.and || dependsOn.and.length === 0) return true;
+    return dependsOn.and.every((cond) => {
+      const rawCond = currentConfig[cond.field];
+      const valueCond =
+        rawCond === undefined || rawCond === null ? '' : String(rawCond);
+      return cond.values.includes(valueCond);
+    });
+  };
+
   useEffect(() => {
     if (!configSchema.properties) {
       return;
@@ -61,12 +78,7 @@ const StrategyConfigForm = ({
           return;
         }
 
-        const dependentRaw = config[fieldSchema.dependsOn.field];
-        const dependentValue =
-          dependentRaw === undefined || dependentRaw === null
-            ? ''
-            : String(dependentRaw);
-        const matches = fieldSchema.dependsOn.values.includes(dependentValue);
+        const matches = matchesDependsOn(config, fieldSchema.dependsOn);
 
         if (
           !matches &&
@@ -515,10 +527,7 @@ const StrategyConfigForm = ({
           ([fieldName, fieldSchema]) => {
             // Check conditional visibility
             if (fieldSchema.dependsOn) {
-              const dependentValue = config[fieldSchema.dependsOn.field];
-              if (
-                !fieldSchema.dependsOn.values.includes(String(dependentValue))
-              ) {
+              if (!matchesDependsOn(config, fieldSchema.dependsOn)) {
                 return null; // Hide field if condition not met
               }
             }

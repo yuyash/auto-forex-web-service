@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Any
@@ -41,6 +42,11 @@ class DirectionMethod(StrEnum):
     OHLC_PRICE_VS_SMA = "ohlc_price_vs_sma"
 
 
+class MomentumLookbackSource(StrEnum):
+    TICKS = "ticks"
+    CANDLES = "candles"
+
+
 @dataclass(frozen=True)
 class FloorStrategyConfig:
     instrument: str
@@ -63,6 +69,9 @@ class FloorStrategyConfig:
     lot_size_increment: Decimal
 
     entry_signal_lookback_ticks: int
+    momentum_lookback_source: MomentumLookbackSource
+    entry_signal_lookback_candles: int
+    entry_signal_candle_granularity_seconds: int
     direction_method: DirectionMethod
 
     sma_fast_period: int
@@ -95,6 +104,11 @@ class FloorStrategyState:
     ticks_seen: int = 0
     price_history: list[Decimal] = field(default_factory=list)
 
+    # Candle-derived close history for momentum lookback when configured.
+    candle_closes: list[Decimal] = field(default_factory=list)
+    current_candle_bucket_start_epoch: int | None = None
+    current_candle_close: Decimal | None = None
+
     active_layers: list[LayerState] = field(default_factory=list)
     volatility_locked: bool = False
 
@@ -110,6 +124,15 @@ class FloorStrategyState:
             "cycle_entry_time": self.cycle_entry_time,
             "ticks_seen": int(self.ticks_seen),
             "price_history": [str(x) for x in self.price_history],
+            "candle_closes": [str(x) for x in self.candle_closes],
+            "current_candle_bucket_start_epoch": (
+                int(self.current_candle_bucket_start_epoch)
+                if self.current_candle_bucket_start_epoch is not None
+                else None
+            ),
+            "current_candle_close": (
+                str(self.current_candle_close) if self.current_candle_close is not None else None
+            ),
             "active_layers": [
                 {
                     "index": int(l.index),
@@ -141,6 +164,24 @@ class FloorStrategyState:
                 d = _to_decimal(v)
                 if d is not None:
                     history.append(d)
+
+        candle_closes_raw = raw.get("candle_closes")
+        candle_closes: list[Decimal] = []
+        if isinstance(candle_closes_raw, list):
+            for v in candle_closes_raw:
+                d = _to_decimal(v)
+                if d is not None:
+                    candle_closes.append(d)
+
+        current_candle_bucket_raw = raw.get("current_candle_bucket_start_epoch")
+        current_candle_bucket_start_epoch: int | None = None
+        try:
+            if current_candle_bucket_raw is not None:
+                current_candle_bucket_start_epoch = int(current_candle_bucket_raw)
+        except Exception:
+            current_candle_bucket_start_epoch = None
+
+        current_candle_close = _to_decimal(raw.get("current_candle_close"))
 
         layers: list[LayerState] = []
         layers_raw = raw.get("active_layers")
@@ -179,12 +220,47 @@ class FloorStrategyState:
             cycle_entry_time=cycle_entry_time,
             ticks_seen=int(raw.get("ticks_seen") or 0),
             price_history=history,
+            candle_closes=candle_closes,
+            current_candle_bucket_start_epoch=current_candle_bucket_start_epoch,
+            current_candle_close=current_candle_close,
             active_layers=layers,
             volatility_locked=bool(raw.get("volatility_locked") or False),
             last_mid=last_mid,
             last_bid=last_bid,
             last_ask=last_ask,
         )
+
+
+def _parse_iso_datetime_best_effort(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    try:
+        s = str(value)
+    except Exception:
+        return None
+    s = s.strip()
+    if not s:
+        return None
+    # Accept Z suffix.
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _tick_bucket_start_epoch_seconds(*, tick_ts: str, granularity_seconds: int) -> int | None:
+    if granularity_seconds <= 0:
+        return None
+    dt = _parse_iso_datetime_best_effort(tick_ts)
+    if dt is None:
+        return None
+    epoch = int(dt.timestamp())
+    return epoch - (epoch % int(granularity_seconds))
 
 
 @dataclass(frozen=True)
@@ -338,7 +414,41 @@ FLOOR_STRATEGY_CONFIG_SCHEMA: dict[str, Any] = {
             "type": "integer",
             "title": "Momentum Lookback Ticks",
             "description": "Number of ticks to analyze when using momentum direction.",
+            "dependsOn": {
+                "field": "direction_method",
+                "values": ["momentum"],
+                "and": [{"field": "momentum_lookback_source", "values": ["ticks"]}],
+            },
+        },
+        "momentum_lookback_source": {
+            "type": "string",
+            "title": "Momentum Lookback Source",
+            "description": "Use raw ticks or candle closes to decide momentum direction.",
+            "enum": ["ticks", "candles"],
+            "default": "candles",
             "dependsOn": {"field": "direction_method", "values": ["momentum"]},
+        },
+        "entry_signal_lookback_candles": {
+            "type": "integer",
+            "title": "Momentum Lookback Candles",
+            "description": "Number of candles to analyze when using candle-based momentum.",
+            "default": 50,
+            "dependsOn": {
+                "field": "direction_method",
+                "values": ["momentum"],
+                "and": [{"field": "momentum_lookback_source", "values": ["candles"]}],
+            },
+        },
+        "entry_signal_candle_granularity_seconds": {
+            "type": "integer",
+            "title": "Momentum Candle Granularity (seconds)",
+            "description": "Candle size in seconds used for momentum lookback (e.g., 60 for 1m).",
+            "default": 60,
+            "dependsOn": {
+                "field": "direction_method",
+                "values": ["momentum"],
+                "and": [{"field": "momentum_lookback_source", "values": ["candles"]}],
+            },
         },
         "direction_method": {
             "type": "string",
@@ -433,6 +543,14 @@ def _parse_direction_method(value: Any) -> DirectionMethod:
         return DirectionMethod.MOMENTUM
 
 
+def _parse_momentum_lookback_source(value: Any) -> MomentumLookbackSource:
+    v = str(value or MomentumLookbackSource.CANDLES).strip()
+    try:
+        return MomentumLookbackSource(v)
+    except Exception:
+        return MomentumLookbackSource.CANDLES
+
+
 def _parse_required_decimal(config: dict[str, Any], key: str) -> Decimal:
     val = _config_value(config, key)
     d = _to_decimal(val)
@@ -493,8 +611,25 @@ class FloorStrategyService(Strategy):
         lot_prog = _parse_progression(_config_value(raw, "lot_size_progression"))
         lot_inc = _parse_required_decimal(raw, "lot_size_increment")
 
-        entry_signal_lookback_ticks = _parse_required_int(raw, "entry_signal_lookback_ticks")
         direction_method = _parse_direction_method(_config_value(raw, "direction_method"))
+
+        # Momentum lookback configuration (ticks vs candle closes).
+        momentum_lookback_source = _parse_momentum_lookback_source(
+            _config_value(raw, "momentum_lookback_source")
+        )
+        entry_signal_lookback_ticks = _parse_int(raw, "entry_signal_lookback_ticks")
+        entry_signal_lookback_candles = _parse_int(raw, "entry_signal_lookback_candles")
+        entry_signal_candle_granularity_seconds = _parse_int(
+            raw, "entry_signal_candle_granularity_seconds"
+        )
+
+        # Apply sane defaults if not specified.
+        if entry_signal_lookback_ticks <= 0:
+            entry_signal_lookback_ticks = 100
+        if entry_signal_lookback_candles <= 0:
+            entry_signal_lookback_candles = 50
+        if entry_signal_candle_granularity_seconds <= 0:
+            entry_signal_candle_granularity_seconds = 60
 
         sma_fast_period = _parse_required_int(raw, "sma_fast_period")
         sma_slow_period = _parse_required_int(raw, "sma_slow_period")
@@ -519,6 +654,9 @@ class FloorStrategyService(Strategy):
             lot_size_progression=lot_prog,
             lot_size_increment=lot_inc,
             entry_signal_lookback_ticks=entry_signal_lookback_ticks,
+            momentum_lookback_source=momentum_lookback_source,
+            entry_signal_lookback_candles=entry_signal_lookback_candles,
+            entry_signal_candle_granularity_seconds=entry_signal_candle_granularity_seconds,
             direction_method=direction_method,
             sma_fast_period=sma_fast_period,
             sma_slow_period=sma_slow_period,
@@ -528,6 +666,68 @@ class FloorStrategyService(Strategy):
             rsi_overbought=rsi_overbought,
             rsi_oversold=rsi_oversold,
         )
+
+    def _update_candle_history(self, *, s: FloorStrategyState, tick: dict[str, Any]) -> None:
+        if self.config.direction_method != DirectionMethod.MOMENTUM:
+            return
+        if self.config.momentum_lookback_source != MomentumLookbackSource.CANDLES:
+            return
+
+        tick_ts = str(tick.get("timestamp") or "")
+        bucket_start = _tick_bucket_start_epoch_seconds(
+            tick_ts=tick_ts,
+            granularity_seconds=int(self.config.entry_signal_candle_granularity_seconds),
+        )
+        if bucket_start is None:
+            # Can't build candles without timestamps; fall back to tick history.
+            return
+
+        if s.current_candle_bucket_start_epoch is None:
+            s.current_candle_bucket_start_epoch = bucket_start
+            s.current_candle_close = s.last_mid
+            return
+
+        # Same candle -> update close.
+        if int(s.current_candle_bucket_start_epoch) == int(bucket_start):
+            s.current_candle_close = s.last_mid
+            return
+
+        # New candle -> finalize previous close.
+        if s.current_candle_close is not None:
+            s.candle_closes.append(s.current_candle_close)
+
+        # Trim to bounded size.
+        max_needed = max(1, int(self.config.entry_signal_lookback_candles) + 5)
+        if len(s.candle_closes) > max_needed:
+            s.candle_closes = s.candle_closes[-max_needed:]
+
+        s.current_candle_bucket_start_epoch = bucket_start
+        s.current_candle_close = s.last_mid
+
+    def _momentum_history(self, s: FloorStrategyState) -> list[Decimal]:
+        if self.config.momentum_lookback_source == MomentumLookbackSource.CANDLES:
+            # If we can't build candles (e.g., backtests without timestamps), fall back to ticks.
+            if s.current_candle_bucket_start_epoch is None:
+                return s.price_history
+            # Include the current candle close (best-effort) so the decision can react live.
+            out = list(s.candle_closes)
+            if s.current_candle_close is not None:
+                out.append(s.current_candle_close)
+            return out
+        return s.price_history
+
+    def _has_enough_history_for_initial_entry(self, s: FloorStrategyState) -> bool:
+        if self.config.direction_method == DirectionMethod.MOMENTUM:
+            if self.config.momentum_lookback_source == MomentumLookbackSource.CANDLES:
+                # If candle bucketing isn't possible (missing timestamps), fall back to ticks.
+                if s.current_candle_bucket_start_epoch is None:
+                    return int(s.ticks_seen) >= int(self.config.entry_signal_lookback_ticks)
+                return len(self._momentum_history(s)) >= int(
+                    self.config.entry_signal_lookback_candles
+                )
+            return int(s.ticks_seen) >= int(self.config.entry_signal_lookback_ticks)
+        # For non-momentum methods keep existing behavior.
+        return int(s.ticks_seen) >= int(self.config.entry_signal_lookback_ticks)
 
     def on_start(self, *, state: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         s = FloorStrategyState.from_dict(state)
@@ -581,6 +781,9 @@ class FloorStrategyService(Strategy):
         s.ticks_seen += 1
         s.price_history.append(derived_mid)
 
+        # Candle builder for candle-based momentum.
+        self._update_candle_history(s=s, tick=tick)
+
         # Keep enough history for indicators
         max_needed = max(
             self.config.entry_signal_lookback_ticks,
@@ -598,9 +801,14 @@ class FloorStrategyService(Strategy):
             return s.to_dict(), [e.to_dict() for e in events]
 
         # Initial entry
-        if not s.initialized and s.ticks_seen >= self.config.entry_signal_lookback_ticks:
+        if not s.initialized and self._has_enough_history_for_initial_entry(s):
             tick_ts = str(tick.get("timestamp") or "")
-            direction = self._decide_direction(s.price_history)
+            history = (
+                self._momentum_history(s)
+                if self.config.direction_method == DirectionMethod.MOMENTUM
+                else s.price_history
+            )
+            direction = self._decide_direction(history)
             entry_price = ask if direction == Direction.LONG else bid
             layer = LayerState(
                 index=0,
@@ -750,7 +958,12 @@ class FloorStrategyService(Strategy):
                     # Re-evaluate direction when creating a new layer (instead of inheriting).
                     # This matches the expectation that each layer's direction is decided at
                     # creation time from the latest indicator history.
-                    new_direction = self._decide_direction(s.price_history)
+                    history = (
+                        self._momentum_history(s)
+                        if self.config.direction_method == DirectionMethod.MOMENTUM
+                        else s.price_history
+                    )
+                    new_direction = self._decide_direction(history)
                     new_fill_price = ask if new_direction == Direction.LONG else bid
 
                     new_layer = LayerState(

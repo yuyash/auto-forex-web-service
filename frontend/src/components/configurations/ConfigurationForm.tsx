@@ -727,8 +727,24 @@ const ConfigurationForm = ({
     if (!strategySchema) return true;
     const fieldSchema = strategySchema.properties[key];
     if (!fieldSchema?.dependsOn) return true;
-    const dependentValue = parameters[fieldSchema.dependsOn.field];
-    return fieldSchema.dependsOn.values.includes(String(dependentValue));
+
+    const dependentRaw = parameters[fieldSchema.dependsOn.field];
+    const dependentValue =
+      dependentRaw === undefined || dependentRaw === null
+        ? ''
+        : String(dependentRaw);
+    if (!fieldSchema.dependsOn.values.includes(dependentValue)) return false;
+
+    if (!fieldSchema.dependsOn.and || fieldSchema.dependsOn.and.length === 0) {
+      return true;
+    }
+
+    return fieldSchema.dependsOn.and.every((cond) => {
+      const rawCond = parameters[cond.field];
+      const valueCond =
+        rawCond === undefined || rawCond === null ? '' : String(rawCond);
+      return cond.values.includes(valueCond);
+    });
   };
 
   const reviewParameters: Array<[string, unknown]> = strategySchema

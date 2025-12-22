@@ -22,6 +22,9 @@ def _base_config(**overrides: object) -> dict[str, object]:
         "lot_size_progression": "equal",
         "lot_size_increment": 1,
         "entry_signal_lookback_ticks": 1,
+        "momentum_lookback_source": "candles",
+        "entry_signal_lookback_candles": 1,
+        "entry_signal_candle_granularity_seconds": 60,
         "direction_method": "momentum",
         "sma_fast_period": 2,
         "sma_slow_period": 3,
@@ -144,3 +147,47 @@ def test_floor_strategy_re_evaluates_direction_when_opening_new_layer(monkeypatc
     ]
     assert len(layer_opened_1) == 1
     assert layer_opened_1[0]["details"]["direction"] == "short"
+
+
+def test_floor_strategy_momentum_can_use_candle_lookback(monkeypatch):
+    monkeypatch.setattr(
+        "apps.trading.services.floor.get_pip_size",
+        lambda *, instrument: Decimal("0.01"),
+    )
+
+    svc = FloorStrategyService(
+        _base_config(
+            entry_signal_lookback_ticks=1,
+            momentum_lookback_source="candles",
+            entry_signal_lookback_candles=3,
+            entry_signal_candle_granularity_seconds=60,
+        )
+    )
+    state: dict[str, object] = {}
+
+    # Candle 1 close = 100.00
+    state, events = svc.on_tick(
+        tick={"mid": "100.00", "timestamp": "2025-12-21T00:00:10Z"},
+        state=state,
+    )
+    # Even though tick lookback is satisfied, candle lookback is not.
+    assert events == []
+
+    # Candle 2 close = 99.00
+    state, events = svc.on_tick(
+        tick={"mid": "99.00", "timestamp": "2025-12-21T00:01:10Z"},
+        state=state,
+    )
+    assert events == []
+
+    # Candle 3 close = 98.00 => momentum is down vs candle 1 => SHORT.
+    state, events = svc.on_tick(
+        tick={"mid": "98.00", "timestamp": "2025-12-21T00:02:10Z"},
+        state=state,
+    )
+
+    open0 = [
+        e for e in events if e.get("type") == "open" and e.get("details", {}).get("layer") == 0
+    ]
+    assert len(open0) == 1
+    assert open0[0]["details"]["direction"] == "short"
