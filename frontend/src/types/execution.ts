@@ -69,9 +69,22 @@ export interface ExecutionMetricsCheckpoint {
 
 export interface BacktestStrategyEvent {
   event_type: string;
-  description: string;
-  details: Record<string, string | number | boolean | null>;
   timestamp?: string;
+  instrument?: string;
+  layer_number?: number;
+  retracement_count?: number;
+  max_retracements_per_layer?: number;
+  direction?: 'long' | 'short' | 'mixed';
+  units?: string | number;
+  bid?: string | number;
+  ask?: string | number;
+  price?: string | number;
+  entry_price?: string | number;
+  exit_price?: string | number;
+  pips?: string | number;
+  pnl?: string | number;
+  entry_time?: string | null;
+  exit_time?: string | null;
 }
 
 export interface StrategyEvent {

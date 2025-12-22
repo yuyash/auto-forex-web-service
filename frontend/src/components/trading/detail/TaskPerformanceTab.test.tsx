@@ -23,6 +23,7 @@ vi.mock('../../../services/api/tradingTasks', () => ({
     getEquityCurve: vi.fn(),
     getTradeLogs: vi.fn(),
     getStrategyEvents: vi.fn(),
+    getMetricsCheckpoint: vi.fn(),
   },
 }));
 
@@ -164,6 +165,10 @@ describe('TaskPerformanceTab Integration Tests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    vi.mocked(tradingTasksApi.getMetricsCheckpoint).mockResolvedValue({
+      checkpoint: null,
+    });
 
     vi.mocked(tradingTasksApi.getEquityCurve).mockResolvedValue({
       task_id: 1,

@@ -86,20 +86,17 @@ describe('BacktestChart', () => {
         {
           timestamp: '2024-01-15T10:30:00Z',
           event_type: 'initial_entry',
-          description: 'Initial entry',
-          details: {
-            price: 1.101,
-            units: 1000,
-          },
+          price: 1.101,
+          entry_price: 1.101,
+          units: 1000,
+          direction: 'long',
         },
         {
           timestamp: '2024-01-15T12:00:00Z',
-          event_type: 'strategy_close',
-          description: 'Strategy close',
-          details: {
-            exit_price: 1.105,
-            units: 1000,
-          },
+          event_type: 'take_profit',
+          exit_price: 1.105,
+          units: 1000,
+          direction: 'long',
         },
       ];
 

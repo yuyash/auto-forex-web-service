@@ -47,13 +47,55 @@ def _safe_json(value: Any, *, max_len: int = 600) -> str:
     return s
 
 
+def _event_type(event: dict[str, Any]) -> str:
+    # Canonical key is `event_type`. Keep a best-effort fallback so non-floor
+    # strategies (or older exports) don't crash the runner.
+    return str(event.get("event_type") or event.get("type") or "")
+
+
 def _format_strategy_event(*, event: dict[str, Any], tick_ts: str | None = None) -> str:
-    e_type = str(event.get("type") or "")
+    e_type = _event_type(event)
+
+    # Canonical floor events are flat. Keep legacy `details` support.
     details_raw = event.get("details")
     details: dict[str, Any] = details_raw if isinstance(details_raw, dict) else {}
 
     prefix = f"[{tick_ts}] " if tick_ts else ""
 
+    if e_type in {"initial_entry", "retracement"}:
+        layer_number = (
+            event.get("layer_number") or details.get("layer_number") or details.get("layer")
+        )
+        direction = event.get("direction") or details.get("direction")
+        price = event.get("price") or details.get("entry_price") or details.get("price")
+        units = event.get("units") or details.get("lot_size") or details.get("units")
+        retr = (
+            event.get("retracement_count")
+            or details.get("retracement_count")
+            or details.get("retracement")
+        )
+        return (
+            f"{prefix}{e_type}: layer={layer_number} dir={direction} price={price} units={units} "
+            f"retracement={retr}"
+        )
+
+    if e_type == "take_profit":
+        layer_number = (
+            event.get("layer_number") or details.get("layer_number") or details.get("layer")
+        )
+        pips = event.get("pips") or details.get("pips")
+        pnl = event.get("pnl") or details.get("pnl")
+        units = event.get("units") or details.get("units")
+        return f"{prefix}take_profit: layer={layer_number} units={units} pips={pips} pnl={pnl}"
+
+    if e_type in {"add_layer", "remove_layer"}:
+        layer_number = event.get("layer_number") or details.get("layer_number")
+        return f"{prefix}{e_type}: layer={layer_number}"
+
+    if e_type in {"volatility_lock", "margin_protection"}:
+        return f"{prefix}{e_type}: { _safe_json(event) }"
+
+    # Legacy types (kept for best-effort logging).
     if e_type == "open":
         layer = details.get("layer")
         direction = details.get("direction")
@@ -104,11 +146,36 @@ def _extract_trade_from_strategy_event(event: dict[str, Any]) -> dict[str, Any] 
     if not isinstance(event, dict):
         return None
 
-    # Already in trade-log shape (some strategies may emit this directly).
+    # Canonical floor strategy: `take_profit` represents a completed trade cycle.
     if event.get("pnl") is not None and (event.get("exit_time") or event.get("timestamp")):
         return event
 
-    e_type = str(event.get("type") or "")
+    e_type = _event_type(event)
+
+    # Canonical flat event.
+    if e_type == "take_profit":
+        pnl = event.get("pnl")
+        if pnl is None:
+            return None
+        exit_time = event.get("exit_time") or event.get("timestamp")
+        if not exit_time:
+            return None
+        return {
+            "pnl": pnl,
+            "pips": event.get("pips"),
+            "units": event.get("units"),
+            "direction": event.get("direction"),
+            "entry_time": event.get("entry_time"),
+            "exit_time": event.get("exit_time") or event.get("timestamp"),
+            "entry_price": event.get("entry_price"),
+            "exit_price": event.get("price") or event.get("exit_price"),
+            "instrument": event.get("instrument"),
+            "layer_number": event.get("layer_number"),
+            "retracement_count": event.get("retracement_count"),
+            "entry_retracement_count": event.get("entry_retracement_count"),
+        }
+
+    # Legacy fallback.
     if e_type != "close":
         return None
 
@@ -184,7 +251,7 @@ def _bulk_persist_strategy_events(
     for event in events:
         if not isinstance(event, dict):
             continue
-        e_type = str(event.get("type") or "")
+        e_type = _event_type(event)
         rows.append(
             ExecutionStrategyEvent(
                 execution=execution,
@@ -464,7 +531,7 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
         strategy_events.extend(start_events)
         pending_events.extend([e for e in start_events if isinstance(e, dict)])
         for e in start_events:
-            e_type = str(e.get("type") or "")
+            e_type = _event_type(e)
             # Persist to execution logs and echo to Celery stdout.
             try:
                 msg = _format_strategy_event(event=e, tick_ts=None)
@@ -525,7 +592,7 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
                 if stop_events:
                     strategy_events.extend(stop_events)
                     for e in stop_events:
-                        e_type = str(e.get("type") or "")
+                        e_type = _event_type(e)
                         try:
                             msg = _format_strategy_event(event=e, tick_ts=None)
                             execution.add_log("INFO", msg)
@@ -588,7 +655,7 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
                         if ctrl_events:
                             strategy_events.extend(ctrl_events)
                             for e in ctrl_events:
-                                e_type = str(e.get("type") or "")
+                                e_type = _event_type(e)
                                 try:
                                     msg = _format_strategy_event(event=e, tick_ts=None)
                                     execution.add_log("INFO", msg)
@@ -691,7 +758,7 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
                         except Exception:  # pylint: disable=broad-exception-caught
                             pass
                 for e in events:
-                    e_type = str(e.get("type") or "")
+                    e_type = _event_type(e)
 
                     # Persist all strategy events (not just open/close).
                     try:
@@ -706,17 +773,24 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
                     except Exception:  # pylint: disable=broad-exception-caught
                         pass
 
-                    if e_type == "close":
-                        details_raw = e.get("details")
-                        if isinstance(details_raw, dict) and details_raw.get("pips") is not None:
+                    if e_type in {"take_profit", "close"}:
+                        pips = e.get("pips")
+                        if pips is None:
+                            details_raw = e.get("details")
+                            if isinstance(details_raw, dict):
+                                pips = details_raw.get("pips")
+                        if pips is not None:
                             try:
-                                realized_pips += Decimal(str(details_raw.get("pips")))
+                                realized_pips += Decimal(str(pips))
                             except Exception:  # pylint: disable=broad-exception-caught
                                 pass
 
-                    if e_type in {"open", "close"}:
-                        event_type = f"trade_{e_type}"
-                        description = f"Trade {e_type} event for trading task {task_id}"
+                    if e_type in {"initial_entry", "retracement", "open"}:
+                        event_type = "trade_open"
+                        description = f"Trade open event for trading task {task_id}"
+                    elif e_type in {"take_profit", "close"}:
+                        event_type = "trade_close"
+                        description = f"Trade close event for trading task {task_id}"
                     else:
                         event_type = f"strategy_{e_type}"[:64] if e_type else "strategy_event"
                         description = f"Strategy event ({strategy_type}) for trading task {task_id}"
@@ -840,7 +914,7 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
         strategy_events.extend(final_stop_events)
         pending_events.extend([e for e in final_stop_events if isinstance(e, dict)])
         for e in final_stop_events:
-            e_type = str(e.get("type") or "")
+            e_type = _event_type(e)
             try:
                 msg = _format_strategy_event(event=e, tick_ts=None)
                 execution.add_log("INFO", msg)
@@ -1010,7 +1084,7 @@ def run_backtest_task(task_id: int, execution_id: int | None = None) -> None:
     if start_events:
         strategy_events.extend(start_events)
         for e in start_events:
-            e_type = str(e.get("type") or "")
+            e_type = _event_type(e)
             try:
                 msg = _format_strategy_event(event=e, tick_ts=None)
                 execution.add_log("INFO", msg)
@@ -1175,9 +1249,17 @@ def run_backtest_task(task_id: int, execution_id: int | None = None) -> None:
         if tick_ts and not enriched.get("timestamp"):
             enriched["timestamp"] = tick_ts
 
+        tick_mid = tick.get("mid")
+
+        # Canonical flat events: attach a best-effort price if missing.
+        if tick_mid and not any(
+            enriched.get(k) not in {None, ""} for k in {"price", "entry_price", "exit_price"}
+        ):
+            enriched["price"] = tick_mid
+
+        # Legacy `details` payloads: keep current enrichment behavior.
         details_raw = enriched.get("details")
         details: dict[str, Any] = details_raw if isinstance(details_raw, dict) else {}
-        tick_mid = tick.get("mid")
 
         # Add a generic current price if no price is present.
         if tick_mid and not any(
@@ -1189,7 +1271,7 @@ def run_backtest_task(task_id: int, execution_id: int | None = None) -> None:
 
         # Close events are easier to plot with an explicit exit price.
         if (
-            str(enriched.get("type") or "") == "close"
+            _event_type(enriched) in {"take_profit", "close"}
             and tick_mid
             and not details.get("exit_price")
         ):
@@ -1447,7 +1529,7 @@ def run_backtest_task(task_id: int, execution_id: int | None = None) -> None:
                         except Exception:  # pylint: disable=broad-exception-caught
                             pass
                 for e in enriched_events:
-                    e_type = str(e.get("type") or "")
+                    e_type = _event_type(e)
 
                     # Persist all strategy events (layer opens/scales, take-profit hits, etc).
                     try:
@@ -1462,17 +1544,24 @@ def run_backtest_task(task_id: int, execution_id: int | None = None) -> None:
                     except Exception:  # pylint: disable=broad-exception-caught
                         pass
 
-                    if e_type == "close":
-                        details_raw = e.get("details")
-                        if isinstance(details_raw, dict) and details_raw.get("pips") is not None:
+                    if e_type in {"take_profit", "close"}:
+                        pips = e.get("pips")
+                        if pips is None:
+                            details_raw = e.get("details")
+                            if isinstance(details_raw, dict):
+                                pips = details_raw.get("pips")
+                        if pips is not None:
                             try:
-                                realized_pips += Decimal(str(details_raw.get("pips")))
+                                realized_pips += Decimal(str(pips))
                             except Exception:  # pylint: disable=broad-exception-caught
                                 pass
 
-                    if e_type in {"open", "close"}:
-                        event_type = f"trade_{e_type}"
-                        description = f"Trade {e_type} event for backtest task {task_id}"
+                    if e_type in {"initial_entry", "retracement", "open"}:
+                        event_type = "trade_open"
+                        description = f"Trade open event for backtest task {task_id}"
+                    elif e_type in {"take_profit", "close"}:
+                        event_type = "trade_close"
+                        description = f"Trade close event for backtest task {task_id}"
                     else:
                         event_type = f"strategy_{e_type}"[:64] if e_type else "strategy_event"
                         description = (

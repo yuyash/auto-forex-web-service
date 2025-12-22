@@ -26,6 +26,7 @@ import {
   SwapHoriz as SwapHorizIcon,
   TrendingDown as TrendingDownIcon,
 } from '@mui/icons-material';
+import { durationMsBetween, formatDurationMs } from '../../../utils/duration';
 
 interface EquityPoint {
   timestamp: string;
@@ -62,6 +63,18 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
   };
+
+  const startedAt =
+    results?.execution?.started_at ?? task.latest_execution?.started_at ?? null;
+  const completedAt =
+    results?.execution?.completed_at ??
+    task.latest_execution?.completed_at ??
+    null;
+
+  const durationMs =
+    task.status === TaskStatus.RUNNING
+      ? durationMsBetween(startedAt, new Date().toISOString())
+      : durationMsBetween(startedAt, completedAt);
 
   // Check if task has completed execution with metrics
   const hasMetrics = task.status === TaskStatus.COMPLETED && !!metrics;
@@ -253,6 +266,10 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
           <Typography variant="body1">
             {formatDate(task.start_time)} → {formatDate(task.end_time)}
           </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {task.status === TaskStatus.RUNNING ? 'Elapsed' : 'Duration'}:{' '}
+            {durationMs !== null ? formatDurationMs(durationMs) : '—'}
+          </Typography>
         </Paper>
 
         {metricsCheckpointError && (
@@ -415,6 +432,9 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
         </Typography>
         <Typography variant="body1">
           {formatDate(task.start_time)} → {formatDate(task.end_time)}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Duration: {durationMs !== null ? formatDurationMs(durationMs) : '—'}
         </Typography>
       </Paper>
 
