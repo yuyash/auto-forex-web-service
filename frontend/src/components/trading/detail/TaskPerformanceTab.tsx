@@ -25,6 +25,7 @@ import { useTradingResults } from '../../../hooks/useTaskResults';
 import type {
   BacktestStrategyEvent,
   EquityPoint,
+  ExecutionMetricsCheckpoint,
   Trade,
 } from '../../../types/execution';
 import {
@@ -75,6 +76,14 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
     null
   );
 
+  const [metricsCheckpoint, setMetricsCheckpoint] =
+    useState<ExecutionMetricsCheckpoint | null>(null);
+  const [metricsCheckpointLoading, setMetricsCheckpointLoading] =
+    useState(false);
+  const [metricsCheckpointError, setMetricsCheckpointError] = useState<
+    string | null
+  >(null);
+
   useEffect(() => {
     if (results) {
       setLastUpdate(new Date());
@@ -98,16 +107,62 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
     }
   };
 
-  // Check if task has execution with metrics
-  const hasMetrics =
-    (task.status === TaskStatus.RUNNING ||
-      task.status === TaskStatus.PAUSED ||
-      task.status === TaskStatus.STOPPED ||
-      task.status === TaskStatus.COMPLETED) &&
-    metrics;
+  const shouldFetchDetails =
+    task.status !== TaskStatus.CREATED && !!task.id && !!execution?.id;
+  const shouldPollDetails = task.status === TaskStatus.RUNNING;
+  const hasMetrics = !!metrics;
 
   useEffect(() => {
-    if (!task.id || !hasMetrics) {
+    if (!shouldFetchDetails) {
+      setMetricsCheckpoint(null);
+      setMetricsCheckpointLoading(false);
+      setMetricsCheckpointError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchCheckpoint = (opts?: { showLoading?: boolean }) => {
+      const showLoading = opts?.showLoading ?? false;
+      if (showLoading) setMetricsCheckpointLoading(true);
+      setMetricsCheckpointError(null);
+
+      tradingTasksApi
+        .getMetricsCheckpoint(task.id)
+        .then((resp) => {
+          if (cancelled) return;
+          setMetricsCheckpoint(resp?.checkpoint ?? null);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setMetricsCheckpointError(
+            err instanceof Error ? err.message : 'Failed to load live metrics'
+          );
+          setMetricsCheckpoint(null);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          if (showLoading) setMetricsCheckpointLoading(false);
+        });
+    };
+
+    fetchCheckpoint({ showLoading: true });
+
+    let intervalId: number | null = null;
+    if (shouldPollDetails) {
+      intervalId = window.setInterval(() => {
+        fetchCheckpoint({ showLoading: false });
+      }, 5000);
+    }
+
+    return () => {
+      cancelled = true;
+      if (intervalId !== null) window.clearInterval(intervalId);
+    };
+  }, [shouldFetchDetails, shouldPollDetails, task.id, execution?.id]);
+
+  useEffect(() => {
+    if (!shouldFetchDetails) {
       setEquityCurve([]);
       setEquityCurveLoading(false);
       setEquityCurveError(null);
@@ -122,74 +177,97 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
 
     let cancelled = false;
 
-    setEquityCurveLoading(true);
-    setEquityCurveError(null);
-    tradingTasksApi
-      .getEquityCurve(task.id)
-      .then((resp) => {
-        if (cancelled) return;
-        setEquityCurve(
-          Array.isArray(resp.equity_curve) ? resp.equity_curve : []
-        );
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setEquityCurveError(
-          err instanceof Error ? err.message : 'Failed to load equity curve'
-        );
-        setEquityCurve([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setEquityCurveLoading(false);
-      });
+    const fetchDetails = (opts?: { showLoading?: boolean }) => {
+      const showLoading = opts?.showLoading ?? false;
 
-    setTradeLogsLoading(true);
-    setTradeLogsError(null);
-    tradingTasksApi
-      .getTradeLogs(task.id)
-      .then((resp) => {
-        if (cancelled) return;
-        setTradeLogs(Array.isArray(resp.trade_logs) ? resp.trade_logs : []);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setTradeLogsError(
-          err instanceof Error ? err.message : 'Failed to load trade logs'
-        );
-        setTradeLogs([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setTradeLogsLoading(false);
-      });
+      if (showLoading) {
+        setEquityCurveLoading(true);
+        setTradeLogsLoading(true);
+        setStrategyEventsLoading(true);
+      }
 
-    setStrategyEventsLoading(true);
-    setStrategyEventsError(null);
-    tradingTasksApi
-      .getStrategyEvents(task.id)
-      .then((resp) => {
-        if (cancelled) return;
-        setStrategyEvents(
-          Array.isArray(resp.strategy_events) ? resp.strategy_events : []
-        );
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setStrategyEventsError(
-          err instanceof Error ? err.message : 'Failed to load strategy events'
-        );
-        setStrategyEvents([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setStrategyEventsLoading(false);
-      });
+      setEquityCurveError(null);
+      setTradeLogsError(null);
+      setStrategyEventsError(null);
+
+      tradingTasksApi
+        .getEquityCurve(task.id)
+        .then((resp) => {
+          if (cancelled) return;
+          setEquityCurve(
+            Array.isArray(resp.equity_curve) ? resp.equity_curve : []
+          );
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setEquityCurveError(
+            err instanceof Error ? err.message : 'Failed to load equity curve'
+          );
+          setEquityCurve([]);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          if (showLoading) setEquityCurveLoading(false);
+        });
+
+      tradingTasksApi
+        .getTradeLogs(task.id)
+        .then((resp) => {
+          if (cancelled) return;
+          setTradeLogs(Array.isArray(resp.trade_logs) ? resp.trade_logs : []);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setTradeLogsError(
+            err instanceof Error ? err.message : 'Failed to load trade logs'
+          );
+          setTradeLogs([]);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          if (showLoading) setTradeLogsLoading(false);
+        });
+
+      tradingTasksApi
+        .getStrategyEvents(task.id)
+        .then((resp) => {
+          if (cancelled) return;
+          setStrategyEvents(
+            Array.isArray(resp.strategy_events) ? resp.strategy_events : []
+          );
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setStrategyEventsError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to load strategy events'
+          );
+          setStrategyEvents([]);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          if (showLoading) setStrategyEventsLoading(false);
+        });
+    };
+
+    // Initial fetch
+    fetchDetails({ showLoading: true });
+
+    let intervalId: number | null = null;
+    if (shouldPollDetails) {
+      intervalId = window.setInterval(() => {
+        fetchDetails({ showLoading: false });
+      }, 5000);
+    }
 
     return () => {
       cancelled = true;
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+      }
     };
-  }, [task.id, hasMetrics, execution?.id]);
+  }, [shouldFetchDetails, shouldPollDetails, task.id, execution?.id]);
 
   // Filter equity curve data based on selected date range
   const getFilteredEquityCurve = () => {
@@ -273,12 +351,11 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
     );
   }
 
-  if (!hasMetrics) {
+  if (!execution?.id) {
     return (
       <Box sx={{ px: 3 }}>
         <Alert severity="warning">
-          No performance metrics available yet. Metrics will be generated as the
-          task executes trades.
+          No execution available yet. Start the task to see performance data.
         </Alert>
       </Box>
     );
@@ -295,43 +372,75 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
       )}
 
       {/* Key Metrics Grid */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <MetricCard
-            title="Total Return"
-            value={`${parseFloat(metrics.total_return).toFixed(2)}%`}
-            icon={<TrendingUpIcon />}
-            color={parseFloat(metrics.total_return) >= 0 ? 'success' : 'error'}
-          />
-        </Grid>
+      {metricsCheckpointError && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          Failed to load live metrics. {metricsCheckpointError}
+        </Alert>
+      )}
 
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <MetricCard
-            title="Win Rate"
-            value={`${parseFloat(metrics.win_rate).toFixed(2)}%`}
-            icon={<ShowChartIcon />}
-            color="primary"
-          />
-        </Grid>
+      {!hasMetrics && !metricsCheckpoint && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Waiting for metrics… Equity curve and trade logs update live.
+        </Alert>
+      )}
 
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <MetricCard
-            title="Total Trades"
-            value={metrics.total_trades.toString()}
-            icon={<SwapHorizIcon />}
-            color="info"
-          />
-        </Grid>
+      {(hasMetrics || !!metricsCheckpoint) && (
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <MetricCard
+              title="Total Return"
+              value={`${parseFloat(
+                (metrics ?? metricsCheckpoint)?.total_return ?? '0'
+              ).toFixed(2)}%`}
+              icon={<TrendingUpIcon />}
+              color={
+                parseFloat(
+                  (metrics ?? metricsCheckpoint)?.total_return ?? '0'
+                ) >= 0
+                  ? 'success'
+                  : 'error'
+              }
+              isLoading={metricsCheckpointLoading && !hasMetrics}
+            />
+          </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <MetricCard
-            title="Max Drawdown"
-            value={`${parseFloat(metrics.max_drawdown).toFixed(2)}%`}
-            icon={<TrendingDownIcon />}
-            color="warning"
-          />
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <MetricCard
+              title="Win Rate"
+              value={`${parseFloat(
+                (metrics ?? metricsCheckpoint)?.win_rate ?? '0'
+              ).toFixed(2)}%`}
+              icon={<ShowChartIcon />}
+              color="primary"
+              isLoading={metricsCheckpointLoading && !hasMetrics}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <MetricCard
+              title="Total Trades"
+              value={
+                (metrics ?? metricsCheckpoint)?.total_trades?.toString() ?? '0'
+              }
+              icon={<SwapHorizIcon />}
+              color="info"
+              isLoading={metricsCheckpointLoading && !hasMetrics}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <MetricCard
+              title="Max Drawdown"
+              value={`${parseFloat(
+                (metrics ?? metricsCheckpoint)?.max_drawdown ?? '0'
+              ).toFixed(2)}%`}
+              icon={<TrendingDownIcon />}
+              color="warning"
+              isLoading={metricsCheckpointLoading && !hasMetrics}
+            />
+          </Grid>
         </Grid>
-      </Grid>
+      )}
 
       {/* Equity Curve Chart */}
       <Paper sx={{ p: 3 }}>
@@ -457,118 +566,122 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
       </Box>
 
       {/* Trade Statistics */}
-      <Paper sx={{ p: 3, mt: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Trade Statistics
-        </Typography>
+      {hasMetrics && (
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Trade Statistics
+          </Typography>
 
-        <Grid container spacing={3}>
-          {metrics.sharpe_ratio && (
+          <Grid container spacing={3}>
+            {metrics.sharpe_ratio && (
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Sharpe Ratio
+                  </Typography>
+                  <Typography variant="h5">
+                    {parseFloat(metrics.sharpe_ratio).toFixed(2)}
+                  </Typography>
+                </Box>
+              </Grid>
+            )}
+
+            {metrics.profit_factor && (
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Profit Factor
+                  </Typography>
+                  <Typography variant="h5">
+                    {parseFloat(metrics.profit_factor).toFixed(2)}
+                  </Typography>
+                </Box>
+              </Grid>
+            )}
+
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
-                  Sharpe Ratio
+                  Total P&L
                 </Typography>
-                <Typography variant="h5">
-                  {parseFloat(metrics.sharpe_ratio).toFixed(2)}
+                <Typography
+                  variant="h5"
+                  color={
+                    parseFloat(metrics.total_pnl) >= 0
+                      ? 'success.main'
+                      : 'error.main'
+                  }
+                >
+                  ${parseFloat(metrics.total_pnl).toFixed(2)}
                 </Typography>
               </Box>
             </Grid>
-          )}
 
-          {metrics.profit_factor && (
+            {metrics.average_win && (
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Average Win
+                  </Typography>
+                  <Typography variant="h5" color="success.main">
+                    ${parseFloat(metrics.average_win).toFixed(2)}
+                  </Typography>
+                </Box>
+              </Grid>
+            )}
+
+            {metrics.average_loss && (
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Average Loss
+                  </Typography>
+                  <Typography variant="h5" color="error.main">
+                    ${parseFloat(metrics.average_loss).toFixed(2)}
+                  </Typography>
+                </Box>
+              </Grid>
+            )}
+
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
-                  Profit Factor
-                </Typography>
-                <Typography variant="h5">
-                  {parseFloat(metrics.profit_factor).toFixed(2)}
-                </Typography>
-              </Box>
-            </Grid>
-          )}
-
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                Total P&L
-              </Typography>
-              <Typography
-                variant="h5"
-                color={
-                  parseFloat(metrics.total_pnl) >= 0
-                    ? 'success.main'
-                    : 'error.main'
-                }
-              >
-                ${parseFloat(metrics.total_pnl).toFixed(2)}
-              </Typography>
-            </Box>
-          </Grid>
-
-          {metrics.average_win && (
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  Average Win
+                  Winning Trades
                 </Typography>
                 <Typography variant="h5" color="success.main">
-                  ${parseFloat(metrics.average_win).toFixed(2)}
+                  {metrics.winning_trades}
                 </Typography>
               </Box>
             </Grid>
-          )}
 
-          {metrics.average_loss && (
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
-                  Average Loss
+                  Losing Trades
                 </Typography>
                 <Typography variant="h5" color="error.main">
-                  ${parseFloat(metrics.average_loss).toFixed(2)}
+                  {metrics.losing_trades}
                 </Typography>
               </Box>
             </Grid>
-          )}
 
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                Winning Trades
-              </Typography>
-              <Typography variant="h5" color="success.main">
-                {metrics.winning_trades}
-              </Typography>
-            </Box>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Box>
+                <Typography variant="body2" color="text.secondary">
+                  Win/Loss Ratio
+                </Typography>
+                <Typography variant="h5">
+                  {metrics.losing_trades > 0
+                    ? (metrics.winning_trades / metrics.losing_trades).toFixed(
+                        2
+                      )
+                    : 'N/A'}
+                </Typography>
+              </Box>
+            </Grid>
           </Grid>
-
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                Losing Trades
-              </Typography>
-              <Typography variant="h5" color="error.main">
-                {metrics.losing_trades}
-              </Typography>
-            </Box>
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                Win/Loss Ratio
-              </Typography>
-              <Typography variant="h5">
-                {metrics.losing_trades > 0
-                  ? (metrics.winning_trades / metrics.losing_trades).toFixed(2)
-                  : 'N/A'}
-              </Typography>
-            </Box>
-          </Grid>
-        </Grid>
-      </Paper>
+        </Paper>
+      )}
     </Box>
   );
 }

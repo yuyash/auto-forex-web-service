@@ -14,15 +14,26 @@ import {
   FileDownload as FileDownloadIcon,
 } from '@mui/icons-material';
 import { backtestTasksApi } from '../../../services/api/backtestTasks';
+import { MetricCard } from '../../tasks/display/MetricCard';
 import { MetricsGrid } from '../../tasks/charts/MetricsGrid';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
 import { BacktestChart } from '../BacktestChart';
 import { FloorLayerLog } from '../FloorLayerLog';
 import type { BacktestTask } from '../../../types/backtestTask';
 import { TaskStatus } from '../../../types/common';
-import type { BacktestStrategyEvent, Trade } from '../../../types/execution';
+import type {
+  BacktestStrategyEvent,
+  ExecutionMetricsCheckpoint,
+  Trade,
+} from '../../../types/execution';
 import type { TaskResults } from '../../../types/results';
 import type { ChartMarker } from '../../../utils/chartMarkers';
+
+const toNumberOrNull = (value: unknown): number | null => {
+  if (value === null || value === undefined) return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+};
 
 interface TaskResultsTabProps {
   task: BacktestTask;
@@ -31,6 +42,9 @@ interface TaskResultsTabProps {
 
 export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
   const metrics = results?.metrics ?? null;
+
+  const hasMetrics = task.status === TaskStatus.COMPLETED && !!metrics;
+
   const [tradeLogs, setTradeLogs] = React.useState<Trade[]>([]);
   const [tradeLogsLoading, setTradeLogsLoading] = React.useState(false);
   const [tradeLogsError, setTradeLogsError] = React.useState<string | null>(
@@ -45,11 +59,69 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
     string | null
   >(null);
 
-  // Check if task has completed execution with metrics
-  const hasMetrics = task.status === TaskStatus.COMPLETED && !!metrics;
+  const [metricsCheckpoint, setMetricsCheckpoint] =
+    React.useState<ExecutionMetricsCheckpoint | null>(null);
+  const [metricsCheckpointLoading, setMetricsCheckpointLoading] =
+    React.useState(false);
+  const [metricsCheckpointError, setMetricsCheckpointError] = React.useState<
+    string | null
+  >(null);
+
+  const shouldFetchDetails =
+    task.status !== TaskStatus.CREATED && !!task.id && !!results?.execution?.id;
+  const shouldPollDetails = task.status === TaskStatus.RUNNING;
 
   React.useEffect(() => {
-    if (!hasMetrics) {
+    if (!shouldFetchDetails) {
+      setMetricsCheckpoint(null);
+      setMetricsCheckpointLoading(false);
+      setMetricsCheckpointError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchCheckpoint = (opts?: { showLoading?: boolean }) => {
+      const showLoading = opts?.showLoading ?? false;
+      if (showLoading) setMetricsCheckpointLoading(true);
+      setMetricsCheckpointError(null);
+
+      backtestTasksApi
+        .getMetricsCheckpoint(task.id)
+        .then((resp) => {
+          if (cancelled) return;
+          setMetricsCheckpoint(resp?.checkpoint ?? null);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setMetricsCheckpointError(
+            err instanceof Error ? err.message : 'Failed to load live metrics'
+          );
+          setMetricsCheckpoint(null);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          if (showLoading) setMetricsCheckpointLoading(false);
+        });
+    };
+
+    fetchCheckpoint({ showLoading: true });
+
+    let intervalId: number | null = null;
+    if (shouldPollDetails) {
+      intervalId = window.setInterval(() => {
+        fetchCheckpoint({ showLoading: false });
+      }, 5000);
+    }
+
+    return () => {
+      cancelled = true;
+      if (intervalId !== null) window.clearInterval(intervalId);
+    };
+  }, [shouldFetchDetails, shouldPollDetails, task.id]);
+
+  React.useEffect(() => {
+    if (!shouldFetchDetails) {
       setTradeLogs([]);
       setTradeLogsLoading(false);
       setTradeLogsError(null);
@@ -61,52 +133,74 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
 
     let cancelled = false;
 
-    setTradeLogsLoading(true);
-    setTradeLogsError(null);
-    backtestTasksApi
-      .getTradeLogs(task.id)
-      .then((resp) => {
-        if (cancelled) return;
-        setTradeLogs(Array.isArray(resp.trade_logs) ? resp.trade_logs : []);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setTradeLogsError(
-          err instanceof Error ? err.message : 'Failed to load trade logs'
-        );
-        setTradeLogs([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setTradeLogsLoading(false);
-      });
+    const fetchDetails = (opts?: { showLoading?: boolean }) => {
+      const showLoading = opts?.showLoading ?? false;
+      if (showLoading) {
+        setTradeLogsLoading(true);
+        setStrategyEventsLoading(true);
+      }
 
-    setStrategyEventsLoading(true);
-    setStrategyEventsError(null);
-    backtestTasksApi
-      .getStrategyEvents(task.id)
-      .then((resp) => {
-        if (cancelled) return;
-        setStrategyEvents(
-          Array.isArray(resp.strategy_events) ? resp.strategy_events : []
-        );
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setStrategyEventsError(
-          err instanceof Error ? err.message : 'Failed to load strategy events'
-        );
-        setStrategyEvents([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setStrategyEventsLoading(false);
-      });
+      setTradeLogsError(null);
+      setStrategyEventsError(null);
+
+      backtestTasksApi
+        .getTradeLogs(task.id)
+        .then((resp) => {
+          if (cancelled) return;
+          setTradeLogs(Array.isArray(resp.trade_logs) ? resp.trade_logs : []);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setTradeLogsError(
+            err instanceof Error ? err.message : 'Failed to load trade logs'
+          );
+          setTradeLogs([]);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          if (showLoading) setTradeLogsLoading(false);
+        });
+
+      backtestTasksApi
+        .getStrategyEvents(task.id)
+        .then((resp) => {
+          if (cancelled) return;
+          setStrategyEvents(
+            Array.isArray(resp.strategy_events) ? resp.strategy_events : []
+          );
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setStrategyEventsError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to load strategy events'
+          );
+          setStrategyEvents([]);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          if (showLoading) setStrategyEventsLoading(false);
+        });
+    };
+
+    // Initial fetch
+    fetchDetails({ showLoading: true });
+
+    let intervalId: number | null = null;
+    if (shouldPollDetails) {
+      intervalId = window.setInterval(() => {
+        fetchDetails({ showLoading: false });
+      }, 5000);
+    }
 
     return () => {
       cancelled = true;
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+      }
     };
-  }, [hasMetrics, task.id, results?.execution?.id]);
+  }, [shouldFetchDetails, shouldPollDetails, task.id, results?.execution?.id]);
 
   // Debug logging for strategy events (ALWAYS LOG)
   React.useEffect(() => {}, [metrics]);
@@ -298,6 +392,36 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
   };
 
   if (!results && task.status !== TaskStatus.CREATED) {
+    // While running, show the live layout even if the first poll hasn't returned yet.
+    if (task.status === TaskStatus.RUNNING) {
+      return (
+        <Box sx={{ px: 3 }}>
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CircularProgress size={16} />
+              <Typography variant="body2">Task is running…</Typography>
+            </Box>
+          </Alert>
+
+          <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              Backtest Period
+            </Typography>
+            <Typography variant="body1">
+              {formatDate(task.start_time)} → {formatDate(task.end_time)}
+            </Typography>
+          </Paper>
+
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" sx={{ mb: 3 }}>
+              Live Results
+            </Typography>
+            <Alert severity="info">Waiting for live snapshot…</Alert>
+          </Paper>
+        </Box>
+      );
+    }
+
     return (
       <Box
         sx={{
@@ -324,8 +448,8 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
 
   if (task.status === TaskStatus.RUNNING) {
     const live = (results?.live ?? null) as Record<string, unknown> | null;
-    const progress = Number(live?.progress ?? 0);
-    const processed = Number(live?.processed ?? 0);
+    const progress = toNumberOrNull(live?.progress);
+    const liveMetrics = metricsCheckpoint;
 
     return (
       <Box sx={{ px: 3 }}>
@@ -334,11 +458,8 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
             <CircularProgress size={16} />
             <Typography variant="body2">
               Task is running...
-              {Number.isFinite(progress) && progress > 0
+              {progress !== null && progress > 0
                 ? ` ${progress}% complete.`
-                : ''}
-              {Number.isFinite(processed) && processed > 0
-                ? ` Processed ticks: ${processed}.`
                 : ''}
             </Typography>
           </Box>
@@ -353,9 +474,154 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
           </Typography>
         </Paper>
 
-        <Alert severity="info">
-          Results will be available once the execution completes.
-        </Alert>
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 3 }}>
+            Performance Metrics
+          </Typography>
+
+          {metricsCheckpointError && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Failed to load live metrics. {metricsCheckpointError}
+            </Alert>
+          )}
+
+          {!liveMetrics && (
+            <Alert severity="info">
+              Waiting for performance metrics… Live results (trades/events)
+              update while the task runs.
+            </Alert>
+          )}
+
+          {liveMetrics && (
+            <MetricsGrid
+              metrics={liveMetrics}
+              isLoading={metricsCheckpointLoading}
+            />
+          )}
+        </Paper>
+
+        {(tradeLogsLoading || strategyEventsLoading) && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CircularProgress size={16} />
+              <Typography variant="body2">Loading live details…</Typography>
+            </Box>
+          </Alert>
+        )}
+
+        {(tradeLogsError || strategyEventsError) && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Failed to load some live details.
+            {tradeLogsError ? ` Trade logs: ${tradeLogsError}.` : ''}
+            {strategyEventsError
+              ? ` Strategy events: ${strategyEventsError}.`
+              : ''}
+          </Alert>
+        )}
+
+        {/* OHLC Chart with Trading Events */}
+        {tradeLogs.length > 0 && (
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Typography variant="h6" sx={{ mb: 3 }}>
+              Price Chart with Trading Events
+            </Typography>
+
+            <BacktestChart
+              instrument={task.instrument}
+              startDate={task.start_time}
+              endDate={task.end_time}
+              strategyEvents={strategyEvents}
+              timezone="UTC"
+              height={500}
+              onTradeClick={handleMarkerClick}
+            />
+          </Paper>
+        )}
+
+        {/* Trade Statistics (derived from current trades) */}
+        {(() => {
+          const stats = getTradeStatistics();
+          if (!stats) return null;
+          return (
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" sx={{ mb: 3 }}>
+                Trade Statistics
+              </Typography>
+
+              <Grid container spacing={3}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Total P&L
+                    </Typography>
+                    <Typography
+                      variant="h5"
+                      color={
+                        stats.totalPnL >= 0 ? 'success.main' : 'error.main'
+                      }
+                    >
+                      ${stats.totalPnL.toFixed(2)}
+                    </Typography>
+                  </Box>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Realized P&L
+                    </Typography>
+                    <Typography
+                      variant="h5"
+                      color={
+                        stats.realizedPnL >= 0 ? 'success.main' : 'error.main'
+                      }
+                    >
+                      ${stats.realizedPnL.toFixed(2)}
+                    </Typography>
+                  </Box>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Unrealized P&L
+                    </Typography>
+                    <Typography
+                      variant="h5"
+                      color={
+                        stats.unrealizedPnL >= 0 ? 'success.main' : 'error.main'
+                      }
+                    >
+                      ${stats.unrealizedPnL.toFixed(2)}
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Paper>
+          );
+        })()}
+
+        {task.strategy_type === 'floor' && tradeLogs.length > 0 && (
+          <FloorLayerLog
+            trades={tradeLogs}
+            strategyEvents={strategyEvents}
+            selectedTradeIndex={selectedTradeIndex}
+          />
+        )}
+
+        <Divider sx={{ my: 3 }} />
+
+        <Box ref={tradeLogRef}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Trade Log
+          </Typography>
+
+          <TradeLogTable
+            trades={tradeLogs}
+            showExport={false}
+            selectedTradeIndex={selectedTradeIndex}
+          />
+        </Box>
       </Box>
     );
   }

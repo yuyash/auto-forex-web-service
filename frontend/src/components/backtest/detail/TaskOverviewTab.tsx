@@ -19,6 +19,7 @@ import { backtestTasksApi } from '../../../services/api/backtestTasks';
 import type { BacktestTask } from '../../../types/backtestTask';
 import { TaskStatus } from '../../../types/common';
 import type { TaskResults } from '../../../types/results';
+import type { ExecutionMetricsCheckpoint } from '../../../types/execution';
 import {
   TrendingUp as TrendingUpIcon,
   ShowChart as ShowChartIcon,
@@ -44,6 +45,14 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
   const [equityCurveLoading, setEquityCurveLoading] = useState(false);
   const [equityCurveError, setEquityCurveError] = useState<string | null>(null);
 
+  const [metricsCheckpoint, setMetricsCheckpoint] =
+    useState<ExecutionMetricsCheckpoint | null>(null);
+  const [metricsCheckpointLoading, setMetricsCheckpointLoading] =
+    useState(false);
+  const [metricsCheckpointError, setMetricsCheckpointError] = useState<
+    string | null
+  >(null);
+
   const metrics = results?.metrics ?? null;
 
   const handleDateRangeChange = (event: SelectChangeEvent<DateRange>) => {
@@ -57,8 +66,61 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
   // Check if task has completed execution with metrics
   const hasMetrics = task.status === TaskStatus.COMPLETED && !!metrics;
 
+  const shouldFetchEquityCurve =
+    task.status !== TaskStatus.CREATED && !!task.id && !!results?.execution?.id;
+  const shouldPollEquityCurve = task.status === TaskStatus.RUNNING;
+
   useEffect(() => {
-    if (!hasMetrics) {
+    if (!shouldFetchEquityCurve) {
+      setMetricsCheckpoint(null);
+      setMetricsCheckpointLoading(false);
+      setMetricsCheckpointError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchCheckpoint = (opts?: { showLoading?: boolean }) => {
+      const showLoading = opts?.showLoading ?? false;
+      if (showLoading) setMetricsCheckpointLoading(true);
+      setMetricsCheckpointError(null);
+
+      backtestTasksApi
+        .getMetricsCheckpoint(task.id)
+        .then((resp) => {
+          if (cancelled) return;
+          setMetricsCheckpoint(resp?.checkpoint ?? null);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setMetricsCheckpointError(
+            err instanceof Error ? err.message : 'Failed to load live metrics'
+          );
+          setMetricsCheckpoint(null);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          if (showLoading) setMetricsCheckpointLoading(false);
+        });
+    };
+
+    fetchCheckpoint({ showLoading: true });
+
+    let intervalId: number | null = null;
+    if (shouldPollEquityCurve) {
+      intervalId = window.setInterval(() => {
+        fetchCheckpoint({ showLoading: false });
+      }, 5000);
+    }
+
+    return () => {
+      cancelled = true;
+      if (intervalId !== null) window.clearInterval(intervalId);
+    };
+  }, [shouldFetchEquityCurve, shouldPollEquityCurve, task.id]);
+
+  useEffect(() => {
+    if (!shouldFetchEquityCurve) {
       setEquityCurve([]);
       setEquityCurveLoading(false);
       setEquityCurveError(null);
@@ -66,33 +128,58 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
     }
 
     let cancelled = false;
-    setEquityCurveLoading(true);
-    setEquityCurveError(null);
 
-    backtestTasksApi
-      .getEquityCurve(task.id)
-      .then((resp) => {
-        if (cancelled) return;
-        setEquityCurve(
-          Array.isArray(resp.equity_curve) ? resp.equity_curve : []
-        );
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setEquityCurveError(
-          err instanceof Error ? err.message : 'Failed to load equity curve'
-        );
-        setEquityCurve([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setEquityCurveLoading(false);
-      });
+    const fetchEquityCurve = (opts?: { showLoading?: boolean }) => {
+      const showLoading = opts?.showLoading ?? false;
+      if (showLoading) {
+        setEquityCurveLoading(true);
+      }
+
+      setEquityCurveError(null);
+
+      backtestTasksApi
+        .getEquityCurve(task.id)
+        .then((resp) => {
+          if (cancelled) return;
+          setEquityCurve(
+            Array.isArray(resp.equity_curve) ? resp.equity_curve : []
+          );
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setEquityCurveError(
+            err instanceof Error ? err.message : 'Failed to load equity curve'
+          );
+          setEquityCurve([]);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          if (showLoading) setEquityCurveLoading(false);
+        });
+    };
+
+    // Initial fetch
+    fetchEquityCurve({ showLoading: true });
+
+    let intervalId: number | null = null;
+    if (shouldPollEquityCurve) {
+      intervalId = window.setInterval(() => {
+        fetchEquityCurve({ showLoading: false });
+      }, 5000);
+    }
 
     return () => {
       cancelled = true;
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+      }
     };
-  }, [hasMetrics, task.id, results?.execution?.id]);
+  }, [
+    shouldFetchEquityCurve,
+    shouldPollEquityCurve,
+    task.id,
+    results?.execution?.id,
+  ]);
 
   // Filter equity curve data based on selected date range
   const getFilteredEquityCurve = () => {
@@ -137,8 +224,13 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
 
   if (task.status === TaskStatus.RUNNING) {
     const live = (results?.live ?? null) as Record<string, unknown> | null;
-    const progress = Number(live?.progress ?? 0);
-    const processed = Number(live?.processed ?? 0);
+    const toNumber = (value: unknown): number | null => {
+      if (value === null || value === undefined) return null;
+      const n = typeof value === 'number' ? value : Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const progress = toNumber(live?.progress);
 
     return (
       <Box sx={{ px: 3 }}>
@@ -147,15 +239,141 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
             <CircularProgress size={16} />
             <Typography variant="body2">
               Backtest is running.
-              {Number.isFinite(progress) && progress > 0
+              {progress !== null && progress > 0
                 ? ` Progress: ${progress}%.`
-                : ''}
-              {Number.isFinite(processed) && processed > 0
-                ? ` Processed ticks: ${processed}.`
                 : ''}
             </Typography>
           </Box>
         </Alert>
+
+        <Paper sx={{ p: 2, mt: 3, mb: 3, bgcolor: 'grey.50' }}>
+          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+            Backtest Period
+          </Typography>
+          <Typography variant="body1">
+            {formatDate(task.start_time)} → {formatDate(task.end_time)}
+          </Typography>
+        </Paper>
+
+        {metricsCheckpointError && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            Failed to load live metrics. {metricsCheckpointError}
+          </Alert>
+        )}
+
+        {!metricsCheckpoint && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            Waiting for performance metrics… Live details (equity curve, trades,
+            events) update while the task runs.
+          </Alert>
+        )}
+
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <MetricCard
+              title="Total Return"
+              value={
+                metricsCheckpoint
+                  ? `${parseFloat(metricsCheckpoint.total_return).toFixed(2)}%`
+                  : '—'
+              }
+              icon={<TrendingUpIcon />}
+              color={
+                metricsCheckpoint
+                  ? parseFloat(metricsCheckpoint.total_return) >= 0
+                    ? 'success'
+                    : 'error'
+                  : 'info'
+              }
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <MetricCard
+              title="Win Rate"
+              value={
+                metricsCheckpoint
+                  ? `${parseFloat(metricsCheckpoint.win_rate).toFixed(2)}%`
+                  : '—'
+              }
+              icon={<ShowChartIcon />}
+              color={metricsCheckpoint ? 'primary' : 'info'}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <MetricCard
+              title="Total Trades"
+              value={
+                metricsCheckpoint
+                  ? metricsCheckpoint.total_trades.toString()
+                  : '—'
+              }
+              icon={<SwapHorizIcon />}
+              color={metricsCheckpoint ? 'info' : 'info'}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <MetricCard
+              title="Max Drawdown"
+              value={
+                metricsCheckpoint
+                  ? `${parseFloat(metricsCheckpoint.max_drawdown).toFixed(2)}%`
+                  : '—'
+              }
+              icon={<TrendingDownIcon />}
+              color={metricsCheckpoint ? 'warning' : 'info'}
+            />
+          </Grid>
+        </Grid>
+
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mb: 3,
+            }}
+          >
+            <Typography variant="h6">Equity Curve</Typography>
+
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <InputLabel id="date-range-label">Date Range</InputLabel>
+              <Select
+                labelId="date-range-label"
+                id="date-range-select"
+                value={dateRange}
+                label="Date Range"
+                onChange={handleDateRangeChange}
+              >
+                <MenuItem value="all">All Time</MenuItem>
+                <MenuItem value="1m">Last Month</MenuItem>
+                <MenuItem value="3m">Last 3 Months</MenuItem>
+                <MenuItem value="6m">Last 6 Months</MenuItem>
+                <MenuItem value="1y">Last Year</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          {equityCurveLoading && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={16} />
+                <Typography variant="body2">Loading equity curve…</Typography>
+              </Box>
+            </Alert>
+          )}
+
+          {equityCurveError && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Failed to load equity curve. {equityCurveError}
+            </Alert>
+          )}
+
+          <EquityCurveChart data={getFilteredEquityCurve()} height={400} />
+        </Paper>
       </Box>
     );
   }

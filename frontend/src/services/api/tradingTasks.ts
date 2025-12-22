@@ -13,6 +13,7 @@ import type {
   TaskEquityCurveResponse,
   TaskStrategyEventsResponse,
   TaskTradeLogsResponse,
+  TaskMetricsCheckpointResponse,
 } from '../../types';
 
 export const tradingTasksApi = {
@@ -278,5 +279,16 @@ export const tradingTasksApi = {
       previous: null,
       count: lastResp.count,
     };
+  },
+
+  /**
+   * Get latest metrics checkpoint for the latest trading execution (best-effort)
+   */
+  getMetricsCheckpoint: (
+    taskId: number
+  ): Promise<TaskMetricsCheckpointResponse> => {
+    return apiClient.get<TaskMetricsCheckpointResponse>(
+      `/trading/trading-tasks/${taskId}/metrics-checkpoint/`
+    );
   },
 };

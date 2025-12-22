@@ -10,10 +10,13 @@ import {
   Timeline,
   Speed,
 } from '@mui/icons-material';
-import type { ExecutionMetrics } from '../../../types/execution';
+import type {
+  ExecutionMetrics,
+  ExecutionMetricsCheckpoint,
+} from '../../../types/execution';
 
 interface MetricsGridProps {
-  metrics: ExecutionMetrics;
+  metrics: ExecutionMetrics | ExecutionMetricsCheckpoint;
   isLoading?: boolean;
   columns?: 2 | 3 | 4;
 }
