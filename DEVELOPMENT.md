@@ -291,18 +291,22 @@ docker-compose exec backend pytest
 #### Code Quality Checks
 
 ```bash
-# Format code
 cd backend
-uv run black .
 
 # Lint code
-uv run flake8 .
+uv run ruff check .
+
+# Lint and auto-fix
+uv run ruff check --fix .
+
+# Format code
+uv run ruff format .
 
 # Type checking
-uv run mypy .
+uv run ty check
 
 # Run all checks
-uv run black --check . && uv run flake8 . && uv run mypy .
+uv run ruff check . && uv run ruff format --check . && uv run ty check
 ```
 
 #### Database Operations
