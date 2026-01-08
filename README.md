@@ -140,43 +140,7 @@ docker-compose exec backend python manage.py createsuperuser
 
 ## Development
 
-### Backend Development
-
-```bash
-# Enter backend container
-docker-compose exec backend bash
-
-# Run tests
-pytest
-
-# Run linting
-flake8
-
-# Format code
-black .
-
-# Type checking
-mypy .
-```
-
-### Frontend Development
-
-```bash
-# Enter frontend container
-docker-compose exec frontend sh
-
-# Run tests
-npm run test
-
-# Run linting
-npm run lint
-
-# Format code
-npm run format
-
-# Type checking
-npm run type-check
-```
+See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed local development setup instructions.
 
 ## Deployment
 
