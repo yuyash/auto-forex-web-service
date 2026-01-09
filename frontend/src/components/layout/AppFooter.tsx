@@ -70,6 +70,33 @@ const AppFooter = () => {
       return;
     }
 
+    const checkAccountExists = async (): Promise<boolean> => {
+      try {
+        const response = await fetch('/api/market/accounts/', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          return false;
+        }
+
+        const data = await response.json().catch(() => null);
+        
+        // Check if accounts array exists and has at least one account
+        if (data && typeof data === 'object' && 'results' in data) {
+          const results = (data as { results?: unknown }).results;
+          return Array.isArray(results) && results.length > 0;
+        }
+        
+        // If response is an array directly
+        return Array.isArray(data) && data.length > 0;
+      } catch {
+        return false;
+      }
+    };
+
     const fetchLatest = async () => {
       const response = await fetch('/api/market/health/oanda/', {
         headers: {
@@ -97,23 +124,18 @@ const AppFooter = () => {
 
     const checkHealth = async () => {
       try {
-        const { response: latestResp, data: latestData } = await fetchLatest();
-
-        // If no account is configured, show an explicit empty-account state.
-        if (
-          latestResp.status === 400 &&
-          latestData &&
-          typeof latestData === 'object' &&
-          'error_code' in latestData &&
-          (latestData as { error_code?: unknown }).error_code ===
-            'NO_OANDA_ACCOUNT'
-        ) {
+        // First check if any OANDA account exists
+        const hasAccount = await checkAccountExists();
+        
+        if (!hasAccount) {
           setOandaHealth({
             state: 'empty',
             message: t('status.noOandaAccount'),
           });
           return;
         }
+
+        const { response: latestResp, data: latestData } = await fetchLatest();
 
         if (!latestResp.ok) {
           setOandaHealth({
