@@ -337,7 +337,7 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
 
     const metricsSafe: Record<string, unknown> =
       metrics && typeof metrics === 'object'
-        ? (metrics as Record<string, unknown>)
+        ? (metrics as unknown as Record<string, unknown>)
         : {};
 
     const unrealizedPnL = safeNumber(metricsSafe.unrealized_pnl);
