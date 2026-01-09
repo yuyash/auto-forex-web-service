@@ -30,7 +30,9 @@ class TestAccountEmailServiceSendEmail:
         mock_ses = MagicMock()
 
         with override_settings(DEFAULT_FROM_EMAIL="noreply@example.com"):
-            with patch("apps.accounts.services.email.boto3.client", return_value=mock_ses) as boto_client:
+            with patch(
+                "apps.accounts.services.email.boto3.client", return_value=mock_ses
+            ) as boto_client:
                 ok = service._send_email(
                     to_address="to@example.com",
                     subject="Hello",

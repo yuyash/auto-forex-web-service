@@ -150,7 +150,7 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
         if not registry.is_registered(value):
             available = ", ".join(registry.list_strategies())
             raise serializers.ValidationError(
-                f"Strategy type '{value}' is not registered. " f"Available strategies: {available}"
+                f"Strategy type '{value}' is not registered. Available strategies: {available}"
             )
         return value
 

@@ -93,7 +93,7 @@ def _format_strategy_event(*, event: dict[str, Any], tick_ts: str | None = None)
         return f"{prefix}{e_type}: layer={layer_number}"
 
     if e_type in {"volatility_lock", "margin_protection"}:
-        return f"{prefix}{e_type}: { _safe_json(event) }"
+        return f"{prefix}{e_type}: {_safe_json(event)}"
 
     # Legacy types (kept for best-effort logging).
     if e_type == "open":
@@ -107,9 +107,7 @@ def _format_strategy_event(*, event: dict[str, Any], tick_ts: str | None = None)
         retracement_open = " retracement" if details.get("retracement_open") else ""
         extra = ""
         if details.get("retracement_open"):
-            extra = (
-                f" (retracement={retr} against_pips={against_pips} " f"trigger_pips={trigger_pips})"
-            )
+            extra = f" (retracement={retr} against_pips={against_pips} trigger_pips={trigger_pips})"
 
         return (
             f"{prefix}Trade OPEN: layer={layer} dir={direction} "
@@ -130,7 +128,7 @@ def _format_strategy_event(*, event: dict[str, Any], tick_ts: str | None = None)
         "strategy_resumed",
         "strategy_stopped",
     }:
-        return f"{prefix}{e_type}: { _safe_json(details) if details else '' }".rstrip()
+        return f"{prefix}{e_type}: {_safe_json(details) if details else ''}".rstrip()
 
     # Default: include details so debugging is possible.
     return f"{prefix}strategy_event type={e_type} details={_safe_json(details)}"

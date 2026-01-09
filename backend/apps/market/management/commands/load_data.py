@@ -177,9 +177,7 @@ def _partition_where_for_date_range(*, start_dt: datetime, end_dt: datetime) -> 
     while current <= last_inclusive_date:
         month = f"{current.month:02d}"
         day = f"{current.day:02d}"
-        parts.append(
-            "(" f"year = '{current.year}' " f"AND month = '{month}' " f"AND day = '{day}'" ")"
-        )
+        parts.append(f"(year = '{current.year}' AND month = '{month}' AND day = '{day}')")
         current += timedelta(days=1)
 
     return "(" + " OR ".join(parts) + ")"

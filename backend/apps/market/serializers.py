@@ -213,9 +213,7 @@ class OrderSerializer(serializers.Serializer):  # pylint: disable=abstract-metho
         help_text="Stop price (for OCO orders)",
     )
 
-    def validate(
-        self, attrs: dict[str, Any]
-    ) -> dict[str, Any]:  # pylint: disable=arguments-renamed
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:  # pylint: disable=arguments-renamed
         """Validate order data based on order type."""
         order_type = attrs.get("order_type")
 

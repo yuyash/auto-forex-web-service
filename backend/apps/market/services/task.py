@@ -67,7 +67,10 @@ class CeleryTaskService:
         force: bool = False,
     ) -> None:
         now_monotonic = time.monotonic()
-        if not force and (now_monotonic - self._last_heartbeat_monotonic) < self.heartbeat_interval_seconds:
+        if (
+            not force
+            and (now_monotonic - self._last_heartbeat_monotonic) < self.heartbeat_interval_seconds
+        ):
             return
 
         now = timezone.now()
@@ -80,7 +83,9 @@ class CeleryTaskService:
             # Best-effort shallow merge. Only do the read/merge when we actually
             # decide to heartbeat (throttled).
             current = (
-                CeleryTaskStatus.objects.filter(task_name=self.task_name, instance_key=self.instance_key)
+                CeleryTaskStatus.objects.filter(
+                    task_name=self.task_name, instance_key=self.instance_key
+                )
                 .values_list("meta", flat=True)
                 .first()
             )
@@ -90,19 +95,24 @@ class CeleryTaskService:
             merged.update(meta_update)
             updates["meta"] = merged
 
-        CeleryTaskStatus.objects.filter(task_name=self.task_name, instance_key=self.instance_key).update(
-            **updates
-        )
+        CeleryTaskStatus.objects.filter(
+            task_name=self.task_name, instance_key=self.instance_key
+        ).update(**updates)
 
         self._last_heartbeat_monotonic = now_monotonic
 
     def should_stop(self, *, force: bool = False) -> bool:
         now_monotonic = time.monotonic()
-        if not force and (now_monotonic - self._last_stop_check_monotonic) < self.stop_check_interval_seconds:
+        if (
+            not force
+            and (now_monotonic - self._last_stop_check_monotonic) < self.stop_check_interval_seconds
+        ):
             return self._cached_should_stop
 
         status = (
-            CeleryTaskStatus.objects.filter(task_name=self.task_name, instance_key=self.instance_key)
+            CeleryTaskStatus.objects.filter(
+                task_name=self.task_name, instance_key=self.instance_key
+            )
             .values_list("status", flat=True)
             .first()
         )
@@ -125,6 +135,6 @@ class CeleryTaskService:
         if status_message is not None:
             updates["status_message"] = status_message
 
-        CeleryTaskStatus.objects.filter(task_name=self.task_name, instance_key=self.instance_key).update(
-            **updates
-        )
+        CeleryTaskStatus.objects.filter(
+            task_name=self.task_name, instance_key=self.instance_key
+        ).update(**updates)
