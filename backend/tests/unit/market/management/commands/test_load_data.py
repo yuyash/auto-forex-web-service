@@ -23,6 +23,7 @@ class _FakePaginator:
 class _FakeAthenaClient:
     def __init__(self, *, pages: list[dict[str, Any]]):
         self._pages = pages
+        self._page_index = 0
 
     def start_query_execution(self, **kwargs) -> dict[str, Any]:  # noqa: ARG002
         return {"QueryExecutionId": "q-123"}
@@ -36,6 +37,13 @@ class _FakeAthenaClient:
                 }
             }
         }
+
+    def get_query_results(self, **kwargs) -> dict[str, Any]:  # noqa: ARG002
+        if self._page_index >= len(self._pages):
+            return {"ResultSet": {"Rows": []}}
+        page = self._pages[self._page_index]
+        self._page_index += 1
+        return page
 
     def get_paginator(self, name: str) -> _FakePaginator:
         assert name == "get_query_results"

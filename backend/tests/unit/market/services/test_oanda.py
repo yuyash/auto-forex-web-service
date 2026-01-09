@@ -74,21 +74,23 @@ class TestOandaServiceUnit:
         account.set_api_token("token")
         account.save(update_fields=["api_token"])
 
-        class DummyAccount:
-            currency = "USD"
-            balance = "1000.01"
-            unrealizedPL = "-1.23"
-            NAV = "998.78"
-            marginUsed = "10"
-            marginAvailable = "988.78"
-            positionValue = "0"
-            openTradeCount = 1
-            openPositionCount = 2
-            pendingOrderCount = 3
-            lastTransactionID = "42"
+        # Return a dict instead of an object since _account_object_to_dict expects dict or object with _properties
+        dummy_account_dict = {
+            "currency": "USD",
+            "balance": "1000.01",
+            "unrealizedPL": "-1.23",
+            "NAV": "998.78",
+            "marginUsed": "10",
+            "marginAvailable": "988.78",
+            "positionValue": "0",
+            "openTradeCount": 1,
+            "openPositionCount": 2,
+            "pendingOrderCount": 3,
+            "lastTransactionID": "42",
+        }
 
         def _get(_account_id):
-            return SimpleNamespace(status=200, body={"account": DummyAccount()})
+            return SimpleNamespace(status=200, body={"account": dummy_account_dict})
 
         import apps.market.services.oanda as oanda_module
 
