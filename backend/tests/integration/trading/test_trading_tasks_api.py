@@ -32,7 +32,7 @@ class TestTradingTasksApi:
 
         url = f"{live_server.url}/api/trading/trading-tasks/"
         payload = {
-            "config": config.id,
+            "config": config.id,  # type: ignore[attr-defined]
             "oanda_account": oanda_account.id,
             "name": "task1",
             "description": "d1",
@@ -71,7 +71,7 @@ class TestTradingTasksApi:
             status=TaskStatus.CREATED,
         )
 
-        detail_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/"
+        detail_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/"  # type: ignore[attr-defined]
         get_resp = requests.get(detail_url, headers=auth_headers, timeout=10)
         assert get_resp.status_code == 200
         assert get_resp.json()["name"] == "task-detail"
@@ -104,6 +104,6 @@ class TestTradingTasksApi:
             status=TaskStatus.RUNNING,
         )
 
-        detail_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/"
+        detail_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/"  # type: ignore[attr-defined]
         del_resp = requests.delete(detail_url, headers=auth_headers, timeout=10)
         assert del_resp.status_code == 400

@@ -8,22 +8,22 @@ replacing the sync-based approach with real-time API queries.
 from __future__ import annotations
 
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
 from logging import getLogger
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import v20
+from django.conf import settings
 from v20.transaction import StopLossDetails, TakeProfitDetails
 
-from django.conf import settings
-
+from apps.market.enums import MarketEventSeverity, MarketEventType
 from apps.market.models import OandaAccount, TickData
 from apps.market.services.compliance import ComplianceService, ComplianceViolationError
-from apps.market.enums import MarketEventSeverity, MarketEventType
 from apps.market.services.events import MarketEventService
 
 logger = getLogger(__name__)
@@ -50,8 +50,8 @@ class StreamMessageType(str, Enum):
 class MarketOrderRequest:
     instrument: str
     units: Decimal  # signed (+ long, - short)
-    take_profit: Optional[Decimal] = None
-    stop_loss: Optional[Decimal] = None
+    take_profit: Decimal | None = None
+    stop_loss: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,8 +59,8 @@ class LimitOrderRequest:
     instrument: str
     units: Decimal  # signed (+ long, - short)
     price: Decimal
-    take_profit: Optional[Decimal] = None
-    stop_loss: Optional[Decimal] = None
+    take_profit: Decimal | None = None
+    stop_loss: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,8 +68,8 @@ class StopOrderRequest:
     instrument: str
     units: Decimal  # signed (+ long, - short)
     price: Decimal
-    take_profit: Optional[Decimal] = None
-    stop_loss: Optional[Decimal] = None
+    take_profit: Decimal | None = None
+    stop_loss: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +88,7 @@ class OrderState(str, Enum):
     UNKNOWN = "UNKNOWN"
 
     @classmethod
-    def from_raw(cls, value: Any) -> "OrderState":
+    def from_raw(cls, value: Any) -> OrderState:
         if not value:
             return cls.UNKNOWN
         value_str = str(value).upper()
@@ -133,7 +133,7 @@ class OpenTrade:
     units: Decimal  # absolute
     entry_price: Decimal
     unrealized_pnl: Decimal
-    open_time: Optional[datetime]
+    open_time: datetime | None
     state: str
     account_id: str
 
@@ -145,12 +145,12 @@ class Order:
     order_type: OrderType
     direction: OrderDirection
     units: Decimal  # absolute
-    price: Optional[Decimal]
+    price: Decimal | None
     state: OrderState
-    time_in_force: Optional[str]
-    create_time: Optional[datetime]
-    fill_time: Optional[datetime] = None
-    cancel_time: Optional[datetime] = None
+    time_in_force: str | None
+    create_time: datetime | None
+    fill_time: datetime | None = None
+    cancel_time: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,7 +175,7 @@ class PendingOrder(Order):
 
 @dataclass(frozen=True, slots=True)
 class CancelledOrder(Order):
-    transaction_id: Optional[str] = None
+    transaction_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,13 +187,13 @@ class OcoOrder(Order):
 @dataclass(frozen=True, slots=True)
 class Transaction:
     transaction_id: str
-    time: Optional[datetime]
+    time: datetime | None
     type: str
-    instrument: Optional[str] = None
-    units: Optional[Decimal] = None
-    price: Optional[Decimal] = None
-    pl: Optional[Decimal] = None
-    account_balance: Optional[Decimal] = None
+    instrument: str | None = None
+    units: Decimal | None = None
+    price: Decimal | None = None
+    pl: Decimal | None = None
+    account_balance: Decimal | None = None
 
 
 class OandaAPIError(Exception):
@@ -240,7 +240,7 @@ class OandaService:
         self.retry_delay = 0.5  # seconds
         self.compliance_manager = ComplianceService(account)
         self.event_service = MarketEventService()
-        self._account_resource_cache: Optional[Dict[str, Any]] = None
+        self._account_resource_cache: dict[str, Any] | None = None
 
         logger.info(
             "OANDA service initialized (account_id=%s, api_hostname=%s, stream_hostname=%s)",
@@ -284,7 +284,7 @@ class OandaService:
         return OandaService._make_jsonable(value)
 
     @staticmethod
-    def _account_object_to_dict(account_data: Any) -> Dict[str, Any]:
+    def _account_object_to_dict(account_data: Any) -> dict[str, Any]:
         if account_data is None:
             return {}
 
@@ -309,7 +309,7 @@ class OandaService:
         except Exception:
             return {"value": str(account_data)}
 
-    def get_account_resource(self, *, refresh: bool = False) -> Dict[str, Any]:
+    def get_account_resource(self, *, refresh: bool = False) -> dict[str, Any]:
         """Fetch the raw OANDA account resource as a dict.
 
         This is used to expose broker flags/parameters (e.g. `hedgingEnabled`) and
@@ -391,9 +391,9 @@ class OandaService:
             )
             raise OandaAPIError(f"Error cancelling order: {str(e)}") from e
 
-    def close_trade(self, trade: OpenTrade, units: Optional[Decimal] = None) -> MarketOrder:
+    def close_trade(self, trade: OpenTrade, units: Decimal | None = None) -> MarketOrder:
         try:
-            kwargs: Dict[str, Any] = {"units": str(units) if units else "ALL"}
+            kwargs: dict[str, Any] = {"units": str(units) if units else "ALL"}
             response = self.api.trade.close(self.account.account_id, trade.trade_id, **kwargs)
 
             if response.status not in (200, 201):
@@ -435,7 +435,7 @@ class OandaService:
             )
             raise OandaAPIError(f"Error closing trade: {str(e)}") from e
 
-    def close_position(self, position: Position, units: Optional[Decimal] = None) -> MarketOrder:
+    def close_position(self, position: Position, units: Decimal | None = None) -> MarketOrder:
         """
         Close an open position for an instrument.
 
@@ -458,7 +458,7 @@ class OandaService:
                     raise ValueError("units cannot exceed open position units")
 
             if position.direction == OrderDirection.LONG:
-                kwargs: Dict[str, Any] = {
+                kwargs: dict[str, Any] = {
                     "longUnits": str(abs(units)) if units is not None else "ALL",
                     "shortUnits": "NONE",
                 }
@@ -533,7 +533,7 @@ class OandaService:
         }
         self._validate_compliance(order_request)
 
-        order_data: Dict[str, Any] = {
+        order_data: dict[str, Any] = {
             "instrument": request.instrument,
             "units": str(int(request.units)),
             "price": str(request.price),
@@ -598,7 +598,7 @@ class OandaService:
         }
         self._validate_compliance(order_request)
 
-        order_data: Dict[str, Any] = {
+        order_data: dict[str, Any] = {
             "instrument": request.instrument,
             "units": str(int(request.units)),
             "type": "MARKET",
@@ -695,7 +695,7 @@ class OandaService:
         }
         self._validate_compliance(order_request)
 
-        order_data: Dict[str, Any] = {
+        order_data: dict[str, Any] = {
             "instrument": request.instrument,
             "units": str(int(request.units)),
             "price": str(request.price),
@@ -848,7 +848,7 @@ class OandaService:
 
         return "hedging" if self.get_account_hedging_enabled() else "netting"
 
-    def get_open_positions(self, instrument: Optional[str] = None) -> List[Position]:
+    def get_open_positions(self, instrument: str | None = None) -> list[Position]:
         """
         Fetch open positions from OANDA API.
 
@@ -906,7 +906,7 @@ class OandaService:
             )
             raise OandaAPIError(f"Error fetching positions: {str(e)}") from e
 
-    def get_open_trades(self, instrument: Optional[str] = None) -> List[OpenTrade]:
+    def get_open_trades(self, instrument: str | None = None) -> list[OpenTrade]:
         """
         Fetch open trades from OANDA API.
 
@@ -968,7 +968,7 @@ class OandaService:
             )
             raise OandaAPIError(f"Error fetching trades: {str(e)}") from e
 
-    def get_pending_orders(self, instrument: Optional[str] = None) -> List[PendingOrder]:
+    def get_pending_orders(self, instrument: str | None = None) -> list[PendingOrder]:
         try:
             response = self.api.order.list_pending(self.account.account_id)
             if response.status != 200:
@@ -992,10 +992,10 @@ class OandaService:
             raise OandaAPIError(f"Error fetching pending orders: {str(e)}") from e
 
     def get_order_history(
-        self, instrument: Optional[str] = None, count: int = 50, state: str = "ALL"
-    ) -> List[Order]:
+        self, instrument: str | None = None, count: int = 50, state: str = "ALL"
+    ) -> list[Order]:
         try:
-            kwargs: Dict[str, Any] = {"count": count, "state": state}
+            kwargs: dict[str, Any] = {"count": count, "state": state}
             if instrument:
                 kwargs["instrument"] = instrument
 
@@ -1035,13 +1035,13 @@ class OandaService:
 
     def get_transaction_history(
         self,
-        from_time: Optional[datetime] = None,
-        to_time: Optional[datetime] = None,
+        from_time: datetime | None = None,
+        to_time: datetime | None = None,
         page_size: int = 100,
-        transaction_type: Optional[str] = None,
-    ) -> List[Transaction]:
+        transaction_type: str | None = None,
+    ) -> list[Transaction]:
         try:
-            kwargs: Dict[str, Any] = {"pageSize": page_size}
+            kwargs: dict[str, Any] = {"pageSize": page_size}
             if from_time:
                 kwargs["from"] = from_time.isoformat()
             if to_time:
@@ -1134,11 +1134,8 @@ class OandaService:
         # v20 returns a Response object for streams; the stream messages are
         # yielded via response.parts() as (type, obj) tuples.
         parts_iter = getattr(response, "parts", None)
-        if callable(parts_iter):
-            stream_iter = parts_iter() or []
-        else:
-            # Best-effort fallback for older/mocked implementations.
-            stream_iter = response
+        # Use parts() if available, otherwise fall back to iterating response directly
+        stream_iter = parts_iter() or [] if callable(parts_iter) else response
 
         for part in stream_iter:
             # v20: ("pricing.ClientPrice", ClientPrice(...)) or ("pricing.PricingHeartbeat", ...)
@@ -1194,7 +1191,7 @@ class OandaService:
             if isinstance(time_raw, datetime):
                 time_value = time_raw
                 if time_value.tzinfo is None:
-                    time_value = time_value.replace(tzinfo=timezone.utc)
+                    time_value = time_value.replace(tzinfo=UTC)
             else:
                 time_value = self._parse_iso_datetime(time_raw)
                 if not time_value:
@@ -1237,7 +1234,7 @@ class OandaService:
             cancel_time=order.cancel_time,
         )
 
-    def _execute_with_retry(self, order_data: Dict[str, Any]) -> Any:
+    def _execute_with_retry(self, order_data: dict[str, Any]) -> Any:
         last_error: str | None = None
 
         for attempt in range(self.max_retries):
@@ -1288,7 +1285,7 @@ class OandaService:
         raise OandaAPIError(error_msg)
 
     def _format_position(
-        self, instrument: str, direction: OrderDirection, pos_data: Dict[str, Any]
+        self, instrument: str, direction: OrderDirection, pos_data: dict[str, Any]
     ) -> Position:
         """
         Format OANDA position data to standard format.
@@ -1332,7 +1329,7 @@ class OandaService:
         except ValueError:
             return None
 
-    def _parse_order(self, order: Dict[str, Any]) -> Order:
+    def _parse_order(self, order: dict[str, Any]) -> Order:
         raw_type = str(order.get("type", "")).upper()
         order_type = {
             "MARKET": OrderType.MARKET,
@@ -1344,7 +1341,9 @@ class OandaService:
         direction = (
             OrderDirection.LONG
             if units_signed > 0
-            else OrderDirection.SHORT if units_signed < 0 else OrderDirection.LONG
+            else OrderDirection.SHORT
+            if units_signed < 0
+            else OrderDirection.LONG
         )
         units_abs = abs(units_signed)
         price = self._to_decimal(order.get("price"))
@@ -1400,7 +1399,7 @@ class OandaService:
             cancel_time=cancel_time,
         )
 
-    def _parse_transaction(self, txn: Dict[str, Any]) -> Transaction:
+    def _parse_transaction(self, txn: dict[str, Any]) -> Transaction:
         return Transaction(
             transaction_id=str(txn.get("id", "")),
             time=self._parse_iso_datetime(txn.get("time")),
@@ -1412,7 +1411,7 @@ class OandaService:
             account_balance=self._to_decimal(txn.get("accountBalance")),
         )
 
-    def _to_decimal(self, value: Any) -> Optional[Decimal]:
+    def _to_decimal(self, value: Any) -> Decimal | None:
         if value is None:
             return None
         value_str = str(value)
@@ -1423,7 +1422,7 @@ class OandaService:
         except Exception:  # pylint: disable=broad-exception-caught
             return None
 
-    def _validate_compliance(self, order_request: Dict[str, Any]) -> None:
+    def _validate_compliance(self, order_request: dict[str, Any]) -> None:
         is_valid, error_message = self.compliance_manager.validate_order(order_request)
 
         if not is_valid:

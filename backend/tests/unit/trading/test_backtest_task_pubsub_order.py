@@ -90,8 +90,8 @@ def test_run_backtest_task_subscribes_before_enqueuing_publisher(monkeypatch, te
     # Arrange
     calls: list[tuple[str, str]] = []
 
-    import apps.trading.tasks as trading_tasks
     import apps.market.tasks as market_tasks
+    import apps.trading.tasks as trading_tasks
 
     monkeypatch.setattr(trading_tasks, "_ensure_strategies_registered", lambda: None)
     monkeypatch.setattr(trading_tasks, "_redis_client", lambda: _FakeRedisClient(calls=calls))
@@ -126,7 +126,7 @@ def test_run_backtest_task_subscribes_before_enqueuing_publisher(monkeypatch, te
     )
 
     # Act
-    trading_tasks.run_backtest_task(task.id)
+    trading_tasks.run_backtest_task(task.id)  # type: ignore[attr-defined]
 
     # Assert: subscribe happens before delay, and both use the same request_id.
     assert len(calls) >= 2

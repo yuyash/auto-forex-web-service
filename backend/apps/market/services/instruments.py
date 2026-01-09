@@ -47,7 +47,7 @@ def get_pip_size(*, instrument: str) -> Decimal:
         raise ValueError(f"Instrument not found: {instrument_norm}")
 
     instr = instruments_list[0]
-    pip_location = int(getattr(instr, "pipLocation"))
+    pip_location = int(instr.pipLocation)
     pip_size = Decimal("10") ** pip_location
 
     cache.set(cache_key, str(pip_size), timeout=24 * 60 * 60)

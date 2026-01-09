@@ -88,7 +88,7 @@ class TestStrategyConfigsApi:
             status=TaskStatus.RUNNING,
         )
 
-        url = f"{live_server.url}/api/trading/strategy-configs/{config.id}/"
+        url = f"{live_server.url}/api/trading/strategy-configs/{config.id}/"  # type: ignore[attr-defined]
         resp = requests.delete(url, headers=auth_headers, timeout=10)
         assert resp.status_code == 409
 
@@ -107,7 +107,7 @@ class TestBacktestTaskCreateValidationApi:
         url = f"{live_server.url}/api/trading/backtest-tasks/"
         now = timezone.now()
         payload = {
-            "config": config.id,
+            "config": config.id,  # type: ignore[attr-defined]
             "name": "bt1",
             "description": "",
             "data_source": "postgresql",

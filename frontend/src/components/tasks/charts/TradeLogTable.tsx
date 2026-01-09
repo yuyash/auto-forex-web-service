@@ -76,15 +76,14 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
     return Number.isNaN(ms) ? 0 : ms;
   };
 
-  const calculateDurationMs = (trade: Trade): number | undefined => {
+  const calculateDurationMs = React.useCallback((trade: Trade): number | undefined => {
     const entry = safeDateMs(trade.entry_time);
     const exit = safeDateMs(trade.exit_time);
     if (!entry || !exit) return undefined;
     return exit - entry;
-  };
+  }, []);
 
   // Sort trades
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const sortedTrades = React.useMemo(() => {
     return [...filteredTrades].sort((a, b) => {
       let aValue: string | number;
@@ -119,7 +118,7 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
       if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [filteredTrades, sortField, sortOrder]);
+  }, [filteredTrades, sortField, sortOrder, calculateDurationMs]);
 
   // Scroll to selected trade when it changes
   React.useEffect(() => {

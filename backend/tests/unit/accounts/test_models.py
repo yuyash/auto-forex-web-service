@@ -11,9 +11,8 @@ Tests cover:
 
 from datetime import timedelta
 
-from django.utils import timezone
-
 import pytest
+from django.utils import timezone
 
 from apps.accounts.models import BlockedIP, User, UserSession, UserSettings, WhitelistedEmail
 
@@ -148,7 +147,7 @@ class TestUserModel:
             email="test@example.com",
             password="pass123",
         )
-        assert user.email_verification_token is None
+        assert user.email_verification_token == ""
         assert user.email_verification_sent_at is None
 
         token = user.generate_verification_token()

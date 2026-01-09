@@ -110,13 +110,10 @@ class WhitelistedEmail(models.Model):
 
         # Check for domain wildcards (*@domain.com or @domain.com)
         domain_patterns = [f"*@{domain}", f"@{domain}"]
-        if cls.objects.filter(
+        return cls.objects.filter(
             email_pattern__in=domain_patterns,
             is_active=True,
-        ).exists():
-            return True
-
-        return False
+        ).exists()
 
 
 class User(AbstractUser):
@@ -135,7 +132,7 @@ class User(AbstractUser):
     )
     email_verification_token = models.CharField(
         max_length=100,
-        null=True,
+        default="",
         blank=True,
         help_text="Token for email verification",
     )
@@ -458,7 +455,7 @@ class UserNotification(models.Model):
 
     def __str__(self) -> str:
         status = "Read" if self.is_read else "Unread"
-        return f"{self.user_id}: [{self.severity.upper()}] {self.title} - {status}"
+        return f"{self.user_id}: [{self.severity.upper()}] {self.title} - {status}"  # type: ignore[attr-defined]
 
     def mark_as_read(self) -> None:
         self.is_read = True
@@ -639,7 +636,7 @@ class AccountSecurityEvent(models.Model):
         help_text="IP address associated with the event",
     )
     user_agent = models.TextField(
-        null=True,
+        default="",
         blank=True,
         help_text="User agent string (if available)",
     )
@@ -667,6 +664,6 @@ class AccountSecurityEvent(models.Model):
 
     def __str__(self) -> str:
         base = f"{self.event_type} ({self.severity})"
-        if self.user_id:
-            return f"{base} user={self.user_id}"
+        if self.user_id:  # type: ignore[attr-defined]
+            return f"{base} user={self.user_id}"  # type: ignore[attr-defined]
         return base

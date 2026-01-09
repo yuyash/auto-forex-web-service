@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone as dt_timezone
+from datetime import UTC, datetime
 from logging import getLogger
 from uuid import uuid4
 
@@ -19,7 +19,7 @@ logger = getLogger(__name__)
 
 
 def _redis_client() -> redis.Redis:
-    return redis.Redis.from_url(getattr(settings, "MARKET_REDIS_URL"), decode_responses=True)
+    return redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
 
 
 # =============================================================================
@@ -84,8 +84,8 @@ def request_backtest_tick_stream(
 
 def _ensure_aware_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=dt_timezone.utc)
-    return dt.astimezone(dt_timezone.utc)
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 @receiver(backtest_tick_stream_requested)
@@ -181,7 +181,7 @@ def bootstrap_tick_pubsub_on_first_live_account(
         try:
             logger.info(
                 "First live OANDA account created; bootstrapping tick pub/sub (account_id=%s)",
-                instance.id,
+                instance.id,  # type: ignore[attr-defined]
             )
 
             from apps.market.tasks import ensure_tick_pubsub_running

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from rest_framework.test import APIRequestFactory
-from rest_framework.test import force_authenticate
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.market.views import (
     MarketStatusView,

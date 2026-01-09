@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import socket
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from logging import getLogger
 from typing import Any, cast
+
 import redis
 from celery import current_task, shared_task
 from django.conf import settings
@@ -28,13 +30,13 @@ def _current_task_id() -> str | None:
 
 
 def _redis_client() -> redis.Redis:
-    return redis.Redis.from_url(getattr(settings, "MARKET_REDIS_URL"), decode_responses=True)
+    return redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
 
 
 def _isoformat(dt: datetime) -> str:
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _parse_iso_datetime(value: str) -> datetime:
@@ -43,7 +45,7 @@ def _parse_iso_datetime(value: str) -> datetime:
         value_str = value_str[:-1] + "+00:00"
     dt = datetime.fromisoformat(value_str)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -126,13 +128,13 @@ def ensure_tick_pubsub_running() -> None:
             if account is None:
                 return
 
-            account_pk = int(getattr(account, "pk"))
+            account_pk = int(account.pk)
 
             # Persist the "first live" account id exactly once.
             client.setnx(account_key, str(account_pk))
             client.setnx(init_key, "1")
 
-        account_pk = int(getattr(account, "pk"))
+        account_pk = int(account.pk)
 
         if account.api_type != ApiType.LIVE:
             # If the stored account was changed to non-live, do nothing.
@@ -150,17 +152,15 @@ def ensure_tick_pubsub_running() -> None:
                 "Registering publisher celery task (account_id=%s)",
                 account_pk,
             )
-            cast(Any, getattr(publish_oanda_ticks, "delay"))(account_id=account_pk)
+            cast(Any, publish_oanda_ticks.delay)(account_id=account_pk)
 
         if not client.exists(subscriber_lock):
             logger.info("Creating subscriber celery task")
-            cast(Any, getattr(subscribe_ticks_to_db, "delay"))()
+            cast(Any, subscribe_ticks_to_db.delay)()
 
     finally:
-        try:
+        with contextlib.suppress(Exception):
             client.close()
-        except Exception:  # pylint: disable=broad-exception-caught
-            pass
 
         stop_requested = task_service.should_stop(force=True)
 
@@ -172,7 +172,7 @@ def ensure_tick_pubsub_running() -> None:
         return
 
     # Self-schedule: keeps pub/sub alive even if tasks crash.
-    cast(Any, getattr(ensure_tick_pubsub_running, "apply_async"))(countdown=interval_seconds)
+    cast(Any, ensure_tick_pubsub_running.apply_async)(countdown=interval_seconds)
 
 
 @shared_task(name="market.tasks.publish_oanda_ticks")
@@ -193,8 +193,8 @@ def publish_oanda_ticks(*, account_id: int, instruments: list[str] | None = None
         meta={"account_id": account_id},
     )
 
-    redis_url = getattr(settings, "MARKET_REDIS_URL")
-    channel = getattr(settings, "MARKET_TICK_CHANNEL")
+    redis_url = settings.MARKET_REDIS_URL
+    channel = settings.MARKET_TICK_CHANNEL
 
     logger.info(
         "Starting OANDA tick publisher task (account_id=%s, channel=%s, redis=%s)",
@@ -349,8 +349,8 @@ def subscribe_ticks_to_db() -> None:
         meta={"kind": "subscriber"},
     )
 
-    redis_url = getattr(settings, "MARKET_REDIS_URL")
-    channel = getattr(settings, "MARKET_TICK_CHANNEL")
+    redis_url = settings.MARKET_REDIS_URL
+    channel = settings.MARKET_TICK_CHANNEL
 
     logger.info(
         "Starting tick subscriber task (channel=%s, redis=%s)",

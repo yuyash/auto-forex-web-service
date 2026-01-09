@@ -11,13 +11,13 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth import authenticate
-
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.middleware import RateLimiter
 from apps.accounts.models import (
     PublicAccountSettings,
     User,
@@ -26,10 +26,6 @@ from apps.accounts.models import (
     UserSettings,
     WhitelistedEmail,
 )
-from apps.accounts.services.jwt import JWTService
-from apps.accounts.middleware import RateLimiter
-from apps.accounts.services.events import SecurityEventService
-from apps.accounts.services.email import AccountEmailService
 from apps.accounts.serializers import (
     PublicAccountSettingsSerializer,
     UserLoginSerializer,
@@ -37,6 +33,9 @@ from apps.accounts.serializers import (
     UserRegistrationSerializer,
     UserSettingsSerializer,
 )
+from apps.accounts.services.email import AccountEmailService
+from apps.accounts.services.events import SecurityEventService
+from apps.accounts.services.jwt import JWTService
 
 logger = logging.getLogger(__name__)
 security_events = SecurityEventService()

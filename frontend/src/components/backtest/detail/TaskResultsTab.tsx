@@ -14,7 +14,6 @@ import {
   FileDownload as FileDownloadIcon,
 } from '@mui/icons-material';
 import { backtestTasksApi } from '../../../services/api/backtestTasks';
-import { MetricCard } from '../../tasks/display/MetricCard';
 import { MetricsGrid } from '../../tasks/charts/MetricsGrid';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
 import { BacktestChart } from '../BacktestChart';
@@ -338,7 +337,7 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
 
     const metricsSafe: Record<string, unknown> =
       metrics && typeof metrics === 'object'
-        ? (metrics as Record<string, unknown>)
+        ? (metrics as unknown as Record<string, unknown>)
         : {};
 
     const unrealizedPnL = safeNumber(metricsSafe.unrealized_pnl);

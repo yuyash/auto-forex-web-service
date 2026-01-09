@@ -9,13 +9,12 @@ Tests cover:
 - Token refresh functionality
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
-
-from django.conf import settings
 
 import jwt
 import pytest
+from django.conf import settings
 
 from apps.accounts.services.jwt import JWTService
 
@@ -64,9 +63,9 @@ class TestGenerateJwtToken:
         mock_user.username = "testuser"
         mock_user.is_staff = False
 
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         token = JWTService().generate_token(mock_user)
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
 
         payload = jwt.decode(
             token,
@@ -92,9 +91,9 @@ class TestGenerateJwtToken:
         mock_user.username = "testuser"
         mock_user.is_staff = False
 
-        before = int(datetime.now(timezone.utc).timestamp())
+        before = int(datetime.now(UTC).timestamp())
         token = JWTService().generate_token(mock_user)
-        after = int(datetime.now(timezone.utc).timestamp())
+        after = int(datetime.now(UTC).timestamp())
 
         payload = jwt.decode(
             token,
@@ -127,7 +126,7 @@ class TestDecodeJwtToken:
     def test_decode_expired_token_returns_none(self) -> None:
         """Test that expired tokens return None."""
         # Create an expired token
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expired_time = now - timedelta(hours=1)
 
         payload = {
@@ -140,7 +139,7 @@ class TestDecodeJwtToken:
         }
 
         token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-        result = JWTService().decode_token(token)
+        result = JWTService().decode_token(token.decode() if isinstance(token, bytes) else token)
 
         assert result is None
 
@@ -171,12 +170,12 @@ class TestDecodeJwtToken:
             "email": "test@example.com",
             "username": "testuser",
             "is_staff": False,
-            "iat": int(datetime.now(timezone.utc).timestamp()),
-            "exp": int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
+            "iat": int(datetime.now(UTC).timestamp()),
+            "exp": int((datetime.now(UTC) + timedelta(hours=1)).timestamp()),
         }
 
         token = jwt.encode(payload, "wrong-secret-key", algorithm=settings.JWT_ALGORITHM)
-        result = JWTService().decode_token(token)
+        result = JWTService().decode_token(token.decode() if isinstance(token, bytes) else token)
 
         assert result is None
 
@@ -241,7 +240,7 @@ class TestGetUserFromToken:
         )
 
         # Create an expired token
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expired_time = now - timedelta(hours=1)
 
         payload = {
@@ -254,7 +253,9 @@ class TestGetUserFromToken:
         }
 
         token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-        result = JWTService().get_user_from_token(token)
+        result = JWTService().get_user_from_token(
+            token.decode() if isinstance(token, bytes) else token
+        )
 
         assert result is None
 
@@ -345,6 +346,7 @@ class TestRefreshJwtToken:
         time.sleep(0.1)
 
         new_token = JWTService().refresh_token(original_token)
+        assert new_token is not None
         new_payload = JWTService().decode_token(new_token)
 
         assert new_payload is not None

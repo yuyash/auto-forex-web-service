@@ -167,6 +167,7 @@ class TestTradingTaskStrategyEventsView:
     def test_trading_strategy_events_return_db_rows_1_to_1(self, test_user):
         from django.utils import timezone
 
+        from apps.market.models import OandaAccount
         from apps.trading.enums import TaskStatus, TaskType
         from apps.trading.models import (
             ExecutionStrategyEvent,
@@ -175,7 +176,6 @@ class TestTradingTaskStrategyEventsView:
             TradingTask,
         )
         from apps.trading.views import TradingTaskStrategyEventsView
-        from apps.market.models import OandaAccount
 
         oanda_account = OandaAccount.objects.create(
             user=test_user,

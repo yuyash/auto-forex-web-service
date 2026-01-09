@@ -5,8 +5,8 @@ This module defines URL patterns for authentication endpoints.
 """
 
 from django.urls import path
-from rest_framework.response import Response
 from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .views import (
