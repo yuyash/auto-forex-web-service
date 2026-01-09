@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
-import pytest
 import boto3
+import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
 

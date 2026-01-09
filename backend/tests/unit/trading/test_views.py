@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-
 from datetime import timedelta
 
 from rest_framework.test import APIRequestFactory, force_authenticate
@@ -47,8 +46,8 @@ class TestBacktestTaskStatusView:
         return task
 
     def test_recently_started_task_is_not_auto_completed(self, monkeypatch, test_user):
-        from apps.trading.enums import TaskStatus
         from apps.trading import views as trading_views
+        from apps.trading.enums import TaskStatus
         from apps.trading.views import BacktestTaskStatusView
 
         task = self._create_task_and_completed_execution(user=test_user)
@@ -78,10 +77,10 @@ class TestBacktestTaskStatusView:
     def test_old_stale_task_is_auto_completed(self, monkeypatch, test_user):
         from django.utils import timezone
 
-        from apps.trading.enums import TaskStatus
         from apps.trading import views as trading_views
-        from apps.trading.views import BacktestTaskStatusView
+        from apps.trading.enums import TaskStatus
         from apps.trading.models import BacktestTask
+        from apps.trading.views import BacktestTaskStatusView
 
         task = self._create_task_and_completed_execution(user=test_user)
 

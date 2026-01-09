@@ -6,8 +6,9 @@ from decimal import Decimal
 from typing import Any
 
 from rest_framework import serializers
-from apps.market.models import OandaAccount, OandaApiHealthStatus
+
 from apps.market.enums import ApiType, Jurisdiction
+from apps.market.models import OandaAccount, OandaApiHealthStatus
 
 
 class OandaAccountSerializer(serializers.ModelSerializer):

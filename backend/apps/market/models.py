@@ -12,11 +12,10 @@ import hashlib
 from datetime import timedelta
 from decimal import Decimal
 
+from cryptography.fernet import Fernet
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
-
-from cryptography.fernet import Fernet
 
 from .enums import ApiType, Jurisdiction
 
@@ -144,9 +143,7 @@ class OandaAccount(models.Model):
         account_id = (self.account_id or "").strip()
         if account_id.startswith("101-"):
             hostname = settings.OANDA_PRACTICE_API
-        elif account_id.startswith("001-"):
-            hostname = settings.OANDA_LIVE_API
-        elif self.api_type == "live":
+        elif account_id.startswith("001-") or self.api_type == "live":
             hostname = settings.OANDA_LIVE_API
         else:
             hostname = settings.OANDA_PRACTICE_API
@@ -243,6 +240,17 @@ class TickData(models.Model):
     def __str__(self) -> str:
         return f"{self.instrument} @ {self.timestamp} - Bid: {self.bid}, Ask: {self.ask}"
 
+    def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        """
+        Override save to automatically calculate mid if not provided.
+        """
+        # Calculate mid price if not provided
+        current_mid = getattr(self, "mid", None)
+        if current_mid is None or current_mid == 0:
+            self.mid = self.calculate_mid(self.bid, self.ask)
+
+        super().save(*args, **kwargs)
+
     @property
     def spread(self) -> Decimal:
         # Keep this simple for runtime correctness and static analysis.
@@ -304,17 +312,6 @@ class TickData(models.Model):
         """
         return ask - bid
 
-    def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
-        """
-        Override save to automatically calculate mid if not provided.
-        """
-        # Calculate mid price if not provided
-        current_mid = getattr(self, "mid", None)
-        if current_mid is None or current_mid == 0:
-            self.mid = self.calculate_mid(self.bid, self.ask)
-
-        super().save(*args, **kwargs)
-
 
 class MarketEvent(models.Model):
     """Persistent event log for the market app.
@@ -341,7 +338,7 @@ class MarketEvent(models.Model):
         blank=True,
         related_name="market_events",
     )
-    instrument = models.CharField(max_length=32, null=True, blank=True, db_index=True)
+    instrument = models.CharField(max_length=32, default="", blank=True, db_index=True)
     details = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
@@ -381,8 +378,8 @@ class CeleryTaskStatus(models.Model):
         db_index=True,
     )
 
-    celery_task_id = models.CharField(max_length=200, null=True, blank=True, db_index=True)
-    worker = models.CharField(max_length=200, null=True, blank=True)
+    celery_task_id = models.CharField(max_length=200, default="", blank=True, db_index=True)
+    worker = models.CharField(max_length=200, default="", blank=True)
 
     status = models.CharField(
         max_length=32,
@@ -391,7 +388,7 @@ class CeleryTaskStatus(models.Model):
         db_index=True,
     )
 
-    status_message = models.TextField(null=True, blank=True)
+    status_message = models.TextField(default="", blank=True)
     meta = models.JSONField(default=dict, blank=True)
 
     started_at = models.DateTimeField(null=True, blank=True)

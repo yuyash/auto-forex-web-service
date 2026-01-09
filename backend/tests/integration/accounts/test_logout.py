@@ -4,10 +4,9 @@ Integration tests for user logout endpoint.
 Tests the POST /api/accounts/auth/logout endpoint using live_server.
 """
 
-from django.contrib.auth import get_user_model
-
 import pytest
 import requests
+from django.contrib.auth import get_user_model
 
 User = get_user_model()
 

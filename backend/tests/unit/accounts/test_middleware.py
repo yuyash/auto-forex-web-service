@@ -8,10 +8,9 @@ Tests cover:
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from django.http import HttpResponse
 from django.test import RequestFactory
-
-import pytest
 
 from apps.accounts.middleware import (
     RateLimiter,

@@ -4,7 +4,7 @@ import json
 import os
 import socket
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from logging import getLogger
 from typing import Any, cast
@@ -14,15 +14,13 @@ from celery import current_task, shared_task
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Max
-from django.utils.dateparse import parse_datetime
 from django.utils import timezone as dj_timezone
+from django.utils.dateparse import parse_datetime
 
-from apps.trading.models import CeleryTaskStatus
-from apps.trading.services.events import TradingEventService
-from apps.trading.services.task import CeleryTaskService
 from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.models import (
     BacktestTask,
+    CeleryTaskStatus,
     ExecutionEquityPoint,
     ExecutionMetrics,
     ExecutionMetricsCheckpoint,
@@ -31,8 +29,10 @@ from apps.trading.models import (
     TaskExecution,
     TradingTask,
 )
-from apps.trading.services.registry import registry as strategy_registry
+from apps.trading.services.events import TradingEventService
 from apps.trading.services.performance import LivePerformanceService
+from apps.trading.services.registry import registry as strategy_registry
+from apps.trading.services.task import CeleryTaskService
 
 logger = getLogger(__name__)
 
@@ -346,13 +346,13 @@ def _persist_metrics_checkpoint(
 
 
 def _redis_client() -> redis.Redis:
-    return redis.Redis.from_url(getattr(settings, "MARKET_REDIS_URL"), decode_responses=True)
+    return redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
 
 
 def _isoformat(dt: datetime) -> str:
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _parse_iso_datetime(value: str) -> datetime:
@@ -361,7 +361,7 @@ def _parse_iso_datetime(value: str) -> datetime:
         value_str = value_str[:-1] + "+00:00"
     dt = datetime.fromisoformat(value_str)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -576,7 +576,7 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
         pending_equity_points = []
 
     client = _redis_client()
-    channel = getattr(settings, "MARKET_TICK_CHANNEL")
+    channel = settings.MARKET_TICK_CHANNEL
     pubsub = client.pubsub(ignore_subscribe_messages=True)
 
     processed = 0
@@ -1200,7 +1200,7 @@ def run_backtest_task(task_id: int, execution_id: int | None = None) -> None:
 
     from apps.market.tasks import publish_ticks_for_backtest
 
-    cast(Any, getattr(publish_ticks_for_backtest, "delay"))(
+    cast(Any, publish_ticks_for_backtest.delay)(
         instrument=instrument,
         start=start,
         end=end,

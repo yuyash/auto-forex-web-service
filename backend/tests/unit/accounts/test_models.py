@@ -11,9 +11,8 @@ Tests cover:
 
 from datetime import timedelta
 
-from django.utils import timezone
-
 import pytest
+from django.utils import timezone
 
 from apps.accounts.models import BlockedIP, User, UserSession, UserSettings, WhitelistedEmail
 

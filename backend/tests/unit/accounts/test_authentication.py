@@ -203,8 +203,8 @@ class TestJWTAuthenticationIntegration:
 
     def test_full_authentication_flow(self) -> None:
         """Test complete authentication flow with real user."""
-        from apps.accounts.services.jwt import JWTService
         from apps.accounts.models import User
+        from apps.accounts.services.jwt import JWTService
 
         # Create a real user
         user = User.objects.create_user(
@@ -231,8 +231,8 @@ class TestJWTAuthenticationIntegration:
 
     def test_authentication_after_user_locked(self) -> None:
         """Test authentication fails after user is locked."""
-        from apps.accounts.services.jwt import JWTService
         from apps.accounts.models import User
+        from apps.accounts.services.jwt import JWTService
 
         user = User.objects.create_user(
             username="testuser",
@@ -257,8 +257,8 @@ class TestJWTAuthenticationIntegration:
 
     def test_authentication_after_user_deactivated(self) -> None:
         """Test authentication fails after user is deactivated."""
-        from apps.accounts.services.jwt import JWTService
         from apps.accounts.models import User
+        from apps.accounts.services.jwt import JWTService
 
         user = User.objects.create_user(
             username="testuser",

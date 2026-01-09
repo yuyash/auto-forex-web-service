@@ -1,22 +1,22 @@
 """Security monitoring middleware and WebSocket authentication for authentication events."""
 
+from collections.abc import Callable
 from datetime import timedelta
 from logging import getLogger
-from typing import Any, Callable, Dict, Optional, Tuple, cast
+from typing import Any, cast
 from urllib.parse import parse_qs
 
-from django.core.cache import cache
+from channels.db import database_sync_to_async
+from channels.middleware import BaseMiddleware
 from django.contrib.auth.models import AnonymousUser
+from django.core.cache import cache
 from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
 
-from channels.db import database_sync_to_async
-from channels.middleware import BaseMiddleware
-
 from .models import BlockedIP, User, UserSession
-from .services.jwt import JWTService
 from .services.events import SecurityEventService
+from .services.jwt import JWTService
 
 logger = getLogger(__name__)
 
@@ -82,7 +82,7 @@ class RateLimiter:
             logger.exception("RateLimiter cache.delete failed (ip=%s)", ip_address)
 
     @staticmethod
-    def is_ip_blocked(ip_address: str) -> Tuple[bool, Optional[str]]:
+    def is_ip_blocked(ip_address: str) -> tuple[bool, str | None]:
         attempts = RateLimiter.get_failed_attempts(ip_address)
         if attempts >= RateLimiter.MAX_ATTEMPTS:
             return (
@@ -121,12 +121,11 @@ class RateLimiter:
             blocked_ip.save()
 
     @staticmethod
-    def check_account_lock(user: User) -> Tuple[bool, Optional[str]]:
+    def check_account_lock(user: User) -> tuple[bool, str | None]:
         if user.is_locked:
             return (
                 True,
-                "Account is locked due to excessive failed login attempts. "
-                "Please contact support.",
+                "Account is locked due to excessive failed login attempts. Please contact support.",
             )
         if user.failed_login_attempts >= RateLimiter.ACCOUNT_LOCK_THRESHOLD:
             user.lock_account()
@@ -280,7 +279,7 @@ class SecurityMonitoringMiddleware:
                 # Registration disabled
                 self.security_events.log_security_event(
                     event_type="registration_blocked",
-                    description=(f"Registration attempt blocked " f"(disabled) from {ip_address}"),
+                    description=(f"Registration attempt blocked (disabled) from {ip_address}"),
                     severity="warning",
                     ip_address=ip_address,
                     user_agent=user_agent,
@@ -341,7 +340,7 @@ class SecurityMonitoringMiddleware:
                 # Too many attempts
                 self.security_events.log_security_event(
                     event_type="login_rate_limited",
-                    description=(f"Login rate limited for IP {ip_address} " f"(too many attempts)"),
+                    description=(f"Login rate limited for IP {ip_address} (too many attempts)"),
                     severity="warning",
                     ip_address=ip_address,
                     user_agent=user_agent,
@@ -672,7 +671,7 @@ class HTTPAccessLoggingMiddleware:
 
             self.security_events.log_security_event(
                 event_type="admin_endpoint_access",
-                description=(f"Admin endpoint access: {method} {path} " f"from {ip_address}"),
+                description=(f"Admin endpoint access: {method} {path} from {ip_address}"),
                 severity="info" if is_staff else "warning",
                 user=log_user,
                 ip_address=ip_address,
@@ -717,7 +716,7 @@ class JWTAuthMiddleware(BaseMiddleware):
     - Falls back to AnonymousUser if token is invalid or missing
     """
 
-    async def __call__(self, scope: Dict[str, Any], receive: Any, send: Any) -> Any:
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> Any:
         """
         Process the WebSocket connection and authenticate the user.
 
@@ -777,7 +776,7 @@ class JWTAuthMiddleware(BaseMiddleware):
         return JWTService().get_user_from_token(token)
 
 
-def JWTAuthMiddlewareStack(inner: Any) -> Any:  # pylint: disable=invalid-name
+def jwt_auth_middleware_stack(inner: Any) -> Any:
     """
     Convenience function to apply JWT authentication middleware.
 
@@ -788,3 +787,7 @@ def JWTAuthMiddlewareStack(inner: Any) -> Any:  # pylint: disable=invalid-name
         Wrapped application with JWT authentication
     """
     return JWTAuthMiddleware(inner)
+
+
+# Alias for backward compatibility
+JWTAuthMiddlewareStack = jwt_auth_middleware_stack  # noqa: N816

@@ -8,9 +8,8 @@ Tests cover:
 - BlockedIPAdmin
 """
 
-from django.contrib.admin.sites import AdminSite
-
 import pytest
+from django.contrib.admin.sites import AdminSite
 
 from apps.accounts.admin import BlockedIPAdmin, UserAdmin, UserSessionAdmin, UserSettingsAdmin
 from apps.accounts.models import BlockedIP, User, UserSession, UserSettings

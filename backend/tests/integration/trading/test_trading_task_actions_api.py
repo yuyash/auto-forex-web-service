@@ -40,7 +40,7 @@ class TestTradingTaskActionsApi:
             "results/",
             "copy/",
         ]:
-            url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/{suffix}"
+            url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/{suffix}"  # type: ignore[attr-defined]
             if suffix in {"status/", "executions/", "logs/", "results/"}:
                 resp = requests.get(url, timeout=10)
             else:
@@ -64,54 +64,54 @@ class TestTradingTaskActionsApi:
             status=TaskStatus.CREATED,
         )
 
-        start_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/start/"
+        start_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/start/"  # type: ignore[attr-defined]
         start = requests.post(start_url, headers=auth_headers, json={}, timeout=10)
         assert start.status_code == 202
 
-        pause_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/pause/"
+        pause_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/pause/"  # type: ignore[attr-defined]
         pause = requests.post(pause_url, headers=auth_headers, json={}, timeout=10)
         assert pause.status_code == 200
 
-        resume_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/resume/"
+        resume_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/resume/"  # type: ignore[attr-defined]
         resume = requests.post(resume_url, headers=auth_headers, json={}, timeout=10)
         assert resume.status_code == 200
 
-        stop_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/stop/"
+        stop_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/stop/"  # type: ignore[attr-defined]
         stop = requests.post(stop_url, headers=auth_headers, json={"mode": "graceful"}, timeout=10)
         assert stop.status_code == 200
 
-        restart_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/restart/"
+        restart_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/restart/"  # type: ignore[attr-defined]
         restart = requests.post(
             restart_url, headers=auth_headers, json={"clear_state": True}, timeout=10
         )
         assert restart.status_code == 202
 
-        status_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/status/"
+        status_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/status/"  # type: ignore[attr-defined]
         status_resp = requests.get(status_url, headers=auth_headers, timeout=10)
         assert status_resp.status_code == 200
         status_data = status_resp.json()
-        assert status_data["task_id"] == task.id
+        assert status_data["task_id"] == task.id  # type: ignore[attr-defined]
         assert status_data["task_type"] == "trading"
         assert "status" in status_data
         assert "progress" in status_data
 
-        executions_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/executions/"
+        executions_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/executions/"  # type: ignore[attr-defined]
         exec_resp = requests.get(executions_url, headers=auth_headers, timeout=10)
         assert exec_resp.status_code == 200
         exec_data = exec_resp.json()
         assert set(exec_data.keys()) >= {"count", "results"}
 
-        logs_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/logs/?limit=10&offset=0"
+        logs_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/logs/?limit=10&offset=0"  # type: ignore[attr-defined]
         logs_resp = requests.get(logs_url, headers=auth_headers, timeout=10)
         assert logs_resp.status_code == 200
         logs_data = logs_resp.json()
         assert set(logs_data.keys()) >= {"count", "next", "previous", "results"}
 
-        results_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/results/"
+        results_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/results/"  # type: ignore[attr-defined]
         results_resp = requests.get(results_url, headers=auth_headers, timeout=10)
         assert results_resp.status_code == 200
         results_data = results_resp.json()
-        assert results_data["task_id"] == task.id
+        assert results_data["task_id"] == task.id  # type: ignore[attr-defined]
         assert results_data["task_type"] == "trading"
         assert "has_live" in results_data
         assert "has_metrics" in results_data
@@ -133,6 +133,6 @@ class TestTradingTaskActionsApi:
             status=TaskStatus.CREATED,
         )
 
-        url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/copy/"
+        url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/copy/"  # type: ignore[attr-defined]
         resp = requests.post(url, headers=auth_headers, json={}, timeout=10)
         assert resp.status_code == 400

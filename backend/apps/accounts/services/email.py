@@ -14,7 +14,6 @@ from typing import Any
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags

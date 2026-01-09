@@ -150,11 +150,11 @@ class ComplianceService:
             return None
 
     def _would_create_hedge(self, instrument: str, units: int) -> bool:
-        Position = self._get_position_model()
-        if Position is None:
+        position_model = self._get_position_model()
+        if position_model is None:
             return False
 
-        existing_positions = Position.objects.filter(
+        existing_positions = position_model.objects.filter(
             account=self.account,
             instrument=instrument,
             closed_at__isnull=True,
@@ -172,8 +172,8 @@ class ComplianceService:
         if self.jurisdiction != self.JURISDICTION_US:
             return False, None
 
-        Position = self._get_position_model()
-        if Position is None:
+        position_model = self._get_position_model()
+        if position_model is None:
             return False, None
 
         if not self._would_create_hedge(instrument, units):
@@ -182,7 +182,7 @@ class ComplianceService:
         order_direction = "long" if units > 0 else "short"
         opposite_direction = "short" if order_direction == "long" else "long"
 
-        opposite_positions = Position.objects.filter(
+        opposite_positions = position_model.objects.filter(
             account=self.account,
             instrument=instrument,
             direction=opposite_direction,
@@ -200,11 +200,11 @@ class ComplianceService:
         if self.jurisdiction != self.JURISDICTION_US:
             return None
 
-        Position = self._get_position_model()
-        if Position is None:
+        position_model = self._get_position_model()
+        if position_model is None:
             return None
 
-        positions = Position.objects.filter(
+        positions = position_model.objects.filter(
             account=self.account,
             instrument=instrument,
             closed_at__isnull=True,
@@ -328,8 +328,7 @@ class ComplianceService:
         if self.account.balance + self.account.unrealized_pnl <= 0:
             return (
                 False,
-                "Order rejected: Negative balance protection. "
-                "Account balance is at or below zero.",
+                "Order rejected: Negative balance protection. Account balance is at or below zero.",
             )
 
         return True, None

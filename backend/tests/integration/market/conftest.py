@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
@@ -16,10 +16,10 @@ class _DummyV20Response:
 
 
 class _DummyMid:
-    def __init__(self, o: str, h: str, l: str, c: str) -> None:
+    def __init__(self, o: str, h: str, low: str, c: str) -> None:
         self.o = o
         self.h = h
-        self.l = l
+        self.l = low  # noqa: E741
         self.c = c
 
 
@@ -134,7 +134,7 @@ class _DummyOandaService:
                 units=Decimal("10"),
                 entry_price=Decimal("1.1000"),
                 unrealized_pnl=Decimal("0"),
-                open_time=datetime(2025, 1, 1, tzinfo=timezone.utc),
+                open_time=datetime(2025, 1, 1, tzinfo=UTC),
                 state="OPEN",
             )
         ]
@@ -150,7 +150,7 @@ class _DummyOandaService:
             units=Decimal("10"),
             price=Decimal("1.1001"),
             state=_E("filled"),
-            fill_time=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            fill_time=datetime(2025, 1, 1, tzinfo=UTC),
         )
 
     def create_market_order(self, _req):
@@ -163,8 +163,8 @@ class _DummyOandaService:
             price=Decimal("1.1001"),
             state=_E("filled"),
             time_in_force="FOK",
-            create_time=datetime(2025, 1, 1, tzinfo=timezone.utc),
-            fill_time=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            create_time=datetime(2025, 1, 1, tzinfo=UTC),
+            fill_time=datetime(2025, 1, 1, tzinfo=UTC),
             cancel_time=None,
         )
 
@@ -192,8 +192,8 @@ class _DummyOandaService:
                 price=Decimal("1.1001"),
                 state=_E("filled"),
                 time_in_force="FOK",
-                create_time=datetime(2025, 1, 1, tzinfo=timezone.utc),
-                fill_time=datetime(2025, 1, 1, tzinfo=timezone.utc),
+                create_time=datetime(2025, 1, 1, tzinfo=UTC),
+                fill_time=datetime(2025, 1, 1, tzinfo=UTC),
                 cancel_time=None,
             )
         ]
@@ -207,7 +207,7 @@ class _DummyOandaService:
         return SimpleNamespace(
             order_id="O1",
             transaction_id="TX1",
-            cancel_time=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            cancel_time=datetime(2025, 1, 1, tzinfo=UTC),
             state=_E("cancelled"),
         )
 

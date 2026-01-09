@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from argparse import ArgumentParser
 import time
+from argparse import ArgumentParser
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, datetime, time as dt_time, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
+from datetime import time as dt_time
 from decimal import Decimal
-from typing import Any, Iterable
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -43,7 +45,7 @@ def _parse_date_or_datetime(value: str, *, is_end: bool) -> datetime:
         return datetime.combine(
             parsed_date,
             dt_time.max if is_end else dt_time.min,
-            tzinfo=timezone.utc,
+            tzinfo=UTC,
         )
 
     # Datetime input
@@ -52,9 +54,9 @@ def _parse_date_or_datetime(value: str, *, is_end: bool) -> datetime:
 
     dt = datetime.fromisoformat(value_str)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
 
-    dt_utc = dt.astimezone(timezone.utc)
+    dt_utc = dt.astimezone(UTC)
     return dt_utc
 
 
@@ -62,8 +64,8 @@ def _athena_timestamp_literal(dt: datetime) -> str:
     """Format a UTC datetime for Athena TIMESTAMP literals."""
 
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    dt = dt.astimezone(timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
+    dt = dt.astimezone(UTC)
     return dt.replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -124,9 +126,9 @@ def _parse_timestamp(value: str) -> datetime:
         dt = datetime.fromisoformat(v.replace(" ", "T"))
 
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
 
-    return dt.astimezone(timezone.utc)
+    return dt.astimezone(UTC)
 
 
 def _parse_epoch_ns(value: str) -> datetime:
@@ -140,14 +142,14 @@ def _parse_epoch_ns(value: str) -> datetime:
     seconds, nanos = divmod(ns, 1_000_000_000)
     # Python datetime supports microsecond resolution.
     microseconds = nanos // 1_000
-    return datetime.fromtimestamp(seconds, tz=timezone.utc).replace(microsecond=microseconds)
+    return datetime.fromtimestamp(seconds, tz=UTC).replace(microsecond=microseconds)
 
 
 def _to_epoch_ns(dt: datetime) -> int:
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    dt_utc = dt.astimezone(timezone.utc)
-    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
+    dt_utc = dt.astimezone(UTC)
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
     delta = dt_utc - epoch
     total_seconds = delta.days * 86_400 + delta.seconds
     return total_seconds * 1_000_000_000 + dt_utc.microsecond * 1_000
@@ -164,8 +166,8 @@ def _partition_where_for_date_range(*, start_dt: datetime, end_dt: datetime) -> 
     if end_dt < start_dt:
         raise ValueError("end_dt must be on/after start_dt")
 
-    start_date = start_dt.astimezone(timezone.utc).date()
-    last_inclusive_date = end_dt.astimezone(timezone.utc).date()
+    start_date = start_dt.astimezone(UTC).date()
+    last_inclusive_date = end_dt.astimezone(UTC).date()
 
     if last_inclusive_date < start_date:
         raise ValueError("empty date range")
@@ -330,12 +332,12 @@ class _AthenaClientManager:
         if self._expiration is None:
             return
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expiration_utc = (
             self._expiration
             if self._expiration.tzinfo is not None
-            else self._expiration.replace(tzinfo=timezone.utc)
-        ).astimezone(timezone.utc)
+            else self._expiration.replace(tzinfo=UTC)
+        ).astimezone(UTC)
 
         if now >= (expiration_utc - self.refresh_window):
             self._assume_role()
@@ -501,15 +503,15 @@ class Command(BaseCommand):
             TickData.objects.bulk_create(unique_batch, **upsert_kwargs)
             return len(unique_batch)
 
-        start_date = start_dt.astimezone(timezone.utc).date()
-        end_date = end_dt.astimezone(timezone.utc).date()
+        start_date = start_dt.astimezone(UTC).date()
+        end_date = end_dt.astimezone(UTC).date()
 
         window_start = start_date
         while window_start <= end_date:
             window_end = min(window_start + timedelta(days=9), end_date)
 
-            chunk_start = datetime.combine(window_start, dt_time.min, tzinfo=timezone.utc)
-            chunk_end = datetime.combine(window_end, dt_time.max, tzinfo=timezone.utc)
+            chunk_start = datetime.combine(window_start, dt_time.min, tzinfo=UTC)
+            chunk_end = datetime.combine(window_end, dt_time.max, tzinfo=UTC)
 
             try:
                 partition_filter_sql = _partition_where_for_date_range(

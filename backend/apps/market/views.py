@@ -8,14 +8,13 @@ This module provides API endpoints for:
 - Supported granularities/timeframes
 """
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from logging import getLogger
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Union
-
-from django.core.exceptions import ObjectDoesNotExist
+from typing import Any
 
 import v20
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -23,6 +22,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.market.models import OandaAccount
+from apps.market.serializers import (
+    OandaAccountSerializer,
+    OandaApiHealthStatusSerializer,
+    PositionSerializer,
+)
+from apps.market.services.compliance import ComplianceViolationError
+from apps.market.services.health import OandaHealthCheckService
 from apps.market.services.oanda import (
     LimitOrderRequest,
     MarketOrderRequest,
@@ -33,13 +39,6 @@ from apps.market.services.oanda import (
     Order,
     StopOrderRequest,
 )
-from apps.market.serializers import (
-    OandaAccountSerializer,
-    OandaApiHealthStatusSerializer,
-    PositionSerializer,
-)
-from apps.market.services.health import OandaHealthCheckService
-from apps.market.services.compliance import ComplianceViolationError
 
 logger = getLogger(__name__)
 
@@ -125,7 +124,7 @@ class OandaAccountDetailView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = OandaAccountSerializer
 
-    def get_object(self, request: Request, account_id: int) -> Union[OandaAccount, None]:
+    def get_object(self, request: Request, account_id: int) -> OandaAccount | None:
         if not request.user.is_authenticated:
             return None
         try:
@@ -341,7 +340,7 @@ class CandleDataView(APIView):
                 # Subtract 1 second to exclude the boundary candle (which we already have)
                 to_timestamp = before_timestamp - 1
 
-                before_as_to_time = datetime.fromtimestamp(to_timestamp, tz=timezone.utc).strftime(
+                before_as_to_time = datetime.fromtimestamp(to_timestamp, tz=UTC).strftime(
                     "%Y-%m-%dT%H:%M:%S.%fZ"
                 )
             except (ValueError, OSError) as e:
@@ -354,9 +353,9 @@ class CandleDataView(APIView):
                 # Add 1 second to exclude the boundary candle (which we already have)
                 from_timestamp = after_timestamp + 1
 
-                after_as_from_time = datetime.fromtimestamp(
-                    from_timestamp, tz=timezone.utc
-                ).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                after_as_from_time = datetime.fromtimestamp(from_timestamp, tz=UTC).strftime(
+                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                )
             except (ValueError, OSError) as e:
                 logger.warning("Failed to parse 'after' timestamp: %s", e)
 
@@ -400,7 +399,7 @@ class CandleDataView(APIView):
             )
 
             # Build request parameters
-            params: Dict[str, Any] = {
+            params: dict[str, Any] = {
                 "granularity": granularity,
             }
 
@@ -522,7 +521,7 @@ class CandleDataView(APIView):
                 all_candles = oanda_response.body.get("candles", []) if oanda_response.body else []
 
             # Parse and format candles
-            candles_data: List[Dict[str, Any]] = []
+            candles_data: list[dict[str, Any]] = []
             incomplete_count = 0
             invalid_mid_count = 0
             invalid_time_count = 0
@@ -634,7 +633,7 @@ class CandleDataView(APIView):
         granularity: str,
         from_dt: datetime,
         to_dt: datetime,
-    ) -> List[Any]:
+    ) -> list[Any]:
         """
         Fetch candles in multiple requests if the range exceeds 5000 candles.
 
@@ -648,7 +647,7 @@ class CandleDataView(APIView):
         Returns:
             List of all candles from paginated requests
         """
-        all_candles: List[Any] = []
+        all_candles: list[Any] = []
         current_from = from_dt
         max_candles_per_request = 5000
 
@@ -663,7 +662,7 @@ class CandleDataView(APIView):
                     current_from.timestamp() + time_delta_seconds,
                     to_dt.timestamp(),
                 ),
-                tz=timezone.utc,
+                tz=UTC,
             )
 
             # Format times for OANDA API
@@ -713,7 +712,7 @@ class CandleDataView(APIView):
                 last_candle_dt = datetime.fromisoformat(last_candle_time.replace("Z", "+00:00"))
                 current_from = datetime.fromtimestamp(
                     last_candle_dt.timestamp() + granularity_seconds,
-                    tz=timezone.utc,
+                    tz=UTC,
                 )
 
             except Exception as e:  # pylint: disable=broad-exception-caught
@@ -967,7 +966,7 @@ class MarketStatusView(APIView):
         Returns:
             Response with market status and active sessions
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         current_hour = now.hour
         current_weekday = now.weekday()  # 0=Monday, 6=Sunday
 
@@ -1015,7 +1014,7 @@ class MarketStatusView(APIView):
         else:  # Session spans midnight (e.g., Sydney)
             return current_hour >= open_hour or current_hour < close_hour
 
-    def _get_next_market_event(self, now: datetime, is_open: bool) -> Dict[str, Any]:
+    def _get_next_market_event(self, now: datetime, is_open: bool) -> dict[str, Any]:
         """Calculate the next market open or close event."""
         current_weekday = now.weekday()
         current_hour = now.hour
@@ -1092,7 +1091,7 @@ class OandaApiHealthView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        latest = account.api_health_statuses.order_by("-checked_at").first()
+        latest = account.api_health_statuses.order_by("-checked_at").first()  # type: ignore[attr-defined]
 
         return Response(
             {
@@ -1169,7 +1168,7 @@ class InstrumentDetailView(APIView):
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    def _fetch_instrument_details(self, request: Request, instrument: str) -> Dict[str, Any] | None:
+    def _fetch_instrument_details(self, request: Request, instrument: str) -> dict[str, Any] | None:
         """
         Fetch instrument details from OANDA API.
 
@@ -1266,7 +1265,7 @@ class InstrumentDetailView(APIView):
 
     def _fetch_current_pricing(
         self, api: v20.Context, account_id: str, instrument: str
-    ) -> Dict[str, Any] | None:
+    ) -> dict[str, Any] | None:
         """Fetch current pricing for spread calculation."""
         try:
             response = api.pricing.get(account_id, instruments=instrument)

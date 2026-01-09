@@ -9,14 +9,13 @@ This module contains views for:
 
 import logging
 from datetime import timedelta
-from typing import Any, Type, cast
+from typing import Any, cast
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError, transaction
 from django.db.models import Model, Q, QuerySet
 from django.utils import timezone
-
 from rest_framework import serializers as drf_serializers
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -41,7 +40,6 @@ from apps.trading.services.equity import EquityService
 from apps.trading.services.lock import TaskLockManager
 from apps.trading.services.performance import LivePerformanceService
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -57,25 +55,27 @@ def _normalize_strategy_event_for_api(event: object) -> dict[str, Any] | None:
     if not isinstance(event, dict):
         return None
 
+    ev = cast(dict[str, Any], event)
+
     # Already normalized by a newer backend.
-    if event.get("event_type") is not None:
-        details_raw = event.get("details")
+    if ev.get("event_type") is not None:
+        details_raw = ev.get("details")
         details: dict[str, Any] = details_raw if isinstance(details_raw, dict) else {}
-        timestamp = event.get("timestamp")
+        timestamp = ev.get("timestamp")
         if timestamp is None:
             timestamp = details.get("timestamp")
         return {
-            **event,
-            "event_type": str(event.get("event_type") or ""),
-            "description": str(event.get("description") or ""),
+            **ev,
+            "event_type": str(ev.get("event_type") or ""),
+            "description": str(ev.get("description") or ""),
             "details": details,
             **({"timestamp": str(timestamp)} if timestamp else {}),
         }
 
-    raw_type = str(event.get("type") or "")
-    details_raw = event.get("details")
+    raw_type = str(ev.get("type") or "")
+    details_raw = ev.get("details")
     details = details_raw if isinstance(details_raw, dict) else {}
-    timestamp = event.get("timestamp") or details.get("timestamp")
+    timestamp = ev.get("timestamp") or details.get("timestamp")
 
     # Best-effort classification so the UI can treat entries consistently.
     event_type = raw_type
@@ -89,7 +89,7 @@ def _normalize_strategy_event_for_api(event: object) -> dict[str, Any] | None:
     elif raw_type in {"take_profit_hit"}:
         event_type = "take_profit"
 
-    description = str(event.get("description") or "")
+    description = str(ev.get("description") or "")
     if not description:
         description = raw_type
 
@@ -569,7 +569,7 @@ class TradingTaskView(ListCreateAPIView):
 
     permission_classes = [IsAuthenticated]
 
-    def get_serializer_class(self) -> Type[drf_serializers.Serializer]:
+    def get_serializer_class(self) -> type[drf_serializers.Serializer]:
         """Return appropriate serializer based on request method."""
         if self.request.method == "POST":
             return TradingTaskCreateSerializer
@@ -592,32 +592,32 @@ class TradingTaskView(ListCreateAPIView):
         )
 
         # Filter by status
-        status_param = self.request.query_params.get("status")
+        status_param = self.request.query_params.get("status")  # type: ignore[union-attr]
         if status_param:
             queryset = queryset.filter(status=status_param)
 
         # Filter by config ID
-        config_id = self.request.query_params.get("config_id")
+        config_id = self.request.query_params.get("config_id")  # type: ignore[union-attr]
         if config_id:
             queryset = queryset.filter(config_id=int(config_id))
 
         # Filter by account ID
-        oanda_account_id = self.request.query_params.get("oanda_account_id")
+        oanda_account_id = self.request.query_params.get("oanda_account_id")  # type: ignore[union-attr]
         if oanda_account_id:
             queryset = queryset.filter(oanda_account_id=int(oanda_account_id))
 
         # Filter by strategy type
-        strategy_type = self.request.query_params.get("strategy_type")
+        strategy_type = self.request.query_params.get("strategy_type")  # type: ignore[union-attr]
         if strategy_type:
             queryset = queryset.filter(config__strategy_type=strategy_type)
 
         # Search in name or description
-        search = self.request.query_params.get("search")
+        search = self.request.query_params.get("search")  # type: ignore[union-attr]
         if search:
             queryset = queryset.filter(Q(name__icontains=search) | Q(description__icontains=search))
 
         # Ordering
-        ordering = self.request.query_params.get("ordering", "-created_at")
+        ordering = self.request.query_params.get("ordering", "-created_at")  # type: ignore[union-attr]
         queryset = queryset.order_by(ordering)
 
         return queryset
@@ -635,7 +635,7 @@ class TradingTaskDetailView(RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
     lookup_url_kwarg = "task_id"
 
-    def get_serializer_class(self) -> Type[drf_serializers.Serializer]:
+    def get_serializer_class(self) -> type[drf_serializers.Serializer]:
         """Return appropriate serializer based on request method."""
         if self.request.method in ["PUT", "PATCH"]:
             return TradingTaskCreateSerializer
@@ -1412,8 +1412,7 @@ class TradingTaskStatusView(APIView):
             and latest_execution.status == TaskStatus.RUNNING
         ):
             logger.info(
-                "Trading task %d is stopped but execution still running, "
-                "updating execution status",
+                "Trading task %d is stopped but execution still running, updating execution status",
                 task_id,
             )
 
@@ -1491,7 +1490,7 @@ class BacktestTaskView(ListCreateAPIView):
 
     permission_classes = [IsAuthenticated]
 
-    def get_serializer_class(self) -> Type[drf_serializers.Serializer]:
+    def get_serializer_class(self) -> type[drf_serializers.Serializer]:
         """Return appropriate serializer based on request method."""
         if self.request.method == "POST":
             return BacktestTaskCreateSerializer
@@ -1504,27 +1503,27 @@ class BacktestTaskView(ListCreateAPIView):
         )
 
         # Filter by status
-        status_param = self.request.query_params.get("status")
+        status_param = self.request.query_params.get("status")  # type: ignore[union-attr]
         if status_param:
             queryset = queryset.filter(status=status_param)
 
         # Filter by config ID
-        config_id = self.request.query_params.get("config_id")
+        config_id = self.request.query_params.get("config_id")  # type: ignore[union-attr]
         if config_id:
             queryset = queryset.filter(config_id=int(config_id))
 
         # Filter by strategy type
-        strategy_type = self.request.query_params.get("strategy_type")
+        strategy_type = self.request.query_params.get("strategy_type")  # type: ignore[union-attr]
         if strategy_type:
             queryset = queryset.filter(config__strategy_type=strategy_type)
 
         # Search in name or description
-        search = self.request.query_params.get("search")
+        search = self.request.query_params.get("search")  # type: ignore[union-attr]
         if search:
             queryset = queryset.filter(Q(name__icontains=search) | Q(description__icontains=search))
 
         # Ordering
-        ordering = self.request.query_params.get("ordering", "-created_at")
+        ordering = self.request.query_params.get("ordering", "-created_at")  # type: ignore[union-attr]
         queryset = queryset.order_by(ordering)
 
         return queryset
@@ -1536,7 +1535,7 @@ class BacktestTaskDetailView(RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
     lookup_url_kwarg = "task_id"
 
-    def get_serializer_class(self) -> Type[drf_serializers.Serializer]:
+    def get_serializer_class(self) -> type[drf_serializers.Serializer]:
         """Return appropriate serializer based on request method."""
         if self.request.method in ["PUT", "PATCH"]:
             return BacktestTaskCreateSerializer
