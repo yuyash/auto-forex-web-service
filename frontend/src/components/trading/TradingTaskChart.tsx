@@ -108,7 +108,7 @@ export const TradingTaskChart: React.FC<TradingTaskChartProps> = ({
   const [refreshInterval, setRefreshInterval] = useState(propRefreshInterval);
 
   // Ref for auto-refresh timer
-  const refreshTimerRef = useRef<number | null>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Calculate initial granularity based on task duration
   const calculatedGranularity = useMemo(() => {

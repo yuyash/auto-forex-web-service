@@ -6,12 +6,19 @@
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/backend/manage.py",
-      "args": ["runserver", "0.0.0.0:8000"],
+      "args": [
+        "runserver",
+        "0.0.0.0:8000"
+      ],
       "django": true,
       "justMyCode": true,
+      "console": "internalConsole",
       "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/.env",
       "env": {
-        "DJANGO_SETTINGS_MODULE": "config.settings"
+        "DJANGO_SETTINGS_MODULE": "config.settings",
+        "DB_HOST": "localhost",
+        "REDIS_URL": "redis://localhost:6379/0"
       }
     },
     {
@@ -31,9 +38,13 @@
         "--max-tasks-per-child=10"
       ],
       "justMyCode": true,
+      "console": "internalConsole",
       "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/.env",
       "env": {
-        "DJANGO_SETTINGS_MODULE": "config.settings"
+        "DJANGO_SETTINGS_MODULE": "config.settings",
+        "DB_HOST": "localhost",
+        "REDIS_URL": "redis://localhost:6379/0"
       }
     },
     {
@@ -53,23 +64,36 @@
         "--max-tasks-per-child=10"
       ],
       "justMyCode": true,
+      "console": "internalConsole",
       "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/.env",
       "env": {
         "DJANGO_SETTINGS_MODULE": "config.settings",
-        "CELERY_START_MARKET_TICK_SUPERVISOR": "1"
+        "CELERY_START_MARKET_TICK_SUPERVISOR": "1",
+        "DB_HOST": "localhost",
+        "REDIS_URL": "redis://localhost:6379/0"
       }
     },
     {
       "name": "Frontend: npm run dev",
-      "type": "node-terminal",
+      "type": "node",
       "request": "launch",
-      "command": "npm run dev",
-      "cwd": "${workspaceFolder}/frontend"
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "cwd": "${workspaceFolder}/frontend",
+      "console": "internalConsole",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": [
+        "<node_internals>/**"
+      ]
     }
   ],
   "compounds": [
     {
-      "name": "Run Full Stack Application",
+      "name": "Run App",
       "configurations": [
         "Django: runserver",
         "Celery: trading worker",

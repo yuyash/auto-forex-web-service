@@ -97,7 +97,7 @@
   "editor.wordWrap": "on",
   "explorer.excludeGitIgnore": true,
   "kiroAgent.enableTabAutocomplete": true,
-  "kiroAgent.modelSelection": "claude-opus-4.5",
+  "kiroAgent.modelSelection": "claude-sonnet-4.5-1m",
   "kiroAgent.trustedCommands": [
     "cat *",
     "cd *",
@@ -149,11 +149,13 @@
     "tests"
   ],
   "python.testing.cwd": "${workspaceFolder}/backend",
-  "python.terminal.activateEnvironment": true,
-  "python.terminal.activateEnvInCurrentTerminal": true,
+  "python.terminal.activateEnvironment": false,
+  "python.terminal.activateEnvInCurrentTerminal": false,
   "typescript.autoClosingTags": false,
   "playwright.reuseBrowser": false,
   "playwright.pickLocatorCopyToClipboard": true,
   "playwright.runGlobalSetupOnEachRun": true,
-  "playwright.showTrace": true
+  "playwright.showTrace": true,
+  "debug.terminal.clearBeforeReusing": true,
+  "terminal.integrated.hideOnStartup": "never"
 }
