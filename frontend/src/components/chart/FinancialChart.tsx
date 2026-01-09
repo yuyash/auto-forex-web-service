@@ -169,49 +169,66 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
     );
 
   // Apply scale provider with fallback for test environments
-  let chartData: OHLCData[] = [];
-  let xScale: any;
-  let xAccessor: (d: OHLCData) => number = () => 0;
-  let displayXAccessor: (d: OHLCData) => number = () => 0;
+  const { chartData, xScale, xAccessor, displayXAccessor } = useMemo(() => {
+    let resultData: OHLCData[] = [];
+    let resultScale: ((value: number) => number) & {
+      domain?: () => number[];
+      range?: () => number[];
+      invert?: (value: number) => number;
+    } = (value: number) => value;
+    let resultAccessor: (d: OHLCData) => number = () => 0;
+    let resultDisplayAccessor: (d: OHLCData) => number = () => 0;
 
-  try {
-    const scaleResult = xScaleProvider(data);
-    
-    const hasValidResult = scaleResult && 
-                          scaleResult.data && 
-                          Array.isArray(scaleResult.data) && 
-                          scaleResult.data.length > 0;
-    
-    if (hasValidResult) {
-      chartData = scaleResult.data;
-      xScale = scaleResult.xScale;
-      xAccessor = scaleResult.xAccessor;
-      displayXAccessor = scaleResult.displayXAccessor;
-    } else {
-      // Fallback: use original data if scale provider fails or returns empty data
-      chartData = data;
-      // Create a simple index-based accessor
+    try {
+      const scaleResult = xScaleProvider(data);
+      
+      const hasValidResult = scaleResult && 
+                            scaleResult.data && 
+                            Array.isArray(scaleResult.data) && 
+                            scaleResult.data.length > 0;
+      
+      if (hasValidResult) {
+        resultData = scaleResult.data;
+        resultScale = scaleResult.xScale;
+        resultAccessor = scaleResult.xAccessor;
+        resultDisplayAccessor = scaleResult.displayXAccessor;
+      } else {
+        // Fallback: use original data if scale provider fails or returns empty data
+        resultData = data;
+        // Create a simple index-based accessor
+        const indexMap = new Map(data.map((d, i) => [d, i]));
+        resultAccessor = (d: OHLCData) => indexMap.get(d) ?? 0;
+        resultDisplayAccessor = resultAccessor;
+        // Create a simple linear scale with required methods
+        const scaleFunc = (value: number) => value;
+        resultScale = Object.assign(scaleFunc, {
+          domain: () => [0, data.length - 1],
+          range: () => [0, width],
+          invert: (value: number) => value,
+        });
+      }
+    } catch {
+      // Fallback for test environments where scale provider may fail
+      resultData = data;
       const indexMap = new Map(data.map((d, i) => [d, i]));
-      xAccessor = (d: OHLCData) => indexMap.get(d) ?? 0;
-      displayXAccessor = xAccessor;
-      // Create a simple linear scale
-      xScale = (value: number) => value;
-      xScale.domain = () => [0, data.length - 1];
-      xScale.range = () => [0, width];
-      xScale.invert = (value: number) => value;
+      resultAccessor = (d: OHLCData) => indexMap.get(d) ?? 0;
+      resultDisplayAccessor = resultAccessor;
+      // Create a simple linear scale with required methods
+      const scaleFunc = (value: number) => value;
+      resultScale = Object.assign(scaleFunc, {
+        domain: () => [0, data.length - 1],
+        range: () => [0, width],
+        invert: (value: number) => value,
+      });
     }
-  } catch (error) {
-    // Fallback for test environments where scale provider may fail
-    chartData = data;
-    const indexMap = new Map(data.map((d, i) => [d, i]));
-    xAccessor = (d: OHLCData) => indexMap.get(d) ?? 0;
-    displayXAccessor = xAccessor;
-    // Create a simple linear scale
-    xScale = (value: number) => value;
-    xScale.domain = () => [0, data.length - 1];
-    xScale.range = () => [0, width];
-    xScale.invert = (value: number) => value;
-  }
+
+    return {
+      chartData: resultData,
+      xScale: resultScale,
+      xAccessor: resultAccessor,
+      displayXAccessor: resultDisplayAccessor,
+    };
+  }, [data, xScaleProvider, width]);
 
   // Extra bottom margin to support two stacked X axes (time + date).
   const margin = { left: 50, right: 50, top: 10, bottom: 75 };
