@@ -35,7 +35,7 @@ class TestOandaHealthCheckService:
         )
 
         row = OandaHealthCheckService(account).check()
-        assert row.account_id == account.id
+        assert row.account_id == account.id  # type: ignore[attr-defined]
         assert row.is_available is True
         assert row.http_status == 200
         assert row.latency_ms is not None
@@ -69,4 +69,4 @@ class TestOandaHealthCheckService:
         row = OandaHealthCheckService(account).check()
         assert row.is_available is False
         assert row.http_status == 401
-        assert "status" in row.error_message
+        assert "status" in str(row.error_message)

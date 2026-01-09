@@ -4,7 +4,7 @@ Admin interface for market app.
 
 from django.contrib import admin
 
-from apps.market.models import CeleryTaskStatus, MarketEvent, OandaAccount, TickData
+from apps.market.models import CeleryTaskStatus, MarketEvent, OandaAccount
 
 
 @admin.register(OandaAccount)

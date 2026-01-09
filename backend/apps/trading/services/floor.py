@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Any
@@ -136,13 +136,13 @@ class FloorStrategyState:
             ),
             "active_layers": [
                 {
-                    "index": int(l.index),
-                    "direction": str(l.direction),
-                    "entry_price": str(l.entry_price),
-                    "lot_size": str(l.lot_size),
-                    "retracements": int(l.retracements),
+                    "index": int(layer.index),
+                    "direction": str(layer.direction),
+                    "entry_price": str(layer.entry_price),
+                    "lot_size": str(layer.lot_size),
+                    "retracements": int(layer.retracements),
                 }
-                for l in self.active_layers
+                for layer in self.active_layers
             ],
             "volatility_locked": bool(self.volatility_locked),
             "margin_protection": bool(self.margin_protection),
@@ -152,7 +152,7 @@ class FloorStrategyState:
         }
 
     @staticmethod
-    def from_dict(raw: dict[str, Any]) -> "FloorStrategyState":
+    def from_dict(raw: dict[str, Any]) -> FloorStrategyState:
         status_raw = str(raw.get("status") or StrategyStatus.RUNNING)
         try:
             status = StrategyStatus(status_raw)
@@ -252,7 +252,7 @@ def _parse_iso_datetime_best_effort(value: Any) -> datetime | None:
     except Exception:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -971,12 +971,16 @@ class FloorStrategyService(Strategy):
             exit_ts = str(tick.get("timestamp") or "")
             cycle_entry_time = s.cycle_entry_time
 
-            total_units = sum((l.lot_size for l in s.active_layers), Decimal("0"))
+            total_units = sum((layer.lot_size for layer in s.active_layers), Decimal("0"))
             weighted_entry = Decimal("0")
             if total_units > 0:
                 weighted_entry = (
                     sum(
-                        (l.entry_price * l.lot_size for l in s.active_layers if l.lot_size > 0),
+                        (
+                            layer.entry_price * layer.lot_size
+                            for layer in s.active_layers
+                            if layer.lot_size > 0
+                        ),
                         Decimal("0"),
                     )
                     / total_units
@@ -986,7 +990,7 @@ class FloorStrategyService(Strategy):
             # If layers contain mixed directions (possible when direction is re-evaluated
             # on new layer creation), report a neutral/mixed direction and use mid for
             # display-only exit_price.
-            directions = {l.direction for l in s.active_layers}
+            directions = {layer.direction for layer in s.active_layers}
             if len(directions) == 1:
                 overall_direction = next(iter(directions))
                 exit_price = bid if overall_direction == Direction.LONG else ask
@@ -996,15 +1000,15 @@ class FloorStrategyService(Strategy):
                 direction_out = "mixed"
 
             total_pnl = Decimal("0")
-            for l in s.active_layers:
-                if l.lot_size <= 0:
+            for layer in s.active_layers:
+                if layer.lot_size <= 0:
                     continue
-                if l.direction == Direction.LONG:
-                    total_pnl += (bid - l.entry_price) * l.lot_size
+                if layer.direction == Direction.LONG:
+                    total_pnl += (bid - layer.entry_price) * layer.lot_size
                 else:
-                    total_pnl += (l.entry_price - ask) * l.lot_size
+                    total_pnl += (layer.entry_price - ask) * layer.lot_size
 
-            max_layer_number = max((int(l.index) + 1 for l in s.active_layers), default=1)
+            max_layer_number = max((int(layer.index) + 1 for layer in s.active_layers), default=1)
             events.append(
                 _canonical_event(
                     "take_profit",
@@ -1240,15 +1244,15 @@ class FloorStrategyService(Strategy):
         # Weighted by lot size (proxy). Positive means profit.
         total = Decimal("0")
         weight = Decimal("0")
-        for l in layers:
-            if l.lot_size <= 0:
+        for layer in layers:
+            if layer.lot_size <= 0:
                 continue
-            if l.direction == Direction.LONG:
-                p = _pips_between(l.entry_price, bid, self.pip_size)
+            if layer.direction == Direction.LONG:
+                p = _pips_between(layer.entry_price, bid, self.pip_size)
             else:
-                p = _pips_between(ask, l.entry_price, self.pip_size)
-            total += p * l.lot_size
-            weight += l.lot_size
+                p = _pips_between(ask, layer.entry_price, self.pip_size)
+            total += p * layer.lot_size
+            weight += layer.lot_size
         if weight == 0:
             return Decimal("0")
         return total / weight

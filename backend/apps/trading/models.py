@@ -6,15 +6,15 @@ This module contains:
 - Django ORM models: TaskExecution, ExecutionMetrics, TradingEvent
 """
 
+import traceback
 from decimal import Decimal
 from typing import Any
-import traceback
 
 from django.db import models
 from django.utils import timezone
 
-from apps.trading.enums import DataSource, TaskStatus, TaskType
 from apps.market.models import OandaAccount
+from apps.trading.enums import DataSource, TaskStatus, TaskType
 
 
 class StrategyConfigManager(models.Manager["StrategyConfig"]):
@@ -1232,7 +1232,7 @@ class ExecutionStrategyEvent(models.Model):
         ordering = ["sequence", "id"]
 
     def __str__(self) -> str:
-        return f"ExecutionStrategyEvent(exec={self.execution_id}, seq={self.sequence}, type={self.event_type})"
+        return f"ExecutionStrategyEvent(exec={self.execution_id}, seq={self.sequence}, type={self.event_type})"  # type: ignore[attr-defined]
 
 
 class ExecutionTradeLogEntry(models.Model):
@@ -1265,7 +1265,7 @@ class ExecutionTradeLogEntry(models.Model):
         ordering = ["sequence", "id"]
 
     def __str__(self) -> str:
-        return f"ExecutionTradeLogEntry(exec={self.execution_id}, seq={self.sequence})"
+        return f"ExecutionTradeLogEntry(exec={self.execution_id}, seq={self.sequence})"  # type: ignore[attr-defined]
 
 
 class ExecutionEquityPoint(models.Model):
@@ -1311,7 +1311,7 @@ class ExecutionEquityPoint(models.Model):
         ordering = ["sequence", "id"]
 
     def __str__(self) -> str:
-        return f"ExecutionEquityPoint(exec={self.execution_id}, seq={self.sequence})"
+        return f"ExecutionEquityPoint(exec={self.execution_id}, seq={self.sequence})"  # type: ignore[attr-defined]
 
 
 class ExecutionMetricsCheckpoint(models.Model):
@@ -1353,7 +1353,7 @@ class ExecutionMetricsCheckpoint(models.Model):
         ordering = ["-created_at", "-id"]
 
     def __str__(self) -> str:
-        return f"ExecutionMetricsCheckpoint(exec={self.execution_id}, created_at={self.created_at})"
+        return f"ExecutionMetricsCheckpoint(exec={self.execution_id}, created_at={self.created_at})"  # type: ignore[attr-defined]
 
 
 class TaskExecutionManager(models.Manager["TaskExecution"]):

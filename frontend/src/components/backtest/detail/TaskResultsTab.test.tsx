@@ -193,6 +193,9 @@ describe('TaskResultsTab Integration', () => {
     Element.prototype.scrollIntoView = vi.fn();
 
     vi.mocked(backtestTasksApi.getMetricsCheckpoint).mockResolvedValue({
+      task_id: 1,
+      task_type: 'backtest',
+      has_checkpoint: false,
       checkpoint: null,
     });
 

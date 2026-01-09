@@ -4,10 +4,9 @@ Integration tests for token refresh endpoint.
 Tests the POST /api/accounts/auth/refresh endpoint using live_server.
 """
 
-from django.contrib.auth import get_user_model
-
 import pytest
 import requests
+from django.contrib.auth import get_user_model
 
 User = get_user_model()
 

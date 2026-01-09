@@ -11,9 +11,14 @@ from decimal import Decimal
 from rest_framework import serializers
 from rest_framework.request import Request
 
-from apps.trading.models import BacktestTask
 from apps.market.models import OandaAccount, TickData
-from apps.trading.models import ExecutionMetrics, TaskExecution, StrategyConfig, TradingTask
+from apps.trading.models import (
+    BacktestTask,
+    ExecutionMetrics,
+    StrategyConfig,
+    TaskExecution,
+    TradingTask,
+)
 from apps.trading.services.registry import registry
 
 
@@ -145,7 +150,7 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
         if not registry.is_registered(value):
             available = ", ".join(registry.list_strategies())
             raise serializers.ValidationError(
-                f"Strategy type '{value}' is not registered. " f"Available strategies: {available}"
+                f"Strategy type '{value}' is not registered. Available strategies: {available}"
             )
         return value
 

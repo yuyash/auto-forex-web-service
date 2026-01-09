@@ -18,7 +18,7 @@ from config.settings import *  # noqa: E402, F401, F403
 
 # Use test-only URL routing so integration tests can hit market endpoints
 # without requiring production wiring changes.
-ROOT_URLCONF = "tests.urls_test"
+ROOT_URLCONF = "tests.urls_test"  # type: ignore[assignment]
 
 # =============================================================================
 # Test-specific Database Configuration
@@ -85,14 +85,14 @@ DEBUG = True
 # =============================================================================
 
 # Disable SSL redirect for live_server tests
-SECURE_SSL_REDIRECT = False
-SECURE_PROXY_SSL_HEADER = None
-SECURE_HSTS_SECONDS = 0
-SECURE_HSTS_INCLUDE_SUBDOMAINS = False
-SECURE_HSTS_PRELOAD = False
+SECURE_SSL_REDIRECT = False  # type: ignore[assignment]
+SECURE_PROXY_SSL_HEADER = None  # type: ignore[assignment]
+SECURE_HSTS_SECONDS = 0  # type: ignore[assignment]
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False  # type: ignore[assignment]
+SECURE_HSTS_PRELOAD = False  # type: ignore[assignment]
 
 # Disable secure cookies for tests
-CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False  # type: ignore[assignment]
 SESSION_COOKIE_SECURE = False
 
 # Allow all hosts in tests

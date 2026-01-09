@@ -6,10 +6,9 @@ Tests the following endpoints using live_server:
 - PUT /api/accounts/settings/
 """
 
-from django.contrib.auth import get_user_model
-
 import pytest
 import requests
+from django.contrib.auth import get_user_model
 
 User = get_user_model()
 

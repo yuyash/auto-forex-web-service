@@ -24,7 +24,7 @@ class LivePerformanceService:
 
     @staticmethod
     def _redis_client() -> redis.Redis:
-        return redis.Redis.from_url(getattr(settings, "MARKET_REDIS_URL"), decode_responses=True)
+        return redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
 
     @classmethod
     def _key_for_trading(cls, task_id: int) -> str:

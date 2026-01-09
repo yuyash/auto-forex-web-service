@@ -134,12 +134,12 @@ class Command(BaseCommand):
                 "logs": execution.logs or [],
                 "resource_usage": {
                     "peak_memory_mb": (
-                        float(getattr(execution, "peak_memory_mb"))
+                        float(execution.peak_memory_mb)
                         if getattr(execution, "peak_memory_mb", None) is not None
                         else None
                     ),
                     "memory_limit_mb": (
-                        float(getattr(execution, "memory_limit_mb"))
+                        float(execution.memory_limit_mb)
                         if getattr(execution, "memory_limit_mb", None) is not None
                         else None
                     ),

@@ -48,8 +48,6 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
 
   const [metricsCheckpoint, setMetricsCheckpoint] =
     useState<ExecutionMetricsCheckpoint | null>(null);
-  const [metricsCheckpointLoading, setMetricsCheckpointLoading] =
-    useState(false);
   const [metricsCheckpointError, setMetricsCheckpointError] = useState<
     string | null
   >(null);
@@ -85,17 +83,17 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
 
   useEffect(() => {
     if (!shouldFetchEquityCurve) {
+      // Reset state when we shouldn't fetch - these are intentional resets
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMetricsCheckpoint(null);
-      setMetricsCheckpointLoading(false);
+       
       setMetricsCheckpointError(null);
       return;
     }
 
     let cancelled = false;
 
-    const fetchCheckpoint = (opts?: { showLoading?: boolean }) => {
-      const showLoading = opts?.showLoading ?? false;
-      if (showLoading) setMetricsCheckpointLoading(true);
+    const fetchCheckpoint = () => {
       setMetricsCheckpointError(null);
 
       backtestTasksApi
@@ -110,19 +108,15 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
             err instanceof Error ? err.message : 'Failed to load live metrics'
           );
           setMetricsCheckpoint(null);
-        })
-        .finally(() => {
-          if (cancelled) return;
-          if (showLoading) setMetricsCheckpointLoading(false);
         });
     };
 
-    fetchCheckpoint({ showLoading: true });
+    fetchCheckpoint();
 
     let intervalId: number | null = null;
     if (shouldPollEquityCurve) {
       intervalId = window.setInterval(() => {
-        fetchCheckpoint({ showLoading: false });
+        fetchCheckpoint();
       }, 5000);
     }
 
@@ -134,8 +128,12 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
 
   useEffect(() => {
     if (!shouldFetchEquityCurve) {
+      // Reset state when we shouldn't fetch - these are intentional resets
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEquityCurve([]);
+       
       setEquityCurveLoading(false);
+       
       setEquityCurveError(null);
       return;
     }

@@ -7,8 +7,7 @@ sampling/normalization logic used by results endpoints.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 
 @dataclass(frozen=True)

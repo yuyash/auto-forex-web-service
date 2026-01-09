@@ -58,22 +58,6 @@ export function createFloorStrategyMarkers(
 }
 
 /**
- * Format unit size for display in marker label
- */
-function formatUnits(units: unknown): string {
-  if (units === null || units === undefined || typeof units === 'boolean')
-    return '';
-  const numUnits =
-    typeof units === 'string' ? parseInt(units, 10) : Number(units);
-  if (isNaN(numUnits)) return '';
-  // Format with K suffix for thousands
-  if (numUnits >= 1000) {
-    return `${(numUnits / 1000).toFixed(numUnits % 1000 === 0 ? 0 : 1)}K`;
-  }
-  return String(numUnits);
-}
-
-/**
  * Create a single marker from a strategy event
  */
 function createMarkerFromEvent(
@@ -95,7 +79,6 @@ function createMarkerFromEvent(
 
   if (!timestamp) {
     if (isDev) {
-      // eslint-disable-next-line no-console
       console.warn('[floorStrategyMarkers] Dropping event: missing timestamp', {
         index,
         event_type:
@@ -110,7 +93,6 @@ function createMarkerFromEvent(
   const eventDate = new Date(timestamp);
   if (isNaN(eventDate.getTime())) {
     if (isDev) {
-      // eslint-disable-next-line no-console
       console.warn('[floorStrategyMarkers] Dropping event: invalid timestamp', {
         index,
         timestamp,
@@ -152,7 +134,6 @@ function createMarkerFromEvent(
       };
     }
     if (isDev) {
-      // eslint-disable-next-line no-console
       console.warn('[floorStrategyMarkers] Dropping event: missing price', {
         index,
         timestamp,
@@ -226,13 +207,13 @@ function getMarkerConfig(event: BacktestStrategyEvent): {
   const inferredDirection =
     directionFromRaw ?? directionFromDescription ?? directionFromUnits;
   const isShort = inferredDirection === 'short';
-  const units = formatUnits(raw.units);
   const layerNumber = raw.layer_number;
 
   switch (eventType) {
     // Backend: trade open marker
     case 'open':
     // Frontend event names
+    // falls through
     case 'initial_entry':
     case 'retracement': {
       const isRetracement = eventType === 'retracement';

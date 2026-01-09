@@ -86,6 +86,8 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
 
   useEffect(() => {
     if (results) {
+      // Update timestamp when results change - intentional state sync
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLastUpdate(new Date());
     }
   }, [results]);
@@ -114,8 +116,12 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
 
   useEffect(() => {
     if (!shouldFetchDetails) {
+      // Reset state when we shouldn't fetch - these are intentional resets
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMetricsCheckpoint(null);
+       
       setMetricsCheckpointLoading(false);
+       
       setMetricsCheckpointError(null);
       return;
     }
@@ -163,14 +169,24 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
 
   useEffect(() => {
     if (!shouldFetchDetails) {
+      // Reset state when we shouldn't fetch - these are intentional resets
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEquityCurve([]);
+       
       setEquityCurveLoading(false);
+       
       setEquityCurveError(null);
+       
       setTradeLogs([]);
+       
       setTradeLogsLoading(false);
+       
       setTradeLogsError(null);
+       
       setStrategyEvents([]);
+       
       setStrategyEventsLoading(false);
+       
       setStrategyEventsError(null);
       return;
     }

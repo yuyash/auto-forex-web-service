@@ -14,9 +14,8 @@ Tests cover:
 
 from unittest.mock import MagicMock, patch
 
-from django.test import override_settings
-
 import pytest
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
 
@@ -411,8 +410,8 @@ class TestUserLogoutView:
 
     def test_logout_success_with_jwt_header(self) -> None:
         """Test successful logout with JWT in header."""
-        from apps.accounts.services.jwt import JWTService
         from apps.accounts.models import User
+        from apps.accounts.services.jwt import JWTService
 
         user = User.objects.create_user(
             username="logoutuser",
@@ -467,8 +466,8 @@ class TestTokenRefreshView:
 
     def test_refresh_valid_token(self) -> None:
         """Test refresh with valid token."""
-        from apps.accounts.services.jwt import JWTService
         from apps.accounts.models import User
+        from apps.accounts.services.jwt import JWTService
 
         user = User.objects.create_user(
             username="refreshuser",

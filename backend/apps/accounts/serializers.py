@@ -8,12 +8,11 @@ This module contains serializers for:
 """
 
 import re
-from typing import Any, Dict
+from typing import Any
 
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-
 from rest_framework import serializers
 
 from .models import User
@@ -143,11 +142,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         try:
             validate_password(value)
         except DjangoValidationError as e:
-            raise serializers.ValidationError(list(e.messages))
+            raise serializers.ValidationError(list(e.messages)) from e
 
         return value
 
-    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """
         Validate that passwords match.
 
@@ -165,7 +164,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
         return attrs
 
-    def create(self, validated_data: Dict[str, Any]) -> "User":
+    def create(self, validated_data: dict[str, Any]) -> "User":
         """
         Create a new user with hashed password.
 
@@ -226,7 +225,7 @@ class UserLoginSerializer(serializers.Serializer):  # pylint: disable=abstract-m
         help_text="User's password",
     )
 
-    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """
         Validate login credentials and whitelist.
 
@@ -254,8 +253,7 @@ class UserLoginSerializer(serializers.Serializer):  # pylint: disable=abstract-m
             email
         ):
             raise serializers.ValidationError(
-                "This email address is not authorized to login. "
-                "Please contact the administrator."
+                "This email address is not authorized to login. Please contact the administrator."
             )
 
         # Authenticate user
@@ -268,7 +266,7 @@ class UserLoginSerializer(serializers.Serializer):  # pylint: disable=abstract-m
         if not user.is_active:
             raise serializers.ValidationError("User account is disabled.")
 
-        if user.is_locked:
+        if user.is_locked:  # type: ignore[attr-defined]
             raise serializers.ValidationError(
                 "Account is locked due to excessive failed login attempts. Please contact support."
             )

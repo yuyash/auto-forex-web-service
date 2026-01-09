@@ -30,7 +30,7 @@ class TestBacktestTasksApi:
         url = f"{live_server.url}/api/trading/backtest-tasks/"
         now = timezone.now()
         payload = {
-            "config": config.id,
+            "config": config.id,  # type: ignore[attr-defined]
             "name": "bt-task",
             "description": "",
             "data_source": "postgresql",
@@ -43,7 +43,7 @@ class TestBacktestTasksApi:
         create = requests.post(url, headers=auth_headers, json=payload, timeout=10)
         assert create.status_code == 201
         task = BacktestTask.objects.get(user=test_user, name="bt-task")
-        task_id = task.id
+        task_id = task.id  # type: ignore[attr-defined]
 
         detail = requests.get(
             f"{live_server.url}/api/trading/backtest-tasks/{task_id}/",

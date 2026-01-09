@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -43,7 +43,7 @@ class TestCeleryTaskService:
         assert svc.should_stop(force=True) is True
 
     def test_heartbeat_is_throttled(self, monkeypatch) -> None:
-        fixed = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        fixed = datetime(2025, 1, 1, tzinfo=UTC)
 
         # Patch timezone.now used by the service module.
         import apps.market.services.task as task_module
@@ -70,7 +70,7 @@ class TestCeleryTaskService:
         assert row2.meta == {"x": 1, "b": 2}
 
     def test_mark_stopped_updates_fields(self, monkeypatch) -> None:
-        fixed = datetime(2025, 1, 2, tzinfo=timezone.utc)
+        fixed = datetime(2025, 1, 2, tzinfo=UTC)
 
         import apps.market.services.task as task_module
 

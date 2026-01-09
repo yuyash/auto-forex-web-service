@@ -4,7 +4,7 @@ JWT authentication backend for Django REST Framework.
 This module provides JWT token authentication for API endpoints.
 """
 
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from rest_framework import authentication, exceptions
 from rest_framework.request import Request
@@ -22,7 +22,7 @@ class JWTAuthentication(authentication.BaseAuthentication):
 
     keyword = "Bearer"
 
-    def authenticate(self, request: Request) -> Optional[Tuple[Any, str]]:
+    def authenticate(self, request: Request) -> tuple[Any, str] | None:
         """
         Authenticate the request using JWT token.
 
@@ -46,7 +46,7 @@ class JWTAuthentication(authentication.BaseAuthentication):
         token = auth_parts[1]
         return self.authenticate_credentials(token)
 
-    def authenticate_credentials(self, token: str) -> Tuple[Any, str]:
+    def authenticate_credentials(self, token: str) -> tuple[Any, str]:
         """
         Validate token and return user.
 

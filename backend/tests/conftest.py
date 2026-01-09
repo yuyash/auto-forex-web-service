@@ -4,9 +4,8 @@ Pytest configuration and fixtures for integration tests.
 This module provides shared fixtures for testing Django views via live_server.
 """
 
-from django.contrib.auth import get_user_model
-
 import pytest
+from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
@@ -45,7 +44,7 @@ def django_db_modify_db_settings(django_db_modify_db_settings_parallel_suffix):
 @pytest.fixture
 def test_user(db):
     """Create a test user for authentication tests."""
-    user = User.objects.create_user(
+    user = User.objects.create_user(  # type: ignore[attr-defined]
         username="testuser",
         email="testuser@example.com",
         password="TestPass123!",
@@ -58,7 +57,7 @@ def test_user(db):
 @pytest.fixture
 def unverified_user(db):
     """Create an unverified test user."""
-    user = User.objects.create_user(
+    user = User.objects.create_user(  # type: ignore[attr-defined]
         username="unverified",
         email="unverified@example.com",
         password="TestPass123!",
@@ -69,7 +68,7 @@ def unverified_user(db):
 @pytest.fixture
 def admin_user(db):
     """Create an admin user for privileged endpoint tests."""
-    user = User.objects.create_superuser(
+    user = User.objects.create_superuser(  # type: ignore[attr-defined]
         username="admin",
         email="admin@example.com",
         password="AdminPass123!",
@@ -82,7 +81,7 @@ def admin_user(db):
 @pytest.fixture
 def locked_user(db):
     """Create a locked user account."""
-    user = User.objects.create_user(
+    user = User.objects.create_user(  # type: ignore[attr-defined]
         username="locked",
         email="locked@example.com",
         password="TestPass123!",

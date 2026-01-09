@@ -7,12 +7,11 @@ This module exposes a class-based API (instantiate where used).
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from django.conf import settings
-
 import jwt
+from django.conf import settings
 
 from apps.accounts.models import User
 
@@ -37,7 +36,7 @@ class JWTService:
 
     def generate_token(self, user: Any) -> str:
         """Generate a JWT for the given user."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expiration = now + timedelta(seconds=int(self._expiration_delta_seconds))
 
         payload = {

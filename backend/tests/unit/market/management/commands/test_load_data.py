@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
-import pytest
 import boto3
+import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
@@ -22,6 +23,7 @@ class _FakePaginator:
 class _FakeAthenaClient:
     def __init__(self, *, pages: list[dict[str, Any]]):
         self._pages = pages
+        self._page_index = 0
 
     def start_query_execution(self, **kwargs) -> dict[str, Any]:  # noqa: ARG002
         return {"QueryExecutionId": "q-123"}
@@ -35,6 +37,13 @@ class _FakeAthenaClient:
                 }
             }
         }
+
+    def get_query_results(self, **kwargs) -> dict[str, Any]:  # noqa: ARG002
+        if self._page_index >= len(self._pages):
+            return {"ResultSet": {"Rows": []}}
+        page = self._pages[self._page_index]
+        self._page_index += 1
+        return page
 
     def get_paginator(self, name: str) -> _FakePaginator:
         assert name == "get_query_results"

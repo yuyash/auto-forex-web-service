@@ -261,7 +261,7 @@ const AppFooter = () => {
     const interval = setInterval(checkHealth, 30000);
 
     return () => clearInterval(interval);
-  }, [token]);
+  }, [token, t]);
 
   // Derive connection status from OANDA health
   const derivedConnectionStatus: OandaConnectionState =

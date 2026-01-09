@@ -5,7 +5,7 @@ This module provides permission classes for restricting access to admin-only
 endpoints.
 """
 
-from typing import Optional, cast
+from typing import cast
 
 from rest_framework import permissions
 from rest_framework.request import Request
@@ -41,7 +41,7 @@ class IsAdminUser(permissions.BasePermission):
 
     message = "You do not have permission to access this resource."
 
-    def has_permission(self, request: Request, view: Optional[APIView]) -> bool:
+    def has_permission(self, request: Request, view: APIView | None) -> bool:
         """
         Check if the user has admin permissions.
 
@@ -73,7 +73,7 @@ class IsAdminOrReadOnly(permissions.BasePermission):
 
     message = "You do not have permission to modify this resource."
 
-    def has_permission(self, request: Request, view: Optional[APIView]) -> bool:
+    def has_permission(self, request: Request, view: APIView | None) -> bool:
         """
         Check if the user has permission for the requested action.
 

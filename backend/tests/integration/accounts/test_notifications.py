@@ -104,7 +104,7 @@ class TestUserNotificationsMarkRead:
         from apps.accounts.models import UserNotification
 
         User = get_user_model()
-        other_user = User.objects.create_user(
+        other_user = User.objects.create_user(  # type: ignore[attr-defined]
             username="other",
             email="other@example.com",
             password="TestPass123!",

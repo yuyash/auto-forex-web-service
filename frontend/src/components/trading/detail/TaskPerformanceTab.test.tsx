@@ -167,6 +167,9 @@ describe('TaskPerformanceTab Integration Tests', () => {
     vi.clearAllMocks();
 
     vi.mocked(tradingTasksApi.getMetricsCheckpoint).mockResolvedValue({
+      task_id: 1,
+      task_type: 'trading',
+      has_checkpoint: false,
       checkpoint: null,
     });
 

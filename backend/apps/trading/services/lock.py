@@ -14,8 +14,8 @@ from datetime import datetime, timedelta
 
 from django.utils import timezone
 
-from apps.trading.models import CeleryTaskStatus
 from apps.trading.enums import TaskType
+from apps.trading.models import CeleryTaskStatus
 
 
 @dataclass(frozen=True, slots=True)

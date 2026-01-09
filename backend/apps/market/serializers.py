@@ -6,8 +6,9 @@ from decimal import Decimal
 from typing import Any
 
 from rest_framework import serializers
-from apps.market.models import OandaAccount, OandaApiHealthStatus
+
 from apps.market.enums import ApiType, Jurisdiction
+from apps.market.models import OandaAccount, OandaApiHealthStatus
 
 
 class OandaAccountSerializer(serializers.ModelSerializer):
@@ -212,9 +213,7 @@ class OrderSerializer(serializers.Serializer):  # pylint: disable=abstract-metho
         help_text="Stop price (for OCO orders)",
     )
 
-    def validate(
-        self, attrs: dict[str, Any]
-    ) -> dict[str, Any]:  # pylint: disable=arguments-renamed
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:  # pylint: disable=arguments-renamed
         """Validate order data based on order type."""
         order_type = attrs.get("order_type")
 

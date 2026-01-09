@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from time import perf_counter
 
-from django.utils import timezone
-
 import v20
+from django.utils import timezone
 
 from apps.market.models import OandaAccount, OandaApiHealthStatus
 
