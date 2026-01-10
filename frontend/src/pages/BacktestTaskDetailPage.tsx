@@ -346,7 +346,8 @@ export default function BacktestTaskDetailPage() {
   const canStop = statusForActions === TaskStatus.RUNNING;
   const canRerun =
     statusForActions === TaskStatus.COMPLETED ||
-    statusForActions === TaskStatus.FAILED;
+    statusForActions === TaskStatus.FAILED ||
+    statusForActions === TaskStatus.STOPPED;
   const canEdit = statusForActions !== TaskStatus.RUNNING;
   const canDelete = statusForActions !== TaskStatus.RUNNING;
 
@@ -423,6 +424,7 @@ export default function BacktestTaskDetailPage() {
                 variant="outlined"
                 startIcon={<ContentCopyIcon />}
                 onClick={handleCopy}
+                size="small"
               >
                 Copy
               </Button>
@@ -431,6 +433,7 @@ export default function BacktestTaskDetailPage() {
                   variant="outlined"
                   startIcon={<EditIcon />}
                   onClick={handleEdit}
+                  size="small"
                 >
                   Edit
                 </Button>
