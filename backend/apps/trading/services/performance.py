@@ -144,7 +144,222 @@ class LivePerformanceService:
         return data if isinstance(data, dict) else None
 
 
+class PerformanceTracker:
+    """Tracks performance metrics during task execution.
+
+    The PerformanceTracker is responsible for tracking real-time performance
+    metrics as a task executes. It updates metrics after each tick and trade,
+    calculates unrealized PnL, and periodically saves checkpoints to the database
+    using the ExecutionMetricsCheckpoint model.
+
+    Attributes:
+        execution: The TaskExecution instance being tracked
+        initial_balance: Initial account balance for the execution
+        ticks_processed: Number of ticks processed so far
+        trades_executed: Number of trades executed so far
+        current_balance: Current account balance
+        realized_pnl: Realized profit/loss from closed trades
+        unrealized_pnl: Unrealized profit/loss from open positions
+        open_positions_count: Number of currently open positions
+
+    Requirements: 5.5, 7.1, 7.3, 13.1, 13.2
+    """
+
+    def __init__(self, execution: Any, initial_balance: Decimal) -> None:
+        """Initialize the PerformanceTracker.
+
+        Args:
+            execution: TaskExecution instance to track metrics for
+            initial_balance: Initial account balance
+        """
+        self.execution = execution
+        self.initial_balance = initial_balance
+        self.ticks_processed = 0
+        self.trades_executed = 0
+        self.current_balance = initial_balance
+        self.realized_pnl = Decimal("0")
+        self.unrealized_pnl = Decimal("0")
+        self.open_positions_count = 0
+
+        # Track trade history for metrics calculation
+        self._trade_pnls: list[Decimal] = []
+        self._winning_trades = 0
+        self._losing_trades = 0
+
+    def on_tick_processed(self) -> None:
+        """Update metrics after processing a tick.
+
+        Increments the tick counter. This should be called after each
+        tick is successfully processed by the strategy.
+
+        Requirements: 5.5
+        """
+        self.ticks_processed += 1
+
+    def on_trade_executed(
+        self,
+        pnl: Decimal | None = None,
+        is_opening: bool = True,
+    ) -> None:
+        """Update metrics after executing a trade.
+
+        Updates trade counters and PnL tracking. For opening trades,
+        increments the open positions count. For closing trades,
+        updates realized PnL and trade statistics.
+
+        Args:
+            pnl: Profit/loss for closing trades (None for opening trades)
+            is_opening: True if opening a position, False if closing
+
+        Requirements: 7.1, 13.1, 13.2
+        """
+        self.trades_executed += 1
+
+        if is_opening:
+            # Opening a new position
+            self.open_positions_count += 1
+        else:
+            # Closing a position
+            self.open_positions_count = max(0, self.open_positions_count - 1)
+
+            if pnl is not None:
+                # Update realized PnL
+                self.realized_pnl += pnl
+                self.current_balance = self.initial_balance + self.realized_pnl
+
+                # Track trade statistics
+                self._trade_pnls.append(pnl)
+                if pnl > 0:
+                    self._winning_trades += 1
+                elif pnl < 0:
+                    self._losing_trades += 1
+
+    def update_unrealized_pnl(self, unrealized_pnl: Decimal) -> None:
+        """Update the unrealized PnL from open positions.
+
+        This should be called periodically to update the unrealized PnL
+        based on current market prices and open positions.
+
+        Args:
+            unrealized_pnl: Current unrealized profit/loss
+
+        Requirements: 7.3, 13.2
+        """
+        self.unrealized_pnl = unrealized_pnl
+
+    def save_checkpoint(self) -> Any:
+        """Save a metrics checkpoint to the database.
+
+        Creates an ExecutionMetricsCheckpoint record with current metrics.
+        This enables tracking metrics over time and providing real-time
+        updates to the UI.
+
+        Returns:
+            ExecutionMetricsCheckpoint: The created checkpoint record
+
+        Requirements: 5.5, 7.1
+        """
+        from apps.trading.models import ExecutionMetricsCheckpoint
+
+        # Calculate derived metrics
+        total_pnl = self.realized_pnl + self.unrealized_pnl
+        total_return = (
+            (
+                (self.current_balance + self.unrealized_pnl - self.initial_balance)
+                / self.initial_balance
+            )
+            * 100
+            if self.initial_balance > 0
+            else Decimal("0")
+        )
+
+        total_trades = len(self._trade_pnls)
+        win_rate = (
+            (Decimal(self._winning_trades) / Decimal(total_trades)) * 100
+            if total_trades > 0
+            else Decimal("0")
+        )
+
+        # Calculate average win/loss
+        winning_pnls = [p for p in self._trade_pnls if p > 0]
+        losing_pnls = [p for p in self._trade_pnls if p < 0]
+
+        average_win = sum(winning_pnls) / len(winning_pnls) if winning_pnls else Decimal("0")
+        average_loss = sum(losing_pnls) / len(losing_pnls) if losing_pnls else Decimal("0")
+
+        # Calculate profit factor
+        gross_profit = sum(winning_pnls) if winning_pnls else Decimal("0")
+        gross_loss = abs(sum(losing_pnls)) if losing_pnls else Decimal("0")
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else None
+
+        # Create checkpoint
+        checkpoint = ExecutionMetricsCheckpoint.objects.create(
+            execution=self.execution,
+            processed=self.ticks_processed,
+            total_return=total_return,
+            total_pnl=total_pnl,
+            realized_pnl=self.realized_pnl,
+            unrealized_pnl=self.unrealized_pnl,
+            total_trades=total_trades,
+            winning_trades=self._winning_trades,
+            losing_trades=self._losing_trades,
+            win_rate=win_rate,
+            max_drawdown=Decimal("0"),  # TODO: Calculate from equity curve
+            sharpe_ratio=None,  # TODO: Calculate from returns
+            profit_factor=profit_factor,
+            average_win=average_win,
+            average_loss=average_loss,
+        )
+
+        return checkpoint
+
+    def get_metrics(self) -> dict[str, Any]:
+        """Get current metrics as a dictionary.
+
+        Returns a dictionary containing all current performance metrics.
+        This is useful for progress updates and real-time monitoring.
+
+        Returns:
+            dict: Dictionary containing current metrics
+
+        Requirements: 5.5, 7.3
+        """
+        total_pnl = self.realized_pnl + self.unrealized_pnl
+        total_return = (
+            (
+                (self.current_balance + self.unrealized_pnl - self.initial_balance)
+                / self.initial_balance
+            )
+            * 100
+            if self.initial_balance > 0
+            else Decimal("0")
+        )
+
+        total_trades = len(self._trade_pnls)
+        win_rate = (
+            (Decimal(self._winning_trades) / Decimal(total_trades)) * 100
+            if total_trades > 0
+            else Decimal("0")
+        )
+
+        return {
+            "ticks_processed": self.ticks_processed,
+            "trades_executed": self.trades_executed,
+            "current_balance": self.current_balance,
+            "current_pnl": total_pnl,
+            "realized_pnl": self.realized_pnl,
+            "unrealized_pnl": self.unrealized_pnl,
+            "open_positions": self.open_positions_count,
+            "total_return": total_return,
+            "total_trades": total_trades,
+            "winning_trades": self._winning_trades,
+            "losing_trades": self._losing_trades,
+            "win_rate": win_rate,
+        }
+
+
 __all__ = [
     "FloorUnrealizedSnapshot",
     "LivePerformanceService",
+    "PerformanceTracker",
 ]
