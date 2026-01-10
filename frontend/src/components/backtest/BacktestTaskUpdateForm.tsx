@@ -53,6 +53,12 @@ const backtestTaskUpdateSchema = z
       })
       .nonnegative('Commission cannot be negative')
       .optional(),
+    pip_size: z.coerce
+      .number({
+        message: 'Pip size must be a number',
+      })
+      .positive('Pip size must be greater than zero')
+      .optional(),
     instrument: z.string().min(1, 'Instrument is required'),
     sell_at_completion: z.boolean().optional().default(false),
   })
@@ -121,6 +127,7 @@ export default function BacktestTaskUpdateForm({
           end_time: data.end_time,
           initial_balance: data.initial_balance.toString(),
           commission_per_trade: data.commission_per_trade?.toString(),
+          pip_size: data.pip_size?.toString(),
           instrument: data.instrument,
           sell_at_completion: data.sell_at_completion,
         },
@@ -323,6 +330,27 @@ export default function BacktestTaskUpdateForm({
                   inputProps={{ min: 0, step: 0.01 }}
                   error={!!errors.commission_per_trade}
                   helperText={errors.commission_per_trade?.message}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Controller
+              name="pip_size"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label="Pip Size (Optional)"
+                  type="number"
+                  inputProps={{ min: 0, step: 0.00001 }}
+                  error={!!errors.pip_size}
+                  helperText={
+                    errors.pip_size?.message ||
+                    'Leave empty to auto-fetch from OANDA account'
+                  }
                 />
               )}
             />

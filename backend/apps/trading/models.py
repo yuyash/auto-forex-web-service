@@ -181,6 +181,19 @@ class BacktestTask(models.Model):
         default=Decimal("0"),
         help_text="Commission to apply per trade",
     )
+    instrument = models.CharField(
+        max_length=20,
+        default="USD_JPY",
+        help_text="Trading instrument (e.g., EUR_USD, USD_JPY)",
+    )
+    pip_size = models.DecimalField(
+        max_digits=10,
+        decimal_places=5,
+        null=True,
+        blank=True,
+        default=Decimal("0.01"),
+        help_text="Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account.",
+    )
     status = models.CharField(
         max_length=20,
         default=TaskStatus.CREATED,
@@ -216,13 +229,6 @@ class BacktestTask(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.config.strategy_type})"
-
-    @property
-    def instrument(self) -> str:
-        """Best-effort instrument derived from strategy config."""
-        params = getattr(self.config, "parameters", None) or {}
-        instrument = params.get("instrument")
-        return str(instrument) if instrument else "EUR_USD"
 
     def validate_configuration(self) -> tuple[bool, str | None]:
         """Validate task configuration before execution."""
@@ -371,6 +377,11 @@ class TradingTask(models.Model):
     sell_on_stop = models.BooleanField(
         default=False,
         help_text="Close all positions when task is stopped",
+    )
+    instrument = models.CharField(
+        max_length=20,
+        default="USD_JPY",
+        help_text="Trading instrument (e.g., EUR_USD, USD_JPY)",
     )
     strategy_state = models.JSONField(
         default=dict,

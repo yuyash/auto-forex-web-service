@@ -135,6 +135,15 @@ export function TaskConfigTab({ task }: TaskConfigTabProps) {
             </Typography>
           </Grid>
 
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <Typography variant="body2" color="text.secondary">
+              Pip Size
+            </Typography>
+            <Typography variant="body1">
+              {task.pip_size || 'Auto (from OANDA account)'}
+            </Typography>
+          </Grid>
+
           <Grid size={{ xs: 12 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               Instrument

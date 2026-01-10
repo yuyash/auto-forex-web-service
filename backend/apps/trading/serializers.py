@@ -689,6 +689,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "end_time",
             "initial_balance",
             "commission_per_trade",
+            "pip_size",
             "instrument",
             "status",
             "latest_execution",
@@ -744,6 +745,7 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
             "start_time",
             "end_time",
             "initial_balance",
+            "pip_size",
             "instrument",
             "status",
             "created_at",
@@ -766,6 +768,8 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "end_time",
             "initial_balance",
             "commission_per_trade",
+            "pip_size",
+            "instrument",
         ]
         # Make fields optional for partial updates (PATCH)
         extra_kwargs = {
@@ -776,6 +780,8 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "end_time": {"required": False},
             "initial_balance": {"required": False},
             "commission_per_trade": {"required": False},
+            "pip_size": {"required": False},
+            "instrument": {"required": False},
         }
 
     def validate_config(self, value: StrategyConfig) -> StrategyConfig:
@@ -789,6 +795,12 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         """Validate initial balance is positive."""
         if value <= 0:
             raise serializers.ValidationError("Initial balance must be positive")
+        return value
+
+    def validate_pip_size(self, value: Decimal | None) -> Decimal | None:
+        """Validate pip size is positive if provided."""
+        if value is not None and value <= 0:
+            raise serializers.ValidationError("Pip size must be positive")
         return value
 
     def validate(self, attrs: dict) -> dict:
@@ -830,11 +842,10 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             if not is_valid:
                 raise serializers.ValidationError({"config": error_message})
 
-            # Validate configuration has instrument parameter
-            if not config.parameters.get("instrument"):
-                raise serializers.ValidationError(
-                    {"config": "Configuration must have an instrument parameter"}
-                )
+        # Validate instrument is provided
+        instrument = attrs.get("instrument")
+        if not instrument:
+            raise serializers.ValidationError({"instrument": "Instrument is required"})
 
         return attrs
 

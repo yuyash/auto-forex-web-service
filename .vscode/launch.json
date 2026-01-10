@@ -34,8 +34,9 @@
         "info",
         "-Q",
         "trading,default",
-        "--concurrency=8",
-        "--max-tasks-per-child=10"
+        "--pool=solo",
+        "-n",
+        "trading_worker@%h"
       ],
       "justMyCode": true,
       "console": "internalConsole",
@@ -44,7 +45,8 @@
       "env": {
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "DB_HOST": "localhost",
-        "REDIS_URL": "redis://localhost:6379/0"
+        "REDIS_URL": "redis://localhost:6379/0",
+        "OBJC_DISABLE_INITIALIZE_FORK_SAFETY": "YES"
       }
     },
     {
@@ -60,8 +62,9 @@
         "info",
         "-Q",
         "market",
-        "--concurrency=8",
-        "--max-tasks-per-child=10"
+        "--pool=solo",
+        "-n",
+        "market_worker@%h"
       ],
       "justMyCode": true,
       "console": "internalConsole",
@@ -71,7 +74,8 @@
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "CELERY_START_MARKET_TICK_SUPERVISOR": "1",
         "DB_HOST": "localhost",
-        "REDIS_URL": "redis://localhost:6379/0"
+        "REDIS_URL": "redis://localhost:6379/0",
+        "OBJC_DISABLE_INITIALIZE_FORK_SAFETY": "YES"
       }
     },
     {

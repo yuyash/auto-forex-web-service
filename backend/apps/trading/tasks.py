@@ -482,7 +482,7 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
         execution = _create_execution(task_type=TaskType.TRADING, task_id=task_id)
     execution.add_log("INFO", "=== Trading execution started ===")
 
-    instrument = str((task.config.parameters or {}).get("instrument") or "") or None
+    instrument = task.instrument
     event_service.log_event(
         event_type="trading_task_started",
         severity="info",
@@ -502,7 +502,45 @@ def run_trading_task(task_id: int, execution_id: int | None = None) -> None:
     # Strategy
     strategy_type = str(task.config.strategy_type)
     config = dict(task.config.parameters or {})
-    strategy = strategy_registry.create(identifier=strategy_type, config=config)
+
+    # Create strategy with error handling for missing OANDA account
+    try:
+        strategy = strategy_registry.create(identifier=strategy_type, config=config)
+    except ValueError as e:
+        error_msg = str(e)
+        if "No active OANDA account found" in error_msg:
+            user_friendly_msg = "OANDA account is required to run trading task. Please configure an OANDA account first."
+            execution.add_log("ERROR", user_friendly_msg)
+            execution.status = TaskStatus.FAILED
+            execution.completed_at = dj_timezone.now()
+            execution.save(update_fields=["status", "completed_at"])
+
+            task.status = TaskStatus.FAILED
+            task.save(update_fields=["status"])
+
+            task_service.mark_stopped(
+                status=CeleryTaskStatus.Status.FAILED, status_message=user_friendly_msg
+            )
+
+            event_service.log_event(
+                event_type="trading_task_failed",
+                severity="error",
+                description=user_friendly_msg,
+                user=task.user,
+                account=getattr(task, "oanda_account", None),
+                task_type=TaskType.TRADING,
+                task_id=task_id,
+                execution=execution,
+                details={"error": error_msg},
+            )
+
+            logger.error(
+                "Trading task failed: %s (task_id=%s)",
+                user_friendly_msg,
+                task_id,
+            )
+            return
+        raise
 
     state: dict[str, Any] = dict(task.strategy_state or {})
     trade_log: list[dict[str, Any]] = []
@@ -1054,7 +1092,48 @@ def run_backtest_task(task_id: int, execution_id: int | None = None) -> None:
 
     strategy_type = str(task.config.strategy_type)
     config = dict(task.config.parameters or {})
-    strategy = strategy_registry.create(identifier=strategy_type, config=config)
+
+    # Add pip_size from task if provided
+    if task.pip_size is not None:
+        config["pip_size"] = task.pip_size
+
+    # Create strategy with error handling for missing OANDA account
+    try:
+        strategy = strategy_registry.create(identifier=strategy_type, config=config)
+    except ValueError as e:
+        error_msg = str(e)
+        if "No active OANDA account found" in error_msg:
+            user_friendly_msg = "OANDA account is required when pip_size is not provided. Please configure an OANDA account or specify pip_size in the task."
+            execution.add_log("ERROR", user_friendly_msg)
+            execution.status = TaskStatus.FAILED
+            execution.completed_at = dj_timezone.now()
+            execution.save(update_fields=["status", "completed_at"])
+
+            task.status = TaskStatus.FAILED
+            task.save(update_fields=["status"])
+
+            task_service.mark_stopped(
+                status=CeleryTaskStatus.Status.FAILED, status_message=user_friendly_msg
+            )
+
+            event_service.log_event(
+                event_type="backtest_task_failed",
+                severity="error",
+                description=user_friendly_msg,
+                user=task.user,
+                task_type=TaskType.BACKTEST,
+                task_id=task_id,
+                execution=execution,
+                details={"error": error_msg},
+            )
+
+            logger.error(
+                "Backtest task failed: %s (task_id=%s)",
+                user_friendly_msg,
+                task_id,
+            )
+            return
+        raise
 
     logger.info(
         "Backtest strategy created (task_id=%s, strategy_type=%s)",
@@ -1070,7 +1149,7 @@ def run_backtest_task(task_id: int, execution_id: int | None = None) -> None:
     strategy_events: list[dict[str, Any]] = []
     realized_pips = Decimal("0")
 
-    instrument = str(config.get("instrument") or "")
+    instrument = task.instrument
 
     state, start_events = strategy.on_start(state=state)
     logger.info(

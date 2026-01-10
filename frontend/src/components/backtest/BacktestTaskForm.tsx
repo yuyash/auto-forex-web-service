@@ -76,6 +76,8 @@ interface ReviewContentProps {
     end_time: string;
     initial_balance: number;
     commission_per_trade: number;
+    pip_size?: number;
+    instrument: string;
     sell_at_completion?: boolean;
   };
 }
@@ -88,12 +90,10 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
     end_time,
     initial_balance,
     commission_per_trade,
+    pip_size,
+    instrument,
     sell_at_completion,
   } = formValues;
-
-  // Get instrument from configuration parameters
-  const instrument =
-    (selectedConfig.parameters?.instrument as string) || 'Not specified';
 
   return (
     <Grid container spacing={2}>
@@ -173,6 +173,17 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
         </Typography>
       </Grid>
 
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          Pip Size
+        </Typography>
+        <Typography variant="body1">
+          {pip_size !== undefined && pip_size !== null
+            ? pip_size
+            : 'Auto (from OANDA account)'}
+        </Typography>
+      </Grid>
+
       <Grid size={{ xs: 12 }}>
         <Typography variant="subtitle2" color="text.secondary">
           Close Positions at Completion
@@ -208,6 +219,8 @@ export default function BacktestTaskForm({
       end_time: defaultDateRange.end_time,
       initial_balance: 10000,
       commission_per_trade: 0,
+      pip_size: 0.01,
+      instrument: 'USD_JPY',
       sell_at_completion: false,
     };
 
@@ -341,6 +354,8 @@ export default function BacktestTaskForm({
       end_time: completeData.end_time,
       initial_balance: completeData.initial_balance,
       commission_per_trade: completeData.commission_per_trade,
+      pip_size: completeData.pip_size,
+      instrument: completeData.instrument,
       sell_at_completion: completeData.sell_at_completion,
     };
 
@@ -554,6 +569,47 @@ export default function BacktestTaskForm({
                 />
               </Grid>
 
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Controller
+                  name="instrument"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Instrument"
+                      placeholder="e.g., EUR_USD, USD_JPY"
+                      error={!!errors.instrument}
+                      helperText={
+                        errors.instrument?.message ||
+                        'Trading pair to backtest'
+                      }
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Controller
+                  name="pip_size"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Pip Size (Optional)"
+                      type="number"
+                      inputProps={{ min: 0, step: 0.00001 }}
+                      error={!!errors.pip_size}
+                      helperText={
+                        errors.pip_size?.message ||
+                        'Leave empty to auto-fetch from OANDA account. Common values: 0.0001 (EUR_USD), 0.01 (USD_JPY)'
+                      }
+                    />
+                  )}
+                />
+              </Grid>
+
               <Grid size={{ xs: 12 }}>
                 <Controller
                   name="sell_at_completion"
@@ -603,6 +659,8 @@ export default function BacktestTaskForm({
           end_time: formData.end_time as string,
           initial_balance: formData.initial_balance as number,
           commission_per_trade: formData.commission_per_trade as number,
+          pip_size: formData.pip_size as number | undefined,
+          instrument: formData.instrument as string,
           sell_at_completion: formData.sell_at_completion as boolean,
         };
 
@@ -616,6 +674,8 @@ export default function BacktestTaskForm({
           end_time: 'End Date',
           initial_balance: 'Initial Balance',
           commission_per_trade: 'Commission Per Trade',
+          pip_size: 'Pip Size',
+          instrument: 'Instrument',
         };
 
         return (

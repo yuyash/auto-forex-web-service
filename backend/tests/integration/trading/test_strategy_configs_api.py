@@ -115,6 +115,7 @@ class TestBacktestTaskCreateValidationApi:
             "end_time": (now + timedelta(days=1)).isoformat(),
             "initial_balance": "10000.00",
             "commission_per_trade": "0.00",
+            "instrument": "EUR_USD",
         }
 
         resp = requests.post(url, headers=auth_headers, json=payload, timeout=10)

@@ -59,8 +59,8 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
   const isFailed = status === TaskStatus.FAILED;
   const isCompleted = status === TaskStatus.COMPLETED;
 
-  // Start: Only for CREATED tasks (no previous execution)
-  const showStart = isCreated && onStart;
+  // Start: For CREATED or STOPPED tasks
+  const showStart = (isCreated || isStopped) && onStart;
 
   // Resume: For STOPPED/PAUSED tasks that can resume (has previous state)
   const showResume = (isStopped || isPaused) && canResume && onResume;
@@ -171,26 +171,17 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
 
       {/* Delete button - always shown but disabled for running tasks */}
       {onDelete && (
-        <Tooltip
-          title={
-            isRunning ? 'Cannot delete while task is running' : 'Delete task'
-          }
-          arrow
+        <Button
+          variant="outlined"
+          color="error"
+          startIcon={<Delete />}
+          onClick={onDelete}
+          disabled={deleteDisabled}
+          size="small"
+          aria-label="Delete task"
         >
-          <span>
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<Delete />}
-              onClick={onDelete}
-              disabled={deleteDisabled}
-              size="small"
-              aria-label="Delete task"
-            >
-              Delete
-            </Button>
-          </span>
-        </Tooltip>
+          Delete
+        </Button>
       )}
     </Box>
   );
