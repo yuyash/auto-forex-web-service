@@ -591,7 +591,15 @@ class FloorStrategyService(Strategy):
     def __init__(self, config: dict[str, Any]) -> None:
         super().__init__(config)
         self.config = self._parse_config(config)
-        self.pip_size = get_pip_size(instrument=self.config.instrument)
+
+        # Get pip size from config or OANDA account
+        config_pip_size = config.get("pip_size")
+        if config_pip_size is not None:
+            # Use pip size from config (for backtests without OANDA account)
+            self.pip_size = Decimal(str(config_pip_size))
+        else:
+            # Fetch from OANDA account (for live trading)
+            self.pip_size = get_pip_size(instrument=self.config.instrument)
 
     @staticmethod
     def _parse_config(raw: dict[str, Any]) -> FloorStrategyConfig:
