@@ -21,9 +21,9 @@ from apps.trading.events import (
     TakeProfitEvent,
 )
 from apps.trading.models import TaskExecution, TradingTask
-from apps.trading.services.base import Strategy
 from apps.trading.services.executor.base import BaseExecutor
 from apps.trading.services.source import TickDataSource
+from apps.trading.strategies.base import Strategy
 
 logger: Logger = getLogger(name=__name__)
 

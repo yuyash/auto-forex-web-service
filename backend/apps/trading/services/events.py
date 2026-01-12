@@ -82,9 +82,8 @@ class EventEmitter:
         # Convert StrategyEvent to dict for database storage
         event_data = event.to_dict()
 
-        parsed_timestamp = (
-            self._parse_timestamp(event.timestamp) if event.timestamp else timezone.now()
-        )
+        # event.timestamp is already a datetime object, use it directly
+        parsed_timestamp = event.timestamp if event.timestamp else timezone.now()
 
         return self._persist_event(
             event_type=event.event_type,
@@ -114,9 +113,8 @@ class EventEmitter:
             **trade.to_dict(),
         }
 
-        parsed_timestamp = (
-            self._parse_timestamp(trade.timestamp) if trade.timestamp else timezone.now()
-        )
+        # trade.timestamp is already a datetime object, use it directly
+        parsed_timestamp = trade.timestamp if trade.timestamp else timezone.now()
 
         return self._persist_event(
             event_type="trade_executed",

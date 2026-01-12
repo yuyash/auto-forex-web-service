@@ -20,12 +20,12 @@ from apps.trading.events import (
     StrategyEvent,
 )
 from apps.trading.models import TaskExecution
-from apps.trading.services.base import Strategy
 from apps.trading.services.controller import TaskController
 from apps.trading.services.events import EventEmitter
 from apps.trading.services.performance import PerformanceTracker
 from apps.trading.services.source import TickDataSource
 from apps.trading.services.state import StateManager
+from apps.trading.strategies.base import Strategy
 
 logger: Logger = getLogger(name=__name__)
 
@@ -106,7 +106,7 @@ class BaseExecutor(ABC):
 
             # Convert strategy_state from dict to proper StrategyState object
             if isinstance(state.strategy_state, dict):
-                strategy_state_obj = self.strategy.initialize_strategy_state(state.strategy_state)
+                strategy_state_obj = self.strategy.deserialize_state(state.strategy_state)
                 state = state.copy_with(strategy_state=strategy_state_obj)
 
             # Validate state if resuming

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from apps.trading.services.base import Strategy
+from apps.trading.strategies.base import Strategy
 
 if TYPE_CHECKING:
     from apps.trading.models import StrategyConfig
@@ -88,16 +88,19 @@ class StrategyRegistry:
 
         strategy_cls = self._strategies[key].strategy_cls
 
-        # Instantiate strategy directly with instrument, pip_size, and config
-        return strategy_cls(instrument, pip_size, strategy_config)
+        # Parse StrategyConfig to strategy-specific config object
+        parsed_config = strategy_cls.parse_config(strategy_config)
+
+        # Instantiate strategy with parsed config
+        return strategy_cls(instrument, pip_size, parsed_config)
 
 
 registry = StrategyRegistry()
 
 
 def register_strategy(
-    identifier: str,
-    config_schema: dict[str, Any] | str | None = None,
+    id: str,
+    schema: dict[str, Any] | str | None = None,
     *,
     display_name: str | None = None,
     description: str = "",
@@ -105,8 +108,8 @@ def register_strategy(
     """Register a strategy with optional schema path or dict.
 
     Args:
-        identifier: Unique strategy identifier
-        config_schema: Schema dict or path to JSON schema file (e.g., "trading/schemas/floor.json")
+        id: Unique strategy identifier
+        schema: Schema dict or path to JSON schema file (e.g., "trading/schemas/floor.json")
         display_name: Display name for the strategy
         description: Strategy description
 
@@ -114,34 +117,34 @@ def register_strategy(
         Decorator function
 
     Example:
-        >>> @register_strategy("floor", "trading/schemas/floor.json")
-        ... class FloorStrategyService(Strategy[FloorStrategyState]):
+        >>> @register_strategy(id="floor", schema="trading/schemas/floor.json")
+        ... class FloorStrategy(Strategy[FloorStrategyState]):
         ...     pass
     """
 
     def _decorator(strategy_cls: type[Strategy]) -> type[Strategy]:
         # Load schema from file if path provided
-        schema: dict[str, Any] | None = None
-        if isinstance(config_schema, str):
+        loaded_schema: dict[str, Any] | None = None
+        if isinstance(schema, str):
             import json
             from pathlib import Path
 
             from django.conf import settings
 
             # Resolve path relative to backend/apps/
-            schema_path = Path(settings.BASE_DIR) / "apps" / config_schema
+            schema_path = Path(settings.BASE_DIR) / "apps" / schema
             if schema_path.exists():
                 with open(schema_path, encoding="utf-8") as f:
-                    schema = json.load(f)
+                    loaded_schema = json.load(f)
             else:
                 raise FileNotFoundError(f"Schema file not found: {schema_path}")
-        elif isinstance(config_schema, dict):
-            schema = config_schema
+        elif isinstance(schema, dict):
+            loaded_schema = schema
 
         registry.register(
-            identifier=identifier,
+            identifier=id,
             strategy_cls=strategy_cls,
-            config_schema=schema,
+            config_schema=loaded_schema,
             display_name=display_name,
             description=description,
         )

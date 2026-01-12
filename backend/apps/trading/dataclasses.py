@@ -123,7 +123,7 @@ class TradeData:
     pips: Decimal | None = None
     order_id: str | None = None
     position_id: str | None = None
-    timestamp: str | None = None
+    timestamp: datetime | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary format.
@@ -140,7 +140,7 @@ class TradeData:
             "pips": str(self.pips) if self.pips is not None else None,
             "order_id": self.order_id,
             "position_id": self.position_id,
-            "timestamp": self.timestamp,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
         }
         """Convert to dictionary format.
 
@@ -489,7 +489,7 @@ class Tick:
         timestamp: Tick timestamp as datetime (timezone-aware)
         bid: Bid price as Decimal
         ask: Ask price as Decimal
-        mid: Mid price as Decimal
+        mid: Mid price as Decimal (calculated from bid/ask if not provided)
 
     Requirements: 9.2, 18.4
 
@@ -509,6 +509,42 @@ class Tick:
     bid: Decimal
     ask: Decimal
     mid: Decimal
+
+    def __post_init__(self) -> None:
+        """Calculate mid if not provided."""
+        if self.mid == Decimal("0") or self.mid is None:
+            calculated_mid = (self.bid + self.ask) / Decimal("2")
+            object.__setattr__(self, "mid", calculated_mid)
+
+    @staticmethod
+    def create(
+        instrument: str,
+        timestamp: datetime,
+        bid: Decimal,
+        ask: Decimal,
+        mid: Decimal | None = None,
+    ) -> "Tick":
+        """Create a Tick with automatic mid calculation if not provided.
+
+        Args:
+            instrument: Trading instrument
+            timestamp: Tick timestamp
+            bid: Bid price
+            ask: Ask price
+            mid: Mid price (calculated from bid/ask if None)
+
+        Returns:
+            Tick instance
+        """
+        if mid is None:
+            mid = (bid + ask) / Decimal("2")
+        return Tick(
+            instrument=instrument,
+            timestamp=timestamp,
+            bid=bid,
+            ask=ask,
+            mid=mid,
+        )
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "Tick":

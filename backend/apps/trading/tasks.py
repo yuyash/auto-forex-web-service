@@ -471,7 +471,3 @@ trading_runner = TradingTaskRunner()
 run_backtest_task = backtest_runner.run
 run_trading_task = trading_runner.run
 stop_trading_task = trading_runner.stop
-
-# Export strategy_registry for testing
-
-# Export strategy_registry for testing
