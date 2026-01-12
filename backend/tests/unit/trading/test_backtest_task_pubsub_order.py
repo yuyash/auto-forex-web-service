@@ -93,9 +93,17 @@ def test_run_backtest_task_subscribes_before_enqueuing_publisher(monkeypatch, te
     import apps.market.tasks as market_tasks
     import apps.trading.tasks as trading_tasks
     from apps.trading.services import registry as strategy_registry_module
+    from apps.trading.services.source import RedisTickDataSource
 
-    monkeypatch.setattr(trading_tasks, "_ensure_strategies_registered", lambda: None)
-    monkeypatch.setattr(trading_tasks, "_redis_client", lambda: _FakeRedisClient(calls=calls))
+    # Mock RedisTickDataSource to use our fake Redis client
+    original_init = RedisTickDataSource.__init__
+
+    def fake_init(self, **kwargs):
+        original_init(self, **kwargs)
+        # Replace the Redis client after initialization
+        self._client = _FakeRedisClient(calls=calls)
+
+    monkeypatch.setattr(RedisTickDataSource, "__init__", fake_init)
     monkeypatch.setattr(
         strategy_registry_module,
         "registry",
