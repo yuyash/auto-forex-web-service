@@ -92,11 +92,14 @@ def test_run_backtest_task_subscribes_before_enqueuing_publisher(monkeypatch, te
 
     import apps.market.tasks as market_tasks
     import apps.trading.tasks as trading_tasks
+    from apps.trading.services import registry as strategy_registry_module
 
     monkeypatch.setattr(trading_tasks, "_ensure_strategies_registered", lambda: None)
     monkeypatch.setattr(trading_tasks, "_redis_client", lambda: _FakeRedisClient(calls=calls))
     monkeypatch.setattr(
-        trading_tasks.strategy_registry, "create", lambda **_kwargs: _FakeStrategy()
+        strategy_registry_module,
+        "registry",
+        type("FakeRegistry", (), {"create": lambda **_kwargs: _FakeStrategy()})(),
     )
 
     class _FakePublisher:

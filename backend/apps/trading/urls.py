@@ -31,10 +31,8 @@ from apps.trading.views import (
     TradingTaskExecutionsView,
     TradingTaskLogsView,
     TradingTaskMetricsCheckpointView,
-    TradingTaskPauseView,
     TradingTaskRestartView,
     TradingTaskResultsView,
-    TradingTaskResumeView,
     TradingTaskStartView,
     TradingTaskStatusView,
     TradingTaskStopView,
@@ -159,16 +157,6 @@ urlpatterns = [
         "trading-tasks/<int:task_id>/stop/",
         TradingTaskStopView.as_view(),
         name="trading_task_stop",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/pause/",
-        TradingTaskPauseView.as_view(),
-        name="trading_task_pause",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/resume/",
-        TradingTaskResumeView.as_view(),
-        name="trading_task_resume",
     ),
     path(
         "trading-tasks/<int:task_id>/restart/",

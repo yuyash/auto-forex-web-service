@@ -16,8 +16,8 @@ from django.conf import settings
 
 from apps.market.enums import ApiType
 from apps.market.models import CeleryTaskStatus, OandaAccount, TickData
+from apps.market.services.celery import CeleryTaskService
 from apps.market.services.oanda import OandaService
-from apps.market.services.task import CeleryTaskService
 
 logger = getLogger(__name__)
 

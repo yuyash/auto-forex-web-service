@@ -14,7 +14,7 @@ from django.db import models
 from django.utils import timezone
 
 from apps.market.models import OandaAccount
-from apps.trading.enums import DataSource, TaskStatus, TaskType
+from apps.trading.enums import DataSource, StrategyType, TaskStatus, TaskType
 
 
 class StrategyConfigManager(models.Manager["StrategyConfig"]):
@@ -80,15 +80,35 @@ class StrategyConfig(models.Model):
     def __str__(self) -> str:
         return f"{self.name} ({self.strategy_type})"
 
+    @property
+    def strategy_type_enum(self) -> "StrategyType":
+        """Get strategy type as enum.
+
+        Returns:
+            StrategyType enum value
+        """
+        from apps.trading.enums import StrategyType
+
+        return StrategyType(self.strategy_type)
+
+    @property
+    def config_dict(self) -> dict[str, Any]:
+        """Get configuration parameters as dictionary.
+
+        Returns:
+            Configuration parameters dictionary
+        """
+        return self.parameters or {}
+
     def is_in_use(self) -> bool:
         return (
             TradingTask.objects.filter(
                 config=self,
-                status__in=[TaskStatus.RUNNING, TaskStatus.PAUSED],
+                status=TaskStatus.RUNNING,
             ).exists()
             or BacktestTask.objects.filter(
                 config=self,
-                status__in=[TaskStatus.RUNNING, TaskStatus.PAUSED],
+                status=TaskStatus.RUNNING,
             ).exists()
         )
 
@@ -186,12 +206,13 @@ class BacktestTask(models.Model):
         default="USD_JPY",
         help_text="Trading instrument (e.g., EUR_USD, USD_JPY)",
     )
-    pip_size = models.DecimalField(
+    _pip_size = models.DecimalField(
         max_digits=10,
         decimal_places=5,
         null=True,
         blank=True,
         default=Decimal("0.01"),
+        db_column="pip_size",
         help_text="Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account.",
     )
     status = models.CharField(
@@ -248,10 +269,66 @@ class BacktestTask(models.Model):
         self.status = TaskStatus.RUNNING
         self.save(update_fields=["status", "updated_at"])
 
-    def rerun(self) -> None:
-        """Rerun the backtest task from the beginning (status -> RUNNING)."""
+    def stop(self) -> None:
+        """Stop a running backtest task.
+
+        Transitions task to stopped state. The execution state is automatically
+        persisted, allowing the task to be resumed later.
+
+        Raises:
+            ValueError: If task is not running
+        """
+        if self.status != TaskStatus.RUNNING:
+            raise ValueError("Task is not running")
+
+        self.status = TaskStatus.STOPPED
+        self.save(update_fields=["status", "updated_at"])
+
+        # Mark current execution as stopped
+        latest_execution = self.get_latest_execution()
+        if latest_execution and latest_execution.status == TaskStatus.RUNNING:
+            from django.utils import timezone
+
+            latest_execution.status = TaskStatus.STOPPED
+            latest_execution.completed_at = timezone.now()
+            latest_execution.save(update_fields=["status", "completed_at"])
+
+    def resume(self) -> None:
+        """Resume a stopped backtest task.
+
+        Transitions task back to running state. The execution will continue
+        from the last persisted state.
+
+        Raises:
+            ValueError: If task is not stopped
+        """
+        if self.status != TaskStatus.STOPPED:
+            raise ValueError("Task is not stopped")
+
+        self.status = TaskStatus.RUNNING
+        self.save(update_fields=["status", "updated_at"])
+
+    def restart(self) -> None:
+        """Restart the backtest task from the beginning.
+
+        Clears all persisted execution state and starts fresh.
+        Task can be in any state (stopped, failed, completed) to be restarted,
+        but not running.
+
+        Raises:
+            ValueError: If task is currently running
+        """
         if self.status == TaskStatus.RUNNING:
-            raise ValueError("Task is already running")
+            raise ValueError("Cannot restart a task that is currently running. Stop it first.")
+
+        # Clear persisted state by deleting execution snapshots
+        latest_execution = self.get_latest_execution()
+        if latest_execution:
+            # Delete execution snapshots to clear state
+            from apps.trading.models import ExecutionSnapshot  # type: ignore[attr-defined]
+
+            ExecutionSnapshot.objects.filter(execution=latest_execution).delete()  # type: ignore[attr-defined]
+
         self.status = TaskStatus.RUNNING
         self.save(update_fields=["status", "updated_at"])
 
@@ -294,6 +371,21 @@ class BacktestTask(models.Model):
             task_id=self.pk,
         ).order_by("-execution_number")
 
+    @property
+    def pip_size(self) -> Decimal:
+        """Get pip_size as Decimal with default value.
+
+        Returns:
+            Decimal: Pip size for the instrument, defaults to 0.01 if not set
+
+        Example:
+            >>> task = BacktestTask.objects.get(id=1)
+            >>> pip_size = task.pip_size  # Always returns Decimal
+        """
+        if self._pip_size is not None:
+            return Decimal(str(self._pip_size))
+        return Decimal("0.01")
+
 
 class TradingTaskManager(models.Manager["TradingTask"]):
     """Custom manager for TradingTask model."""
@@ -303,8 +395,8 @@ class TradingTaskManager(models.Manager["TradingTask"]):
         return self.filter(user=user)
 
     def active(self) -> models.QuerySet["TradingTask"]:
-        """Get all active (running or paused) trading tasks."""
-        return self.filter(status__in=[TaskStatus.RUNNING, TaskStatus.PAUSED])
+        """Get all active (running) trading tasks."""
+        return self.filter(status=TaskStatus.RUNNING)
 
     def running(self) -> models.QuerySet["TradingTask"]:
         """Get all running trading tasks."""
@@ -404,7 +496,6 @@ class TradingTask(models.Model):
                         TaskStatus.CREATED,
                         TaskStatus.RUNNING,
                         TaskStatus.STOPPED,
-                        TaskStatus.PAUSED,
                         TaskStatus.FAILED,
                     ]
                 ),
@@ -440,7 +531,7 @@ class TradingTask(models.Model):
         other_running_tasks = TradingTask.objects.filter(
             oanda_account=self.oanda_account,
             status=TaskStatus.RUNNING,
-        ).exclude(id=self.pk)
+        ).exclude(pk=self.pk)
 
         if other_running_tasks.exists():
             other_task = other_running_tasks.first()
@@ -456,7 +547,7 @@ class TradingTask(models.Model):
 
         # Mark current execution as running
         latest_execution = self.get_latest_execution()
-        if latest_execution and latest_execution.status == TaskStatus.PAUSED:
+        if latest_execution and latest_execution.status == TaskStatus.STOPPED:
             latest_execution.status = TaskStatus.RUNNING
             latest_execution.save(update_fields=["status"])
 
@@ -465,30 +556,8 @@ class TradingTask(models.Model):
         Stop a running trading task.
 
         Transitions task to stopped state and marks current execution as stopped.
-
-        Raises:
-            ValueError: If task is not running or paused
-        """
-        if self.status not in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
-            raise ValueError("Task is not running or paused")
-
-        # Update task status
-        self.status = TaskStatus.STOPPED
-        self.save(update_fields=["status", "updated_at"])
-
-        # Mark current execution as stopped
-        latest_execution = self.get_latest_execution()
-        if latest_execution and latest_execution.status in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
-            latest_execution.status = TaskStatus.STOPPED
-            latest_execution.completed_at = timezone.now()
-            latest_execution.save(update_fields=["status", "completed_at"])
-
-    def pause(self) -> None:
-        """
-        Pause a running trading task.
-
-        Transitions task to paused state. Execution continues to track but strategy
-        stops making new trades.
+        The execution state is automatically persisted, allowing the task to be
+        resumed later.
 
         Raises:
             ValueError: If task is not running
@@ -497,32 +566,34 @@ class TradingTask(models.Model):
             raise ValueError("Task is not running")
 
         # Update task status
-        self.status = TaskStatus.PAUSED
+        self.status = TaskStatus.STOPPED
         self.save(update_fields=["status", "updated_at"])
 
-        # Mark current execution as paused
+        # Mark current execution as stopped
         latest_execution = self.get_latest_execution()
         if latest_execution and latest_execution.status == TaskStatus.RUNNING:
-            latest_execution.status = TaskStatus.PAUSED
-            latest_execution.save(update_fields=["status"])
+            latest_execution.status = TaskStatus.STOPPED
+            latest_execution.completed_at = timezone.now()
+            latest_execution.save(update_fields=["status", "completed_at"])
 
     def resume(self) -> None:
         """
-        Resume a paused trading task.
+        Resume a stopped trading task.
 
-        Transitions task back to running state.
+        Transitions task back to running state. The execution will continue
+        from the last persisted state.
 
         Raises:
-            ValueError: If task is not paused
+            ValueError: If task is not stopped or another task is running on the account
         """
-        if self.status != TaskStatus.PAUSED:
-            raise ValueError("Task is not paused")
+        if self.status != TaskStatus.STOPPED:
+            raise ValueError("Task is not stopped")
 
         # Check if another task is running on this account
         other_running_tasks = TradingTask.objects.filter(
             oanda_account=self.oanda_account,
             status=TaskStatus.RUNNING,
-        ).exclude(id=self.pk)
+        ).exclude(pk=self.pk)
 
         if other_running_tasks.exists():
             other_task = other_running_tasks.first()
@@ -538,56 +609,30 @@ class TradingTask(models.Model):
 
         # Mark current execution as running
         latest_execution = self.get_latest_execution()
-        if latest_execution and latest_execution.status == TaskStatus.PAUSED:
+        if latest_execution and latest_execution.status == TaskStatus.STOPPED:
             latest_execution.status = TaskStatus.RUNNING
             latest_execution.save(update_fields=["status"])
 
-    def rerun(self) -> None:
-        """
-        Rerun the trading task from the beginning.
+    def restart(self, *, clear_state: bool = True) -> None:
+        """Restart task from the beginning.
 
-        Transitions task to running state. The actual TaskExecution record
-        will be created by the Celery task that performs the trading.
-        Task can be in any state (stopped, failed) to be rerun, but not running or paused.
+        Clears all persisted execution state and starts fresh.
+        Task can be in any state (stopped, failed) to be restarted, but not running.
+
+        Args:
+            clear_state: Whether to clear persisted strategy state (default: True)
 
         Raises:
-            ValueError: If task is currently running or paused
+            ValueError: If task is currently running or another task is running on the account
         """
-        if self.status in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
-            raise ValueError(
-                "Cannot rerun a task that is currently running or paused. Stop it first."
-            )
+        if self.status == TaskStatus.RUNNING:
+            raise ValueError("Cannot restart a task that is currently running. Stop it first.")
 
         # Check if another task is running on this account
         other_running_tasks = TradingTask.objects.filter(
             oanda_account=self.oanda_account,
             status=TaskStatus.RUNNING,
-        ).exclude(id=self.pk)
-
-        if other_running_tasks.exists():
-            other_task = other_running_tasks.first()
-            if other_task:
-                raise ValueError(
-                    f"Another task '{other_task.name}' is already running on this account. "
-                    "Only one task can run per account at a time."
-                )
-
-        # Update task status
-        self.status = TaskStatus.RUNNING
-        self.save(update_fields=["status", "updated_at"])
-
-    def restart(self, *, clear_state: bool = True) -> None:
-        """Restart task, optionally clearing persisted strategy state."""
-        if self.status in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
-            raise ValueError(
-                "Cannot restart a task that is currently running or paused. Stop it first."
-            )
-
-        # Check if another task is running on this account
-        other_running_tasks = TradingTask.objects.filter(
-            oanda_account=self.oanda_account,
-            status=TaskStatus.RUNNING,
-        ).exclude(id=self.pk)
+        ).exclude(pk=self.pk)
 
         if other_running_tasks.exists():
             other_task = other_running_tasks.first()
@@ -599,6 +644,14 @@ class TradingTask(models.Model):
 
         if clear_state:
             self.strategy_state = {}
+
+            # Clear persisted state by deleting execution snapshots
+            latest_execution = self.get_latest_execution()
+            if latest_execution:
+                # Delete execution snapshots to clear state
+                from apps.trading.models import ExecutionSnapshot  # type: ignore[attr-defined]
+
+                ExecutionSnapshot.objects.filter(execution=latest_execution).delete()  # type: ignore[attr-defined]
 
         self.status = TaskStatus.RUNNING
         self.save(update_fields=["status", "strategy_state", "updated_at"])
@@ -688,10 +741,20 @@ class TradingTask(models.Model):
 
     def can_resume(self) -> bool:
         """Whether a stopped/failed task has enough state to resume."""
-        return (
-            self.status in [TaskStatus.STOPPED, TaskStatus.FAILED, TaskStatus.CREATED]
-            and self.has_strategy_state()
-        )
+        return self.status in [TaskStatus.STOPPED, TaskStatus.FAILED] and self.has_strategy_state()
+
+    @property
+    def pip_size(self) -> Decimal:
+        """Get pip_size for the instrument.
+
+        Returns pip_size from OANDA instruments service.
+
+        Returns:
+            Decimal: Pip size for the instrument
+        """
+        from apps.market.services.instruments import get_pip_size
+
+        return get_pip_size(instrument=self.instrument)
 
 
 class FloorSide(models.TextChoices):

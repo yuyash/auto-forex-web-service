@@ -192,7 +192,7 @@ The Floor Strategy implements multi-layer position management with dynamic scali
 - Monitors 14-period ATR on 1-hour candles
 - Triggers volatility lock when ATR ≥ 5x normal ATR
 - Closes all positions at break-even prices
-- Pauses strategy execution until volatility normalizes
+- Stops strategy execution until volatility normalizes (can be resumed manually)
 
 ### Margin Protection
 

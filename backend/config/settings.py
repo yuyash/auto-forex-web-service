@@ -554,7 +554,7 @@ LOGGING = {
             "level": LOG_LEVEL,
             "propagate": True,
         },
-        "apps.market.services.task": {
+        "apps.market.services.celery": {
             "handlers": ["celery_market_file"],
             "level": LOG_LEVEL,
             "propagate": True,

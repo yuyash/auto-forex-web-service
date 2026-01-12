@@ -879,12 +879,12 @@ class TradingTaskStopView(APIView):
         has_active_lock = lock_info is not None and not lock_info.is_stale
 
         # Validate task status - check both database and actual celery state
-        db_is_stoppable = task.status in [TaskStatus.RUNNING, TaskStatus.PAUSED]
+        db_is_stoppable = task.status in [TaskStatus.RUNNING]  # type: ignore[comparison-overlap]
 
         if not db_is_stoppable and not has_active_lock:
             # Task is not running in database AND no active celery task
             return Response(
-                {"error": "Task is not running or paused"},
+                {"error": "Task is not running"},
                 status=status.HTTP_409_CONFLICT,
             )
 
@@ -927,8 +927,7 @@ class TradingTaskStopView(APIView):
         latest_execution = task.get_latest_execution()
         if latest_execution and latest_execution.status in [
             TaskStatus.RUNNING,
-            TaskStatus.PAUSED,
-        ]:
+        ]:  # type: ignore[comparison-overlap]
             latest_execution.status = TaskStatus.STOPPED
             latest_execution.completed_at = timezone.now()
             latest_execution.save(update_fields=["status", "completed_at"])
@@ -961,111 +960,6 @@ class TradingTaskStopView(APIView):
                 "stop_mode": stop_mode.value,
                 "status": TaskStatus.STOPPED,
             },
-            status=status.HTTP_200_OK,
-        )
-
-
-class TradingTaskPauseView(APIView):
-    """
-    Pause a running trading task.
-
-    POST: Pause the live trading execution
-    """
-
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request: Request, task_id: int) -> Response:
-        """
-        Pause trading task execution.
-
-        Transitions task to paused state. Strategy stops making new trades but
-        execution continues to track.
-        """
-        # Get the task
-        try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
-        except TradingTask.DoesNotExist:
-            return Response(
-                {"error": "Trading task not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        # Pause the task
-        try:
-            task.pause()
-        except ValueError as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        # Add lifecycle log to execution
-        latest_execution = task.get_latest_execution()
-        if latest_execution:
-            latest_execution.add_log("INFO", "=== Task PAUSED ===")
-
-        # Log lifecycle event
-        logger.info(
-            "Trading task %d '%s' paused by user %s",
-            task.pk,
-            task.name,
-            request.user.pk,
-        )
-
-        return Response(
-            {"message": "Trading task paused successfully"},
-            status=status.HTTP_200_OK,
-        )
-
-
-class TradingTaskResumeView(APIView):
-    """
-    Resume a paused trading task.
-
-    POST: Resume the live trading execution
-    """
-
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request: Request, task_id: int) -> Response:
-        """
-        Resume trading task execution.
-
-        Transitions task back to running state. Enforces one active task per account.
-        """
-        # Get the task
-        try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
-        except TradingTask.DoesNotExist:
-            return Response(
-                {"error": "Trading task not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        # Resume the task
-        try:
-            task.resume()
-        except ValueError as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        # Add lifecycle log to execution
-        latest_execution = task.get_latest_execution()
-        if latest_execution:
-            latest_execution.add_log("INFO", "=== Task RESUMED ===")
-
-        # Log lifecycle event
-        logger.info(
-            "Trading task %d '%s' resumed by user %s",
-            task.pk,
-            task.name,
-            request.user.pk,
-        )
-
-        return Response(
-            {"message": "Trading task resumed successfully"},
             status=status.HTTP_200_OK,
         )
 

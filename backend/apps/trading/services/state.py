@@ -9,7 +9,12 @@ and validating execution state for task resumability.
 from decimal import Decimal
 from typing import Any
 
-from apps.trading.dataclasses import ExecutionState
+from apps.trading.dataclasses import (
+    ExecutionMetrics,
+    ExecutionState,
+    OpenPosition,
+    ValidationResult,
+)
 from apps.trading.models import ExecutionStateSnapshot, TaskExecution
 
 
@@ -45,12 +50,17 @@ class StateManager:
         If no snapshot exists, initializes a new ExecutionState with the
         provided initial values.
 
+        Note: The returned ExecutionState will have strategy_state as a dict.
+        The caller (executor) is responsible for converting it to the appropriate
+        StrategyState implementation using the strategy's from_dict method.
+
         Args:
             initial_balance: Initial account balance to use if no state exists
             initial_strategy_state: Initial strategy state dict, defaults to empty dict
 
         Returns:
-            ExecutionState: Loaded or newly initialized execution state
+            ExecutionState: Loaded or newly initialized execution state with
+                           strategy_state as dict
 
         Requirements: 4.1, 4.3
         """
@@ -63,23 +73,38 @@ class StateManager:
 
         if snapshot is not None:
             # Load state from snapshot
+            # Parse positions from dict format
+            positions = [
+                OpenPosition.from_dict(pos_data)
+                for pos_data in snapshot.open_positions
+                if isinstance(pos_data, dict)
+            ]
+
+            # Parse metrics from dict format
+            metrics_data = snapshot.metrics
+            metrics = (
+                ExecutionMetrics.from_dict(metrics_data)
+                if isinstance(metrics_data, dict)
+                else ExecutionMetrics()
+            )
+
             return ExecutionState(
                 strategy_state=snapshot.strategy_state,
                 current_balance=snapshot.current_balance,
-                open_positions=snapshot.open_positions,
+                open_positions=positions,
                 ticks_processed=snapshot.ticks_processed,
                 last_tick_timestamp=snapshot.last_tick_timestamp or None,
-                metrics=snapshot.metrics,
+                metrics=metrics,
             )
 
         # Initialize new state
         return ExecutionState(
-            strategy_state=initial_strategy_state or {},
+            strategy_state=initial_strategy_state or {},  # type: ignore[arg-type]
             current_balance=initial_balance,
             open_positions=[],
             ticks_processed=0,
             last_tick_timestamp=None,
-            metrics={},
+            metrics=ExecutionMetrics(),
         )
 
     def update_strategy_state(
@@ -103,7 +128,7 @@ class StateManager:
         Requirements: 4.1
         """
         return ExecutionState(
-            strategy_state=new_strategy_state,
+            strategy_state=new_strategy_state,  # type: ignore[arg-type]
             current_balance=state.current_balance,
             open_positions=state.open_positions,
             ticks_processed=state.ticks_processed,
@@ -135,10 +160,10 @@ class StateManager:
             sequence=sequence,
             strategy_state=state.strategy_state,
             current_balance=state.current_balance,
-            open_positions=state.open_positions,
+            open_positions=[pos.to_dict() for pos in state.open_positions],
             ticks_processed=state.ticks_processed,
             last_tick_timestamp=state.last_tick_timestamp or "",
-            metrics=state.metrics,
+            metrics=state.metrics.to_dict(),
         )
 
         return snapshot
@@ -150,7 +175,7 @@ class StateManager:
         Returns None if no snapshots exist.
 
         Returns:
-            ExecutionState | None: Current state or None if no snapshots exist
+            ExecutionState or None: Current state or None if no snapshots exist
 
         Requirements: 4.3
         """
@@ -163,16 +188,31 @@ class StateManager:
         if snapshot is None:
             return None
 
+        # Parse positions from dict format
+        positions = [
+            OpenPosition.from_dict(pos_data)
+            for pos_data in snapshot.open_positions
+            if isinstance(pos_data, dict)
+        ]
+
+        # Parse metrics from dict format
+        metrics_data = snapshot.metrics
+        metrics = (
+            ExecutionMetrics.from_dict(metrics_data)
+            if isinstance(metrics_data, dict)
+            else ExecutionMetrics()
+        )
+
         return ExecutionState(
             strategy_state=snapshot.strategy_state,
             current_balance=snapshot.current_balance,
-            open_positions=snapshot.open_positions,
+            open_positions=positions,
             ticks_processed=snapshot.ticks_processed,
             last_tick_timestamp=snapshot.last_tick_timestamp or None,
-            metrics=snapshot.metrics,
+            metrics=metrics,
         )
 
-    def validate_state(self, state: ExecutionState) -> tuple[bool, str | None]:
+    def validate_state(self, state: ExecutionState) -> ValidationResult:
         """Validate state integrity before resuming.
 
         Performs validation checks on the state to ensure it's valid
@@ -186,38 +226,47 @@ class StateManager:
             state: ExecutionState to validate
 
         Returns:
-            tuple[bool, str | None]: (is_valid, error_message)
-                is_valid: True if state is valid, False otherwise
-                error_message: Error description if invalid, None if valid
+            ValidationResult: Validation result with is_valid flag and optional error message
 
         Requirements: 4.5
+
+        Example:
+            >>> result = state_manager.validate_state(state)
+            >>> if not result.is_valid:
+            ...     raise ValueError(f"Invalid state: {result.error_message}")
         """
-        # Validate strategy_state is a dictionary
-        if not isinstance(state.strategy_state, dict):
-            return False, "strategy_state must be a dictionary"
+        # Validate strategy_state implements StrategyState protocol
+        if not hasattr(state.strategy_state, "to_dict"):
+            return ValidationResult.failure(
+                "strategy_state must implement StrategyState protocol (have to_dict method)"
+            )
 
         # Validate current_balance is non-negative
         if state.current_balance < 0:
-            return False, "current_balance cannot be negative"
+            return ValidationResult.failure("current_balance cannot be negative")
 
-        # Validate open_positions is a list
+        # Validate open_positions is a list of Position objects
         if not isinstance(state.open_positions, list):
-            return False, "open_positions must be a list"
+            return ValidationResult.failure("open_positions must be a list")
+
+        for pos in state.open_positions:
+            if not isinstance(pos, OpenPosition):
+                return ValidationResult.failure("open_positions must contain OpenPosition objects")
 
         # Validate ticks_processed is non-negative
         if state.ticks_processed < 0:
-            return False, "ticks_processed cannot be negative"
+            return ValidationResult.failure("ticks_processed cannot be negative")
 
         # Validate last_tick_timestamp format if present
         if state.last_tick_timestamp is not None:
             if not isinstance(state.last_tick_timestamp, str):
-                return False, "last_tick_timestamp must be a string or None"
+                return ValidationResult.failure("last_tick_timestamp must be a string or None")
 
-        # Validate metrics is a dictionary
-        if not isinstance(state.metrics, dict):
-            return False, "metrics must be a dictionary"
+        # Validate metrics is an ExecutionMetrics object
+        if not isinstance(state.metrics, ExecutionMetrics):
+            return ValidationResult.failure("metrics must be an ExecutionMetrics object")
 
-        return True, None
+        return ValidationResult.success()
 
     def clear_state(self) -> None:
         """Clear all state snapshots for the execution.

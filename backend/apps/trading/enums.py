@@ -28,7 +28,6 @@ class TaskStatus(models.TextChoices):
     CREATED = "created", "Created"
     RUNNING = "running", "Running"
     STOPPED = "stopped", "Stopped"
-    PAUSED = "paused", "Paused"
     COMPLETED = "completed", "Completed"
     FAILED = "failed", "Failed"
 
@@ -54,3 +53,61 @@ class StopMode(models.TextChoices):
     IMMEDIATE = "immediate", "Immediate Stop"
     GRACEFUL = "graceful", "Graceful Stop (Keep Positions)"
     GRACEFUL_CLOSE = "graceful_close", "Graceful Stop (Close Positions)"
+
+
+class EventType(models.TextChoices):
+    """
+    Types of strategy events.
+
+    These events are emitted by strategies during execution to track
+    significant occurrences like opening positions, closing positions,
+    and other strategy-specific actions.
+    """
+
+    # Core events
+    TICK_RECEIVED = "tick_received", "Tick Received"
+    STRATEGY_SIGNAL = "strategy_signal", "Strategy Signal"
+    TRADE_EXECUTED = "trade_executed", "Trade Executed"
+    STATUS_CHANGED = "status_changed", "Status Changed"
+    ERROR_OCCURRED = "error_occurred", "Error Occurred"
+
+    # Floor strategy events
+    INITIAL_ENTRY = "initial_entry", "Initial Entry"
+    RETRACEMENT = "retracement", "Retracement"
+    TAKE_PROFIT = "take_profit", "Take Profit"
+    ADD_LAYER = "add_layer", "Add Layer"
+    REMOVE_LAYER = "remove_layer", "Remove Layer"
+    VOLATILITY_LOCK = "volatility_lock", "Volatility Lock"
+    MARGIN_PROTECTION = "margin_protection", "Margin Protection"
+
+    # Lifecycle events
+    STRATEGY_STARTED = "strategy_started", "Strategy Started"
+    STRATEGY_PAUSED = "strategy_paused", "Strategy Paused"
+    STRATEGY_RESUMED = "strategy_resumed", "Strategy Resumed"
+    STRATEGY_STOPPED = "strategy_stopped", "Strategy Stopped"
+
+
+class StrategyType(models.TextChoices):
+    """
+    Types of trading strategies.
+
+    Identifies the strategy algorithm being used for trading decisions.
+    """
+
+    FLOOR = "floor", "Floor Strategy"
+    CUSTOM = "custom", "Custom Strategy"
+
+
+class LogLevel(models.TextChoices):
+    """
+    Log levels for execution logs.
+
+    Standard log levels used in execution logging to indicate
+    the severity or type of log message.
+    """
+
+    DEBUG = "DEBUG", "Debug"
+    INFO = "INFO", "Info"
+    WARNING = "WARNING", "Warning"
+    ERROR = "ERROR", "Error"
+    CRITICAL = "CRITICAL", "Critical"

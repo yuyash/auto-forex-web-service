@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any
 
-from .base import Strategy
+from apps.trading.services.base import Strategy
+
+if TYPE_CHECKING:
+    from apps.trading.models import StrategyConfig
 
 
 @dataclass(frozen=True)
@@ -62,11 +66,30 @@ class StrategyRegistry:
             }
         return info
 
-    def create(self, *, identifier: str, config: dict[str, Any]) -> Strategy:
-        key = str(identifier)
+    def create(
+        self, *, instrument: str, pip_size: Decimal, strategy_config: "StrategyConfig"
+    ) -> Strategy:
+        """Create a strategy instance.
+
+        Args:
+            instrument: Trading instrument (e.g., "USD_JPY")
+            pip_size: Pip size for the instrument
+            strategy_config: StrategyConfig model instance
+
+        Returns:
+            Strategy: Initialized strategy instance
+
+        Raises:
+            ValueError: If strategy identifier is unknown
+        """
+        key = str(strategy_config.strategy_type)
         if key not in self._strategies:
             raise ValueError(f"Unknown strategy '{key}'")
-        return self._strategies[key].strategy_cls(config)
+
+        strategy_cls = self._strategies[key].strategy_cls
+
+        # Instantiate strategy directly with instrument, pip_size, and config
+        return strategy_cls(instrument, pip_size, strategy_config)
 
 
 registry = StrategyRegistry()
@@ -74,16 +97,51 @@ registry = StrategyRegistry()
 
 def register_strategy(
     identifier: str,
-    config_schema: dict[str, Any] | None = None,
+    config_schema: dict[str, Any] | str | None = None,
     *,
     display_name: str | None = None,
     description: str = "",
 ) -> Callable[[type[Strategy]], type[Strategy]]:
+    """Register a strategy with optional schema path or dict.
+
+    Args:
+        identifier: Unique strategy identifier
+        config_schema: Schema dict or path to JSON schema file (e.g., "trading/schemas/floor.json")
+        display_name: Display name for the strategy
+        description: Strategy description
+
+    Returns:
+        Decorator function
+
+    Example:
+        >>> @register_strategy("floor", "trading/schemas/floor.json")
+        ... class FloorStrategyService(Strategy[FloorStrategyState]):
+        ...     pass
+    """
+
     def _decorator(strategy_cls: type[Strategy]) -> type[Strategy]:
+        # Load schema from file if path provided
+        schema: dict[str, Any] | None = None
+        if isinstance(config_schema, str):
+            import json
+            from pathlib import Path
+
+            from django.conf import settings
+
+            # Resolve path relative to backend/apps/
+            schema_path = Path(settings.BASE_DIR) / "apps" / config_schema
+            if schema_path.exists():
+                with open(schema_path, encoding="utf-8") as f:
+                    schema = json.load(f)
+            else:
+                raise FileNotFoundError(f"Schema file not found: {schema_path}")
+        elif isinstance(config_schema, dict):
+            schema = config_schema
+
         registry.register(
             identifier=identifier,
             strategy_cls=strategy_cls,
-            config_schema=config_schema,
+            config_schema=schema,
             display_name=display_name,
             description=description,
         )
@@ -93,13 +151,13 @@ def register_strategy(
 
 
 def register_all_strategies() -> None:
-    """Idempotently register all strategy implementations."""
+    """Register all strategy implementations."""
 
     if not registry.is_registered("floor"):
         # Import triggers decorator registration.
-        from apps.trading.services import floor as floor_module
+        from apps.trading.strategies import floor as floor_module
 
-        _ = floor_module.FloorStrategyService
+        _ = floor_module.FloorStrategy
 
 
 __all__ = [
