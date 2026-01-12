@@ -371,12 +371,12 @@ class TradingTaskRunner(BaseTaskRunner):
 
         from apps.market.services.oanda import OandaService
 
-        trading_ops = OandaService(account=self.task.oanda_account)
+        trading_service = OandaService(account=self.task.oanda_account)
 
         return TradingExecutor(
             data_source=data_source,
             strategy=strategy,
-            trading_ops=trading_ops,
+            trading_service=trading_service,
             execution=self.execution,
             task=self.task,
         )

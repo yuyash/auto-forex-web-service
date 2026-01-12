@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 from logging import Logger, getLogger
-from typing import Any
 
+from apps.market.services.oanda import OandaService
 from apps.trading.dataclasses import (
     ExecutionState,
     TradeData,
@@ -45,7 +45,7 @@ class TradingExecutor(BaseExecutor):
         *,
         data_source: TickDataSource,
         strategy: Strategy,
-        trading_ops: Any,  # OandaService instance
+        trading_service: OandaService,
         execution: TaskExecution,
         task: TradingTask,
     ) -> None:
@@ -58,11 +58,12 @@ class TradingExecutor(BaseExecutor):
             execution: TaskExecution model instance
             task: TradingTask instance
         """
-        self.task = task
-        self.trading_ops = trading_ops
+        self.task: TradingTask = task
+        self.trading_service: OandaService = trading_service
 
-        # Extract initial balance from account
-        initial_balance = Decimal(str(getattr(task.oanda_account, "balance", "0") or "0"))
+        # Get current balance from trading service
+        account_details = self.trading_service.get_account_details()
+        initial_balance = account_details.balance
 
         # Initialize base executor
         from apps.trading.dataclasses import EventContext
@@ -74,7 +75,7 @@ class TradingExecutor(BaseExecutor):
             event_context=EventContext(
                 execution=execution,
                 user=task.user,
-                account=getattr(task, "oanda_account", None),
+                account=task.oanda_account,
                 instrument=task.instrument,
             ),
             initial_balance=initial_balance,
@@ -83,7 +84,8 @@ class TradingExecutor(BaseExecutor):
 
     def _get_initial_balance(self) -> Decimal:
         """Get the initial balance for trading."""
-        return Decimal(str(getattr(self.task.oanda_account, "balance", "0") or "0"))
+        account_details = self.trading_service.get_account_details()
+        return account_details.balance
 
     def _handle_strategy_event(self, event: StrategyEvent, state: ExecutionState) -> None:
         """Handle a strategy event.
@@ -134,8 +136,8 @@ class TradingExecutor(BaseExecutor):
         Args:
             event: Strategy event containing trade details
         """
-        if self.trading_ops is None:
-            logger.warning("Trading operations not available, skipping trade execution")
+        if self.trading_service is None:
+            logger.warning("Trading service not available, skipping trade execution")
             return
 
         try:
@@ -150,7 +152,7 @@ class TradingExecutor(BaseExecutor):
             )
 
             # Execute the order
-            order = self.trading_ops.create_market_order(order_request)
+            order = self.trading_service.create_market_order(order_request)
 
             direction_str = (
                 event.direction if isinstance(event.direction, str) else event.direction.value
@@ -178,8 +180,8 @@ class TradingExecutor(BaseExecutor):
         Args:
             event: TakeProfitEvent containing close details
         """
-        if self.trading_ops is None:
-            logger.warning("Trading operations not available, skipping position close")
+        if self.trading_service is None:
+            logger.warning("Trading service not available, skipping position close")
             return
 
         try:
@@ -195,7 +197,7 @@ class TradingExecutor(BaseExecutor):
             )
 
             # Execute the closing order
-            order = self.trading_ops.create_market_order(order_request)
+            order = self.trading_service.create_market_order(order_request)
 
             logger.info(
                 f"Position closed: {event.units} units at {event.exit_price} "

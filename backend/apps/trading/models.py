@@ -475,6 +475,15 @@ class TradingTask(models.Model):
         default="USD_JPY",
         help_text="Trading instrument (e.g., EUR_USD, USD_JPY)",
     )
+    _pip_size = models.DecimalField(
+        max_digits=10,
+        decimal_places=5,
+        null=True,
+        blank=True,
+        default=Decimal("0.01"),
+        db_column="pip_size",
+        help_text="Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account.",
+    )
     strategy_state = models.JSONField(
         default=dict,
         blank=True,
@@ -745,16 +754,18 @@ class TradingTask(models.Model):
 
     @property
     def pip_size(self) -> Decimal:
-        """Get pip_size for the instrument.
-
-        Returns pip_size from OANDA instruments service.
+        """Get pip_size as Decimal with default value.
 
         Returns:
-            Decimal: Pip size for the instrument
-        """
-        from apps.market.services.instruments import get_pip_size
+            Decimal: Pip size for the instrument, defaults to 0.01 if not set
 
-        return get_pip_size(instrument=self.instrument)
+        Example:
+            >>> task = TradingTask.objects.get(id=1)
+            >>> pip_size = task.pip_size  # Always returns Decimal
+        """
+        if self._pip_size is not None:
+            return Decimal(str(self._pip_size))
+        return Decimal("0.01")
 
 
 class FloorSide(models.TextChoices):
