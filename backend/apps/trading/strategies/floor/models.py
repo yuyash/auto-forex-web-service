@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -208,12 +209,24 @@ class FloorStrategyConfig:
 
 
 @dataclass
+class Position:
+    """Individual position entry (used in Hedging Mode)."""
+
+    entry_price: Decimal
+    lot_size: Decimal
+    entry_time: datetime
+    exit_price: Decimal | None = None
+    exit_time: datetime | None = None
+
+
+@dataclass
 class LayerState:
     index: int
     direction: Direction
-    entry_price: Decimal
-    lot_size: Decimal
+    entry_price: Decimal  # Weighted average in Netting Mode, first entry in Hedging Mode
+    lot_size: Decimal  # Total lot size
     retracements: int = 0
+    positions: list[Position] = field(default_factory=list)  # Individual positions for Hedging Mode
 
 
 @dataclass
@@ -302,6 +315,18 @@ class FloorStrategyState:
                     "entry_price": str(layer.entry_price),
                     "lot_size": str(layer.lot_size),
                     "retracements": int(layer.retracements),
+                    "positions": [
+                        {
+                            "entry_price": str(pos.entry_price),
+                            "lot_size": str(pos.lot_size),
+                            "entry_time": pos.entry_time.isoformat() if pos.entry_time else None,
+                            "exit_price": str(pos.exit_price)
+                            if pos.exit_price is not None
+                            else None,
+                            "exit_time": pos.exit_time.isoformat() if pos.exit_time else None,
+                        }
+                        for pos in layer.positions
+                    ],
                 }
                 for layer in self.active_layers
             ],
@@ -360,6 +385,55 @@ class FloorStrategyState:
 
                 entry_price = _to_decimal(item.get("entry_price")) or Decimal("0")
                 lot_size = _to_decimal(item.get("lot_size")) or Decimal("0")
+
+                # Parse positions for Hedging Mode
+                positions: list[Position] = []
+                positions_raw = item.get("positions", [])
+                if isinstance(positions_raw, list):
+                    for pos_item in positions_raw:
+                        if not isinstance(pos_item, dict):
+                            continue
+                        pos_entry_price = _to_decimal(pos_item.get("entry_price")) or Decimal("0")
+                        pos_lot_size = _to_decimal(pos_item.get("lot_size")) or Decimal("0")
+
+                        # Parse entry_time
+                        pos_entry_time_raw = pos_item.get("entry_time")
+                        pos_entry_time: datetime | None = None
+                        if pos_entry_time_raw:
+                            try:
+                                if isinstance(pos_entry_time_raw, datetime):
+                                    pos_entry_time = pos_entry_time_raw
+                                else:
+                                    pos_entry_time = datetime.fromisoformat(str(pos_entry_time_raw))
+                            except (ValueError, TypeError):
+                                pass
+
+                        # Parse exit_price
+                        pos_exit_price = _to_decimal(pos_item.get("exit_price"))
+
+                        # Parse exit_time
+                        pos_exit_time_raw = pos_item.get("exit_time")
+                        pos_exit_time: datetime | None = None
+                        if pos_exit_time_raw:
+                            try:
+                                if isinstance(pos_exit_time_raw, datetime):
+                                    pos_exit_time = pos_exit_time_raw
+                                else:
+                                    pos_exit_time = datetime.fromisoformat(str(pos_exit_time_raw))
+                            except (ValueError, TypeError):
+                                pass
+
+                        if pos_entry_time:  # Only add position if entry_time is valid
+                            positions.append(
+                                Position(
+                                    entry_price=pos_entry_price,
+                                    lot_size=pos_lot_size,
+                                    entry_time=pos_entry_time,
+                                    exit_price=pos_exit_price,
+                                    exit_time=pos_exit_time,
+                                )
+                            )
+
                 layers.append(
                     LayerState(
                         index=int(item.get("index") or 0),
@@ -367,6 +441,7 @@ class FloorStrategyState:
                         entry_price=entry_price,
                         lot_size=lot_size,
                         retracements=int(item.get("retracements") or 0),
+                        positions=positions,
                     )
                 )
 

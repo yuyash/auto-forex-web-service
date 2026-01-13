@@ -7,7 +7,7 @@ from django.db import models
 from django.utils import timezone
 
 from apps.market.models import OandaAccount
-from apps.trading.enums import DataSource, TaskStatus, TaskType
+from apps.trading.enums import DataSource, TaskStatus, TaskType, TradingMode
 
 
 class BacktestTaskManager(models.Manager["BacktestTask"]):
@@ -99,6 +99,12 @@ class BacktestTask(models.Model):
         default=Decimal("0.01"),
         db_column="pip_size",
         help_text="Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account.",
+    )
+    trading_mode = models.CharField(
+        max_length=20,
+        choices=TradingMode.choices,
+        default=TradingMode.NETTING,
+        help_text="Trading mode: netting (aggregated positions) or hedging (independent trades)",
     )
     status = models.CharField(
         max_length=20,
@@ -238,6 +244,18 @@ class BacktestTask(models.Model):
             status=TaskStatus.CREATED,
         )
 
+    def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:  # type: ignore[override]
+        """Delete the task and stop any running Celery tasks."""
+        from apps.trading.enums import TaskType
+        from apps.trading.services.lock import TaskLockManager
+
+        # Stop the Celery task if running
+        if self.status == TaskStatus.RUNNING:
+            lock_manager = TaskLockManager()
+            lock_manager.set_cancellation_flag(TaskType.BACKTEST, self.pk)
+
+        return super().delete(*args, **kwargs)
+
     def get_latest_execution(self) -> Any:
         """Get the most recent execution for this task."""
         from apps.trading.models.execution import TaskExecution
@@ -373,6 +391,12 @@ class TradingTask(models.Model):
         db_column="pip_size",
         help_text="Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account.",
     )
+    trading_mode = models.CharField(
+        max_length=20,
+        choices=TradingMode.choices,
+        default=TradingMode.NETTING,
+        help_text="Trading mode: netting (aggregated positions) or hedging (independent trades)",
+    )
     strategy_state = models.JSONField(
         default=dict,
         blank=True,
@@ -439,9 +463,23 @@ class TradingTask(models.Model):
                     "Only one task can run per account at a time."
                 )
 
+        # Fetch trading_mode from OANDA if not set
+        if not self.trading_mode or self.trading_mode == TradingMode.NETTING:
+            try:
+                from apps.market.services.oanda import OandaService
+
+                oanda_service = OandaService(self.oanda_account)
+                position_mode = oanda_service.get_account_position_mode()
+                self.trading_mode = (
+                    TradingMode.HEDGING if position_mode == "hedging" else TradingMode.NETTING
+                )
+            except Exception:
+                # Default to netting if fetch fails
+                self.trading_mode = TradingMode.NETTING
+
         # Update task status
         self.status = TaskStatus.RUNNING
-        self.save(update_fields=["status", "updated_at"])
+        self.save(update_fields=["status", "trading_mode", "updated_at"])
 
         # Mark current execution as running
         latest_execution = self.get_latest_execution()
@@ -587,6 +625,18 @@ class TradingTask(models.Model):
         )
 
         return new_task
+
+    def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:  # type: ignore[override]
+        """Delete the task and stop any running Celery tasks."""
+        from apps.trading.enums import TaskType
+        from apps.trading.services.lock import TaskLockManager
+
+        # Stop the Celery task if running
+        if self.status == TaskStatus.RUNNING:
+            lock_manager = TaskLockManager()
+            lock_manager.set_cancellation_flag(TaskType.TRADING, self.pk)
+
+        return super().delete(*args, **kwargs)
 
     def get_latest_execution(self) -> Any:
         """Get the most recent execution for this task."""

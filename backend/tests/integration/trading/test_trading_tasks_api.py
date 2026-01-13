@@ -88,6 +88,7 @@ class TestTradingTasksApi:
         assert del_resp.status_code == 204
 
     def test_cannot_delete_running_task(self, live_server, auth_headers, test_user, oanda_account):
+        """Test that running tasks are automatically stopped before deletion."""
         config = StrategyConfig.objects.create(
             user=test_user,
             name="cfg-running",
@@ -105,5 +106,10 @@ class TestTradingTasksApi:
         )
 
         detail_url = f"{live_server.url}/api/trading/trading-tasks/{task.id}/"  # type: ignore[attr-defined]
+
+        # Deletion should succeed (task is automatically stopped first)
         del_resp = requests.delete(detail_url, headers=auth_headers, timeout=10)
-        assert del_resp.status_code == 400
+        assert del_resp.status_code == 204
+
+        # Verify task is deleted
+        assert not TradingTask.objects.filter(pk=task.pk).exists()

@@ -84,7 +84,7 @@ class BacktestTaskRunner(BaseTaskRunner):
             kind="backtest",
         )
 
-        logger.info(f"Backtest task started (task_id={task_id})")
+        logger.info(f"Backtest task started (task_id={task_id}, execution_id={execution_id})")
 
         try:
             # Load the backtest task
@@ -98,13 +98,27 @@ class BacktestTaskRunner(BaseTaskRunner):
             )
             return
 
-        # Setup execution context
-        self._setup_execution_context(
-            task_id=task_id,
-            execution_id=execution_id,
-            task_type=TaskType.BACKTEST,
-            log_message="Backtest execution started",
-        )
+        # Setup execution context (with stale execution check)
+        try:
+            self._setup_execution_context(
+                task_id=task_id,
+                execution_id=execution_id,
+                task_type=TaskType.BACKTEST,
+                log_message="Backtest execution started",
+            )
+        except ValueError as e:
+            # Stale execution detected - skip this task
+            logger.warning(
+                "Skipping stale backtest execution: task_id=%d, execution_id=%s, reason=%s",
+                task_id,
+                execution_id,
+                str(e),
+            )
+            self.task_service.mark_stopped(
+                status=CeleryTaskStatus.Status.FAILED,
+                status_message=f"Stale execution skipped: {str(e)}",
+            )
+            return
 
         # Create strategy with automatic error handling
         with StrategyCreationContext(

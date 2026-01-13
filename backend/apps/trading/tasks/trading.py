@@ -58,7 +58,7 @@ class TradingTaskRunner(BaseTaskRunner):
             kind="trading",
         )
 
-        logger.info(f"Trading task started (task_id={task_id})")
+        logger.info(f"Trading task started (task_id={task_id}, execution_id={execution_id})")
 
         try:
             # Load the trading task
@@ -72,13 +72,27 @@ class TradingTaskRunner(BaseTaskRunner):
             )
             return
 
-        # Setup execution context
-        self._setup_execution_context(
-            task_id=task_id,
-            execution_id=execution_id,
-            task_type=TaskType.TRADING,
-            log_message="Trading execution started",
-        )
+        # Setup execution context (with stale execution check)
+        try:
+            self._setup_execution_context(
+                task_id=task_id,
+                execution_id=execution_id,
+                task_type=TaskType.TRADING,
+                log_message="Trading execution started",
+            )
+        except ValueError as e:
+            # Stale execution detected - skip this task
+            logger.warning(
+                "Skipping stale trading execution: task_id=%d, execution_id=%s, reason=%s",
+                task_id,
+                execution_id,
+                str(e),
+            )
+            self.task_service.mark_stopped(
+                status=CeleryTaskStatus.Status.FAILED,
+                status_message=f"Stale execution skipped: {str(e)}",
+            )
+            return
 
         # Create strategy with automatic error handling
         with StrategyCreationContext(

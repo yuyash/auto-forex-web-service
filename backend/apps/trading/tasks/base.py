@@ -100,8 +100,22 @@ class BaseTaskRunner(ABC):
 
         Returns:
             TaskExecution instance
+
+        Raises:
+            ValueError: If execution_id is provided but is not the latest execution
         """
         execution: TaskExecution
+
+        # Get the latest execution for this task
+        latest_execution = (
+            TaskExecution.objects.filter(
+                task_type=task_type.value,
+                task_id=task_id,
+            )
+            .order_by("-execution_number")
+            .first()
+        )
+
         if execution_id is not None:
             try:
                 execution = TaskExecution.objects.get(
@@ -109,16 +123,48 @@ class BaseTaskRunner(ABC):
                     task_type=task_type.value,
                     task_id=task_id,
                 )
+
+                # Check if this is the latest execution
+                if latest_execution and execution.pk != latest_execution.pk:
+                    logger.warning(
+                        "Skipping execution %d for task %d: not the latest execution (latest=%d)",
+                        execution.pk,
+                        task_id,
+                        latest_execution.pk,
+                    )
+                    raise ValueError(
+                        f"Execution {execution_id} is not the latest execution for task {task_id}. "
+                        f"Latest execution is {latest_execution.pk}. Skipping to prevent stale execution."
+                    )
+
                 if execution.status != TaskStatus.RUNNING or execution.progress != 0:
                     execution.status = TaskStatus.RUNNING
                     execution.progress = 0
                 if execution.started_at is None:
                     execution.started_at = dj_timezone.now()
                 execution.save(update_fields=["status", "progress", "started_at"])
+
+                logger.info(
+                    "Resuming execution %d for task %d (latest execution confirmed)",
+                    execution.pk,
+                    task_id,
+                )
             except TaskExecution.DoesNotExist:
+                logger.warning(
+                    "Execution %d not found for task %d, creating new execution",
+                    execution_id,
+                    task_id,
+                )
                 execution = self._create_execution(task_type=task_type.value, task_id=task_id)
         else:
             execution = self._create_execution(task_type=task_type.value, task_id=task_id)
+            logger.info(
+                "Created new execution %d for task %d (execution_number=%d)",
+                execution.pk,
+                task_id,
+                execution.execution_number,
+            )
+
         return execution
 
     def _initialize_task_service(

@@ -111,3 +111,15 @@ class LogLevel(models.TextChoices):
     WARNING = "WARNING", "Warning"
     ERROR = "ERROR", "Error"
     CRITICAL = "CRITICAL", "Critical"
+
+
+class TradingMode(models.TextChoices):
+    """
+    Trading modes for position management.
+
+    - NETTING: Positions are aggregated per instrument (FIFO for partial closes)
+    - HEDGING: Multiple independent trades can exist per instrument
+    """
+
+    NETTING = "netting", "Netting Mode"
+    HEDGING = "hedging", "Hedging Mode"

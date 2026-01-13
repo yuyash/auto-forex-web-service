@@ -107,10 +107,14 @@ class StrategyCreationContext:
             instrument = self.task.instrument
             pip_size = self.task.pip_size
 
+            # Get trading_mode if available
+            trading_mode = getattr(self.task, "trading_mode", None)
+
             self.strategy = strategy_registry.create(
                 instrument=instrument,
                 pip_size=pip_size,
                 strategy_config=self.strategy_config,
+                trading_mode=trading_mode,
             )
 
             logger.info(f"Strategy created (strategy_type={self.strategy_config.strategy_type})")

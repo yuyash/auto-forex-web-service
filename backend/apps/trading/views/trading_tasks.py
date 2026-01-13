@@ -5,7 +5,6 @@ from typing import Any
 from django.db.models import Model, Q, QuerySet
 from rest_framework import serializers as drf_serializers
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -19,6 +18,8 @@ from apps.trading.serializers import (
     TradingTaskListSerializer,
     TradingTaskSerializer,
 )
+
+
 class TradingTaskView(ListCreateAPIView):
     """
     List and create trading tasks.
@@ -108,10 +109,24 @@ class TradingTaskDetailView(RetrieveUpdateDestroyAPIView):
         )
 
     def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        """Delete trading task (disallow deletion while running)."""
+        """Delete trading task.
+
+        Automatically stops the task if running before deletion.
+        """
+        from logging import getLogger
+
+        logger = getLogger(__name__)
         task = self.get_object()
+
+        # Stop the task if running (this will set cancellation flag)
         if task.status == TaskStatus.RUNNING:
-            raise ValidationError("Cannot delete a running task. Stop it first.")
+            logger.info("Stopping running trading task %d before deletion", task.pk)
+
+            try:
+                task.stop()
+            except Exception as e:
+                logger.warning("Failed to stop task before deletion: %s", str(e))
+
         return super().destroy(request, *args, **kwargs)
 
 
@@ -160,4 +175,3 @@ class TradingTaskCopyView(APIView):
         # Serialize and return
         serializer = TradingTaskSerializer(new_task)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-

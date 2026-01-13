@@ -67,7 +67,12 @@ class StrategyRegistry:
         return info
 
     def create(
-        self, *, instrument: str, pip_size: Decimal, strategy_config: "StrategyConfig"
+        self,
+        *,
+        instrument: str,
+        pip_size: Decimal,
+        strategy_config: "StrategyConfig",
+        trading_mode: Any = None,
     ) -> Strategy:
         """Create a strategy instance.
 
@@ -75,6 +80,7 @@ class StrategyRegistry:
             instrument: Trading instrument (e.g., "USD_JPY")
             pip_size: Pip size for the instrument
             strategy_config: StrategyConfig model instance
+            trading_mode: Optional trading mode (TradingMode enum)
 
         Returns:
             Strategy: Initialized strategy instance
@@ -91,7 +97,15 @@ class StrategyRegistry:
         # Parse StrategyConfig to strategy-specific config object
         parsed_config = strategy_cls.parse_config(strategy_config)
 
-        # Instantiate strategy with parsed config
+        # Check if strategy accepts trading_mode parameter
+        import inspect
+
+        sig = inspect.signature(strategy_cls.__init__)
+        if "trading_mode" in sig.parameters and trading_mode is not None:
+            # Type ignore for dynamic parameter passing
+            return strategy_cls(instrument, pip_size, parsed_config, trading_mode=trading_mode)  # type: ignore[call-arg]
+
+        # Instantiate strategy with parsed config (backward compatibility)
         return strategy_cls(instrument, pip_size, parsed_config)
 
 

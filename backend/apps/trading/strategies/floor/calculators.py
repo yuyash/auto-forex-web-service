@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 
+from apps.trading.enums import TradingMode
 from apps.trading.strategies.floor.enums import Direction
 from apps.trading.strategies.floor.models import LayerState
 
@@ -9,15 +10,28 @@ from apps.trading.strategies.floor.models import LayerState
 class PriceCalculator:
     """Handles price and P&L calculations."""
 
-    def __init__(self, pip_size: Decimal) -> None:
+    def __init__(self, pip_size: Decimal, trading_mode: TradingMode = TradingMode.NETTING) -> None:
         self.pip_size = pip_size
+        self.trading_mode = trading_mode
 
     def pips_between(self, price_a: Decimal, price_b: Decimal) -> Decimal:
         """Calculate pips between two prices."""
         return (price_b - price_a) / self.pip_size
 
     def calculate_pnl(self, layers: list[LayerState], bid: Decimal, ask: Decimal) -> Decimal:
-        """Calculate net P&L in pips, weighted by lot size."""
+        """Calculate net P&L in pips, weighted by lot size.
+
+        In Netting Mode: Returns weighted average P&L across all layers.
+        In Hedging Mode: Returns weighted average P&L across all individual positions.
+        """
+        if self.trading_mode == TradingMode.HEDGING:
+            return self._calculate_pnl_hedging(layers, bid, ask)
+        return self._calculate_pnl_netting(layers, bid, ask)
+
+    def _calculate_pnl_netting(
+        self, layers: list[LayerState], bid: Decimal, ask: Decimal
+    ) -> Decimal:
+        """Calculate P&L for Netting Mode (weighted average)."""
         total = Decimal("0")
         weight = Decimal("0")
 
@@ -33,6 +47,76 @@ class PriceCalculator:
 
             total += pips * layer.lot_size
             weight += layer.lot_size
+
+        return total / weight if weight > 0 else Decimal("0")
+
+    def _calculate_pnl_hedging(
+        self, layers: list[LayerState], bid: Decimal, ask: Decimal
+    ) -> Decimal:
+        """Calculate P&L for Hedging Mode (individual positions)."""
+        total = Decimal("0")
+        weight = Decimal("0")
+
+        for layer in layers:
+            for position in layer.positions:
+                if position.lot_size <= 0:
+                    continue
+
+                mark = bid if layer.direction == Direction.LONG else ask
+                pips = self.pips_between(position.entry_price, mark)
+
+                if layer.direction == Direction.SHORT:
+                    pips = -pips
+
+                total += pips * position.lot_size
+                weight += position.lot_size
+
+        return total / weight if weight > 0 else Decimal("0")
+
+    def calculate_layer_pnl(self, layer: LayerState, bid: Decimal, ask: Decimal) -> Decimal:
+        """Calculate P&L for a single layer in pips.
+
+        In Netting Mode: Returns P&L based on weighted average entry price.
+        In Hedging Mode: Returns weighted average P&L of all positions in the layer.
+        """
+        if self.trading_mode == TradingMode.HEDGING:
+            return self._calculate_layer_pnl_hedging(layer, bid, ask)
+        return self._calculate_layer_pnl_netting(layer, bid, ask)
+
+    def _calculate_layer_pnl_netting(
+        self, layer: LayerState, bid: Decimal, ask: Decimal
+    ) -> Decimal:
+        """Calculate layer P&L for Netting Mode."""
+        if layer.lot_size <= 0:
+            return Decimal("0")
+
+        mark = bid if layer.direction == Direction.LONG else ask
+        pips = self.pips_between(layer.entry_price, mark)
+
+        if layer.direction == Direction.SHORT:
+            pips = -pips
+
+        return pips
+
+    def _calculate_layer_pnl_hedging(
+        self, layer: LayerState, bid: Decimal, ask: Decimal
+    ) -> Decimal:
+        """Calculate layer P&L for Hedging Mode (weighted average of positions)."""
+        total = Decimal("0")
+        weight = Decimal("0")
+
+        for position in layer.positions:
+            if position.lot_size <= 0:
+                continue
+
+            mark = bid if layer.direction == Direction.LONG else ask
+            pips = self.pips_between(position.entry_price, mark)
+
+            if layer.direction == Direction.SHORT:
+                pips = -pips
+
+            total += pips * position.lot_size
+            weight += position.lot_size
 
         return total / weight if weight > 0 else Decimal("0")
 

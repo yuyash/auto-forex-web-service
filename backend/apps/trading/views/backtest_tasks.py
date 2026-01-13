@@ -5,7 +5,6 @@ from typing import cast
 from django.db.models import Model, Q, QuerySet
 from rest_framework import serializers as drf_serializers
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -19,6 +18,8 @@ from apps.trading.serializers import (
     BacktestTaskListSerializer,
     BacktestTaskSerializer,
 )
+
+
 class BacktestTaskView(ListCreateAPIView):
     """List and create backtest tasks."""
 
@@ -82,10 +83,24 @@ class BacktestTaskDetailView(RetrieveUpdateDestroyAPIView):
         )
 
     def perform_destroy(self, instance: Model) -> None:
-        """Delete backtest task (disallow deletion while running)."""
+        """Delete backtest task.
+
+        Automatically stops the task if running before deletion.
+        """
         task = cast(BacktestTask, instance)
+
+        # Stop the task if running (this will set cancellation flag)
         if task.status == TaskStatus.RUNNING:
-            raise ValidationError("Cannot delete a running task. Stop it first.")
+            from logging import getLogger
+
+            logger = getLogger(__name__)
+            logger.info("Stopping running backtest task %d before deletion", task.pk)
+
+            try:
+                task.stop()
+            except Exception as e:
+                logger.warning("Failed to stop task before deletion: %s", str(e))
+
         task.delete()
 
 
@@ -112,4 +127,3 @@ class BacktestTaskCopyView(APIView):
 
         serializer = BacktestTaskSerializer(new_task)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-

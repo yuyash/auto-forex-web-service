@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from logging import Logger, getLogger
 from typing import TYPE_CHECKING
 
 from apps.trading.dataclasses import ExecutionState, StrategyResult, Tick
-from apps.trading.enums import StrategyType
+from apps.trading.enums import StrategyType, TradingMode
 from apps.trading.events import StrategyEvent
 from apps.trading.services.registry import register_strategy
 from apps.trading.strategies.base import Strategy
@@ -26,6 +27,9 @@ if TYPE_CHECKING:
     from apps.trading.models import StrategyConfig
 
 
+logger: Logger = getLogger(name=__name__)
+
+
 @register_strategy(id="floor", schema="trading/schemas/floor.json", display_name="Floor Strategy")
 class FloorStrategy(Strategy[FloorStrategyState]):
     """Floor strategy implementation."""
@@ -43,6 +47,7 @@ class FloorStrategy(Strategy[FloorStrategyState]):
         instrument: str,
         pip_size: Decimal,
         config: FloorStrategyConfig,
+        trading_mode: TradingMode = TradingMode.NETTING,
     ) -> None:
         """Initialize the strategy with instrument, pip_size, and configuration.
 
@@ -50,11 +55,12 @@ class FloorStrategy(Strategy[FloorStrategyState]):
             instrument: Trading instrument (e.g., "USD_JPY")
             pip_size: Pip size for the instrument
             config: Parsed FloorStrategyConfig instance
+            trading_mode: Trading mode (netting or hedging)
         """
         super().__init__(instrument, pip_size, config)
 
         # Initialize calculation components
-        price_calc = PriceCalculator(pip_size)
+        price_calc = PriceCalculator(pip_size, trading_mode)
         indicator_calc = IndicatorCalculator()
         direction_decider = FloorDirectionDecider(config, indicator_calc)
         volatility_monitor_component = FloorVolatilityMonitor(config, price_calc)
@@ -71,6 +77,7 @@ class FloorStrategy(Strategy[FloorStrategyState]):
             direction_decider,
             layer_manager,
             history_manager,
+            trading_mode,
         )
 
     @property
@@ -110,10 +117,6 @@ class FloorStrategy(Strategy[FloorStrategyState]):
         Returns:
             StrategyResult: Updated state and list of emitted events
         """
-        import logging
-
-        logger = logging.getLogger(__name__)
-
         if state.ticks_processed % 10000 == 0:
             logger.info(f"FloorStrategy.on_tick called for tick {state.ticks_processed}")
 
@@ -121,8 +124,6 @@ class FloorStrategy(Strategy[FloorStrategyState]):
         events: list[StrategyEvent] = []
 
         # Update state from tick
-        if state.ticks_processed % 10000 == 0:
-            logger.info("Updating history from tick")
         self.history_manager.update_from_tick(s, tick)
 
         # Monitor volatility
@@ -134,8 +135,6 @@ class FloorStrategy(Strategy[FloorStrategyState]):
             return StrategyResult.with_events(state.copy_with(strategy_state=s), events)
 
         # Execute trading logic (delegated)
-        if state.ticks_processed % 10000 == 0:
-            logger.info("Processing trading logic")
         events.extend(self.trading_engine.process_initial_entry(s, tick))
         events.extend(self.trading_engine.process_take_profit(s, tick))
         events.extend(self.trading_engine.process_retracements(s, tick))
