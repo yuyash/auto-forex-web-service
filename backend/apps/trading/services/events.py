@@ -51,10 +51,14 @@ class EventEmitter:
         event_data = {
             "type": "tick_received",
             "instrument": tick.instrument,
-            "timestamp": tick.timestamp,
-            "bid": tick.bid,
-            "ask": tick.ask,
-            "mid": tick.mid,
+            "timestamp": (
+                tick.timestamp.isoformat()
+                if hasattr(tick.timestamp, "isoformat")
+                else str(tick.timestamp)
+            ),
+            "bid": str(tick.bid) if tick.bid is not None else None,
+            "ask": str(tick.ask) if tick.ask is not None else None,
+            "mid": str(tick.mid) if tick.mid is not None else None,
         }
 
         return self._persist_event(

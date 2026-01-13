@@ -179,10 +179,13 @@ class BaseExecutor(ABC):
         Returns:
             ExecutionState: Updated execution state
         """
+        logger.debug(f"_process_tick called for tick {state.ticks_processed + 1}")
         result = self.strategy.on_tick(tick=tick, state=state)
+        logger.debug(f"strategy.on_tick returned {len(result.events)} events")
 
         # Handle strategy events
         for event in result.events:
+            logger.debug(f"Handling strategy event: {event.event_type}")
             self._handle_strategy_event(event, result.state)
 
         return result.state
@@ -209,13 +212,26 @@ class BaseExecutor(ABC):
         Args:
             state: Current execution state (modified in place)
         """
+        logger.info(f"Starting tick processing for execution {self.execution.pk}")
+        self.execution.add_log("INFO", "Starting tick processing")
+
         ticks_since_last_save = 0
         ticks_since_last_heartbeat = 0
         save_interval = 100  # Save state every 100 ticks
         heartbeat_interval = 10  # Send heartbeat every 10 ticks
 
         try:
+            logger.info(f"Iterating over data source for execution {self.execution.pk}")
             for tick_batch in self.data_source:
+                logger.info(f"Received batch of {len(tick_batch)} ticks, type: {type(tick_batch)}")
+
+                # Debug: check if tick_batch is iterable
+                if not tick_batch:
+                    logger.warning("Empty tick batch received, skipping")
+                    continue
+
+                logger.debug(f"About to iterate over {len(tick_batch)} ticks")
+
                 # Check for stop request
                 control: TaskControl = self.task_controller.check_control()
                 if control.should_stop:
@@ -227,35 +243,65 @@ class BaseExecutor(ABC):
                     break
 
                 # Process each tick in the batch
-                for tick in tick_batch:
-                    # Emit tick received event
-                    self.event_emitter.emit_tick_received(tick)
+                for i, tick in enumerate(tick_batch):
+                    if i == 0:
+                        logger.info(
+                            f"Processing first tick in batch: {tick.instrument} @ {tick.timestamp}"
+                        )
+
+                    # Emit tick received event (sampled to avoid DB overload)
+                    # Only emit every 1000th tick
+                    if state.ticks_processed % 1000 == 0:
+                        if state.ticks_processed % 10000 == 0:
+                            logger.debug(
+                                f"Emitting tick_received event at tick {state.ticks_processed}"
+                            )
+                        self.event_emitter.emit_tick_received(tick)
 
                     # Process tick through strategy
+                    if i == 0:
+                        logger.info("Calling strategy.on_tick for first tick")
                     state = self._process_tick(tick, state)
+                    if i == 0:
+                        logger.info("Completed strategy.on_tick for first tick")
+
+                    # Increment ticks processed
+                    state = state.copy_with(
+                        ticks_processed=state.ticks_processed + 1,
+                        last_tick_timestamp=tick.timestamp.isoformat()
+                        if hasattr(tick.timestamp, "isoformat")
+                        else str(tick.timestamp),
+                    )
 
                     # Update performance tracker
+                    if i == 0:
+                        logger.info("Updating performance tracker")
                     self.performance_tracker.on_tick_processed()
 
                     # Periodic state save
                     ticks_since_last_save += 1
                     if ticks_since_last_save >= save_interval:
+                        logger.info(f"Saving state snapshot at tick {state.ticks_processed}")
                         self.state_manager.save_snapshot(state)
                         self.performance_tracker.save_checkpoint()
                         ticks_since_last_save = 0
+                        logger.info("State snapshot saved")
 
                     # Periodic heartbeat
                     ticks_since_last_heartbeat += 1
                     if ticks_since_last_heartbeat >= heartbeat_interval:
+                        logger.debug(f"Sending heartbeat at tick {state.ticks_processed}")
                         metrics = self.performance_tracker.get_metrics()
                         self.task_controller.heartbeat(
                             status_message=f"Processed {metrics['ticks_processed']} ticks",
                             meta_update=metrics,
                         )
                         ticks_since_last_heartbeat = 0
+                        logger.debug("Heartbeat sent")
 
                     # Check for stop after each tick
                     if self._should_stop:
+                        logger.info("Stop flag detected, breaking tick loop")
                         break
 
                 if self._should_stop:

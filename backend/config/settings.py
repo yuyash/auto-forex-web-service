@@ -210,6 +210,12 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
 CELERY_ENABLE_UTC = True
 
+# Celery logging configuration
+CELERY_WORKER_LOG_FORMAT = "[%(asctime)s: %(levelname)s/%(processName)s] [%(name)s] %(message)s"
+CELERY_WORKER_TASK_LOG_FORMAT = (
+    "[%(asctime)s: %(levelname)s/%(processName)s] [%(task_name)s(%(task_id)s)] %(message)s"
+)
+
 # Avoid starvation from long-running tick publisher/subscriber tasks.
 # Route market tick jobs to a dedicated queue and trading/backtest jobs to another.
 CELERY_TASK_DEFAULT_QUEUE = os.getenv("CELERY_TASK_DEFAULT_QUEUE", "default")

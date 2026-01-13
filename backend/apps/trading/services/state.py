@@ -154,11 +154,19 @@ class StateManager:
         # Get the next sequence number
         sequence = self._next_snapshot_sequence()
 
+        # Convert strategy_state to dict if it has a to_dict method
+        strategy_state_dict = state.strategy_state
+        if hasattr(strategy_state_dict, "to_dict"):
+            strategy_state_dict = strategy_state_dict.to_dict()
+        elif not isinstance(strategy_state_dict, dict):
+            # Fallback: convert to dict using __dict__ or empty dict
+            strategy_state_dict = getattr(strategy_state_dict, "__dict__", {})
+
         # Create and save the snapshot
         snapshot = ExecutionStateSnapshot.objects.create(
             execution=self.execution,
             sequence=sequence,
-            strategy_state=state.strategy_state,
+            strategy_state=strategy_state_dict,
             current_balance=state.current_balance,
             open_positions=[pos.to_dict() for pos in state.open_positions],
             ticks_processed=state.ticks_processed,

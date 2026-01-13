@@ -110,10 +110,19 @@ class FloorStrategy(Strategy[FloorStrategyState]):
         Returns:
             StrategyResult: Updated state and list of emitted events
         """
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        if state.ticks_processed % 10000 == 0:
+            logger.info(f"FloorStrategy.on_tick called for tick {state.ticks_processed}")
+
         s = state.strategy_state
         events: list[StrategyEvent] = []
 
         # Update state from tick
+        if state.ticks_processed % 10000 == 0:
+            logger.info("Updating history from tick")
         self.history_manager.update_from_tick(s, tick)
 
         # Monitor volatility
@@ -125,6 +134,8 @@ class FloorStrategy(Strategy[FloorStrategyState]):
             return StrategyResult.with_events(state.copy_with(strategy_state=s), events)
 
         # Execute trading logic (delegated)
+        if state.ticks_processed % 10000 == 0:
+            logger.info("Processing trading logic")
         events.extend(self.trading_engine.process_initial_entry(s, tick))
         events.extend(self.trading_engine.process_take_profit(s, tick))
         events.extend(self.trading_engine.process_retracements(s, tick))
@@ -132,6 +143,9 @@ class FloorStrategy(Strategy[FloorStrategyState]):
         # Monitor margin protection
         if margin_event := self.margin_monitor.check(s, tick.timestamp):
             events.append(margin_event)
+
+        if state.ticks_processed % 10000 == 0:
+            logger.info(f"FloorStrategy.on_tick completed, returning {len(events)} events")
 
         return StrategyResult.with_events(state.copy_with(strategy_state=s), events)
 

@@ -103,30 +103,66 @@ class RedisTickDataSource(TickDataSource):
         Requirements: 18.1, 18.4
         """
         import json
+        import logging
 
         import redis
         from django.conf import settings
+
+        logger = logging.getLogger(__name__)
 
         # Initialize Redis connection
         self.client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
         self.pubsub = self.client.pubsub(ignore_subscribe_messages=True)
         self.pubsub.subscribe(self.channel)
+        logger.info(f"RedisTickDataSource subscribed to channel: {self.channel}")
 
         # Trigger the publisher if callback provided
         if self.trigger_publisher:
+            logger.info(f"Triggering publisher for channel: {self.channel}")
             self.trigger_publisher()
 
         batch: list[Tick] = []
+        max_reconnect_attempts = 3
+        reconnect_count = 0
+        messages_received = 0
 
         try:
             while True:
-                message = self.pubsub.get_message(timeout=1.0)
+                try:
+                    message = self.pubsub.get_message(timeout=1.0)
+                    reconnect_count = 0  # Reset on successful message
+                except (redis.ConnectionError, ConnectionError) as e:
+                    reconnect_count += 1
+                    if reconnect_count > max_reconnect_attempts:
+                        raise RuntimeError(
+                            f"Failed to reconnect to Redis after {max_reconnect_attempts} attempts"
+                        ) from e
+
+                    # Reconnect on connection error
+                    try:
+                        self.pubsub.close()
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        pass
+
+                    self.client = redis.Redis.from_url(
+                        settings.MARKET_REDIS_URL, decode_responses=True
+                    )
+                    self.pubsub = self.client.pubsub(ignore_subscribe_messages=True)
+                    self.pubsub.subscribe(self.channel)
+                    continue
+
                 if not message:
                     # Yield any pending batch on timeout
                     if batch:
                         yield batch
                         batch = []
                     continue
+
+                messages_received += 1
+                if messages_received % 10000 == 0:
+                    logger.info(
+                        f"RedisTickDataSource received {messages_received} messages from {self.channel}"
+                    )
 
                 if message.get("type") != "message":
                     continue

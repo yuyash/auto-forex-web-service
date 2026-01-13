@@ -22,7 +22,7 @@ django_asgi_app = get_asgi_application()
 # Import routing and JWT auth middleware after Django is initialized
 # pylint: disable=wrong-import-position
 from apps.accounts.middleware import (  # noqa: E402
-    JWTAuthMiddlewareStack,  # type: ignore[attr-defined]
+    jwt_auth_middleware_stack,
 )
 from config.routing import websocket_urlpatterns  # noqa: E402
 
@@ -30,7 +30,7 @@ application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
         "websocket": AllowedHostsOriginValidator(
-            JWTAuthMiddlewareStack(URLRouter(websocket_urlpatterns))
+            jwt_auth_middleware_stack(URLRouter(websocket_urlpatterns))
         ),
     }
 )

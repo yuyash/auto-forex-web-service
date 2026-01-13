@@ -85,6 +85,13 @@ class CeleryTaskService:
             updates["status_message"] = status_message
 
         if meta_update is not None:
+            # Convert Decimal objects to strings for JSON serialization
+            from decimal import Decimal
+
+            json_safe_meta = {
+                k: str(v) if isinstance(v, Decimal) else v for k, v in meta_update.items()
+            }
+
             current = (
                 CeleryTaskStatus.objects.filter(
                     task_name=self.task_name, instance_key=self.instance_key
@@ -95,7 +102,7 @@ class CeleryTaskService:
             merged: dict[str, Any] = {}
             if isinstance(current, dict):
                 merged.update(current)
-            merged.update(meta_update)
+            merged.update(json_safe_meta)
             updates["meta"] = merged
 
         CeleryTaskStatus.objects.filter(

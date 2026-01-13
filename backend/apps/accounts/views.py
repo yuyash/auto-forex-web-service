@@ -545,8 +545,8 @@ class UserLoginView(APIView):
                 user_agent=request.META.get("HTTP_USER_AGENT"),
             )
 
-            # Increment user-level failed attempts if user exists.
-            # Skip for admin users and for whitelist blocks (avoid locking accounts when creds are correct).
+            # Increment user-level failed attempts if user exists. Skip for admin users and for
+            # whitelist blocks (avoid locking accounts when credentials are correct).
             if not is_admin_user and not blocked_by_whitelist:
                 try:
                     user = User.objects.get(email__iexact=email)

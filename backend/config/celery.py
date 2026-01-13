@@ -7,6 +7,7 @@ import os
 
 from celery import Celery
 from celery.signals import worker_ready
+from django.apps import apps
 
 # Set the default Django settings module for the 'celery' program.
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
@@ -20,7 +21,8 @@ app = Celery("auto_forex")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 
 # Load task modules from all registered Django apps.
-app.autodiscover_tasks()
+# Use a callable to ensure Django apps are loaded before discovery
+app.autodiscover_tasks(lambda: [app_config.name for app_config in apps.get_app_configs()])
 
 
 @worker_ready.connect

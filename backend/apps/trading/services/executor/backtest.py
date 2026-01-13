@@ -86,18 +86,23 @@ class BacktestExecutor(BaseExecutor):
             event: Strategy event object (typed subclass)
             state: Current execution state
         """
+        logger.debug(f"Handling strategy event: {type(event).__name__}")
+
         # Emit strategy event
         self.event_emitter.emit_strategy_event(
             event=event,
             strategy_type=self.strategy.strategy_type,
         )
+        logger.debug(f"Emitted strategy event: {type(event).__name__}")
 
         # Handle trade events using type-safe pattern matching
         if isinstance(event, (InitialEntryEvent, RetracementEvent)):
+            logger.debug("Trade event: opening position")
             # Opening a position
             self.performance_tracker.on_trade_executed(is_opening=True)
 
         elif isinstance(event, TakeProfitEvent):
+            logger.debug(f"Trade event: closing position with PnL={event.pnl}")
             # Closing a position
             self.performance_tracker.on_trade_executed(
                 pnl=event.pnl,

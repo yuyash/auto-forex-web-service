@@ -43,7 +43,7 @@ class MarketEventService:
                 description=description,
                 user=user if getattr(user, "pk", None) else None,
                 account=account if getattr(account, "pk", None) else None,
-                instrument=instrument,
+                instrument=instrument or "",
                 details=details or {},
             )
         except Exception:  # pylint: disable=broad-exception-caught

@@ -1,6 +1,4 @@
-"""apps.trading.events
-
-Typed event classes for strategy events.
+"""Typed event classes for strategy events.
 
 This module provides type-safe event classes for each EventType, making
 it clear what fields are required for each event and enabling better

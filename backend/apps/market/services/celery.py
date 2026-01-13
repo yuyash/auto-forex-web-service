@@ -47,10 +47,10 @@ class CeleryTaskService:
             task_name=self.task_name,
             instance_key=self.instance_key,
             defaults={
-                "celery_task_id": celery_task_id,
-                "worker": worker,
+                "celery_task_id": celery_task_id or "",
+                "worker": worker or "",
                 "status": CeleryTaskStatus.Status.RUNNING,
-                "status_message": None,
+                "status_message": "",
                 "meta": meta or {},
                 "started_at": now,
                 "last_heartbeat_at": now,
