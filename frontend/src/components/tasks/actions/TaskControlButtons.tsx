@@ -1,0 +1,276 @@
+// TaskControlButtons component - Start, Stop, Resume, Restart buttons
+import React, { useState } from 'react';
+import {
+  Box,
+  Button,
+  ButtonGroup,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Typography,
+  FormControlLabel,
+  Radio,
+  RadioGroup,
+} from '@mui/material';
+import {
+  PlayArrow as StartIcon,
+  Stop as StopIcon,
+  Pause as PauseIcon,
+  PlayCircle as ResumeIcon,
+  Refresh as RestartIcon,
+} from '@mui/icons-material';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { backtestTasksApi, tradingTasksApi } from '../../../services/api';
+import { TaskType } from '../../../types';
+
+interface TaskControlButtonsProps {
+  taskId: number;
+  taskType: TaskType;
+  currentStatus: string;
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+}
+
+export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
+  taskId,
+  taskType,
+  currentStatus,
+  onSuccess,
+  onError,
+}) => {
+  const queryClient = useQueryClient();
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [restartDialogOpen, setRestartDialogOpen] = useState(false);
+  const [stopMode, setStopMode] = useState<'immediate' | 'graceful' | 'graceful_close'>('graceful');
+  const [clearState, setClearState] = useState(true);
+
+  const api = taskType === TaskType.BACKTEST ? backtestTasksApi : tradingTasksApi;
+
+  // Start mutation
+  const startMutation = useMutation({
+    mutationFn: () => api.start(taskId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['execution-status'] });
+      queryClient.invalidateQueries({
+        queryKey: taskType === TaskType.BACKTEST
+          ? ['backtest-task', taskId]
+          : ['trading-task', taskId],
+      });
+      onSuccess?.();
+    },
+    onError: (error: Error) => {
+      onError?.(error);
+    },
+  });
+
+  // Stop mutation
+  const stopMutation = useMutation({
+    mutationFn: () => {
+      if (taskType === TaskType.TRADING) {
+        return tradingTasksApi.stop(taskId, stopMode);
+      }
+      return backtestTasksApi.stop(taskId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['execution-status'] });
+      queryClient.invalidateQueries({
+        queryKey: taskType === TaskType.BACKTEST
+          ? ['backtest-task', taskId]
+          : ['trading-task', taskId],
+      });
+      setStopDialogOpen(false);
+      onSuccess?.();
+    },
+    onError: (error: Error) => {
+      setStopDialogOpen(false);
+      onError?.(error);
+    },
+  });
+
+  // Pause mutation (trading only)
+  const pauseMutation = useMutation({
+    mutationFn: () => tradingTasksApi.pause(taskId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['execution-status'] });
+      queryClient.invalidateQueries({ queryKey: ['trading-task', taskId] });
+      onSuccess?.();
+    },
+    onError: (error: Error) => {
+      onError?.(error);
+    },
+  });
+
+  // Resume mutation (trading only)
+  const resumeMutation = useMutation({
+    mutationFn: () => tradingTasksApi.resume(taskId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['execution-status'] });
+      queryClient.invalidateQueries({ queryKey: ['trading-task', taskId] });
+      onSuccess?.();
+    },
+    onError: (error: Error) => {
+      onError?.(error);
+    },
+  });
+
+  // Restart mutation (trading only)
+  const restartMutation = useMutation({
+    mutationFn: () => tradingTasksApi.restart(taskId, clearState),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['execution-status'] });
+      queryClient.invalidateQueries({ queryKey: ['trading-task', taskId] });
+      setRestartDialogOpen(false);
+      onSuccess?.();
+    },
+    onError: (error: Error) => {
+      setRestartDialogOpen(false);
+      onError?.(error);
+    },
+  });
+
+  const isLoading =
+    startMutation.isPending ||
+    stopMutation.isPending ||
+    pauseMutation.isPending ||
+    resumeMutation.isPending ||
+    restartMutation.isPending;
+
+  const canStart = ['created', 'stopped', 'completed', 'failed'].includes(
+    currentStatus
+  );
+  const canStop = ['running', 'pending'].includes(currentStatus);
+  const canPause = taskType === TaskType.TRADING && currentStatus === 'running';
+  const canResume = taskType === TaskType.TRADING && currentStatus === 'paused';
+  const canRestart = taskType === TaskType.TRADING && ['stopped', 'completed', 'failed'].includes(currentStatus);
+
+  return (
+    <>
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        <ButtonGroup variant="contained" disabled={isLoading}>
+          {canStart && (
+            <Button
+              startIcon={isLoading ? <CircularProgress size={16} /> : <StartIcon />}
+              onClick={() => startMutation.mutate()}
+              color="primary"
+            >
+              Start
+            </Button>
+          )}
+
+          {canStop && (
+            <Button
+              startIcon={isLoading ? <CircularProgress size={16} /> : <StopIcon />}
+              onClick={() => setStopDialogOpen(true)}
+              color="error"
+            >
+              Stop
+            </Button>
+          )}
+
+          {canPause && (
+            <Button
+              startIcon={isLoading ? <CircularProgress size={16} /> : <PauseIcon />}
+              onClick={() => pauseMutation.mutate()}
+              color="warning"
+            >
+              Pause
+            </Button>
+          )}
+
+          {canResume && (
+            <Button
+              startIcon={isLoading ? <CircularProgress size={16} /> : <ResumeIcon />}
+              onClick={() => resumeMutation.mutate()}
+              color="success"
+            >
+              Resume
+            </Button>
+          )}
+
+          {canRestart && (
+            <Button
+              startIcon={isLoading ? <CircularProgress size={16} /> : <RestartIcon />}
+              onClick={() => setRestartDialogOpen(true)}
+              color="info"
+            >
+              Restart
+            </Button>
+          )}
+        </ButtonGroup>
+      </Box>
+
+      {/* Stop Dialog */}
+      <Dialog open={stopDialogOpen} onClose={() => setStopDialogOpen(false)}>
+        <DialogTitle>Stop Task</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>
+            Are you sure you want to stop this task?
+          </Typography>
+          {taskType === TaskType.TRADING && (
+            <RadioGroup
+              value={stopMode}
+              onChange={(e) => setStopMode(e.target.value as 'immediate' | 'graceful' | 'graceful_close')}
+            >
+              <FormControlLabel
+                value="graceful"
+                control={<Radio />}
+                label="Graceful - Stop after current tick"
+              />
+              <FormControlLabel
+                value="graceful_close"
+                control={<Radio />}
+                label="Graceful Close - Close all positions then stop"
+              />
+              <FormControlLabel
+                value="immediate"
+                control={<Radio />}
+                label="Immediate - Stop immediately"
+              />
+            </RadioGroup>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStopDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => stopMutation.mutate()}
+            color="error"
+            variant="contained"
+          >
+            Stop
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Restart Dialog */}
+      <Dialog open={restartDialogOpen} onClose={() => setRestartDialogOpen(false)}>
+        <DialogTitle>Restart Task</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>
+            Are you sure you want to restart this task?
+          </Typography>
+          <FormControlLabel
+            control={
+              <Radio
+                checked={clearState}
+                onChange={(e) => setClearState(e.target.checked)}
+              />
+            }
+            label="Clear strategy state (start fresh)"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRestartDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => restartMutation.mutate()}
+            color="info"
+            variant="contained"
+          >
+            Restart
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+};

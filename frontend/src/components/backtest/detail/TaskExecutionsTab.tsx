@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import {
   Box,
@@ -20,6 +21,8 @@ import {
   FormControlLabel,
   Tooltip,
   IconButton,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
@@ -32,6 +35,8 @@ import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
 import { useTaskLogs } from '../../../hooks/useTaskLogs';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
 import { ErrorDisplay } from '../../tasks/display/ErrorDisplay';
+import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
+import { ExecutionComparisonView } from '../../tasks/display/ExecutionComparisonView';
 import { TaskStatus, TaskType } from '../../../types/common';
 import type { TaskExecution, ExecutionLog } from '../../../types/execution';
 
@@ -165,10 +170,13 @@ export function TaskExecutionsTab({
   taskStatus,
   task,
 }: TaskExecutionsTabProps) {
+  const navigate = useNavigate();
+  const [tabValue, setTabValue] = useState(0); // 0 = History, 1 = Logs, 2 = Compare
   const [selectedExecution, setSelectedExecution] =
     useState<TaskExecution | null>(null);
   const [executionsPage, setExecutionsPage] = useState(1);
   const executionsPageSize = 20;
+  const [selectedComparisonIds, setSelectedComparisonIds] = useState<number[]>([]);
 
   const [autoScroll, setAutoScroll] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -279,6 +287,14 @@ export function TaskExecutionsTab({
     }
   }, [executions, selectedExecution?.id]);
 
+  const handleExecutionClick = (executionId: number) => {
+    navigate(`/executions/${executionId}/results`);
+  };
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
   if (isLoading) {
     return (
       <Box
@@ -338,324 +354,359 @@ export function TaskExecutionsTab({
         </Paper>
       )}
 
-      <Grid container spacing={3}>
-        {/* Execution List */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Execution History
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {executions.length} execution{executions.length !== 1 ? 's' : ''}
-            </Typography>
-          </Box>
+      {/* Tabs for History, Logs, and Compare */}
+      <Paper sx={{ mb: 2 }}>
+        <Tabs
+          value={tabValue}
+          onChange={handleTabChange}
+          aria-label="execution tabs"
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab label="History" />
+          <Tab label="Logs" />
+          <Tab label="Compare" />
+        </Tabs>
+      </Paper>
 
-          <List sx={{ p: 0 }}>
-            {executions.map((execution) => (
-              <ExecutionItem
-                key={execution.id}
-                execution={execution}
-                taskId={taskId}
-                taskType={taskType}
-                isSelected={selectedExecution?.id === execution.id}
-                onSelect={() => setSelectedExecution(execution)}
-              />
-            ))}
-          </List>
+      {/* History Tab */}
+      {tabValue === 0 && (
+        <ExecutionHistoryTable
+          taskId={taskId}
+          taskType={taskType}
+          onExecutionClick={handleExecutionClick}
+        />
+      )}
 
-          {totalExecutionPages > 1 && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-              <Pagination
-                count={totalExecutionPages}
-                page={executionsPage}
-                onChange={(_e, value) => {
-                  setExecutionsPage(value);
-                  setSelectedExecution(null);
-                }}
-                size="small"
-              />
+      {/* Logs Tab */}
+      {tabValue === 1 && (
+        <Grid container spacing={3}>
+          {/* Execution List */}
+          <Grid size={{ xs: 12, md: 4 }}>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Execution History
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {executions.length} execution{executions.length !== 1 ? 's' : ''}
+              </Typography>
             </Box>
-          )}
-        </Grid>
 
-        {/* Logs Panel */}
-        <Grid size={{ xs: 12, md: 8 }}>
-          {selectedExecution ? (
-            <Paper
-              variant="outlined"
-              sx={{
-                height: '100%',
-                minHeight: '500px',
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
+            <List sx={{ p: 0 }}>
+              {executions.map((execution) => (
+                <ExecutionItem
+                  key={execution.id}
+                  execution={execution}
+                  taskId={taskId}
+                  taskType={taskType}
+                  isSelected={selectedExecution?.id === execution.id}
+                  onSelect={() => setSelectedExecution(execution)}
+                />
+              ))}
+            </List>
+
+            {totalExecutionPages > 1 && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                <Pagination
+                  count={totalExecutionPages}
+                  page={executionsPage}
+                  onChange={(_e, value) => {
+                    setExecutionsPage(value);
+                    setSelectedExecution(null);
                   }}
-                >
-                  <Box>
-                    <Typography variant="h6">
-                      Execution #{selectedExecution.execution_number} Logs
-                    </Typography>
-                    <Box
-                      sx={{
-                        mt: 0.5,
-                        display: 'flex',
-                        gap: 1,
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      <StatusBadge
-                        status={selectedExecution.status}
-                        size="small"
-                      />
-                      <Typography variant="caption" color="text.secondary">
-                        Started:{' '}
-                        {new Date(
-                          selectedExecution.started_at
-                        ).toLocaleString()}
-                      </Typography>
+                  size="small"
+                />
+              </Box>
+            )}
+          </Grid>
 
-                      <Typography variant="caption" color="text.secondary">
-                        Execution ID: {selectedExecution.id}
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={autoScroll}
-                          onChange={(e) => {
-                            setAutoScroll(e.target.checked);
-                            isUserScrollingRef.current = false;
-                          }}
-                          size="small"
-                        />
-                      }
-                      label="Auto-scroll"
-                      sx={{ mr: 0 }}
-                    />
-                    <Tooltip title="Refresh logs">
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          refetchExecutions();
-                          refreshLogs();
-                        }}
-                        aria-label="Refresh logs"
-                      >
-                        <RefreshIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Typography variant="caption" color="text.secondary">
-                      {totalLogsCount}{' '}
-                      {totalLogsCount === 1 ? 'entry' : 'entries'}
-                    </Typography>
-                  </Box>
-                </Box>
-
-                {totalLogPages > 1 && (
+          {/* Logs Panel */}
+          <Grid size={{ xs: 12, md: 8 }}>
+            {selectedExecution ? (
+              <Paper
+                variant="outlined"
+                sx={{
+                  height: '100%',
+                  minHeight: '500px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
                   <Box
                     sx={{
-                      mt: 1,
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      gap: 1,
-                      flexWrap: 'wrap',
                     }}
                   >
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={logsPage <= 1 || isLogsLoading}
-                        onClick={() => setLogsPage((p) => Math.max(1, p - 1))}
+                    <Box>
+                      <Typography variant="h6">
+                        Execution #{selectedExecution.execution_number} Logs
+                      </Typography>
+                      <Box
+                        sx={{
+                          mt: 0.5,
+                          display: 'flex',
+                          gap: 1,
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                        }}
                       >
-                        Newer
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={logsPage >= totalLogPages || isLogsLoading}
-                        onClick={() =>
-                          setLogsPage((p) => Math.min(totalLogPages, p + 1))
-                        }
-                      >
-                        Older
-                      </Button>
+                        <StatusBadge
+                          status={selectedExecution.status}
+                          size="small"
+                        />
+                        <Typography variant="caption" color="text.secondary">
+                          Started:{' '}
+                          {new Date(
+                            selectedExecution.started_at
+                          ).toLocaleString()}
+                        </Typography>
+
+                        <Typography variant="caption" color="text.secondary">
+                          Execution ID: {selectedExecution.id}
+                        </Typography>
+                      </Box>
                     </Box>
-
-                    <Pagination
-                      count={totalLogPages}
-                      page={logsPage}
-                      onChange={(_e, value) => setLogsPage(value)}
-                      size="small"
-                    />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={autoScroll}
+                            onChange={(e) => {
+                              setAutoScroll(e.target.checked);
+                              isUserScrollingRef.current = false;
+                            }}
+                            size="small"
+                          />
+                        }
+                        label="Auto-scroll"
+                        sx={{ mr: 0 }}
+                      />
+                      <Tooltip title="Refresh logs">
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            refetchExecutions();
+                            refreshLogs();
+                          }}
+                          aria-label="Refresh logs"
+                        >
+                          <RefreshIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Typography variant="caption" color="text.secondary">
+                        {totalLogsCount}{' '}
+                        {totalLogsCount === 1 ? 'entry' : 'entries'}
+                      </Typography>
+                    </Box>
                   </Box>
-                )}
-              </Box>
 
-              <Box
-                ref={logsContainerRef}
-                onScroll={handleScroll}
-                sx={{
-                  flex: 1,
-                  overflow: 'auto',
-                  '&::-webkit-scrollbar': {
-                    width: '8px',
-                  },
-                  '&::-webkit-scrollbar-track': {
-                    bgcolor: 'background.paper',
-                  },
-                  '&::-webkit-scrollbar-thumb': {
-                    bgcolor: 'action.disabled',
-                    borderRadius: '4px',
-                    '&:hover': {
-                      bgcolor: 'action.active',
+                  {totalLogPages > 1 && (
+                    <Box
+                      sx={{
+                        mt: 1,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 1,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={logsPage <= 1 || isLogsLoading}
+                          onClick={() => setLogsPage((p) => Math.max(1, p - 1))}
+                        >
+                          Newer
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={logsPage >= totalLogPages || isLogsLoading}
+                          onClick={() =>
+                            setLogsPage((p) => Math.min(totalLogPages, p + 1))
+                          }
+                        >
+                          Older
+                        </Button>
+                      </Box>
+
+                      <Pagination
+                        count={totalLogPages}
+                        page={logsPage}
+                        onChange={(_e, value) => setLogsPage(value)}
+                        size="small"
+                      />
+                    </Box>
+                  )}
+                </Box>
+
+                <Box
+                  ref={logsContainerRef}
+                  onScroll={handleScroll}
+                  sx={{
+                    flex: 1,
+                    overflow: 'auto',
+                    '&::-webkit-scrollbar': {
+                      width: '8px',
                     },
-                  },
-                }}
-              >
-                {logsError ? (
-                  <Box sx={{ p: 2 }}>
-                    <ErrorDisplay
-                      error={logsError}
-                      title="Failed to load logs"
-                    />
-                  </Box>
-                ) : allLogs.length > 0 ? (
-                  <TableContainer>
-                    <Table size="small" stickyHeader>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell
-                            sx={{
-                              fontWeight: 'bold',
-                              bgcolor: 'background.paper',
-                              width: '140px',
-                            }}
-                          >
-                            Timestamp
-                          </TableCell>
-                          <TableCell
-                            sx={{
-                              fontWeight: 'bold',
-                              bgcolor: 'background.paper',
-                              width: '100px',
-                            }}
-                          >
-                            Level
-                          </TableCell>
-                          <TableCell
-                            sx={{
-                              fontWeight: 'bold',
-                              bgcolor: 'background.paper',
-                            }}
-                          >
-                            Message
-                          </TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {allLogs.map((log: ExecutionLog, index: number) => (
-                          <TableRow
-                            key={index}
-                            sx={{
-                              '&:nth-of-type(odd)': {
-                                bgcolor: 'grey.50',
-                              },
-                              '&:hover': {
-                                bgcolor: 'action.hover',
-                              },
-                            }}
-                          >
+                    '&::-webkit-scrollbar-track': {
+                      bgcolor: 'background.paper',
+                    },
+                    '&::-webkit-scrollbar-thumb': {
+                      bgcolor: 'action.disabled',
+                      borderRadius: '4px',
+                      '&:hover': {
+                        bgcolor: 'action.active',
+                      },
+                    },
+                  }}
+                >
+                  {logsError ? (
+                    <Box sx={{ p: 2 }}>
+                      <ErrorDisplay
+                        error={logsError}
+                        title="Failed to load logs"
+                      />
+                    </Box>
+                  ) : allLogs.length > 0 ? (
+                    <TableContainer>
+                      <Table size="small" stickyHeader>
+                        <TableHead>
+                          <TableRow>
                             <TableCell
                               sx={{
-                                fontFamily: 'monospace',
-                                fontSize: '0.75rem',
-                                color: 'text.secondary',
-                              }}
-                            >
-                              {new Date(log.timestamp).toLocaleTimeString()}
-                            </TableCell>
-                            <TableCell
-                              sx={{
-                                fontFamily: 'monospace',
                                 fontWeight: 'bold',
-                                fontSize: '0.75rem',
-                                color:
-                                  log.level === 'ERROR'
-                                    ? 'error.main'
-                                    : log.level === 'WARNING'
-                                      ? 'warning.main'
-                                      : 'info.main',
+                                bgcolor: 'background.paper',
+                                width: '140px',
                               }}
                             >
-                              {log.level}
+                              Timestamp
                             </TableCell>
                             <TableCell
                               sx={{
-                                fontFamily: 'monospace',
-                                fontSize: '0.875rem',
-                                wordBreak: 'break-word',
+                                fontWeight: 'bold',
+                                bgcolor: 'background.paper',
+                                width: '100px',
                               }}
                             >
-                              {log.message}
+                              Level
+                            </TableCell>
+                            <TableCell
+                              sx={{
+                                fontWeight: 'bold',
+                                bgcolor: 'background.paper',
+                              }}
+                            >
+                              Message
                             </TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    <div ref={logsEndRef} />
-                  </TableContainer>
-                ) : (
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      height: '100%',
-                      textAlign: 'center',
-                      p: 2,
-                    }}
-                  >
-                    <Typography variant="body2" color="text.secondary">
-                      {isLogsLoading
-                        ? 'Loading logs...'
-                        : selectedExecution.status === TaskStatus.RUNNING
-                          ? 'Waiting for logs...'
-                          : 'No logs available for this execution'}
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
-            </Paper>
-          ) : (
-            <Paper
-              variant="outlined"
-              sx={{
-                height: '100%',
-                minHeight: '500px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Typography variant="body2" color="text.secondary">
-                Select an execution to view logs
-              </Typography>
-            </Paper>
-          )}
+                        </TableHead>
+                        <TableBody>
+                          {allLogs.map((log: ExecutionLog, index: number) => (
+                            <TableRow
+                              key={index}
+                              sx={{
+                                '&:nth-of-type(odd)': {
+                                  bgcolor: 'grey.50',
+                                },
+                                '&:hover': {
+                                  bgcolor: 'action.hover',
+                                },
+                              }}
+                            >
+                              <TableCell
+                                sx={{
+                                  fontFamily: 'monospace',
+                                  fontSize: '0.75rem',
+                                  color: 'text.secondary',
+                                }}
+                              >
+                                {new Date(log.timestamp).toLocaleTimeString()}
+                              </TableCell>
+                              <TableCell
+                                sx={{
+                                  fontFamily: 'monospace',
+                                  fontWeight: 'bold',
+                                  fontSize: '0.75rem',
+                                  color:
+                                    log.level === 'ERROR'
+                                      ? 'error.main'
+                                      : log.level === 'WARNING'
+                                        ? 'warning.main'
+                                        : 'info.main',
+                                }}
+                              >
+                                {log.level}
+                              </TableCell>
+                              <TableCell
+                                sx={{
+                                  fontFamily: 'monospace',
+                                  fontSize: '0.875rem',
+                                  wordBreak: 'break-word',
+                                }}
+                              >
+                                {log.message}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      <div ref={logsEndRef} />
+                    </TableContainer>
+                  ) : (
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        height: '100%',
+                        textAlign: 'center',
+                        p: 2,
+                      }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        {isLogsLoading
+                          ? 'Loading logs...'
+                          : selectedExecution.status === TaskStatus.RUNNING
+                            ? 'Waiting for logs...'
+                            : 'No logs available for this execution'}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Paper>
+            ) : (
+              <Paper
+                variant="outlined"
+                sx={{
+                  height: '100%',
+                  minHeight: '500px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Select an execution to view logs
+                </Typography>
+              </Paper>
+            )}
+          </Grid>
         </Grid>
-      </Grid>
+      )}
+
+      {/* Compare Tab */}
+      {tabValue === 2 && (
+        <ExecutionComparisonView
+          executions={executions}
+          selectedExecutionIds={selectedComparisonIds}
+          onSelectionChange={setSelectedComparisonIds}
+        />
+      )}
     </Box>
   );
 }

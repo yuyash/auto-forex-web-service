@@ -133,6 +133,7 @@ export interface Trade {
   is_first_lot?: boolean;
   retracement_count?: number;
   entry_retracement_count?: number;
+  [key: string]: unknown; // Allow additional properties for DataTable compatibility
 }
 
 export interface ExecutionSummary {

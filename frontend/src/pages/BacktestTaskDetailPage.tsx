@@ -36,7 +36,7 @@ import {
   useRerunBacktestTask,
 } from '../hooks/useBacktestTaskMutations';
 import { useTaskPolling } from '../hooks/useTaskPolling';
-import { useInvalidateExecutions } from '../hooks/useTaskExecutions';
+import { useInvalidateExecutions, useTaskExecutions } from '../hooks/useTaskExecutions';
 import { useBacktestResults } from '../hooks/useTaskResults';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
@@ -47,7 +47,7 @@ import { TaskExecutionsTab } from '../components/backtest/detail/TaskExecutionsT
 import { TaskConfigTab } from '../components/backtest/detail/TaskConfigTab';
 import { CopyTaskDialog } from '../components/tasks/actions/CopyTaskDialog';
 import { DeleteTaskDialog } from '../components/tasks/actions/DeleteTaskDialog';
-import { TaskStatus } from '../types/common';
+import { TaskStatus, TaskType } from '../types/common';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
 
 interface TabPanelProps {
@@ -97,6 +97,17 @@ export default function BacktestTaskDetailPage() {
 
   const { data: task, isLoading, error, refetch } = useBacktestTask(taskId);
   const { strategies } = useStrategies();
+
+  // Fetch executions to get the latest one
+  const { data: executionsData } = useTaskExecutions(
+    taskId,
+    TaskType.BACKTEST,
+    { page: 1, page_size: 1 },
+    { enablePolling: true }
+  );
+
+  // Get the latest execution
+  const latestExecution = executionsData?.results?.[0] ?? null;
 
   // Use HTTP polling for task status updates (Requirements 1.2, 1.3, 4.3, 4.4)
   const { status: polledStatus, refetch: refetchPolledStatus } = useTaskPolling(
@@ -379,6 +390,11 @@ export default function BacktestTaskDetailPage() {
                 {task.name}
               </Typography>
               <StatusBadge status={statusForActions} />
+              {latestExecution && (
+                <Typography variant="body2" color="text.secondary">
+                  Execution #{latestExecution.execution_number}
+                </Typography>
+              )}
             </Box>
 
             <Typography variant="body2" color="text.secondary">
@@ -487,11 +503,19 @@ export default function BacktestTaskDetailPage() {
         </Tabs>
 
         <TabPanel value={tabValue} index={0}>
-          <TaskOverviewTab task={taskForTabs} results={results} />
+          <TaskOverviewTab 
+            task={taskForTabs} 
+            results={results} 
+            latestExecution={latestExecution}
+          />
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
-          <TaskResultsTab task={taskForTabs} results={results} />
+          <TaskResultsTab 
+            task={taskForTabs} 
+            results={results}
+            latestExecution={latestExecution}
+          />
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>

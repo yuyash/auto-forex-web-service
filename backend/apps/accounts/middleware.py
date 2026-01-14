@@ -473,8 +473,6 @@ class HTTPAccessLoggingMiddleware:
     - Detects SQL injection and path traversal attempts
     - Logs admin endpoint access
     - Monitors suspicious patterns
-
-    Requirements: 35.1, 35.3, 35.4, 35.5
     """
 
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]):
@@ -787,7 +785,3 @@ def jwt_auth_middleware_stack(inner: Any) -> Any:
         Wrapped application with JWT authentication
     """
     return JWTAuthMiddleware(inner)
-
-
-# Alias for backward compatibility
-JWTAuthMiddlewareStack = jwt_auth_middleware_stack  # noqa: N816

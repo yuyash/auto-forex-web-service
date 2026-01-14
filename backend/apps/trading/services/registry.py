@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any
 
-from .base import Strategy
+from apps.trading.strategies.base import Strategy
+
+if TYPE_CHECKING:
+    from apps.trading.models import StrategyConfig
 
 
 @dataclass(frozen=True)
@@ -62,28 +66,99 @@ class StrategyRegistry:
             }
         return info
 
-    def create(self, *, identifier: str, config: dict[str, Any]) -> Strategy:
-        key = str(identifier)
+    def create(
+        self,
+        *,
+        instrument: str,
+        pip_size: Decimal,
+        strategy_config: "StrategyConfig",
+        trading_mode: Any = None,
+    ) -> Strategy:
+        """Create a strategy instance.
+
+        Args:
+            instrument: Trading instrument (e.g., "USD_JPY")
+            pip_size: Pip size for the instrument
+            strategy_config: StrategyConfig model instance
+            trading_mode: Optional trading mode (TradingMode enum)
+
+        Returns:
+            Strategy: Initialized strategy instance
+
+        Raises:
+            ValueError: If strategy identifier is unknown
+        """
+        key = str(strategy_config.strategy_type)
         if key not in self._strategies:
             raise ValueError(f"Unknown strategy '{key}'")
-        return self._strategies[key].strategy_cls(config)
+
+        strategy_cls = self._strategies[key].strategy_cls
+
+        # Parse StrategyConfig to strategy-specific config object
+        parsed_config = strategy_cls.parse_config(strategy_config)
+
+        # Check if strategy accepts trading_mode parameter
+        import inspect
+
+        sig = inspect.signature(strategy_cls.__init__)
+        if "trading_mode" in sig.parameters and trading_mode is not None:
+            # Type ignore for dynamic parameter passing
+            return strategy_cls(instrument, pip_size, parsed_config, trading_mode=trading_mode)  # type: ignore[call-arg]
+
+        # Instantiate strategy with parsed config (backward compatibility)
+        return strategy_cls(instrument, pip_size, parsed_config)
 
 
 registry = StrategyRegistry()
 
 
 def register_strategy(
-    identifier: str,
-    config_schema: dict[str, Any] | None = None,
+    id: str,
+    schema: dict[str, Any] | str | None = None,
     *,
     display_name: str | None = None,
     description: str = "",
 ) -> Callable[[type[Strategy]], type[Strategy]]:
+    """Register a strategy with optional schema path or dict.
+
+    Args:
+        id: Unique strategy identifier
+        schema: Schema dict or path to JSON schema file (e.g., "trading/schemas/floor.json")
+        display_name: Display name for the strategy
+        description: Strategy description
+
+    Returns:
+        Decorator function
+
+    Example:
+        >>> @register_strategy(id="floor", schema="trading/schemas/floor.json")
+        ... class FloorStrategy(Strategy[FloorStrategyState]):
+        ...     pass
+    """
+
     def _decorator(strategy_cls: type[Strategy]) -> type[Strategy]:
+        # Load schema from file if path provided
+        loaded_schema: dict[str, Any] | None = None
+        if isinstance(schema, str):
+            import json
+            from pathlib import Path
+
+            from django.conf import settings
+
+            # Resolve path relative to backend/apps/
+            schema_path = Path(settings.BASE_DIR) / "apps" / schema
+            if schema_path.exists():
+                with open(schema_path, encoding="utf-8") as f:
+                    loaded_schema = json.load(f)
+            else:
+                raise FileNotFoundError(f"Schema file not found: {schema_path}")
+        elif isinstance(schema, dict):
+            loaded_schema = schema
+
         registry.register(
-            identifier=identifier,
+            identifier=id,
             strategy_cls=strategy_cls,
-            config_schema=config_schema,
+            config_schema=loaded_schema,
             display_name=display_name,
             description=description,
         )
@@ -93,13 +168,13 @@ def register_strategy(
 
 
 def register_all_strategies() -> None:
-    """Idempotently register all strategy implementations."""
+    """Register all strategy implementations."""
 
     if not registry.is_registered("floor"):
         # Import triggers decorator registration.
-        from apps.trading.services import floor as floor_module
+        from apps.trading.strategies import floor as floor_module
 
-        _ = floor_module.FloorStrategyService
+        _ = floor_module.FloorStrategy
 
 
 __all__ = [

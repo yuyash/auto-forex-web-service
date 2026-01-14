@@ -6,8 +6,6 @@ This module provides the TaskController class which manages the lifecycle
 of task executions, including starting, stopping, pausing, and heartbeating.
 It wraps the CeleryTaskStatus model to provide a clean interface for task
 control operations.
-
-Requirements: 2.6, 8.1, 17.5
 """
 
 from __future__ import annotations
@@ -15,7 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from apps.trading.dataclasses import TaskControl
-from apps.trading.services.task import CeleryTaskService
+from apps.trading.services.celery import CeleryTaskService
 
 
 class TaskController:
@@ -28,27 +26,6 @@ class TaskController:
 
     The controller maintains task state through the CeleryTaskStatus model
     and provides methods to check for stop/pause requests during execution.
-
-    Attributes:
-        task_name: Name of the Celery task (e.g., "trading.tasks.run_trading_task")
-        instance_key: Unique identifier for this task instance
-        _service: Underlying CeleryTaskService instance
-
-    Requirements:
-        - 2.6: Handle all lifecycle transitions
-        - 8.1: Support graceful error handling
-        - 17.5: Handle Celery worker restarts gracefully
-
-    Example:
-        >>> controller = TaskController(
-        ...     task_name="trading.tasks.run_trading_task",
-        ...     instance_key="123"
-        ... )
-        >>> controller.start(celery_task_id="abc-123")
-        >>> controller.heartbeat(status_message="Processing tick 100")
-        >>> control = controller.check_control()
-        >>> if control.should_stop:
-        ...     controller.stop()
     """
 
     def __init__(
@@ -93,8 +70,6 @@ class TaskController:
             celery_task_id: Celery task ID for this execution
             worker: Worker hostname executing the task
             meta: Additional metadata to store with the task status
-
-        Requirements: 2.6
         """
         self._service.start(
             celery_task_id=celery_task_id,
@@ -118,8 +93,6 @@ class TaskController:
             status_message: Optional status message to update
             meta_update: Optional metadata updates to merge with existing meta
             force: If True, bypass throttling and send heartbeat immediately
-
-        Requirements: 2.6, 17.5
         """
         self._service.heartbeat(
             status_message=status_message,
@@ -139,14 +112,12 @@ class TaskController:
 
         Returns:
             TaskControl: Control flags indicating requested actions
-
-        Requirements: 2.6, 10.5
         """
         should_stop = self._service.should_stop(force=force)
         # Note: Current implementation only supports stop requests.
         # Pause functionality can be added when needed by extending
         # CeleryTaskStatus.Status to include PAUSE_REQUESTED.
-        return TaskControl(should_stop=should_stop, should_pause=False)
+        return TaskControl(should_stop=should_stop)  # type: ignore[call-arg]
 
     def stop(
         self,
@@ -163,8 +134,6 @@ class TaskController:
         Args:
             status_message: Optional message describing why the task stopped
             failed: If True, mark as FAILED instead of STOPPED
-
-        Requirements: 2.6, 8.1
         """
         from apps.trading.models import CeleryTaskStatus
 

@@ -172,7 +172,7 @@ class TestUserModel:
 
         assert result is True
         assert user.email_verified is True
-        assert user.email_verification_token is None
+        assert user.email_verification_token == ""
         assert user.email_verification_sent_at is None
 
     def test_user_verify_email_invalid_token(self) -> None:

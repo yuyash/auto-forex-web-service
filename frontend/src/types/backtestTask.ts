@@ -17,6 +17,7 @@ export interface BacktestTask {
   commission_per_trade: string;
   pip_size?: string;
   instrument: string;
+  trading_mode?: 'netting' | 'hedging';
   status: TaskStatus;
   sell_at_completion: boolean;
   latest_execution?: ExecutionSummary;
@@ -35,6 +36,7 @@ export interface BacktestTaskCreateData {
   commission_per_trade?: number | string;
   pip_size?: number | string;
   instrument: string;
+  trading_mode?: 'netting' | 'hedging';
   sell_at_completion?: boolean;
 }
 
@@ -50,6 +52,7 @@ export interface BacktestTaskFormData {
   commission_per_trade?: number;
   pip_size?: number;
   instrument: string;
+  trading_mode?: 'netting' | 'hedging';
   sell_at_completion?: boolean;
 }
 
@@ -64,6 +67,7 @@ export interface BacktestTaskUpdateData {
   commission_per_trade?: number | string;
   pip_size?: number | string;
   instrument?: string;
+  trading_mode?: 'netting' | 'hedging';
   sell_at_completion?: boolean;
 }
 

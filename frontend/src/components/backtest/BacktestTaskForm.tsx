@@ -12,6 +12,11 @@ import {
   Alert,
   FormControlLabel,
   Checkbox,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  FormHelperText,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
@@ -78,6 +83,7 @@ interface ReviewContentProps {
     commission_per_trade: number;
     pip_size?: number;
     instrument: string;
+    trading_mode?: 'netting' | 'hedging';
     sell_at_completion?: boolean;
   };
 }
@@ -92,6 +98,7 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
     commission_per_trade,
     pip_size,
     instrument,
+    trading_mode,
     sell_at_completion,
   } = formValues;
 
@@ -147,6 +154,17 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
           Instrument
         </Typography>
         <Typography variant="body1">{instrument}</Typography>
+      </Grid>
+
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          Trading Mode
+        </Typography>
+        <Typography variant="body1">
+          {trading_mode === 'hedging'
+            ? 'Hedging Mode (Independent Trades)'
+            : 'Netting Mode (Aggregated Positions)'}
+        </Typography>
       </Grid>
 
       <Grid size={{ xs: 12, md: 6 }}>
@@ -221,6 +239,7 @@ export default function BacktestTaskForm({
       commission_per_trade: 0,
       pip_size: 0.01,
       instrument: 'USD_JPY',
+      trading_mode: 'netting' as const,
       sell_at_completion: false,
     };
 
@@ -610,6 +629,30 @@ export default function BacktestTaskForm({
                 />
               </Grid>
 
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Controller
+                  name="trading_mode"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth error={!!errors.trading_mode}>
+                      <InputLabel>Trading Mode</InputLabel>
+                      <Select {...field} label="Trading Mode">
+                        <MenuItem value="netting">
+                          Netting Mode (Aggregated Positions)
+                        </MenuItem>
+                        <MenuItem value="hedging">
+                          Hedging Mode (Independent Trades)
+                        </MenuItem>
+                      </Select>
+                      <FormHelperText>
+                        {errors.trading_mode?.message ||
+                          'Netting: positions aggregated per instrument (FIFO). Hedging: multiple independent trades per instrument.'}
+                      </FormHelperText>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
               <Grid size={{ xs: 12 }}>
                 <Controller
                   name="sell_at_completion"
@@ -661,6 +704,7 @@ export default function BacktestTaskForm({
           commission_per_trade: formData.commission_per_trade as number,
           pip_size: formData.pip_size as number | undefined,
           instrument: formData.instrument as string,
+          trading_mode: formData.trading_mode as 'netting' | 'hedging' | undefined,
           sell_at_completion: formData.sell_at_completion as boolean,
         };
 

@@ -21,6 +21,12 @@ from apps.trading.views import (
     BacktestTaskStrategyEventsView,
     BacktestTaskTradeLogsView,
     BacktestTaskView,
+    ExecutionDetailView,
+    ExecutionEquityView,
+    ExecutionEventsView,
+    ExecutionMetricsView,
+    ExecutionStatusView,
+    ExecutionTradesView,
     StrategyConfigDetailView,
     StrategyConfigView,
     StrategyDefaultsView,
@@ -31,10 +37,8 @@ from apps.trading.views import (
     TradingTaskExecutionsView,
     TradingTaskLogsView,
     TradingTaskMetricsCheckpointView,
-    TradingTaskPauseView,
     TradingTaskRestartView,
     TradingTaskResultsView,
-    TradingTaskResumeView,
     TradingTaskStartView,
     TradingTaskStatusView,
     TradingTaskStopView,
@@ -161,16 +165,6 @@ urlpatterns = [
         name="trading_task_stop",
     ),
     path(
-        "trading-tasks/<int:task_id>/pause/",
-        TradingTaskPauseView.as_view(),
-        name="trading_task_pause",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/resume/",
-        TradingTaskResumeView.as_view(),
-        name="trading_task_resume",
-    ),
-    path(
         "trading-tasks/<int:task_id>/restart/",
         TradingTaskRestartView.as_view(),
         name="trading_task_restart",
@@ -214,5 +208,36 @@ urlpatterns = [
         "trading-tasks/<int:task_id>/metrics-checkpoint/",
         TradingTaskMetricsCheckpointView.as_view(),
         name="trading_task_metrics_checkpoint",
+    ),
+    # Execution-specific endpoints (task 14)
+    path(
+        "executions/<int:execution_id>/",
+        ExecutionDetailView.as_view(),
+        name="execution_detail",
+    ),
+    path(
+        "executions/<int:execution_id>/status/",
+        ExecutionStatusView.as_view(),
+        name="execution_status",
+    ),
+    path(
+        "executions/<int:execution_id>/events/",
+        ExecutionEventsView.as_view(),
+        name="execution_events",
+    ),
+    path(
+        "executions/<int:execution_id>/trades/",
+        ExecutionTradesView.as_view(),
+        name="execution_trades",
+    ),
+    path(
+        "executions/<int:execution_id>/equity/",
+        ExecutionEquityView.as_view(),
+        name="execution_equity",
+    ),
+    path(
+        "executions/<int:execution_id>/metrics/latest/",
+        ExecutionMetricsView.as_view(),
+        name="execution_metrics_latest",
     ),
 ]

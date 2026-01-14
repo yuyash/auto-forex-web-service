@@ -8,12 +8,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Decimal
+from typing import Any
 
 
 @dataclass(frozen=True)
 class DownsampleResult:
     points: list[dict]
     granularity_seconds: int | None
+
+
+@dataclass(frozen=True)
+class EquityStatistics:
+    """Statistics calculated from equity curve data."""
+
+    peak: Decimal
+    trough: Decimal
+    volatility: Decimal
+    peak_timestamp: datetime | None
+    trough_timestamp: datetime | None
+    total_points: int
 
 
 class EquityService:
@@ -127,3 +141,88 @@ class EquityService:
             sampled = sampled[:max_points]
 
         return DownsampleResult(points=sampled, granularity_seconds=granularity_seconds)
+
+    def calculate_equity_statistics(
+        self,
+        equity_curve: list[dict[str, Any]] | None,
+    ) -> EquityStatistics | None:
+        """Calculate statistics from equity curve data.
+
+        Calculates:
+        - Peak: Maximum balance value
+        - Trough: Minimum balance value
+        - Volatility: Standard deviation of balance values
+
+        Args:
+            equity_curve: List of equity points with 'balance' and 'timestamp' fields
+
+        Returns:
+            EquityStatistics object with calculated values, or None if insufficient data
+        """
+        if not equity_curve or not isinstance(equity_curve, list):
+            return None
+
+        # Extract valid balance values
+        balances: list[tuple[Decimal, datetime | None]] = []
+        for point in equity_curve:
+            if not isinstance(point, dict):
+                continue
+
+            balance_value = point.get("balance")
+            if balance_value is None:
+                continue
+
+            # Convert to Decimal
+            try:
+                if isinstance(balance_value, (int, float)):
+                    balance = Decimal(str(balance_value))
+                elif isinstance(balance_value, str):
+                    balance = Decimal(balance_value)
+                elif isinstance(balance_value, Decimal):
+                    balance = balance_value
+                else:
+                    continue
+            except (ValueError, TypeError, Exception):
+                # Skip invalid balance values (e.g., "invalid", nested dicts)
+                continue
+
+            timestamp = self.parse_iso_dt(point.get("timestamp"))
+            balances.append((balance, timestamp))
+
+        if not balances:
+            return None
+
+        # Calculate peak
+        peak_balance, peak_ts = max(balances, key=lambda x: x[0])
+
+        # Calculate trough
+        trough_balance, trough_ts = min(balances, key=lambda x: x[0])
+
+        # Calculate volatility (standard deviation)
+        balance_values = [b for b, _ in balances]
+        n = len(balance_values)
+
+        if n < 2:
+            # Need at least 2 points for volatility
+            volatility = Decimal("0")
+        else:
+            # Calculate mean
+            mean = sum(balance_values) / n
+
+            # Calculate variance
+            variance = sum((float(b) - float(mean)) ** 2 for b in balance_values) / (n - 1)
+
+            # Calculate standard deviation
+            # Use float for sqrt, then convert back to Decimal
+            import math
+
+            volatility = Decimal(str(math.sqrt(float(variance))))
+
+        return EquityStatistics(
+            peak=peak_balance,
+            trough=trough_balance,
+            volatility=volatility,
+            peak_timestamp=peak_ts,
+            trough_timestamp=trough_ts,
+            total_points=n,
+        )

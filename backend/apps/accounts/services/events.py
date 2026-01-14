@@ -37,7 +37,7 @@ class SecurityEventService:
                 description=description,
                 user=user if getattr(user, "pk", None) else None,
                 ip_address=ip_address,
-                user_agent=user_agent,
+                user_agent=user_agent or "",
                 details=details or {},
             )
         except Exception:  # pylint: disable=broad-exception-caught

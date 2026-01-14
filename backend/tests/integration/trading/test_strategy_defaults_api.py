@@ -25,8 +25,9 @@ class TestTradingStrategyDefaultsApi:
         assert isinstance(defaults, dict)
 
         # sanity check: should include at least a few known floor keys
-        assert "instrument" in defaults
         assert "max_layers" in defaults
+        assert "base_lot_size" in defaults
+        assert "take_profit_pips" in defaults
 
     def test_returns_404_for_unknown_strategy(self, live_server, auth_headers):
         url = f"{live_server.url}/api/trading/strategies/does-not-exist/defaults/"

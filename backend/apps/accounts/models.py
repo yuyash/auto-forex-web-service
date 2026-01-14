@@ -260,7 +260,7 @@ class User(AbstractUser):
 
         # Mark email as verified
         self.email_verified = True
-        self.email_verification_token = None
+        self.email_verification_token = ""
         self.email_verification_sent_at = None
         self.save(
             update_fields=[
@@ -339,6 +339,7 @@ class UserSession(models.Model):
         help_text="IP address of the session",
     )
     user_agent = models.TextField(
+        default="",
         blank=True,
         help_text="User agent string from the browser",
     )

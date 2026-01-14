@@ -5,4 +5,11 @@ export { backtestTasksApi } from './backtestTasks';
 export { tradingTasksApi } from './tradingTasks';
 export { accountsApi } from './accounts';
 export { strategiesApi } from './strategies';
+export { executionApi } from './executionApi';
 export type { Strategy, StrategyListResponse } from './strategies';
+export type {
+  ExecutionStatusResponse,
+  ExecutionEventsResponse,
+  ExecutionTradesResponse,
+  ExecutionEquityResponse,
+} from './executionApi';

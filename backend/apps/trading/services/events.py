@@ -11,38 +11,10 @@ from typing import Any
 
 from django.utils import timezone
 
-from apps.trading.dataclasses import EventContext, Tick
+from apps.trading.dataclasses import EventContext, Tick, TradeData
+from apps.trading.enums import StrategyType
+from apps.trading.events import StrategyEvent
 from apps.trading.models import ExecutionStrategyEvent
-
-
-# Backward compatibility alias for legacy code
-class TradingEventService:
-    """Legacy event service for backward compatibility.
-
-    This class exists to maintain compatibility with existing code
-    that hasn't been refactored yet. New code should use EventEmitter directly.
-
-    This is a no-op implementation that doesn't actually log events,
-    since the old event logging system is being replaced by the new
-    EventEmitter system.
-    """
-
-    def log_event(
-        self, event_type: str, severity: str, details: dict[str, Any] | None = None, **kwargs: Any
-    ) -> None:
-        """No-op log_event for backward compatibility.
-
-        This method exists to prevent errors in legacy code that hasn't
-        been refactored yet. It doesn't actually log events.
-
-        Args:
-            event_type: Type of event
-            severity: Event severity level
-            details: Optional event details
-            **kwargs: Additional keyword arguments (ignored)
-        """
-        # No-op - legacy code will be refactored to use EventEmitter
-        pass
 
 
 class EventEmitter:
@@ -55,8 +27,6 @@ class EventEmitter:
 
     Attributes:
         context: EventContext containing execution, user, account, and instrument info
-
-    Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6
     """
 
     def __init__(self, context: EventContext) -> None:
@@ -77,92 +47,78 @@ class EventEmitter:
 
         Returns:
             ExecutionStrategyEvent: The created event record
-
-        Requirements: 1.1
         """
         event_data = {
             "type": "tick_received",
             "instrument": tick.instrument,
-            "timestamp": tick.timestamp,
-            "bid": tick.bid,
-            "ask": tick.ask,
-            "mid": tick.mid,
+            "timestamp": (
+                tick.timestamp.isoformat()
+                if hasattr(tick.timestamp, "isoformat")
+                else str(tick.timestamp)
+            ),
+            "bid": str(tick.bid) if tick.bid is not None else None,
+            "ask": str(tick.ask) if tick.ask is not None else None,
+            "mid": str(tick.mid) if tick.mid is not None else None,
         }
 
         return self._persist_event(
             event_type="tick_received",
             event_data=event_data,
-            timestamp=self._parse_timestamp(tick.timestamp),
+            timestamp=tick.timestamp,
         )
 
     def emit_strategy_event(
         self,
-        event_type: str,
-        strategy_type: str,
-        event_data: dict[str, Any],
-        timestamp: str | None = None,
+        event: StrategyEvent,
+        strategy_type: StrategyType,
     ) -> ExecutionStrategyEvent:
         """Emit a strategy-specific event.
 
         Called when a strategy generates a signal or other strategy-specific event.
 
         Args:
-            event_type: Type of strategy event (e.g., "signal", "layer_added")
-            strategy_type: Strategy type identifier (e.g., "floor", "momentum")
-            event_data: Strategy-specific event data dictionary
-            timestamp: Optional ISO format timestamp, defaults to current time
+            event: StrategyEvent object containing event data
+            strategy_type: Strategy type enum value (e.g., StrategyType.FLOOR)
 
         Returns:
             ExecutionStrategyEvent: The created event record
-
-        Requirements: 1.2
         """
-        # Ensure event_data has a type field
-        full_event_data = {
-            "type": event_type,
-            **event_data,
-        }
+        # Convert StrategyEvent to dict for database storage
+        event_data = event.to_dict()
 
-        parsed_timestamp = self._parse_timestamp(timestamp) if timestamp else timezone.now()
+        # event.timestamp is already a datetime object, use it directly
+        parsed_timestamp = event.timestamp if event.timestamp else timezone.now()
 
         return self._persist_event(
-            event_type=event_type,
-            event_data=full_event_data,
-            strategy_type=strategy_type,
+            event_type=event.event_type,
+            event_data=event_data,
+            strategy_type=strategy_type.value,  # Use enum value for database storage
             timestamp=parsed_timestamp,
         )
 
     def emit_trade_executed(
         self,
-        trade_data: dict[str, Any],
-        timestamp: str | None = None,
+        trade: TradeData,
     ) -> ExecutionStrategyEvent:
         """Emit a trade_executed event.
 
         Called when a trade is executed (opened or closed).
 
         Args:
-            trade_data: Trade information dictionary containing:
-                - direction: "long" or "short"
-                - units: Number of units
-                - price: Execution price
-                - order_id: Order identifier (optional)
-                - position_id: Position identifier (optional)
-                - pnl: Profit/loss if closing (optional)
-            timestamp: Optional ISO format timestamp, defaults to current time
+            trade: TradeData object containing trade information
 
         Returns:
             ExecutionStrategyEvent: The created event record
-
-        Requirements: 1.3
         """
+        # Convert TradeData to dict and add instrument
         event_data = {
             "type": "trade_executed",
             "instrument": self.context.instrument,
-            **trade_data,
+            **trade.to_dict(),
         }
 
-        parsed_timestamp = self._parse_timestamp(timestamp) if timestamp else timezone.now()
+        # trade.timestamp is already a datetime object, use it directly
+        parsed_timestamp = trade.timestamp if trade.timestamp else timezone.now()
 
         return self._persist_event(
             event_type="trade_executed",
@@ -187,8 +143,6 @@ class EventEmitter:
 
         Returns:
             ExecutionStrategyEvent: The created event record
-
-        Requirements: 1.4
         """
         event_data = {
             "type": "status_changed",
@@ -218,8 +172,6 @@ class EventEmitter:
 
         Returns:
             ExecutionStrategyEvent: The created event record
-
-        Requirements: 1.5
         """
         event_data = {
             "type": "error_occurred",
@@ -254,8 +206,6 @@ class EventEmitter:
 
         Returns:
             ExecutionStrategyEvent: The created event record
-
-        Requirements: 1.6
         """
         # Get the next sequence number
         sequence = self._next_event_sequence()
