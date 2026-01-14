@@ -19,6 +19,87 @@ from apps.trading.services.equity import EquityService
 from apps.trading.views._helpers import _paginate_list_by_page
 
 
+class ExecutionDetailView(APIView):
+    """Get full execution details.
+
+    GET /api/trading/executions/{id}/
+    Returns complete execution object with all related data.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, execution_id: int) -> Response:
+        """Get full execution details."""
+        try:
+            execution = TaskExecution.objects.get(id=execution_id)
+        except TaskExecution.DoesNotExist:
+            return Response(
+                {"error": "Execution not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Verify user has access to this execution's task
+        if execution.task_type == TaskType.BACKTEST:
+            try:
+                BacktestTask.objects.get(id=execution.task_id, user=request.user.pk)
+            except BacktestTask.DoesNotExist:
+                return Response(
+                    {"error": "Access denied"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif execution.task_type == TaskType.TRADING:
+            try:
+                TradingTask.objects.get(id=execution.task_id, user=request.user.pk)
+            except TradingTask.DoesNotExist:
+                return Response(
+                    {"error": "Access denied"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        # Get latest metrics checkpoint
+        assert isinstance(execution, TaskExecution)
+        checkpoint = execution.metrics_checkpoints.order_by("-created_at", "-id").first()
+
+        response_data = {
+            "id": execution.pk,
+            "execution_id": execution.pk,
+            "task_type": execution.task_type,
+            "task_id": execution.task_id,
+            "execution_number": execution.execution_number,
+            "status": execution.status,
+            "progress": execution.progress,
+            "started_at": execution.started_at.isoformat() if execution.started_at else None,
+            "completed_at": execution.completed_at.isoformat() if execution.completed_at else None,
+            "error_message": execution.error_message or None,
+            "logs": execution.logs or [],
+            "metrics": None,
+        }
+
+        if checkpoint:
+            response_data["metrics"] = {
+                "processed": checkpoint.processed,
+                "total_return": str(checkpoint.total_return),
+                "total_pnl": str(checkpoint.total_pnl),
+                "realized_pnl": str(checkpoint.realized_pnl),
+                "unrealized_pnl": str(checkpoint.unrealized_pnl),
+                "total_trades": checkpoint.total_trades,
+                "winning_trades": checkpoint.winning_trades,
+                "losing_trades": checkpoint.losing_trades,
+                "win_rate": str(checkpoint.win_rate),
+                "max_drawdown": str(checkpoint.max_drawdown),
+                "sharpe_ratio": (
+                    str(checkpoint.sharpe_ratio) if checkpoint.sharpe_ratio is not None else None
+                ),
+                "profit_factor": (
+                    str(checkpoint.profit_factor) if checkpoint.profit_factor is not None else None
+                ),
+                "average_win": str(checkpoint.average_win),
+                "average_loss": str(checkpoint.average_loss),
+            }
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
 class ExecutionStatusView(APIView):
     """Get current status with metrics from ExecutionMetricsCheckpoint for a specific execution.
 
@@ -76,9 +157,25 @@ class ExecutionStatusView(APIView):
             "error_message": execution.error_message or None,
             "has_checkpoint": checkpoint is not None,
             "checkpoint": None,
+            # Add metrics at top level for frontend compatibility
+            "ticks_processed": 0,
+            "trades_executed": 0,
+            "current_balance": "0",
+            "current_pnl": "0",
+            "realized_pnl": "0",
+            "unrealized_pnl": "0",
+            "last_tick_timestamp": None,
         }
 
         if checkpoint:
+            # Update top-level metrics from checkpoint
+            response_data["ticks_processed"] = checkpoint.processed
+            response_data["trades_executed"] = checkpoint.total_trades
+            response_data["current_balance"] = str(checkpoint.total_return)  # Using return as proxy
+            response_data["current_pnl"] = str(checkpoint.total_pnl)
+            response_data["realized_pnl"] = str(checkpoint.realized_pnl)
+            response_data["unrealized_pnl"] = str(checkpoint.unrealized_pnl)
+
             response_data["checkpoint"] = {
                 "id": checkpoint.pk,
                 "processed": checkpoint.processed,

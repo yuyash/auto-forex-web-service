@@ -7,6 +7,7 @@ export { CopyTaskDialog } from './CopyTaskDialog';
 export { DeleteTaskDialog } from './DeleteTaskDialog';
 export { StopOptionsDialog, type StopOption } from './StopOptionsDialog';
 export { RestartOptionsDialog } from './RestartOptionsDialog';
+export { TaskControlButtons } from './TaskControlButtons';
 
 // Keyboard shortcuts
 export {

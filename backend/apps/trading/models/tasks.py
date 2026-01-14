@@ -710,6 +710,15 @@ class TradingTask(models.Model):
             return Decimal(str(self._pip_size))
         return Decimal("0.01")
 
+    @property
+    def account_id(self) -> int:
+        """Get the OANDA account ID.
+
+        Returns:
+            int: The primary key of the associated OANDA account
+        """
+        return self.oanda_account_id  # type: ignore[return-value]
+
 
 class FloorSide(models.TextChoices):
     """Side used by the floor strategy for layering."""

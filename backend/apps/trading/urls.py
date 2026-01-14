@@ -21,6 +21,7 @@ from apps.trading.views import (
     BacktestTaskStrategyEventsView,
     BacktestTaskTradeLogsView,
     BacktestTaskView,
+    ExecutionDetailView,
     ExecutionEquityView,
     ExecutionEventsView,
     ExecutionMetricsView,
@@ -209,6 +210,11 @@ urlpatterns = [
         name="trading_task_metrics_checkpoint",
     ),
     # Execution-specific endpoints (task 14)
+    path(
+        "executions/<int:execution_id>/",
+        ExecutionDetailView.as_view(),
+        name="execution_detail",
+    ),
     path(
         "executions/<int:execution_id>/status/",
         ExecutionStatusView.as_view(),

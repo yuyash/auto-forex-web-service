@@ -262,11 +262,18 @@ class ExecutionLifecycle:
         Returns:
             False to propagate exceptions (never suppresses exceptions)
         """
+        logger.info(
+            f"ExecutionLifecycle.__exit__ called: exc_type={exc_type}, "
+            f"execution_id={self.execution.pk}, task_id={self.task.pk}"
+        )
+
         if exc_type is None:
             # Success path
+            logger.info(f"Calling _handle_success for execution {self.execution.pk}")
             self._handle_success()
         else:
             # Failure path
+            logger.error(f"Calling _handle_failure for execution {self.execution.pk}: {exc_val}")
             self._handle_failure(exc_val)
 
         # Always propagate exceptions
@@ -274,9 +281,35 @@ class ExecutionLifecycle:
 
     def _handle_success(self) -> None:
         """Handle successful execution completion."""
-        # Mark task as completed
-        self.task.status = self.success_status
-        self.task.save(update_fields=["status", "updated_at"])
+        logger.info(
+            f"_handle_success called: execution_id={self.execution.pk}, "
+            f"task_id={self.task.pk}, success_status={self.success_status}"
+        )
+
+        try:
+            # Mark execution as completed
+            logger.info(
+                f"About to update execution {self.execution.pk} status to {self.success_status}"
+            )
+            self.execution.status = self.success_status
+            self.execution.completed_at = dj_timezone.now()
+            logger.info(f"About to save execution {self.execution.pk}")
+            self.execution.save(update_fields=["status", "completed_at", "updated_at"])
+            logger.info(f"Execution {self.execution.pk} status updated to {self.success_status}")
+        except Exception as e:
+            logger.exception(f"Failed to update execution status: {e}")
+            raise
+
+        try:
+            # Mark task as completed
+            logger.info(f"About to update task {self.task.pk} status to {self.success_status}")
+            self.task.status = self.success_status
+            logger.info(f"About to save task {self.task.pk}")
+            self.task.save(update_fields=["status", "updated_at"])
+            logger.info(f"Task {self.task.pk} status updated to {self.success_status}")
+        except Exception as e:
+            logger.exception(f"Failed to update task status: {e}")
+            raise
 
         # Emit status change event
         success_status_name = self.success_status.value.upper()
@@ -297,7 +330,11 @@ class ExecutionLifecycle:
         )
 
         task_id = self.task.id if hasattr(self.task, "id") else "unknown"
-        logger.info(f"Task completed successfully (task_id={task_id})")
+        execution_id = self.execution.id if hasattr(self.execution, "id") else "unknown"
+        logger.info(
+            f"Task and execution completed successfully "
+            f"(task_id={task_id}, execution_id={execution_id})"
+        )
 
     def _handle_failure(self, exc: BaseException | None) -> None:
         """Handle execution failure.

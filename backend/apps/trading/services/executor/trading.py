@@ -11,6 +11,7 @@ from logging import Logger, getLogger
 from apps.market.services.oanda import OandaService
 from apps.trading.dataclasses import (
     ExecutionState,
+    Tick,
     TradeData,
 )
 from apps.trading.enums import LogLevel
@@ -21,6 +22,7 @@ from apps.trading.events import (
     TakeProfitEvent,
 )
 from apps.trading.models import TaskExecution, TradingTask
+from apps.trading.services.errors import ErrorAction, ErrorContext, ErrorHandler
 from apps.trading.services.executor.base import BaseExecutor
 from apps.trading.services.source import TickDataSource
 from apps.trading.strategies.base import Strategy
@@ -61,6 +63,9 @@ class TradingExecutor(BaseExecutor):
         self.task: TradingTask = task
         self.trading_service: OandaService = trading_service
 
+        # Initialize error handler
+        self.error_handler = ErrorHandler()
+
         # Get current balance from trading service
         account_details = self.trading_service.get_account_details()
         initial_balance = account_details.balance
@@ -86,6 +91,71 @@ class TradingExecutor(BaseExecutor):
         """Get the initial balance for trading."""
         account_details = self.trading_service.get_account_details()
         return account_details.balance
+
+    def _process_tick(self, tick: Tick, state: ExecutionState) -> ExecutionState:
+        """Process a single tick through the strategy with error handling.
+
+        Args:
+            tick: Tick to process
+            state: Current execution state
+
+        Returns:
+            ExecutionState: Updated execution state
+        """
+        try:
+            # Call parent implementation
+            return super()._process_tick(tick, state)
+
+        except Exception as e:
+            # Create error context
+            error_context = ErrorContext(
+                error=e,
+                execution_id=self.execution.pk,
+                task_id=self.task.pk,
+                tick_data={
+                    "instrument": tick.instrument,
+                    "timestamp": str(tick.timestamp),
+                    "bid": str(tick.bid),
+                    "ask": str(tick.ask),
+                },
+                strategy_state=state.strategy_state.to_dict()
+                if hasattr(state.strategy_state, "to_dict")
+                else {},
+                additional_info={
+                    "ticks_processed": state.ticks_processed,
+                    "current_balance": str(state.current_balance),
+                    "account_id": str(self.task.oanda_account.account_id),
+                },
+            )
+
+            # Determine action based on error type
+            action = self.error_handler.handle_error(e, error_context)
+
+            # Emit error event
+            self.event_emitter.emit_error(
+                e,
+                error_context={
+                    "tick": error_context.tick_data,
+                    "ticks_processed": state.ticks_processed,
+                    "action": action.value,
+                },
+            )
+
+            # Take appropriate action
+            if action == ErrorAction.FAIL_TASK:
+                logger.critical(f"Critical error in tick processing: {e}")
+                raise
+            elif action == ErrorAction.RETRY:
+                logger.warning(f"Transient error in tick processing, will retry: {e}")
+                # For now, we'll just continue - retry logic would be more complex
+                # and might require changes to the data source
+                return state
+            elif action == ErrorAction.LOG_AND_CONTINUE:
+                logger.error(f"Error in tick processing, continuing: {e}")
+                return state
+            else:  # ErrorAction.REJECT
+                logger.error(f"Validation error in tick processing: {e}")
+                raise
 
     def _handle_strategy_event(self, event: StrategyEvent, state: ExecutionState) -> None:
         """Handle a strategy event.

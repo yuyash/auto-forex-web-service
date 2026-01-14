@@ -8,10 +8,15 @@ from apps.trading.serializers.backtest import (
     BacktestTaskListSerializer,
     BacktestTaskSerializer,
 )
+from apps.trading.serializers.events import (
+    StrategyEventSerializer,
+    StructuredLogSerializer,
+)
 from apps.trading.serializers.execution import (
     TaskExecutionDetailSerializer,
     TaskExecutionListSerializer,
     TaskExecutionSerializer,
+    TaskExecutionWithStructuredDataSerializer,
 )
 from apps.trading.serializers.metrics import (
     ExecutionMetricsSerializer,
@@ -36,10 +41,14 @@ __all__ = [
     "BacktestTaskCreateSerializer",
     "BacktestTaskListSerializer",
     "BacktestTaskSerializer",
+    # Events
+    "StrategyEventSerializer",
+    "StructuredLogSerializer",
     # Execution
     "TaskExecutionDetailSerializer",
     "TaskExecutionListSerializer",
     "TaskExecutionSerializer",
+    "TaskExecutionWithStructuredDataSerializer",
     # Metrics
     "ExecutionMetricsSerializer",
     "ExecutionMetricsSummarySerializer",

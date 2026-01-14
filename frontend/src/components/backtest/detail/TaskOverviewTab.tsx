@@ -19,7 +19,7 @@ import { backtestTasksApi } from '../../../services/api/backtestTasks';
 import type { BacktestTask } from '../../../types/backtestTask';
 import { TaskStatus } from '../../../types/common';
 import type { TaskResults } from '../../../types/results';
-import type { ExecutionMetricsCheckpoint } from '../../../types/execution';
+import type { ExecutionMetricsCheckpoint, TaskExecution } from '../../../types/execution';
 import {
   TrendingUp as TrendingUpIcon,
   ShowChart as ShowChartIcon,
@@ -36,11 +36,12 @@ interface EquityPoint {
 interface TaskOverviewTabProps {
   task: BacktestTask;
   results?: TaskResults | null;
+  latestExecution?: TaskExecution | null;
 }
 
 type DateRange = 'all' | '1m' | '3m' | '6m' | '1y';
 
-export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
+export function TaskOverviewTab({ task, results, latestExecution }: TaskOverviewTabProps) {
   const [dateRange, setDateRange] = useState<DateRange>('all');
   const [equityCurve, setEquityCurve] = useState<EquityPoint[]>([]);
   const [equityCurveLoading, setEquityCurveLoading] = useState(false);
@@ -423,6 +424,12 @@ export function TaskOverviewTab({ task, results }: TaskOverviewTabProps) {
 
   return (
     <Box sx={{ px: 3 }}>
+      {latestExecution && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Showing data from Execution #{latestExecution.execution_number}
+        </Alert>
+      )}
+
       {/* Backtest Period */}
       <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
         <Typography variant="subtitle2" color="text.secondary" gutterBottom>

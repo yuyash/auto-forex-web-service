@@ -146,6 +146,13 @@ class BaseExecutor(ABC):
             # Save final metrics checkpoint
             self.performance_tracker.save_checkpoint()
 
+            # Mark execution as completed (sets status, completed_at, progress=100)
+            self.execution.mark_completed()
+            logger.info(
+                f"Execution {self.execution.pk} marked as completed "
+                f"(status={self.execution.status}, progress={self.execution.progress})"
+            )
+
             # Mark task as stopped
             self.task_controller.stop(
                 status_message=f"Execution {self.execution.pk} completed successfully"
@@ -279,6 +286,15 @@ class BaseExecutor(ABC):
                     if ticks_since_last_heartbeat >= heartbeat_interval:
                         logger.debug(f"Sending heartbeat at tick {state.ticks_processed}")
                         metrics = self.performance_tracker.get_metrics()
+
+                        # Update progress (for backtests, we can estimate based on time or ticks)
+                        # For now, we'll update progress incrementally
+                        # This will be overridden to 100% at the end
+                        if self.execution.progress < 99:
+                            # Increment progress gradually (will reach ~99% before completion)
+                            self.execution.progress = min(self.execution.progress + 1, 99)
+                            self.execution.save(update_fields=["progress"])
+
                         self.task_controller.heartbeat(
                             status_message=f"Processed {metrics['ticks_processed']} ticks",
                             meta_update=metrics,

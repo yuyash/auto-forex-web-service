@@ -37,6 +37,7 @@ from .configs import (
     StrategyConfigView,
 )
 from .executions import (
+    ExecutionDetailView,
     ExecutionEquityView,
     ExecutionEventsView,
     ExecutionMetricsView,
@@ -110,6 +111,7 @@ __all__ = [
     "BacktestTaskTradeLogsView",
     "BacktestTaskMetricsCheckpointView",
     # Executions (Task 14)
+    "ExecutionDetailView",
     "ExecutionStatusView",
     "ExecutionEventsView",
     "ExecutionTradesView",

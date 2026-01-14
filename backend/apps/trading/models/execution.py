@@ -1,12 +1,18 @@
 """Task execution models."""
 
 import traceback
+from typing import TYPE_CHECKING
 
 from django.db import models
 from django.utils import timezone
 
 from apps.market.models import OandaAccount
 from apps.trading.enums import TaskStatus, TaskType
+
+if TYPE_CHECKING:
+    from apps.trading.models.events import ExecutionStrategyEvent
+    from apps.trading.models.metrics import ExecutionMetricsCheckpoint
+    from apps.trading.models.state import ExecutionStateSnapshot
 
 
 class TaskExecutionManager(models.Manager["TaskExecution"]):
@@ -38,6 +44,12 @@ class TaskExecution(models.Model):
     """
 
     objects = TaskExecutionManager()
+
+    if TYPE_CHECKING:
+        # Type stubs for reverse relationships
+        state_snapshots: models.Manager["ExecutionStateSnapshot"]
+        strategy_event_rows: models.Manager["ExecutionStrategyEvent"]
+        metrics_checkpoints: models.Manager["ExecutionMetricsCheckpoint"]
 
     task_type = models.CharField(
         max_length=20,
@@ -221,6 +233,158 @@ class TaskExecution(models.Model):
             return ExecutionMetrics.objects.get(execution=self)
         except ExecutionMetrics.DoesNotExist:
             return None
+
+    # State Management Methods (Requirements: 4.1, 4.2, 4.3)
+
+    def save_state_snapshot(
+        self,
+        strategy_state: dict,
+        current_balance,
+        open_positions: list,
+        ticks_processed: int,
+        last_tick_timestamp: str = "",
+        metrics: dict | None = None,
+    ) -> "ExecutionStateSnapshot":  # type: ignore[name-defined]
+        """
+        Save a state snapshot for this execution.
+
+        Creates a new ExecutionStateSnapshot with a monotonically increasing
+        sequence number, enabling task resumability.
+
+        Args:
+            strategy_state: Strategy-specific state dictionary
+            current_balance: Current account balance (Decimal or numeric)
+            open_positions: List of open position dictionaries
+            ticks_processed: Number of ticks processed so far
+            last_tick_timestamp: ISO format timestamp of last processed tick
+            metrics: Current performance metrics dictionary
+
+        Returns:
+            The created ExecutionStateSnapshot instance
+
+        Requirements: 4.1, 4.2
+        """
+        from decimal import Decimal
+
+        from apps.trading.models.state import ExecutionStateSnapshot
+
+        sequence = self._next_snapshot_sequence()
+
+        snapshot = ExecutionStateSnapshot.objects.create(
+            execution=self,
+            sequence=sequence,
+            strategy_state=strategy_state or {},
+            current_balance=Decimal(str(current_balance)),
+            open_positions=open_positions or [],
+            ticks_processed=ticks_processed,
+            last_tick_timestamp=last_tick_timestamp,
+            metrics=metrics or {},
+        )
+
+        return snapshot
+
+    def load_latest_state(self) -> dict | None:
+        """
+        Load the most recent state snapshot for this execution.
+
+        Returns a dictionary containing the state data, or None if no
+        snapshots exist. This enables resuming execution from the last
+        saved state.
+
+        Returns:
+            Dictionary with keys: strategy_state, current_balance,
+            open_positions, ticks_processed, last_tick_timestamp, metrics.
+            Returns None if no snapshots exist.
+
+        Requirements: 4.2, 4.3
+        """
+        snapshot = self.state_snapshots.order_by("-sequence").first()
+
+        if snapshot is None:
+            return None
+
+        return {
+            "strategy_state": snapshot.strategy_state,
+            "current_balance": snapshot.current_balance,
+            "open_positions": snapshot.open_positions,
+            "ticks_processed": snapshot.ticks_processed,
+            "last_tick_timestamp": snapshot.last_tick_timestamp,
+            "metrics": snapshot.metrics,
+            "sequence": snapshot.sequence,
+        }
+
+    def _next_snapshot_sequence(self) -> int:
+        """
+        Get the next sequence number for state snapshots.
+
+        Returns:
+            Next monotonic sequence number (0-indexed)
+
+        Requirements: 4.1
+        """
+        last_snapshot = self.state_snapshots.order_by("-sequence").first()
+        return (last_snapshot.sequence + 1) if last_snapshot else 0
+
+    # Event Emission Methods (Requirements: 1.6)
+
+    def emit_event(
+        self,
+        event_type: str,
+        event_data: dict,
+        strategy_type: str = "",
+        timestamp: str | None = None,
+    ) -> "ExecutionStrategyEvent":  # type: ignore[name-defined]
+        """
+        Emit a strategy event for this execution.
+
+        Creates a new ExecutionStrategyEvent with a monotonically increasing
+        sequence number. Events are persisted to enable real-time monitoring
+        and post-execution analysis.
+
+        Args:
+            event_type: Type of event (e.g., 'tick_received', 'trade_executed')
+            event_data: Event payload dictionary
+            strategy_type: Strategy type identifier (e.g., 'floor', 'momentum')
+            timestamp: Event timestamp (ISO format string), parsed if provided
+
+        Returns:
+            The created ExecutionStrategyEvent instance
+
+        Requirements: 1.6
+        """
+        from django.utils.dateparse import parse_datetime
+
+        from apps.trading.models.events import ExecutionStrategyEvent
+
+        sequence = self._next_event_sequence()
+
+        # Parse timestamp if provided
+        parsed_timestamp = None
+        if timestamp:
+            parsed_timestamp = parse_datetime(timestamp)
+
+        event = ExecutionStrategyEvent.objects.create(
+            execution=self,
+            sequence=sequence,
+            event_type=event_type,
+            strategy_type=strategy_type,
+            timestamp=parsed_timestamp,
+            event=event_data or {},
+        )
+
+        return event
+
+    def _next_event_sequence(self) -> int:
+        """
+        Get the next sequence number for strategy events.
+
+        Returns:
+            Next monotonic sequence number (0-indexed)
+
+        Requirements: 1.6
+        """
+        last_event = self.strategy_event_rows.order_by("-sequence").first()
+        return (last_event.sequence + 1) if last_event else 0
 
 
 class TaskExecutionResult(models.Model):
