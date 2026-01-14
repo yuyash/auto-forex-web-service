@@ -1,0 +1,202 @@
+{
+  "display_name": "Floor Strategy",
+  "type": "object",
+  "properties": {
+    "base_lot_size": {
+      "type": "number",
+      "title": "Base Lot Size",
+      "description": "Initial lot size for the first entry."
+    },
+    "retracement_lot_mode": {
+      "type": "string",
+      "title": "Retracement Lot Mode",
+      "enum": ["additive", "multiplicative"],
+      "description": "How lot size changes on each retracement entry."
+    },
+    "retracement_lot_amount": {
+      "type": "number",
+      "title": "Retracement Lot Amount",
+      "description": "Amount to add/multiply by on each retracement entry."
+    },
+    "retracement_pips": {
+      "type": "number",
+      "title": "Retracement Pips",
+      "description": "Adverse movement in pips required to trigger a retracement entry."
+    },
+    "take_profit_pips": {
+      "type": "number",
+      "title": "Take Profit Pips",
+      "description": "Profit in pips required to close the position."
+    },
+    "max_layers": {
+      "type": "integer",
+      "title": "Maximum Layers",
+      "description": "Maximum number of layers that can be opened."
+    },
+    "max_retracements_per_layer": {
+      "type": "integer",
+      "title": "Max Retracements Per Layer",
+      "description": "Max number of retracement entries allowed per layer."
+    },
+    "volatility_lock_multiplier": {
+      "type": "number",
+      "title": "Volatility Lock Multiplier",
+      "description": "ATR multiplier threshold to trigger volatility lock."
+    },
+    "retracement_trigger_progression": {
+      "type": "string",
+      "title": "Retracement Trigger Progression",
+      "enum": ["equal", "additive", "exponential", "inverse"],
+      "description": "How retracement triggers progress across layers."
+    },
+    "retracement_trigger_increment": {
+      "type": "number",
+      "title": "Retracement Trigger Increment",
+      "description": "Used for additive/exponential progression.",
+      "dependsOn": {
+        "field": "retracement_trigger_progression",
+        "values": ["additive", "exponential"]
+      }
+    },
+    "lot_size_progression": {
+      "type": "string",
+      "title": "Lot Size Progression",
+      "enum": ["equal", "additive", "exponential", "inverse"],
+      "description": "How base lot size changes across layers."
+    },
+    "lot_size_increment": {
+      "type": "number",
+      "title": "Lot Size Increment",
+      "description": "Used for additive/exponential progression.",
+      "dependsOn": {
+        "field": "lot_size_progression",
+        "values": ["additive", "exponential"]
+      }
+    },
+    "entry_signal_lookback_ticks": {
+      "type": "integer",
+      "title": "Momentum Lookback Ticks",
+      "description": "Number of ticks to analyze when using momentum direction.",
+      "dependsOn": {
+        "field": "direction_method",
+        "values": ["momentum"],
+        "and": [{ "field": "momentum_lookback_source", "values": ["ticks"] }]
+      }
+    },
+    "momentum_lookback_source": {
+      "type": "string",
+      "title": "Momentum Lookback Source",
+      "enum": ["ticks", "candles"],
+      "default": "candles",
+      "description": "Use raw ticks or candle closes to decide momentum direction.",
+      "dependsOn": {
+        "field": "direction_method",
+        "values": ["momentum"]
+      }
+    },
+    "entry_signal_lookback_candles": {
+      "type": "integer",
+      "title": "Momentum Lookback Candles",
+      "default": 50,
+      "description": "Number of candles to analyze when using candle-based momentum.",
+      "dependsOn": {
+        "field": "direction_method",
+        "values": ["momentum"],
+        "and": [{ "field": "momentum_lookback_source", "values": ["candles"] }]
+      }
+    },
+    "entry_signal_candle_granularity_seconds": {
+      "type": "integer",
+      "title": "Momentum Candle Granularity (seconds)",
+      "default": 60,
+      "description": "Candle size in seconds used for momentum lookback.",
+      "dependsOn": {
+        "field": "direction_method",
+        "values": ["momentum"],
+        "and": [{ "field": "momentum_lookback_source", "values": ["candles"] }]
+      }
+    },
+    "direction_method": {
+      "type": "string",
+      "title": "Direction Decision Method",
+      "enum": [
+        "momentum",
+        "sma_crossover",
+        "ema_crossover",
+        "price_vs_sma",
+        "rsi"
+      ],
+      "description": "Technical method used to decide long vs short."
+    },
+    "sma_fast_period": {
+      "type": "integer",
+      "title": "SMA Fast Period",
+      "description": "Fast SMA window size (in ticks).",
+      "dependsOn": {
+        "field": "direction_method",
+        "values": ["sma_crossover"]
+      }
+    },
+    "sma_slow_period": {
+      "type": "integer",
+      "title": "SMA Slow Period",
+      "description": "Slow SMA window size (in ticks).",
+      "dependsOn": {
+        "field": "direction_method",
+        "values": ["sma_crossover", "price_vs_sma"]
+      }
+    },
+    "ema_fast_period": {
+      "type": "integer",
+      "title": "EMA Fast Period",
+      "description": "Fast EMA window size (in ticks).",
+      "dependsOn": {
+        "field": "direction_method",
+        "values": ["ema_crossover"]
+      }
+    },
+    "ema_slow_period": {
+      "type": "integer",
+      "title": "EMA Slow Period",
+      "description": "Slow EMA window size (in ticks).",
+      "dependsOn": {
+        "field": "direction_method",
+        "values": ["ema_crossover"]
+      }
+    },
+    "rsi_period": {
+      "type": "integer",
+      "title": "RSI Period",
+      "description": "RSI window size (in ticks).",
+      "dependsOn": {
+        "field": "direction_method",
+        "values": ["rsi"]
+      }
+    },
+    "rsi_overbought": {
+      "type": "integer",
+      "title": "RSI Overbought",
+      "description": "RSI threshold above which to short.",
+      "dependsOn": {
+        "field": "direction_method",
+        "values": ["rsi"]
+      }
+    },
+    "rsi_oversold": {
+      "type": "integer",
+      "title": "RSI Oversold",
+      "description": "RSI threshold below which to long.",
+      "dependsOn": {
+        "field": "direction_method",
+        "values": ["rsi"]
+      }
+    }
+  },
+  "required": [
+    "base_lot_size",
+    "retracement_lot_mode",
+    "retracement_lot_amount",
+    "retracement_pips",
+    "take_profit_pips"
+  ]
+}

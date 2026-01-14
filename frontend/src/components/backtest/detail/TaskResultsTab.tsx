@@ -25,6 +25,7 @@ import type {
   BacktestStrategyEvent,
   ExecutionMetricsCheckpoint,
   Trade,
+  TaskExecution,
 } from '../../../types/execution';
 import type { TaskResults } from '../../../types/results';
 import type { ChartMarker } from '../../../utils/chartMarkers';
@@ -38,9 +39,10 @@ const toNumberOrNull = (value: unknown): number | null => {
 interface TaskResultsTabProps {
   task: BacktestTask;
   results?: TaskResults | null;
+  latestExecution?: TaskExecution | null;
 }
 
-export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
+export function TaskResultsTab({ task, results, latestExecution }: TaskResultsTabProps) {
   const metrics = results?.metrics ?? null;
 
   const hasMetrics = task.status === TaskStatus.COMPLETED && !!metrics;
@@ -677,6 +679,12 @@ export function TaskResultsTab({ task, results }: TaskResultsTabProps) {
 
   return (
     <Box sx={{ px: 3 }}>
+      {latestExecution && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Showing results from Execution #{latestExecution.execution_number}
+        </Alert>
+      )}
+
       {/* Backtest Period */}
       <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
         <Typography variant="subtitle2" color="text.secondary" gutterBottom>

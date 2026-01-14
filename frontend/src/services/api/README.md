@@ -33,8 +33,8 @@ The task-based architecture separates strategy configuration from execution, all
 ### Mutation Hooks (`src/hooks/`)
 
 - **useConfigurationMutations.ts** - Create, update, delete configurations
-- **useBacktestTaskMutations.ts** - Backtest task lifecycle (start, stop, rerun, copy)
-- **useTradingTaskMutations.ts** - Trading task lifecycle (start, stop, pause, resume, rerun, copy)
+- **useBacktestTaskMutations.ts** - Backtest task lifecycle (start, stop, resume, restart, copy)
+- **useTradingTaskMutations.ts** - Trading task lifecycle (start, stop, resume, restart, copy)
 
 ## Usage Examples
 
@@ -159,8 +159,9 @@ function RunningTaskMonitor({ taskId }) {
 - `DELETE /api/backtest-tasks/{id}/` - Delete backtest task
 - `POST /api/backtest-tasks/{id}/copy/` - Copy task
 - `POST /api/backtest-tasks/{id}/start/` - Start execution
-- `POST /api/backtest-tasks/{id}/stop/` - Stop execution
-- `POST /api/backtest-tasks/{id}/rerun/` - Rerun from beginning
+- `POST /api/backtest-tasks/{id}/stop/` - Stop execution (state is persisted)
+- `POST /api/backtest-tasks/{id}/resume/` - Resume execution from persisted state
+- `POST /api/backtest-tasks/{id}/restart/` - Restart from beginning (clears state)
 - `GET /api/backtest-tasks/{id}/executions/` - Get execution history
 
 ### Trading Tasks
@@ -172,10 +173,9 @@ function RunningTaskMonitor({ taskId }) {
 - `DELETE /api/trading-tasks/{id}/` - Delete trading task
 - `POST /api/trading-tasks/{id}/copy/` - Copy task
 - `POST /api/trading-tasks/{id}/start/` - Start execution
-- `POST /api/trading-tasks/{id}/stop/` - Stop execution
-- `POST /api/trading-tasks/{id}/pause/` - Pause execution
-- `POST /api/trading-tasks/{id}/resume/` - Resume execution
-- `POST /api/trading-tasks/{id}/rerun/` - Rerun from beginning
+- `POST /api/trading-tasks/{id}/stop/` - Stop execution (state is persisted)
+- `POST /api/trading-tasks/{id}/resume/` - Resume execution from persisted state
+- `POST /api/trading-tasks/{id}/restart/` - Restart from beginning (clears state)
 - `GET /api/trading-tasks/{id}/executions/` - Get execution history
 
 ## Authentication

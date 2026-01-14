@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from apps.market.models import CeleryTaskStatus
-from apps.market.services.task import CeleryTaskService
+from apps.market.services.celery import CeleryTaskService
 
 
 @pytest.mark.django_db
@@ -46,7 +46,7 @@ class TestCeleryTaskService:
         fixed = datetime(2025, 1, 1, tzinfo=UTC)
 
         # Patch timezone.now used by the service module.
-        import apps.market.services.task as task_module
+        import apps.market.services.celery as task_module
 
         monkeypatch.setattr(task_module.timezone, "now", lambda: fixed)
 
@@ -72,7 +72,7 @@ class TestCeleryTaskService:
     def test_mark_stopped_updates_fields(self, monkeypatch) -> None:
         fixed = datetime(2025, 1, 2, tzinfo=UTC)
 
-        import apps.market.services.task as task_module
+        import apps.market.services.celery as task_module
 
         monkeypatch.setattr(task_module.timezone, "now", lambda: fixed)
 

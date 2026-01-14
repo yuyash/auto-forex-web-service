@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from apps.trading.services.lock import TaskLockManager
 from apps.trading.views import StrategyDefaultsView, StrategyView
 
 
@@ -46,15 +47,16 @@ class TestBacktestTaskStatusView:
         return task
 
     def test_recently_started_task_is_not_auto_completed(self, monkeypatch, test_user):
-        from apps.trading import views as trading_views
         from apps.trading.enums import TaskStatus
         from apps.trading.views import BacktestTaskStatusView
 
         task = self._create_task_and_completed_execution(user=test_user)
 
         # No lock info yet (Celery hasn't started), but task was updated recently.
+        from apps.trading.services.lock import TaskLockManager
+
         monkeypatch.setattr(
-            trading_views.TaskLockManager,
+            TaskLockManager,
             "get_lock_info",
             lambda *_args, **_kwargs: None,
         )
@@ -77,7 +79,6 @@ class TestBacktestTaskStatusView:
     def test_old_stale_task_is_auto_completed(self, monkeypatch, test_user):
         from django.utils import timezone
 
-        from apps.trading import views as trading_views
         from apps.trading.enums import TaskStatus
         from apps.trading.models import BacktestTask
         from apps.trading.views import BacktestTaskStatusView
@@ -90,7 +91,7 @@ class TestBacktestTaskStatusView:
         )
 
         monkeypatch.setattr(
-            trading_views.TaskLockManager,
+            TaskLockManager,
             "get_lock_info",
             lambda *_args, **_kwargs: None,
         )
