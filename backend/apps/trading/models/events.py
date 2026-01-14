@@ -2,6 +2,7 @@
 
 from django.db import models
 
+
 class ExecutionStrategyEvent(models.Model):
     """Incrementally persisted strategy events during an execution.
 
@@ -139,6 +140,7 @@ class ExecutionEquityPoint(models.Model):
 
     def __str__(self) -> str:
         return f"ExecutionEquityPoint(exec={self.execution_id}, seq={self.sequence})"  # type: ignore[attr-defined]
+
 
 class TradingEvent(models.Model):
     """Persistent event log for the trading app.

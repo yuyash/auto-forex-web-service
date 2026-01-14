@@ -6,6 +6,7 @@ from typing import Any
 from django.db import models
 from django.utils import timezone
 
+
 class ExecutionMetricsManager(models.Manager["ExecutionMetrics"]):
     """Custom manager for ExecutionMetrics model."""
 
@@ -359,6 +360,7 @@ class ExecutionMetrics(models.Model):
             "profit_factor": float(self.profit_factor) if self.profit_factor else None,
         }
 
+
 class ExecutionMetricsCheckpoint(models.Model):
     """Mutable, periodic metrics snapshots during an execution.
 
@@ -399,4 +401,3 @@ class ExecutionMetricsCheckpoint(models.Model):
 
     def __str__(self) -> str:
         return f"ExecutionMetricsCheckpoint(exec={self.execution_id}, created_at={self.created_at})"  # type: ignore[attr-defined]
-

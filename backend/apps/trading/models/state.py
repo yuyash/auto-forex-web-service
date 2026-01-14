@@ -2,6 +2,7 @@
 
 from django.db import models
 
+
 class ExecutionStateSnapshot(models.Model):
     """Periodic state snapshots for task execution resumability.
 
@@ -72,4 +73,3 @@ class ExecutionStateSnapshot(models.Model):
 
     def __str__(self) -> str:
         return f"StateSnapshot(exec={self.execution_id}, seq={self.sequence})"  # type: ignore[attr-defined]
-

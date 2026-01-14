@@ -158,4 +158,3 @@ class FloorStrategyLayerState(models.Model):
     def __str__(self) -> str:
         floor_state_id = getattr(self, "floor_state_id", None)
         return f"FloorLayer(state={floor_state_id}, idx={self.layer_index}, open={self.is_open})"
-
