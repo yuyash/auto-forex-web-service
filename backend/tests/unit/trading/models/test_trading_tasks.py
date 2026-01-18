@@ -17,7 +17,7 @@ class TestTradingTasksModel:
     @pytest.fixture
     def user(self):
         """Create a test user."""
-        return User.objects.create_user(
+        return User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -54,7 +54,7 @@ class TestTradingTasksModel:
             instrument="EUR_USD",
         )
 
-        assert task.id is not None
+        assert task.id is not None  # type: ignore[union-attr]
         assert task.name == "Test Trading Task"
         assert task.user == user
         assert task.config == config
@@ -131,7 +131,7 @@ class TestTradingTasksModel:
 
         copy = original.copy("Copied Task")
 
-        assert copy.id != original.id
+        assert copy.id != original.id  # type: ignore[union-attr]
         assert copy.name == "Copied Task"
         assert copy.description == original.description
         assert copy.user == original.user
@@ -141,7 +141,7 @@ class TestTradingTasksModel:
 
     def test_manager_for_user(self, user, config, oanda_account):
         """Test manager method for_user."""
-        user2 = User.objects.create_user(
+        user2 = User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser2",
             email="test2@example.com",
             password="testpass123",
@@ -162,7 +162,7 @@ class TestTradingTasksModel:
 
         user_tasks = TradingTasks.objects.for_user(user)
         assert user_tasks.count() == 1
-        assert user_tasks.first().user == user
+        assert user_tasks.first().user == user  # type: ignore[union-attr]
 
     def test_manager_for_account(self, user, config, oanda_account):
         """Test manager method for_account."""
@@ -188,4 +188,4 @@ class TestTradingTasksModel:
 
         account_tasks = TradingTasks.objects.for_account(oanda_account)
         assert account_tasks.count() == 1
-        assert account_tasks.first().oanda_account == oanda_account
+        assert account_tasks.first().oanda_account == oanda_account  # type: ignore[union-attr]

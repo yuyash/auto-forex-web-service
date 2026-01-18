@@ -11,7 +11,6 @@ from apps.trading.enums import TaskStatus, TaskType
 
 if TYPE_CHECKING:
     from apps.trading.models.events import StrategyEvents
-    from apps.trading.models.metrics import ExecutionMetricsCheckpoint
     from apps.trading.models.state import ExecutionStateSnapshot
 
 
@@ -49,7 +48,6 @@ class Executions(models.Model):
         # Type stubs for reverse relationships
         state_snapshots: models.Manager["ExecutionStateSnapshot"]
         strategy_events: models.Manager["StrategyEvents"]
-        metrics_checkpoints: models.Manager["ExecutionMetricsCheckpoint"]
 
     task_type = models.CharField(
         max_length=20,
@@ -218,21 +216,6 @@ class Executions(models.Model):
             days = total_seconds / 86400
             return f"{days:.1f}d"
         return None
-
-    def get_metrics(self):
-        """
-        Get associated execution metrics.
-
-        Returns:
-            ExecutionMetrics instance if exists, None otherwise
-        """
-        from apps.trading.models.metrics import ExecutionMetrics
-
-        try:
-            # Access the related ExecutionMetrics via the reverse relation
-            return ExecutionMetrics.objects.get(execution=self)
-        except ExecutionMetrics.DoesNotExist:
-            return None
 
     # State Management Methods (Requirements: 4.1, 4.2, 4.3)
 

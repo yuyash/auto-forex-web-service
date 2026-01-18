@@ -22,7 +22,7 @@ class TestExecutionsModel:
             status=TaskStatus.RUNNING,
         )
 
-        assert execution.id is not None
+        assert execution.id is not None  # type: ignore[union-attr]
         assert execution.task_type == TaskType.BACKTEST
         assert execution.task_id == 1
         assert execution.execution_number == 1
@@ -150,7 +150,7 @@ class TestExecutionsModel:
 
         executions = Executions.objects.for_task(TaskType.BACKTEST, 1)
         assert executions.count() == 1
-        assert executions.first().task_id == 1
+        assert executions.first().task_id == 1  # type: ignore[union-attr]
 
     def test_manager_running(self):
         """Test manager method running."""
@@ -169,4 +169,4 @@ class TestExecutionsModel:
 
         running = Executions.objects.running()
         assert running.count() == 1
-        assert running.first().status == TaskStatus.RUNNING
+        assert running.first().status == TaskStatus.RUNNING  # type: ignore[union-attr]

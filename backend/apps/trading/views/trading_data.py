@@ -1,7 +1,5 @@
 """Views for TradingTask data endpoints."""
 
-from typing import Any
-
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -58,9 +56,8 @@ class TradingTaskResultsView(APIView):
 
             metrics_obj = _get_execution_metrics_or_none(latest_execution)
             if metrics_obj:
-                from apps.trading.serializers import ExecutionMetricsSummarySerializer
-
-                metrics_payload = ExecutionMetricsSummarySerializer(metrics_obj).data
+                # TODO: Update to use TradingMetrics model
+                metrics_payload = {}
 
         live = LivePerformanceService.get_trading_intermediate_results(task_id)
         has_live = live is not None
@@ -111,53 +108,20 @@ class TradingTaskEquityCurveView(APIView):
             )
 
         metrics_obj = _get_execution_metrics_or_none(latest_execution)
-        # Live fallback (DB-backed incremental equity points)
+        # TODO: This endpoint will be replaced by execution-based endpoints
+        # The old ExecutionEquityPoint model has been removed
+        # Use the new TradingMetrics model with granularity aggregation instead
         if not metrics_obj:
-            from apps.trading.models import ExecutionEquityPoint
-
-            qs = (
-                ExecutionEquityPoint.objects.filter(execution=latest_execution)
-                .order_by("sequence", "id")
-                .values("timestamp", "timestamp_raw", "balance", "created_at")
-            )
-
-            pagination = _paginate_queryset_by_page(
-                request=request,
-                queryset=qs,
-                base_url=f"/api/trading/trading-tasks/{task_id}/equity-curve/",
-                default_page_size=500,
-                max_page_size=1000,
-            )
-
-            points: list[dict[str, Any]] = []
-            results_raw = pagination.get("results")
-            results_rows: list[dict[str, Any]] = (
-                results_raw if isinstance(results_raw, list) else []
-            )
-            for row in results_rows:
-                ts = row.get("timestamp")
-                ts_s = None
-                if ts is not None and hasattr(ts, "isoformat"):
-                    try:
-                        ts_s = str(ts.isoformat())
-                    except Exception:  # pylint: disable=broad-exception-caught
-                        ts_s = None
-                if not ts_s:
-                    ts_s = str(row.get("timestamp_raw") or "") or str(
-                        getattr(row.get("created_at"), "isoformat", lambda: "")()
-                    )
-                points.append({"timestamp": ts_s, "balance": float(row.get("balance") or 0)})
-
             return Response(
                 {
                     "task_id": task_id,
                     "task_type": "trading",
                     "execution_id": latest_execution.pk,
-                    "has_metrics": len(points) > 0,
-                    "equity_curve": points,
-                    "count": pagination["count"],
-                    "next": pagination["next"],
-                    "previous": pagination["previous"],
+                    "has_metrics": False,
+                    "equity_curve": [],
+                    "count": 0,
+                    "next": None,
+                    "previous": None,
                     "equity_curve_granularity_seconds": None,
                 },
                 status=status.HTTP_200_OK,
@@ -368,7 +332,8 @@ class TradingTaskMetricsCheckpointView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        checkpoint = latest_execution.metrics_checkpoints.order_by("-created_at", "-id").first()
+        # TODO: Update to use TradingMetrics model
+        checkpoint = None
 
         if not checkpoint:
             return Response(

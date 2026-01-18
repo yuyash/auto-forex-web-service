@@ -138,4 +138,4 @@ class TestStrategyEventsModel:
 
         floor_events = StrategyEvents.objects.filter(strategy_type="floor")
         assert floor_events.count() == 1
-        assert floor_events.first().sequence == 0
+        assert floor_events.first().sequence == 0  # type: ignore[union-attr]

@@ -149,8 +149,7 @@ class PerformanceTracker:
 
     The PerformanceTracker is responsible for tracking real-time performance
     metrics as a task executes. It updates metrics after each tick and trade,
-    calculates unrealized PnL, and periodically saves checkpoints to the database
-    using the ExecutionMetricsCheckpoint model.
+    and calculates unrealized PnL.
 
     Attributes:
         execution: The TaskExecution instance being tracked
@@ -246,72 +245,6 @@ class PerformanceTracker:
         Requirements: 7.3, 13.2
         """
         self.unrealized_pnl = unrealized_pnl
-
-    def save_checkpoint(self) -> Any:
-        """Save a metrics checkpoint to the database.
-
-        Creates an ExecutionMetricsCheckpoint record with current metrics.
-        This enables tracking metrics over time and providing real-time
-        updates to the UI.
-
-        Returns:
-            ExecutionMetricsCheckpoint: The created checkpoint record
-
-        Requirements: 5.5, 7.1
-        """
-        from apps.trading.models import ExecutionMetricsCheckpoint
-
-        # Calculate derived metrics
-        total_pnl = self.realized_pnl + self.unrealized_pnl
-        total_return = (
-            (
-                (self.current_balance + self.unrealized_pnl - self.initial_balance)
-                / self.initial_balance
-            )
-            * 100
-            if self.initial_balance > 0
-            else Decimal("0")
-        )
-
-        total_trades = len(self._trade_pnls)
-        win_rate = (
-            (Decimal(self._winning_trades) / Decimal(total_trades)) * 100
-            if total_trades > 0
-            else Decimal("0")
-        )
-
-        # Calculate average win/loss
-        winning_pnls = [p for p in self._trade_pnls if p > 0]
-        losing_pnls = [p for p in self._trade_pnls if p < 0]
-
-        average_win = sum(winning_pnls) / len(winning_pnls) if winning_pnls else Decimal("0")
-        average_loss = sum(losing_pnls) / len(losing_pnls) if losing_pnls else Decimal("0")
-
-        # Calculate profit factor
-        gross_profit = sum(winning_pnls) if winning_pnls else Decimal("0")
-        gross_loss = abs(sum(losing_pnls)) if losing_pnls else Decimal("0")
-        profit_factor = gross_profit / gross_loss if gross_loss > 0 else None
-
-        # Create checkpoint
-        checkpoint = ExecutionMetricsCheckpoint.objects.create(
-            execution=self.execution,
-            processed=self.ticks_processed,
-            total_return=total_return,
-            total_pnl=total_pnl,
-            realized_pnl=self.realized_pnl,
-            unrealized_pnl=self.unrealized_pnl,
-            total_trades=total_trades,
-            winning_trades=self._winning_trades,
-            losing_trades=self._losing_trades,
-            win_rate=win_rate,
-            max_drawdown=Decimal("0"),  # TODO: Calculate from equity curve
-            sharpe_ratio=None,  # TODO: Calculate from returns
-            profit_factor=profit_factor,
-            average_win=average_win,
-            average_loss=average_loss,
-        )
-
-        return checkpoint
 
     def get_metrics(self) -> dict[str, Any]:
         """Get current metrics as a dictionary.

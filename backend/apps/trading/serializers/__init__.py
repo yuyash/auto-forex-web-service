@@ -18,10 +18,6 @@ from apps.trading.serializers.execution import (
     TaskExecutionSerializer,
     TaskExecutionWithStructuredDataSerializer,
 )
-from apps.trading.serializers.metrics import (
-    ExecutionMetricsSerializer,
-    ExecutionMetricsSummarySerializer,
-)
 from apps.trading.serializers.strategy import (
     StrategyConfigCreateSerializer,
     StrategyConfigDetailSerializer,
@@ -49,9 +45,6 @@ __all__ = [
     "TaskExecutionListSerializer",
     "TaskExecutionSerializer",
     "TaskExecutionWithStructuredDataSerializer",
-    # Metrics
-    "ExecutionMetricsSerializer",
-    "ExecutionMetricsSummarySerializer",
     # Strategy
     "StrategyConfigCreateSerializer",
     "StrategyConfigDetailSerializer",

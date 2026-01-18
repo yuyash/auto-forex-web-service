@@ -15,7 +15,7 @@ class TestStrategyConfigurationsModel:
     @pytest.fixture
     def user(self):
         """Create a test user."""
-        return User.objects.create_user(
+        return User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -31,7 +31,7 @@ class TestStrategyConfigurationsModel:
             description="Test description",
         )
 
-        assert config.id is not None
+        assert config.id is not None  # type: ignore[union-attr]
         assert config.user == user
         assert config.name == "Test Config"
         assert config.strategy_type == "floor"
@@ -100,7 +100,7 @@ class TestStrategyConfigurationsModel:
 
     def test_manager_for_user(self, user):
         """Test manager method for_user."""
-        user2 = User.objects.create_user(
+        user2 = User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser2",
             email="test2@example.com",
             password="testpass123",
@@ -121,7 +121,7 @@ class TestStrategyConfigurationsModel:
 
         user_configs = StrategyConfigurations.objects.for_user(user)
         assert user_configs.count() == 1
-        assert user_configs.first().user == user
+        assert user_configs.first().user == user  # type: ignore[union-attr]
 
     def test_manager_create_for_user(self, user):
         """Test manager method create_for_user."""

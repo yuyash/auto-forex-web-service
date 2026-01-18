@@ -146,9 +146,6 @@ class BaseExecutor(ABC):
             # Save final state
             self.state_manager.save_snapshot(state)
 
-            # Save final metrics checkpoint
-            self.performance_tracker.save_checkpoint()
-
             # Mark execution as completed (sets status, completed_at, progress=100)
             self.execution.mark_completed()
             logger.info(

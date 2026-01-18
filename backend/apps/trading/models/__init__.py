@@ -17,7 +17,6 @@ from apps.trading.models.configs import (
     StrategyConfigurationsManager,
 )
 from apps.trading.models.events import (
-    ExecutionEquityPoint,
     StrategyEvents,
     TradeLogs,
     TradingEvent,
@@ -33,9 +32,6 @@ from apps.trading.models.floor import (
     FloorStrategyTaskState,
 )
 from apps.trading.models.metrics import (
-    ExecutionMetrics,
-    ExecutionMetricsCheckpoint,
-    ExecutionMetricsManager,
     TradingMetrics,
 )
 from apps.trading.models.state import ExecutionStateSnapshot
@@ -64,14 +60,10 @@ __all__ = [
     "ExecutionsManager",
     "TaskExecutionResult",
     # Metrics
-    "ExecutionMetrics",
-    "ExecutionMetricsManager",
-    "ExecutionMetricsCheckpoint",
     "TradingMetrics",
     # Events
     "StrategyEvents",
     "TradeLogs",
-    "ExecutionEquityPoint",
     "TradingEvent",
     # State
     "ExecutionStateSnapshot",

@@ -98,52 +98,6 @@ class TradeLogs(models.Model):
         return f"TradeLogs(exec={self.execution_id}, seq={self.sequence})"  # type: ignore[attr-defined]
 
 
-class ExecutionEquityPoint(models.Model):
-    """Incrementally persisted equity curve points during an execution."""
-
-    execution = models.ForeignKey(
-        "trading.Executions",
-        on_delete=models.CASCADE,
-        related_name="equity_point_rows",
-        help_text="Owning task execution",
-    )
-    sequence = models.PositiveIntegerField(help_text="Monotonic per-execution sequence")
-    timestamp = models.DateTimeField(
-        null=True, blank=True, help_text="Point timestamp (best-effort)"
-    )
-    timestamp_raw = models.CharField(
-        max_length=64,
-        blank=True,
-        default="",
-        help_text="Original timestamp string when parsing fails",
-    )
-    balance = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        help_text="Account balance after applying realized P&L",
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "execution_equity_points"
-        verbose_name = "Execution Equity Point"
-        verbose_name_plural = "Execution Equity Points"
-        indexes = [
-            models.Index(fields=["execution", "sequence"]),
-            models.Index(fields=["execution", "timestamp"]),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["execution", "sequence"],
-                name="uniq_execution_equity_point_sequence",
-            )
-        ]
-        ordering = ["sequence", "id"]
-
-    def __str__(self) -> str:
-        return f"ExecutionEquityPoint(exec={self.execution_id}, seq={self.sequence})"  # type: ignore[attr-defined]
-
-
 class TradingEvent(models.Model):
     """Persistent event log for the trading app.
 

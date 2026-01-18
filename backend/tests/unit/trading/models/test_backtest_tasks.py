@@ -20,7 +20,7 @@ class TestBacktestTasksModel:
     @pytest.fixture
     def user(self):
         """Create a test user."""
-        return User.objects.create_user(
+        return User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -54,7 +54,7 @@ class TestBacktestTasksModel:
             instrument="EUR_USD",
         )
 
-        assert task.id is not None
+        assert task.id is not None  # type: ignore[union-attr]
         assert task.name == "Test Backtest"
         assert task.user == user
         assert task.config == config
@@ -139,7 +139,7 @@ class TestBacktestTasksModel:
 
         copy = original.copy("Copied Task")
 
-        assert copy.id != original.id
+        assert copy.id != original.id  # type: ignore[union-attr]
         assert copy.name == "Copied Task"
         assert copy.description == original.description
         assert copy.user == original.user
@@ -148,7 +148,7 @@ class TestBacktestTasksModel:
 
     def test_manager_for_user(self, user, config):
         """Test manager method for_user."""
-        user2 = User.objects.create_user(
+        user2 = User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser2",
             email="test2@example.com",
             password="testpass123",
@@ -176,4 +176,4 @@ class TestBacktestTasksModel:
 
         user_tasks = BacktestTasks.objects.for_user(user)
         assert user_tasks.count() == 1
-        assert user_tasks.first().user == user
+        assert user_tasks.first().user == user  # type: ignore[union-attr]

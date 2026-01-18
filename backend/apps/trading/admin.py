@@ -3,7 +3,6 @@ from django.contrib import admin
 from apps.trading.models import (
     BacktestTasks,
     CeleryTaskStatus,
-    ExecutionMetrics,
     Executions,
     StrategyConfigurations,
     TaskExecutionResult,
@@ -68,24 +67,6 @@ class ExecutionsAdmin(admin.ModelAdmin):
     )
     list_filter = ("task_type", "status", "created_at")
     search_fields = ("task_type", "task_id", "error_message")
-    ordering = ("-created_at",)
-
-
-@admin.register(ExecutionMetrics)
-class ExecutionMetricsAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "execution",
-        "total_return",
-        "total_pnl",
-        "realized_pnl",
-        "unrealized_pnl",
-        "total_trades",
-        "win_rate",
-        "created_at",
-    )
-    list_filter = ("created_at",)
-    search_fields = ("execution__id",)
     ordering = ("-created_at",)
 
 

@@ -15,7 +15,6 @@ from apps.trading.enums import TaskType
 from apps.trading.models import TradingTasks
 from apps.trading.models.execution import Executions
 from apps.trading.models.tasks import BacktestTasks
-from apps.trading.services.equity import EquityService
 from apps.trading.views._helpers import _paginate_list_by_page
 
 
@@ -56,9 +55,9 @@ class ExecutionDetailView(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-        # Get latest metrics checkpoint
+        # TODO: Update to use TradingMetrics model
         assert isinstance(execution, Executions)
-        checkpoint = execution.metrics_checkpoints.order_by("-created_at", "-id").first()
+        checkpoint = None
 
         response_data = {
             "id": execution.pk,
@@ -137,12 +136,8 @@ class ExecutionStatusView(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-        # Get latest metrics checkpoint
-
-        if isinstance(execution, Executions):
-            checkpoint = execution.metrics_checkpoints.order_by("-created_at", "-id").first()
-        else:
-            checkpoint = None
+        # TODO: Update to use TradingMetrics model
+        checkpoint = None
 
         response_data = {
             "execution_id": execution.pk,
@@ -443,7 +438,7 @@ class ExecutionEquityView(APIView):
         # Verify user has access to this execution's task
         if execution.task_type == TaskType.BACKTEST:
             try:
-                task = BacktestTasks.objects.get(id=execution.task_id, user=request.user.pk)  # type: ignore[name-defined]  # noqa: F823
+                BacktestTasks.objects.get(id=execution.task_id, user=request.user.pk)  # type: ignore[name-defined]  # noqa: F823
             except BacktestTasks.DoesNotExist:  # type: ignore[name-defined]  # noqa: F823
                 return Response(
                     {"error": "Access denied"},
@@ -451,133 +446,24 @@ class ExecutionEquityView(APIView):
                 )
         elif execution.task_type == TaskType.TRADING:
             try:
-                task = TradingTasks.objects.get(id=execution.task_id, user=request.user.pk)
+                TradingTasks.objects.get(id=execution.task_id, user=request.user.pk)
             except TradingTasks.DoesNotExist:
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-        else:
-            task = None
 
-        from apps.trading.models import ExecutionEquityPoint
-
-        # Build query
-        qs = ExecutionEquityPoint.objects.filter(execution=execution).order_by("sequence", "id")
-
-        # Filter by since_sequence for incremental fetching
-        since_sequence = request.query_params.get("since_sequence")
-        if since_sequence:
-            try:
-                qs = qs.filter(sequence__gt=int(since_sequence))
-            except ValueError:
-                return Response(
-                    {"error": "Invalid since_sequence parameter"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        # Filter by time range
-        start_time = request.query_params.get("start_time")
-        end_time = request.query_params.get("end_time")
-
-        if start_time:
-            from django.utils.dateparse import parse_datetime
-
-            start_dt = parse_datetime(start_time)
-            if start_dt:
-                qs = qs.filter(timestamp__gte=start_dt)
-
-        if end_time:
-            from django.utils.dateparse import parse_datetime
-
-            end_dt = parse_datetime(end_time)
-            if end_dt:
-                qs = qs.filter(timestamp__lte=end_dt)
-
-        # Get equity points
-        equity_data = list(
-            qs.values("sequence", "timestamp", "timestamp_raw", "balance", "created_at")
-        )
-
-        # Format points
-        points = []
-        for point_row in equity_data:
-            ts = point_row["timestamp"]
-            ts_s = None
-            if ts is not None and hasattr(ts, "isoformat"):
-                try:
-                    ts_s = str(ts.isoformat())
-                except Exception:  # pylint: disable=broad-exception-caught
-                    ts_s = None
-            if not ts_s:
-                ts_s = str(point_row["timestamp_raw"] or "") or str(
-                    getattr(point_row["created_at"], "isoformat", lambda: "")()
-                )
-
-            points.append(
-                {
-                    "sequence": point_row["sequence"],
-                    "timestamp": ts_s,
-                    "balance": float(point_row["balance"]),
-                }
-            )
-
-        # Apply downsampling if requested
-        max_points = request.query_params.get("max_points")
-        granularity_seconds = None
-
-        if max_points:
-            try:
-                max_points_int = int(max_points)
-                if len(points) > max_points_int:
-                    equity_service = EquityService()
-
-                    # Determine start/end times for downsampling
-                    start_dt = None
-                    end_dt = None
-                    if execution.task_type == TaskType.BACKTEST and task:
-                        if isinstance(task, BacktestTasks):
-                            start_dt = task.start_time
-                            end_dt = task.end_time
-                    else:
-                        start_dt = execution.started_at
-                        end_dt = execution.completed_at
-
-                    ds = equity_service.downsample_equity_curve(
-                        points,
-                        max_points=max_points_int,
-                        start_dt=start_dt,
-                        end_dt=end_dt,
-                    )
-                    points = ds.points
-                    granularity_seconds = ds.granularity_seconds
-            except ValueError:
-                pass  # Ignore invalid max_points
-
-        pagination = _paginate_list_by_page(
-            request=request,
-            items=points,
-            base_url=f"/api/trading/executions/{execution_id}/equity/",
-            default_page_size=500,
-            max_page_size=1000,
-            extra_query={
-                "since_sequence": since_sequence,
-                "start_time": start_time,
-                "end_time": end_time,
-                "max_points": max_points,
-            },
-        )
-
+        # TODO: This endpoint will be replaced by execution-based endpoints
+        # The old ExecutionEquityPoint model has been removed
+        # Use the new TradingMetrics model with granularity aggregation instead
         return Response(
             {
-                "execution_id": execution.pk,
+                "execution_id": execution_id,
                 "task_type": execution.task_type,
                 "task_id": execution.task_id,
-                "equity_curve": pagination["results"],
-                "count": pagination["count"],
-                "next": pagination["next"],
-                "previous": pagination["previous"],
-                "granularity_seconds": granularity_seconds,
+                "equity_curve": [],
+                "count": 0,
+                "granularity_seconds": None,
             },
             status=status.HTTP_200_OK,
         )
@@ -620,12 +506,8 @@ class ExecutionMetricsView(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-        # Get latest checkpoint
-
-        if isinstance(execution, Executions):
-            checkpoint = execution.metrics_checkpoints.order_by("-created_at", "-id").first()
-        else:
-            checkpoint = None
+        # TODO: Update to use TradingMetrics model
+        checkpoint = None
 
         if not checkpoint:
             return Response(
