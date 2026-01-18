@@ -30,7 +30,7 @@ class FloorStrategyTaskState(models.Model):
         help_text="Associated live trading task (if applicable)",
     )
     backtest_task = models.OneToOneField(
-        "trading.BacktestTask",
+        "trading.BacktestTasks",
         on_delete=models.CASCADE,
         related_name="floor_state",
         null=True,

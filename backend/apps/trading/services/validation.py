@@ -5,6 +5,8 @@ This module provides validation for task configurations, account permissions,
 and date ranges before task execution.
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional, Tuple

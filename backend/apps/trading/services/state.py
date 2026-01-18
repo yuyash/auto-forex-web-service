@@ -6,6 +6,8 @@ This module provides the StateManager class which handles loading, saving,
 and validating execution state for task resumability.
 """
 
+from __future__ import annotations
+
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 

@@ -6,6 +6,8 @@ This module provides the EventEmitter class which handles emitting and
 persisting events during task execution for tracking and monitoring.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
