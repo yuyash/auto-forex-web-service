@@ -11,7 +11,7 @@ from apps.market.enums import ApiType, Jurisdiction
 from apps.market.models import OandaAccounts, OandaApiHealthStatus
 
 
-class OandaAccountSerializer(serializers.ModelSerializer):
+class OandaAccountsSerializer(serializers.ModelSerializer):
     """
     Serializer for OANDA account.
     """

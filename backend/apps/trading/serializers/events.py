@@ -7,8 +7,8 @@ from rest_framework import serializers
 from apps.trading.models import StrategyEvents
 
 
-class StrategyEventSerializer(serializers.ModelSerializer):
-    """Serializer for ExecutionStrategyEvent with structured event parsing.
+class StrategyEventsSerializer(serializers.ModelSerializer):
+    """Serializer for StrategyEvents with structured event parsing.
 
     Parses the raw event JSON into a structured format with:
     - strategy_type: Strategy identifier (e.g., 'floor', 'momentum')

@@ -4,11 +4,11 @@ from rest_framework import serializers
 
 from apps.trading.models import Executions
 
-from .events import StrategyEventSerializer, StructuredLogSerializer
+from .events import StrategyEventsSerializer, StructuredLogSerializer
 
 
-class TaskExecutionSerializer(serializers.ModelSerializer):
-    """Serializer for TaskExecution summary views."""
+class ExecutionsSerializer(serializers.ModelSerializer):
+    """Serializer for Executions summary views."""
 
     duration = serializers.SerializerMethodField()
 
@@ -34,7 +34,7 @@ class TaskExecutionSerializer(serializers.ModelSerializer):
         return obj.get_duration()
 
 
-class TaskExecutionListSerializer(serializers.ModelSerializer):
+class ExecutionsListSerializer(serializers.ModelSerializer):
     """Serializer for execution list endpoints.
 
     Per API contract, this omits heavy fields like logs and nested metrics.
@@ -63,9 +63,9 @@ class TaskExecutionListSerializer(serializers.ModelSerializer):
         return obj.get_duration()
 
 
-class TaskExecutionDetailSerializer(serializers.ModelSerializer):
+class ExecutionsDetailSerializer(serializers.ModelSerializer):
     """
-    Serializer for detailed task execution view with nested metrics.
+    Serializer for detailed execution view with nested metrics.
     """
 
     duration = serializers.SerializerMethodField()
@@ -97,11 +97,10 @@ class TaskExecutionDetailSerializer(serializers.ModelSerializer):
 
     def get_has_metrics(self, obj: Executions) -> bool:
         """Check if execution has associated metrics."""
-        # TODO: Update to use TradingMetrics model
-        return False
+        return obj.trading_metrics.exists()  # type: ignore[attr-defined]
 
 
-class TaskExecutionWithStructuredDataSerializer(serializers.ModelSerializer):
+class ExecutionsWithStructuredDataSerializer(serializers.ModelSerializer):
     """Enhanced serializer with structured events, logs, and latest metrics.
 
     This serializer provides:
@@ -149,8 +148,7 @@ class TaskExecutionWithStructuredDataSerializer(serializers.ModelSerializer):
 
     def get_has_metrics(self, obj: Executions) -> bool:
         """Check if execution has associated metrics."""
-        # TODO: Update to use TradingMetrics model
-        return False
+        return obj.trading_metrics.exists()  # type: ignore[attr-defined]
 
     def get_structured_events(self, obj: Executions) -> list[dict]:
         """Get structured strategy events.
@@ -164,7 +162,7 @@ class TaskExecutionWithStructuredDataSerializer(serializers.ModelSerializer):
         # Reverse to get chronological order
         events = list(reversed(events))
 
-        serializer = StrategyEventSerializer(events, many=True)
+        serializer = StrategyEventsSerializer(events, many=True)
         return serializer.data  # type: ignore[return-value]
 
     def get_structured_logs(self, obj: Executions) -> list[dict]:
@@ -187,6 +185,12 @@ class TaskExecutionWithStructuredDataSerializer(serializers.ModelSerializer):
         """Get the latest metrics checkpoint.
 
         Returns the most recent TradingMetrics snapshot.
-        TODO: Update to use TradingMetrics model
         """
-        return None
+        latest_metric = obj.trading_metrics.order_by("-sequence").first()  # type: ignore[attr-defined]
+        if not latest_metric:
+            return None
+
+        from .metrics import TradingMetricsSerializer
+
+        serializer = TradingMetricsSerializer(latest_metric)
+        return serializer.data  # type: ignore[return-value]

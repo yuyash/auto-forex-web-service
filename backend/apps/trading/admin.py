@@ -5,8 +5,11 @@ from apps.trading.models import (
     CeleryTaskStatus,
     Executions,
     StrategyConfigurations,
+    StrategyEvents,
     TaskExecutionResult,
+    TradeLogs,
     TradingEvent,
+    TradingMetrics,
     TradingTasks,
 )
 
@@ -111,3 +114,126 @@ class TradingEventAdmin(admin.ModelAdmin):
     list_filter = ("severity", "event_type", "task_type", "created_at")
     search_fields = ("event_type", "description", "instrument", "task_type", "task_id")
     ordering = ("-created_at",)
+
+
+@admin.register(TradingMetrics)
+class TradingMetricsAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "execution",
+        "sequence",
+        "timestamp",
+        "realized_pnl",
+        "unrealized_pnl",
+        "total_pnl",
+        "open_positions",
+        "total_trades",
+        "created_at",
+    )
+    list_filter = ("created_at", "timestamp")
+    search_fields = ("execution__id", "sequence")
+    ordering = ("-created_at",)
+    readonly_fields = (
+        "execution",
+        "sequence",
+        "timestamp",
+        "realized_pnl",
+        "unrealized_pnl",
+        "total_pnl",
+        "open_positions",
+        "total_trades",
+        "tick_ask_min",
+        "tick_ask_max",
+        "tick_ask_avg",
+        "tick_bid_min",
+        "tick_bid_max",
+        "tick_bid_avg",
+        "tick_mid_min",
+        "tick_mid_max",
+        "tick_mid_avg",
+        "created_at",
+        "updated_at",
+    )
+    fieldsets = (
+        (
+            "Execution Info",
+            {
+                "fields": ("execution", "sequence", "timestamp"),
+            },
+        ),
+        (
+            "PnL Metrics",
+            {
+                "fields": ("realized_pnl", "unrealized_pnl", "total_pnl"),
+            },
+        ),
+        (
+            "Position Metrics",
+            {
+                "fields": ("open_positions", "total_trades"),
+            },
+        ),
+        (
+            "Tick Statistics - Ask",
+            {
+                "fields": ("tick_ask_min", "tick_ask_max", "tick_ask_avg"),
+            },
+        ),
+        (
+            "Tick Statistics - Bid",
+            {
+                "fields": ("tick_bid_min", "tick_bid_max", "tick_bid_avg"),
+            },
+        ),
+        (
+            "Tick Statistics - Mid",
+            {
+                "fields": ("tick_mid_min", "tick_mid_max", "tick_mid_avg"),
+            },
+        ),
+        (
+            "Timestamps",
+            {
+                "fields": ("created_at", "updated_at"),
+            },
+        ),
+    )
+
+
+@admin.register(TradeLogs)
+class TradeLogsAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "execution",
+        "sequence",
+        "created_at",
+    )
+    list_filter = ("created_at",)
+    search_fields = ("execution__id", "sequence")
+    ordering = ("-created_at",)
+    readonly_fields = ("execution", "sequence", "trade", "created_at")
+
+
+@admin.register(StrategyEvents)
+class StrategyEventsAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "execution",
+        "sequence",
+        "event_type",
+        "strategy_type",
+        "timestamp",
+        "created_at",
+    )
+    list_filter = ("event_type", "strategy_type", "created_at", "timestamp")
+    search_fields = ("execution__id", "sequence", "event_type", "strategy_type")
+    ordering = ("-created_at",)
+    readonly_fields = (
+        "execution",
+        "sequence",
+        "event_type",
+        "strategy_type",
+        "timestamp",
+        "event",
+        "created_at",
+    )

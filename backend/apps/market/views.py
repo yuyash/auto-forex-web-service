@@ -23,7 +23,7 @@ from rest_framework.views import APIView
 
 from apps.market.models import OandaAccounts
 from apps.market.serializers import (
-    OandaAccountSerializer,
+    OandaAccountsSerializer,
     OandaApiHealthStatusSerializer,
     PositionSerializer,
 )
@@ -55,7 +55,7 @@ class OandaAccountView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    serializer_class = OandaAccountSerializer
+    serializer_class = OandaAccountsSerializer
 
     def get(self, request: Request) -> Response:
         if not request.user.is_authenticated:
@@ -122,7 +122,7 @@ class OandaAccountDetailView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    serializer_class = OandaAccountSerializer
+    serializer_class = OandaAccountsSerializer
 
     def get_object(self, request: Request, account_id: int) -> OandaAccounts | None:
         if not request.user.is_authenticated:

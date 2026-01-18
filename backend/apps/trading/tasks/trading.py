@@ -33,8 +33,8 @@ class TradingTaskRunner(BaseTaskRunner):
 
     def _create_executor(self, data_source: LiveTickDataSource, strategy: Any) -> TradingExecutor:
         """Create TradingExecutor instance."""
-        # Type assertion for TradingTask
-        assert isinstance(self.task, TradingTasks), "Task must be TradingTask"
+        # Type assertion for TradingTasks
+        assert isinstance(self.task, TradingTasks), "Task must be TradingTasks"
 
         from apps.market.services.oanda import OandaService
 
@@ -66,7 +66,7 @@ class TradingTaskRunner(BaseTaskRunner):
                 "config", "oanda_account", "user"
             ).get(pk=task_id)
         except TradingTasks.DoesNotExist:
-            logger.error(f"TradingTask {task_id} not found")
+            logger.error(f"TradingTasks {task_id} not found")
             self.task_service.mark_stopped(
                 status=CeleryTaskStatus.Status.FAILED, status_message="Task not found"
             )

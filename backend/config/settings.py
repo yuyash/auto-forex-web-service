@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Third-party apps
     "rest_framework",
+    "drf_spectacular",
     "channels",
     "django_celery_beat",
     # Local apps
@@ -349,9 +350,42 @@ REST_FRAMEWORK = {
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DATETIME_FORMAT": "%Y-%m-%dT%H:%M:%S.%fZ",
     "DATE_FORMAT": "%Y-%m-%d",
     "TIME_FORMAT": "%H:%M:%S",
+}
+
+
+# =============================================================================
+# DRF Spectacular (OpenAPI) Configuration
+# =============================================================================
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Auto Forex Trading API",
+    "DESCRIPTION": "API for managing algorithmic forex trading operations across multiple OANDA accounts",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SCHEMA_PATH_PREFIX": "/api/",
+    "SERVERS": [
+        {"url": "http://localhost:8000", "description": "Development server"},
+        {"url": "https://api.autoforex.example.com", "description": "Production server"},
+    ],
+    "TAGS": [
+        {"name": "accounts", "description": "User account management"},
+        {"name": "health", "description": "System health checks"},
+        {"name": "market", "description": "Market data and OANDA account management"},
+        {"name": "trading", "description": "Trading tasks and execution management"},
+        {"name": "executions", "description": "Execution data and metrics"},
+    ],
+    "CONTACT": {
+        "name": "Auto Forex Support",
+        "email": "support@autoforex.example.com",
+    },
+    "LICENSE": {
+        "name": "Proprietary",
+    },
 }
 
 

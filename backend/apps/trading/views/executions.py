@@ -9,6 +9,7 @@ Requirements: 6.13, 6.14, 6.15, 6.16, 6.17, 6.18, 6.19, 6.20
 
 from datetime import datetime
 
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -39,6 +40,41 @@ class ExecutionDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="get_execution_detail",
+        tags=["executions"],
+        summary="Get execution details",
+        description="Retrieve complete details for a specific execution including status, timing, resource usage, and logs.",
+        responses={
+            200: {
+                "description": "Execution details retrieved successfully",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "id": 1,
+                            "task_type": "backtest",
+                            "task_id": 123,
+                            "execution_number": 1,
+                            "status": "completed",
+                            "progress": 100.0,
+                            "started_at": "2024-01-01T00:00:00Z",
+                            "completed_at": "2024-01-01T01:00:00Z",
+                            "duration": 3600,
+                            "cpu_limit_cores": 2.0,
+                            "memory_limit_mb": "2048",
+                            "peak_memory_mb": "1536",
+                            "error_message": None,
+                            "error_traceback": None,
+                            "logs": [],
+                            "created_at": "2024-01-01T00:00:00Z",
+                        }
+                    }
+                },
+            },
+            403: {"description": "Access denied - user does not own this execution's task"},
+            404: {"description": "Execution not found"},
+        },
+    )
     def get(self, request: Request, execution_id: int) -> Response:
         """Get full execution details.
 
@@ -113,6 +149,69 @@ class ExecutionLogsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="get_execution_logs",
+        tags=["executions"],
+        summary="Get execution logs",
+        description="Retrieve execution logs with optional filtering by level, time range, and limit.",
+        parameters=[
+            OpenApiParameter(
+                name="level",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Filter by log level (debug, info, warning, error)",
+                required=False,
+                enum=["debug", "info", "warning", "error"],
+            ),
+            OpenApiParameter(
+                name="start_time",
+                type=OpenApiTypes.DATETIME,
+                location=OpenApiParameter.QUERY,
+                description="Filter logs after this timestamp (ISO format)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="end_time",
+                type=OpenApiTypes.DATETIME,
+                location=OpenApiParameter.QUERY,
+                description="Filter logs before this timestamp (ISO format)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="limit",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="Maximum number of logs to return (default: 100, max: 1000)",
+                required=False,
+            ),
+        ],
+        responses={
+            200: {
+                "description": "Logs retrieved successfully",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "execution_id": 1,
+                            "task_type": "backtest",
+                            "task_id": 123,
+                            "logs": [
+                                {
+                                    "timestamp": "2024-01-01T00:00:00Z",
+                                    "level": "info",
+                                    "message": "Strategy initialized",
+                                }
+                            ],
+                            "count": 1,
+                            "next": None,
+                            "previous": None,
+                        }
+                    }
+                },
+            },
+            403: {"description": "Access denied"},
+            404: {"description": "Execution not found"},
+        },
+    )
     def get(self, request: Request, execution_id: int) -> Response:
         """Get execution logs with filtering.
 
@@ -236,6 +335,35 @@ class ExecutionStatusView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="get_execution_status",
+        tags=["executions"],
+        summary="Get execution status",
+        description="Retrieve current execution status including progress, timing, and estimated completion.",
+        responses={
+            200: {
+                "description": "Status retrieved successfully",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "execution_id": 1,
+                            "task_type": "backtest",
+                            "task_id": 123,
+                            "execution_number": 1,
+                            "status": "running",
+                            "progress": 75.0,
+                            "started_at": "2024-01-01T00:00:00Z",
+                            "completed_at": None,
+                            "error_message": None,
+                            "estimated_remaining_seconds": 1200,
+                        }
+                    }
+                },
+            },
+            403: {"description": "Access denied"},
+            404: {"description": "Execution not found"},
+        },
+    )
     def get(self, request: Request, execution_id: int) -> Response:
         """Get execution status with progress.
 
@@ -311,6 +439,58 @@ class ExecutionEventsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="get_execution_events",
+        tags=["executions"],
+        summary="Get execution strategy events",
+        description="Retrieve strategy events with optional filtering by event type and incremental fetching support.",
+        parameters=[
+            OpenApiParameter(
+                name="since_sequence",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="Return only events with sequence number greater than this value (for incremental fetching)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="event_type",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Filter by event type",
+                required=False,
+            ),
+        ],
+        responses={
+            200: {
+                "description": "Events retrieved successfully",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "execution_id": 1,
+                            "task_type": "backtest",
+                            "task_id": 123,
+                            "events": [
+                                {
+                                    "sequence": 1,
+                                    "event_type": "signal_generated",
+                                    "strategy_type": "floor",
+                                    "timestamp": "2024-01-01T00:00:00Z",
+                                    "event": {},
+                                    "created_at": "2024-01-01T00:00:00Z",
+                                }
+                            ],
+                            "count": 1,
+                            "next": None,
+                            "previous": None,
+                        }
+                    }
+                },
+            },
+            400: {"description": "Invalid parameters"},
+            403: {"description": "Access denied"},
+            404: {"description": "Execution not found"},
+        },
+    )
     def get(self, request: Request, execution_id: int) -> Response:
         """Get execution events with filtering and pagination."""
         try:
@@ -414,6 +594,67 @@ class ExecutionTradesView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="get_execution_trades",
+        tags=["executions"],
+        summary="Get execution trades",
+        description="Retrieve trade logs with optional filtering by instrument, direction, and incremental fetching support.",
+        parameters=[
+            OpenApiParameter(
+                name="since_sequence",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="Return only trades with sequence number greater than this value (for incremental fetching)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="instrument",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Filter by instrument (e.g., EUR_USD)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="direction",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Filter by trade direction (buy/sell)",
+                required=False,
+                enum=["buy", "sell"],
+            ),
+        ],
+        responses={
+            200: {
+                "description": "Trades retrieved successfully",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "execution_id": 1,
+                            "task_type": "backtest",
+                            "task_id": 123,
+                            "trades": [
+                                {
+                                    "sequence": 1,
+                                    "trade": {
+                                        "instrument": "EUR_USD",
+                                        "direction": "buy",
+                                        "units": 1000,
+                                    },
+                                    "created_at": "2024-01-01T00:00:00Z",
+                                }
+                            ],
+                            "count": 1,
+                            "next": None,
+                            "previous": None,
+                        }
+                    }
+                },
+            },
+            400: {"description": "Invalid parameters"},
+            403: {"description": "Access denied"},
+            404: {"description": "Execution not found"},
+        },
+    )
     def get(self, request: Request, execution_id: int) -> Response:
         """Get execution trades with filtering and pagination."""
         try:
@@ -529,6 +770,80 @@ class ExecutionEquityView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="get_execution_equity",
+        tags=["executions"],
+        summary="Get execution equity curve",
+        description="Retrieve equity curve data with configurable time granularity for binning and statistical aggregation.",
+        parameters=[
+            OpenApiParameter(
+                name="granularity",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="Time window in seconds for binning (default: 60)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="start_time",
+                type=OpenApiTypes.DATETIME,
+                location=OpenApiParameter.QUERY,
+                description="Filter data after this timestamp (ISO format)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="end_time",
+                type=OpenApiTypes.DATETIME,
+                location=OpenApiParameter.QUERY,
+                description="Filter data before this timestamp (ISO format)",
+                required=False,
+            ),
+        ],
+        responses={
+            200: {
+                "description": "Equity curve data retrieved successfully",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "execution_id": 1,
+                            "task_type": "backtest",
+                            "task_id": 123,
+                            "granularity_seconds": 60,
+                            "bins": [
+                                {
+                                    "timestamp": "2024-01-01T00:00:00Z",
+                                    "realized_pnl_min": "100.0",
+                                    "realized_pnl_max": "150.0",
+                                    "realized_pnl_avg": "125.0",
+                                    "realized_pnl_median": "120.0",
+                                    "unrealized_pnl_min": "-50.0",
+                                    "unrealized_pnl_max": "50.0",
+                                    "unrealized_pnl_avg": "10.0",
+                                    "unrealized_pnl_median": "5.0",
+                                    "tick_ask_min": "1.1000",
+                                    "tick_ask_max": "1.1050",
+                                    "tick_ask_avg": "1.1025",
+                                    "tick_ask_median": "1.1020",
+                                    "tick_bid_min": "1.0990",
+                                    "tick_bid_max": "1.1040",
+                                    "tick_bid_avg": "1.1015",
+                                    "tick_bid_median": "1.1010",
+                                    "tick_mid_min": "1.0995",
+                                    "tick_mid_max": "1.1045",
+                                    "tick_mid_avg": "1.1020",
+                                    "tick_mid_median": "1.1015",
+                                    "trade_count": 5,
+                                }
+                            ],
+                            "count": 1,
+                        }
+                    }
+                },
+            },
+            400: {"description": "Invalid parameters"},
+            403: {"description": "Access denied"},
+            404: {"description": "Execution not found"},
+        },
+    )
     def get(self, request: Request, execution_id: int) -> Response:
         """Get execution equity curve with granularity aggregation.
 
@@ -698,6 +1013,71 @@ class ExecutionMetricsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="get_execution_metrics",
+        tags=["executions"],
+        summary="Get execution metrics",
+        description="Retrieve metrics data with optional granularity binning, time range filtering, or last N points.",
+        parameters=[
+            OpenApiParameter(
+                name="granularity",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="Time window in seconds for binning (optional, returns binned data if provided)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="start_time",
+                type=OpenApiTypes.DATETIME,
+                location=OpenApiParameter.QUERY,
+                description="Filter metrics after this timestamp (ISO format)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="end_time",
+                type=OpenApiTypes.DATETIME,
+                location=OpenApiParameter.QUERY,
+                description="Filter metrics before this timestamp (ISO format)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="last_n",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="Return last N metrics points (alternative to time range)",
+                required=False,
+            ),
+        ],
+        responses={
+            200: {
+                "description": "Metrics retrieved successfully",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "execution_id": 1,
+                            "task_type": "backtest",
+                            "task_id": 123,
+                            "metrics": [
+                                {
+                                    "sequence": 1,
+                                    "timestamp": "2024-01-01T00:00:00Z",
+                                    "realized_pnl": "100.0",
+                                    "unrealized_pnl": "50.0",
+                                    "total_pnl": "150.0",
+                                    "open_positions": 2,
+                                    "total_trades": 5,
+                                }
+                            ],
+                            "count": 1,
+                        }
+                    }
+                },
+            },
+            400: {"description": "Invalid parameters"},
+            403: {"description": "Access denied"},
+            404: {"description": "Execution not found"},
+        },
+    )
     def get(self, request: Request, execution_id: int) -> Response:
         """Get execution metrics with filtering.
 
@@ -903,6 +1283,48 @@ class ExecutionLatestMetricsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="get_execution_latest_metrics",
+        tags=["executions"],
+        summary="Get latest execution metrics",
+        description="Retrieve the most recent metrics snapshot for an execution.",
+        responses={
+            200: {
+                "description": "Latest metrics retrieved successfully",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "execution_id": 1,
+                            "task_type": "backtest",
+                            "task_id": 123,
+                            "has_metrics": True,
+                            "metrics": {
+                                "sequence": 100,
+                                "timestamp": "2024-01-01T01:00:00Z",
+                                "realized_pnl": "500.0",
+                                "unrealized_pnl": "100.0",
+                                "total_pnl": "600.0",
+                                "open_positions": 3,
+                                "total_trades": 25,
+                                "tick_ask_min": "1.1000",
+                                "tick_ask_max": "1.1050",
+                                "tick_ask_avg": "1.1025",
+                                "tick_bid_min": "1.0990",
+                                "tick_bid_max": "1.1040",
+                                "tick_bid_avg": "1.1015",
+                                "tick_mid_min": "1.0995",
+                                "tick_mid_max": "1.1045",
+                                "tick_mid_avg": "1.1020",
+                                "created_at": "2024-01-01T01:00:00Z",
+                            },
+                        }
+                    }
+                },
+            },
+            403: {"description": "Access denied"},
+            404: {"description": "Execution not found"},
+        },
+    )
     def get(self, request: Request, execution_id: int) -> Response:
         """Get latest metrics snapshot for execution.
 

@@ -31,8 +31,8 @@ class BacktestTaskRunner(BaseTaskRunner):
 
     def _create_data_source(self) -> RedisTickDataSource:
         """Create data source for backtest execution."""
-        # Type assertion for BacktestTask
-        assert isinstance(self.task, BacktestTasks), "Task must be BacktestTask"
+        # Type assertion for BacktestTasks
+        assert isinstance(self.task, BacktestTasks), "Task must be BacktestTasks"
 
         task_id = self.task.pk
         request_id = f"backtest:{task_id}:{int(time.time())}"
@@ -65,8 +65,8 @@ class BacktestTaskRunner(BaseTaskRunner):
 
     def _create_executor(self, data_source: RedisTickDataSource, strategy: Any) -> BacktestExecutor:
         """Create BacktestExecutor instance."""
-        # Type assertion for BacktestTask
-        assert isinstance(self.task, BacktestTasks), "Task must be BacktestTask"
+        # Type assertion for BacktestTasks
+        assert isinstance(self.task, BacktestTasks), "Task must be BacktestTasks"
 
         return BacktestExecutor(
             data_source=data_source,
@@ -92,7 +92,7 @@ class BacktestTaskRunner(BaseTaskRunner):
                 pk=task_id
             )
         except BacktestTasks.DoesNotExist:
-            logger.error(f"BacktestTask {task_id} not found")
+            logger.error(f"BacktestTasks {task_id} not found")
             self.task_service.mark_stopped(
                 status=CeleryTaskStatus.Status.FAILED, status_message="Task not found"
             )

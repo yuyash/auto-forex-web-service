@@ -529,11 +529,11 @@ class TradingTaskExecutionsView(APIView):
         # Get execution history
         executions = task.get_execution_history()
 
-        from apps.trading.serializers import TaskExecutionListSerializer
+        from apps.trading.serializers import ExecutionsListSerializer
 
         paginator = self.pagination_class()
         paginated = paginator.paginate_queryset(executions, request)
-        serializer = TaskExecutionListSerializer(paginated, many=True)
+        serializer = ExecutionsListSerializer(paginated, many=True)
         return paginator.get_paginated_response(serializer.data)
 
 
