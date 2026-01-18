@@ -97,7 +97,7 @@
   "editor.wordWrap": "on",
   "explorer.excludeGitIgnore": true,
   "kiroAgent.enableTabAutocomplete": true,
-  "kiroAgent.modelSelection": "claude-sonnet-4.5",
+  "kiroAgent.modelSelection": "claude-sonnet-4.5-1m",
   "kiroAgent.trustedCommands": [
     "cat *",
     "cd *",
