@@ -15,7 +15,7 @@ from celery import current_task, shared_task
 from django.conf import settings
 
 from apps.market.enums import ApiType
-from apps.market.models import CeleryTaskStatus, OandaAccount, TickData
+from apps.market.models import CeleryTaskStatus, OandaAccounts, TickData
 from apps.market.services.celery import CeleryTaskService
 from apps.market.services.oanda import OandaService
 
@@ -113,17 +113,17 @@ def ensure_tick_pubsub_running() -> None:
         init_key = getattr(settings, "MARKET_TICK_PUBSUB_INIT_KEY", "market:tick_pubsub:init")
 
         account_id_raw = client.get(account_key)
-        account: OandaAccount | None = None
+        account: OandaAccounts | None = None
         if account_id_raw:
             try:
                 account_id = int(str(account_id_raw))
-                account = OandaAccount.objects.filter(id=account_id).first()
+                account = OandaAccounts.objects.filter(id=account_id).first()
             except Exception:  # pylint: disable=broad-exception-caught
                 account = None
 
         if account is None:
             account = (
-                OandaAccount.objects.filter(api_type=ApiType.LIVE).order_by("created_at").first()
+                OandaAccounts.objects.filter(api_type=ApiType.LIVE).order_by("created_at").first()
             )
             if account is None:
                 return
@@ -229,7 +229,7 @@ def publish_oanda_ticks(*, account_id: int, instruments: list[str] | None = None
             pass
         return
 
-    account = OandaAccount.objects.filter(id=account_id).first()
+    account = OandaAccounts.objects.filter(id=account_id).first()
     if account is None:
         logger.error("Tick publisher cannot start: account %s not found", account_id)
         task_service.mark_stopped(

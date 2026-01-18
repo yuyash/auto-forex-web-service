@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from apps.market.models import OandaAccount
+from apps.market.models import OandaAccounts
 from apps.trading.models import StrategyConfig, TradingTask
 
 
@@ -202,7 +202,7 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Configuration does not belong to the current user")
         return value
 
-    def validate_oanda_account(self, value: OandaAccount) -> OandaAccount:
+    def validate_oanda_account(self, value: OandaAccounts) -> OandaAccounts:
         """Validate that account belongs to the user and is active."""
         user = self.context["request"].user
         if value.user != user:

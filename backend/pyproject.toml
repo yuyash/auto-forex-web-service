@@ -52,7 +52,7 @@ build-backend = "hatchling.build"
 packages = ["config"]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "tests.settings_test"
+DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["test_*.py", "*_test.py", "tests.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -61,11 +61,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--import-mode=importlib",
-    "-n=auto",
-    "--cov=.",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
+    "-v",
 ]
 testpaths = ["tests"]
 markers = [

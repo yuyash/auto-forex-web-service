@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional, Tuple
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from apps.market.models import OandaAccount
+from apps.market.models import OandaAccounts
 from apps.trading.models import BacktestTask, StrategyConfig, TradingTask
 
 if TYPE_CHECKING:
@@ -148,8 +148,8 @@ class TaskValidator:
             Tuple of (is_valid, error_message)
         """
         try:
-            account = OandaAccount.objects.get(id=account_id)
-        except OandaAccount.DoesNotExist:
+            account = OandaAccounts.objects.get(id=account_id)
+        except OandaAccounts.DoesNotExist:
             return False, f"Account {account_id} not found"
 
         # Check if user owns the account

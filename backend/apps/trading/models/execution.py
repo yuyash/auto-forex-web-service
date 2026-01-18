@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from django.db import models
 from django.utils import timezone
 
-from apps.market.models import OandaAccount
+from apps.market.models import OandaAccounts
 from apps.trading.enums import TaskStatus, TaskType
 
 if TYPE_CHECKING:
@@ -418,7 +418,7 @@ class TaskExecutionResult(models.Model):
         help_text="Error message if failed",
     )
     account = models.ForeignKey(
-        OandaAccount,
+        OandaAccounts,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,

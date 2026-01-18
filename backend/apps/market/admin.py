@@ -4,12 +4,18 @@ Admin interface for market app.
 
 from django.contrib import admin
 
-from apps.market.models import CeleryTaskStatus, MarketEvent, OandaAccount
+from apps.market.models import (
+    CeleryTaskStatus,
+    MarketEvent,
+    OandaAccounts,
+    OandaApiHealthStatus,
+    TickData,
+)
 
 
-@admin.register(OandaAccount)
+@admin.register(OandaAccounts)
 class OandaAccountAdmin(admin.ModelAdmin):
-    """Admin interface for OandaAccount model."""
+    """Admin interface for OandaAccounts model."""
 
     list_display = [
         "user",
@@ -96,6 +102,8 @@ class MarketEventAdmin(admin.ModelAdmin):
 
 @admin.register(CeleryTaskStatus)
 class CeleryTaskStatusAdmin(admin.ModelAdmin):
+    """Admin interface for CeleryTaskStatus model."""
+
     list_display = [
         "id",
         "task_name",
@@ -108,7 +116,161 @@ class CeleryTaskStatusAdmin(admin.ModelAdmin):
         "stopped_at",
         "updated_at",
     ]
-    list_filter = ["task_name", "status"]
+    list_filter = ["task_name", "status", "started_at", "stopped_at"]
     search_fields = ["task_name", "instance_key", "celery_task_id", "worker"]
     readonly_fields = ["created_at", "updated_at"]
     ordering = ["-updated_at"]
+
+    fieldsets = (
+        (
+            "Task Information",
+            {
+                "fields": (
+                    "task_name",
+                    "instance_key",
+                    "celery_task_id",
+                    "worker",
+                )
+            },
+        ),
+        (
+            "Status",
+            {
+                "fields": (
+                    "status",
+                    "status_message",
+                )
+            },
+        ),
+        (
+            "Metadata",
+            {"fields": ("meta",)},
+        ),
+        (
+            "Timestamps",
+            {
+                "fields": (
+                    "started_at",
+                    "last_heartbeat_at",
+                    "stopped_at",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+
+
+@admin.register(TickData)
+class TickDataAdmin(admin.ModelAdmin):
+    """Admin interface for TickData model."""
+
+    list_display = [
+        "instrument",
+        "timestamp",
+        "bid",
+        "ask",
+        "mid",
+        "spread_display",
+        "created_at",
+    ]
+    list_filter = ["instrument", "timestamp", "created_at"]
+    search_fields = ["instrument"]
+    readonly_fields = ["mid", "spread_display", "created_at"]
+    ordering = ["-timestamp"]
+    date_hierarchy = "timestamp"
+
+    fieldsets = (
+        (
+            "Instrument & Time",
+            {
+                "fields": (
+                    "instrument",
+                    "timestamp",
+                )
+            },
+        ),
+        (
+            "Prices",
+            {
+                "fields": (
+                    "bid",
+                    "ask",
+                    "mid",
+                    "spread_display",
+                )
+            },
+        ),
+        (
+            "Metadata",
+            {"fields": ("created_at",)},
+        ),
+    )
+
+    def spread_display(self, obj):
+        """Display the spread value."""
+        return f"{obj.spread:.5f}"
+
+    spread_display.short_description = "Spread"  # type: ignore[attr-defined]
+
+
+@admin.register(OandaApiHealthStatus)
+class OandaApiHealthStatusAdmin(admin.ModelAdmin):
+    """Admin interface for OandaApiHealthStatus model."""
+
+    list_display = [
+        "id",
+        "account",
+        "is_available",
+        "checked_at",
+        "latency_ms",
+        "http_status",
+        "created_at",
+    ]
+    list_filter = ["is_available", "http_status", "checked_at", "created_at"]
+    search_fields = ["account__account_id", "account__user__email", "error_message"]
+    readonly_fields = [
+        "account",
+        "is_available",
+        "checked_at",
+        "latency_ms",
+        "http_status",
+        "error_message",
+        "created_at",
+    ]
+    ordering = ["-checked_at"]
+    date_hierarchy = "checked_at"
+
+    fieldsets = (
+        (
+            "Account",
+            {"fields": ("account",)},
+        ),
+        (
+            "Health Status",
+            {
+                "fields": (
+                    "is_available",
+                    "http_status",
+                    "latency_ms",
+                    "checked_at",
+                )
+            },
+        ),
+        (
+            "Error Details",
+            {"fields": ("error_message",)},
+        ),
+        (
+            "Metadata",
+            {"fields": ("created_at",)},
+        ),
+    )
+
+    def has_add_permission(self, request):
+        """Disable manual creation of health status records."""
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        """Allow deletion for cleanup purposes."""
+        return True

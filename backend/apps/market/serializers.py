@@ -8,7 +8,7 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.market.enums import ApiType, Jurisdiction
-from apps.market.models import OandaAccount, OandaApiHealthStatus
+from apps.market.models import OandaAccounts, OandaApiHealthStatus
 
 
 class OandaAccountSerializer(serializers.ModelSerializer):
@@ -23,7 +23,7 @@ class OandaAccountSerializer(serializers.ModelSerializer):
     )
 
     class Meta:
-        model = OandaAccount
+        model = OandaAccounts
         fields = [
             "id",
             "account_id",
@@ -64,7 +64,7 @@ class OandaAccountSerializer(serializers.ModelSerializer):
         api_type = attrs.get("api_type") or getattr(self.instance, "api_type", None)
 
         if account_id and api_type:
-            qs = OandaAccount.objects.filter(user=user, account_id=account_id, api_type=api_type)
+            qs = OandaAccounts.objects.filter(user=user, account_id=account_id, api_type=api_type)
             if self.instance is not None and getattr(self.instance, "pk", None) is not None:
                 qs = qs.exclude(pk=self.instance.pk)
             if qs.exists():
@@ -92,24 +92,24 @@ class OandaAccountSerializer(serializers.ModelSerializer):
             )
         return value
 
-    def create(self, validated_data: dict[str, Any]) -> OandaAccount:
+    def create(self, validated_data: dict[str, Any]) -> OandaAccounts:
         api_token = validated_data.pop("api_token")
         is_default = validated_data.pop("is_default", False)
         request = self.context.get("request")
         if not request or not hasattr(request, "user"):
             raise serializers.ValidationError("User context is required")
         user = request.user
-        existing_accounts_count = OandaAccount.objects.filter(user=user).count()
+        existing_accounts_count = OandaAccounts.objects.filter(user=user).count()
         if existing_accounts_count == 0:
             is_default = True
-        account = OandaAccount.objects.create(user=user, **validated_data)
+        account = OandaAccounts.objects.create(user=user, **validated_data)
         account.set_api_token(api_token)
         account.save()
         if is_default:
             account.set_as_default()
         return account
 
-    def update(self, instance: OandaAccount, validated_data: dict[str, Any]) -> OandaAccount:
+    def update(self, instance: OandaAccounts, validated_data: dict[str, Any]) -> OandaAccounts:
         api_token = validated_data.pop("api_token", None)
         is_default = validated_data.pop("is_default", None)
         for attr, value in validated_data.items():

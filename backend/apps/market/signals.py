@@ -13,7 +13,7 @@ from django.dispatch import Signal, receiver
 from django.utils.timezone import now as django_now
 
 from apps.market.enums import ApiType
-from apps.market.models import CeleryTaskStatus, OandaAccount
+from apps.market.models import CeleryTaskStatus, OandaAccounts
 
 logger = getLogger(__name__)
 
@@ -162,9 +162,9 @@ def _handle_market_task_cancel_requested(
         )
 
 
-@receiver(post_save, sender=OandaAccount)
+@receiver(post_save, sender=OandaAccounts)
 def bootstrap_tick_pubsub_on_first_live_account(
-    sender: type[OandaAccount], instance: OandaAccount, created: bool, **_kwargs: object
+    sender: type[OandaAccounts], instance: OandaAccounts, created: bool, **_kwargs: object
 ) -> None:
     _ = sender
     if not created:
@@ -173,7 +173,7 @@ def bootstrap_tick_pubsub_on_first_live_account(
     if instance.api_type != ApiType.LIVE:
         return
 
-    live_count = OandaAccount.objects.filter(api_type=ApiType.LIVE).count()
+    live_count = OandaAccounts.objects.filter(api_type=ApiType.LIVE).count()
     if live_count != 1:
         return
 

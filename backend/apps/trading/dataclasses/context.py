@@ -10,7 +10,7 @@ from .trade import OpenPosition
 
 if TYPE_CHECKING:
     from apps.accounts.models import User
-    from apps.market.models import OandaAccount
+    from apps.market.models import OandaAccounts
     from apps.trading.models import TaskExecution
 
 
@@ -25,7 +25,7 @@ class EventContext:
     Attributes:
         execution: TaskExecution instance
         user: User instance
-        account: OandaAccount instance (optional, None for backtests)
+        account: OandaAccounts instance (optional, None for backtests)
         instrument: Trading instrument (e.g., "USD_JPY")
 
     Requirements: 1.1, 1.2, 1.3
@@ -33,7 +33,7 @@ class EventContext:
 
     execution: "TaskExecution"  # Forward reference to avoid circular import
     user: "User"  # Forward reference to avoid circular import
-    account: "OandaAccount | None"  # Forward reference to avoid circular import
+    account: "OandaAccounts | None"  # Forward reference to avoid circular import
     instrument: str
 
 

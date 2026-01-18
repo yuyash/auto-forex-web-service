@@ -22,7 +22,7 @@ from django.conf import settings
 from v20.transaction import StopLossDetails, TakeProfitDetails
 
 from apps.market.enums import MarketEventSeverity, MarketEventType
-from apps.market.models import OandaAccount, TickData
+from apps.market.models import OandaAccounts, TickData
 from apps.market.services.compliance import ComplianceService, ComplianceViolationError
 from apps.market.services.events import MarketEventService
 
@@ -208,12 +208,12 @@ class OandaService:
     directly from OANDA without database caching.
     """
 
-    def __init__(self, account: OandaAccount):
+    def __init__(self, account: OandaAccounts):
         """
         Initialize OANDA API client.
 
         Args:
-            account: OandaAccount instance with API credentials
+            account: OandaAccounts instance with API credentials
         """
         self.account = account
         rest_hostname = str(account.api_hostname)

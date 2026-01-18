@@ -21,7 +21,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.market.models import OandaAccount
+from apps.market.models import OandaAccounts
 from apps.market.serializers import (
     OandaAccountSerializer,
     OandaApiHealthStatusSerializer,
@@ -63,7 +63,7 @@ class OandaAccountView(APIView):
                 {"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED
             )
 
-        accounts = OandaAccount.objects.filter(user_id=request.user.id).order_by("-created_at")
+        accounts = OandaAccounts.objects.filter(user_id=request.user.id).order_by("-created_at")
         serializer = self.serializer_class(accounts, many=True)
         logger.info(
             "User %s retrieved %s OANDA accounts",
@@ -124,13 +124,13 @@ class OandaAccountDetailView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = OandaAccountSerializer
 
-    def get_object(self, request: Request, account_id: int) -> OandaAccount | None:
+    def get_object(self, request: Request, account_id: int) -> OandaAccounts | None:
         if not request.user.is_authenticated:
             return None
         try:
-            account = OandaAccount.objects.get(id=account_id, user_id=request.user.id)
+            account = OandaAccounts.objects.get(id=account_id, user_id=request.user.id)
             return account
-        except OandaAccount.DoesNotExist:
+        except OandaAccounts.DoesNotExist:
             return None
 
     def get(self, request: Request, account_id: int) -> Response:
@@ -360,15 +360,15 @@ class CandleDataView(APIView):
                 logger.warning("Failed to parse 'after' timestamp: %s", e)
 
         # Get user's OANDA account
-        account: OandaAccount | None
+        account: OandaAccounts | None
         try:
             if account_id:
-                account = OandaAccount.objects.get(account_id=account_id, user=request.user.id)
+                account = OandaAccounts.objects.get(account_id=account_id, user=request.user.id)
             else:
                 # Use default account if not specified, otherwise use first account
                 account = (
-                    OandaAccount.objects.filter(user=request.user.id, is_default=True).first()
-                    or OandaAccount.objects.filter(user=request.user.id).first()
+                    OandaAccounts.objects.filter(user=request.user.id, is_default=True).first()
+                    or OandaAccounts.objects.filter(user=request.user.id).first()
                 )
 
             if account is None:
@@ -793,7 +793,7 @@ class SupportedInstrumentsView(APIView):
         """
         try:
             # Get any active OANDA account to use for API call
-            account = OandaAccount.objects.filter(is_active=True).first()
+            account = OandaAccounts.objects.filter(is_active=True).first()
             if not account:
                 logger.warning("No active OANDA account found")
                 return None
@@ -905,7 +905,7 @@ class SupportedGranularitiesView(APIView):
         """
         try:
             # Get any active OANDA account to use for API call
-            account = OandaAccount.objects.filter(is_active=True).first()
+            account = OandaAccounts.objects.filter(is_active=True).first()
             if not account:
                 logger.warning("No active OANDA account found")
                 return None
@@ -1066,18 +1066,18 @@ class OandaApiHealthView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def _get_account(self, request: Request) -> OandaAccount | None:
+    def _get_account(self, request: Request) -> OandaAccounts | None:
         account_id = request.query_params.get("account_id")
 
         if account_id:
-            return OandaAccount.objects.filter(
+            return OandaAccounts.objects.filter(
                 account_id=account_id,
                 user=request.user.id,
             ).first()
 
         return (
-            OandaAccount.objects.filter(user=request.user.id, is_default=True).first()
-            or OandaAccount.objects.filter(user=request.user.id).first()
+            OandaAccounts.objects.filter(user=request.user.id, is_default=True).first()
+            or OandaAccounts.objects.filter(user=request.user.id).first()
         )
 
     def get(self, request: Request) -> Response:
@@ -1185,8 +1185,8 @@ class InstrumentDetailView(APIView):
                 return None
             # Get user's OANDA account or any active account
             account = (
-                OandaAccount.objects.filter(user_id=user_id, is_active=True).first()
-                or OandaAccount.objects.filter(is_active=True).first()
+                OandaAccounts.objects.filter(user_id=user_id, is_active=True).first()
+                or OandaAccounts.objects.filter(is_active=True).first()
             )
 
             if not account:
@@ -1363,8 +1363,8 @@ class PositionView(APIView):
             return Response({"error": "account_id is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            account = OandaAccount.objects.get(id=int(account_id), user=request.user.pk)
-        except (ValueError, TypeError, OandaAccount.DoesNotExist):
+            account = OandaAccounts.objects.get(id=int(account_id), user=request.user.pk)
+        except (ValueError, TypeError, OandaAccounts.DoesNotExist):
             return Response(
                 {"error": "Account not found or access denied"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -1441,14 +1441,14 @@ class PositionView(APIView):
         # Get accounts to query
         if account_id:
             try:
-                accounts = [OandaAccount.objects.get(id=int(account_id), user=request.user.id)]
-            except OandaAccount.DoesNotExist:
+                accounts = [OandaAccounts.objects.get(id=int(account_id), user=request.user.id)]
+            except OandaAccounts.DoesNotExist:
                 return Response(
                     {"error": "Account not found or access denied"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
         else:
-            accounts = list(OandaAccount.objects.filter(user=request.user.id, is_active=True))
+            accounts = list(OandaAccounts.objects.filter(user=request.user.id, is_active=True))
 
         if not accounts:
             return Response({"results": [], "count": 0})
@@ -1546,8 +1546,8 @@ class PositionDetailView(APIView):
             )
 
         try:
-            account = OandaAccount.objects.get(id=int(account_id), user=request.user.pk)
-        except OandaAccount.DoesNotExist:
+            account = OandaAccounts.objects.get(id=int(account_id), user=request.user.pk)
+        except OandaAccounts.DoesNotExist:
             return Response(
                 {"error": "Account not found or access denied"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -1613,13 +1613,13 @@ class PositionDetailView(APIView):
             )
 
         try:
-            account = OandaAccount.objects.get(id=int(account_id), user=request.user.id)
+            account = OandaAccounts.objects.get(id=int(account_id), user=request.user.id)
         except (ValueError, TypeError):
             return Response(
                 {"error": "Invalid account_id"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except OandaAccount.DoesNotExist:
+        except OandaAccounts.DoesNotExist:
             return Response(
                 {"error": "Account not found or access denied"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -1714,14 +1714,14 @@ class OrderView(APIView):
         # If no account_id specified, get orders from all user accounts
         if account_id:
             try:
-                accounts = [OandaAccount.objects.get(id=int(account_id), user=request.user.pk)]
-            except OandaAccount.DoesNotExist:
+                accounts = [OandaAccounts.objects.get(id=int(account_id), user=request.user.pk)]
+            except OandaAccounts.DoesNotExist:
                 return Response(
                     {"error": "Account not found or access denied"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
         else:
-            accounts = list(OandaAccount.objects.filter(user=request.user.pk, is_active=True))
+            accounts = list(OandaAccounts.objects.filter(user=request.user.pk, is_active=True))
 
         if not accounts:
             return Response({"results": [], "count": 0})
@@ -1849,8 +1849,8 @@ class OrderView(APIView):
 
         # Verify account belongs to user
         try:
-            account = OandaAccount.objects.get(id=account_id, user=request.user.pk)
-        except OandaAccount.DoesNotExist:
+            account = OandaAccounts.objects.get(id=account_id, user=request.user.pk)
+        except OandaAccounts.DoesNotExist:
             return Response(
                 {"error": "Account not found or access denied"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -2027,8 +2027,8 @@ class OrderDetailView(APIView):
             )
 
         try:
-            account = OandaAccount.objects.get(id=int(account_id), user=request.user.pk)
-        except OandaAccount.DoesNotExist:
+            account = OandaAccounts.objects.get(id=int(account_id), user=request.user.pk)
+        except OandaAccounts.DoesNotExist:
             return Response(
                 {"error": "Account not found or access denied"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -2081,8 +2081,8 @@ class OrderDetailView(APIView):
             )
 
         try:
-            account = OandaAccount.objects.get(id=int(account_id), user=request.user.pk)
-        except OandaAccount.DoesNotExist:
+            account = OandaAccounts.objects.get(id=int(account_id), user=request.user.pk)
+        except OandaAccounts.DoesNotExist:
             return Response(
                 {"error": "Account not found or access denied"},
                 status=status.HTTP_404_NOT_FOUND,

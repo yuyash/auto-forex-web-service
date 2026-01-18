@@ -6,7 +6,7 @@ from typing import Any
 from django.db import models
 from django.utils import timezone
 
-from apps.market.models import OandaAccount
+from apps.market.models import OandaAccounts
 from apps.trading.enums import DataSource, TaskStatus, TaskType, TradingMode
 
 
@@ -344,7 +344,7 @@ class TradingTask(models.Model):
         help_text="Strategy configuration used by this task",
     )
     oanda_account = models.ForeignKey(
-        OandaAccount,
+        OandaAccounts,
         on_delete=models.PROTECT,
         related_name="trading_tasks",
         help_text="OANDA account used for trading",

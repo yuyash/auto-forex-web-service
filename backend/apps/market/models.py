@@ -2,7 +2,7 @@
 Market data models for storing OANDA accounts and tick data.
 
 This module contains models for:
-- OandaAccount: OANDA trading account with encrypted API token
+- OandaAccounts: OANDA trading account with encrypted API token
 - TickData: Historical tick data for backtesting and analysis
 - MarketEvent: Persistent event log for market-related events
 """
@@ -20,7 +20,7 @@ from django.utils import timezone
 from .enums import ApiType, Jurisdiction
 
 
-class OandaAccount(models.Model):
+class OandaAccounts(models.Model):
     """
     OANDA trading account with encrypted API token.
     """
@@ -176,7 +176,7 @@ class OandaAccount(models.Model):
         self.save(update_fields=["is_active", "updated_at"])
 
     def set_as_default(self) -> None:
-        OandaAccount.objects.filter(user=self.user, is_default=True).exclude(id=self.pk).update(
+        OandaAccounts.objects.filter(user=self.user, is_default=True).exclude(id=self.pk).update(
             is_default=False
         )
         self.is_default = True
@@ -332,7 +332,7 @@ class MarketEvent(models.Model):
         related_name="market_events",
     )
     account = models.ForeignKey(
-        "market.OandaAccount",
+        "market.OandaAccounts",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -426,7 +426,7 @@ class OandaApiHealthStatus(models.Model):
     """Persisted OANDA API health check results."""
 
     account = models.ForeignKey(
-        "market.OandaAccount",
+        "market.OandaAccounts",
         on_delete=models.CASCADE,
         related_name="api_health_statuses",
     )

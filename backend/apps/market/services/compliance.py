@@ -14,7 +14,7 @@ from typing import Any
 
 from django.apps import apps as django_apps
 
-from apps.market.models import OandaAccount
+from apps.market.models import OandaAccounts
 
 
 class ComplianceViolationError(Exception):
@@ -66,7 +66,7 @@ class ComplianceService:
         "NZD_USD",
     ]
 
-    def __init__(self, account: OandaAccount) -> None:
+    def __init__(self, account: OandaAccounts) -> None:
         self.account = account
         self.jurisdiction = getattr(account, "jurisdiction", self.JURISDICTION_OTHER)
 
