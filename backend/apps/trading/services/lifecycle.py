@@ -15,9 +15,9 @@ from django.utils import timezone as dj_timezone
 from apps.trading.enums import LogLevel, TaskStatus
 
 if TYPE_CHECKING:
-    from apps.trading.models import StrategyConfig
+    from apps.trading.models import StrategyConfigurations
 
-from apps.trading.models import BacktestTask, TaskExecution, TradingTask
+from apps.trading.models import BacktestTasks, Executions, TradingTasks
 from apps.trading.services.celery import CeleryTaskService
 from apps.trading.services.events import EventEmitter
 
@@ -49,23 +49,23 @@ class StrategyCreationContext:
     def __init__(
         self,
         *,
-        execution: TaskExecution,
-        task: BacktestTask | TradingTask,
+        execution: Executions,
+        task: BacktestTasks | TradingTasks,
         event_emitter: EventEmitter,
         task_service: CeleryTaskService,
-        strategy_config: "StrategyConfig",
+        strategy_config: "StrategyConfigurations",
     ) -> None:
         """Initialize the strategy creation context.
 
         Args:
-            execution: TaskExecution instance
-            task: Task instance (BacktestTask or TradingTask)
+            execution: Executions instance
+            task: Task instance (BacktestTasks or TradingTasks)
             event_emitter: EventEmitter for error events
             task_service: CeleryTaskService for lifecycle management
-            strategy_config: StrategyConfig model instance
+            strategy_config: StrategyConfigurations model instance
         """
         self.execution = execution
-        self.task: BacktestTask | TradingTask = task
+        self.task: BacktestTasks | TradingTasks = task
         self.event_emitter = event_emitter
         self.task_service = task_service
         self.strategy_config = strategy_config
@@ -190,8 +190,8 @@ class ExecutionLifecycle:
     def __init__(
         self,
         *,
-        execution: TaskExecution,
-        task: BacktestTask | TradingTask,
+        execution: Executions,
+        task: BacktestTasks | TradingTasks,
         event_emitter: EventEmitter,
         task_service: CeleryTaskService,
         success_status: TaskStatus = TaskStatus.COMPLETED,

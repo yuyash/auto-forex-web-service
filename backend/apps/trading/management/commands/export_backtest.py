@@ -20,7 +20,7 @@ from typing import Any
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from apps.trading.models import BacktestTask, TaskExecution
+from apps.trading.models import BacktestTasks, Executions
 
 
 class DecimalEncoder(json.JSONEncoder):
@@ -69,26 +69,26 @@ class Command(BaseCommand):
         pretty = options.get("pretty", False)
 
         try:
-            task = BacktestTask.objects.select_related("config", "user").get(id=task_id)
-        except BacktestTask.DoesNotExist as exc:
-            raise CommandError(f"BacktestTask with ID {task_id} does not exist") from exc
+            task = BacktestTasks.objects.select_related("config", "user").get(id=task_id)
+        except BacktestTasks.DoesNotExist as exc:
+            raise CommandError(f"BacktestTasks with ID {task_id} does not exist") from exc
 
         if execution_id is not None:
             try:
-                execution = TaskExecution.objects.select_related("metrics").get(
+                execution = Executions.objects.select_related("metrics").get(
                     id=execution_id,
                     task_type="backtest",
                     task_id=task.pk,
                 )
-            except TaskExecution.DoesNotExist as exc:
+            except Executions.DoesNotExist as exc:
                 raise CommandError(
-                    f"TaskExecution {execution_id} does not exist for BacktestTask {task_id}"
+                    f"Executions {execution_id} does not exist for BacktestTasks {task_id}"
                 ) from exc
         else:
             execution = task.get_latest_execution()
 
         if not execution:
-            raise CommandError(f"No execution found for BacktestTask {task_id}")
+            raise CommandError(f"No execution found for BacktestTasks {task_id}")
 
         metrics_obj = getattr(execution, "metrics", None)
 

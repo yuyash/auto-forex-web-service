@@ -1,5 +1,7 @@
 """Unit tests for Executions model."""
 
+from datetime import timedelta
+
 import pytest
 from django.utils import timezone
 
@@ -124,7 +126,7 @@ class TestExecutionsModel:
 
         # Set start and end times
         execution.started_at = timezone.now()
-        execution.completed_at = execution.started_at + timezone.timedelta(seconds=30)
+        execution.completed_at = execution.started_at + timedelta(seconds=30)
         execution.save()
 
         duration = execution.get_duration()

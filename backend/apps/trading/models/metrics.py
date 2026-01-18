@@ -26,7 +26,7 @@ class TradingMetrics(models.Model):
     """
 
     execution = models.ForeignKey(
-        "trading.TaskExecution",
+        "trading.Executions",
         on_delete=models.CASCADE,
         related_name="trading_metrics",
         help_text="Associated task execution",
@@ -135,7 +135,8 @@ class TradingMetrics(models.Model):
         unique_together = [["execution", "sequence"]]
 
     def __str__(self) -> str:
-        return f"TradingMetrics(execution={self.execution_id}, sequence={self.sequence})"
+        exec_id = self.execution_id if hasattr(self, "execution_id") else "?"
+        return f"TradingMetrics(execution={exec_id}, sequence={self.sequence})"
 
 
 class ExecutionMetricsManager(models.Manager["ExecutionMetrics"]):
@@ -157,7 +158,7 @@ class ExecutionMetrics(models.Model):
     objects = ExecutionMetricsManager()
 
     execution = models.OneToOneField(
-        "trading.TaskExecution",
+        "trading.Executions",
         on_delete=models.CASCADE,
         related_name="metrics",
         help_text="Associated task execution",
@@ -500,7 +501,7 @@ class ExecutionMetricsCheckpoint(models.Model):
     """
 
     execution = models.ForeignKey(
-        "trading.TaskExecution",
+        "trading.Executions",
         on_delete=models.CASCADE,
         related_name="metrics_checkpoints",
         help_text="Owning task execution",

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from logging import Logger, getLogger
+from typing import TYPE_CHECKING
 
 from apps.trading.dataclasses import (
     ExecutionState,
@@ -19,11 +20,13 @@ from apps.trading.events import (
     StrategyEvent,
     TakeProfitEvent,
 )
-from apps.trading.models import BacktestTask, TaskExecution
 from apps.trading.services.errors import ErrorAction, ErrorContext, ErrorHandler
 from apps.trading.services.executor.base import BaseExecutor
 from apps.trading.services.source import TickDataSource
 from apps.trading.strategies.base import Strategy
+
+if TYPE_CHECKING:
+    from apps.trading.models import BacktestTasks, Executions
 
 logger: Logger = getLogger(name=__name__)
 
@@ -44,8 +47,8 @@ class BacktestExecutor(BaseExecutor):
         *,
         data_source: TickDataSource,
         strategy: Strategy,
-        execution: TaskExecution,
-        task: BacktestTask,
+        execution: Executions,
+        task: BacktestTasks,
     ) -> None:
         """Initialize the BacktestExecutor.
 

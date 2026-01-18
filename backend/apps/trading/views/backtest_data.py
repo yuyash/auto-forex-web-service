@@ -8,7 +8,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.trading.models import BacktestTask
+from apps.trading.models import BacktestTasks
 from apps.trading.services.equity import EquityService
 from apps.trading.services.performance import LivePerformanceService
 from apps.trading.views._helpers import (
@@ -29,10 +29,10 @@ class BacktestTaskResultsView(APIView):
 
     def get(self, request: Request, task_id: int) -> Response:
         try:
-            task = BacktestTask.objects.select_related("config", "user").get(
+            task = BacktestTasks.objects.select_related("config", "user").get(
                 id=task_id, user=request.user.pk
             )
-        except BacktestTask.DoesNotExist:
+        except BacktestTasks.DoesNotExist:
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         latest_execution = task.get_latest_execution()
@@ -90,10 +90,10 @@ class BacktestTaskEquityCurveView(APIView):
 
     def get(self, request: Request, task_id: int) -> Response:
         try:
-            task = BacktestTask.objects.select_related("config", "user").get(
+            task = BacktestTasks.objects.select_related("config", "user").get(
                 id=task_id, user=request.user.pk
             )
-        except BacktestTask.DoesNotExist:
+        except BacktestTasks.DoesNotExist:
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         latest_execution = task.get_latest_execution()
@@ -205,10 +205,10 @@ class BacktestTaskStrategyEventsView(APIView):
 
     def get(self, request: Request, task_id: int) -> Response:
         try:
-            task = BacktestTask.objects.select_related("config", "user").get(
+            task = BacktestTasks.objects.select_related("config", "user").get(
                 id=task_id, user=request.user.pk
             )
-        except BacktestTask.DoesNotExist:
+        except BacktestTasks.DoesNotExist:
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         latest_execution = task.get_latest_execution()
@@ -227,10 +227,10 @@ class BacktestTaskStrategyEventsView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        from apps.trading.models import ExecutionStrategyEvent
+        from apps.trading.models import StrategyEvents
 
         qs = (
-            ExecutionStrategyEvent.objects.filter(execution=latest_execution)
+            StrategyEvents.objects.filter(execution=latest_execution)
             .order_by("sequence", "id")
             .values_list("event", flat=True)
         )
@@ -265,10 +265,10 @@ class BacktestTaskTradeLogsView(APIView):
 
     def get(self, request: Request, task_id: int) -> Response:
         try:
-            task = BacktestTask.objects.select_related("config", "user").get(
+            task = BacktestTasks.objects.select_related("config", "user").get(
                 id=task_id, user=request.user.pk
             )
-        except BacktestTask.DoesNotExist:
+        except BacktestTasks.DoesNotExist:
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         latest_execution = task.get_latest_execution()
@@ -290,10 +290,10 @@ class BacktestTaskTradeLogsView(APIView):
         metrics_obj = _get_execution_metrics_or_none(latest_execution)
         # Live fallback (DB-backed incremental trades)
         if not metrics_obj:
-            from apps.trading.models import ExecutionTradeLogEntry
+            from apps.trading.models import TradeLogs
 
             qs = (
-                ExecutionTradeLogEntry.objects.filter(execution=latest_execution)
+                TradeLogs.objects.filter(execution=latest_execution)
                 .order_by("sequence", "id")
                 .values_list("trade", flat=True)
             )
@@ -352,10 +352,10 @@ class BacktestTaskMetricsCheckpointView(APIView):
 
     def get(self, request: Request, task_id: int) -> Response:
         try:
-            task = BacktestTask.objects.select_related("config", "user").get(
+            task = BacktestTasks.objects.select_related("config", "user").get(
                 id=task_id, user=request.user.pk
             )
-        except BacktestTask.DoesNotExist:
+        except BacktestTasks.DoesNotExist:
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         latest_execution = task.get_latest_execution()

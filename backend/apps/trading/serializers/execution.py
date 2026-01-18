@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from apps.trading.models import TaskExecution
+from apps.trading.models import Executions
 
 from .events import StrategyEventSerializer, StructuredLogSerializer
 from .metrics import ExecutionMetricsSerializer
@@ -14,7 +14,7 @@ class TaskExecutionSerializer(serializers.ModelSerializer):
     duration = serializers.SerializerMethodField()
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
-        model = TaskExecution
+        model = Executions
         fields = [
             "id",
             "task_type",
@@ -31,7 +31,7 @@ class TaskExecutionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_duration(self, obj: TaskExecution) -> str | None:
+    def get_duration(self, obj: Executions) -> str | None:
         return obj.get_duration()
 
 
@@ -44,7 +44,7 @@ class TaskExecutionListSerializer(serializers.ModelSerializer):
     duration = serializers.SerializerMethodField()
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
-        model = TaskExecution
+        model = Executions
         fields = [
             "id",
             "task_type",
@@ -60,7 +60,7 @@ class TaskExecutionListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_duration(self, obj: TaskExecution) -> str | None:
+    def get_duration(self, obj: Executions) -> str | None:
         return obj.get_duration()
 
 
@@ -74,7 +74,7 @@ class TaskExecutionDetailSerializer(serializers.ModelSerializer):
     has_metrics = serializers.SerializerMethodField()
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
-        model = TaskExecution
+        model = Executions
         fields = [
             "id",
             "task_type",
@@ -94,11 +94,11 @@ class TaskExecutionDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_duration(self, obj: TaskExecution) -> str | None:
+    def get_duration(self, obj: Executions) -> str | None:
         """Get formatted execution duration."""
         return obj.get_duration()
 
-    def get_has_metrics(self, obj: TaskExecution) -> bool:
+    def get_has_metrics(self, obj: Executions) -> bool:
         """Check if execution has associated metrics."""
         return obj.get_metrics() is not None
 
@@ -123,7 +123,7 @@ class TaskExecutionWithStructuredDataSerializer(serializers.ModelSerializer):
     latest_metrics_checkpoint = serializers.SerializerMethodField()
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
-        model = TaskExecution
+        model = Executions
         fields = [
             "id",
             "task_type",
@@ -147,22 +147,22 @@ class TaskExecutionWithStructuredDataSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_duration(self, obj: TaskExecution) -> str | None:
+    def get_duration(self, obj: Executions) -> str | None:
         """Get formatted execution duration."""
         return obj.get_duration()
 
-    def get_has_metrics(self, obj: TaskExecution) -> bool:
+    def get_has_metrics(self, obj: Executions) -> bool:
         """Check if execution has associated metrics."""
         return obj.get_metrics() is not None
 
-    def get_structured_events(self, obj: TaskExecution) -> list[dict]:
+    def get_structured_events(self, obj: Executions) -> list[dict]:
         """Get structured strategy events.
 
         Returns a limited number of recent events with structured parsing.
         For full event access, use the ExecutionEventsView endpoint.
         """
         # Limit to most recent 100 events to avoid payload bloat
-        events = obj.strategy_event_rows.order_by("-sequence", "-id")[:100]
+        events = obj.strategy_events.order_by("-sequence", "-id")[:100]
 
         # Reverse to get chronological order
         events = list(reversed(events))
@@ -170,7 +170,7 @@ class TaskExecutionWithStructuredDataSerializer(serializers.ModelSerializer):
         serializer = StrategyEventSerializer(events, many=True)
         return serializer.data  # type: ignore[return-value]
 
-    def get_structured_logs(self, obj: TaskExecution) -> list[dict]:
+    def get_structured_logs(self, obj: Executions) -> list[dict]:
         """Get structured logs with log_type categorization.
 
         Transforms raw log entries into structured format with:
@@ -186,7 +186,7 @@ class TaskExecutionWithStructuredDataSerializer(serializers.ModelSerializer):
         serializer = StructuredLogSerializer(logs, many=True)
         return serializer.data  # type: ignore[return-value]
 
-    def get_latest_metrics_checkpoint(self, obj: TaskExecution) -> dict | None:
+    def get_latest_metrics_checkpoint(self, obj: Executions) -> dict | None:
         """Get the latest metrics checkpoint.
 
         Returns the most recent ExecutionMetricsCheckpoint with all metrics.

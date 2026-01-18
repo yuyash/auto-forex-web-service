@@ -15,7 +15,7 @@ class ExecutionStateSnapshot(models.Model):
     """
 
     execution = models.ForeignKey(
-        "trading.TaskExecution",
+        "trading.Executions",
         on_delete=models.CASCADE,
         related_name="state_snapshots",
         help_text="Associated task execution",

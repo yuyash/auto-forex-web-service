@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from logging import Logger, getLogger
+from typing import TYPE_CHECKING
 
 from apps.market.services.oanda import OandaService
 from apps.trading.dataclasses import (
@@ -21,11 +22,13 @@ from apps.trading.events import (
     StrategyEvent,
     TakeProfitEvent,
 )
-from apps.trading.models import TaskExecution, TradingTask
 from apps.trading.services.errors import ErrorAction, ErrorContext, ErrorHandler
 from apps.trading.services.executor.base import BaseExecutor
 from apps.trading.services.source import TickDataSource
 from apps.trading.strategies.base import Strategy
+
+if TYPE_CHECKING:
+    from apps.trading.models import Executions, TradingTasks
 
 logger: Logger = getLogger(name=__name__)
 
@@ -48,8 +51,8 @@ class TradingExecutor(BaseExecutor):
         data_source: TickDataSource,
         strategy: Strategy,
         trading_service: OandaService,
-        execution: TaskExecution,
-        task: TradingTask,
+        execution: Executions,
+        task: TradingTasks,
     ) -> None:
         """Initialize the TradingExecutor.
 
@@ -60,7 +63,7 @@ class TradingExecutor(BaseExecutor):
             execution: TaskExecution model instance
             task: TradingTask instance
         """
-        self.task: TradingTask = task
+        self.task: TradingTasks = task
         self.trading_service: OandaService = trading_service
 
         # Initialize error handler

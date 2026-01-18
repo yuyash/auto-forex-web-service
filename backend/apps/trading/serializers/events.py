@@ -4,7 +4,7 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.trading.models import ExecutionStrategyEvent
+from apps.trading.models import StrategyEvents
 
 
 class StrategyEventSerializer(serializers.ModelSerializer):
@@ -26,7 +26,7 @@ class StrategyEventSerializer(serializers.ModelSerializer):
     strategy_data = serializers.SerializerMethodField()
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
-        model = ExecutionStrategyEvent
+        model = StrategyEvents
         fields = [
             "sequence",
             "event_type",
@@ -42,7 +42,7 @@ class StrategyEventSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_parsed_event_type(self, obj: ExecutionStrategyEvent) -> str:
+    def get_parsed_event_type(self, obj: StrategyEvents) -> str:
         """Extract event_type from event JSON.
 
         Falls back to the event_type field if not present in event JSON.
@@ -51,7 +51,7 @@ class StrategyEventSerializer(serializers.ModelSerializer):
             return obj.event.get("event_type", obj.event_type)
         return obj.event_type
 
-    def get_parsed_timestamp(self, obj: ExecutionStrategyEvent) -> str | None:
+    def get_parsed_timestamp(self, obj: StrategyEvents) -> str | None:
         """Extract timestamp from event JSON.
 
         Falls back to the timestamp field if not present in event JSON.
@@ -66,7 +66,7 @@ class StrategyEventSerializer(serializers.ModelSerializer):
 
         return None
 
-    def get_common_data(self, obj: ExecutionStrategyEvent) -> dict[str, Any]:
+    def get_common_data(self, obj: StrategyEvents) -> dict[str, Any]:
         """Extract common data fields from event JSON.
 
         Common fields include: price, instrument, balance, pnl, etc.
@@ -95,7 +95,7 @@ class StrategyEventSerializer(serializers.ModelSerializer):
 
         return common_data
 
-    def get_strategy_data(self, obj: ExecutionStrategyEvent) -> dict[str, Any]:
+    def get_strategy_data(self, obj: StrategyEvents) -> dict[str, Any]:
         """Extract strategy-specific data from event JSON.
 
         For Floor strategy events, this includes:

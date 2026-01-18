@@ -12,9 +12,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.trading.enums import TaskType
-from apps.trading.models import TradingTask
-from apps.trading.models.execution import TaskExecution
-from apps.trading.models.tasks import BacktestTask
+from apps.trading.models import TradingTasks
+from apps.trading.models.execution import Executions
+from apps.trading.models.tasks import BacktestTasks
 from apps.trading.services.equity import EquityService
 from apps.trading.views._helpers import _paginate_list_by_page
 
@@ -31,8 +31,8 @@ class ExecutionDetailView(APIView):
     def get(self, request: Request, execution_id: int) -> Response:
         """Get full execution details."""
         try:
-            execution = TaskExecution.objects.get(id=execution_id)
-        except TaskExecution.DoesNotExist:
+            execution = Executions.objects.get(id=execution_id)
+        except Executions.DoesNotExist:
             return Response(
                 {"error": "Execution not found"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -41,23 +41,23 @@ class ExecutionDetailView(APIView):
         # Verify user has access to this execution's task
         if execution.task_type == TaskType.BACKTEST:
             try:
-                BacktestTask.objects.get(id=execution.task_id, user=request.user.pk)
-            except BacktestTask.DoesNotExist:
+                BacktestTasks.objects.get(id=execution.task_id, user=request.user.pk)
+            except BacktestTasks.DoesNotExist:
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
         elif execution.task_type == TaskType.TRADING:
             try:
-                TradingTask.objects.get(id=execution.task_id, user=request.user.pk)
-            except TradingTask.DoesNotExist:
+                TradingTasks.objects.get(id=execution.task_id, user=request.user.pk)
+            except TradingTasks.DoesNotExist:
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
         # Get latest metrics checkpoint
-        assert isinstance(execution, TaskExecution)
+        assert isinstance(execution, Executions)
         checkpoint = execution.metrics_checkpoints.order_by("-created_at", "-id").first()
 
         response_data = {
@@ -112,8 +112,8 @@ class ExecutionStatusView(APIView):
     def get(self, request: Request, execution_id: int) -> Response:
         """Get execution status with latest metrics checkpoint."""
         try:
-            execution = TaskExecution.objects.get(id=execution_id)  # type: ignore[name-defined]  # noqa: F823
-        except TaskExecution.DoesNotExist:  # type: ignore[name-defined]  # noqa: F823
+            execution = Executions.objects.get(id=execution_id)  # type: ignore[name-defined]  # noqa: F823
+        except Executions.DoesNotExist:  # type: ignore[name-defined]  # noqa: F823
             return Response(
                 {"error": "Execution not found"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -122,25 +122,24 @@ class ExecutionStatusView(APIView):
         # Verify user has access to this execution's task
         if execution.task_type == TaskType.BACKTEST:
             try:
-                BacktestTask.objects.get(id=execution.task_id, user=request.user.pk)
-            except BacktestTask.DoesNotExist:
+                BacktestTasks.objects.get(id=execution.task_id, user=request.user.pk)
+            except BacktestTasks.DoesNotExist:
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
         elif execution.task_type == TaskType.TRADING:
             try:
-                TradingTask.objects.get(id=execution.task_id, user=request.user.pk)
-            except TradingTask.DoesNotExist:
+                TradingTasks.objects.get(id=execution.task_id, user=request.user.pk)
+            except TradingTasks.DoesNotExist:
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
         # Get latest metrics checkpoint
-        from apps.trading.models import TaskExecution
 
-        if isinstance(execution, TaskExecution):
+        if isinstance(execution, Executions):
             checkpoint = execution.metrics_checkpoints.order_by("-created_at", "-id").first()
         else:
             checkpoint = None
@@ -214,8 +213,8 @@ class ExecutionEventsView(APIView):
     def get(self, request: Request, execution_id: int) -> Response:
         """Get execution events with filtering and pagination."""
         try:
-            execution = TaskExecution.objects.get(id=execution_id)
-        except TaskExecution.DoesNotExist:
+            execution = Executions.objects.get(id=execution_id)
+        except Executions.DoesNotExist:
             return Response(
                 {"error": "Execution not found"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -224,25 +223,25 @@ class ExecutionEventsView(APIView):
         # Verify user has access to this execution's task
         if execution.task_type == TaskType.BACKTEST:
             try:
-                BacktestTask.objects.get(id=execution.task_id, user=request.user.pk)
-            except BacktestTask.DoesNotExist:
+                BacktestTasks.objects.get(id=execution.task_id, user=request.user.pk)
+            except BacktestTasks.DoesNotExist:
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
         elif execution.task_type == TaskType.TRADING:
             try:
-                TradingTask.objects.get(id=execution.task_id, user=request.user.pk)
-            except TradingTask.DoesNotExist:
+                TradingTasks.objects.get(id=execution.task_id, user=request.user.pk)
+            except TradingTasks.DoesNotExist:
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-        from apps.trading.models import ExecutionStrategyEvent
+        from apps.trading.models import StrategyEvents
 
         # Build query
-        qs = ExecutionStrategyEvent.objects.filter(execution=execution).order_by("sequence", "id")
+        qs = StrategyEvents.objects.filter(execution=execution).order_by("sequence", "id")
 
         # Filter by since_sequence for incremental fetching
         since_sequence = request.query_params.get("since_sequence")
@@ -319,8 +318,8 @@ class ExecutionTradesView(APIView):
     def get(self, request: Request, execution_id: int) -> Response:
         """Get execution trades with filtering and pagination."""
         try:
-            execution = TaskExecution.objects.get(id=execution_id)
-        except TaskExecution.DoesNotExist:
+            execution = Executions.objects.get(id=execution_id)
+        except Executions.DoesNotExist:
             return Response(
                 {"error": "Execution not found"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -329,25 +328,25 @@ class ExecutionTradesView(APIView):
         # Verify user has access to this execution's task
         if execution.task_type == TaskType.BACKTEST:
             try:
-                BacktestTask.objects.get(id=execution.task_id, user=request.user.pk)
-            except BacktestTask.DoesNotExist:
+                BacktestTasks.objects.get(id=execution.task_id, user=request.user.pk)
+            except BacktestTasks.DoesNotExist:
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
         elif execution.task_type == TaskType.TRADING:
             try:
-                TradingTask.objects.get(id=execution.task_id, user=request.user.pk)
-            except TradingTask.DoesNotExist:
+                TradingTasks.objects.get(id=execution.task_id, user=request.user.pk)
+            except TradingTasks.DoesNotExist:
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-        from apps.trading.models import ExecutionTradeLogEntry
+        from apps.trading.models import TradeLogs
 
         # Build query
-        qs = ExecutionTradeLogEntry.objects.filter(execution=execution).order_by("sequence", "id")
+        qs = TradeLogs.objects.filter(execution=execution).order_by("sequence", "id")
 
         # Filter by since_sequence for incremental fetching
         since_sequence = request.query_params.get("since_sequence")
@@ -434,8 +433,8 @@ class ExecutionEquityView(APIView):
     def get(self, request: Request, execution_id: int) -> Response:
         """Get execution equity curve with filtering and pagination."""
         try:
-            execution = TaskExecution.objects.get(id=execution_id)
-        except TaskExecution.DoesNotExist:
+            execution = Executions.objects.get(id=execution_id)
+        except Executions.DoesNotExist:
             return Response(
                 {"error": "Execution not found"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -444,16 +443,16 @@ class ExecutionEquityView(APIView):
         # Verify user has access to this execution's task
         if execution.task_type == TaskType.BACKTEST:
             try:
-                task = BacktestTask.objects.get(id=execution.task_id, user=request.user.pk)  # type: ignore[name-defined]  # noqa: F823
-            except BacktestTask.DoesNotExist:  # type: ignore[name-defined]  # noqa: F823
+                task = BacktestTasks.objects.get(id=execution.task_id, user=request.user.pk)  # type: ignore[name-defined]  # noqa: F823
+            except BacktestTasks.DoesNotExist:  # type: ignore[name-defined]  # noqa: F823
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
         elif execution.task_type == TaskType.TRADING:
             try:
-                task = TradingTask.objects.get(id=execution.task_id, user=request.user.pk)
-            except TradingTask.DoesNotExist:
+                task = TradingTasks.objects.get(id=execution.task_id, user=request.user.pk)
+            except TradingTasks.DoesNotExist:
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN,
@@ -537,9 +536,7 @@ class ExecutionEquityView(APIView):
                     start_dt = None
                     end_dt = None
                     if execution.task_type == TaskType.BACKTEST and task:
-                        from apps.trading.models import BacktestTask
-
-                        if isinstance(task, BacktestTask):
+                        if isinstance(task, BacktestTasks):
                             start_dt = task.start_time
                             end_dt = task.end_time
                     else:
@@ -598,8 +595,8 @@ class ExecutionMetricsView(APIView):
     def get(self, request: Request, execution_id: int) -> Response:
         """Get latest metrics checkpoint for execution."""
         try:
-            execution = TaskExecution.objects.get(id=execution_id)  # type: ignore[name-defined]  # noqa: F823
-        except TaskExecution.DoesNotExist:  # type: ignore[name-defined]  # noqa: F823
+            execution = Executions.objects.get(id=execution_id)  # type: ignore[name-defined]  # noqa: F823
+        except Executions.DoesNotExist:  # type: ignore[name-defined]  # noqa: F823
             return Response(
                 {"error": "Execution not found"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -608,25 +605,24 @@ class ExecutionMetricsView(APIView):
         # Verify user has access to this execution's task
         if execution.task_type == TaskType.BACKTEST:
             try:
-                BacktestTask.objects.get(id=execution.task_id, user=request.user.pk)
-            except BacktestTask.DoesNotExist:
+                BacktestTasks.objects.get(id=execution.task_id, user=request.user.pk)
+            except BacktestTasks.DoesNotExist:
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
         elif execution.task_type == TaskType.TRADING:
             try:
-                TradingTask.objects.get(id=execution.task_id, user=request.user.pk)
-            except TradingTask.DoesNotExist:
+                TradingTasks.objects.get(id=execution.task_id, user=request.user.pk)
+            except TradingTasks.DoesNotExist:
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
         # Get latest checkpoint
-        from apps.trading.models import TaskExecution
 
-        if isinstance(execution, TaskExecution):
+        if isinstance(execution, Executions):
             checkpoint = execution.metrics_checkpoints.order_by("-created_at", "-id").first()
         else:
             checkpoint = None

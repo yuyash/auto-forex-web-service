@@ -8,6 +8,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from decimal import Decimal
 from logging import Logger, getLogger
+from typing import TYPE_CHECKING
 
 from apps.trading.dataclasses import (
     EventContext,
@@ -19,13 +20,15 @@ from apps.trading.dataclasses import (
 from apps.trading.events import (
     StrategyEvent,
 )
-from apps.trading.models import TaskExecution
 from apps.trading.services.controller import TaskController
 from apps.trading.services.events import EventEmitter
 from apps.trading.services.performance import PerformanceTracker
 from apps.trading.services.source import TickDataSource
 from apps.trading.services.state import StateManager
 from apps.trading.strategies.base import Strategy
+
+if TYPE_CHECKING:
+    from apps.trading.models import Executions
 
 logger: Logger = getLogger(name=__name__)
 
@@ -47,7 +50,7 @@ class BaseExecutor(ABC):
         *,
         data_source: TickDataSource,
         strategy: Strategy,
-        execution: TaskExecution,
+        execution: Executions,
         event_context: EventContext,
         initial_balance: Decimal,
         task_name: str,

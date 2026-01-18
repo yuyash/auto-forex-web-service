@@ -7,14 +7,16 @@ persisting events during task execution for tracking and monitoring.
 """
 
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.utils import timezone
 
 from apps.trading.dataclasses import EventContext, Tick, TradeData
 from apps.trading.enums import StrategyType
 from apps.trading.events import StrategyEvent
-from apps.trading.models import ExecutionStrategyEvent
+
+if TYPE_CHECKING:
+    from apps.trading.models import StrategyEvents
 
 
 class EventEmitter:
@@ -37,7 +39,7 @@ class EventEmitter:
         """
         self.context = context
 
-    def emit_tick_received(self, tick: Tick) -> ExecutionStrategyEvent:
+    def emit_tick_received(self, tick: Tick) -> StrategyEvents:
         """Emit a tick_received event.
 
         Called when a tick is received from the market data stream.
@@ -71,7 +73,7 @@ class EventEmitter:
         self,
         event: StrategyEvent,
         strategy_type: StrategyType,
-    ) -> ExecutionStrategyEvent:
+    ) -> StrategyEvents:
         """Emit a strategy-specific event.
 
         Called when a strategy generates a signal or other strategy-specific event.
@@ -99,7 +101,7 @@ class EventEmitter:
     def emit_trade_executed(
         self,
         trade: TradeData,
-    ) -> ExecutionStrategyEvent:
+    ) -> StrategyEvents:
         """Emit a trade_executed event.
 
         Called when a trade is executed (opened or closed).
@@ -131,7 +133,7 @@ class EventEmitter:
         from_status: str,
         to_status: str,
         reason: str = "",
-    ) -> ExecutionStrategyEvent:
+    ) -> StrategyEvents:
         """Emit a status_changed event.
 
         Called when the task execution status transitions.
@@ -161,7 +163,7 @@ class EventEmitter:
         self,
         error: Exception,
         error_context: dict[str, Any] | None = None,
-    ) -> ExecutionStrategyEvent:
+    ) -> StrategyEvents:
         """Emit an error event.
 
         Called when an error occurs during execution.
@@ -192,7 +194,7 @@ class EventEmitter:
         event_data: dict[str, Any],
         timestamp: datetime,
         strategy_type: str = "",
-    ) -> ExecutionStrategyEvent:
+    ) -> StrategyEvents:
         """Persist an event to the database with sequence number.
 
         Creates an ExecutionStrategyEvent record with a monotonically
@@ -211,7 +213,7 @@ class EventEmitter:
         sequence = self._next_event_sequence()
 
         # Create and save the event
-        event = ExecutionStrategyEvent.objects.create(
+        event = StrategyEvents.objects.create(
             execution=self.context.execution,
             sequence=sequence,
             event_type=event_type,
@@ -232,7 +234,7 @@ class EventEmitter:
             int: Next sequence number
         """
         last_event = (
-            ExecutionStrategyEvent.objects.filter(execution=self.context.execution)
+            StrategyEvents.objects.filter(execution=self.context.execution)
             .order_by("-sequence")
             .first()
         )

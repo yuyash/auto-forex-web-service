@@ -3,7 +3,7 @@
 from rest_framework import serializers
 from rest_framework.request import Request
 
-from apps.trading.models import StrategyConfig
+from apps.trading.models import StrategyConfigurations
 
 
 class StrategyConfigDetailSerializer(serializers.ModelSerializer):
@@ -15,7 +15,7 @@ class StrategyConfigDetailSerializer(serializers.ModelSerializer):
     is_in_use = serializers.SerializerMethodField()
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
-        model = StrategyConfig
+        model = StrategyConfigurations
         fields = [
             "id",
             "user_id",
@@ -29,7 +29,7 @@ class StrategyConfigDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "user_id", "is_in_use", "created_at", "updated_at"]
 
-    def get_is_in_use(self, obj: StrategyConfig) -> bool:
+    def get_is_in_use(self, obj: StrategyConfigurations) -> bool:
         """Get whether configuration is in use by active tasks."""
         return obj.is_in_use()
 
@@ -43,7 +43,7 @@ class StrategyConfigListSerializer(serializers.ModelSerializer):
     is_in_use = serializers.SerializerMethodField()
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
-        model = StrategyConfig
+        model = StrategyConfigurations
         fields = [
             "id",
             "user_id",
@@ -56,7 +56,7 @@ class StrategyConfigListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_is_in_use(self, obj: StrategyConfig) -> bool:
+    def get_is_in_use(self, obj: StrategyConfigurations) -> bool:
         """Get whether configuration is in use by active tasks."""
         return obj.is_in_use()
 
@@ -69,7 +69,7 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
     """
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
-        model = StrategyConfig
+        model = StrategyConfigurations
         fields = [
             "name",
             "strategy_type",
@@ -105,7 +105,7 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
 
         if strategy_type:
             # Create temporary config for validation
-            temp_config = StrategyConfig(
+            temp_config = StrategyConfigurations(
                 strategy_type=strategy_type,
                 parameters=normalized_parameters,
             )
@@ -137,14 +137,14 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
 
         return normalized
 
-    def create(self, validated_data: dict) -> StrategyConfig:
+    def create(self, validated_data: dict) -> StrategyConfigurations:
         """Create strategy configuration with user from context."""
         request: Request = self.context["request"]
         user = request.user
         # Type narrowing: request.user is authenticated in view
-        return StrategyConfig.objects.create_for_user(user, **validated_data)
+        return StrategyConfigurations.objects.create_for_user(user, **validated_data)
 
-    def update(self, instance: StrategyConfig, validated_data: dict) -> StrategyConfig:
+    def update(self, instance: StrategyConfigurations, validated_data: dict) -> StrategyConfigurations:
         """Update strategy configuration."""
         # Don't allow updating strategy_type if config is in use
         if (

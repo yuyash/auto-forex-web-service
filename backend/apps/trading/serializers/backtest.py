@@ -4,11 +4,11 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from apps.trading.models import BacktestTask, StrategyConfig
+from apps.trading.models import BacktestTasks, StrategyConfigurations
 
 
 class BacktestTaskSerializer(serializers.ModelSerializer):
-    """Serializer for BacktestTask full details."""
+    """Serializer for BacktestTasks full details."""
 
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     config_id = serializers.IntegerField(source="config.id", read_only=True)
@@ -17,7 +17,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     latest_execution = serializers.SerializerMethodField()
 
     class Meta:
-        model = BacktestTask
+        model = BacktestTasks
         fields = [
             "id",
             "user_id",
@@ -51,7 +51,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def get_latest_execution(self, obj: BacktestTask) -> dict | None:
+    def get_latest_execution(self, obj: BacktestTasks) -> dict | None:
         """Get summary of latest execution."""
         execution = obj.get_latest_execution()
         if not execution:
@@ -75,7 +75,7 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
 
     class Meta:
-        model = BacktestTask
+        model = BacktestTasks
         fields = [
             "id",
             "user_id",
@@ -99,10 +99,10 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
 
 
 class BacktestTaskCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating and updating BacktestTask."""
+    """Serializer for creating and updating BacktestTasks."""
 
     class Meta:
-        model = BacktestTask
+        model = BacktestTasks
         fields = [
             "config",
             "name",
@@ -130,7 +130,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "trading_mode": {"required": False},
         }
 
-    def validate_config(self, value: StrategyConfig) -> StrategyConfig:
+    def validate_config(self, value: StrategyConfigurations) -> StrategyConfigurations:
         """Validate that config belongs to the user."""
         user = self.context["request"].user
         if value.user != user:
@@ -195,13 +195,13 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
         return attrs
 
-    def create(self, validated_data: dict) -> BacktestTask:
+    def create(self, validated_data: dict) -> BacktestTasks:
         """Create backtest task with user from context."""
         user = self.context["request"].user
         validated_data["user"] = user
-        return BacktestTask.objects.create(**validated_data)
+        return BacktestTasks.objects.create(**validated_data)
 
-    def update(self, instance: BacktestTask, validated_data: dict) -> BacktestTask:
+    def update(self, instance: BacktestTasks, validated_data: dict) -> BacktestTasks:
         """Update backtest task."""
         # Don't allow updating if task is running
         if instance.status == "running":

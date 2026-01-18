@@ -102,7 +102,7 @@ class ExecutionEquityPoint(models.Model):
     """Incrementally persisted equity curve points during an execution."""
 
     execution = models.ForeignKey(
-        "trading.TaskExecution",
+        "trading.Executions",
         on_delete=models.CASCADE,
         related_name="equity_point_rows",
         help_text="Owning task execution",

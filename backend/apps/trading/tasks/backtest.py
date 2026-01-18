@@ -9,7 +9,7 @@ from django.conf import settings
 
 from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.models import (
-    BacktestTask,
+    BacktestTasks,
     CeleryTaskStatus,
 )
 from apps.trading.services.executor import BacktestExecutor
@@ -32,7 +32,7 @@ class BacktestTaskRunner(BaseTaskRunner):
     def _create_data_source(self) -> RedisTickDataSource:
         """Create data source for backtest execution."""
         # Type assertion for BacktestTask
-        assert isinstance(self.task, BacktestTask), "Task must be BacktestTask"
+        assert isinstance(self.task, BacktestTasks), "Task must be BacktestTask"
 
         task_id = self.task.pk
         request_id = f"backtest:{task_id}:{int(time.time())}"
@@ -66,7 +66,7 @@ class BacktestTaskRunner(BaseTaskRunner):
     def _create_executor(self, data_source: RedisTickDataSource, strategy: Any) -> BacktestExecutor:
         """Create BacktestExecutor instance."""
         # Type assertion for BacktestTask
-        assert isinstance(self.task, BacktestTask), "Task must be BacktestTask"
+        assert isinstance(self.task, BacktestTasks), "Task must be BacktestTask"
 
         return BacktestExecutor(
             data_source=data_source,
@@ -88,10 +88,10 @@ class BacktestTaskRunner(BaseTaskRunner):
 
         try:
             # Load the backtest task
-            self.task: BacktestTask = BacktestTask.objects.select_related("config", "user").get(
+            self.task: BacktestTasks = BacktestTasks.objects.select_related("config", "user").get(
                 pk=task_id
             )
-        except BacktestTask.DoesNotExist:
+        except BacktestTasks.DoesNotExist:
             logger.error(f"BacktestTask {task_id} not found")
             self.task_service.mark_stopped(
                 status=CeleryTaskStatus.Status.FAILED, status_message="Task not found"

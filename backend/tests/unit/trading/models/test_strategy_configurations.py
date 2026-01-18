@@ -95,6 +95,7 @@ class TestStrategyConfigurationsModel:
 
         is_valid, error = config.validate_parameters()
         assert not is_valid
+        assert error is not None
         assert "not registered" in error
 
     def test_manager_for_user(self, user):

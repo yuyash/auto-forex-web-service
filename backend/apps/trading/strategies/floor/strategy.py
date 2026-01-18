@@ -24,7 +24,7 @@ from apps.trading.strategies.floor.monitors import MarginProtectionMonitor, Vola
 from apps.trading.strategies.floor.trading import TradingEngine
 
 if TYPE_CHECKING:
-    from apps.trading.models import StrategyConfig
+    from apps.trading.models import StrategyConfigurations
 
 
 logger: Logger = getLogger(name=__name__)
@@ -86,7 +86,7 @@ class FloorStrategy(Strategy[FloorStrategyState]):
         return StrategyType.FLOOR
 
     @staticmethod
-    def parse_config(strategy_config: "StrategyConfig") -> FloorStrategyConfig:
+    def parse_config(strategy_config: "StrategyConfigurations") -> FloorStrategyConfig:
         """Parse StrategyConfig to FloorStrategyConfig.
 
         Args:

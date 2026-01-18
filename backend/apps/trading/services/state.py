@@ -7,7 +7,7 @@ and validating execution state for task resumability.
 """
 
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from apps.trading.dataclasses import (
     ExecutionMetrics,
@@ -15,7 +15,10 @@ from apps.trading.dataclasses import (
     OpenPosition,
     ValidationResult,
 )
-from apps.trading.models import ExecutionStateSnapshot, TaskExecution
+from apps.trading.models import ExecutionStateSnapshot
+
+if TYPE_CHECKING:
+    from apps.trading.models import Executions
 
 
 class StateManager:
@@ -31,7 +34,7 @@ class StateManager:
     Requirements: 4.1, 4.2, 4.3, 4.5
     """
 
-    def __init__(self, execution: TaskExecution) -> None:
+    def __init__(self, execution: Executions) -> None:
         """Initialize the StateManager with a TaskExecution.
 
         Args:

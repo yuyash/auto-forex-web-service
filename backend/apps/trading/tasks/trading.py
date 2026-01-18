@@ -10,7 +10,7 @@ from django.utils import timezone as dj_timezone
 from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.models import (
     CeleryTaskStatus,
-    TradingTask,
+    TradingTasks,
 )
 from apps.trading.services.executor import TradingExecutor
 from apps.trading.services.lifecycle import ExecutionLifecycle, StrategyCreationContext
@@ -34,7 +34,7 @@ class TradingTaskRunner(BaseTaskRunner):
     def _create_executor(self, data_source: LiveTickDataSource, strategy: Any) -> TradingExecutor:
         """Create TradingExecutor instance."""
         # Type assertion for TradingTask
-        assert isinstance(self.task, TradingTask), "Task must be TradingTask"
+        assert isinstance(self.task, TradingTasks), "Task must be TradingTask"
 
         from apps.market.services.oanda import OandaService
 
@@ -62,10 +62,10 @@ class TradingTaskRunner(BaseTaskRunner):
 
         try:
             # Load the trading task
-            self.task: TradingTask = TradingTask.objects.select_related(
+            self.task: TradingTasks = TradingTasks.objects.select_related(
                 "config", "oanda_account", "user"
             ).get(pk=task_id)
-        except TradingTask.DoesNotExist:
+        except TradingTasks.DoesNotExist:
             logger.error(f"TradingTask {task_id} not found")
             self.task_service.mark_stopped(
                 status=CeleryTaskStatus.Status.FAILED, status_message="Task not found"

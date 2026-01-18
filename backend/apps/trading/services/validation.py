@@ -13,7 +13,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from apps.market.models import OandaAccounts
-from apps.trading.models import BacktestTask, StrategyConfig, TradingTask
+from apps.trading.models import BacktestTasks, StrategyConfigurations, TradingTasks
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractBaseUser
@@ -37,7 +37,7 @@ class TaskValidator:
 
     @staticmethod
     def validate_strategy_configuration(
-        config: Optional[StrategyConfig],
+        config: Optional[StrategyConfigurations],
     ) -> Tuple[bool, Optional[str]]:
         """
         Validate strategy configuration.
@@ -207,7 +207,7 @@ class TaskValidator:
         return True, None
 
     @staticmethod
-    def validate_backtest_task(task: BacktestTask) -> Tuple[bool, Optional[str]]:
+    def validate_backtest_task(task: BacktestTasks) -> Tuple[bool, Optional[str]]:
         """
         Validate a backtest task before starting.
 
@@ -234,7 +234,7 @@ class TaskValidator:
         return True, None
 
     @staticmethod
-    def validate_trading_task(task: TradingTask, user: "User") -> Tuple[bool, Optional[str]]:
+    def validate_trading_task(task: TradingTasks, user: "User") -> Tuple[bool, Optional[str]]:
         """
         Validate a trading task before starting.
 

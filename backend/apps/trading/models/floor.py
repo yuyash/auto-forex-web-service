@@ -22,7 +22,7 @@ class FloorStrategyTaskState(models.Model):
     """
 
     trading_task = models.OneToOneField(
-        "trading.TradingTask",
+        "trading.TradingTasks",
         on_delete=models.CASCADE,
         related_name="floor_state",
         null=True,

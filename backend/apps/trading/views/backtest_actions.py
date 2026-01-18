@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.trading.enums import TaskStatus, TaskType
-from apps.trading.models import BacktestTask, TaskExecution
+from apps.trading.models import BacktestTasks, Executions
 from apps.trading.services.lock import TaskLockManager
 from apps.trading.views._helpers import (
     TaskExecutionPagination,
@@ -33,8 +33,8 @@ class BacktestTaskStartView(APIView):
     def post(self, request: Request, task_id: int) -> Response:
         """Start backtest task execution."""
         try:
-            task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
-        except BacktestTask.DoesNotExist:
+            task = BacktestTasks.objects.get(id=task_id, user=request.user.pk)
+        except BacktestTasks.DoesNotExist:
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         if task.status == TaskStatus.RUNNING:
@@ -77,18 +77,18 @@ class BacktestTaskStartView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_409_CONFLICT)
 
         now = timezone.now()
-        execution: TaskExecution | None
+        execution: Executions | None
         try:
             with transaction.atomic():
                 last_num = (
-                    TaskExecution.objects.select_for_update()
+                    Executions.objects.select_for_update()
                     .filter(task_type=TaskType.BACKTEST, task_id=task_id)
                     .order_by("-execution_number")
                     .values_list("execution_number", flat=True)
                     .first()
                 )
                 next_num = int(last_num or 0) + 1
-                execution = TaskExecution.objects.create(
+                execution = Executions.objects.create(
                     task_type=TaskType.BACKTEST,
                     task_id=task_id,
                     execution_number=next_num,
@@ -126,8 +126,8 @@ class BacktestTaskStopView(APIView):
     def post(self, request: Request, task_id: int) -> Response:
         """Stop backtest task execution."""
         try:
-            task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
-        except BacktestTask.DoesNotExist:
+            task = BacktestTasks.objects.get(id=task_id, user=request.user.pk)
+        except BacktestTasks.DoesNotExist:
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         lock_manager = TaskLockManager()
@@ -173,8 +173,8 @@ class BacktestTaskStatusView(APIView):
     def get(self, request: Request, task_id: int) -> Response:
         """Get current task status and execution details."""
         try:
-            task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
-        except BacktestTask.DoesNotExist:
+            task = BacktestTasks.objects.get(id=task_id, user=request.user.pk)
+        except BacktestTasks.DoesNotExist:
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         latest_execution = task.get_latest_execution()
@@ -332,8 +332,8 @@ class BacktestTaskExecutionsView(APIView):
     def get(self, request: Request, task_id: int) -> Response:
         """Get execution history for backtest task."""
         try:
-            task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
-        except BacktestTask.DoesNotExist:
+            task = BacktestTasks.objects.get(id=task_id, user=request.user.pk)
+        except BacktestTasks.DoesNotExist:
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         executions = task.get_execution_history()
@@ -354,10 +354,10 @@ class BacktestTaskExportView(APIView):
     def get(self, request: Request, task_id: int) -> Response:
         """Export complete backtest results."""
         try:
-            task = BacktestTask.objects.select_related("config", "user").get(
+            task = BacktestTasks.objects.select_related("config", "user").get(
                 id=task_id, user=request.user.pk
             )
-        except BacktestTask.DoesNotExist:
+        except BacktestTasks.DoesNotExist:
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         latest_execution = task.get_latest_execution()
@@ -463,14 +463,14 @@ class BacktestTaskLogsView(APIView):
     def get(self, request: Request, task_id: int) -> Response:
         """Get task logs with pagination and filtering."""
         try:
-            BacktestTask.objects.get(id=task_id, user=request.user.pk)
-        except BacktestTask.DoesNotExist:
+            BacktestTasks.objects.get(id=task_id, user=request.user.pk)
+        except BacktestTasks.DoesNotExist:
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         execution_id = request.query_params.get("execution_id")
         level = request.query_params.get("level")
 
-        executions_query = TaskExecution.objects.filter(
+        executions_query = Executions.objects.filter(
             task_type="backtest", task_id=task_id
         ).order_by("execution_number")
 

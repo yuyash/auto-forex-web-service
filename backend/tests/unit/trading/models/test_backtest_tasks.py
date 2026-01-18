@@ -1,5 +1,6 @@
 """Unit tests for BacktestTasks model."""
 
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
@@ -38,7 +39,7 @@ class TestBacktestTasksModel:
     def test_create_backtest_task_with_valid_data(self, user, config):
         """Test creating BacktestTasks with valid fields."""
         start_time = timezone.now()
-        end_time = start_time + timezone.timedelta(days=1)
+        end_time = start_time + timedelta(days=1)
 
         task = BacktestTasks.objects.create(
             name="Test Backtest",
@@ -63,7 +64,7 @@ class TestBacktestTasksModel:
     def test_unique_constraint_on_user_name(self, user, config):
         """Test that (user, name) must be unique."""
         start_time = timezone.now()
-        end_time = start_time + timezone.timedelta(days=1)
+        end_time = start_time + timedelta(days=1)
 
         # Create first task
         BacktestTasks.objects.create(
@@ -89,7 +90,7 @@ class TestBacktestTasksModel:
     def test_start_method(self, user, config):
         """Test starting a backtest task."""
         start_time = timezone.now()
-        end_time = start_time + timezone.timedelta(days=1)
+        end_time = start_time + timedelta(days=1)
 
         task = BacktestTasks.objects.create(
             name="Test Backtest",
@@ -106,7 +107,7 @@ class TestBacktestTasksModel:
     def test_stop_method(self, user, config):
         """Test stopping a running backtest task."""
         start_time = timezone.now()
-        end_time = start_time + timezone.timedelta(days=1)
+        end_time = start_time + timedelta(days=1)
 
         task = BacktestTasks.objects.create(
             name="Test Backtest",
@@ -124,7 +125,7 @@ class TestBacktestTasksModel:
     def test_copy_method(self, user, config):
         """Test copying a backtest task."""
         start_time = timezone.now()
-        end_time = start_time + timezone.timedelta(days=1)
+        end_time = start_time + timedelta(days=1)
 
         original = BacktestTasks.objects.create(
             name="Original Task",
@@ -154,7 +155,7 @@ class TestBacktestTasksModel:
         )
 
         start_time = timezone.now()
-        end_time = start_time + timezone.timedelta(days=1)
+        end_time = start_time + timedelta(days=1)
 
         BacktestTasks.objects.create(
             name="Task 1",

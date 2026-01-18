@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.trading.enums import TaskStatus
-from apps.trading.models import BacktestTask
+from apps.trading.models import BacktestTasks
 from apps.trading.serializers import (
     BacktestTaskCreateSerializer,
     BacktestTaskListSerializer,
@@ -33,7 +33,7 @@ class BacktestTaskView(ListCreateAPIView):
 
     def get_queryset(self) -> QuerySet:
         """Get backtest tasks for the authenticated user with filtering."""
-        queryset = BacktestTask.objects.filter(user=self.request.user.pk).select_related(
+        queryset = BacktestTasks.objects.filter(user=self.request.user.pk).select_related(
             "config", "user"
         )
 
@@ -78,7 +78,7 @@ class BacktestTaskDetailView(RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self) -> QuerySet[Model]:
         """Get backtest tasks for the authenticated user."""
-        return BacktestTask.objects.filter(user=self.request.user.pk).select_related(
+        return BacktestTasks.objects.filter(user=self.request.user.pk).select_related(
             "config", "user"
         )
 
@@ -87,7 +87,7 @@ class BacktestTaskDetailView(RetrieveUpdateDestroyAPIView):
 
         Automatically stops the task if running before deletion.
         """
-        task = cast(BacktestTask, instance)
+        task = cast(BacktestTasks, instance)
 
         # Stop the task if running (this will set cancellation flag)
         if task.status == TaskStatus.RUNNING:
@@ -112,8 +112,8 @@ class BacktestTaskCopyView(APIView):
     def post(self, request: Request, task_id: int) -> Response:
         """Copy backtest task."""
         try:
-            task = BacktestTask.objects.get(id=task_id, user=request.user.pk)
-        except BacktestTask.DoesNotExist:
+            task = BacktestTasks.objects.get(id=task_id, user=request.user.pk)
+        except BacktestTasks.DoesNotExist:
             return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         new_name = request.data.get("new_name")

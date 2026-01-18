@@ -8,7 +8,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.trading.models import TradingTask
+from apps.trading.models import TradingTasks
 from apps.trading.services.equity import EquityService
 from apps.trading.services.performance import LivePerformanceService
 from apps.trading.views._helpers import (
@@ -29,10 +29,10 @@ class TradingTaskResultsView(APIView):
 
     def get(self, request: Request, task_id: int) -> Response:
         try:
-            task = TradingTask.objects.select_related("config", "user", "oanda_account").get(
+            task = TradingTasks.objects.select_related("config", "user", "oanda_account").get(
                 id=task_id, user=request.user.pk
             )
-        except TradingTask.DoesNotExist:
+        except TradingTasks.DoesNotExist:
             return Response({"error": "Trading task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         latest_execution = task.get_latest_execution()
@@ -87,10 +87,10 @@ class TradingTaskEquityCurveView(APIView):
 
     def get(self, request: Request, task_id: int) -> Response:
         try:
-            task = TradingTask.objects.select_related("config", "user", "oanda_account").get(
+            task = TradingTasks.objects.select_related("config", "user", "oanda_account").get(
                 id=task_id, user=request.user.pk
             )
-        except TradingTask.DoesNotExist:
+        except TradingTasks.DoesNotExist:
             return Response({"error": "Trading task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         latest_execution = task.get_latest_execution()
@@ -202,10 +202,10 @@ class TradingTaskStrategyEventsView(APIView):
 
     def get(self, request: Request, task_id: int) -> Response:
         try:
-            task = TradingTask.objects.select_related("config", "user", "oanda_account").get(
+            task = TradingTasks.objects.select_related("config", "user", "oanda_account").get(
                 id=task_id, user=request.user.pk
             )
-        except TradingTask.DoesNotExist:
+        except TradingTasks.DoesNotExist:
             return Response({"error": "Trading task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         latest_execution = task.get_latest_execution()
@@ -224,10 +224,10 @@ class TradingTaskStrategyEventsView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        from apps.trading.models import ExecutionStrategyEvent
+        from apps.trading.models import StrategyEvents
 
         qs = (
-            ExecutionStrategyEvent.objects.filter(execution=latest_execution)
+            StrategyEvents.objects.filter(execution=latest_execution)
             .order_by("sequence", "id")
             .values_list("event", flat=True)
         )
@@ -262,10 +262,10 @@ class TradingTaskTradeLogsView(APIView):
 
     def get(self, request: Request, task_id: int) -> Response:
         try:
-            task = TradingTask.objects.select_related("config", "user", "oanda_account").get(
+            task = TradingTasks.objects.select_related("config", "user", "oanda_account").get(
                 id=task_id, user=request.user.pk
             )
-        except TradingTask.DoesNotExist:
+        except TradingTasks.DoesNotExist:
             return Response({"error": "Trading task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         latest_execution = task.get_latest_execution()
@@ -287,10 +287,10 @@ class TradingTaskTradeLogsView(APIView):
         metrics_obj = _get_execution_metrics_or_none(latest_execution)
         # Live fallback (DB-backed incremental trades)
         if not metrics_obj:
-            from apps.trading.models import ExecutionTradeLogEntry
+            from apps.trading.models import TradeLogs
 
             qs = (
-                ExecutionTradeLogEntry.objects.filter(execution=latest_execution)
+                TradeLogs.objects.filter(execution=latest_execution)
                 .order_by("sequence", "id")
                 .values_list("trade", flat=True)
             )
@@ -349,10 +349,10 @@ class TradingTaskMetricsCheckpointView(APIView):
 
     def get(self, request: Request, task_id: int) -> Response:
         try:
-            task = TradingTask.objects.select_related("config", "user", "oanda_account").get(
+            task = TradingTasks.objects.select_related("config", "user", "oanda_account").get(
                 id=task_id, user=request.user.pk
             )
-        except TradingTask.DoesNotExist:
+        except TradingTasks.DoesNotExist:
             return Response({"error": "Trading task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         latest_execution = task.get_latest_execution()

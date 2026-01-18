@@ -9,9 +9,9 @@ from django.utils import timezone as dj_timezone
 from apps.trading.dataclasses import EventContext
 from apps.trading.enums import LogLevel, TaskStatus, TaskType
 from apps.trading.models import (
-    BacktestTask,
-    TaskExecution,
-    TradingTask,
+    BacktestTasks,
+    Executions,
+    TradingTasks,
 )
 from apps.trading.services.celery import CeleryTaskService
 from apps.trading.services.events import EventEmitter
@@ -24,8 +24,8 @@ class BaseTaskRunner(ABC):
     """Base class for task runners with common functionality."""
 
     # Instance attributes set during run() execution
-    execution: TaskExecution
-    task: BacktestTask | TradingTask
+    execution: Executions
+    task: BacktestTasks | TradingTasks
     event_emitter: EventEmitter
     task_service: CeleryTaskService
 
@@ -34,16 +34,16 @@ class BaseTaskRunner(ABC):
         register_all_strategies()
 
     @staticmethod
-    def _create_execution(*, task_type: str, task_id: int) -> TaskExecution:
-        """Create a new TaskExecution with sequential numbering."""
+    def _create_execution(*, task_type: str, task_id: int) -> Executions:
+        """Create a new Executions with sequential numbering."""
         last_num = (
-            TaskExecution.objects.filter(task_type=task_type, task_id=task_id)
+            Executions.objects.filter(task_type=task_type, task_id=task_id)
             .order_by("-execution_number")
             .values_list("execution_number", flat=True)
             .first()
         )
         next_num = int(last_num or 0) + 1
-        return TaskExecution.objects.create(
+        return Executions.objects.create(
             task_type=task_type,
             task_id=task_id,
             execution_number=next_num,
@@ -90,7 +90,7 @@ class BaseTaskRunner(ABC):
         task_type: TaskType,
         task_id: int,
         execution_id: int | None,
-    ) -> TaskExecution:
+    ) -> Executions:
         """Get existing execution or create a new one.
 
         Args:
@@ -99,16 +99,16 @@ class BaseTaskRunner(ABC):
             execution_id: Optional ID of existing execution to resume
 
         Returns:
-            TaskExecution instance
+            Executions instance
 
         Raises:
             ValueError: If execution_id is provided but is not the latest execution
         """
-        execution: TaskExecution
+        execution: Executions
 
         # Get the latest execution for this task
         latest_execution = (
-            TaskExecution.objects.filter(
+            Executions.objects.filter(
                 task_type=task_type.value,
                 task_id=task_id,
             )
@@ -118,7 +118,7 @@ class BaseTaskRunner(ABC):
 
         if execution_id is not None:
             try:
-                execution = TaskExecution.objects.get(
+                execution = Executions.objects.get(
                     pk=int(execution_id),
                     task_type=task_type.value,
                     task_id=task_id,
@@ -149,7 +149,7 @@ class BaseTaskRunner(ABC):
                     execution.pk,
                     task_id,
                 )
-            except TaskExecution.DoesNotExist:
+            except Executions.DoesNotExist:
                 logger.warning(
                     "Execution %d not found for task %d, creating new execution",
                     execution_id,

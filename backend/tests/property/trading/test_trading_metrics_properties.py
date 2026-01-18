@@ -11,7 +11,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from apps.trading.enums import TaskStatus, TaskType
-from apps.trading.models import TaskExecution, TradingMetrics
+from apps.trading.models import Executions, TradingMetrics
 
 # Counter for generating unique execution numbers
 _execution_counter = 0
@@ -101,7 +101,7 @@ class TestTradingMetricsProperties:
         Validates: Requirements 1.2
         """
         # Create execution with unique execution number
-        execution = TaskExecution.objects.create(
+        execution = Executions.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=1,
             execution_number=get_next_execution_number(),
@@ -145,7 +145,7 @@ class TestTradingMetricsProperties:
         Validates: Requirements 3.4
         """
         # Create execution with unique execution number
-        execution = TaskExecution.objects.create(
+        execution = Executions.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=1,
             execution_number=get_next_execution_number(),

@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.trading.enums import TaskStatus
-from apps.trading.models import TradingTask
+from apps.trading.models import TradingTasks
 from apps.trading.serializers import (
     TradingTaskCreateSerializer,
     TradingTaskListSerializer,
@@ -48,7 +48,7 @@ class TradingTaskView(ListCreateAPIView):
         - search: Search in name or description
         - ordering: Sort field (e.g., '-created_at', 'name')
         """
-        queryset = TradingTask.objects.filter(user=self.request.user.pk).select_related(
+        queryset = TradingTasks.objects.filter(user=self.request.user.pk).select_related(
             "config", "oanda_account", "user"
         )
 
@@ -104,7 +104,7 @@ class TradingTaskDetailView(RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self) -> QuerySet[Model]:
         """Get trading tasks for the authenticated user."""
-        return TradingTask.objects.filter(user=self.request.user.pk).select_related(
+        return TradingTasks.objects.filter(user=self.request.user.pk).select_related(
             "config", "oanda_account", "user"
         )
 
@@ -148,8 +148,8 @@ class TradingTaskCopyView(APIView):
         """
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
-        except TradingTask.DoesNotExist:
+            task = TradingTasks.objects.get(id=task_id, user=request.user.pk)
+        except TradingTasks.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
                 status=status.HTTP_404_NOT_FOUND,

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar
 if TYPE_CHECKING:
     from apps.trading.dataclasses import ExecutionState, StrategyResult, StrategyState, Tick
     from apps.trading.enums import StrategyType as StrategyTypeEnum
-    from apps.trading.models import StrategyConfig
+    from apps.trading.models import StrategyConfigurations
 
 
 # Type variable for strategy state
@@ -35,7 +35,7 @@ class Strategy(ABC, Generic[TStrategyState]):
 
     @staticmethod
     @abstractmethod
-    def parse_config(strategy_config: "StrategyConfig") -> Any:
+    def parse_config(strategy_config: "StrategyConfigurations") -> Any:
         """Parse StrategyConfig to strategy-specific config object.
 
         This method is called by the registry before instantiation to convert

@@ -10,6 +10,7 @@ from apps.market.models import OandaAccounts
 from apps.trading.enums import TaskStatus, TaskType
 
 if TYPE_CHECKING:
+    from apps.trading.models.events import StrategyEvents
     from apps.trading.models.metrics import ExecutionMetricsCheckpoint
     from apps.trading.models.state import ExecutionStateSnapshot
 

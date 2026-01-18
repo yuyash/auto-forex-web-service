@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.trading.enums import TaskStatus, TaskType
-from apps.trading.models import TaskExecution, TradingTask
+from apps.trading.models import Executions, TradingTasks
 from apps.trading.services.lock import TaskLockManager
 from apps.trading.views._helpers import (
     TaskExecutionPagination,
@@ -43,8 +43,8 @@ class TradingTaskStartView(APIView):
         """
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
-        except TradingTask.DoesNotExist:
+            task = TradingTasks.objects.get(id=task_id, user=request.user.pk)
+        except TradingTasks.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -103,18 +103,18 @@ class TradingTaskStartView(APIView):
             )
 
         now = timezone.now()
-        execution: TaskExecution | None
+        execution: Executions | None
         try:
             with transaction.atomic():
                 last_num = (
-                    TaskExecution.objects.select_for_update()
+                    Executions.objects.select_for_update()
                     .filter(task_type=TaskType.TRADING, task_id=task_id)
                     .order_by("-execution_number")
                     .values_list("execution_number", flat=True)
                     .first()
                 )
                 next_num = int(last_num or 0) + 1
-                execution = TaskExecution.objects.create(
+                execution = Executions.objects.create(
                     task_type=TaskType.TRADING,
                     task_id=task_id,
                     execution_number=next_num,
@@ -188,8 +188,8 @@ class TradingTaskStopView(APIView):
 
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
-        except TradingTask.DoesNotExist:
+            task = TradingTasks.objects.get(id=task_id, user=request.user.pk)
+        except TradingTasks.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -310,8 +310,8 @@ class TradingTaskRestartView(APIView):
         """
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
-        except TradingTask.DoesNotExist:
+            task = TradingTasks.objects.get(id=task_id, user=request.user.pk)
+        except TradingTasks.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -338,18 +338,18 @@ class TradingTaskRestartView(APIView):
             )
 
         now = timezone.now()
-        execution: TaskExecution | None
+        execution: Executions | None
         try:
             with transaction.atomic():
                 last_num = (
-                    TaskExecution.objects.select_for_update()
+                    Executions.objects.select_for_update()
                     .filter(task_type=TaskType.TRADING, task_id=task_id)
                     .order_by("-execution_number")
                     .values_list("execution_number", flat=True)
                     .first()
                 )
                 next_num = int(last_num or 0) + 1
-                execution = TaskExecution.objects.create(
+                execution = Executions.objects.create(
                     task_type=TaskType.TRADING,
                     task_id=task_id,
                     execution_number=next_num,
@@ -411,8 +411,8 @@ class TradingTaskExecutionsView(APIView):
         """
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
-        except TradingTask.DoesNotExist:
+            task = TradingTasks.objects.get(id=task_id, user=request.user.pk)
+        except TradingTasks.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -433,7 +433,7 @@ class TradingTaskLogsView(APIView):
     """
     Get logs for a trading task with pagination and filtering.
 
-    GET: Return paginated log entries from TaskExecution.logs JSONField
+    GET: Return paginated log entries from Executions.logs JSONField
     """
 
     permission_classes = [IsAuthenticated]
@@ -476,8 +476,8 @@ class TradingTaskLogsView(APIView):
         """
         # Verify task exists and user has access
         try:
-            TradingTask.objects.get(id=task_id, user=request.user.pk)
-        except TradingTask.DoesNotExist:
+            TradingTasks.objects.get(id=task_id, user=request.user.pk)
+        except TradingTasks.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
                 status=status.HTTP_404_NOT_FOUND,
@@ -487,7 +487,7 @@ class TradingTaskLogsView(APIView):
         execution_id = request.query_params.get("execution_id")
         level = request.query_params.get("level")
 
-        executions_query = TaskExecution.objects.filter(
+        executions_query = Executions.objects.filter(
             task_type="trading",
             task_id=task_id,
         ).order_by("execution_number")
@@ -539,8 +539,8 @@ class TradingTaskStatusView(APIView):
         """
         # Get the task
         try:
-            task = TradingTask.objects.get(id=task_id, user=request.user.pk)
-        except TradingTask.DoesNotExist:
+            task = TradingTasks.objects.get(id=task_id, user=request.user.pk)
+        except TradingTasks.DoesNotExist:
             return Response(
                 {"error": "Trading task not found"},
                 status=status.HTTP_404_NOT_FOUND,
