@@ -24,7 +24,9 @@ def api_client():
 @pytest.fixture
 def user(db: None) -> User:  # type: ignore[type-arg]
     """Create test user."""
-    return User.objects.create_user(username="testuser", password="testpass123")  # type: ignore[attr-defined]
+    return User.objects.create_user(  # type: ignore[attr-defined]
+        username="testuser", password="testpass123"
+    )
 
 
 @pytest.fixture

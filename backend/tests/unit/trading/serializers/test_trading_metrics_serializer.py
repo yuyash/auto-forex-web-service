@@ -31,7 +31,7 @@ class TestTradingMetricsSerializer:
         )
         return Executions.objects.create(
             task_type="backtest",
-            task_id=backtest_task.id,
+            task_id=backtest_task.id,  # type: ignore[attr-defined]
             execution_number=1,
             status="running",
         )

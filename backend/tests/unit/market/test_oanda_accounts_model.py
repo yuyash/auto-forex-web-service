@@ -23,7 +23,7 @@ class TestOandaAccountsModel:
     @pytest.fixture
     def user(self):
         """Create a test user."""
-        return User.objects.create_user(  # type: ignore[attr-defined]
+        return User.objects.create_user(  # type: ignore[attr-defined]  # type: ignore[attr-defined]
             email="test@example.com", password="testpass123", username="testuser"
         )
 

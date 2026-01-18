@@ -37,7 +37,7 @@ def api_client():
 @pytest.fixture
 def user(db: None) -> User:  # type: ignore[type-arg]
     """Create test user."""
-    return User.objects.create_user(  # type: ignore[attr-defined]
+    return User.objects.create_user(  # type: ignore[attr-defined]  # type: ignore[attr-defined]
         username="testuser",
         email="test@example.com",
         password="testpass123",
@@ -179,7 +179,7 @@ class TestExecutionDetailView:
 
     def test_get_execution_detail_access_denied(self, api_client, execution):
         """Test execution detail with different user."""
-        other_user = User.objects.create_user(  # type: ignore[attr-defined]
+        other_user = User.objects.create_user(  # type: ignore[attr-defined]  # type: ignore[attr-defined]
             username="otheruser",
             email="other@example.com",
             password="testpass123",

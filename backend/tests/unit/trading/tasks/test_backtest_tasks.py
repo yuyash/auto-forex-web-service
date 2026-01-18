@@ -26,7 +26,7 @@ class TestBacktestTaskRunner(TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.user = User.objects.create_user(  # type: ignore[attr-defined]
+        self.user = User.objects.create_user(  # type: ignore[attr-defined]  # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
