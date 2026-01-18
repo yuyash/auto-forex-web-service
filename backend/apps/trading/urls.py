@@ -9,21 +9,18 @@ from django.urls import path
 from apps.trading.views import (
     BacktestTaskCopyView,
     BacktestTaskDetailView,
-    BacktestTaskEquityCurveView,
     BacktestTaskExecutionsView,
-    BacktestTaskExportView,
-    BacktestTaskLogsView,
-    BacktestTaskMetricsCheckpointView,
-    BacktestTaskResultsView,
+    BacktestTaskRestartView,
+    BacktestTaskResumeView,
     BacktestTaskStartView,
     BacktestTaskStatusView,
     BacktestTaskStopView,
-    BacktestTaskStrategyEventsView,
-    BacktestTaskTradeLogsView,
     BacktestTaskView,
     ExecutionDetailView,
     ExecutionEquityView,
     ExecutionEventsView,
+    ExecutionLatestMetricsView,
+    ExecutionLogsView,
     ExecutionMetricsView,
     ExecutionStatusView,
     ExecutionTradesView,
@@ -33,17 +30,12 @@ from apps.trading.views import (
     StrategyView,
     TradingTaskCopyView,
     TradingTaskDetailView,
-    TradingTaskEquityCurveView,
     TradingTaskExecutionsView,
-    TradingTaskLogsView,
-    TradingTaskMetricsCheckpointView,
     TradingTaskRestartView,
-    TradingTaskResultsView,
+    TradingTaskResumeView,
     TradingTaskStartView,
     TradingTaskStatusView,
     TradingTaskStopView,
-    TradingTaskStrategyEventsView,
-    TradingTaskTradeLogsView,
     TradingTaskView,
 )
 
@@ -94,6 +86,16 @@ urlpatterns = [
         name="backtest_task_stop",
     ),
     path(
+        "backtest-tasks/<int:task_id>/resume/",
+        BacktestTaskResumeView.as_view(),
+        name="backtest_task_resume",
+    ),
+    path(
+        "backtest-tasks/<int:task_id>/restart/",
+        BacktestTaskRestartView.as_view(),
+        name="backtest_task_restart",
+    ),
+    path(
         "backtest-tasks/<int:task_id>/status/",
         BacktestTaskStatusView.as_view(),
         name="backtest_task_status",
@@ -102,41 +104,6 @@ urlpatterns = [
         "backtest-tasks/<int:task_id>/executions/",
         BacktestTaskExecutionsView.as_view(),
         name="backtest_task_executions",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/logs/",
-        BacktestTaskLogsView.as_view(),
-        name="backtest_task_logs",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/export/",
-        BacktestTaskExportView.as_view(),
-        name="backtest_task_export",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/results/",
-        BacktestTaskResultsView.as_view(),
-        name="backtest_task_results",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/equity-curve/",
-        BacktestTaskEquityCurveView.as_view(),
-        name="backtest_task_equity_curve",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/strategy-events/",
-        BacktestTaskStrategyEventsView.as_view(),
-        name="backtest_task_strategy_events",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/trade-logs/",
-        BacktestTaskTradeLogsView.as_view(),
-        name="backtest_task_trade_logs",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/metrics-checkpoint/",
-        BacktestTaskMetricsCheckpointView.as_view(),
-        name="backtest_task_metrics_checkpoint",
     ),
     # Trading task endpoints
     path(
@@ -165,6 +132,11 @@ urlpatterns = [
         name="trading_task_stop",
     ),
     path(
+        "trading-tasks/<int:task_id>/resume/",
+        TradingTaskResumeView.as_view(),
+        name="trading_task_resume",
+    ),
+    path(
         "trading-tasks/<int:task_id>/restart/",
         TradingTaskRestartView.as_view(),
         name="trading_task_restart",
@@ -179,41 +151,16 @@ urlpatterns = [
         TradingTaskExecutionsView.as_view(),
         name="trading_task_executions",
     ),
-    path(
-        "trading-tasks/<int:task_id>/logs/",
-        TradingTaskLogsView.as_view(),
-        name="trading_task_logs",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/results/",
-        TradingTaskResultsView.as_view(),
-        name="trading_task_results",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/equity-curve/",
-        TradingTaskEquityCurveView.as_view(),
-        name="trading_task_equity_curve",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/strategy-events/",
-        TradingTaskStrategyEventsView.as_view(),
-        name="trading_task_strategy_events",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/trade-logs/",
-        TradingTaskTradeLogsView.as_view(),
-        name="trading_task_trade_logs",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/metrics-checkpoint/",
-        TradingTaskMetricsCheckpointView.as_view(),
-        name="trading_task_metrics_checkpoint",
-    ),
     # Execution-specific endpoints (task 14)
     path(
         "executions/<int:execution_id>/",
         ExecutionDetailView.as_view(),
         name="execution_detail",
+    ),
+    path(
+        "executions/<int:execution_id>/logs/",
+        ExecutionLogsView.as_view(),
+        name="execution_logs",
     ),
     path(
         "executions/<int:execution_id>/status/",
@@ -236,8 +183,13 @@ urlpatterns = [
         name="execution_equity",
     ),
     path(
-        "executions/<int:execution_id>/metrics/latest/",
+        "executions/<int:execution_id>/metrics/",
         ExecutionMetricsView.as_view(),
+        name="execution_metrics",
+    ),
+    path(
+        "executions/<int:execution_id>/metrics/latest/",
+        ExecutionLatestMetricsView.as_view(),
         name="execution_metrics_latest",
     ),
 ]

@@ -5,27 +5,18 @@ This package organizes trading views into logical modules:
 - configs: StrategyConfig CRUD operations
 - trading_tasks: TradingTask CRUD operations
 - trading_actions: TradingTask lifecycle (start/stop/restart/status)
-- trading_data: TradingTask data endpoints (equity/events/trades/logs)
 - backtest_tasks: BacktestTask CRUD operations
 - backtest_actions: BacktestTask lifecycle (start/stop/status)
-- backtest_data: BacktestTask data endpoints (equity/events/trades/logs)
-- executions: Execution-specific endpoints (Task 14)
+- executions: Execution-specific endpoints
 """
 
 from .backtest_actions import (
     BacktestTaskExecutionsView,
-    BacktestTaskExportView,
-    BacktestTaskLogsView,
+    BacktestTaskRestartView,
+    BacktestTaskResumeView,
     BacktestTaskStartView,
     BacktestTaskStatusView,
     BacktestTaskStopView,
-)
-from .backtest_data import (
-    BacktestTaskEquityCurveView,
-    BacktestTaskMetricsCheckpointView,
-    BacktestTaskResultsView,
-    BacktestTaskStrategyEventsView,
-    BacktestTaskTradeLogsView,
 )
 from .backtest_tasks import (
     BacktestTaskCopyView,
@@ -40,6 +31,8 @@ from .executions import (
     ExecutionDetailView,
     ExecutionEquityView,
     ExecutionEventsView,
+    ExecutionLatestMetricsView,
+    ExecutionLogsView,
     ExecutionMetricsView,
     ExecutionStatusView,
     ExecutionTradesView,
@@ -50,18 +43,11 @@ from .strategies import (
 )
 from .trading_actions import (
     TradingTaskExecutionsView,
-    TradingTaskLogsView,
     TradingTaskRestartView,
+    TradingTaskResumeView,
     TradingTaskStartView,
     TradingTaskStatusView,
     TradingTaskStopView,
-)
-from .trading_data import (
-    TradingTaskEquityCurveView,
-    TradingTaskMetricsCheckpointView,
-    TradingTaskResultsView,
-    TradingTaskStrategyEventsView,
-    TradingTaskTradeLogsView,
 )
 from .trading_tasks import (
     TradingTaskCopyView,
@@ -83,16 +69,10 @@ __all__ = [
     # Trading Actions
     "TradingTaskStartView",
     "TradingTaskStopView",
+    "TradingTaskResumeView",
     "TradingTaskRestartView",
     "TradingTaskExecutionsView",
-    "TradingTaskLogsView",
     "TradingTaskStatusView",
-    # Trading Data
-    "TradingTaskResultsView",
-    "TradingTaskEquityCurveView",
-    "TradingTaskStrategyEventsView",
-    "TradingTaskTradeLogsView",
-    "TradingTaskMetricsCheckpointView",
     # Backtest Tasks
     "BacktestTaskView",
     "BacktestTaskDetailView",
@@ -100,21 +80,17 @@ __all__ = [
     # Backtest Actions
     "BacktestTaskStartView",
     "BacktestTaskStopView",
+    "BacktestTaskResumeView",
+    "BacktestTaskRestartView",
     "BacktestTaskStatusView",
     "BacktestTaskExecutionsView",
-    "BacktestTaskExportView",
-    "BacktestTaskLogsView",
-    # Backtest Data
-    "BacktestTaskResultsView",
-    "BacktestTaskEquityCurveView",
-    "BacktestTaskStrategyEventsView",
-    "BacktestTaskTradeLogsView",
-    "BacktestTaskMetricsCheckpointView",
     # Executions (Task 14)
     "ExecutionDetailView",
+    "ExecutionLogsView",
     "ExecutionStatusView",
     "ExecutionEventsView",
     "ExecutionTradesView",
     "ExecutionEquityView",
     "ExecutionMetricsView",
+    "ExecutionLatestMetricsView",
 ]

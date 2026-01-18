@@ -18,7 +18,7 @@ from apps.trading.enums import StrategyType
 from apps.trading.events import StrategyEvent
 
 if TYPE_CHECKING:
-    pass
+    from apps.trading.models import StrategyEvents
 else:
     # Import at runtime for database operations
     from apps.trading.models import StrategyEvents

@@ -113,7 +113,11 @@ class BacktestTaskStartView(APIView):
         )
 
         return Response(
-            {"message": "Backtest task started successfully", "task_id": task.pk},
+            {
+                "message": "Backtest task started successfully",
+                "task_id": task.pk,
+                "execution_id": execution.pk if execution else None,
+            },
             status=status.HTTP_202_ACCEPTED,
         )
 
@@ -162,6 +166,200 @@ class BacktestTaskStopView(APIView):
         return Response(
             {"id": task.pk, "status": TaskStatus.STOPPED, "message": "Task stop initiated"},
             status=status.HTTP_200_OK,
+        )
+
+
+class BacktestTaskResumeView(APIView):
+    """Resume a paused backtest task."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, task_id: int) -> Response:
+        """Resume backtest task execution."""
+        try:
+            task = BacktestTasks.objects.get(id=task_id, user=request.user.pk)
+        except BacktestTasks.DoesNotExist:
+            return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check if task can be resumed
+        if task.status != TaskStatus.STOPPED:
+            return Response(
+                {"error": f"Cannot resume task with status: {task.status}"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Check for active lock
+        lock_manager = TaskLockManager()
+        lock_info = lock_manager.get_lock_info(TaskType.BACKTEST, task_id)
+
+        if lock_info is not None and not lock_info.is_stale:
+            return Response(
+                {"error": "Task has an active lock. The task may already be running."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Clean up stale lock if exists
+        if lock_info is not None and lock_info.is_stale:
+            logger.warning(
+                "Cleaning up stale lock for backtest task %d before resuming",
+                task_id,
+            )
+            lock_manager.release_lock(TaskType.BACKTEST, task_id)
+
+        # Validate configuration
+        is_valid, error_message = task.validate_configuration()
+        if not is_valid:
+            return Response(
+                {"error": f"Configuration validation failed: {error_message}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update task status to running
+        task.status = TaskStatus.RUNNING
+        task.save(update_fields=["status", "updated_at"])
+
+        # Create new execution for resume
+        now = timezone.now()
+        execution: Executions | None
+        try:
+            with transaction.atomic():
+                last_num = (
+                    Executions.objects.select_for_update()
+                    .filter(task_type=TaskType.BACKTEST, task_id=task_id)
+                    .order_by("-execution_number")
+                    .values_list("execution_number", flat=True)
+                    .first()
+                )
+                next_num = int(last_num or 0) + 1
+                execution = Executions.objects.create(
+                    task_type=TaskType.BACKTEST,
+                    task_id=task_id,
+                    execution_number=next_num,
+                    status=TaskStatus.RUNNING,
+                    progress=0,
+                    started_at=now,
+                    logs=[
+                        {
+                            "timestamp": now.isoformat(),
+                            "level": "INFO",
+                            "message": "Execution resumed",
+                        }
+                    ],
+                )
+        except IntegrityError:
+            execution = task.get_latest_execution()
+
+        # Queue the backtest task
+        from apps.trading.tasks import run_backtest_task
+
+        cast(Any, run_backtest_task).delay(
+            task.pk, execution_id=execution.pk if execution else None
+        )
+
+        return Response(
+            {
+                "message": "Backtest task resumed successfully",
+                "task_id": task.pk,
+                "execution_id": execution.pk if execution else None,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class BacktestTaskRestartView(APIView):
+    """Restart a backtest task from scratch."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, task_id: int) -> Response:
+        """Restart backtest task with fresh state."""
+        try:
+            task = BacktestTasks.objects.get(id=task_id, user=request.user.pk)
+        except BacktestTasks.DoesNotExist:
+            return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check if task is currently running
+        if task.status == TaskStatus.RUNNING:
+            return Response(
+                {"error": "Cannot restart a running task. Stop it first."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Check for active lock
+        lock_manager = TaskLockManager()
+        lock_info = lock_manager.get_lock_info(TaskType.BACKTEST, task_id)
+
+        if lock_info is not None and not lock_info.is_stale:
+            return Response(
+                {"error": "Task has an active lock. The task may already be running."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Clean up stale lock if exists
+        if lock_info is not None and lock_info.is_stale:
+            logger.warning(
+                "Cleaning up stale lock for backtest task %d before restarting",
+                task_id,
+            )
+            lock_manager.release_lock(TaskType.BACKTEST, task_id)
+
+        # Validate configuration
+        is_valid, error_message = task.validate_configuration()
+        if not is_valid:
+            return Response(
+                {"error": f"Configuration validation failed: {error_message}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update task status to running
+        task.status = TaskStatus.RUNNING
+        task.save(update_fields=["status", "updated_at"])
+
+        # Create new execution for restart
+        now = timezone.now()
+        execution: Executions | None
+        try:
+            with transaction.atomic():
+                last_num = (
+                    Executions.objects.select_for_update()
+                    .filter(task_type=TaskType.BACKTEST, task_id=task_id)
+                    .order_by("-execution_number")
+                    .values_list("execution_number", flat=True)
+                    .first()
+                )
+                next_num = int(last_num or 0) + 1
+                execution = Executions.objects.create(
+                    task_type=TaskType.BACKTEST,
+                    task_id=task_id,
+                    execution_number=next_num,
+                    status=TaskStatus.RUNNING,
+                    progress=0,
+                    started_at=now,
+                    logs=[
+                        {
+                            "timestamp": now.isoformat(),
+                            "level": "INFO",
+                            "message": "Execution restarted from scratch",
+                        }
+                    ],
+                )
+        except IntegrityError:
+            execution = task.get_latest_execution()
+
+        # Queue the backtest task
+        from apps.trading.tasks import run_backtest_task
+
+        cast(Any, run_backtest_task).delay(
+            task.pk, execution_id=execution.pk if execution else None
+        )
+
+        return Response(
+            {
+                "message": "Backtest task restarted successfully",
+                "task_id": task.pk,
+                "execution_id": execution.pk if execution else None,
+            },
+            status=status.HTTP_202_ACCEPTED,
         )
 
 
@@ -319,6 +517,10 @@ class BacktestTaskStatusView(APIView):
             "error_message": (latest_execution.error_message or None) if latest_execution else None,
             "execution": execution_data,
         }
+
+        # Include execution_id when task is running
+        if task.status == TaskStatus.RUNNING and latest_execution:
+            response_data["execution_id"] = latest_execution.pk
 
         return Response(response_data, status=status.HTTP_200_OK)
 

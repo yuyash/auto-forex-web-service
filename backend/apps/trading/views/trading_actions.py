@@ -152,6 +152,7 @@ class TradingTaskStartView(APIView):
             {
                 "message": "Trading task started successfully",
                 "task_id": task.pk,
+                "execution_id": execution.pk if execution else None,
             },
             status=status.HTTP_202_ACCEPTED,
         )
@@ -286,6 +287,112 @@ class TradingTaskStopView(APIView):
         )
 
 
+class TradingTaskResumeView(APIView):
+    """Resume a paused trading task."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, task_id: int) -> Response:
+        """Resume trading task execution."""
+        try:
+            task = TradingTasks.objects.get(id=task_id, user=request.user.pk)
+        except TradingTasks.DoesNotExist:
+            return Response(
+                {"error": "Trading task not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Check if task can be resumed
+        if task.status != TaskStatus.STOPPED:
+            return Response(
+                {"error": f"Cannot resume task with status: {task.status}"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Check for active lock
+        lock_manager = TaskLockManager()
+        lock_info = lock_manager.get_lock_info(TaskType.TRADING, task_id)
+
+        if lock_info is not None and not lock_info.is_stale:
+            return Response(
+                {"error": "Task has an active lock. The task may already be running."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Clean up stale lock if exists
+        if lock_info is not None and lock_info.is_stale:
+            logger.warning(
+                "Cleaning up stale lock for trading task %d before resuming",
+                task_id,
+            )
+            lock_manager.release_lock(TaskType.TRADING, task_id)
+
+        # Validate configuration
+        is_valid, error_message = task.validate_configuration()
+        if not is_valid:
+            return Response(
+                {"error": f"Configuration validation failed: {error_message}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update task status to running
+        task.status = TaskStatus.RUNNING
+        task.save(update_fields=["status", "updated_at"])
+
+        # Create new execution for resume
+        now = timezone.now()
+        execution: Executions | None
+        try:
+            with transaction.atomic():
+                last_num = (
+                    Executions.objects.select_for_update()
+                    .filter(task_type=TaskType.TRADING, task_id=task_id)
+                    .order_by("-execution_number")
+                    .values_list("execution_number", flat=True)
+                    .first()
+                )
+                next_num = int(last_num or 0) + 1
+                execution = Executions.objects.create(
+                    task_type=TaskType.TRADING,
+                    task_id=task_id,
+                    execution_number=next_num,
+                    status=TaskStatus.RUNNING,
+                    progress=0,
+                    started_at=now,
+                    logs=[
+                        {
+                            "timestamp": now.isoformat(),
+                            "level": "INFO",
+                            "message": "Execution resumed",
+                        }
+                    ],
+                )
+        except IntegrityError:
+            execution = task.get_latest_execution()
+
+        # Queue the trading task
+        from apps.trading.tasks import run_trading_task
+
+        cast(Any, run_trading_task).delay(task.pk, execution_id=execution.pk if execution else None)
+
+        # Log lifecycle event
+        logger.info(
+            "Trading task %d '%s' resumed by user %s",
+            task.pk,
+            task.name,
+            request.user.pk,
+        )
+
+        return Response(
+            {
+                "message": "Trading task resumed successfully",
+                "task_id": task.pk,
+                "execution_id": execution.pk if execution else None,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
 class TradingTaskRestartView(APIView):
     """
     Restart a trading task with fresh state.
@@ -388,6 +495,7 @@ class TradingTaskRestartView(APIView):
                 "message": "Trading task restarted successfully",
                 "task_id": task.pk,
                 "state_cleared": clear_state,
+                "execution_id": execution.pk if execution else None,
             },
             status=status.HTTP_202_ACCEPTED,
         )
@@ -698,5 +806,9 @@ class TradingTaskStatusView(APIView):
             "error_message": (latest_execution.error_message or None) if latest_execution else None,
             "execution": execution_data,
         }
+
+        # Include execution_id when task is running
+        if task.status == TaskStatus.RUNNING and latest_execution:
+            response_data["execution_id"] = latest_execution.pk
 
         return Response(response_data, status=status.HTTP_200_OK)
