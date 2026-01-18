@@ -32,7 +32,7 @@ class Migration(migrations.Migration):
                 null=True,
                 on_delete=django.db.models.deletion.PROTECT,
                 related_name="backtest_tasks",
-                to="market.oandaaccount",
+                to="market.OandaAccounts",
             ),
         ),
         migrations.AddIndex(

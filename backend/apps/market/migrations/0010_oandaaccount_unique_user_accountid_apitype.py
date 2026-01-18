@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AlterUniqueTogether(
-            name="oandaaccount",
+            name="oandaaccounts",
             unique_together={("user", "account_id", "api_type")},
         ),
     ]

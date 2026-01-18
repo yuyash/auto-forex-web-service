@@ -98,7 +98,7 @@ class Migration(migrations.Migration):
                         null=True,
                         on_delete=django.db.models.deletion.SET_NULL,
                         related_name="events",
-                        to="market.oandaaccount",
+                        to="market.OandaAccounts",
                     ),
                 ),
                 (

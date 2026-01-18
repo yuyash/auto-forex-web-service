@@ -70,7 +70,7 @@ class Migration(migrations.Migration):
                         help_text="OANDA account that received this tick",
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="tick_data",
-                        to="market.oandaaccount",
+                        to="market.OandaAccounts",
                     ),
                 ),
             ],

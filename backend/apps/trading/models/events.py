@@ -160,7 +160,7 @@ class TradingEvent(models.Model):
         related_name="trading_events",
     )
     account = models.ForeignKey(
-        "market.OandaAccount",
+        "market.OandaAccounts",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

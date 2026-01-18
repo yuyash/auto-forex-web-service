@@ -78,7 +78,7 @@ class Migration(migrations.Migration):
                         help_text="OANDA account associated with this strategy",
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="strategies",
-                        to="market.oandaaccount",
+                        to="market.OandaAccounts",
                     ),
                 ),
             ],
@@ -183,7 +183,7 @@ class Migration(migrations.Migration):
                         help_text="OANDA account associated with this position",
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="positions",
-                        to="market.oandaaccount",
+                        to="market.OandaAccounts",
                     ),
                 ),
                 (
@@ -314,7 +314,7 @@ class Migration(migrations.Migration):
                         help_text="OANDA account associated with this order",
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="orders",
-                        to="market.oandaaccount",
+                        to="market.OandaAccounts",
                     ),
                 ),
                 (
@@ -472,7 +472,7 @@ class Migration(migrations.Migration):
                         help_text="OANDA account associated with this trade",
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="trades",
-                        to="market.oandaaccount",
+                        to="market.OandaAccounts",
                     ),
                 ),
                 (

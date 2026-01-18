@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name="OandaAccount",
+            name="OandaAccounts",
             fields=[
                 (
                     "id",
@@ -233,7 +233,7 @@ class Migration(migrations.Migration):
                         help_text="OANDA account that received this tick",
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="tick_data",
-                        to="market.oandaaccount",
+                        to="market.OandaAccounts",
                     ),
                 ),
             ],
@@ -245,25 +245,25 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.AddIndex(
-            model_name="oandaaccount",
+            model_name="oandaaccounts",
             index=models.Index(fields=["user", "is_active"], name="oanda_accou_user_id_be2e7d_idx"),
         ),
         migrations.AddIndex(
-            model_name="oandaaccount",
+            model_name="oandaaccounts",
             index=models.Index(fields=["account_id"], name="oanda_accou_account_707afc_idx"),
         ),
         migrations.AddIndex(
-            model_name="oandaaccount",
+            model_name="oandaaccounts",
             index=models.Index(
                 fields=["user", "is_default"], name="oanda_accou_user_id_3f5a4a_idx"
             ),
         ),
         migrations.AddIndex(
-            model_name="oandaaccount",
+            model_name="oandaaccounts",
             index=models.Index(fields=["created_at"], name="oanda_accou_created_da4c80_idx"),
         ),
         migrations.AlterUniqueTogether(
-            name="oandaaccount",
+            name="oandaaccounts",
             unique_together={("user", "account_id")},
         ),
         migrations.AddIndex(

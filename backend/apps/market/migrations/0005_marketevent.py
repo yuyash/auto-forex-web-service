@@ -34,7 +34,7 @@ class Migration(migrations.Migration):
                         null=True,
                         on_delete=models.deletion.SET_NULL,
                         related_name="market_events",
-                        to="market.oandaaccount",
+                        to="market.OandaAccounts",
                     ),
                 ),
                 (

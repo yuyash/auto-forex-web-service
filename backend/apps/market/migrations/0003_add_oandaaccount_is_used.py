@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AddField(
-            model_name="oandaaccount",
+            model_name="oandaaccounts",
             name="is_used",
             field=models.BooleanField(
                 default=False,

@@ -11,19 +11,19 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RemoveField(
-            model_name="oandaaccount",
+            model_name="oandaaccounts",
             name="enable_position_differentiation",
         ),
         migrations.RemoveField(
-            model_name="oandaaccount",
+            model_name="oandaaccounts",
             name="position_diff_increment",
         ),
         migrations.RemoveField(
-            model_name="oandaaccount",
+            model_name="oandaaccounts",
             name="position_diff_pattern",
         ),
         migrations.RemoveField(
-            model_name="oandaaccount",
+            model_name="oandaaccounts",
             name="status",
         ),
     ]

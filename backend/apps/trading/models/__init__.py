@@ -5,7 +5,7 @@ This package organizes trading models into logical modules:
 - tasks: BacktestTask, TradingTask
 - floor_state: FloorStrategyTaskState, FloorStrategyLayerState
 - execution: TaskExecution, TaskExecutionResult
-- metrics: ExecutionMetrics, ExecutionMetricsCheckpoint
+- metrics: ExecutionMetrics, ExecutionMetricsCheckpoint, TradingMetrics
 - events: ExecutionStrategyEvent, ExecutionTradeLogEntry, ExecutionEquityPoint, TradingEvent
 - state: ExecutionStateSnapshot
 - celery: CeleryTaskStatus
@@ -33,6 +33,7 @@ from apps.trading.models.metrics import (
     ExecutionMetrics,
     ExecutionMetricsCheckpoint,
     ExecutionMetricsManager,
+    TradingMetrics,
 )
 from apps.trading.models.state import ExecutionStateSnapshot
 from apps.trading.models.tasks import (
@@ -63,6 +64,7 @@ __all__ = [
     "ExecutionMetrics",
     "ExecutionMetricsManager",
     "ExecutionMetricsCheckpoint",
+    "TradingMetrics",
     # Events
     "ExecutionStrategyEvent",
     "ExecutionTradeLogEntry",

@@ -41,12 +41,12 @@ class Migration(migrations.Migration):
             field=models.CharField(blank=True, db_index=True, default='', max_length=32),
         ),
         migrations.AlterField(
-            model_name='oandaaccount',
+            model_name='oandaaccounts',
             name='api_type',
             field=models.CharField(choices=[('practice', 'Practice'), ('live', 'Live')], default='practice', help_text='API endpoint type (practice or live)', max_length=20),
         ),
         migrations.AlterField(
-            model_name='oandaaccount',
+            model_name='oandaaccounts',
             name='jurisdiction',
             field=models.CharField(choices=[('US', 'United States'), ('JP', 'Japan'), ('OTHER', 'Other/International')], default='OTHER', help_text='Regulatory jurisdiction for this account', max_length=10),
         ),
