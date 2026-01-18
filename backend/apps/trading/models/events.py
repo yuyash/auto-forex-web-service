@@ -3,7 +3,7 @@
 from django.db import models
 
 
-class ExecutionStrategyEvent(models.Model):
+class StrategyEvents(models.Model):
     """Incrementally persisted strategy events during an execution.
 
     These rows enable live strategy markers/timelines while an execution is RUNNING.
@@ -12,9 +12,9 @@ class ExecutionStrategyEvent(models.Model):
     """
 
     execution = models.ForeignKey(
-        "trading.TaskExecution",
+        "trading.Executions",
         on_delete=models.CASCADE,
-        related_name="strategy_event_rows",
+        related_name="strategy_events",
         help_text="Owning task execution",
     )
     sequence = models.PositiveIntegerField(help_text="Monotonic per-execution sequence")
@@ -42,9 +42,9 @@ class ExecutionStrategyEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "execution_strategy_events"
-        verbose_name = "Execution Strategy Event"
-        verbose_name_plural = "Execution Strategy Events"
+        db_table = "strategy_events"
+        verbose_name = "Strategy Event"
+        verbose_name_plural = "Strategy Events"
         indexes = [
             models.Index(fields=["execution", "sequence"]),
             models.Index(fields=["execution", "created_at"]),
@@ -60,16 +60,18 @@ class ExecutionStrategyEvent(models.Model):
         ordering = ["sequence", "id"]
 
     def __str__(self) -> str:
-        return f"ExecutionStrategyEvent(exec={self.execution_id}, seq={self.sequence}, type={self.event_type})"  # type: ignore[attr-defined]
+        return (
+            f"StrategyEvents(exec={self.execution_id}, seq={self.sequence}, type={self.event_type})"  # type: ignore[attr-defined]
+        )
 
 
-class ExecutionTradeLogEntry(models.Model):
+class TradeLogs(models.Model):
     """Incrementally persisted trade log entries during an execution."""
 
     execution = models.ForeignKey(
-        "trading.TaskExecution",
+        "trading.Executions",
         on_delete=models.CASCADE,
-        related_name="trade_log_rows",
+        related_name="trade_logs",
         help_text="Owning task execution",
     )
     sequence = models.PositiveIntegerField(help_text="Monotonic per-execution sequence")
@@ -77,9 +79,9 @@ class ExecutionTradeLogEntry(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "execution_trade_logs"
-        verbose_name = "Execution Trade Log Entry"
-        verbose_name_plural = "Execution Trade Log Entries"
+        db_table = "trade_logs"
+        verbose_name = "Trade Log"
+        verbose_name_plural = "Trade Logs"
         indexes = [
             models.Index(fields=["execution", "sequence"]),
             models.Index(fields=["execution", "created_at"]),
@@ -93,7 +95,7 @@ class ExecutionTradeLogEntry(models.Model):
         ordering = ["sequence", "id"]
 
     def __str__(self) -> str:
-        return f"ExecutionTradeLogEntry(exec={self.execution_id}, seq={self.sequence})"  # type: ignore[attr-defined]
+        return f"TradeLogs(exec={self.execution_id}, seq={self.sequence})"  # type: ignore[attr-defined]
 
 
 class ExecutionEquityPoint(models.Model):
@@ -171,7 +173,7 @@ class TradingEvent(models.Model):
     task_type = models.CharField(max_length=32, blank=True, default="", db_index=True)
     task_id = models.IntegerField(null=True, blank=True, db_index=True)
     execution = models.ForeignKey(
-        "trading.TaskExecution",
+        "trading.Executions",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

@@ -1,27 +1,30 @@
 """Trading models package.
 
 This package organizes trading models into logical modules:
-- configs: StrategyConfig and related
-- tasks: BacktestTask, TradingTask
+- configs: StrategyConfigurations and related
+- tasks: BacktestTasks, TradingTasks
 - floor_state: FloorStrategyTaskState, FloorStrategyLayerState
-- execution: TaskExecution, TaskExecutionResult
+- execution: Executions, TaskExecutionResult
 - metrics: ExecutionMetrics, ExecutionMetricsCheckpoint, TradingMetrics
-- events: ExecutionStrategyEvent, ExecutionTradeLogEntry, ExecutionEquityPoint, TradingEvent
+- events: StrategyEvents, TradeLogs, ExecutionEquityPoint, TradingEvent
 - state: ExecutionStateSnapshot
 - celery: CeleryTaskStatus
 """
 
 from apps.trading.models.celery import CeleryTaskStatus
-from apps.trading.models.configs import StrategyConfig, StrategyConfigManager
+from apps.trading.models.configs import (
+    StrategyConfigurations,
+    StrategyConfigurationsManager,
+)
 from apps.trading.models.events import (
     ExecutionEquityPoint,
-    ExecutionStrategyEvent,
-    ExecutionTradeLogEntry,
+    StrategyEvents,
+    TradeLogs,
     TradingEvent,
 )
 from apps.trading.models.execution import (
-    TaskExecution,
-    TaskExecutionManager,
+    Executions,
+    ExecutionsManager,
     TaskExecutionResult,
 )
 from apps.trading.models.floor import (
@@ -37,28 +40,28 @@ from apps.trading.models.metrics import (
 )
 from apps.trading.models.state import ExecutionStateSnapshot
 from apps.trading.models.tasks import (
-    BacktestTask,
-    BacktestTaskManager,
-    TradingTask,
-    TradingTaskManager,
+    BacktestTasks,
+    BacktestTasksManager,
+    TradingTasks,
+    TradingTasksManager,
 )
 
 __all__ = [
     # Configs
-    "StrategyConfig",
-    "StrategyConfigManager",
+    "StrategyConfigurations",
+    "StrategyConfigurationsManager",
     # Tasks
-    "BacktestTask",
-    "BacktestTaskManager",
-    "TradingTask",
-    "TradingTaskManager",
+    "BacktestTasks",
+    "BacktestTasksManager",
+    "TradingTasks",
+    "TradingTasksManager",
     # Floor State
     "FloorSide",
     "FloorStrategyTaskState",
     "FloorStrategyLayerState",
     # Execution
-    "TaskExecution",
-    "TaskExecutionManager",
+    "Executions",
+    "ExecutionsManager",
     "TaskExecutionResult",
     # Metrics
     "ExecutionMetrics",
@@ -66,8 +69,8 @@ __all__ = [
     "ExecutionMetricsCheckpoint",
     "TradingMetrics",
     # Events
-    "ExecutionStrategyEvent",
-    "ExecutionTradeLogEntry",
+    "StrategyEvents",
+    "TradeLogs",
     "ExecutionEquityPoint",
     "TradingEvent",
     # State

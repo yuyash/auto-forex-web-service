@@ -10,32 +10,31 @@ from apps.market.models import OandaAccounts
 from apps.trading.enums import TaskStatus, TaskType
 
 if TYPE_CHECKING:
-    from apps.trading.models.events import ExecutionStrategyEvent
     from apps.trading.models.metrics import ExecutionMetricsCheckpoint
     from apps.trading.models.state import ExecutionStateSnapshot
 
 
-class TaskExecutionManager(models.Manager["TaskExecution"]):
-    """Custom manager for TaskExecution model."""
+class ExecutionsManager(models.Manager["Executions"]):
+    """Custom manager for Executions model."""
 
-    def for_task(self, task_type: str, task_id: int) -> models.QuerySet["TaskExecution"]:
+    def for_task(self, task_type: str, task_id: int) -> models.QuerySet["Executions"]:
         """Get all executions for a specific task."""
         return self.filter(task_type=task_type, task_id=task_id)
 
-    def running(self) -> models.QuerySet["TaskExecution"]:
+    def running(self) -> models.QuerySet["Executions"]:
         """Get all running executions."""
         return self.filter(status=TaskStatus.RUNNING)
 
-    def completed(self) -> models.QuerySet["TaskExecution"]:
+    def completed(self) -> models.QuerySet["Executions"]:
         """Get all completed executions."""
         return self.filter(status=TaskStatus.COMPLETED)
 
-    def failed(self) -> models.QuerySet["TaskExecution"]:
+    def failed(self) -> models.QuerySet["Executions"]:
         """Get all failed executions."""
         return self.filter(status=TaskStatus.FAILED)
 
 
-class TaskExecution(models.Model):
+class Executions(models.Model):
     """
     Track individual execution runs of tasks.
 
@@ -43,12 +42,12 @@ class TaskExecution(models.Model):
     including status, timing, and error information.
     """
 
-    objects = TaskExecutionManager()
+    objects = ExecutionsManager()
 
     if TYPE_CHECKING:
         # Type stubs for reverse relationships
         state_snapshots: models.Manager["ExecutionStateSnapshot"]
-        strategy_event_rows: models.Manager["ExecutionStrategyEvent"]
+        strategy_events: models.Manager["StrategyEvents"]
         metrics_checkpoints: models.Manager["ExecutionMetricsCheckpoint"]
 
     task_type = models.CharField(
@@ -123,9 +122,9 @@ class TaskExecution(models.Model):
     )
 
     class Meta:
-        db_table = "task_executions"
-        verbose_name = "Task Execution"
-        verbose_name_plural = "Task Executions"
+        db_table = "executions"
+        verbose_name = "Execution"
+        verbose_name_plural = "Executions"
         constraints = [
             models.UniqueConstraint(
                 fields=["task_type", "task_id", "execution_number"],
@@ -333,11 +332,11 @@ class TaskExecution(models.Model):
         event_data: dict,
         strategy_type: str = "",
         timestamp: str | None = None,
-    ) -> "ExecutionStrategyEvent":  # type: ignore[name-defined]
+    ) -> "StrategyEvents":  # type: ignore[name-defined]
         """
         Emit a strategy event for this execution.
 
-        Creates a new ExecutionStrategyEvent with a monotonically increasing
+        Creates a new StrategyEvents with a monotonically increasing
         sequence number. Events are persisted to enable real-time monitoring
         and post-execution analysis.
 
@@ -348,13 +347,13 @@ class TaskExecution(models.Model):
             timestamp: Event timestamp (ISO format string), parsed if provided
 
         Returns:
-            The created ExecutionStrategyEvent instance
+            The created StrategyEvents instance
 
         Requirements: 1.6
         """
         from django.utils.dateparse import parse_datetime
 
-        from apps.trading.models.events import ExecutionStrategyEvent
+        from apps.trading.models.events import StrategyEvents
 
         sequence = self._next_event_sequence()
 
@@ -363,7 +362,7 @@ class TaskExecution(models.Model):
         if timestamp:
             parsed_timestamp = parse_datetime(timestamp)
 
-        event = ExecutionStrategyEvent.objects.create(
+        event = StrategyEvents.objects.create(
             execution=self,
             sequence=sequence,
             event_type=event_type,
@@ -383,7 +382,7 @@ class TaskExecution(models.Model):
 
         Requirements: 1.6
         """
-        last_event = self.strategy_event_rows.order_by("-sequence").first()
+        last_event = self.strategy_events.order_by("-sequence").first()
         return (last_event.sequence + 1) if last_event else 0
 
 
@@ -401,12 +400,12 @@ class TaskExecutionResult(models.Model):
         help_text="ID of the task that was executed (matches TaskExecution.task_id)",
     )
     execution = models.OneToOneField(
-        "trading.TaskExecution",
+        "trading.Executions",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name="result",
-        help_text="Associated TaskExecution record (if created)",
+        help_text="Associated Executions record (if created)",
     )
     success = models.BooleanField(
         default=False,

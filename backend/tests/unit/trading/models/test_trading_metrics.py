@@ -7,7 +7,7 @@ from django.db import IntegrityError
 from django.utils import timezone
 
 from apps.trading.enums import TaskStatus, TaskType
-from apps.trading.models import TaskExecution, TradingMetrics
+from apps.trading.models import Executions, TradingMetrics
 
 
 @pytest.mark.django_db
@@ -17,7 +17,7 @@ class TestTradingMetricsModel:
     @pytest.fixture
     def execution(self):
         """Create a test execution."""
-        return TaskExecution.objects.create(
+        return Executions.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=1,
             execution_number=1,

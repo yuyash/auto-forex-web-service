@@ -7,20 +7,20 @@ from django.db import models
 from apps.trading.enums import StrategyType
 
 
-class StrategyConfigManager(models.Manager["StrategyConfig"]):
-    """Custom manager for StrategyConfig model."""
+class StrategyConfigurationsManager(models.Manager["StrategyConfigurations"]):
+    """Custom manager for StrategyConfigurations model."""
 
-    def create_for_user(self, user: Any, **kwargs: Any) -> "StrategyConfig":
+    def create_for_user(self, user: Any, **kwargs: Any) -> "StrategyConfigurations":
         return self.create(user=user, **kwargs)
 
-    def for_user(self, user: Any) -> models.QuerySet["StrategyConfig"]:
+    def for_user(self, user: Any) -> models.QuerySet["StrategyConfigurations"]:
         return self.filter(user=user)
 
 
-class StrategyConfig(models.Model):
-    """Reusable strategy configuration used by TradingTask and BacktestTask."""
+class StrategyConfigurations(models.Model):
+    """Reusable strategy configuration used by TradingTasks and BacktestTasks."""
 
-    objects = StrategyConfigManager()
+    objects = StrategyConfigurationsManager()
 
     user = models.ForeignKey(
         "accounts.User",
@@ -55,7 +55,7 @@ class StrategyConfig(models.Model):
     )
 
     class Meta:
-        db_table = "strategy_configs"
+        db_table = "strategy_configurations"
         verbose_name = "Strategy Configuration"
         verbose_name_plural = "Strategy Configurations"
         ordering = ["-created_at"]
@@ -92,14 +92,14 @@ class StrategyConfig(models.Model):
 
     def is_in_use(self) -> bool:
         from apps.trading.enums import TaskStatus
-        from apps.trading.models.tasks import BacktestTask, TradingTask
+        from apps.trading.models.tasks import BacktestTasks, TradingTasks
 
         return (
-            TradingTask.objects.filter(
+            TradingTasks.objects.filter(
                 config=self,
                 status=TaskStatus.RUNNING,
             ).exists()
-            or BacktestTask.objects.filter(
+            or BacktestTasks.objects.filter(
                 config=self,
                 status=TaskStatus.RUNNING,
             ).exists()
