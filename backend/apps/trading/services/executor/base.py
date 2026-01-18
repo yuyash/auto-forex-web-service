@@ -22,6 +22,7 @@ from apps.trading.events import (
 )
 from apps.trading.services.controller import TaskController
 from apps.trading.services.events import EventEmitter
+from apps.trading.services.metrics_collection import MetricsCollectionService
 from apps.trading.services.performance import PerformanceTracker
 from apps.trading.services.source import TickDataSource
 from apps.trading.services.state import StateManager
@@ -76,6 +77,7 @@ class BaseExecutor(ABC):
             execution=execution,
             initial_balance=initial_balance,
         )
+        self.metrics_collection_service = MetricsCollectionService()
         self.task_controller = TaskController(
             task_name=task_name,
             instance_key=str(execution.pk),
@@ -195,6 +197,20 @@ class BaseExecutor(ABC):
             logger.debug(f"Handling strategy event: {event.event_type}")
             self._handle_strategy_event(event, result.state)
 
+        # Create metrics snapshot for this tick
+        # Requirements: 1.2, 4.1, 4.2, 4.3
+        try:
+            self.metrics_collection_service.create_metrics_snapshot(
+                execution=self.execution,
+                tick_data=tick,
+                current_state=result.state,
+            )
+            logger.debug(f"Created metrics snapshot for tick {state.ticks_processed + 1}")
+        except Exception as e:
+            logger.error(f"Failed to create metrics snapshot: {e}")
+            # Don't fail the execution for metrics collection errors
+            # Just log and continue
+
         return result.state
 
     @abstractmethod
@@ -277,7 +293,8 @@ class BaseExecutor(ABC):
                     if ticks_since_last_save >= save_interval:
                         logger.debug(f"Saving state snapshot at tick {state.ticks_processed}")
                         self.state_manager.save_snapshot(state)
-                        self.performance_tracker.save_checkpoint()
+                        # Note: Metrics are now saved on every tick via MetricsCollectionService
+                        # No need for periodic checkpoint saves
                         ticks_since_last_save = 0
                         logger.debug("State snapshot saved")
 
