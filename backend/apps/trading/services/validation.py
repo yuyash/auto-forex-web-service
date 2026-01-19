@@ -7,8 +7,8 @@ and date ranges before task execution.
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
+from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Optional, Tuple
 
 from django.contrib.auth import get_user_model
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 else:
     User = get_user_model()
 
-logger = logging.getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 class TaskValidator:

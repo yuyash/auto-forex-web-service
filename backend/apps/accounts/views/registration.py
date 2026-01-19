@@ -4,7 +4,7 @@ from logging import Logger, getLogger
 from typing import Any
 
 from django.conf import settings
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -19,39 +19,6 @@ from apps.accounts.services.events import SecurityEventService
 logger: Logger = getLogger(name=__name__)
 
 
-@extend_schema_view(
-    post=extend_schema(
-        summary="Register new user",
-        description="Register a new user account and send email verification link.",
-        request=UserRegistrationSerializer,
-        responses={
-            201: OpenApiResponse(
-                description="User registered successfully",
-                response={
-                    "type": "object",
-                    "properties": {
-                        "message": {"type": "string"},
-                        "user": {
-                            "type": "object",
-                            "properties": {
-                                "id": {"type": "integer"},
-                                "email": {"type": "string"},
-                                "username": {"type": "string"},
-                                "first_name": {"type": "string"},
-                                "last_name": {"type": "string"},
-                                "email_verified": {"type": "boolean"},
-                            },
-                        },
-                        "email_sent": {"type": "boolean"},
-                    },
-                },
-            ),
-            400: OpenApiResponse(description="Validation error"),
-            503: OpenApiResponse(description="Registration is disabled"),
-        },
-        tags=["Authentication"],
-    )
-)
 class UserRegistrationView(APIView):
     """
     API endpoint for user registration.
@@ -90,6 +57,37 @@ class UserRegistrationView(APIView):
             ip = str(request.META.get("REMOTE_ADDR", ""))
         return ip
 
+    @extend_schema(
+        summary="POST /api/accounts/auth/register",
+        description="Register a new user account and send email verification link.",
+        request=UserRegistrationSerializer,
+        responses={
+            201: OpenApiResponse(
+                description="User registered successfully",
+                response={
+                    "type": "object",
+                    "properties": {
+                        "message": {"type": "string"},
+                        "user": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer"},
+                                "email": {"type": "string"},
+                                "username": {"type": "string"},
+                                "first_name": {"type": "string"},
+                                "last_name": {"type": "string"},
+                                "email_verified": {"type": "boolean"},
+                            },
+                        },
+                        "email_sent": {"type": "boolean"},
+                    },
+                },
+            ),
+            400: OpenApiResponse(description="Validation error"),
+            503: OpenApiResponse(description="Registration is disabled"),
+        },
+        tags=["Authentication"],
+    )
     def post(self, request: Request) -> Response:
         """Handle user registration."""
         system_settings = PublicAccountSettings.get_settings()

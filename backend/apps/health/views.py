@@ -39,7 +39,7 @@ class HealthView(APIView):
 
     @extend_schema(
         operation_id="health_check",
-        summary="/api/health/",
+        summary="GET /api/health/",
         description="Check the health status of the backend API service. Returns overall system status.",
         tags=["health"],
         responses={

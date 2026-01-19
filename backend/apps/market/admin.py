@@ -159,61 +159,6 @@ class CeleryTaskStatusAdmin(admin.ModelAdmin):
         ),
     )
 
-    # Temporarily commented out due to composite primary key incompatibility with Django admin
-    # @admin.register(TickData)
-    # class TickDataAdmin(admin.ModelAdmin):
-    #     """Admin interface for TickData model."""
-    #
-    #     list_display = [
-    #         "instrument",
-    #         "timestamp",
-    #         "bid",
-    #         "ask",
-    #         "mid",
-    #         "spread_display",
-    #         "created_at",
-    #     ]
-    #     list_filter = ["instrument", "timestamp", "created_at"]
-    #     search_fields = ["instrument"]
-    #     readonly_fields = ["mid", "spread_display", "created_at"]
-    #     ordering = ["-timestamp"]
-
-
-#     date_hierarchy = "timestamp"
-#
-#     fieldsets = (
-#         (
-#             "Instrument & Time",
-#             {
-#                 "fields": (
-#                     "instrument",
-#                     "timestamp",
-#                 )
-#             },
-#         ),
-#         (
-#             "Prices",
-#             {
-#                 "fields": (
-#                     "bid",
-#                     "ask",
-#                     "mid",
-#                     "spread_display",
-#                 )
-#             },
-#         ),
-#         (
-#             "Metadata",
-#             {"fields": ("created_at",)},
-#         ),
-#     )
-#
-#     def spread_display(self, obj):
-#         """Display the spread value."""
-#         return f"{obj.spread:.5f}"
-#
-#     spread_display.short_description = "Spread"  # type: ignore[attr-defined]
-
 
 @admin.register(OandaApiHealthStatus)
 class OandaApiHealthStatusAdmin(admin.ModelAdmin):

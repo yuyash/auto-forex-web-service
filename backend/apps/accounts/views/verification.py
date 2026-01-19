@@ -1,9 +1,9 @@
 """Email verification views."""
 
-import logging
+from logging import Logger, getLogger
 
 from django.conf import settings
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -13,12 +13,22 @@ from rest_framework.views import APIView
 from apps.accounts.models import User
 from apps.accounts.services.email import AccountEmailService
 
-logger = logging.getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
-@extend_schema_view(
-    post=extend_schema(
-        summary="Verify email address",
+class EmailVerificationView(APIView):
+    """
+    API endpoint for email verification.
+
+    POST /api/auth/verify-email
+    - Verify user email with token
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+
+    @extend_schema(
+        summary="POST /api/accounts/auth/verify-email",
         description="Verify user email address using the verification token sent via email.",
         request={
             "type": "object",
@@ -31,18 +41,6 @@ logger = logging.getLogger(__name__)
         },
         tags=["Authentication"],
     )
-)
-class EmailVerificationView(APIView):
-    """
-    API endpoint for email verification.
-
-    POST /api/auth/verify-email
-    - Verify user email with token
-    """
-
-    permission_classes = [AllowAny]
-    authentication_classes: list = []
-
     def post(self, request: Request) -> Response:
         """Verify user email with token."""
         token = request.data.get("token")
@@ -92,22 +90,6 @@ class EmailVerificationView(APIView):
         )
 
 
-@extend_schema_view(
-    post=extend_schema(
-        summary="Resend verification email",
-        description="Resend email verification link to the specified email address.",
-        request={
-            "type": "object",
-            "properties": {"email": {"type": "string", "format": "email"}},
-            "required": ["email"],
-        },
-        responses={
-            200: OpenApiResponse(description="Verification email sent"),
-            400: OpenApiResponse(description="Email is required or already verified"),
-        },
-        tags=["Authentication"],
-    )
-)
 class ResendVerificationEmailView(APIView):
     """
     API endpoint for resending verification email.
@@ -130,6 +112,20 @@ class ResendVerificationEmailView(APIView):
 
         return f"{base_url}/verify-email?token={token}"
 
+    @extend_schema(
+        summary="POST /api/accounts/auth/resend-verification",
+        description="Resend email verification link to the specified email address.",
+        request={
+            "type": "object",
+            "properties": {"email": {"type": "string", "format": "email"}},
+            "required": ["email"],
+        },
+        responses={
+            200: OpenApiResponse(description="Verification email sent"),
+            400: OpenApiResponse(description="Email is required or already verified"),
+        },
+        tags=["Authentication"],
+    )
     def post(self, request: Request) -> Response:
         """Resend verification email."""
         email = request.data.get("email", "").lower()

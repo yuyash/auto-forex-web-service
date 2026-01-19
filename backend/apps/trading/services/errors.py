@@ -5,13 +5,13 @@ This module provides centralized error handling with categorization,
 retry logic, and appropriate error actions.
 """
 
-import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
+from logging import Logger, getLogger
 from typing import Any, Callable, Dict, Optional, TypeVar
 
-logger = logging.getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 T = TypeVar("T")
 

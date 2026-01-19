@@ -9,11 +9,18 @@ maintaining a consistent interface.
 
 from __future__ import annotations
 
+import json
 from abc import ABC, abstractmethod
 from decimal import Decimal, InvalidOperation
+from logging import Logger, getLogger
 from typing import Callable, Iterator
 
+import redis
+from django.conf import settings
+
 from apps.trading.dataclasses import Tick
+
+logger: Logger = getLogger(name=__name__)
 
 
 class TickDataSource(ABC):
@@ -48,22 +55,6 @@ class RedisTickDataSource(TickDataSource):
     This data source subscribes to a Redis pub/sub channel and yields
     batches of ticks published by the market service. It's used for
     backtests where historical ticks are published to a dedicated channel.
-
-    Attributes:
-        channel: Redis channel name
-        batch_size: Number of ticks to batch before yielding
-        trigger_publisher: Optional callback to trigger tick publisher
-        client: Redis client instance
-        pubsub: Redis pub/sub instance
-    Example:
-        >>> data_source = RedisTickDataSource(
-        ...     channel="market:backtest:ticks:12345",
-        ...     batch_size=100
-        ... )
-        >>> for tick_batch in data_source:
-        ...     for tick in tick_batch:
-        ...         print(f"Tick: {tick.instrument} @ {tick.timestamp}")
-        >>> data_source.close()
     """
 
     def __init__(
@@ -90,14 +81,6 @@ class RedisTickDataSource(TickDataSource):
 
         Yields:
             Batches of Tick objects"""
-        import json
-        import logging
-
-        import redis
-        from django.conf import settings
-
-        logger = logging.getLogger(__name__)
-
         # Initialize Redis connection
         self.client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
         self.pubsub = self.client.pubsub(ignore_subscribe_messages=True)
@@ -256,21 +239,6 @@ class LiveTickDataSource(TickDataSource):
     This data source subscribes to a Redis pub/sub channel for real-time
     market data and yields individual ticks as they arrive. It's used for
     live trading where ticks are streamed in real-time.
-
-    Attributes:
-        channel: Redis channel name
-        instrument: Trading instrument to filter for
-        client: Redis client instance
-        pubsub: Redis pub/sub instance
-    Example:
-        >>> data_source = LiveTickDataSource(
-        ...     channel="market:ticks",
-        ...     instrument="USD_JPY"
-        ... )
-        >>> for tick_batch in data_source:
-        ...     for tick in tick_batch:
-        ...         print(f"Live tick: {tick.instrument} @ {tick.mid}")
-        >>> data_source.close()
     """
 
     def __init__(self, channel: str, instrument: str) -> None:

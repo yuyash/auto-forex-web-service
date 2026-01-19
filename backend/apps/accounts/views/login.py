@@ -4,7 +4,7 @@ from logging import Logger, getLogger
 from typing import Any
 
 from django.contrib.auth import authenticate
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -20,9 +20,37 @@ from apps.accounts.services.jwt import JWTService
 logger: Logger = getLogger(name=__name__)
 
 
-@extend_schema_view(
-    post=extend_schema(
-        summary="User login",
+class UserLoginView(APIView):
+    """
+    API endpoint for user login.
+
+    POST /api/auth/login
+    - Authenticate user with email and password
+    - Generate JWT token
+    - Implement rate limiting
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+    serializer_class = UserLoginSerializer
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize view with security event service."""
+        super().__init__(**kwargs)
+        self.security_events = SecurityEventService()
+
+    def get_client_ip(self, request: Request) -> str:
+        """Get client IP address from request."""
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            ip: str = x_forwarded_for.split(",")[0].strip()
+        else:
+            ip = str(request.META.get("REMOTE_ADDR", ""))
+        return ip
+
+    # pylint: disable=too-many-branches,too-many-statements
+    @extend_schema(
+        summary="POST /api/accounts/auth/login",
         description="Authenticate user with email and password. Returns JWT token on success. "
         "Rate limited to 5 attempts per 15 minutes per IP address.",
         request=UserLoginSerializer,
@@ -54,36 +82,6 @@ logger: Logger = getLogger(name=__name__)
         },
         tags=["Authentication"],
     )
-)
-class UserLoginView(APIView):
-    """
-    API endpoint for user login.
-
-    POST /api/auth/login
-    - Authenticate user with email and password
-    - Generate JWT token
-    - Implement rate limiting
-    """
-
-    permission_classes = [AllowAny]
-    authentication_classes: list = []
-    serializer_class = UserLoginSerializer
-
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize view with security event service."""
-        super().__init__(**kwargs)
-        self.security_events = SecurityEventService()
-
-    def get_client_ip(self, request: Request) -> str:
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip: str = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = str(request.META.get("REMOTE_ADDR", ""))
-        return ip
-
-    # pylint: disable=too-many-branches,too-many-statements
     def post(self, request: Request) -> Response:
         """Handle user login."""
         system_settings = PublicAccountSettings.get_settings()

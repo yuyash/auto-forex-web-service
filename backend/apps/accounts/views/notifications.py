@@ -1,12 +1,11 @@
 """User notification views."""
 
-import logging
+from logging import Logger, getLogger
 
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiResponse,
     extend_schema,
-    extend_schema_view,
 )
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -16,12 +15,16 @@ from rest_framework.views import APIView
 
 from apps.accounts.models import UserNotification
 
-logger = logging.getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
-@extend_schema_view(
-    get=extend_schema(
-        summary="List user notifications",
+class UserNotificationListView(APIView):
+    """List notifications for the authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="GET /api/accounts/notifications",
         description="Retrieve list of notifications for the authenticated user. "
         "Supports filtering by read status and limiting results.",
         parameters=[
@@ -68,12 +71,6 @@ logger = logging.getLogger(__name__)
         },
         tags=["Notifications"],
     )
-)
-class UserNotificationListView(APIView):
-    """List notifications for the authenticated user."""
-
-    permission_classes = [IsAuthenticated]
-
     def get(self, request: Request) -> Response:
         """Get list of notifications for the authenticated user."""
         try:
@@ -124,9 +121,13 @@ class UserNotificationListView(APIView):
             )
 
 
-@extend_schema_view(
-    post=extend_schema(
-        summary="Mark notification as read",
+class UserNotificationMarkReadView(APIView):
+    """Mark a single notification as read for the authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="POST /api/accounts/notifications/{notification_id}/read",
         description="Mark a single notification as read for the authenticated user.",
         parameters=[
             OpenApiParameter(
@@ -146,12 +147,6 @@ class UserNotificationListView(APIView):
         },
         tags=["Notifications"],
     )
-)
-class UserNotificationMarkReadView(APIView):
-    """Mark a single notification as read for the authenticated user."""
-
-    permission_classes = [IsAuthenticated]
-
     def post(self, request: Request, notification_id: int) -> Response:
         """Mark a notification as read."""
         try:
@@ -185,9 +180,13 @@ class UserNotificationMarkReadView(APIView):
             )
 
 
-@extend_schema_view(
-    post=extend_schema(
-        summary="Mark all notifications as read",
+class UserNotificationMarkAllReadView(APIView):
+    """Mark all unread notifications as read for the authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="POST /api/accounts/notifications/read-all",
         description="Mark all unread notifications as read for the authenticated user.",
         request=None,
         responses={
@@ -206,12 +205,6 @@ class UserNotificationMarkReadView(APIView):
         },
         tags=["Notifications"],
     )
-)
-class UserNotificationMarkAllReadView(APIView):
-    """Mark all unread notifications as read for the authenticated user."""
-
-    permission_classes = [IsAuthenticated]
-
     def post(self, request: Request) -> Response:
         """Mark all unread notifications as read."""
         try:

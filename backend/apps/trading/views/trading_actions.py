@@ -1,7 +1,7 @@
 """Views for TradingTask lifecycle operations."""
 
-import logging
 from datetime import timedelta
+from logging import Logger, getLogger
 from typing import Any, cast
 
 from django.db import IntegrityError, transaction
@@ -21,7 +21,7 @@ from apps.trading.views._helpers import (
     _paginate_list_by_page,
 )
 
-logger = logging.getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 class TradingTaskStartView(APIView):

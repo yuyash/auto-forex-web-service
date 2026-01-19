@@ -3,13 +3,13 @@
 This module contains shared utility functions used across multiple view modules.
 """
 
-import logging
+from logging import Logger, getLogger
 from typing import Any
 
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 
-logger = logging.getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 class TaskExecutionPagination(PageNumberPagination):

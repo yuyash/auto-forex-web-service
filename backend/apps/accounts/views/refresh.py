@@ -1,8 +1,8 @@
 """JWT token refresh view."""
 
-import logging
+from logging import Logger, getLogger
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -11,12 +11,22 @@ from rest_framework.views import APIView
 
 from apps.accounts.services.jwt import JWTService
 
-logger = logging.getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
-@extend_schema_view(
-    post=extend_schema(
-        summary="Refresh JWT token",
+class TokenRefreshView(APIView):
+    """
+    API endpoint for JWT token refresh.
+
+    POST /api/auth/refresh
+    - Refresh JWT token if valid
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+
+    @extend_schema(
+        summary="POST /api/accounts/auth/refresh",
         description="Refresh an existing JWT token to extend its expiration time. "
         "Requires valid JWT token in Authorization header.",
         request=None,
@@ -46,18 +56,6 @@ logger = logging.getLogger(__name__)
         },
         tags=["Authentication"],
     )
-)
-class TokenRefreshView(APIView):
-    """
-    API endpoint for JWT token refresh.
-
-    POST /api/auth/refresh
-    - Refresh JWT token if valid
-    """
-
-    permission_classes = [AllowAny]
-    authentication_classes: list = []
-
     def post(self, request: Request) -> Response:
         """Handle token refresh."""
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
