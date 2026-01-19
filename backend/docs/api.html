@@ -306,8 +306,9 @@
     },
     "/api/health/": {
       "get": {
-        "operationId": "health_retrieve",
-        "description": "Public health check endpoint.\n\nGET /api/health/",
+        "operationId": "health_check",
+        "description": "Check the health status of the API service. Returns database connectivity and overall system status.",
+        "summary": "/api/health",
         "tags": [
           "health"
         ],
@@ -316,7 +317,80 @@
         ],
         "responses": {
           "200": {
-            "description": "No response body"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "healthy"
+                      ],
+                      "description": "Overall health status"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Timestamp of the health check"
+                    },
+                    "response_time_ms": {
+                      "type": "integer",
+                      "description": "Response time in milliseconds"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "timestamp",
+                    "response_time_ms"
+                  ],
+                  "example": {
+                    "status": "healthy",
+                    "timestamp": "2024-01-18T12:00:00Z",
+                    "response_time_ms": 15
+                  }
+                }
+              }
+            },
+            "description": "Service is healthy"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "unhealthy"
+                      ],
+                      "description": "Overall health status"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Timestamp of the health check"
+                    },
+                    "response_time_ms": {
+                      "type": "integer",
+                      "description": "Response time in milliseconds"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "timestamp",
+                    "response_time_ms"
+                  ],
+                  "example": {
+                    "status": "unhealthy",
+                    "timestamp": "2024-01-18T12:00:00Z",
+                    "response_time_ms": 20
+                  }
+                }
+              }
+            },
+            "description": "Service is unhealthy"
           }
         }
       }
@@ -338,7 +412,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OandaAccount"
+                  "$ref": "#/components/schemas/OandaAccounts"
                 }
               }
             },
@@ -356,7 +430,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OandaAccountRequest"
+                "$ref": "#/components/schemas/OandaAccountsRequest"
               }
             }
           },
@@ -372,7 +446,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OandaAccount"
+                  "$ref": "#/components/schemas/OandaAccounts"
                 }
               }
             },
@@ -408,7 +482,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OandaAccount"
+                  "$ref": "#/components/schemas/OandaAccounts"
                 }
               }
             },
@@ -436,7 +510,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OandaAccountRequest"
+                "$ref": "#/components/schemas/OandaAccountsRequest"
               }
             }
           },
@@ -452,7 +526,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OandaAccount"
+                  "$ref": "#/components/schemas/OandaAccounts"
                 }
               }
             },
@@ -3104,7 +3178,7 @@
         "type": "string",
         "description": "* `US` - United States\n* `JP` - Japan\n* `OTHER` - Other/International"
       },
-      "OandaAccount": {
+      "OandaAccounts": {
         "type": "object",
         "description": "Serializer for OANDA account.",
         "properties": {
@@ -3198,7 +3272,7 @@
           "updated_at"
         ]
       },
-      "OandaAccountRequest": {
+      "OandaAccountsRequest": {
         "type": "object",
         "description": "Serializer for OANDA account.",
         "properties": {

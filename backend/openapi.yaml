@@ -241,18 +241,69 @@ paths:
           description: No response body
   /api/health/:
     get:
-      operationId: health_retrieve
-      description: |-
-        Public health check endpoint.
-
-        GET /api/health/
+      operationId: health_check
+      description: Check the health status of the API service. Returns database connectivity
+        and overall system status.
+      summary: /api/health
       tags:
       - health
       security:
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - healthy
+                    description: Overall health status
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: Timestamp of the health check
+                  response_time_ms:
+                    type: integer
+                    description: Response time in milliseconds
+                required:
+                - status
+                - timestamp
+                - response_time_ms
+                example:
+                  status: healthy
+                  timestamp: '2024-01-18T12:00:00Z'
+                  response_time_ms: 15
+          description: Service is healthy
+        '503':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - unhealthy
+                    description: Overall health status
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: Timestamp of the health check
+                  response_time_ms:
+                    type: integer
+                    description: Response time in milliseconds
+                required:
+                - status
+                - timestamp
+                - response_time_ms
+                example:
+                  status: unhealthy
+                  timestamp: '2024-01-18T12:00:00Z'
+                  response_time_ms: 20
+          description: Service is unhealthy
   /api/market/accounts/:
     get:
       operationId: market_accounts_retrieve
@@ -273,7 +324,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OandaAccount'
+                $ref: '#/components/schemas/OandaAccounts'
           description: ''
     post:
       operationId: market_accounts_create
@@ -291,7 +342,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OandaAccountRequest'
+              $ref: '#/components/schemas/OandaAccountsRequest'
         required: true
       security:
       - cookieAuth: []
@@ -300,7 +351,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OandaAccount'
+                $ref: '#/components/schemas/OandaAccounts'
           description: ''
   /api/market/accounts/{account_id}/:
     get:
@@ -331,7 +382,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OandaAccount'
+                $ref: '#/components/schemas/OandaAccounts'
           description: ''
     put:
       operationId: market_accounts_update
@@ -358,7 +409,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OandaAccountRequest'
+              $ref: '#/components/schemas/OandaAccountsRequest'
         required: true
       security:
       - cookieAuth: []
@@ -367,7 +418,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OandaAccount'
+                $ref: '#/components/schemas/OandaAccounts'
           description: ''
     delete:
       operationId: market_accounts_destroy
@@ -2308,7 +2359,7 @@ components:
         * `US` - United States
         * `JP` - Japan
         * `OTHER` - Other/International
-    OandaAccount:
+    OandaAccounts:
       type: object
       description: Serializer for OANDA account.
       properties:
@@ -2389,7 +2440,7 @@ components:
       - margin_used
       - unrealized_pnl
       - updated_at
-    OandaAccountRequest:
+    OandaAccountsRequest:
       type: object
       description: Serializer for OANDA account.
       properties:

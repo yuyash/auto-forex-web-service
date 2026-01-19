@@ -7,7 +7,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.health.services.health_check import HealthCheckResult
+from apps.health.services.health import HealthCheckResult
 
 
 @pytest.mark.django_db
@@ -22,12 +22,17 @@ class TestHealthCheckView:
         with patch("apps.health.views.HealthCheckService.check") as mock_check:
             mock_check.return_value = HealthCheckResult(
                 http_status=200,
-                body={"overall_status": "healthy", "checks": {}},
+                body={
+                    "status": "healthy",
+                    "timestamp": "2024-01-18T12:00:00Z",
+                    "response_time_ms": 10,
+                },
             )
             response = client.get(url)
 
             assert response.status_code == status.HTTP_200_OK
-            assert "overall_status" in response.data
+            assert "status" in response.data
+            assert response.data["status"] == "healthy"
 
     @patch("apps.health.views.HealthCheckService.check")
     def test_health_check_with_healthy_database(self, mock_check):
@@ -35,11 +40,9 @@ class TestHealthCheckView:
         mock_check.return_value = HealthCheckResult(
             http_status=200,
             body={
-                "overall_status": "healthy",
-                "checks": {
-                    "database": {"status": "healthy"},
-                    "redis": {"status": "healthy"},
-                },
+                "status": "healthy",
+                "timestamp": "2024-01-18T12:00:00Z",
+                "response_time_ms": 10,
             },
         )
 
@@ -48,7 +51,9 @@ class TestHealthCheckView:
         response = client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["overall_status"] == "healthy"
+        assert response.data["status"] == "healthy"
+        assert "timestamp" in response.data
+        assert "response_time_ms" in response.data
         mock_check.assert_called_once()
 
     @patch("apps.health.views.HealthCheckService.check")
@@ -57,11 +62,9 @@ class TestHealthCheckView:
         mock_check.return_value = HealthCheckResult(
             http_status=503,
             body={
-                "overall_status": "unhealthy",
-                "checks": {
-                    "database": {"status": "unhealthy", "error": "Connection failed"},
-                    "redis": {"status": "healthy"},
-                },
+                "status": "unhealthy",
+                "timestamp": "2024-01-18T12:00:00Z",
+                "response_time_ms": 10,
             },
         )
 
@@ -70,4 +73,4 @@ class TestHealthCheckView:
         response = client.get(url)
 
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-        assert response.data["overall_status"] == "unhealthy"
+        assert response.data["status"] == "unhealthy"
