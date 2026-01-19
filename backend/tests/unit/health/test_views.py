@@ -1,80 +1,12 @@
-"""Unit tests for health views."""
+"""Unit tests for health views (no database, mocked dependencies)."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-import pytest
-from django.urls import reverse
-from rest_framework import status
-from rest_framework.test import APIClient, APIRequestFactory
+from rest_framework.permissions import AllowAny
+from rest_framework.test import APIRequestFactory
 
 from apps.health.services.health import HealthCheckResult
-from apps.health.views import get_client_ip
-
-
-@pytest.mark.django_db
-class TestHealthCheckView:
-    """Test health check view."""
-
-    def test_health_check_returns_200(self):
-        """Test health check returns 200 OK."""
-        client = APIClient()
-        url = reverse("health:health_check")
-
-        with patch("apps.health.views.HealthCheckService.check") as mock_check:
-            mock_check.return_value = HealthCheckResult(
-                http_status=200,
-                body={
-                    "status": "healthy",
-                    "timestamp": "2024-01-18T12:00:00Z",
-                    "response_time_ms": 10,
-                },
-            )
-            response = client.get(url)
-
-            assert response.status_code == status.HTTP_200_OK
-            assert "status" in response.data
-            assert response.data["status"] == "healthy"
-
-    @patch("apps.health.views.HealthCheckService.check")
-    def test_health_check_with_healthy_database(self, mock_check):
-        """Test health check with healthy database."""
-        mock_check.return_value = HealthCheckResult(
-            http_status=200,
-            body={
-                "status": "healthy",
-                "timestamp": "2024-01-18T12:00:00Z",
-                "response_time_ms": 10,
-            },
-        )
-
-        client = APIClient()
-        url = reverse("health:health_check")
-        response = client.get(url)
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data["status"] == "healthy"
-        assert "timestamp" in response.data
-        assert "response_time_ms" in response.data
-        mock_check.assert_called_once()
-
-    @patch("apps.health.views.HealthCheckService.check")
-    def test_health_check_handles_database_failure(self, mock_check):
-        """Test health check handles database failure."""
-        mock_check.return_value = HealthCheckResult(
-            http_status=503,
-            body={
-                "status": "unhealthy",
-                "timestamp": "2024-01-18T12:00:00Z",
-                "response_time_ms": 10,
-            },
-        )
-
-        client = APIClient()
-        url = reverse("health:health_check")
-        response = client.get(url)
-
-        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-        assert response.data["status"] == "unhealthy"
+from apps.health.views import HealthView, get_client_ip
 
 
 class TestGetClientIP:
@@ -112,7 +44,6 @@ class TestGetClientIP:
         """Test extracting client IP returns 'unknown' when no IP available."""
         factory = APIRequestFactory()
         request = factory.get("/")
-        # Remove REMOTE_ADDR if it exists
         request.META.pop("REMOTE_ADDR", None)
 
         client_ip = get_client_ip(request)
@@ -127,3 +58,101 @@ class TestGetClientIP:
         client_ip = get_client_ip(request)
 
         assert client_ip == "203.0.113.1"
+
+
+class TestHealthView:
+    """Unit tests for HealthView (mocked dependencies, no database)."""
+
+    def test_health_view_returns_healthy_status(self) -> None:
+        """Test health view returns healthy status when service check passes."""
+        factory = APIRequestFactory()
+        request = factory.get("/api/health/")
+
+        mock_result = HealthCheckResult(
+            http_status=200,
+            body={
+                "status": "healthy",
+                "timestamp": "2024-01-18T12:00:00Z",
+                "response_time_ms": 10,
+            },
+        )
+
+        with patch("apps.health.views.HealthCheckService") as mock_service_class:
+            mock_service = MagicMock()
+            mock_service.check.return_value = mock_result
+            mock_service_class.return_value = mock_service
+
+            view = HealthView()
+            response = view.get(request)
+
+            assert response.status_code == 200
+            assert response.data["status"] == "healthy"
+            assert "timestamp" in response.data
+            assert "response_time_ms" in response.data
+            mock_service.check.assert_called_once()
+
+    def test_health_view_returns_unhealthy_status(self) -> None:
+        """Test health view returns unhealthy status when service check fails."""
+        factory = APIRequestFactory()
+        request = factory.get("/api/health/")
+
+        mock_result = HealthCheckResult(
+            http_status=503,
+            body={
+                "status": "unhealthy",
+                "timestamp": "2024-01-18T12:00:00Z",
+                "response_time_ms": 15,
+            },
+        )
+
+        with patch("apps.health.views.HealthCheckService") as mock_service_class:
+            mock_service = MagicMock()
+            mock_service.check.return_value = mock_result
+            mock_service_class.return_value = mock_service
+
+            view = HealthView()
+            response = view.get(request)
+
+            assert response.status_code == 503
+            assert response.data["status"] == "unhealthy"
+
+    def test_health_view_logs_client_ip(self) -> None:
+        """Test health view logs client IP address."""
+        factory = APIRequestFactory()
+        request = factory.get("/api/health/", HTTP_X_FORWARDED_FOR="203.0.113.1")
+
+        mock_result = HealthCheckResult(
+            http_status=200,
+            body={"status": "healthy", "timestamp": "2024-01-18T12:00:00Z", "response_time_ms": 5},
+        )
+
+        with patch("apps.health.views.HealthCheckService") as mock_service_class:
+            mock_service = MagicMock()
+            mock_service.check.return_value = mock_result
+            mock_service_class.return_value = mock_service
+
+            with patch("apps.health.views.logger") as mock_logger:
+                view = HealthView()
+                response = view.get(request)
+
+                assert response.status_code == 200
+                mock_logger.debug.assert_called_once()
+                call_args = mock_logger.debug.call_args[1]["msg"]
+                assert "203.0.113.1" in call_args
+
+    def test_health_view_permission_classes(self) -> None:
+        """Test health view has AllowAny permission."""
+        view = HealthView()
+        assert view.permission_classes == [AllowAny]
+
+    def test_health_view_authentication_classes(self) -> None:
+        """Test health view has no authentication classes."""
+        view = HealthView()
+        assert view.authentication_classes == []
+
+    def test_health_view_initializes_health_service(self) -> None:
+        """Test health view initializes HealthCheckService in constructor."""
+        with patch("apps.health.views.HealthCheckService") as mock_service_class:
+            view = HealthView()
+            assert hasattr(view, "health_service")
+            mock_service_class.assert_called_once()
