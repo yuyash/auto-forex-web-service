@@ -58,7 +58,7 @@ class TestJWTAuthentication:
     @pytest.mark.django_db
     def test_authenticate_credentials_with_valid_token(self):
         """Test authenticate_credentials with valid token."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -85,7 +85,7 @@ class TestJWTAuthentication:
     @pytest.mark.django_db
     def test_authenticate_credentials_with_inactive_user(self):
         """Test authenticate_credentials with inactive user."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -105,7 +105,7 @@ class TestJWTAuthentication:
     @pytest.mark.django_db
     def test_authenticate_credentials_with_locked_user(self):
         """Test authenticate_credentials with locked user."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",

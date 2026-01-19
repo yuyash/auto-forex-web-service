@@ -1,7 +1,4 @@
-"""Unit tests for TradingMetricsSerializer.
-
-Requirements: 8.3
-"""
+"""Unit tests for TradingMetricsSerializer."""
 
 from decimal import Decimal
 
@@ -31,7 +28,7 @@ class TestTradingMetricsSerializer:
         )
         return Executions.objects.create(
             task_type="backtest",
-            task_id=backtest_task.id,  # type: ignore[attr-defined]
+            task_id=backtest_task.pk  ,  # type: ignore[attr-defined]
             execution_number=1,
             status="running",
         )
@@ -99,7 +96,7 @@ class TestTradingMetricsSerializer:
         serializer = TradingMetricsSerializer(trading_metrics)
         data = serializer.data
 
-        assert data["execution_id"] == trading_metrics.execution.id
+        assert data["execution_id"] == trading_metrics.execution.pk
         assert data["sequence"] == trading_metrics.sequence
         assert Decimal(data["realized_pnl"]) == trading_metrics.realized_pnl
         assert Decimal(data["unrealized_pnl"]) == trading_metrics.unrealized_pnl
@@ -110,7 +107,7 @@ class TestTradingMetricsSerializer:
     def test_deserialization(self, execution):
         """Test deserialization of TradingMetrics data."""
         data = {
-            "execution": execution.id,
+            "execution": execution.pk  ,  # type: ignore[attr-defined]
             "sequence": 2,
             "timestamp": timezone.now().isoformat(),
             "realized_pnl": "200.00",
@@ -133,7 +130,7 @@ class TestTradingMetricsSerializer:
         assert serializer.is_valid(), serializer.errors
 
         metrics = serializer.save()
-        assert metrics.execution.id == execution.id
+        assert metrics.execution.pk == execution.pk
         assert metrics.sequence == 2
         assert metrics.realized_pnl == Decimal("200.00")
         assert metrics.total_trades == 10

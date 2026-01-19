@@ -25,7 +25,7 @@ class TestOandaAccountsModel:
 
     def test_set_api_token_encrypts_token(self):
         """Test that set_api_token encrypts the token."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -43,11 +43,11 @@ class TestOandaAccountsModel:
         # Token should be encrypted (not equal to plain text)
         assert account.api_token != plain_token
         # Should be able to decrypt it
-        assert account.get_api_token() == plain_token
+        assert account.get_api_token()  # type: ignore[attr-defined] == plain_token
 
     def test_multiple_accounts_same_user(self):
         """Test user can have multiple OANDA accounts."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -183,7 +183,7 @@ class TestOandaApiHealthStatusModel:
 
     def test_create_health_status(self):
         """Test creating API health status."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -209,7 +209,7 @@ class TestOandaApiHealthStatusModel:
 
     def test_health_status_with_error(self):
         """Test health status with error message."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",

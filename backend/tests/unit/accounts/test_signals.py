@@ -14,7 +14,7 @@ class TestUserSignals:
 
     def test_user_settings_created_on_user_creation(self):
         """Test UserSettings is created when user is created."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -26,7 +26,7 @@ class TestUserSignals:
 
     def test_user_settings_not_duplicated(self):
         """Test UserSettings is not duplicated on user save."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -39,5 +39,5 @@ class TestUserSignals:
         user.save()
 
         # Settings should still be the same instance
-        user.refresh_from_db()
+        user.refresh_from_db()  # type: ignore[attr-defined]
         assert user.settings.id == settings_id

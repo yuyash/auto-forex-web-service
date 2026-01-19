@@ -26,7 +26,7 @@ class TestBacktestTaskRunner(TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.user = User.objects.create_user(  # type: ignore[attr-defined]  # type: ignore[attr-defined]
+        self.user = User.objects.create_user(      # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -76,7 +76,7 @@ class TestBacktestTaskRunner(TestCase):
         # Create execution
         execution = Executions.objects.create(
             task_type=TaskType.BACKTEST,
-            task_id=self.task.pk,
+            task_id=self.task.pk  ,  # type: ignore[attr-defined]
             execution_number=1,
             status=TaskStatus.RUNNING,
         )
@@ -121,12 +121,12 @@ class TestBacktestTaskRunner(TestCase):
         with patch.object(runner, "_initialize_task_service"):
             with patch.object(runner, "_create_data_source"):
                 with patch.object(runner, "_create_executor"):
-                    runner.run(task_id=self.task.pk)
+                    runner.run(task_id=self.task.pk)  # type: ignore[attr-defined]
 
         # Verify execution was created
         execution = Executions.objects.filter(
             task_type=TaskType.BACKTEST,
-            task_id=self.task.pk,
+            task_id=self.task.pk  ,  # type: ignore[attr-defined]
         ).first()
 
         assert execution is not None
@@ -189,14 +189,14 @@ class TestBacktestTaskRunner(TestCase):
         _ = BacktestTaskRunner()
 
         # Verify task can be loaded with new model name
-        task = BacktestTasks.objects.get(pk=self.task.pk)
+        task = BacktestTasks.objects.get(pk=self.task.pk)  # type: ignore[attr-defined]
         assert task is not None
         assert isinstance(task, BacktestTasks)
 
         # Verify execution can be created with new model name
         execution = Executions.objects.create(
             task_type=TaskType.BACKTEST,
-            task_id=task.pk,
+            task_id=task.pk  ,  # type: ignore[attr-defined]
             execution_number=1,
         )
         assert execution is not None

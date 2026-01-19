@@ -11,7 +11,7 @@ User = get_user_model()
 @pytest.fixture
 def user(db):  # type: ignore[misc]
     """Create test user."""
-    return User.objects.create_user(  # type: ignore[attr-defined]  # type: ignore[attr-defined]
+    return User.objects.create_user(      # type: ignore[attr-defined]
         username="testuser",
         email="test@example.com",
         password="testpass123",

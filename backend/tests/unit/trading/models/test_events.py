@@ -16,7 +16,7 @@ class TestTradingEventModel:
 
     def test_create_trading_event(self):
         """Test creating a trading event."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -35,7 +35,7 @@ class TestTradingEventModel:
 
     def test_trading_event_with_details(self):
         """Test trading event with JSON details."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",

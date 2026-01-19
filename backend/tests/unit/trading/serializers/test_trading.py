@@ -15,7 +15,7 @@ class TestTradingTaskSerializer:
 
     def test_serialize_trading_task(self):
         """Test serializing trading task."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",

@@ -31,10 +31,7 @@ class StateManager:
     ExecutionStateSnapshot model for persistence.
 
     Attributes:
-        execution: The TaskExecution instance this manager is associated with
-
-    Requirements: 4.1, 4.2, 4.3, 4.5
-    """
+        execution: The TaskExecution instance this manager is associated with"""
 
     def __init__(self, execution: Executions) -> None:
         """Initialize the StateManager with a TaskExecution.
@@ -65,10 +62,7 @@ class StateManager:
 
         Returns:
             ExecutionState: Loaded or newly initialized execution state with
-                           strategy_state as dict
-
-        Requirements: 4.1, 4.3
-        """
+                           strategy_state as dict"""
         # Try to load the most recent snapshot
         snapshot = (
             ExecutionStateSnapshot.objects.filter(execution=self.execution)
@@ -128,10 +122,7 @@ class StateManager:
             new_strategy_state: New strategy state dictionary
 
         Returns:
-            ExecutionState: New ExecutionState with updated strategy state
-
-        Requirements: 4.1
-        """
+            ExecutionState: New ExecutionState with updated strategy state"""
         return ExecutionState(
             strategy_state=new_strategy_state,  # type: ignore[arg-type]
             current_balance=state.current_balance,
@@ -152,10 +143,7 @@ class StateManager:
             state: ExecutionState to save
 
         Returns:
-            ExecutionStateSnapshot: The created snapshot record
-
-        Requirements: 4.1, 4.2
-        """
+            ExecutionStateSnapshot: The created snapshot record"""
         # Get the next sequence number
         sequence = self._next_snapshot_sequence()
 
@@ -188,10 +176,7 @@ class StateManager:
         Returns None if no snapshots exist.
 
         Returns:
-            ExecutionState or None: Current state or None if no snapshots exist
-
-        Requirements: 4.3
-        """
+            ExecutionState or None: Current state or None if no snapshots exist"""
         snapshot = (
             ExecutionStateSnapshot.objects.filter(execution=self.execution)
             .order_by("-sequence")
@@ -240,9 +225,6 @@ class StateManager:
 
         Returns:
             ValidationResult: Validation result with is_valid flag and optional error message
-
-        Requirements: 4.5
-
         Example:
             >>> result = state_manager.validate_state(state)
             >>> if not result.is_valid:
@@ -285,10 +267,7 @@ class StateManager:
         """Clear all state snapshots for the execution.
 
         Deletes all ExecutionStateSnapshot records associated with the
-        execution. This is useful when restarting a task from scratch.
-
-        Requirements: 4.6
-        """
+        execution. This is useful when restarting a task from scratch."""
         ExecutionStateSnapshot.objects.filter(execution=self.execution).delete()
 
     def _next_snapshot_sequence(self) -> int:

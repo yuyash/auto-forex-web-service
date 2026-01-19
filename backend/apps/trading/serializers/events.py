@@ -14,10 +14,7 @@ class StrategyEventsSerializer(serializers.ModelSerializer):
     - strategy_type: Strategy identifier (e.g., 'floor', 'momentum')
     - event_type: Type of event (e.g., 'initial_entry', 'retracement', 'take_profit')
     - common_data: Common fields across all events (timestamp, price, etc.)
-    - strategy_data: Strategy-specific fields (layer_number, retracement_count for Floor)
-
-    Requirements: 1.6, 15.5
-    """
+    - strategy_data: Strategy-specific fields (layer_number, retracement_count for Floor)"""
 
     # Structured fields extracted from event JSON
     parsed_event_type = serializers.SerializerMethodField()
@@ -163,10 +160,7 @@ class StructuredLogSerializer(serializers.Serializer):  # pylint: disable=abstra
     - timestamp: Log timestamp
     - level: Log level (info, warning, error)
     - message: Log message
-    - data: Extracted structured data from message
-
-    Requirements: 8.3
-    """
+    - data: Extracted structured data from message"""
 
     log_type = serializers.SerializerMethodField()
     timestamp = serializers.CharField()

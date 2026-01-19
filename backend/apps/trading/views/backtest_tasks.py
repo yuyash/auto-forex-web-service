@@ -91,9 +91,9 @@ class BacktestTaskDetailView(RetrieveUpdateDestroyAPIView):
 
         # Stop the task if running (this will set cancellation flag)
         if task.status == TaskStatus.RUNNING:
-            from logging import getLogger
+            from logging import Logger, getLogger
 
-            logger = getLogger(__name__)
+            logger: Logger = getLogger(name=__name__)
             logger.info("Stopping running backtest task %d before deletion", task.pk)
 
             try:

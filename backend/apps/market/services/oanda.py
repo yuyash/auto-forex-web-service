@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
-from logging import getLogger
+from logging import Logger, getLogger
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -26,7 +26,7 @@ from apps.market.models import OandaAccounts, TickData
 from apps.market.services.compliance import ComplianceService, ComplianceViolationError
 from apps.market.services.events import MarketEventService
 
-logger = getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 class OrderType(str, Enum):

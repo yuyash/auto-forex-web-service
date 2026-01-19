@@ -10,7 +10,7 @@ This module provides API endpoints for:
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from logging import getLogger
+from logging import Logger, getLogger
 from typing import Any
 
 import v20
@@ -40,7 +40,7 @@ from apps.market.services.oanda import (
     StopOrderRequest,
 )
 
-logger = getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 class OandaAccountView(APIView):

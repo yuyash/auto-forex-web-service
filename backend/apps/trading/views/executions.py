@@ -3,8 +3,6 @@
 These endpoints work directly with execution IDs rather than task IDs,
 allowing access to specific historical executions and enabling comparison
 across multiple executions.
-
-Requirements: 6.13, 6.14, 6.15, 6.16, 6.17, 6.18, 6.19, 6.20
 """
 
 from datetime import datetime
@@ -33,10 +31,7 @@ class ExecutionDetailView(APIView):
     """Get full execution details.
 
     GET /api/trading/executions/{id}/
-    Returns complete execution object with all related data.
-
-    Requirements: 6.13
-    """
+    Returns complete execution object with all related data."""
 
     permission_classes = [IsAuthenticated]
 
@@ -84,10 +79,7 @@ class ExecutionDetailView(APIView):
             - Timing information (started_at, completed_at, duration)
             - Resource usage (cpu_limit_cores, memory_limit_mb, peak_memory_mb)
             - Error information (error_message, error_traceback)
-            - Logs array
-
-        Requirements: 6.13
-        """
+            - Logs array"""
         try:
             execution = Executions.objects.get(id=execution_id)
         except Executions.DoesNotExist:
@@ -142,10 +134,7 @@ class ExecutionLogsView(APIView):
     """Get execution logs with filtering.
 
     GET /api/trading/executions/{id}/logs/
-    Supports filtering by level, start_time, end_time, limit.
-
-    Requirements: 6.14
-    """
+    Supports filtering by level, start_time, end_time, limit."""
 
     permission_classes = [IsAuthenticated]
 
@@ -222,10 +211,7 @@ class ExecutionLogsView(APIView):
             limit: Maximum number of logs to return (default: 100, max: 1000)
 
         Returns:
-            Filtered logs array with pagination
-
-        Requirements: 6.14
-        """
+            Filtered logs array with pagination"""
         try:
             execution = Executions.objects.get(id=execution_id)
         except Executions.DoesNotExist:
@@ -328,10 +314,7 @@ class ExecutionStatusView(APIView):
     """Get current execution status with progress.
 
     GET /api/trading/executions/{id}/status/
-    Returns current status with progress information.
-
-    Requirements: 6.15
-    """
+    Returns current status with progress information."""
 
     permission_classes = [IsAuthenticated]
 
@@ -374,10 +357,7 @@ class ExecutionStatusView(APIView):
             - started_at: Start timestamp
             - completed_at: Completion timestamp (if completed)
             - error_message: Error message (if failed)
-            - estimated_remaining_seconds: Estimated time remaining (if running)
-
-        Requirements: 6.15
-        """
+            - estimated_remaining_seconds: Estimated time remaining (if running)"""
         try:
             execution = Executions.objects.get(id=execution_id)
         except Executions.DoesNotExist:
@@ -763,10 +743,7 @@ class ExecutionEquityView(APIView):
     """Get equity curve for a specific execution with granularity aggregation.
 
     GET /api/trading/executions/{id}/equity/
-    Supports granularity parameter for time binning and time range filtering.
-
-    Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 5.11, 6.18
-    """
+    Supports granularity parameter for time binning and time range filtering."""
 
     permission_classes = [IsAuthenticated]
 
@@ -860,10 +837,7 @@ class ExecutionEquityView(APIView):
             - tick_ask_min/max/avg/median: Ask price statistics
             - tick_bid_min/max/avg/median: Bid price statistics
             - tick_mid_min/max/avg/median: Mid price statistics
-            - trade_count: Number of trades in bin
-
-        Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 5.11, 6.18
-        """
+            - trade_count: Number of trades in bin"""
         try:
             execution = Executions.objects.get(id=execution_id)
         except Executions.DoesNotExist:
@@ -1006,10 +980,7 @@ class ExecutionMetricsView(APIView):
     """Get metrics for a specific execution with flexible filtering.
 
     GET /api/trading/executions/{id}/metrics/
-    Supports granularity, time range, and last_n filtering.
-
-    Requirements: 6.19
-    """
+    Supports granularity, time range, and last_n filtering."""
 
     permission_classes = [IsAuthenticated]
 
@@ -1088,10 +1059,7 @@ class ExecutionMetricsView(APIView):
             last_n: Return last N metrics points (alternative to time range)
 
         Returns:
-            Metrics data (raw or binned depending on granularity parameter)
-
-        Requirements: 6.19
-        """
+            Metrics data (raw or binned depending on granularity parameter)"""
         try:
             execution = Executions.objects.get(id=execution_id)
         except Executions.DoesNotExist:
@@ -1276,10 +1244,7 @@ class ExecutionLatestMetricsView(APIView):
     """Get the most recent metrics snapshot for a specific execution.
 
     GET /api/trading/executions/{id}/metrics/latest/
-    Returns the latest TradingMetrics record.
-
-    Requirements: 6.20
-    """
+    Returns the latest TradingMetrics record."""
 
     permission_classes = [IsAuthenticated]
 
@@ -1329,10 +1294,7 @@ class ExecutionLatestMetricsView(APIView):
         """Get latest metrics snapshot for execution.
 
         Returns:
-            Most recent TradingMetrics snapshot with all fields
-
-        Requirements: 6.20
-        """
+            Most recent TradingMetrics snapshot with all fields"""
         try:
             execution = Executions.objects.get(id=execution_id)
         except Executions.DoesNotExist:

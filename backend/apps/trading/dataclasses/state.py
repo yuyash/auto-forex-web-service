@@ -31,9 +31,6 @@ class ExecutionState(Generic[TStrategyState]):
         ticks_processed: Number of ticks processed so far
         last_tick_timestamp: Timestamp of the last processed tick (ISO format)
         metrics: Current performance metrics
-
-    Requirements: 4.1, 4.2, 4.3
-
     Example:
         >>> state: ExecutionState[FloorStrategyState] = ExecutionState(
         ...     strategy_state=FloorStrategyState(),

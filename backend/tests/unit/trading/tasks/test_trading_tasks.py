@@ -31,7 +31,7 @@ class TestTradingTaskRunner(TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.user = User.objects.create_user(  # type: ignore[attr-defined]  # type: ignore[attr-defined]
+        self.user = User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -88,7 +88,7 @@ class TestTradingTaskRunner(TestCase):
         # Create execution
         execution = Executions.objects.create(
             task_type=TaskType.TRADING,
-            task_id=self.task.pk,
+            task_id=self.task.pk,  # type: ignore[attr-defined]
             execution_number=1,
             status=TaskStatus.RUNNING,
         )
@@ -109,7 +109,7 @@ class TestTradingTaskRunner(TestCase):
         """Test that stop() updates CeleryTaskStatus correctly."""
         # Create CeleryTaskStatus record
         task_name = "trading.tasks.run_trading_task"
-        instance_key = str(self.task.pk)
+        instance_key = str(self.task.pk)  # type: ignore[attr-defined]
 
         CeleryTaskStatus.objects.create(
             task_name=task_name,
@@ -118,7 +118,10 @@ class TestTradingTaskRunner(TestCase):
         )
 
         runner = TradingTaskRunner()
-        runner.stop(task_id=self.task.pk, mode="graceful")
+        runner.stop(
+            task_id=self.task.pk,  # type: ignore[attr-defined]
+            mode="graceful",
+        )
 
         # Verify status was updated
         status = CeleryTaskStatus.objects.get(
@@ -131,7 +134,7 @@ class TestTradingTaskRunner(TestCase):
     def test_stop_with_different_modes(self):
         """Test stop() with different stop modes."""
         task_name = "trading.tasks.run_trading_task"
-        instance_key = str(self.task.pk)
+        instance_key = str(self.task.pk)  # type: ignore[attr-defined]
 
         for mode in ["immediate", "graceful", "graceful_close"]:
             # Create fresh status record
@@ -147,7 +150,10 @@ class TestTradingTaskRunner(TestCase):
             )
 
             runner = TradingTaskRunner()
-            runner.stop(task_id=self.task.pk, mode=mode)
+            runner.stop(
+                task_id=self.task.pk,  # type: ignore[attr-defined]
+                mode=mode,
+            )
 
             # Verify status was updated with correct mode
             status = CeleryTaskStatus.objects.get(
@@ -162,14 +168,14 @@ class TestTradingTaskRunner(TestCase):
         _ = TradingTaskRunner()
 
         # Verify task can be loaded with new model name
-        task = TradingTasks.objects.get(pk=self.task.pk)
+        task = TradingTasks.objects.get(pk=self.task.pk)  # type: ignore[attr-defined]
         assert task is not None
         assert isinstance(task, TradingTasks)
 
         # Verify execution can be created with new model name
         execution = Executions.objects.create(
             task_type=TaskType.TRADING,
-            task_id=task.pk,
+            task_id=task.pk,  # type: ignore[attr-defined]
             execution_number=1,
         )
         assert execution is not None

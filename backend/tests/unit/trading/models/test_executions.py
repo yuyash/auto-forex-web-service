@@ -22,7 +22,7 @@ class TestExecutionsModel:
             status=TaskStatus.RUNNING,
         )
 
-        assert execution.id is not None  # type: ignore[union-attr]
+        assert execution.pk is not None  # type: ignore[union-attr]
         assert execution.task_type == TaskType.BACKTEST
         assert execution.task_id == 1
         assert execution.execution_number == 1

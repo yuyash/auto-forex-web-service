@@ -15,7 +15,7 @@ class TestBacktestTaskSerializer:
 
     def test_serialize_backtest_task(self):
         """Test serializing backtest task."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",

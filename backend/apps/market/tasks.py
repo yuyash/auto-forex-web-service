@@ -7,7 +7,7 @@ import socket
 import time
 from datetime import UTC, datetime
 from decimal import Decimal
-from logging import getLogger
+from logging import Logger, getLogger
 from typing import Any, cast
 
 import redis
@@ -19,7 +19,7 @@ from apps.market.models import CeleryTaskStatus, OandaAccounts, TickData
 from apps.market.services.celery import CeleryTaskService
 from apps.market.services.oanda import OandaService
 
-logger = getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 def _current_task_id() -> str | None:

@@ -159,10 +159,7 @@ class PerformanceTracker:
         current_balance: Current account balance
         realized_pnl: Realized profit/loss from closed trades
         unrealized_pnl: Unrealized profit/loss from open positions
-        open_positions_count: Number of currently open positions
-
-    Requirements: 5.5, 7.1, 7.3, 13.1, 13.2
-    """
+        open_positions_count: Number of currently open positions"""
 
     def __init__(self, execution: Any, initial_balance: Decimal) -> None:
         """Initialize the PerformanceTracker.
@@ -189,10 +186,7 @@ class PerformanceTracker:
         """Update metrics after processing a tick.
 
         Increments the tick counter. This should be called after each
-        tick is successfully processed by the strategy.
-
-        Requirements: 5.5
-        """
+        tick is successfully processed by the strategy."""
         self.ticks_processed += 1
 
     def on_trade_executed(
@@ -208,10 +202,7 @@ class PerformanceTracker:
 
         Args:
             pnl: Profit/loss for closing trades (None for opening trades)
-            is_opening: True if opening a position, False if closing
-
-        Requirements: 7.1, 13.1, 13.2
-        """
+            is_opening: True if opening a position, False if closing"""
         self.trades_executed += 1
 
         if is_opening:
@@ -240,10 +231,7 @@ class PerformanceTracker:
         based on current market prices and open positions.
 
         Args:
-            unrealized_pnl: Current unrealized profit/loss
-
-        Requirements: 7.3, 13.2
-        """
+            unrealized_pnl: Current unrealized profit/loss"""
         self.unrealized_pnl = unrealized_pnl
 
     def get_metrics(self) -> dict[str, Any]:
@@ -253,10 +241,7 @@ class PerformanceTracker:
         This is useful for progress updates and real-time monitoring.
 
         Returns:
-            dict: Dictionary containing current metrics
-
-        Requirements: 5.5, 7.3
-        """
+            dict: Dictionary containing current metrics"""
         total_pnl = self.realized_pnl + self.unrealized_pnl
         total_return = (
             (

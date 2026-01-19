@@ -17,7 +17,7 @@ class TestIsAdminUserPermission:
 
     def test_admin_user_has_permission(self):
         """Test admin user has permission."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="admin",
             email="admin@example.com",
             password="testpass123",
@@ -32,7 +32,7 @@ class TestIsAdminUserPermission:
 
     def test_regular_user_no_permission(self):
         """Test regular user has no permission."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -51,7 +51,7 @@ class TestIsAdminOrReadOnlyPermission:
 
     def test_admin_user_has_write_permission(self):
         """Test admin user has write permission."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="admin",
             email="admin@example.com",
             password="testpass123",
@@ -67,7 +67,7 @@ class TestIsAdminOrReadOnlyPermission:
 
     def test_regular_user_has_read_permission(self):
         """Test regular user has read permission."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -84,7 +84,7 @@ class TestIsAdminOrReadOnlyPermission:
 
     def test_regular_user_no_write_permission(self):
         """Test regular user has no write permission."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",

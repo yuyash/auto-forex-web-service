@@ -92,9 +92,6 @@ class GranularityAggregationService:
 
     The service uses database aggregation functions (MIN, MAX, AVG) for
     efficiency and calculates median in Python using statistics.median.
-
-    Requirements: 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 5.11
-
     Example:
         >>> service = GranularityAggregationService()
         >>> bins = service.aggregate_metrics(
@@ -131,10 +128,7 @@ class GranularityAggregationService:
 
         Raises:
             ValueError: If granularity_seconds <= 0
-            ValueError: If execution has no TradingMetrics records
-
-        Requirements: 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 5.11
-        """
+            ValueError: If execution has no TradingMetrics records"""
         from apps.trading.models.metrics import TradingMetrics
 
         # Validate granularity
@@ -196,10 +190,7 @@ class GranularityAggregationService:
             BinStatistics with all statistical summaries
 
         Raises:
-            ValueError: If metrics list is empty
-
-        Requirements: 5.5, 5.6, 5.7, 5.8, 5.9
-        """
+            ValueError: If metrics list is empty"""
         if not metrics:
             raise ValueError("metrics list cannot be empty")
 
@@ -264,10 +255,7 @@ class GranularityAggregationService:
             granularity_seconds: Bin size in seconds
 
         Returns:
-            Bin start timestamp (floored to granularity boundary)
-
-        Requirements: 5.4
-        """
+            Bin start timestamp (floored to granularity boundary)"""
         # Convert timestamp to Unix epoch seconds
         epoch_seconds = int(timestamp.timestamp())
 
@@ -284,10 +272,7 @@ class GranularityAggregationService:
             values: List of Decimal values (must not be empty)
 
         Returns:
-            Average as Decimal
-
-        Requirements: 5.5, 5.6, 5.7, 5.8, 5.9
-        """
+            Average as Decimal"""
         if not values:
             return Decimal("0")
 
@@ -305,10 +290,7 @@ class GranularityAggregationService:
             values: List of Decimal values (must not be empty)
 
         Returns:
-            Median as Decimal
-
-        Requirements: 5.5, 5.6, 5.7, 5.8, 5.9
-        """
+            Median as Decimal"""
         if not values:
             return Decimal("0")
 

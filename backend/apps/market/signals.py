@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from logging import getLogger
+from logging import Logger, getLogger
 from uuid import uuid4
 
 import redis
@@ -15,7 +15,7 @@ from django.utils.timezone import now as django_now
 from apps.market.enums import ApiType
 from apps.market.models import CeleryTaskStatus, OandaAccounts
 
-logger = getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 def _redis_client() -> redis.Redis:

@@ -217,7 +217,7 @@ class Executions(models.Model):
             return f"{days:.1f}d"
         return None
 
-    # State Management Methods (Requirements: 4.1, 4.2, 4.3)
+    # State Management Methods
 
     def save_state_snapshot(
         self,
@@ -243,10 +243,7 @@ class Executions(models.Model):
             metrics: Current performance metrics dictionary
 
         Returns:
-            The created ExecutionStateSnapshot instance
-
-        Requirements: 4.1, 4.2
-        """
+            The created ExecutionStateSnapshot instance"""
         from decimal import Decimal
 
         from apps.trading.models.state import ExecutionStateSnapshot
@@ -277,10 +274,7 @@ class Executions(models.Model):
         Returns:
             Dictionary with keys: strategy_state, current_balance,
             open_positions, ticks_processed, last_tick_timestamp, metrics.
-            Returns None if no snapshots exist.
-
-        Requirements: 4.2, 4.3
-        """
+            Returns None if no snapshots exist."""
         snapshot = self.state_snapshots.order_by("-sequence").first()
 
         if snapshot is None:
@@ -301,14 +295,11 @@ class Executions(models.Model):
         Get the next sequence number for state snapshots.
 
         Returns:
-            Next monotonic sequence number (0-indexed)
-
-        Requirements: 4.1
-        """
+            Next monotonic sequence number (0-indexed)"""
         last_snapshot = self.state_snapshots.order_by("-sequence").first()
         return (last_snapshot.sequence + 1) if last_snapshot else 0
 
-    # Event Emission Methods (Requirements: 1.6)
+    # Event Emission Methods
 
     def emit_event(
         self,
@@ -331,10 +322,7 @@ class Executions(models.Model):
             timestamp: Event timestamp (ISO format string), parsed if provided
 
         Returns:
-            The created StrategyEvents instance
-
-        Requirements: 1.6
-        """
+            The created StrategyEvents instance"""
         from django.utils.dateparse import parse_datetime
 
         from apps.trading.models.events import StrategyEvents
@@ -362,10 +350,7 @@ class Executions(models.Model):
         Get the next sequence number for strategy events.
 
         Returns:
-            Next monotonic sequence number (0-indexed)
-
-        Requirements: 1.6
-        """
+            Next monotonic sequence number (0-indexed)"""
         last_event = self.strategy_events.order_by("-sequence").first()
         return (last_event.sequence + 1) if last_event else 0
 

@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from datetime import timedelta
-from logging import getLogger
+from logging import Logger, getLogger
 from typing import Any, cast
 from urllib.parse import parse_qs
 
@@ -18,7 +18,7 @@ from .models import BlockedIP, User, UserSession
 from .services.events import SecurityEventService
 from .services.jwt import JWTService
 
-logger = getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 def _get_authenticated_user(user: Any) -> User | None:

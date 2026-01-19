@@ -198,7 +198,6 @@ class BaseExecutor(ABC):
             self._handle_strategy_event(event, result.state)
 
         # Create metrics snapshot for this tick
-        # Requirements: 1.2, 4.1, 4.2, 4.3
         try:
             self.metrics_collection_service.create_metrics_snapshot(
                 execution=self.execution,

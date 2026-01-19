@@ -107,10 +107,7 @@ class ExecutionsWithStructuredDataSerializer(serializers.ModelSerializer):
     - Structured strategy events with parsed fields
     - Structured logs with log_type categorization
     - Latest metrics checkpoint
-    - All standard execution fields
-
-    Requirements: 11.1, 11.2
-    """
+    - All standard execution fields"""
 
     duration = serializers.SerializerMethodField()
     has_metrics = serializers.SerializerMethodField()

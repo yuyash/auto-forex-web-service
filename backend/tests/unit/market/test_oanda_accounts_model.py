@@ -23,7 +23,7 @@ class TestOandaAccountsModel:
     @pytest.fixture
     def user(self):
         """Create a test user."""
-        return User.objects.create_user(  # type: ignore[attr-defined]  # type: ignore[attr-defined]
+        return User.objects.create_user(      # type: ignore[attr-defined]
             email="test@example.com", password="testpass123", username="testuser"
         )
 
@@ -64,7 +64,7 @@ class TestOandaAccountsModel:
         account.set_api_token("test-token")
         account.save()
 
-        assert account.id is not None
+        assert account.pk is not None
         assert account.user == user
         assert account.account_id == "101-001-12345678-002"
         assert account.api_type == ApiType.PRACTICE
@@ -104,7 +104,7 @@ class TestOandaAccountsModel:
             jurisdiction=Jurisdiction.OTHER,
             currency="USD",
         )
-        assert live_account.id is not None
+        assert live_account.pk is not None
         assert live_account.account_id == oanda_account.account_id
         assert live_account.api_type != oanda_account.api_type
 
@@ -118,16 +118,16 @@ class TestOandaAccountsModel:
         assert oanda_account.api_token != original_token
 
         # Should be able to decrypt
-        decrypted_token = oanda_account.get_api_token()
+        decrypted_token = oanda_account.get_api_token()  # type: ignore[attr-defined]
         assert decrypted_token == original_token
 
     def test_update_balance(self, oanda_account):
         """Test updating account balance and margin fields."""
-        oanda_account.update_balance(
+        oanda_account.update_balance(  # type: ignore[attr-defined]
             balance=15000.00, margin_used=500.00, margin_available=14500.00, unrealized_pnl=100.00
         )
 
-        oanda_account.refresh_from_db()
+        oanda_account.refresh_from_db()  # type: ignore[attr-defined]
         assert oanda_account.balance == Decimal("15000.00")
         assert oanda_account.margin_used == Decimal("500.00")
         assert oanda_account.margin_available == Decimal("14500.00")
@@ -136,11 +136,11 @@ class TestOandaAccountsModel:
     def test_activate_deactivate(self, oanda_account):
         """Test activating and deactivating an account."""
         oanda_account.deactivate()
-        oanda_account.refresh_from_db()
+        oanda_account.refresh_from_db()  # type: ignore[attr-defined]
         assert oanda_account.is_active is False
 
         oanda_account.activate()
-        oanda_account.refresh_from_db()
+        oanda_account.refresh_from_db()  # type: ignore[attr-defined]
         assert oanda_account.is_active is True
 
     def test_set_as_default(self, user, oanda_account):
@@ -155,14 +155,14 @@ class TestOandaAccountsModel:
         )
 
         # Set first account as default
-        oanda_account.set_as_default()
-        oanda_account.refresh_from_db()
+        oanda_account.set_as_default()  # type: ignore[attr-defined]
+        oanda_account.refresh_from_db()  # type: ignore[attr-defined]
         assert oanda_account.is_default is True
 
         # Set second account as default
-        account2.set_as_default()
-        account2.refresh_from_db()
-        oanda_account.refresh_from_db()
+        account2.set_as_default()  # type: ignore[attr-defined]
+        account2.refresh_from_db()  # type: ignore[attr-defined]
+        oanda_account.refresh_from_db()  # type: ignore[attr-defined]
 
         # Only second account should be default
         assert account2.is_default is True
@@ -223,7 +223,7 @@ class TestOandaAccountsModel:
         oanda_account.unrealized_pnl = Decimal("-50.50")
         oanda_account.save()
 
-        oanda_account.refresh_from_db()
+        oanda_account.refresh_from_db()  # type: ignore[attr-defined]
         assert oanda_account.balance == Decimal("12345.67")
         assert oanda_account.margin_used == Decimal("123.45")
         assert oanda_account.margin_available == Decimal("12222.22")

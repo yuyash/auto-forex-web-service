@@ -5,8 +5,6 @@ Tests for serializers that were renamed as part of the refactoring:
 - ExecutionsSerializer (formerly TaskExecutionSerializer)
 - ExecutionsListSerializer (formerly TaskExecutionListSerializer)
 - ExecutionsDetailSerializer (formerly TaskExecutionDetailSerializer)
-
-Requirements: 8.3
 """
 
 from decimal import Decimal
@@ -42,7 +40,7 @@ class TestStrategyEventsSerializer:
         )
         return Executions.objects.create(
             task_type="backtest",
-            task_id=backtest_task.id,  # type: ignore[attr-defined]
+            task_id=backtest_task.pk  ,  # type: ignore[attr-defined]
             execution_number=1,
             status="running",
         )
@@ -112,7 +110,7 @@ class TestExecutionsSerializers:
         )
         return Executions.objects.create(
             task_type="backtest",
-            task_id=backtest_task.id,  # type: ignore[attr-defined]
+            task_id=backtest_task.pk  ,  # type: ignore[attr-defined]
             execution_number=1,
             status="completed",
             started_at=timezone.now(),

@@ -26,10 +26,7 @@ class EventContext:
         execution: Executions instance
         user: User instance
         account: OandaAccounts instance (optional, None for backtests)
-        instrument: Trading instrument (e.g., "USD_JPY")
-
-    Requirements: 1.1, 1.2, 1.3
-    """
+        instrument: Trading instrument (e.g., "USD_JPY")"""
 
     execution: "Executions"  # Forward reference to avoid circular import
     user: "User"  # Forward reference to avoid circular import
@@ -49,10 +46,7 @@ class StrategyContext:
         current_balance: Current account balance
         open_positions: List of open positions
         instrument: Trading instrument (e.g., "USD_JPY")
-        pip_size: Pip size for the instrument
-
-    Requirements: 3.5
-    """
+        pip_size: Pip size for the instrument"""
 
     current_balance: Decimal
     open_positions: list[OpenPosition]

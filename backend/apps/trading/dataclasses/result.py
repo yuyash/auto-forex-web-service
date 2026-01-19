@@ -24,9 +24,6 @@ class StrategyResult(Generic[TStrategyState]):
     Attributes:
         state: Updated execution state after processing
         events: List of strategy events emitted during processing
-
-    Requirements: 3.1, 3.2
-
     Example:
         >>> from apps.trading.events import StrategyStartedEvent
         >>> result: StrategyResult[FloorStrategyState] = StrategyResult(

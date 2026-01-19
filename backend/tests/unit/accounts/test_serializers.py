@@ -95,7 +95,7 @@ class TestUserLoginSerializer:
     def test_valid_login_data(self):
         """Test serializer with valid login credentials."""
         # Create a test user
-        User.objects.create_user(  # type: ignore[attr-defined]
+        User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="TestPass123!",
@@ -127,7 +127,7 @@ class TestUserProfileSerializer:
 
     def test_serialize_user_profile(self):
         """Test serializing user profile."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="TestPass123!",
@@ -146,7 +146,7 @@ class TestUserProfileSerializer:
 
     def test_update_user_profile(self):
         """Test updating user profile."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="TestPass123!",

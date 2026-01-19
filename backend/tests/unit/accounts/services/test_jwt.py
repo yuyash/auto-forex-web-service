@@ -75,7 +75,7 @@ class TestJWTService:
     @pytest.mark.django_db
     def test_get_user_from_token_valid(self):
         """Test getting user from valid token."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -98,7 +98,7 @@ class TestJWTService:
     @pytest.mark.django_db
     def test_refresh_token_valid(self):
         """Test refreshing valid token."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -125,7 +125,7 @@ class TestJWTService:
     @pytest.mark.django_db
     def test_refresh_token_inactive_user(self):
         """Test refreshing token for inactive user."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",

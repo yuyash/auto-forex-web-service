@@ -13,10 +13,7 @@ class TradingMetricsSerializer(serializers.ModelSerializer):
     - Sequencing and timing fields
     - PnL metrics (realized, unrealized, total)
     - Position metrics (open positions, total trades)
-    - Tick statistics for ask, bid, and mid prices
-
-    Requirements: 8.3
-    """
+    - Tick statistics for ask, bid, and mid prices"""
 
     execution_id = serializers.IntegerField(source="execution.id", read_only=True)
 

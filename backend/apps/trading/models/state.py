@@ -9,10 +9,7 @@ class ExecutionStateSnapshot(models.Model):
     This model stores snapshots of execution state at regular intervals,
     enabling tasks to resume from where they left off after stopping or
     failing. Each snapshot includes the complete strategy state, account
-    balance, open positions, and progress tracking.
-
-    Requirements: 4.1, 4.2
-    """
+    balance, open positions, and progress tracking."""
 
     execution = models.ForeignKey(
         "trading.Executions",

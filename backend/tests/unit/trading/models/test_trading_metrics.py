@@ -241,7 +241,7 @@ class TestTradingMetricsModel:
         )
 
         # Refresh from database
-        metrics.refresh_from_db()
+        metrics.refresh_from_db()    # type: ignore[attr-defined]
 
         # Check precision is maintained
         assert metrics.realized_pnl == Decimal("123.45678")
@@ -273,7 +273,7 @@ class TestTradingMetricsModel:
         )
 
         # Refresh from database
-        metrics.refresh_from_db()
+        metrics.refresh_from_db()    # type: ignore[attr-defined]
 
         # Check precision is maintained
         assert metrics.tick_ask_min == Decimal("1.12345")
@@ -383,5 +383,5 @@ class TestTradingMetricsModel:
         )
 
         str_repr = str(metrics)
-        assert f"execution={execution.id}" in str_repr
+        assert f"execution={execution.pk}" in str_repr
         assert "sequence=5" in str_repr

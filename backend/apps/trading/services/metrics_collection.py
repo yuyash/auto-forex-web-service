@@ -51,9 +51,6 @@ class MetricsCollectionService:
     - Calculating tick statistics (min/max/avg for ask/bid/mid)
     - Auto-incrementing sequence numbers
     - Extracting PnL and position data from execution state
-
-    Requirements: 1.2, 3.4
-
     Example:
         >>> service = MetricsCollectionService()
         >>> metrics = service.create_metrics_snapshot(
@@ -87,10 +84,7 @@ class MetricsCollectionService:
 
         Raises:
             ValueError: If tick_data is missing required fields
-            ValueError: If current_state is missing required fields
-
-        Requirements: 1.2, 3.4
-        """
+            ValueError: If current_state is missing required fields"""
         from apps.trading.models.metrics import TradingMetrics
 
         # Validate inputs
@@ -156,10 +150,7 @@ class MetricsCollectionService:
             TickStatistics with min/max/avg for ask/bid/mid
 
         Raises:
-            ValueError: If tick_data is missing required price fields
-
-        Requirements: 3.4
-        """
+            ValueError: If tick_data is missing required price fields"""
         # Validate tick data has required fields
         if not hasattr(tick_data, "ask") or tick_data.ask is None:
             raise ValueError("tick_data must have 'ask' field")
@@ -191,10 +182,7 @@ class MetricsCollectionService:
             execution: The execution instance
 
         Returns:
-            Next monotonic sequence number (0-indexed)
-
-        Requirements: 1.2
-        """
+            Next monotonic sequence number (0-indexed)"""
         from django.db.models import Max
 
         from apps.trading.models.metrics import TradingMetrics
@@ -220,10 +208,7 @@ class MetricsCollectionService:
             tick_data: Current tick with market prices
 
         Returns:
-            Total unrealized PnL across all open positions
-
-        Requirements: 1.2
-        """
+            Total unrealized PnL across all open positions"""
         if not open_positions:
             return Decimal("0")
 

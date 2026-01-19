@@ -2,8 +2,6 @@
 
 Tests all execution-based endpoints with valid inputs, error responses,
 filtering, pagination, and granularity parameters.
-
-Requirements: 6.13, 6.14, 6.15, 6.16, 6.17, 6.18, 6.19, 6.20
 """
 
 from datetime import timedelta
@@ -37,7 +35,7 @@ def api_client():
 @pytest.fixture
 def user(db: None) -> User:  # type: ignore[type-arg]
     """Create test user."""
-    return User.objects.create_user(  # type: ignore[attr-defined]  # type: ignore[attr-defined]
+    return User.objects.create_user(      # type: ignore[attr-defined]
         username="testuser",
         email="test@example.com",
         password="testpass123",
@@ -75,7 +73,7 @@ def execution(db, backtest_task):
     """Create test execution."""
     return Executions.objects.create(
         task_type=TaskType.BACKTEST,
-        task_id=backtest_task.pk,
+        task_id=backtest_task.pk  ,  # type: ignore[attr-defined]
         execution_number=1,
         status=TaskStatus.COMPLETED,
         progress=100,
@@ -142,7 +140,7 @@ def strategy_events(db, execution):
     return events
 
 
-# ExecutionDetailView Tests (Requirements: 6.13)
+# ExecutionDetailView Tests
 
 
 @pytest.mark.django_db
@@ -179,7 +177,7 @@ class TestExecutionDetailView:
 
     def test_get_execution_detail_access_denied(self, api_client, execution):
         """Test execution detail with different user."""
-        other_user = User.objects.create_user(  # type: ignore[attr-defined]  # type: ignore[attr-defined]
+        other_user = User.objects.create_user(      # type: ignore[attr-defined]
             username="otheruser",
             email="other@example.com",
             password="testpass123",
@@ -190,7 +188,7 @@ class TestExecutionDetailView:
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
-# ExecutionLogsView Tests (Requirements: 6.14)
+# ExecutionLogsView Tests
 
 
 @pytest.mark.django_db
@@ -245,7 +243,7 @@ class TestExecutionLogsView:
         assert len(data["logs"]) <= 5
 
 
-# ExecutionStatusView Tests (Requirements: 6.15)
+# ExecutionStatusView Tests
 
 
 @pytest.mark.django_db
@@ -269,7 +267,7 @@ class TestExecutionStatusView:
         """Test execution status for running execution with time estimate."""
         running_execution = Executions.objects.create(
             task_type=TaskType.BACKTEST,
-            task_id=backtest_task.pk,
+            task_id=backtest_task.pk  ,  # type: ignore[attr-defined]
             execution_number=2,
             status="running",
             progress=50,
@@ -285,7 +283,7 @@ class TestExecutionStatusView:
         assert "estimated_remaining_seconds" in data
 
 
-# ExecutionEventsView Tests (Requirements: 6.16)
+# ExecutionEventsView Tests
 
 
 @pytest.mark.django_db
@@ -334,7 +332,7 @@ class TestExecutionEventsView:
             assert event["sequence"] > 1
 
 
-# ExecutionTradesView Tests (Requirements: 6.17)
+# ExecutionTradesView Tests
 
 
 @pytest.mark.django_db
@@ -383,7 +381,7 @@ class TestExecutionTradesView:
             assert trade["trade"]["direction"] == "long"
 
 
-# ExecutionEquityView Tests (Requirements: 6.18)
+# ExecutionEquityView Tests
 
 
 @pytest.mark.django_db
@@ -453,7 +451,7 @@ class TestExecutionEquityView:
         assert "bins" in data
 
 
-# ExecutionMetricsView Tests (Requirements: 6.19)
+# ExecutionMetricsView Tests
 
 
 @pytest.mark.django_db
@@ -519,7 +517,7 @@ class TestExecutionMetricsView:
         assert "metrics" in data
 
 
-# ExecutionLatestMetricsView Tests (Requirements: 6.20)
+# ExecutionLatestMetricsView Tests
 
 
 @pytest.mark.django_db

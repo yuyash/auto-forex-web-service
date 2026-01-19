@@ -113,9 +113,9 @@ class TradingTaskDetailView(RetrieveUpdateDestroyAPIView):
 
         Automatically stops the task if running before deletion.
         """
-        from logging import getLogger
+        from logging import Logger, getLogger
 
-        logger = getLogger(__name__)
+        logger: Logger = getLogger(name=__name__)
         task = self.get_object()
 
         # Stop the task if running (this will set cancellation flag)

@@ -24,7 +24,7 @@ def api_client():
 @pytest.fixture
 def user(db: None) -> User:  # type: ignore[type-arg]
     """Create test user."""
-    return User.objects.create_user(  # type: ignore[attr-defined]
+    return User.objects.create_user(    # type: ignore[attr-defined]
         username="testuser", password="testpass123"
     )
 
@@ -183,7 +183,7 @@ class TestBacktestTaskStatusView:
         # Create execution
         execution = Executions.objects.create(
             task_type=TaskType.BACKTEST,
-            task_id=backtest_task.pk,
+            task_id=backtest_task.pk  ,  # type: ignore[attr-defined]
             execution_number=1,
             status=TaskStatus.RUNNING,
             progress=0,
@@ -317,7 +317,7 @@ class TestTradingTaskStatusView:
         # Create execution
         execution = Executions.objects.create(
             task_type=TaskType.TRADING,
-            task_id=trading_task.pk,
+            task_id=trading_task.pk  ,  # type: ignore[attr-defined]
             execution_number=1,
             status=TaskStatus.RUNNING,
             progress=0,

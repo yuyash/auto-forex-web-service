@@ -21,7 +21,7 @@ class TestOandaAccountsSerializer:
 
     def test_serialize_oanda_account(self):
         """Test serializing OANDA account."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -48,7 +48,7 @@ class TestOandaApiHealthStatusSerializer:
 
     def test_serialize_health_status(self):
         """Test serializing API health status."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",

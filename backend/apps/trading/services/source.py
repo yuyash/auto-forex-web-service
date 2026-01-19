@@ -22,20 +22,14 @@ class TickDataSource(ABC):
     A TickDataSource provides an iterator over batches of ticks for
     backtest or live trading execution. Different implementations can
     provide ticks from various sources (Redis pub/sub, database queries,
-    file streams, etc.).
-
-    Requirements: 18.1, 18.4
-    """
+    file streams, etc.)."""
 
     @abstractmethod
     def __iter__(self) -> Iterator[list[Tick]]:
         """Return an iterator that yields batches of ticks.
 
         Yields:
-            Batches of Tick objects
-
-        Requirements: 18.1
-        """
+            Batches of Tick objects"""
         pass
 
     @abstractmethod
@@ -61,9 +55,6 @@ class RedisTickDataSource(TickDataSource):
         trigger_publisher: Optional callback to trigger tick publisher
         client: Redis client instance
         pubsub: Redis pub/sub instance
-
-    Requirements: 18.1, 18.2, 18.4
-
     Example:
         >>> data_source = RedisTickDataSource(
         ...     channel="market:backtest:ticks:12345",
@@ -98,10 +89,7 @@ class RedisTickDataSource(TickDataSource):
         """Iterate over batches of ticks from Redis.
 
         Yields:
-            Batches of Tick objects
-
-        Requirements: 18.1, 18.4
-        """
+            Batches of Tick objects"""
         import json
         import logging
 
@@ -274,9 +262,6 @@ class LiveTickDataSource(TickDataSource):
         instrument: Trading instrument to filter for
         client: Redis client instance
         pubsub: Redis pub/sub instance
-
-    Requirements: 10.1, 18.1, 18.4
-
     Example:
         >>> data_source = LiveTickDataSource(
         ...     channel="market:ticks",
@@ -304,10 +289,7 @@ class LiveTickDataSource(TickDataSource):
         """Iterate over ticks from real-time market data.
 
         Yields:
-            Single-item batches containing one Tick object each
-
-        Requirements: 10.1, 18.1, 18.4
-        """
+            Single-item batches containing one Tick object each"""
         import json
 
         import redis

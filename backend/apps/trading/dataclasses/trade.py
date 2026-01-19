@@ -63,9 +63,6 @@ class OpenPosition:
         unrealized_pnl: Unrealized profit/loss in account currency
         unrealized_pips: Unrealized profit/loss in pips
         timestamp: Position open timestamp (ISO format)
-
-    Requirements: 1.3, 15.1
-
     Example:
         >>> position = OpenPosition(
         ...     position_id="12345",

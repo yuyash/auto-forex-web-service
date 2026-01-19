@@ -24,10 +24,7 @@ class StrategyEvent:
 
     Attributes:
         event_type: Type of event (EventType enum value)
-        timestamp: Event timestamp (optional)
-
-    Requirements: 1.2, 3.2
-    """
+        timestamp: Event timestamp (optional)"""
 
     event_type: EventType
     timestamp: datetime | None = None

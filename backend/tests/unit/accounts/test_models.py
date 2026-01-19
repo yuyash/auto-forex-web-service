@@ -24,7 +24,7 @@ class TestUserModel:
 
     def test_create_user_with_valid_data(self):
         """Test creating a user with valid data."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -49,13 +49,13 @@ class TestUserModel:
 
     def test_username_unique_constraint(self):
         """Test username must be unique."""
-        User.objects.create_user(  # type: ignore[attr-defined]
+        User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test1@example.com",
             password="testpass123",
         )
         with pytest.raises(IntegrityError):
-            User.objects.create_user(  # type: ignore[attr-defined]
+            User.objects.create_user(    # type: ignore[attr-defined]
                 username="testuser",
                 email="test2@example.com",
                 password="testpass123",
@@ -63,13 +63,13 @@ class TestUserModel:
 
     def test_email_unique_constraint(self):
         """Test email must be unique."""
-        User.objects.create_user(  # type: ignore[attr-defined]
+        User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser1",
             email="test@example.com",
             password="testpass123",
         )
         with pytest.raises(IntegrityError):
-            User.objects.create_user(  # type: ignore[attr-defined]
+            User.objects.create_user(    # type: ignore[attr-defined]
                 username="testuser2",
                 email="test@example.com",
                 password="testpass123",
@@ -82,7 +82,7 @@ class TestUserSettingsModel:
 
     def test_create_user_settings_on_user_creation(self):
         """Test UserSettings is created automatically when user is created."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -92,7 +92,7 @@ class TestUserSettingsModel:
 
     def test_default_notification_settings(self):
         """Test default notification settings."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -109,7 +109,7 @@ class TestUserSessionModel:
 
     def test_create_user_session(self):
         """Test creating a user session."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -127,7 +127,7 @@ class TestUserSessionModel:
 
     def test_session_expiry(self):
         """Test session expiry logic."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -204,7 +204,7 @@ class TestAccountSecurityEventModel:
 
     def test_create_security_event(self):
         """Test creating a security event."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -221,7 +221,7 @@ class TestAccountSecurityEventModel:
 
     def test_security_event_cascade_delete(self):
         """Test security events are deleted when user is deleted."""
-        user = User.objects.create_user(  # type: ignore[attr-defined]
+        user = User.objects.create_user(    # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
