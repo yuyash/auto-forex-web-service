@@ -600,8 +600,7 @@ export default function BacktestTaskForm({
                       placeholder="e.g., EUR_USD, USD_JPY"
                       error={!!errors.instrument}
                       helperText={
-                        errors.instrument?.message ||
-                        'Trading pair to backtest'
+                        errors.instrument?.message || 'Trading pair to backtest'
                       }
                     />
                   )}
@@ -704,7 +703,10 @@ export default function BacktestTaskForm({
           commission_per_trade: formData.commission_per_trade as number,
           pip_size: formData.pip_size as number | undefined,
           instrument: formData.instrument as string,
-          trading_mode: formData.trading_mode as 'netting' | 'hedging' | undefined,
+          trading_mode: formData.trading_mode as
+            | 'netting'
+            | 'hedging'
+            | undefined,
           sell_at_completion: formData.sell_at_completion as boolean,
         };
 

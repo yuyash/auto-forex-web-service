@@ -42,7 +42,11 @@ interface TaskResultsTabProps {
   latestExecution?: TaskExecution | null;
 }
 
-export function TaskResultsTab({ task, results, latestExecution }: TaskResultsTabProps) {
+export function TaskResultsTab({
+  task,
+  results,
+  latestExecution,
+}: TaskResultsTabProps) {
   const metrics = results?.metrics ?? null;
 
   const hasMetrics = task.status === TaskStatus.COMPLETED && !!metrics;

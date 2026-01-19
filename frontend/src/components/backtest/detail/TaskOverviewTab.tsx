@@ -19,7 +19,10 @@ import { backtestTasksApi } from '../../../services/api/backtestTasks';
 import type { BacktestTask } from '../../../types/backtestTask';
 import { TaskStatus } from '../../../types/common';
 import type { TaskResults } from '../../../types/results';
-import type { ExecutionMetricsCheckpoint, TaskExecution } from '../../../types/execution';
+import type {
+  ExecutionMetricsCheckpoint,
+  TaskExecution,
+} from '../../../types/execution';
 import {
   TrendingUp as TrendingUpIcon,
   ShowChart as ShowChartIcon,
@@ -41,7 +44,11 @@ interface TaskOverviewTabProps {
 
 type DateRange = 'all' | '1m' | '3m' | '6m' | '1y';
 
-export function TaskOverviewTab({ task, results, latestExecution }: TaskOverviewTabProps) {
+export function TaskOverviewTab({
+  task,
+  results,
+  latestExecution,
+}: TaskOverviewTabProps) {
   const [dateRange, setDateRange] = useState<DateRange>('all');
   const [equityCurve, setEquityCurve] = useState<EquityPoint[]>([]);
   const [equityCurveLoading, setEquityCurveLoading] = useState(false);
@@ -87,7 +94,7 @@ export function TaskOverviewTab({ task, results, latestExecution }: TaskOverview
       // Reset state when we shouldn't fetch - these are intentional resets
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setMetricsCheckpoint(null);
-       
+
       setMetricsCheckpointError(null);
       return;
     }
@@ -132,9 +139,9 @@ export function TaskOverviewTab({ task, results, latestExecution }: TaskOverview
       // Reset state when we shouldn't fetch - these are intentional resets
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setEquityCurve([]);
-       
+
       setEquityCurveLoading(false);
-       
+
       setEquityCurveError(null);
       return;
     }

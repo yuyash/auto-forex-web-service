@@ -77,9 +77,7 @@ const CustomTooltip: React.FC<TooltipProps> = ({ active, payload }) => {
           size="small"
           sx={{ mb: 0.5 }}
         />
-        <Typography variant="body2">
-          Layer: {data.layer_number}
-        </Typography>
+        <Typography variant="body2">Layer: {data.layer_number}</Typography>
         <Typography variant="body2">
           Retracement: {data.retracement_count}
         </Typography>
@@ -117,7 +115,9 @@ export const FloorStrategyTimeline: React.FC<FloorStrategyTimelineProps> = ({
 
   const timelineData: TimelineDataPoint[] = useMemo(() => {
     return events
-      .filter((event) => event.layer_number != null && event.retracement_count != null)
+      .filter(
+        (event) => event.layer_number != null && event.retracement_count != null
+      )
       .map((event: BacktestStrategyEvent) => ({
         timestamp: event.timestamp || '',
         displayTime: event.timestamp
@@ -207,10 +207,11 @@ export const FloorStrategyTimeline: React.FC<FloorStrategyTimelineProps> = ({
           ))}
         </Box>
         <ResponsiveContainer width="100%" height={height}>
-          <ScatterChart
-            margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
+          <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke={theme.palette.divider}
+            />
             <XAxis
               dataKey="displayTime"
               name="Time"

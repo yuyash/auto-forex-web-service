@@ -103,13 +103,16 @@ export const ExecutionStatusCard: React.FC<ExecutionStatusCardProps> = ({
     );
   }
 
-  const statusInfo = statusConfig[status.status as keyof typeof statusConfig] || {
+  const statusInfo = statusConfig[
+    status.status as keyof typeof statusConfig
+  ] || {
     label: status.status,
     color: 'default' as const,
     icon: null,
   };
 
-  const showProgress = status.status === 'running' || status.status === 'pending';
+  const showProgress =
+    status.status === 'running' || status.status === 'pending';
   const progress = Math.min(Math.max(status.progress || 0, 0), 100);
 
   return (
@@ -129,7 +132,9 @@ export const ExecutionStatusCard: React.FC<ExecutionStatusCardProps> = ({
 
         {showProgress && (
           <Box sx={{ mb: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <Box
+              sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}
+            >
               <Typography variant="body2" color="text.secondary">
                 Progress
               </Typography>

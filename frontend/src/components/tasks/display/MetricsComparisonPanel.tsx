@@ -113,10 +113,12 @@ export const MetricsComparisonPanel: React.FC<MetricsComparisonPanelProps> = ({
   executions,
   title = 'Execution Comparison',
 }) => {
-
   // Calculate best/worst for each metric
   const metricComparison = useMemo(() => {
-    const comparison: Record<string, { best: number; worst: number; values: number[] }> = {};
+    const comparison: Record<
+      string,
+      { best: number; worst: number; values: number[] }
+    > = {};
 
     metricRows.forEach((row) => {
       const values = executions
@@ -145,7 +147,7 @@ export const MetricsComparisonPanel: React.FC<MetricsComparisonPanelProps> = ({
     if (value === null || !metricComparison[metricKey]) return 'default';
 
     const { best, worst } = metricComparison[metricKey];
-    
+
     if (value === best) return 'success';
     if (value === worst) return 'error';
     return 'default';
@@ -156,10 +158,11 @@ export const MetricsComparisonPanel: React.FC<MetricsComparisonPanelProps> = ({
     metricKey: string,
     higherIsBetter: boolean
   ) => {
-    if (value === null || !metricComparison[metricKey]) return <NeutralIcon fontSize="small" />;
+    if (value === null || !metricComparison[metricKey])
+      return <NeutralIcon fontSize="small" />;
 
     const { best, worst } = metricComparison[metricKey];
-    
+
     if (value === best) {
       return higherIsBetter ? (
         <TrendingUpIcon fontSize="small" color="success" />
@@ -201,7 +204,8 @@ export const MetricsComparisonPanel: React.FC<MetricsComparisonPanelProps> = ({
 
         <Box sx={{ mb: 2 }}>
           <Typography variant="body2" color="text.secondary">
-            Comparing {executions.length} execution{executions.length !== 1 ? 's' : ''}
+            Comparing {executions.length} execution
+            {executions.length !== 1 ? 's' : ''}
           </Typography>
         </Box>
 
@@ -211,7 +215,11 @@ export const MetricsComparisonPanel: React.FC<MetricsComparisonPanelProps> = ({
               <TableRow sx={{ bgcolor: 'background.default' }}>
                 <TableCell sx={{ fontWeight: 'bold' }}>Metric</TableCell>
                 {executions.map((exec) => (
-                  <TableCell key={exec.id} align="center" sx={{ fontWeight: 'bold' }}>
+                  <TableCell
+                    key={exec.id}
+                    align="center"
+                    sx={{ fontWeight: 'bold' }}
+                  >
                     <Box>
                       <Typography variant="body2" fontWeight="bold">
                         Execution #{exec.execution_number}
@@ -223,8 +231,8 @@ export const MetricsComparisonPanel: React.FC<MetricsComparisonPanelProps> = ({
                           exec.status === 'completed'
                             ? 'success'
                             : exec.status === 'failed'
-                            ? 'error'
-                            : 'default'
+                              ? 'error'
+                              : 'default'
                         }
                         sx={{ mt: 0.5 }}
                       />
@@ -243,11 +251,16 @@ export const MetricsComparisonPanel: React.FC<MetricsComparisonPanelProps> = ({
                     },
                   }}
                 >
-                  <TableCell component="th" scope="row" sx={{ fontWeight: 'medium' }}>
+                  <TableCell
+                    component="th"
+                    scope="row"
+                    sx={{ fontWeight: 'medium' }}
+                  >
                     {row.label}
                   </TableCell>
                   {executions.map((exec) => {
-                    const value = exec.metrics?.[row.key as keyof typeof exec.metrics];
+                    const value =
+                      exec.metrics?.[row.key as keyof typeof exec.metrics];
                     // Skip if value is an array (equity_points, trades, events)
                     if (Array.isArray(value)) {
                       return (
@@ -260,7 +273,11 @@ export const MetricsComparisonPanel: React.FC<MetricsComparisonPanelProps> = ({
                     }
                     const numValue = value ? parseFloat(String(value)) : null;
                     const badgeColor = getBadgeColor(numValue, row.key);
-                    const trendIcon = getTrendIcon(numValue, row.key, row.higherIsBetter);
+                    const trendIcon = getTrendIcon(
+                      numValue,
+                      row.key,
+                      row.higherIsBetter
+                    );
 
                     return (
                       <TableCell key={exec.id} align="center">
@@ -275,16 +292,20 @@ export const MetricsComparisonPanel: React.FC<MetricsComparisonPanelProps> = ({
                           {trendIcon}
                           <Typography
                             variant="body2"
-                            fontWeight={badgeColor !== 'default' ? 'bold' : 'normal'}
+                            fontWeight={
+                              badgeColor !== 'default' ? 'bold' : 'normal'
+                            }
                             color={
                               badgeColor === 'success'
                                 ? 'success.main'
                                 : badgeColor === 'error'
-                                ? 'error.main'
-                                : 'text.primary'
+                                  ? 'error.main'
+                                  : 'text.primary'
                             }
                           >
-                            {row.format(value as string | number | null | undefined)}
+                            {row.format(
+                              value as string | number | null | undefined
+                            )}
                           </Typography>
                         </Box>
                       </TableCell>
@@ -295,7 +316,11 @@ export const MetricsComparisonPanel: React.FC<MetricsComparisonPanelProps> = ({
 
               {/* Execution Details */}
               <TableRow sx={{ bgcolor: 'background.default' }}>
-                <TableCell component="th" scope="row" sx={{ fontWeight: 'medium' }}>
+                <TableCell
+                  component="th"
+                  scope="row"
+                  sx={{ fontWeight: 'medium' }}
+                >
                   Started
                 </TableCell>
                 {executions.map((exec) => (
@@ -311,7 +336,11 @@ export const MetricsComparisonPanel: React.FC<MetricsComparisonPanelProps> = ({
               </TableRow>
 
               <TableRow>
-                <TableCell component="th" scope="row" sx={{ fontWeight: 'medium' }}>
+                <TableCell
+                  component="th"
+                  scope="row"
+                  sx={{ fontWeight: 'medium' }}
+                >
                   Completed
                 </TableCell>
                 {executions.map((exec) => (

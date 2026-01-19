@@ -146,24 +146,25 @@ export const CompleteEquityChart: React.FC<CompleteEquityChartProps> = ({
     ? filteredData.slice(zoomDomain[0], zoomDomain[1])
     : filteredData;
 
-  const { minBalance, maxBalance, initialBalance, finalBalance } = useMemo(() => {
-    if (displayData.length === 0) {
-      return {
-        minBalance: 0,
-        maxBalance: 0,
-        initialBalance: 0,
-        finalBalance: 0,
-      };
-    }
+  const { minBalance, maxBalance, initialBalance, finalBalance } =
+    useMemo(() => {
+      if (displayData.length === 0) {
+        return {
+          minBalance: 0,
+          maxBalance: 0,
+          initialBalance: 0,
+          finalBalance: 0,
+        };
+      }
 
-    const balances = displayData.map((d) => d.balance);
-    return {
-      minBalance: Math.min(...balances),
-      maxBalance: Math.max(...balances),
-      initialBalance: displayData[0].balance,
-      finalBalance: displayData[displayData.length - 1].balance,
-    };
-  }, [displayData]);
+      const balances = displayData.map((d) => d.balance);
+      return {
+        minBalance: Math.min(...balances),
+        maxBalance: Math.max(...balances),
+        initialBalance: displayData[0].balance,
+        finalBalance: displayData[displayData.length - 1].balance,
+      };
+    }, [displayData]);
 
   const handleZoomIn = () => {
     if (displayData.length < 10) return;
@@ -235,9 +236,16 @@ export const CompleteEquityChart: React.FC<CompleteEquityChartProps> = ({
   return (
     <Card>
       <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 2,
+          }}
+        >
           <Typography variant="h6">{title}</Typography>
-          
+
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
             {/* Time Range Selector */}
             <ButtonGroup size="small" variant="outlined">
@@ -282,12 +290,20 @@ export const CompleteEquityChart: React.FC<CompleteEquityChartProps> = ({
             {/* Zoom Controls */}
             <Box>
               <Tooltip title="Zoom In">
-                <IconButton size="small" onClick={handleZoomIn} disabled={displayData.length < 10}>
+                <IconButton
+                  size="small"
+                  onClick={handleZoomIn}
+                  disabled={displayData.length < 10}
+                >
                   <ZoomInIcon />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Zoom Out">
-                <IconButton size="small" onClick={handleZoomOut} disabled={!zoomDomain}>
+                <IconButton
+                  size="small"
+                  onClick={handleZoomOut}
+                  disabled={!zoomDomain}
+                >
                   <ZoomOutIcon />
                 </IconButton>
               </Tooltip>
@@ -301,7 +317,16 @@ export const CompleteEquityChart: React.FC<CompleteEquityChartProps> = ({
         </Box>
 
         {/* Summary Stats */}
-        <Box sx={{ display: 'flex', gap: 3, mb: 2, p: 1, bgcolor: 'background.default', borderRadius: 1 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 3,
+            mb: 2,
+            p: 1,
+            bgcolor: 'background.default',
+            borderRadius: 1,
+          }}
+        >
           <Box>
             <Typography variant="caption" color="text.secondary">
               Initial Balance
@@ -317,7 +342,9 @@ export const CompleteEquityChart: React.FC<CompleteEquityChartProps> = ({
             <Typography
               variant="body2"
               fontWeight="bold"
-              color={finalBalance >= initialBalance ? 'success.main' : 'error.main'}
+              color={
+                finalBalance >= initialBalance ? 'success.main' : 'error.main'
+              }
             >
               {formatCurrency(finalBalance)}
             </Typography>
@@ -345,7 +372,10 @@ export const CompleteEquityChart: React.FC<CompleteEquityChartProps> = ({
             data={displayData}
             margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke={theme.palette.divider}
+            />
             <XAxis
               dataKey="displayTime"
               stroke={theme.palette.text.secondary}
@@ -362,7 +392,7 @@ export const CompleteEquityChart: React.FC<CompleteEquityChartProps> = ({
             />
             <RechartsTooltip content={<CustomTooltip />} />
             <Legend />
-            
+
             {/* Reference line for initial balance */}
             <ReferenceLine
               y={initialBalance}
@@ -370,7 +400,7 @@ export const CompleteEquityChart: React.FC<CompleteEquityChartProps> = ({
               strokeDasharray="3 3"
               label={{ value: 'Initial', position: 'right', fontSize: 12 }}
             />
-            
+
             <Line
               type="monotone"
               dataKey="balance"
@@ -380,7 +410,7 @@ export const CompleteEquityChart: React.FC<CompleteEquityChartProps> = ({
               name="Balance"
               isAnimationActive={false}
             />
-            
+
             {/* Brush for panning */}
             {!zoomDomain && filteredData.length > 50 && (
               <Brush

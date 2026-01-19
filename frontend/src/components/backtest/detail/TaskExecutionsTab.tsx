@@ -176,7 +176,9 @@ export function TaskExecutionsTab({
     useState<TaskExecution | null>(null);
   const [executionsPage, setExecutionsPage] = useState(1);
   const executionsPageSize = 20;
-  const [selectedComparisonIds, setSelectedComparisonIds] = useState<number[]>([]);
+  const [selectedComparisonIds, setSelectedComparisonIds] = useState<number[]>(
+    []
+  );
 
   const [autoScroll, setAutoScroll] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -387,7 +389,8 @@ export function TaskExecutionsTab({
                 Execution History
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {executions.length} execution{executions.length !== 1 ? 's' : ''}
+                {executions.length} execution
+                {executions.length !== 1 ? 's' : ''}
               </Typography>
             </Box>
 

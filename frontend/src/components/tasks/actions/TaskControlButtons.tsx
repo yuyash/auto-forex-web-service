@@ -43,10 +43,13 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   const queryClient = useQueryClient();
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
   const [restartDialogOpen, setRestartDialogOpen] = useState(false);
-  const [stopMode, setStopMode] = useState<'immediate' | 'graceful' | 'graceful_close'>('graceful');
+  const [stopMode, setStopMode] = useState<
+    'immediate' | 'graceful' | 'graceful_close'
+  >('graceful');
   const [clearState, setClearState] = useState(true);
 
-  const api = taskType === TaskType.BACKTEST ? backtestTasksApi : tradingTasksApi;
+  const api =
+    taskType === TaskType.BACKTEST ? backtestTasksApi : tradingTasksApi;
 
   // Start mutation
   const startMutation = useMutation({
@@ -54,9 +57,10 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['execution-status'] });
       queryClient.invalidateQueries({
-        queryKey: taskType === TaskType.BACKTEST
-          ? ['backtest-task', taskId]
-          : ['trading-task', taskId],
+        queryKey:
+          taskType === TaskType.BACKTEST
+            ? ['backtest-task', taskId]
+            : ['trading-task', taskId],
       });
       onSuccess?.();
     },
@@ -76,9 +80,10 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['execution-status'] });
       queryClient.invalidateQueries({
-        queryKey: taskType === TaskType.BACKTEST
-          ? ['backtest-task', taskId]
-          : ['trading-task', taskId],
+        queryKey:
+          taskType === TaskType.BACKTEST
+            ? ['backtest-task', taskId]
+            : ['trading-task', taskId],
       });
       setStopDialogOpen(false);
       onSuccess?.();
@@ -143,7 +148,9 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   const canStop = ['running', 'pending'].includes(currentStatus);
   const canPause = taskType === TaskType.TRADING && currentStatus === 'running';
   const canResume = taskType === TaskType.TRADING && currentStatus === 'paused';
-  const canRestart = taskType === TaskType.TRADING && ['stopped', 'completed', 'failed'].includes(currentStatus);
+  const canRestart =
+    taskType === TaskType.TRADING &&
+    ['stopped', 'completed', 'failed'].includes(currentStatus);
 
   return (
     <>
@@ -151,7 +158,9 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
         <ButtonGroup variant="contained" disabled={isLoading}>
           {canStart && (
             <Button
-              startIcon={isLoading ? <CircularProgress size={16} /> : <StartIcon />}
+              startIcon={
+                isLoading ? <CircularProgress size={16} /> : <StartIcon />
+              }
               onClick={() => startMutation.mutate()}
               color="primary"
             >
@@ -161,7 +170,9 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
 
           {canStop && (
             <Button
-              startIcon={isLoading ? <CircularProgress size={16} /> : <StopIcon />}
+              startIcon={
+                isLoading ? <CircularProgress size={16} /> : <StopIcon />
+              }
               onClick={() => setStopDialogOpen(true)}
               color="error"
             >
@@ -171,7 +182,9 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
 
           {canPause && (
             <Button
-              startIcon={isLoading ? <CircularProgress size={16} /> : <PauseIcon />}
+              startIcon={
+                isLoading ? <CircularProgress size={16} /> : <PauseIcon />
+              }
               onClick={() => pauseMutation.mutate()}
               color="warning"
             >
@@ -181,7 +194,9 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
 
           {canResume && (
             <Button
-              startIcon={isLoading ? <CircularProgress size={16} /> : <ResumeIcon />}
+              startIcon={
+                isLoading ? <CircularProgress size={16} /> : <ResumeIcon />
+              }
               onClick={() => resumeMutation.mutate()}
               color="success"
             >
@@ -191,7 +206,9 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
 
           {canRestart && (
             <Button
-              startIcon={isLoading ? <CircularProgress size={16} /> : <RestartIcon />}
+              startIcon={
+                isLoading ? <CircularProgress size={16} /> : <RestartIcon />
+              }
               onClick={() => setRestartDialogOpen(true)}
               color="info"
             >
@@ -211,7 +228,11 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
           {taskType === TaskType.TRADING && (
             <RadioGroup
               value={stopMode}
-              onChange={(e) => setStopMode(e.target.value as 'immediate' | 'graceful' | 'graceful_close')}
+              onChange={(e) =>
+                setStopMode(
+                  e.target.value as 'immediate' | 'graceful' | 'graceful_close'
+                )
+              }
             >
               <FormControlLabel
                 value="graceful"
@@ -244,7 +265,10 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       </Dialog>
 
       {/* Restart Dialog */}
-      <Dialog open={restartDialogOpen} onClose={() => setRestartDialogOpen(false)}>
+      <Dialog
+        open={restartDialogOpen}
+        onClose={() => setRestartDialogOpen(false)}
+      >
         <DialogTitle>Restart Task</DialogTitle>
         <DialogContent>
           <Typography gutterBottom>

@@ -104,9 +104,7 @@ const EventItem: React.FC<{ event: BacktestStrategyEvent }> = ({ event }) => {
 
     if (event.pnl) {
       const pnl = parseFloat(String(event.pnl));
-      details.push(
-        `P&L: ${formatCurrency(pnl)}`
-      );
+      details.push(`P&L: ${formatCurrency(pnl)}`);
     }
 
     if (event.pips) {
@@ -134,7 +132,16 @@ const EventItem: React.FC<{ event: BacktestStrategyEvent }> = ({ event }) => {
             <Chip
               label={config.label}
               size="small"
-              color={config.color as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
+              color={
+                config.color as
+                  | 'default'
+                  | 'primary'
+                  | 'secondary'
+                  | 'error'
+                  | 'info'
+                  | 'success'
+                  | 'warning'
+              }
               icon={config.icon as React.ReactElement}
             />
             {event.direction && (
@@ -199,7 +206,12 @@ export const EventFeed: React.FC<EventFeedProps> = ({
           </Typography>
           <Box>
             {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} variant="rectangular" height={60} sx={{ mb: 1 }} />
+              <Skeleton
+                key={i}
+                variant="rectangular"
+                height={60}
+                sx={{ mb: 1 }}
+              />
             ))}
           </Box>
         </CardContent>
@@ -224,7 +236,8 @@ export const EventFeed: React.FC<EventFeedProps> = ({
             }}
           >
             <Typography color="text.secondary">
-              No events yet. Events will appear here as the execution progresses.
+              No events yet. Events will appear here as the execution
+              progresses.
             </Typography>
           </Paper>
         ) : (

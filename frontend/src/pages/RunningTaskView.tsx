@@ -34,9 +34,8 @@ export const RunningTaskView: React.FC = () => {
   const parsedTaskId = taskId ? parseInt(taskId, 10) : null;
   const parsedExecutionId = executionId ? parseInt(executionId, 10) : null;
 
-  const { data: status, error: statusError } = useExecutionStatus(
-    parsedExecutionId
-  );
+  const { data: status, error: statusError } =
+    useExecutionStatus(parsedExecutionId);
 
   if (!parsedTaskId || !parsedExecutionId) {
     return (
@@ -129,9 +128,7 @@ export const RunningTaskView: React.FC = () => {
       <Grid container spacing={3}>
         {/* Status Card - Full Width */}
         <Grid size={{ xs: 12 }}>
-          <ExecutionStatusCard
-            executionId={parsedExecutionId}
-          />
+          <ExecutionStatusCard executionId={parsedExecutionId} />
         </Grid>
 
         {/* Metrics Panel - Full Width */}
@@ -151,7 +148,11 @@ export const RunningTaskView: React.FC = () => {
 
         {/* Event Feed - Full Width */}
         <Grid size={{ xs: 12 }}>
-          <EventFeed executionId={parsedExecutionId} maxHeight={600} autoScroll />
+          <EventFeed
+            executionId={parsedExecutionId}
+            maxHeight={600}
+            autoScroll
+          />
         </Grid>
       </Grid>
     </Container>

@@ -36,7 +36,10 @@ import {
   useRerunBacktestTask,
 } from '../hooks/useBacktestTaskMutations';
 import { useTaskPolling } from '../hooks/useTaskPolling';
-import { useInvalidateExecutions, useTaskExecutions } from '../hooks/useTaskExecutions';
+import {
+  useInvalidateExecutions,
+  useTaskExecutions,
+} from '../hooks/useTaskExecutions';
 import { useBacktestResults } from '../hooks/useTaskResults';
 import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
@@ -503,16 +506,16 @@ export default function BacktestTaskDetailPage() {
         </Tabs>
 
         <TabPanel value={tabValue} index={0}>
-          <TaskOverviewTab 
-            task={taskForTabs} 
-            results={results} 
+          <TaskOverviewTab
+            task={taskForTabs}
+            results={results}
             latestExecution={latestExecution}
           />
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
-          <TaskResultsTab 
-            task={taskForTabs} 
+          <TaskResultsTab
+            task={taskForTabs}
             results={results}
             latestExecution={latestExecution}
           />

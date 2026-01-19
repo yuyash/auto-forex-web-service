@@ -113,8 +113,12 @@ export function ExecutionHistoryTable({
       onExecutionClick(execution.id);
     } else {
       // If execution is running or paused, navigate to running task view
-      if (execution.status === TaskStatus.RUNNING || execution.status === TaskStatus.PAUSED) {
-        const taskTypeStr = taskType === TaskType.BACKTEST ? 'backtest' : 'trading';
+      if (
+        execution.status === TaskStatus.RUNNING ||
+        execution.status === TaskStatus.PAUSED
+      ) {
+        const taskTypeStr =
+          taskType === TaskType.BACKTEST ? 'backtest' : 'trading';
         navigate(`/${taskTypeStr}-tasks/${taskId}/running`);
       } else {
         // Navigate to execution results view for completed/stopped/failed executions
@@ -173,7 +177,9 @@ export function ExecutionHistoryTable({
   }
 
   if (error) {
-    return <ErrorDisplay error={error} title="Failed to load execution history" />;
+    return (
+      <ErrorDisplay error={error} title="Failed to load execution history" />
+    );
   }
 
   return (
@@ -256,7 +262,11 @@ export function ExecutionHistoryTable({
             {filteredExecutions.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} align="center">
-                  <Typography variant="body2" color="text.secondary" sx={{ py: 4 }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ py: 4 }}
+                  >
                     No executions found
                   </Typography>
                 </TableCell>

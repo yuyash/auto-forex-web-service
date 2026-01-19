@@ -76,12 +76,15 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
     return Number.isNaN(ms) ? 0 : ms;
   };
 
-  const calculateDurationMs = React.useCallback((trade: Trade): number | undefined => {
-    const entry = safeDateMs(trade.entry_time);
-    const exit = safeDateMs(trade.exit_time);
-    if (!entry || !exit) return undefined;
-    return exit - entry;
-  }, []);
+  const calculateDurationMs = React.useCallback(
+    (trade: Trade): number | undefined => {
+      const entry = safeDateMs(trade.entry_time);
+      const exit = safeDateMs(trade.exit_time);
+      if (!entry || !exit) return undefined;
+      return exit - entry;
+    },
+    []
+  );
 
   // Sort trades
   const sortedTrades = React.useMemo(() => {

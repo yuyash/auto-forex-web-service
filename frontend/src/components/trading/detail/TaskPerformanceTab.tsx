@@ -119,9 +119,9 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
       // Reset state when we shouldn't fetch - these are intentional resets
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setMetricsCheckpoint(null);
-       
+
       setMetricsCheckpointLoading(false);
-       
+
       setMetricsCheckpointError(null);
       return;
     }
@@ -172,21 +172,21 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
       // Reset state when we shouldn't fetch - these are intentional resets
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setEquityCurve([]);
-       
+
       setEquityCurveLoading(false);
-       
+
       setEquityCurveError(null);
-       
+
       setTradeLogs([]);
-       
+
       setTradeLogsLoading(false);
-       
+
       setTradeLogsError(null);
-       
+
       setStrategyEvents([]);
-       
+
       setStrategyEventsLoading(false);
-       
+
       setStrategyEventsError(null);
       return;
     }

@@ -162,7 +162,10 @@ export const EquityChart: React.FC<EquityChartProps> = ({
             data={chartData}
             margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke={theme.palette.divider}
+            />
             <XAxis
               dataKey="displayTime"
               stroke={theme.palette.text.secondary}

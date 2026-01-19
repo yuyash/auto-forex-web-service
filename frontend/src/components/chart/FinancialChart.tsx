@@ -17,11 +17,11 @@
  */
 
 import React, { useState, useMemo, useCallback, useRef } from 'react';
+import { Chart, ChartCanvas } from 'react-financial-charts';
 import {
-  Chart,
-  ChartCanvas,
-} from 'react-financial-charts';
-import { getAxisCanvas, GenericChartComponent } from '@react-financial-charts/core';
+  getAxisCanvas,
+  GenericChartComponent,
+} from '@react-financial-charts/core';
 import { CandlestickSeries } from '@react-financial-charts/series';
 import { XAxis, YAxis } from '@react-financial-charts/axes';
 import { discontinuousTimeScaleProviderBuilder } from '@react-financial-charts/scales';
@@ -60,7 +60,8 @@ import {
 import { useResizeObserver } from '../../hooks/useResizeObserver';
 
 // Detect test environment
-const isTestEnvironment = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
+const isTestEnvironment =
+  typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
 
 /**
  * OHLC Data interface for chart rendering
@@ -181,12 +182,13 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
 
     try {
       const scaleResult = xScaleProvider(data);
-      
-      const hasValidResult = scaleResult && 
-                            scaleResult.data && 
-                            Array.isArray(scaleResult.data) && 
-                            scaleResult.data.length > 0;
-      
+
+      const hasValidResult =
+        scaleResult &&
+        scaleResult.data &&
+        Array.isArray(scaleResult.data) &&
+        scaleResult.data.length > 0;
+
       if (hasValidResult) {
         resultData = scaleResult.data;
         resultScale = scaleResult.xScale;
@@ -675,7 +677,10 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
     // Handle empty data
     if (!data || data.length === 0) {
       return (
-        <Box ref={containerRef} sx={{ width: '100%', p: 3, textAlign: 'center' }}>
+        <Box
+          ref={containerRef}
+          sx={{ width: '100%', p: 3, textAlign: 'center' }}
+        >
           <Typography color="text.secondary">
             No data available for this period
           </Typography>
@@ -699,9 +704,7 @@ export const FinancialChart: React.FC<FinancialChartProps> = ({
           gap: 1,
         }}
       >
-        {showResetButton && (
-          <Button size="small">Reset View</Button>
-        )}
+        {showResetButton && <Button size="small">Reset View</Button>}
         {enableMarkerToggle && markers && markers.length > 0 && (
           <ButtonGroup size="small">
             <Button>Buy/Sell Markers</Button>

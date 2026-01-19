@@ -29,7 +29,12 @@ import { MetricsComparisonPanel } from '../components/tasks/display/MetricsCompa
 import { useTaskExecutions } from '../hooks/useTaskExecutions';
 import { apiClient } from '../services/api/client';
 import { TaskType } from '../types';
-import type { TaskExecution, EquityPoint, Trade, BacktestStrategyEvent } from '../types';
+import type {
+  TaskExecution,
+  EquityPoint,
+  Trade,
+  BacktestStrategyEvent,
+} from '../types';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -71,7 +76,8 @@ export const ExecutionResultsView: React.FC = () => {
 
   const parsedTaskId = taskId ? parseInt(taskId, 10) : null;
   const parsedExecutionId = executionId ? parseInt(executionId, 10) : null;
-  const parsedTaskType = taskType === 'backtest' ? TaskType.BACKTEST : TaskType.TRADING;
+  const parsedTaskType =
+    taskType === 'backtest' ? TaskType.BACKTEST : TaskType.TRADING;
 
   // Fetch all executions for comparison (only if we have taskId and taskType)
   const shouldFetchExecutions = parsedTaskId !== null && taskType !== undefined;
@@ -81,7 +87,9 @@ export const ExecutionResultsView: React.FC = () => {
     { page_size: 10, include_metrics: true }
   );
 
-  const executionsData = shouldFetchExecutions ? (executionsResponse?.results || []) : [];
+  const executionsData = shouldFetchExecutions
+    ? executionsResponse?.results || []
+    : [];
 
   // Fetch execution details
   useEffect(() => {
@@ -96,16 +104,20 @@ export const ExecutionResultsView: React.FC = () => {
         const execResponse = await apiClient.get<TaskExecution>(
           `/trading/executions/${parsedExecutionId}/`
         );
-        
+
         console.log('Execution API response:', execResponse);
         console.log('Execution metrics:', execResponse.metrics);
-        
+
         // If execution is still running, redirect to running task view
-        if (execResponse.status === 'running' || execResponse.status === 'paused') {
+        if (
+          execResponse.status === 'running' ||
+          execResponse.status === 'paused'
+        ) {
           // Get taskType and taskId from execution if not in URL
-          const execTaskType = execResponse.task_type === 'backtest' ? 'backtest' : 'trading';
+          const execTaskType =
+            execResponse.task_type === 'backtest' ? 'backtest' : 'trading';
           const execTaskId = execResponse.task_id;
-          
+
           if (execTaskType === 'backtest') {
             navigate(`/backtest-tasks/${execTaskId}/running`);
           } else {
@@ -113,7 +125,7 @@ export const ExecutionResultsView: React.FC = () => {
           }
           return;
         }
-        
+
         setExecution(execResponse);
 
         // Fetch equity points
@@ -180,7 +192,8 @@ export const ExecutionResultsView: React.FC = () => {
       }
     } else if (execution) {
       // Otherwise, use execution data
-      const execTaskType = execution.task_type === 'backtest' ? 'backtest' : 'trading';
+      const execTaskType =
+        execution.task_type === 'backtest' ? 'backtest' : 'trading';
       if (execTaskType === 'backtest') {
         navigate(`/backtest-tasks/${execution.task_id}`);
       } else {
@@ -227,8 +240,8 @@ export const ExecutionResultsView: React.FC = () => {
               ? 'Backtest Tasks'
               : 'Trading Tasks'
             : taskType === 'backtest'
-            ? 'Backtest Tasks'
-            : 'Trading Tasks'}
+              ? 'Backtest Tasks'
+              : 'Trading Tasks'}
         </Link>
         <Typography color="text.primary">
           Execution #{parsedExecutionId} Results
@@ -243,8 +256,8 @@ export const ExecutionResultsView: React.FC = () => {
               ? 'Backtest'
               : 'Trading'
             : taskType === 'backtest'
-            ? 'Backtest'
-            : 'Trading'}{' '}
+              ? 'Backtest'
+              : 'Trading'}{' '}
           Execution Results
         </Typography>
         <Typography variant="body1" color="text.secondary">

@@ -46,7 +46,7 @@ export const ExecutionSummaryCard: React.FC<ExecutionSummaryCardProps> = ({
   execution,
 }) => {
   const metrics = execution.metrics;
-  
+
   if (!execution) {
     return (
       <Card>
@@ -58,16 +58,22 @@ export const ExecutionSummaryCard: React.FC<ExecutionSummaryCardProps> = ({
     );
   }
 
-  const statusInfo = statusConfig[execution.status as keyof typeof statusConfig] || {
+  const statusInfo = statusConfig[
+    execution.status as keyof typeof statusConfig
+  ] || {
     label: execution.status,
     color: 'default' as const,
     icon: null,
   };
 
-  const totalReturn = metrics?.total_return ? parseFloat(metrics.total_return) : 0;
+  const totalReturn = metrics?.total_return
+    ? parseFloat(metrics.total_return)
+    : 0;
   const totalPnl = metrics?.total_pnl ? parseFloat(metrics.total_pnl) : 0;
   const winRate = metrics?.win_rate ? parseFloat(metrics.win_rate) : 0;
-  const maxDrawdown = metrics?.max_drawdown ? parseFloat(metrics.max_drawdown) : 0;
+  const maxDrawdown = metrics?.max_drawdown
+    ? parseFloat(metrics.max_drawdown)
+    : 0;
 
   const formatDuration = (started: string, completed?: string) => {
     if (!completed) return 'N/A';
@@ -77,7 +83,7 @@ export const ExecutionSummaryCard: React.FC<ExecutionSummaryCardProps> = ({
     const hours = Math.floor(durationMs / (1000 * 60 * 60));
     const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((durationMs % (1000 * 60)) / 1000);
-    
+
     if (hours > 0) {
       return `${hours}h ${minutes}m ${seconds}s`;
     } else if (minutes > 0) {
@@ -96,7 +102,8 @@ export const ExecutionSummaryCard: React.FC<ExecutionSummaryCardProps> = ({
               Execution #{execution.execution_number}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {execution.task_type === 'backtest' ? 'Backtest' : 'Trading'} Execution Summary
+              {execution.task_type === 'backtest' ? 'Backtest' : 'Trading'}{' '}
+              Execution Summary
             </Typography>
           </Box>
           <Chip
@@ -158,7 +165,8 @@ export const ExecutionSummaryCard: React.FC<ExecutionSummaryCardProps> = ({
               No metrics available for this execution.
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              The execution may have completed without generating results or is still processing.
+              The execution may have completed without generating results or is
+              still processing.
             </Typography>
           </Box>
         )}
@@ -166,17 +174,31 @@ export const ExecutionSummaryCard: React.FC<ExecutionSummaryCardProps> = ({
         {metrics && (
           <>
             <Divider sx={{ my: 2 }} />
-            
+
             {/* Performance Metrics */}
             <Typography variant="h6" gutterBottom>
               Performance Metrics
             </Typography>
-            
+
             <Grid container spacing={3}>
               {/* Total Return */}
               <Grid size={{ xs: 6, sm: 3 }}>
-                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
+                <Box
+                  sx={{
+                    textAlign: 'center',
+                    p: 2,
+                    bgcolor: 'background.default',
+                    borderRadius: 1,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      mb: 1,
+                    }}
+                  >
                     {totalReturn >= 0 ? (
                       <TrendingUpIcon color="success" />
                     ) : (
@@ -198,8 +220,19 @@ export const ExecutionSummaryCard: React.FC<ExecutionSummaryCardProps> = ({
 
               {/* Total P&L */}
               <Grid size={{ xs: 6, sm: 3 }}>
-                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <Box
+                  sx={{
+                    textAlign: 'center',
+                    p: 2,
+                    bgcolor: 'background.default',
+                    borderRadius: 1,
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 1 }}
+                  >
                     Total P&L
                   </Typography>
                   <Typography
@@ -211,7 +244,8 @@ export const ExecutionSummaryCard: React.FC<ExecutionSummaryCardProps> = ({
                   </Typography>
                   {metrics.realized_pnl && (
                     <Typography variant="caption" color="text.secondary">
-                      Realized: {formatCurrency(parseFloat(metrics.realized_pnl))}
+                      Realized:{' '}
+                      {formatCurrency(parseFloat(metrics.realized_pnl))}
                     </Typography>
                   )}
                 </Box>
@@ -219,8 +253,19 @@ export const ExecutionSummaryCard: React.FC<ExecutionSummaryCardProps> = ({
 
               {/* Win Rate */}
               <Grid size={{ xs: 6, sm: 3 }}>
-                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <Box
+                  sx={{
+                    textAlign: 'center',
+                    p: 2,
+                    bgcolor: 'background.default',
+                    borderRadius: 1,
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 1 }}
+                  >
                     Win Rate
                   </Typography>
                   <Typography variant="h5" fontWeight="bold">
@@ -234,8 +279,19 @@ export const ExecutionSummaryCard: React.FC<ExecutionSummaryCardProps> = ({
 
               {/* Max Drawdown */}
               <Grid size={{ xs: 6, sm: 3 }}>
-                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <Box
+                  sx={{
+                    textAlign: 'center',
+                    p: 2,
+                    bgcolor: 'background.default',
+                    borderRadius: 1,
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 1 }}
+                  >
                     Max Drawdown
                   </Typography>
                   <Typography variant="h5" color="error.main" fontWeight="bold">
