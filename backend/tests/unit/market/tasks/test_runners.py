@@ -6,7 +6,6 @@ from unittest.mock import patch
 import pytest
 
 from apps.market.tasks import (
-    backtest_publisher_runner,
     publisher_runner,
     subscriber_runner,
     supervisor_runner,
@@ -31,11 +30,6 @@ class TestTaskRunners:
         assert subscriber_runner is not None
         assert hasattr(subscriber_runner, "run")
 
-    def test_backtest_publisher_runner_exists(self) -> None:
-        """Test backtest publisher runner instance exists."""
-        assert backtest_publisher_runner is not None
-        assert hasattr(backtest_publisher_runner, "run")
-
     def test_runner_classes_importable(self) -> None:
         """Test that runner classes can be imported."""
         from apps.market.tasks import (
@@ -49,6 +43,13 @@ class TestTaskRunners:
         assert TickPublisherRunner is not None
         assert TickSubscriberRunner is not None
         assert TickSupervisorRunner is not None
+
+    def test_backtest_task_function_importable(self) -> None:
+        """Test that backtest task function can be imported."""
+        from apps.market.tasks import publish_ticks_for_backtest
+
+        assert publish_ticks_for_backtest is not None
+        assert callable(publish_ticks_for_backtest)
 
 
 @pytest.mark.django_db

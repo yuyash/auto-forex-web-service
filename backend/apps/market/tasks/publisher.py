@@ -25,6 +25,18 @@ from apps.market.tasks.base import (
 logger: Logger = getLogger(name=__name__)
 
 
+@shared_task(bind=True, name="market.tasks.publish_oanda_ticks")
+def publish_oanda_ticks(self: Any, account_id: int, instruments: list[str] | None = None) -> None:
+    """Stream live pricing ticks from OANDA and publish to Redis pub/sub.
+
+    Args:
+        account_id: OANDA account ID
+        instruments: List of instruments to stream (optional)
+    """
+    runner = TickPublisherRunner()
+    runner.run(account_id, instruments)
+
+
 class TickPublisherRunner:
     """Runner for OANDA tick publisher task."""
 
@@ -33,9 +45,8 @@ class TickPublisherRunner:
         self.task_service: CeleryTaskService | None = None
         self.account: OandaAccounts | None = None
 
-    @shared_task(bind=True, name="market.tasks.publish_oanda_ticks")
     def run(self, account_id: int, instruments: list[str] | None = None) -> None:
-        """Stream live pricing ticks from OANDA and publish to Redis pub/sub.
+        """Execute the tick publisher task.
 
         Args:
             account_id: OANDA account ID

@@ -1,11 +1,11 @@
 """Extended integration tests for subscriber task."""
 
-from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.utils import timezone as dj_timezone
 
 from apps.market.models import TickData
 from apps.market.tasks.subscriber import TickSubscriberRunner
@@ -64,8 +64,8 @@ class TestTickSubscriberRunnerExtendedIntegration:
         runner = TickSubscriberRunner()
         runner.task_service = MagicMock()
 
-        # Add tick to buffer
-        now = datetime.now()
+        # Add tick to buffer with timezone-aware datetime
+        now = dj_timezone.now()
         tick = TickData(
             instrument="EUR_USD",
             timestamp=now,

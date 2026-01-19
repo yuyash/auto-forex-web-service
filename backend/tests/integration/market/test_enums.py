@@ -1,5 +1,7 @@
 """Integration tests for market enums."""
 
+from typing import Any, cast
+
 import pytest
 
 from apps.market.enums import ApiType, Jurisdiction
@@ -14,8 +16,8 @@ class TestEnumsIntegration:
         from apps.market.models import OandaAccounts
 
         # Get choices from model field
-        field = OandaAccounts._meta.get_field("api_type")
-        if field.choices:
+        field = cast(Any, OandaAccounts._meta.get_field("api_type"))
+        if hasattr(field, "choices") and field.choices:
             choice_values = [choice[0] for choice in field.choices]
 
             # Verify all ApiType values are in choices
@@ -27,8 +29,8 @@ class TestEnumsIntegration:
         from apps.market.models import OandaAccounts
 
         # Get choices from model field
-        field = OandaAccounts._meta.get_field("jurisdiction")
-        if field.choices:
+        field = cast(Any, OandaAccounts._meta.get_field("jurisdiction"))
+        if hasattr(field, "choices") and field.choices:
             choice_values = [choice[0] for choice in field.choices]
 
             # Verify Jurisdiction values are in choices

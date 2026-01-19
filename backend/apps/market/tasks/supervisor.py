@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 from logging import Logger, getLogger
-from typing import Any, cast
+from typing import Any
 
 from celery import shared_task
 from django.conf import settings
@@ -17,6 +17,19 @@ from apps.market.tasks.base import acquire_lock, current_task_id, lock_value, re
 logger: Logger = getLogger(name=__name__)
 
 
+@shared_task(bind=True, name="market.tasks.ensure_tick_pubsub_running")
+def ensure_tick_pubsub_running(self: Any) -> None:
+    """Ensure there is exactly one active publisher/subscriber pair.
+
+    If either side isn't running (lock missing), re-creates the task.
+    This task re-schedules itself periodically and is also triggered on:
+    - worker startup
+    - first LIVE OANDA account creation
+    """
+    runner = TickSupervisorRunner()
+    runner.run()
+
+
 class TickSupervisorRunner:
     """Runner for tick pub/sub supervisor task."""
 
@@ -24,15 +37,8 @@ class TickSupervisorRunner:
         """Initialize the supervisor runner."""
         self.task_service: CeleryTaskService | None = None
 
-    @shared_task(bind=True, name="market.tasks.ensure_tick_pubsub_running")
     def run(self) -> None:
-        """Ensure there is exactly one active publisher/subscriber pair.
-
-        If either side isn't running (lock missing), re-creates the task.
-        This task re-schedules itself periodically and is also triggered on:
-        - worker startup
-        - first LIVE OANDA account creation
-        """
+        """Execute the supervisor task."""
         # Import here to avoid circular dependency
 
         task_name = "market.tasks.ensure_tick_pubsub_running"
@@ -98,8 +104,10 @@ class TickSupervisorRunner:
             return
 
         # Self-schedule: keeps pub/sub alive even if tasks crash.
-        # Use self.run to avoid circular import
-        cast(Any, self.run.apply_async)(countdown=interval_seconds)
+        # Import the task function to schedule it
+        from apps.market.tasks import ensure_tick_pubsub_running
+
+        ensure_tick_pubsub_running.apply_async(countdown=interval_seconds)
 
     def _get_or_initialize_account(self, client: Any) -> OandaAccounts | None:
         """Get or initialize the OANDA account for tick streaming."""

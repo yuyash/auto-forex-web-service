@@ -20,6 +20,36 @@ from apps.trading.tasks.base import BaseTaskRunner
 logger: Logger = getLogger(name=__name__)
 
 
+@shared_task(bind=True, name="trading.tasks.run_trading_task")
+def run_trading_task(self: Any, task_id: int, execution_id: int | None = None) -> None:
+    """Run a live trading task using TradingExecutor."""
+    runner = TradingTaskRunner()
+    runner.run(task_id, execution_id)
+
+
+@shared_task(bind=True, name="trading.tasks.stop_trading_task")
+def stop_trading_task(self: Any, task_id: int, mode: str = "graceful") -> None:
+    """Request stop for a running trading task.
+
+    This handles complex cleanup operations like closing positions.
+    Backtest tasks use a simpler direct stop mechanism via
+    TaskLockManager.set_cancellation_flag().
+
+    Args:
+        task_id: ID of the trading task to stop
+        mode: Stop mode ('immediate', 'graceful', 'graceful_close')
+    """
+    task_name = "trading.tasks.run_trading_task"
+    instance_key = str(task_id)
+    CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
+        status=CeleryTaskStatus.Status.STOP_REQUESTED,
+        status_message=f"stop_requested mode={mode}",
+        last_heartbeat_at=dj_timezone.now(),
+    )
+
+    logger.info(f"Stop requested for trading task {task_id} (mode={mode})")
+
+
 class TradingTaskRunner(BaseTaskRunner):
     """Task runner for live trading tasks."""
 
@@ -48,9 +78,8 @@ class TradingTaskRunner(BaseTaskRunner):
             task=self.task,
         )
 
-    @shared_task(bind=True, name="trading.tasks.run_trading_task")
     def run(self, task_id: int, execution_id: int | None = None) -> None:
-        """Run a live trading task using TradingExecutor."""
+        """Execute the trading task."""
         # Initialize Celery task service
         self._initialize_task_service(
             task_name="trading.tasks.run_trading_task",
@@ -120,25 +149,3 @@ class TradingTaskRunner(BaseTaskRunner):
         ) as lifecycle:
             lifecycle.set_strategy_type(self.task.config.strategy_type)
             executor.execute()
-
-    @shared_task(bind=True, name="trading.tasks.stop_trading_task")
-    def stop(self, task_id: int, mode: str = "graceful") -> None:
-        """Request stop for a running trading task.
-
-        This handles complex cleanup operations like closing positions.
-        Backtest tasks use a simpler direct stop mechanism via
-        TaskLockManager.set_cancellation_flag().
-
-        Args:
-            task_id: ID of the trading task to stop
-            mode: Stop mode ('immediate', 'graceful', 'graceful_close')
-        """
-        task_name = "trading.tasks.run_trading_task"
-        instance_key = str(task_id)
-        CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
-            status=CeleryTaskStatus.Status.STOP_REQUESTED,
-            status_message=f"stop_requested mode={mode}",
-            last_heartbeat_at=dj_timezone.now(),
-        )
-
-        logger.info(f"Stop requested for trading task {task_id} (mode={mode})")

@@ -25,6 +25,13 @@ from apps.market.tasks.base import (
 logger: Logger = getLogger(name=__name__)
 
 
+@shared_task(bind=True, name="market.tasks.subscribe_ticks_to_db")
+def subscribe_ticks_to_db(self: Any) -> None:
+    """Subscribe to Redis pub/sub and persist tick messages into TickData."""
+    runner = TickSubscriberRunner()
+    runner.run()
+
+
 class TickSubscriberRunner:
     """Runner for tick subscriber task."""
 
@@ -35,9 +42,8 @@ class TickSubscriberRunner:
         self.buffer_max: int = 200
         self.flush_interval_seconds: int = 2
 
-    @shared_task(bind=True, name="market.tasks.subscribe_ticks_to_db")
     def run(self) -> None:
-        """Subscribe to Redis pub/sub and persist tick messages into TickData."""
+        """Execute the tick subscriber task."""
         task_name = "market.tasks.subscribe_ticks_to_db"
         instance_key = "default"
         self.task_service = CeleryTaskService(

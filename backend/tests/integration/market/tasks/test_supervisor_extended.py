@@ -46,7 +46,7 @@ class TestTickSupervisorRunnerExtendedIntegration:
         account = runner._get_or_initialize_account(mock_client)
 
         assert account is not None
-        assert account.id == live_account.id
+        assert account.pk == live_account.pk
         assert account.api_type == ApiType.LIVE
 
     @patch("apps.market.tasks.supervisor.redis_client")
@@ -60,7 +60,7 @@ class TestTickSupervisorRunnerExtendedIntegration:
         )
 
         mock_client = MagicMock()
-        mock_client.get.return_value = str(live_account.id)
+        mock_client.get.return_value = str(live_account.pk)
         mock_redis.return_value = mock_client
 
         runner = TickSupervisorRunner()
@@ -68,7 +68,7 @@ class TestTickSupervisorRunnerExtendedIntegration:
         account = runner._get_or_initialize_account(mock_client)
 
         assert account is not None
-        assert account.id == live_account.id
+        assert account.pk == live_account.pk
 
     @patch("apps.market.tasks.supervisor.redis_client")
     def test_ensure_tasks_running(self, mock_redis: Any) -> None:

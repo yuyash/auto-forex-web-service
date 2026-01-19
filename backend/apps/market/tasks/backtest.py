@@ -24,6 +24,26 @@ from apps.market.tasks.base import (
 logger: Logger = getLogger(name=__name__)
 
 
+@shared_task(bind=True, name="market.tasks.publish_ticks_for_backtest")
+def publish_ticks_for_backtest(
+    self: Any, instrument: str, start: str, end: str, request_id: str
+) -> None:
+    """Publish historical ticks from DB to Redis for a backtest run.
+
+    Each signal creates a new Celery task. This task streams TickData rows in
+    bounded chunks (doesn't load all ticks at once), publishes each tick to a
+    dedicated per-request Redis channel, emits an EOF marker, then exits.
+
+    Args:
+        instrument: Currency pair
+        start: Start time (ISO format)
+        end: End time (ISO format)
+        request_id: Unique request identifier
+    """
+    runner = BacktestTickPublisherRunner()
+    runner.run(instrument, start, end, request_id)
+
+
 class BacktestTickPublisherRunner:
     """Runner for backtest tick publisher task."""
 
@@ -31,13 +51,8 @@ class BacktestTickPublisherRunner:
         """Initialize the backtest publisher runner."""
         self.task_service: CeleryTaskService | None = None
 
-    @shared_task(bind=True, name="market.tasks.publish_ticks_for_backtest")
     def run(self, instrument: str, start: str, end: str, request_id: str) -> None:
-        """Publish historical ticks from DB to Redis for a backtest run.
-
-        Each signal creates a new Celery task. This task streams TickData rows in
-        bounded chunks (doesn't load all ticks at once), publishes each tick to a
-        dedicated per-request Redis channel, emits an EOF marker, then exits.
+        """Execute the backtest tick publishing task.
 
         Args:
             instrument: Currency pair

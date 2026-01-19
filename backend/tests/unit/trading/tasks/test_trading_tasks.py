@@ -107,6 +107,8 @@ class TestTradingTaskRunner(TestCase):
 
     def test_stop_updates_celery_task_status(self):
         """Test that stop() updates CeleryTaskStatus correctly."""
+        from apps.trading.tasks.trading import stop_trading_task
+
         # Create CeleryTaskStatus record
         task_name = "trading.tasks.run_trading_task"
         instance_key = str(self.task.pk)  # type: ignore[attr-defined]
@@ -117,8 +119,7 @@ class TestTradingTaskRunner(TestCase):
             status=CeleryTaskStatus.Status.RUNNING,
         )
 
-        runner = TradingTaskRunner()
-        runner.stop(
+        stop_trading_task(
             task_id=self.task.pk,  # type: ignore[attr-defined]
             mode="graceful",
         )
@@ -133,6 +134,8 @@ class TestTradingTaskRunner(TestCase):
 
     def test_stop_with_different_modes(self):
         """Test stop() with different stop modes."""
+        from apps.trading.tasks.trading import stop_trading_task
+
         task_name = "trading.tasks.run_trading_task"
         instance_key = str(self.task.pk)  # type: ignore[attr-defined]
 
@@ -149,8 +152,7 @@ class TestTradingTaskRunner(TestCase):
                 status=CeleryTaskStatus.Status.RUNNING,
             )
 
-            runner = TradingTaskRunner()
-            runner.stop(
+            stop_trading_task(
                 task_id=self.task.pk,  # type: ignore[attr-defined]
                 mode=mode,
             )
@@ -185,17 +187,17 @@ class TestTradingTaskRunner(TestCase):
         assert isinstance(task.config, StrategyConfigurations)
 
     def test_run_method_is_shared_task(self):
-        """Test that run() method is decorated as shared_task."""
-        runner = TradingTaskRunner()
+        """Test that run task function is a Celery shared task."""
+        from apps.trading.tasks import run_trading_task
 
-        # Verify the method has Celery task attributes
-        assert hasattr(runner.run, "delay")
-        assert hasattr(runner.run, "apply_async")
+        # Verify the task function has Celery task attributes
+        assert hasattr(run_trading_task, "delay")
+        assert hasattr(run_trading_task, "apply_async")
 
     def test_stop_method_is_shared_task(self):
-        """Test that stop() method is decorated as shared_task."""
-        runner = TradingTaskRunner()
+        """Test that stop task function is a Celery shared task."""
+        from apps.trading.tasks import stop_trading_task
 
-        # Verify the method has Celery task attributes
-        assert hasattr(runner.stop, "delay")
-        assert hasattr(runner.stop, "apply_async")
+        # Verify the task function has Celery task attributes
+        assert hasattr(stop_trading_task, "delay")
+        assert hasattr(stop_trading_task, "apply_async")
