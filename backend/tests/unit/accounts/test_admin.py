@@ -1,38 +1,44 @@
-"""Unit tests for accounts admin."""
+"""Unit tests for admin.py."""
 
-import pytest
-from django.contrib import admin
-from django.contrib.auth import get_user_model
-
-from apps.accounts.admin import UserAdmin
-
-User = get_user_model()
-
-
-@pytest.mark.django_db
-class TestUserAdmin:
-    """Test UserAdmin."""
-
-    def test_user_admin_registered(self):
-        """Test User is registered in admin."""
-        assert User in admin.site._registry
-        assert isinstance(admin.site._registry[User], UserAdmin)
-
-    def test_user_admin_list_display(self):
-        """Test list_display is configured."""
-        admin_instance = UserAdmin(User, admin.site)
-        assert hasattr(admin_instance, "list_display")
-        assert len(admin_instance.list_display) > 0
+from apps.accounts.admin import (
+    BlockedIPAdmin,
+    PublicAccountSettingsAdmin,
+    UserAdmin,
+    UserSessionAdmin,
+    UserSettingsAdmin,
+)
 
 
-@pytest.mark.django_db
-class TestAccountsAdminModels:
-    """Test other accounts models are registered in admin."""
+class TestAdminClasses:
+    """Unit tests for admin class configurations."""
 
-    def test_models_registered_in_admin(self):
-        """Test accounts models are registered."""
-        # Check if models are registered (may or may not be)
-        registered_models = admin.site._registry.keys()
+    def test_user_admin_list_display(self) -> None:
+        """Test UserAdmin list_display configuration."""
+        assert "email" in UserAdmin.list_display
+        assert "username" in UserAdmin.list_display
+        assert "is_locked" in UserAdmin.list_display
 
-        # At least User should be registered
-        assert User in registered_models
+    def test_user_settings_admin_list_display(self) -> None:
+        """Test UserSettingsAdmin list_display configuration."""
+        assert "user" in UserSettingsAdmin.list_display
+        assert "notification_enabled" in UserSettingsAdmin.list_display
+
+    def test_user_session_admin_list_display(self) -> None:
+        """Test UserSessionAdmin list_display configuration."""
+        assert "user" in UserSessionAdmin.list_display
+        assert "ip_address" in UserSessionAdmin.list_display
+        assert "is_active" in UserSessionAdmin.list_display
+
+    def test_blocked_ip_admin_list_display(self) -> None:
+        """Test BlockedIPAdmin list_display configuration."""
+        assert "ip_address" in BlockedIPAdmin.list_display
+        assert "is_permanent" in BlockedIPAdmin.list_display
+
+    def test_public_account_settings_admin_has_no_delete(self) -> None:
+        """Test PublicAccountSettingsAdmin prevents deletion."""
+        from django.contrib.admin import AdminSite
+
+        from apps.accounts.models import PublicAccountSettings
+
+        admin = PublicAccountSettingsAdmin(model=PublicAccountSettings, admin_site=AdminSite())
+        assert admin.has_delete_permission(request=None) is False

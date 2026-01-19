@@ -73,8 +73,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Custom security and logging middleware
-    "apps.accounts.middleware.HTTPAccessLoggingMiddleware",
-    "apps.accounts.middleware.SecurityMonitoringMiddleware",
+    "apps.accounts.middlewares.logging.HTTPAccessLoggingMiddleware",
+    "apps.accounts.middlewares.security.SecurityMonitoringMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -332,7 +332,7 @@ MARKET_BACKTEST_PUBLISH_BATCH_SIZE = int(os.getenv("MARKET_BACKTEST_PUBLISH_BATC
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "apps.accounts.authentication.JWTAuthentication",
+        "apps.accounts.auth.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [

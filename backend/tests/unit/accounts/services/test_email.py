@@ -1,28 +1,63 @@
-"""Unit tests for email service."""
+"""Unit tests for AccountEmailService (mocked dependencies)."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from apps.accounts.services.email import AccountEmailService
 
 
 class TestAccountEmailService:
-    """Test AccountEmailService class."""
+    """Unit tests for AccountEmailService."""
 
-    def test_email_service_exists(self):
-        """Test AccountEmailService class exists."""
-        assert AccountEmailService is not None
-
-    @patch("django.core.mail.send_mail")
-    def test_send_verification_email(self, mock_send_mail):
+    def test_send_verification_email(self) -> None:
         """Test sending verification email."""
-        mock_send_mail.return_value = 1
-
         service = AccountEmailService()
+        mock_user = MagicMock()
+        mock_user.email = "test@example.com"
+        mock_user.username = "testuser"
 
-        # Test that service has send method or similar
-        assert hasattr(service, "send_verification_email") or hasattr(service, "send_email")
+        with patch.object(service, "_send_email") as mock_send:
+            mock_send.return_value = True
 
-    def test_email_service_is_callable(self):
-        """Test AccountEmailService can be instantiated."""
+            result = service.send_verification_email(
+                user=mock_user,
+                verification_url="https://example.com/verify?token=abc",
+                sender=None,
+            )
+
+        assert result is True
+        mock_send.assert_called_once()
+
+    def test_send_verification_email_failure(self) -> None:
+        """Test handling verification email send failure."""
         service = AccountEmailService()
-        assert service is not None
+        mock_user = MagicMock()
+        mock_user.email = "test@example.com"
+
+        with patch.object(service, "_send_email") as mock_send:
+            mock_send.return_value = False
+
+            result = service.send_verification_email(
+                user=mock_user,
+                verification_url="https://example.com/verify?token=abc",
+                sender=None,
+            )
+
+        assert result is False
+
+    def test_send_welcome_message(self) -> None:
+        """Test sending welcome message."""
+        service = AccountEmailService()
+        mock_user = MagicMock()
+        mock_user.email = "test@example.com"
+        mock_user.username = "testuser"
+
+        with patch.object(service, "_send_email") as mock_send:
+            mock_send.return_value = True
+
+            result = service.send_welcome_message(
+                user=mock_user,
+                sender=None,
+            )
+
+        assert result is True
+        mock_send.assert_called_once()

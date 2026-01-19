@@ -40,13 +40,14 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/accounts/"
       }
     },
     "/api/accounts/auth/login": {
       "post": {
         "operationId": "accounts_auth_login_create",
-        "description": "Handle user login.\n\nArgs:\n    request: HTTP request with email and password\n\nReturns:\n    Response with JWT token or error message",
+        "description": "Handle user login.",
         "tags": [
           "accounts"
         ],
@@ -74,13 +75,14 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/accounts/auth/login"
       }
     },
     "/api/accounts/auth/logout": {
       "post": {
         "operationId": "accounts_auth_logout_create",
-        "description": "Handle user logout.\n\nArgs:\n    request: HTTP request with Authorization header containing JWT token\n\nReturns:\n    Response with success message or error",
+        "description": "Handle user logout.",
         "tags": [
           "accounts"
         ],
@@ -93,13 +95,14 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/accounts/auth/logout"
       }
     },
     "/api/accounts/auth/refresh": {
       "post": {
         "operationId": "accounts_auth_refresh_create",
-        "description": "Handle token refresh.\n\nArgs:\n    request: HTTP request with Authorization header containing JWT token\n\nReturns:\n    Response with new JWT token or error",
+        "description": "Handle token refresh.",
         "tags": [
           "accounts"
         ],
@@ -110,13 +113,14 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/accounts/auth/refresh"
       }
     },
     "/api/accounts/auth/register": {
       "post": {
         "operationId": "accounts_auth_register_create",
-        "description": "Handle user registration.\n\nArgs:\n    request: HTTP request with email, username, password, password_confirm\n\nReturns:\n    Response with user data or validation errors",
+        "description": "Handle user registration.",
         "tags": [
           "accounts"
         ],
@@ -144,13 +148,14 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/accounts/auth/register"
       }
     },
     "/api/accounts/auth/resend-verification": {
       "post": {
         "operationId": "accounts_auth_resend_verification_create",
-        "description": "Resend verification email.\n\nArgs:\n    request: HTTP request with email\n\nReturns:\n    Response with success or error message",
+        "description": "Resend verification email.",
         "tags": [
           "accounts"
         ],
@@ -161,13 +166,14 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/accounts/auth/resend-verification"
       }
     },
     "/api/accounts/auth/verify-email": {
       "post": {
         "operationId": "accounts_auth_verify_email_create",
-        "description": "Verify user email with token.\n\nArgs:\n    request: HTTP request with token\n\nReturns:\n    Response with success or error message",
+        "description": "Verify user email with token.",
         "tags": [
           "accounts"
         ],
@@ -178,13 +184,14 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/accounts/auth/verify-email"
       }
     },
     "/api/accounts/notifications": {
       "get": {
         "operationId": "accounts_notifications_retrieve",
-        "description": "List notifications for the authenticated user.",
+        "description": "Get list of notifications for the authenticated user.",
         "tags": [
           "accounts"
         ],
@@ -197,13 +204,14 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/accounts/notifications"
       }
     },
     "/api/accounts/notifications/{notification_id}/read": {
       "post": {
         "operationId": "accounts_notifications_read_create",
-        "description": "Mark a single notification as read for the authenticated user.",
+        "description": "Mark a notification as read.",
         "parameters": [
           {
             "in": "path",
@@ -226,13 +234,14 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/accounts/notifications/{notification_id}/read"
       }
     },
     "/api/accounts/notifications/read-all": {
       "post": {
         "operationId": "accounts_notifications_read_all_create",
-        "description": "Mark all unread notifications as read for the authenticated user.",
+        "description": "Mark all unread notifications as read.",
         "tags": [
           "accounts"
         ],
@@ -245,13 +254,14 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/accounts/notifications/read-all"
       }
     },
     "/api/accounts/settings/": {
       "get": {
         "operationId": "accounts_settings_retrieve",
-        "description": "Get user settings.\n\nArgs:\n    request: HTTP request\n\nReturns:\n    Response with user profile and settings",
+        "description": "Get user settings.",
         "tags": [
           "accounts"
         ],
@@ -264,11 +274,12 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/accounts/settings/"
       },
       "put": {
         "operationId": "accounts_settings_update",
-        "description": "Update user settings.\n\nArgs:\n    request: HTTP request with updated settings\n\nReturns:\n    Response with updated settings or validation errors",
+        "description": "Update user settings.",
         "tags": [
           "accounts"
         ],
@@ -281,13 +292,14 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/accounts/settings/"
       }
     },
     "/api/accounts/settings/public": {
       "get": {
         "operationId": "accounts_settings_public_retrieve",
-        "description": "Get public account settings.\n\nArgs:\n    request: HTTP request\n\nReturns:\n    Response with registration_enabled and login_enabled flags",
+        "description": "Get public account settings.",
         "tags": [
           "accounts"
         ],
@@ -301,14 +313,15 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/accounts/settings/public"
       }
     },
     "/api/health/": {
       "get": {
         "operationId": "health_check",
-        "description": "Check the health status of the API service. Returns database connectivity and overall system status.",
-        "summary": "/api/health",
+        "description": "Check the health status of the backend API service. Returns overall system status.",
+        "summary": "Get health check status.",
         "tags": [
           "health"
         ],
@@ -418,7 +431,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/market/accounts/"
       },
       "post": {
         "operationId": "market_accounts_create",
@@ -452,7 +466,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/market/accounts/"
       }
     },
     "/api/market/accounts/{account_id}/": {
@@ -488,7 +503,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/market/accounts/{account_id}/"
       },
       "put": {
         "operationId": "market_accounts_update",
@@ -532,7 +548,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/market/accounts/{account_id}/"
       },
       "delete": {
         "operationId": "market_accounts_destroy",
@@ -559,7 +576,8 @@
           "204": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/accounts/{account_id}/"
       }
     },
     "/api/market/candles/": {
@@ -578,7 +596,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/candles/"
       }
     },
     "/api/market/candles/granularities/": {
@@ -597,7 +616,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/candles/granularities/"
       }
     },
     "/api/market/health/oanda/": {
@@ -616,7 +636,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/health/oanda/"
       },
       "post": {
         "operationId": "market_health_oanda_create",
@@ -633,7 +654,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/health/oanda/"
       }
     },
     "/api/market/instruments/": {
@@ -652,7 +674,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/instruments/"
       }
     },
     "/api/market/instruments/{instrument}/": {
@@ -681,7 +704,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/instruments/{instrument}/"
       }
     },
     "/api/market/market/status/": {
@@ -700,7 +724,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/market/status/"
       }
     },
     "/api/market/orders/": {
@@ -719,7 +744,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/orders/"
       },
       "post": {
         "operationId": "market_orders_create",
@@ -736,7 +762,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/orders/"
       }
     },
     "/api/market/orders/{order_id}/": {
@@ -765,7 +792,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/orders/{order_id}/"
       },
       "delete": {
         "operationId": "market_orders_destroy",
@@ -792,7 +820,8 @@
           "204": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/orders/{order_id}/"
       }
     },
     "/api/market/positions/": {
@@ -811,7 +840,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/positions/"
       },
       "put": {
         "operationId": "market_positions_update",
@@ -828,7 +858,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/positions/"
       }
     },
     "/api/market/positions/{position_id}/": {
@@ -857,7 +888,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/positions/{position_id}/"
       },
       "patch": {
         "operationId": "market_positions_partial_update",
@@ -884,7 +916,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/market/positions/{position_id}/"
       }
     },
     "/api/trading/backtest-tasks/": {
@@ -939,7 +972,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/trading/backtest-tasks/"
       },
       "post": {
         "operationId": "trading_backtest_tasks_create",
@@ -972,7 +1006,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/trading/backtest-tasks/"
       }
     },
     "/api/trading/backtest-tasks/{task_id}/": {
@@ -1008,7 +1043,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/trading/backtest-tasks/{task_id}/"
       },
       "put": {
         "operationId": "trading_backtest_tasks_update",
@@ -1051,7 +1087,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/trading/backtest-tasks/{task_id}/"
       },
       "patch": {
         "operationId": "trading_backtest_tasks_partial_update",
@@ -1094,7 +1131,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/trading/backtest-tasks/{task_id}/"
       },
       "delete": {
         "operationId": "trading_backtest_tasks_destroy",
@@ -1121,7 +1159,8 @@
           "204": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/backtest-tasks/{task_id}/"
       }
     },
     "/api/trading/backtest-tasks/{task_id}/copy/": {
@@ -1150,7 +1189,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/backtest-tasks/{task_id}/copy/"
       }
     },
     "/api/trading/backtest-tasks/{task_id}/executions/": {
@@ -1179,7 +1219,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/backtest-tasks/{task_id}/executions/"
       }
     },
     "/api/trading/backtest-tasks/{task_id}/restart/": {
@@ -1208,7 +1249,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/backtest-tasks/{task_id}/restart/"
       }
     },
     "/api/trading/backtest-tasks/{task_id}/resume/": {
@@ -1237,7 +1279,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/backtest-tasks/{task_id}/resume/"
       }
     },
     "/api/trading/backtest-tasks/{task_id}/start/": {
@@ -1266,7 +1309,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/backtest-tasks/{task_id}/start/"
       }
     },
     "/api/trading/backtest-tasks/{task_id}/status/": {
@@ -1295,7 +1339,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/backtest-tasks/{task_id}/status/"
       }
     },
     "/api/trading/backtest-tasks/{task_id}/stop/": {
@@ -1324,7 +1369,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/backtest-tasks/{task_id}/stop/"
       }
     },
     "/api/trading/executions/{execution_id}/": {
@@ -2172,7 +2218,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/strategies/"
       }
     },
     "/api/trading/strategies/{strategy_id}/defaults/": {
@@ -2201,7 +2248,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/strategies/{strategy_id}/defaults/"
       }
     },
     "/api/trading/strategy-configs/": {
@@ -2220,7 +2268,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/strategy-configs/"
       },
       "post": {
         "operationId": "trading_strategy_configs_create",
@@ -2237,7 +2286,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/strategy-configs/"
       }
     },
     "/api/trading/strategy-configs/{config_id}/": {
@@ -2266,7 +2316,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/strategy-configs/{config_id}/"
       },
       "put": {
         "operationId": "trading_strategy_configs_update",
@@ -2293,7 +2344,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/strategy-configs/{config_id}/"
       },
       "delete": {
         "operationId": "trading_strategy_configs_destroy",
@@ -2320,7 +2372,8 @@
           "204": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/strategy-configs/{config_id}/"
       }
     },
     "/api/trading/trading-tasks/": {
@@ -2375,7 +2428,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/trading/trading-tasks/"
       },
       "post": {
         "operationId": "trading_trading_tasks_create",
@@ -2408,7 +2462,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/trading/trading-tasks/"
       }
     },
     "/api/trading/trading-tasks/{task_id}/": {
@@ -2444,7 +2499,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/trading/trading-tasks/{task_id}/"
       },
       "put": {
         "operationId": "trading_trading_tasks_update",
@@ -2487,7 +2543,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/trading/trading-tasks/{task_id}/"
       },
       "patch": {
         "operationId": "trading_trading_tasks_partial_update",
@@ -2530,7 +2587,8 @@
             },
             "description": ""
           }
-        }
+        },
+        "summary": "/api/trading/trading-tasks/{task_id}/"
       },
       "delete": {
         "operationId": "trading_trading_tasks_destroy",
@@ -2557,7 +2615,8 @@
           "204": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/trading-tasks/{task_id}/"
       }
     },
     "/api/trading/trading-tasks/{task_id}/copy/": {
@@ -2586,7 +2645,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/trading-tasks/{task_id}/copy/"
       }
     },
     "/api/trading/trading-tasks/{task_id}/executions/": {
@@ -2615,7 +2675,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/trading-tasks/{task_id}/executions/"
       }
     },
     "/api/trading/trading-tasks/{task_id}/restart/": {
@@ -2644,7 +2705,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/trading-tasks/{task_id}/restart/"
       }
     },
     "/api/trading/trading-tasks/{task_id}/resume/": {
@@ -2673,7 +2735,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/trading-tasks/{task_id}/resume/"
       }
     },
     "/api/trading/trading-tasks/{task_id}/start/": {
@@ -2702,7 +2765,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/trading-tasks/{task_id}/start/"
       }
     },
     "/api/trading/trading-tasks/{task_id}/status/": {
@@ -2731,7 +2795,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/trading-tasks/{task_id}/status/"
       }
     },
     "/api/trading/trading-tasks/{task_id}/stop/": {
@@ -2760,7 +2825,8 @@
           "200": {
             "description": "No response body"
           }
-        }
+        },
+        "summary": "/api/trading/trading-tasks/{task_id}/stop/"
       }
     }
   },
@@ -3762,7 +3828,7 @@
       },
       "UserLogin": {
         "type": "object",
-        "description": "Serializer for user login.\n\nNote: This is a read-only serializer used only for validation.\nIt does not implement create() or update() methods as it never persists data.",
+        "description": "Serializer for user login.",
         "properties": {
           "email": {
             "type": "string",
@@ -3776,7 +3842,7 @@
       },
       "UserLoginRequest": {
         "type": "object",
-        "description": "Serializer for user login.\n\nNote: This is a read-only serializer used only for validation.\nIt does not implement create() or update() methods as it never persists data.",
+        "description": "Serializer for user login.",
         "properties": {
           "email": {
             "type": "string",

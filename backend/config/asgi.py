@@ -21,9 +21,7 @@ django_asgi_app = get_asgi_application()
 
 # Import routing and JWT auth middleware after Django is initialized
 # pylint: disable=wrong-import-position
-from apps.accounts.middleware import (  # noqa: E402
-    jwt_auth_middleware_stack,
-)
+from apps.accounts.middlewares import jwt_auth_middleware_stack  # noqa: E402
 from config.routing import websocket_urlpatterns  # noqa: E402
 
 application = ProtocolTypeRouter(

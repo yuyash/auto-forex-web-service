@@ -1,140 +1,145 @@
-"""Unit tests for JWT service."""
+"""Unit tests for JWTService (mocked dependencies)."""
 
-from datetime import UTC, datetime, timedelta
-from unittest.mock import Mock
-
-import jwt
-import pytest
-from django.conf import settings
-from django.contrib.auth import get_user_model
+from unittest.mock import MagicMock, patch
 
 from apps.accounts.services.jwt import JWTService
 
-User = get_user_model()
-
 
 class TestJWTService:
-    """Test JWTService class."""
+    """Unit tests for JWTService."""
 
-    def test_generate_token(self):
-        """Test generating token."""
-        user = Mock(spec=User)
-        user.id = 1
-        user.email = "test@example.com"
-        user.username = "testuser"
-        user.is_staff = False
-
+    def test_generate_token(self) -> None:
+        """Test generating JWT token."""
         service = JWTService()
-        token = service.generate_token(user)
+        mock_user = MagicMock()
+        mock_user.id = 1
+        mock_user.email = "test@example.com"
 
-        assert isinstance(token, str)
-        assert len(token) > 0
+        with patch("apps.accounts.services.jwt.jwt.encode") as mock_encode:
+            mock_encode.return_value = "test_token"
 
-    def test_decode_token_valid(self):
+            token = service.generate_token(mock_user)
+
+        assert token == "test_token"
+        mock_encode.assert_called_once()
+
+    def test_decode_token_valid(self) -> None:
         """Test decoding valid token."""
-        user = Mock(spec=User)
-        user.id = 1
-        user.email = "test@example.com"
-        user.username = "testuser"
-        user.is_staff = False
-
         service = JWTService()
-        token = service.generate_token(user)
-        payload = service.decode_token(token)
 
-        assert payload is not None
-        assert payload["user_id"] == 1
-        assert payload["email"] == "test@example.com"
+        with patch("apps.accounts.services.jwt.jwt.decode") as mock_decode:
+            mock_decode.return_value = {"user_id": 1}
 
-    def test_decode_token_expired(self):
+            payload = service.decode_token("valid_token")
+
+        assert payload == {"user_id": 1}
+
+    def test_decode_token_expired(self) -> None:
         """Test decoding expired token."""
+        import jwt
+
         service = JWTService()
 
-        # Create an expired token
-        payload = {
-            "user_id": 1,
-            "email": "test@example.com",
-            "username": "testuser",
-            "is_staff": False,
-            "exp": int((datetime.now(UTC) - timedelta(hours=1)).timestamp()),
-            "iat": int((datetime.now(UTC) - timedelta(hours=2)).timestamp()),
-        }
-        token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-        if isinstance(token, bytes):
-            token = token.decode("utf-8")
+        with patch("apps.accounts.services.jwt.jwt.decode") as mock_decode:
+            mock_decode.side_effect = jwt.ExpiredSignatureError()
 
-        result = service.decode_token(token)
-        assert result is None
+            payload = service.decode_token("expired_token")
 
-    def test_decode_token_invalid(self):
+        assert payload is None
+
+    def test_decode_token_invalid(self) -> None:
         """Test decoding invalid token."""
-        service = JWTService()
-        result = service.decode_token("invalid_token")
-        assert result is None
+        import jwt
 
-    @pytest.mark.django_db
-    def test_get_user_from_token_valid(self):
+        service = JWTService()
+
+        with patch("apps.accounts.services.jwt.jwt.decode") as mock_decode:
+            mock_decode.side_effect = jwt.InvalidTokenError()
+
+            payload = service.decode_token("invalid_token")
+
+        assert payload is None
+
+    def test_get_user_from_token_valid(self) -> None:
         """Test getting user from valid token."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
-            username="testuser",
-            email="test@example.com",
-            password="testpass123",
-        )
-
         service = JWTService()
-        token = service.generate_token(user)
-        retrieved_user = service.get_user_from_token(token)
 
-        assert retrieved_user is not None
-        assert retrieved_user.id == user.id
-        assert retrieved_user.email == user.email
+        with patch.object(service, "decode_token") as mock_decode:
+            mock_decode.return_value = {"user_id": 1}
 
-    def test_get_user_from_token_invalid(self):
+            with patch("apps.accounts.services.jwt.User.objects.get") as mock_get:
+                mock_user = MagicMock()
+                mock_get.return_value = mock_user
+
+                user = service.get_user_from_token("valid_token")
+
+        assert user == mock_user
+
+    def test_get_user_from_token_invalid(self) -> None:
         """Test getting user from invalid token."""
         service = JWTService()
-        user = service.get_user_from_token("invalid_token")
+
+        with patch.object(service, "decode_token") as mock_decode:
+            mock_decode.return_value = None
+
+            user = service.get_user_from_token("invalid_token")
+
         assert user is None
 
-    @pytest.mark.django_db
-    def test_refresh_token_valid(self):
+    def test_refresh_token_valid(self) -> None:
         """Test refreshing valid token."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
-            username="testuser",
-            email="test@example.com",
-            password="testpass123",
-        )
-
         service = JWTService()
-        token = service.generate_token(user)
-        new_token = service.refresh_token(token)
 
-        assert new_token is not None
-        assert isinstance(new_token, str)
-        # Tokens will be different due to different timestamps
-        # Just verify new token is valid
-        payload = service.decode_token(new_token)
-        assert payload is not None
-        assert payload["user_id"] == user.id
+        mock_user = MagicMock()
+        mock_user.is_active = True
+        mock_user.is_locked = False
 
-    def test_refresh_token_invalid(self):
+        with patch.object(service, "get_user_from_token") as mock_get_user:
+            mock_get_user.return_value = mock_user
+
+            with patch.object(service, "generate_token") as mock_generate:
+                mock_generate.return_value = "new_token"
+
+                new_token = service.refresh_token("old_token")
+
+        assert new_token == "new_token"
+
+    def test_refresh_token_invalid(self) -> None:
         """Test refreshing invalid token."""
         service = JWTService()
-        new_token = service.refresh_token("invalid_token")
+
+        with patch.object(service, "get_user_from_token") as mock_get_user:
+            mock_get_user.return_value = None
+
+            new_token = service.refresh_token("invalid_token")
+
         assert new_token is None
 
-    @pytest.mark.django_db
-    def test_refresh_token_inactive_user(self):
+    def test_refresh_token_inactive_user(self) -> None:
         """Test refreshing token for inactive user."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
-            username="testuser",
-            email="test@example.com",
-            password="testpass123",
-        )
-        user.is_active = False
-        user.save()
-
         service = JWTService()
-        token = service.generate_token(user)
-        new_token = service.refresh_token(token)
+
+        mock_user = MagicMock()
+        mock_user.is_active = False
+
+        with patch.object(service, "get_user_from_token") as mock_get_user:
+            mock_get_user.return_value = mock_user
+
+            new_token = service.refresh_token("token")
+
+        assert new_token is None
+
+    def test_refresh_token_locked_user(self) -> None:
+        """Test refreshing token for locked user."""
+        service = JWTService()
+
+        mock_user = MagicMock()
+        mock_user.is_active = True
+        mock_user.is_locked = True
+
+        with patch.object(service, "get_user_from_token") as mock_get_user:
+            mock_get_user.return_value = mock_user
+
+            new_token = service.refresh_token("token")
 
         assert new_token is None

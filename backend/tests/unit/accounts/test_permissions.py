@@ -1,98 +1,114 @@
-"""Unit tests for accounts permissions."""
+"""Unit tests for permissions.py."""
 
-from unittest.mock import Mock
-
-import pytest
-from django.contrib.auth import get_user_model
-from rest_framework.request import Request
+from unittest.mock import MagicMock
 
 from apps.accounts.permissions import IsAdminOrReadOnly, IsAdminUser
 
-User = get_user_model()
 
+class TestIsAdminUser:
+    """Unit tests for IsAdminUser permission."""
 
-@pytest.mark.django_db
-class TestIsAdminUserPermission:
-    """Test IsAdminUser permission."""
-
-    def test_admin_user_has_permission(self):
-        """Test admin user has permission."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
-            username="admin",
-            email="admin@example.com",
-            password="testpass123",
-            is_staff=True,
-        )
-
+    def test_has_permission_admin_user(self) -> None:
+        """Test permission allows admin user."""
         permission = IsAdminUser()
-        request = Mock(spec=Request)
-        request.user = user
+        request = MagicMock()
+        request.user = MagicMock()
+        request.user.is_authenticated = True
+        request.user.is_active = True
+        request.user.is_staff = True
 
-        assert permission.has_permission(request, None) is True
-
-    def test_regular_user_no_permission(self):
-        """Test regular user has no permission."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
-            username="testuser",
-            email="test@example.com",
-            password="testpass123",
-        )
-
-        permission = IsAdminUser()
-        request = Mock(spec=Request)
-        request.user = user
-
-        assert permission.has_permission(request, None) is False
-
-
-@pytest.mark.django_db
-class TestIsAdminOrReadOnlyPermission:
-    """Test IsAdminOrReadOnly permission."""
-
-    def test_admin_user_has_write_permission(self):
-        """Test admin user has write permission."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
-            username="admin",
-            email="admin@example.com",
-            password="testpass123",
-            is_staff=True,
-        )
-
-        permission = IsAdminOrReadOnly()
-        request = Mock(spec=Request)
-        request.user = user
-        request.method = "POST"
-
-        assert permission.has_permission(request, None) is True
-
-    def test_regular_user_has_read_permission(self):
-        """Test regular user has read permission."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
-            username="testuser",
-            email="test@example.com",
-            password="testpass123",
-        )
-
-        permission = IsAdminOrReadOnly()
-        request = Mock(spec=Request)
-        request.user = user
-        request.method = "GET"
-
-        # Should allow read operations
         result = permission.has_permission(request, None)
-        assert result is True or result is False  # Depends on implementation
 
-    def test_regular_user_no_write_permission(self):
-        """Test regular user has no write permission."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
-            username="testuser",
-            email="test@example.com",
-            password="testpass123",
-        )
+        assert result is True
 
+    def test_has_permission_non_admin_user(self) -> None:
+        """Test permission denies non-admin user."""
+        permission = IsAdminUser()
+        request = MagicMock()
+        request.user = MagicMock()
+        request.user.is_authenticated = True
+        request.user.is_active = True
+        request.user.is_staff = False
+
+        result = permission.has_permission(request, None)
+
+        assert result is False
+
+    def test_has_permission_unauthenticated(self) -> None:
+        """Test permission denies unauthenticated user."""
+        permission = IsAdminUser()
+        request = MagicMock()
+        request.user = None
+
+        result = permission.has_permission(request, None)
+
+        assert result is False
+
+    def test_has_permission_inactive_user(self) -> None:
+        """Test permission denies inactive user."""
+        permission = IsAdminUser()
+        request = MagicMock()
+        request.user = MagicMock()
+        request.user.is_authenticated = True
+        request.user.is_active = False
+        request.user.is_staff = True
+
+        result = permission.has_permission(request, None)
+
+        assert result is False
+
+
+class TestIsAdminOrReadOnly:
+    """Unit tests for IsAdminOrReadOnly permission."""
+
+    def test_has_permission_read_only_authenticated(self) -> None:
+        """Test permission allows read-only for authenticated user."""
         permission = IsAdminOrReadOnly()
-        request = Mock(spec=Request)
-        request.user = user
-        request.method = "POST"
+        request = MagicMock()
+        request.method = "GET"
+        request.user = MagicMock()
+        request.user.is_authenticated = True
+        request.user.is_active = True
+        request.user.is_staff = False
 
-        assert permission.has_permission(request, None) is False
+        result = permission.has_permission(request, None)
+
+        assert result is True
+
+    def test_has_permission_write_admin(self) -> None:
+        """Test permission allows write for admin user."""
+        permission = IsAdminOrReadOnly()
+        request = MagicMock()
+        request.method = "POST"
+        request.user = MagicMock()
+        request.user.is_authenticated = True
+        request.user.is_active = True
+        request.user.is_staff = True
+
+        result = permission.has_permission(request, None)
+
+        assert result is True
+
+    def test_has_permission_write_non_admin(self) -> None:
+        """Test permission denies write for non-admin user."""
+        permission = IsAdminOrReadOnly()
+        request = MagicMock()
+        request.method = "POST"
+        request.user = MagicMock()
+        request.user.is_authenticated = True
+        request.user.is_active = True
+        request.user.is_staff = False
+
+        result = permission.has_permission(request, None)
+
+        assert result is False
+
+    def test_has_permission_unauthenticated(self) -> None:
+        """Test permission denies unauthenticated user."""
+        permission = IsAdminOrReadOnly()
+        request = MagicMock()
+        request.user = None
+
+        result = permission.has_permission(request, None)
+
+        assert result is False

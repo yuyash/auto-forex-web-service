@@ -1,43 +1,38 @@
-"""Unit tests for accounts signals."""
+"""Unit tests for signals.py."""
 
-import pytest
-from django.contrib.auth import get_user_model
+from unittest.mock import MagicMock, patch
 
-from apps.accounts.models import UserSettings
-
-User = get_user_model()
+from apps.accounts.signals import create_user_settings
 
 
-@pytest.mark.django_db
-class TestUserSignals:
-    """Test signals for User model."""
+class TestCreateUserSettingsSignal:
+    """Unit tests for create_user_settings signal handler."""
 
-    def test_user_settings_created_on_user_creation(self):
-        """Test UserSettings is created when user is created."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
-            username="testuser",
-            email="test@example.com",
-            password="testpass123",
-        )
+    def test_creates_settings_for_new_user(self) -> None:
+        """Test signal creates UserSettings for new user."""
+        mock_user = MagicMock()
+        mock_user.username = "testuser"
+        mock_user.email = "test@example.com"
+        mock_user.pk = 1
 
-        # UserSettings should be created automatically
-        assert hasattr(user, "settings")
-        assert isinstance(user.settings, UserSettings)
+        with patch("apps.accounts.signals.UserSettings.objects.create") as mock_create:
+            create_user_settings(
+                sender=MagicMock(),
+                instance=mock_user,
+                created=True,
+            )
 
-    def test_user_settings_not_duplicated(self):
-        """Test UserSettings is not duplicated on user save."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
-            username="testuser",
-            email="test@example.com",
-            password="testpass123",
-        )
+        mock_create.assert_called_once_with(user=mock_user)
 
-        settings_id = user.settings.id
+    def test_does_not_create_settings_for_existing_user(self) -> None:
+        """Test signal does not create UserSettings for existing user."""
+        mock_user = MagicMock()
 
-        # Save user again
-        user.first_name = "Updated"
-        user.save()
+        with patch("apps.accounts.signals.UserSettings.objects.create") as mock_create:
+            create_user_settings(
+                sender=MagicMock(),
+                instance=mock_user,
+                created=False,
+            )
 
-        # Settings should still be the same instance
-        user.refresh_from_db()  # type: ignore[attr-defined]
-        assert user.settings.id == settings_id
+        mock_create.assert_not_called()
