@@ -73,9 +73,13 @@ class SecurityEventService:
         """
         try:
             AccountSecurityEvent.objects.create(**event.to_dict())
-        except Exception:  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
             # Never break request handling due to logging failures
-            pass
+            # Log the error but continue processing
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning("Failed to log security event: %s", exc)
 
     def log_login_success(
         self,

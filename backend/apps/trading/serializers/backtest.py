@@ -118,7 +118,6 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         ]
         # Make fields optional for partial updates (PATCH)
         extra_kwargs = {
-            "config": {"required": False},
             "name": {"required": False},
             "data_source": {"required": False},
             "start_time": {"required": False},
@@ -183,10 +182,12 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
         # Validate configuration parameters
         config = attrs.get("config")
-        if config:
-            is_valid, error_message = config.validate_parameters()
-            if not is_valid:
-                raise serializers.ValidationError({"config": error_message})
+        if not config:
+            raise serializers.ValidationError({"config": "Strategy configuration is required"})
+
+        is_valid, error_message = config.validate_parameters()
+        if not is_valid:
+            raise serializers.ValidationError({"config": error_message})
 
         # Validate instrument is provided
         instrument = attrs.get("instrument")
@@ -197,6 +198,11 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict) -> BacktestTasks:
         """Create backtest task with user from context."""
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error(f"Creating backtest task with data: {validated_data}")
+
         user = self.context["request"].user
         validated_data["user"] = user
         return BacktestTasks.objects.create(**validated_data)

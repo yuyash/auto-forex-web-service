@@ -294,19 +294,37 @@ class ExecutionLifecycle:
             self.execution.status = self.success_status
             self.execution.completed_at = dj_timezone.now()
             logger.info(f"About to save execution {self.execution.pk}")
-            self.execution.save(update_fields=["status", "completed_at", "updated_at"])
+            self.execution.save(update_fields=["status", "completed_at"])
             logger.info(f"Execution {self.execution.pk} status updated to {self.success_status}")
         except Exception as e:
             logger.exception(f"Failed to update execution status: {e}")
             raise
 
         try:
-            # Mark task as completed
-            logger.info(f"About to update task {self.task.pk} status to {self.success_status}")
-            self.task.status = self.success_status
-            logger.info(f"About to save task {self.task.pk}")
-            self.task.save(update_fields=["status", "updated_at"])
-            logger.info(f"Task {self.task.pk} status updated to {self.success_status}")
+            # Mark task status based on latest execution
+            # Only update task to completed if this is the latest execution
+            logger.info(f"About to update task {self.task.pk} status")
+
+            # Get the latest execution for this task
+            from apps.trading.models import Executions
+
+            latest_execution = (
+                Executions.objects.filter(task_type=self.execution.task_type, task_id=self.task.pk)
+                .order_by("-execution_number")
+                .first()
+            )
+
+            # Only update task status if this is the latest execution
+            if latest_execution and latest_execution.pk == self.execution.pk:
+                self.task.status = self.success_status
+                logger.info(f"About to save task {self.task.pk} (latest execution)")
+                self.task.save(update_fields=["status", "updated_at"])
+                logger.info(f"Task {self.task.pk} status updated to {self.success_status}")
+            else:
+                logger.info(
+                    f"Skipping task status update - this is not the latest execution "
+                    f"(current: {self.execution.pk}, latest: {latest_execution.pk if latest_execution else None})"
+                )
         except Exception as e:
             logger.exception(f"Failed to update task status: {e}")
             raise
@@ -368,9 +386,24 @@ class ExecutionLifecycle:
         # Mark execution as failed
         self.execution.mark_failed(exc)
 
-        # Mark task as failed
-        self.task.status = self.failure_status
-        self.task.save(update_fields=["status", "updated_at"])
+        # Mark task as failed only if this is the latest execution
+        from apps.trading.models import Executions
+
+        latest_execution = (
+            Executions.objects.filter(task_type=self.execution.task_type, task_id=self.task.pk)
+            .order_by("-execution_number")
+            .first()
+        )
+
+        if latest_execution and latest_execution.pk == self.execution.pk:
+            self.task.status = self.failure_status
+            self.task.save(update_fields=["status", "updated_at"])
+            logger.info(f"Task {self.task.pk} status updated to {self.failure_status}")
+        else:
+            logger.info(
+                f"Skipping task status update - this is not the latest execution "
+                f"(current: {self.execution.pk}, latest: {latest_execution.pk if latest_execution else None})"
+            )
 
         # Mark Celery task as stopped
         from apps.trading.models import CeleryTaskStatus

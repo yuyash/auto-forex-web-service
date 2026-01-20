@@ -21,11 +21,9 @@ import { TradingTaskChart } from '../TradingTaskChart';
 import { tradingTasksApi } from '../../../services/api/tradingTasks';
 import type { TradingTask } from '../../../types/tradingTask';
 import { TaskStatus } from '../../../types/common';
-import { useTradingResults } from '../../../hooks/useTaskResults';
 import type {
   BacktestStrategyEvent,
   EquityPoint,
-  ExecutionMetricsCheckpoint,
   Trade,
 } from '../../../types/execution';
 import {

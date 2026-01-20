@@ -1,199 +1,252 @@
-# Task-Based Strategy Configuration API Layer
+# API Service Layer
 
-This directory contains the API service layer and React hooks for the task-based strategy configuration feature.
+This directory contains the API service layer for the Auto Forex trading application, now using the generated OpenAPI client for type-safe API calls.
 
 ## Overview
 
-The task-based architecture separates strategy configuration from execution, allowing reusable configurations to be shared across multiple backtesting and live trading tasks.
+The API layer has been refactored to use a generated OpenAPI client (from `openapi-typescript-codegen`) with execution-centric endpoints. This provides:
+
+- **Type Safety**: All API calls are fully typed based on the OpenAPI specification
+- **Consistency**: Standardized error handling and retry logic
+- **Execution-Centric**: Data is accessed through execution endpoints rather than task-specific endpoints
+- **Maintainability**: API client is auto-generated from the backend OpenAPI spec
 
 ## Structure
 
-### Types (`src/types/`)
+### Generated Client (`src/api/generated/`)
 
-- **common.ts** - Common enums and types (TaskStatus, TaskType, DataSource, PaginatedResponse)
-- **configuration.ts** - Strategy configuration types
-- **backtestTask.ts** - Backtest task types
-- **tradingTask.ts** - Trading task types
-- **execution.ts** - Task execution and metrics types
+- **services/** - Auto-generated service classes (ExecutionsService, TradingService, etc.)
+- **models/** - Auto-generated TypeScript types from OpenAPI schemas
+- **core/** - Core client functionality (request handling, error types)
 
-### API Services (`src/services/api/`)
+### API Wrappers (`src/services/api/`)
 
-- **client.ts** - Base API client with authentication and error handling
+- **client.ts** - Legacy API client (being phased out)
+- **executionApi.ts** - Execution-based endpoints (status, logs, events, trades, equity, metrics)
+- **backtestTasks.ts** - Backtest task operations (CRUD + lifecycle control)
+- **tradingTasks.ts** - Trading task operations (CRUD + lifecycle control)
 - **configurations.ts** - Strategy configuration CRUD operations
-- **backtestTasks.ts** - Backtest task operations (CRUD + lifecycle)
-- **tradingTasks.ts** - Trading task operations (CRUD + lifecycle)
+- **accounts.ts** - OANDA account operations
+- **strategies.ts** - Strategy listing and defaults
 
-### Data Fetching Hooks (`src/hooks/`)
+## Key Changes from Previous Architecture
 
-- **useConfigurations.ts** - Fetch configurations and related tasks
-- **useBacktestTasks.ts** - Fetch backtest tasks with polling support
-- **useTradingTasks.ts** - Fetch trading tasks with polling support
-- **useTaskExecutions.ts** - Fetch execution history
+### Execution-Based Data Access
 
-### Mutation Hooks (`src/hooks/`)
+**Before**: Data was accessed through task-specific endpoints
 
-- **useConfigurationMutations.ts** - Create, update, delete configurations
-- **useBacktestTaskMutations.ts** - Backtest task lifecycle (start, stop, resume, restart, copy)
-- **useTradingTaskMutations.ts** - Trading task lifecycle (start, stop, resume, restart, copy)
+```typescript
+// Old approach - task-specific endpoints
+GET /api/backtest-tasks/{task_id}/logs/
+GET /api/backtest-tasks/{task_id}/equity-curve/
+GET /api/backtest-tasks/{task_id}/strategy-events/
+```
+
+**After**: Data is accessed through execution endpoints
+
+```typescript
+// New approach - execution-based endpoints
+GET /api/executions/{execution_id}/logs/
+GET /api/executions/{execution_id}/equity/
+GET /api/executions/{execution_id}/events/
+```
+
+### Task Control Returns Execution ID
+
+All task control endpoints (start, resume, restart) now return an `execution_id`:
+
+```typescript
+const response = await backtestTasksApi.start(taskId);
+// response includes: { execution_id: number, status: string, message: string }
+```
+
+### Status Endpoints Include Execution ID
+
+Task status endpoints include the current `execution_id` when running:
+
+```typescript
+const status = await backtestTasksApi.getStatus(taskId);
+// status includes: { execution_id: number, status: 'running', ... }
+```
 
 ## Usage Examples
 
-### Fetching Configurations
+### Starting a Task and Accessing Execution Data
 
 ```typescript
-import { useConfigurations } from '../hooks/useConfigurations';
+import { backtestTasksApi, executionApi } from '../services/api';
 
-function ConfigurationsList() {
-  const { data, isLoading, error, refetch } = useConfigurations({
-    page: 1,
-    page_size: 20,
-    strategy_type: 'ma_crossover',
-  });
+// Start a backtest task
+const startResponse = await backtestTasksApi.start(taskId);
+const executionId = startResponse.execution_id;
 
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
-
-  return (
-    <div>
-      {data?.results.map((config) => (
-        <div key={config.id}>{config.name}</div>
-      ))}
-    </div>
-  );
-}
+// Access execution data
+const status = await executionApi.getStatus(executionId);
+const logs = await executionApi.getLogs(executionId, { limit: 100 });
+const events = await executionApi.getEvents(executionId);
+const trades = await executionApi.getTrades(executionId);
+const equity = await executionApi.getEquity(executionId, { granularity: 60 });
+const metrics = await executionApi.getMetrics(executionId);
 ```
 
-### Creating a Configuration
+### Granular Equity Curve
+
+The equity endpoint supports configurable time granularity for binning:
 
 ```typescript
-import { useCreateConfiguration } from '../hooks/useConfigurationMutations';
+// Get equity curve with 5-minute bins
+const equity = await executionApi.getEquity(executionId, {
+  granularity: 300, // seconds
+  startTime: '2024-01-01T00:00:00Z',
+  endTime: '2024-01-02T00:00:00Z',
+});
 
-function CreateConfigForm() {
-  const { mutate, isLoading, error } = useCreateConfiguration({
-    onSuccess: (data) => {
-      console.log('Configuration created:', data);
-    },
-    onError: (error) => {
-      console.error('Failed to create:', error);
-    },
-  });
-
-  const handleSubmit = async (formData) => {
-    await mutate({
-      name: formData.name,
-      strategy_type: 'ma_crossover',
-      parameters: {
-        fast_period: 50,
-        slow_period: 200,
-      },
-    });
-  };
-
-  return <form onSubmit={handleSubmit}>...</form>;
-}
+// Response includes statistical aggregations per bin:
+// - realized_pnl_min/max/avg/median
+// - unrealized_pnl_min/max/avg/median
+// - tick_ask/bid/mid_min/max/avg/median
+// - trade_count
 ```
 
-### Starting a Backtest Task
+### Incremental Data Fetching
+
+Events and trades support incremental fetching with `sinceSequence`:
 
 ```typescript
-import { useStartBacktestTask } from '../hooks/useBacktestTaskMutations';
+// Initial fetch
+const events = await executionApi.getEvents(executionId);
 
-function BacktestTaskCard({ taskId }) {
-  const { mutate: startTask, isLoading } = useStartBacktestTask({
-    onSuccess: (data) => {
-      console.log('Task started, execution ID:', data.execution_id);
-    },
-  });
-
-  return (
-    <button onClick={() => startTask(taskId)} disabled={isLoading}>
-      {isLoading ? 'Starting...' : 'Start Task'}
-    </button>
-  );
-}
+// Later, fetch only new events
+const newEvents = await executionApi.getEvents(executionId, {
+  sinceSequence: lastSequence,
+});
 ```
 
-### Polling Running Tasks
+### Task Lifecycle Control
 
 ```typescript
-import { useBacktestTaskPolling } from '../hooks/useBacktestTasks';
-import { TaskStatus } from '../types';
+import { backtestTasksApi } from '../services/api';
 
-function RunningTaskMonitor({ taskId }) {
-  const { data, isLoading } = useBacktestTaskPolling(
-    taskId,
-    true, // enabled
-    10000 // poll every 10 seconds
-  );
+// Start a task
+const startResp = await backtestTasksApi.start(taskId);
+console.log('Execution ID:', startResp.execution_id);
 
-  const isRunning = data?.status === TaskStatus.RUNNING;
+// Stop a task
+await backtestTasksApi.stop(taskId);
 
-  return (
-    <div>
-      <div>Status: {data?.status}</div>
-      {data?.latest_execution && (
-        <div>Progress: {data.latest_execution.progress}%</div>
-      )}
-    </div>
-  );
-}
+// Resume a paused task
+const resumeResp = await backtestTasksApi.resume(taskId);
+console.log('Resumed execution ID:', resumeResp.execution_id);
+
+// Restart a task (closes positions, reinitializes strategy)
+const restartResp = await backtestTasksApi.restart(taskId);
+console.log('New execution ID:', restartResp.execution_id);
 ```
 
 ## API Endpoints
 
-### Strategy Configurations
+### Execution Endpoints (New)
 
-- `GET /api/strategy-configs/` - List configurations
-- `POST /api/strategy-configs/` - Create configuration
-- `GET /api/strategy-configs/{id}/` - Get configuration
-- `PUT /api/strategy-configs/{id}/` - Update configuration
-- `DELETE /api/strategy-configs/{id}/` - Delete configuration
-- `GET /api/strategy-configs/{id}/tasks/` - Get tasks using config
+- `GET /api/executions/{id}/` - Get execution details
+- `GET /api/executions/{id}/status/` - Get execution status
+- `GET /api/executions/{id}/logs/` - Get execution logs (with filtering)
+- `GET /api/executions/{id}/events/` - Get strategy events (with incremental fetch)
+- `GET /api/executions/{id}/trades/` - Get trade logs (with incremental fetch)
+- `GET /api/executions/{id}/equity/` - Get equity curve (with granularity binning)
+- `GET /api/executions/{id}/metrics/` - Get metrics (with granularity binning)
+- `GET /api/executions/{id}/metrics/latest/` - Get latest metrics snapshot
 
-### Backtest Tasks
+### Backtest Task Endpoints
 
-- `GET /api/backtest-tasks/` - List backtest tasks
-- `POST /api/backtest-tasks/` - Create backtest task
-- `GET /api/backtest-tasks/{id}/` - Get backtest task
-- `PUT /api/backtest-tasks/{id}/` - Update backtest task
-- `DELETE /api/backtest-tasks/{id}/` - Delete backtest task
-- `POST /api/backtest-tasks/{id}/copy/` - Copy task
-- `POST /api/backtest-tasks/{id}/start/` - Start execution
-- `POST /api/backtest-tasks/{id}/stop/` - Stop execution (state is persisted)
-- `POST /api/backtest-tasks/{id}/resume/` - Resume execution from persisted state
-- `POST /api/backtest-tasks/{id}/restart/` - Restart from beginning (clears state)
-- `GET /api/backtest-tasks/{id}/executions/` - Get execution history
+- `GET /api/trading/backtest-tasks/` - List backtest tasks
+- `POST /api/trading/backtest-tasks/` - Create backtest task
+- `GET /api/trading/backtest-tasks/{id}/` - Get backtest task
+- `PUT /api/trading/backtest-tasks/{id}/` - Update backtest task
+- `PATCH /api/trading/backtest-tasks/{id}/` - Partially update backtest task
+- `DELETE /api/trading/backtest-tasks/{id}/` - Delete backtest task
+- `POST /api/trading/backtest-tasks/{id}/copy/` - Copy task
+- `POST /api/trading/backtest-tasks/{id}/start/` - Start execution (returns execution_id)
+- `POST /api/trading/backtest-tasks/{id}/stop/` - Stop execution
+- `POST /api/trading/backtest-tasks/{id}/resume/` - Resume execution (returns execution_id)
+- `POST /api/trading/backtest-tasks/{id}/restart/` - Restart execution (returns execution_id)
+- `GET /api/trading/backtest-tasks/{id}/status/` - Get status (includes execution_id when running)
+- `GET /api/trading/backtest-tasks/{id}/executions/` - Get execution history
 
-### Trading Tasks
+### Trading Task Endpoints
 
-- `GET /api/trading-tasks/` - List trading tasks
-- `POST /api/trading-tasks/` - Create trading task
-- `GET /api/trading-tasks/{id}/` - Get trading task
-- `PUT /api/trading-tasks/{id}/` - Update trading task
-- `DELETE /api/trading-tasks/{id}/` - Delete trading task
-- `POST /api/trading-tasks/{id}/copy/` - Copy task
-- `POST /api/trading-tasks/{id}/start/` - Start execution
-- `POST /api/trading-tasks/{id}/stop/` - Stop execution (state is persisted)
-- `POST /api/trading-tasks/{id}/resume/` - Resume execution from persisted state
-- `POST /api/trading-tasks/{id}/restart/` - Restart from beginning (clears state)
-- `GET /api/trading-tasks/{id}/executions/` - Get execution history
+- `GET /api/trading/trading-tasks/` - List trading tasks
+- `POST /api/trading/trading-tasks/` - Create trading task
+- `GET /api/trading/trading-tasks/{id}/` - Get trading task
+- `PUT /api/trading/trading-tasks/{id}/` - Update trading task
+- `PATCH /api/trading/trading-tasks/{id}/` - Partially update trading task
+- `DELETE /api/trading/trading-tasks/{id}/` - Delete trading task
+- `POST /api/trading/trading-tasks/{id}/copy/` - Copy task
+- `POST /api/trading/trading-tasks/{id}/start/` - Start execution (returns execution_id)
+- `POST /api/trading/trading-tasks/{id}/stop/` - Stop execution
+- `POST /api/trading/trading-tasks/{id}/resume/` - Resume execution (returns execution_id)
+- `POST /api/trading/trading-tasks/{id}/restart/` - Restart execution (returns execution_id)
+- `GET /api/trading/trading-tasks/{id}/status/` - Get status (includes execution_id when running)
+- `GET /api/trading/trading-tasks/{id}/executions/` - Get execution history
 
-## Authentication
+### Strategy Configuration Endpoints
 
-All API requests automatically include the Bearer token from localStorage. The token is managed by the AuthContext.
+- `GET /api/trading/strategy-configs/` - List configurations
+- `POST /api/trading/strategy-configs/` - Create configuration
+- `GET /api/trading/strategy-configs/{id}/` - Get configuration
+- `PUT /api/trading/strategy-configs/{id}/` - Update configuration
+- `DELETE /api/trading/strategy-configs/{id}/` - Delete configuration
 
 ## Error Handling
 
-The API client provides consistent error handling:
+The API client provides consistent error handling through the `withRetry` wrapper:
 
-- Network errors are caught and formatted
-- HTTP errors include status code and response data
-- Mutation hooks support onSuccess and onError callbacks
-- All hooks expose error state for UI display
+- Automatic retry for transient failures (network errors, 5xx errors, rate limits)
+- Exponential backoff for retries
+- Transformed error objects with consistent structure
+- Type-safe error responses
 
-## Future Enhancements
+```typescript
+import { withRetry, transformApiError } from '../api/client';
 
-- Add React Query for better caching and state management
-- Add optimistic updates for mutations
-- Add WebSocket support for real-time updates
-- Add request cancellation for long-running operations
+try {
+  const data = await withRetry(() => ExecutionsService.getExecutionStatus(id));
+} catch (error) {
+  const transformedError = transformApiError(error);
+  console.error(transformedError.message);
+}
+```
+
+## Regenerating the API Client
+
+When the backend OpenAPI spec changes, regenerate the client:
+
+```bash
+cd frontend
+npm run generate:api
+```
+
+This reads `backend/openapi.yaml` and generates TypeScript client code in `frontend/src/api/generated/`.
+
+## Migration Notes
+
+### Removed Endpoints
+
+The following task-specific data endpoints have been removed:
+
+- `GET /api/backtest-tasks/{id}/logs/` → Use `GET /api/executions/{execution_id}/logs/`
+- `GET /api/backtest-tasks/{id}/export/` → Removed (no replacement)
+- `GET /api/backtest-tasks/{id}/results/` → Removed (no replacement)
+- `GET /api/backtest-tasks/{id}/equity-curve/` → Use `GET /api/executions/{execution_id}/equity/`
+- `GET /api/backtest-tasks/{id}/strategy-events/` → Use `GET /api/executions/{execution_id}/events/`
+- `GET /api/backtest-tasks/{id}/trade-logs/` → Use `GET /api/executions/{execution_id}/trades/`
+- `GET /api/backtest-tasks/{id}/metrics-checkpoint/` → Use `GET /api/executions/{execution_id}/metrics/latest/`
+
+Same removals apply to trading task endpoints.
+
+### Components Need Updates
+
+Components that previously used task-specific endpoints need to:
+
+1. Get the `execution_id` from task status or start/resume/restart responses
+2. Use execution-based endpoints for data access
+3. Handle the new response formats (especially equity curve with statistical bins)

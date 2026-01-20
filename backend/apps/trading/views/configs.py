@@ -2,7 +2,6 @@
 
 from django.db import models
 from rest_framework import status
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -14,21 +13,14 @@ from apps.trading.serializers import (
     StrategyConfigDetailSerializer,
     StrategyConfigListSerializer,
 )
-
-
-class StrategyConfigPagination(PageNumberPagination):
-    """Pagination class for strategy configurations."""
-
-    page_size = 20
-    page_size_query_param = "page_size"
-    max_page_size = 100
+from apps.trading.views._helpers import TaskExecutionPagination
 
 
 class StrategyConfigView(APIView):
     """List and create strategy configurations."""
 
     permission_classes = [IsAuthenticated]
-    pagination_class = StrategyConfigPagination
+    pagination_class = TaskExecutionPagination
 
     def get(self, request: Request) -> Response:
         from apps.trading.models import StrategyConfigurations

@@ -1,11 +1,5 @@
 import type { TaskStatus, TaskType } from './common';
-import type {
-  BacktestStrategyEvent,
-  EquityPoint,
-  ExecutionMetrics,
-  ExecutionMetricsCheckpoint,
-  Trade,
-} from './execution';
+import type { ExecutionMetrics } from './execution';
 
 export interface TaskResultsExecutionSummary {
   id: number;
@@ -34,46 +28,4 @@ export interface TaskResults {
 
   has_metrics: boolean;
   metrics?: ExecutionMetrics | null;
-}
-
-export interface TaskEquityCurveResponse {
-  task_id: number;
-  task_type: TaskType | 'trading' | 'backtest';
-  execution_id?: number | null;
-  has_metrics: boolean;
-  equity_curve: EquityPoint[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-  equity_curve_granularity_seconds?: number | null;
-}
-
-export interface TaskStrategyEventsResponse {
-  task_id: number;
-  task_type: TaskType | 'trading' | 'backtest';
-  execution_id?: number | null;
-  has_metrics: boolean;
-  strategy_events: BacktestStrategyEvent[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-}
-
-export interface TaskTradeLogsResponse {
-  task_id: number;
-  task_type: TaskType | 'trading' | 'backtest';
-  execution_id?: number | null;
-  has_metrics: boolean;
-  trade_logs: Trade[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-}
-
-export interface TaskMetricsCheckpointResponse {
-  task_id: number;
-  task_type: TaskType | 'trading' | 'backtest';
-  execution_id?: number | null;
-  has_checkpoint: boolean;
-  checkpoint: ExecutionMetricsCheckpoint | null;
 }

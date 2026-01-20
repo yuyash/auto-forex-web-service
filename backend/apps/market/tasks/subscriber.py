@@ -150,8 +150,11 @@ class TickSubscriberRunner:
                     try:
                         if pubsub is not None:
                             pubsub.close()
-                    except Exception:  # pylint: disable=broad-exception-caught
-                        pass
+                    except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+                        import logging
+
+                        logger_local = logging.getLogger(__name__)
+                        logger_local.debug("Failed to close pubsub on error: %s", exc)
                     pubsub = None
 
                     time.sleep(5)
@@ -159,8 +162,11 @@ class TickSubscriberRunner:
                 if pubsub is not None:
                     try:
                         pubsub.close()
-                    except Exception:  # pylint: disable=broad-exception-caught
-                        pass
+                    except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+                        import logging
+
+                        logger_local = logging.getLogger(__name__)
+                        logger_local.debug("Failed to close pubsub: %s", exc)
                     pubsub = None
 
         finally:
@@ -218,28 +224,36 @@ class TickSubscriberRunner:
                     status_message="flushed",
                     meta_update={"last_flush": time.monotonic()},
                 )
-        except Exception:  # pylint: disable=broad-exception-caught
-            pass
+        except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+            # Log flush failure but don't raise
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning("Failed to flush buffer: %s", exc)
 
     def _cleanup_and_stop(self, client: Any, lock_key: str, pubsub: Any, message: str) -> None:
         """Cleanup resources and mark task as stopped."""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
         # Flush any buffered ticks best-effort.
         self._flush_buffer()
 
         try:
             if pubsub is not None:
                 pubsub.close()
-        except Exception:  # pylint: disable=broad-exception-caught
-            pass
+        except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+            logger.debug("Failed to close pubsub: %s", exc)
 
         try:
             client.delete(lock_key)
-        except Exception:  # pylint: disable=broad-exception-caught
-            pass
+        except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+            logger.debug("Failed to delete lock key: %s", exc)
         try:
             client.close()
-        except Exception:  # pylint: disable=broad-exception-caught
-            pass
+        except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+            logger.debug("Failed to close Redis client: %s", exc)
 
         if self.task_service:
             self.task_service.mark_stopped(

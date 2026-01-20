@@ -207,7 +207,7 @@ class User(AbstractUser):
                 return False
 
         self.email_verified = True
-        self.email_verification_token = ""
+        self.email_verification_token = ""  # nosec B105 - Clearing token, not setting password
         self.email_verification_sent_at = None
         self.save(
             update_fields=[

@@ -1,7 +1,7 @@
-// Task Polling Service - HTTP polling for task status, details, and logs
+// Task Polling Service - HTTP polling for task status and details
 
 import { apiClient } from '../api/client';
-import type { BacktestTask, TradingTask, ExecutionLog } from '../../types';
+import type { BacktestTask, TradingTask } from '../../types';
 import type { ExecutionSummary } from '../../types/execution';
 import { TaskStatus } from '../../types/common';
 
@@ -23,17 +23,9 @@ export interface TaskDetailsResponse {
   current_execution: ExecutionSummary | null;
 }
 
-export interface TaskLogsResponse {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: ExecutionLog[];
-}
-
 export interface PollingCallbacks {
   onStatusUpdate?: (status: TaskStatusResponse) => void;
   onDetailsUpdate?: (details: TaskDetailsResponse) => void;
-  onLogsUpdate?: (logs: TaskLogsResponse) => void;
   onError?: (error: Error) => void;
 }
 
@@ -181,15 +173,10 @@ export class TaskPollingService {
         this.stopPolling();
       }
 
-      // Optionally fetch details and logs
+      // Optionally fetch details
       if (this.callbacks.onDetailsUpdate) {
         const details = await this.fetchDetails();
         this.callbacks.onDetailsUpdate(details);
-      }
-
-      if (this.callbacks.onLogsUpdate) {
-        const logs = await this.fetchLogs();
-        this.callbacks.onLogsUpdate(logs);
       }
     } catch (error) {
       this.handleError(error as Error);
@@ -219,23 +206,6 @@ export class TaskPollingService {
       task,
       current_execution,
     };
-  }
-
-  /**
-   * Fetch task logs
-   */
-  private async fetchLogs(params?: {
-    execution_id?: number;
-    level?: string;
-    page?: number;
-    page_size?: number;
-  }): Promise<TaskLogsResponse> {
-    const endpoint = `/trading/${this.taskType}-tasks/${this.taskId}/logs/`;
-    return apiClient.get<TaskLogsResponse>(endpoint, {
-      page: 1,
-      page_size: 100,
-      ...params,
-    });
   }
 
   /**

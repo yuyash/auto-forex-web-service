@@ -116,7 +116,7 @@ LOGGING = {
 # Security Settings (Relaxed for Tests)
 # =============================================================================
 
-SECRET_KEY = "test-secret-key-not-for-production"
+SECRET_KEY = "test-secret-key-not-for-production"  # nosec B105 - Test environment only
 DEBUG = False  # Keep False to test production-like behavior
 ALLOWED_HOSTS = ["*"]
 

@@ -230,6 +230,23 @@ CELERY_TASK_ROUTES = {
     "trading.tasks.run_trading_task": {"queue": "trading"},
     "trading.tasks.stop_trading_task": {"queue": "trading"},
     "trading.tasks.run_backtest_task": {"queue": "trading"},
+    # Monitoring tasks
+    "trading.monitor_stuck_executions": {"queue": "default"},
+    "trading.sync_celery_task_status": {"queue": "default"},
+}
+
+# Celery Beat periodic task schedule
+CELERY_BEAT_SCHEDULE = {
+    "monitor-stuck-executions": {
+        "task": "trading.monitor_stuck_executions",
+        "schedule": 300.0,  # Run every 5 minutes
+        "options": {"queue": "default"},
+    },
+    "sync-celery-task-status": {
+        "task": "trading.sync_celery_task_status",
+        "schedule": 180.0,  # Run every 3 minutes
+        "options": {"queue": "default"},
+    },
 }
 
 

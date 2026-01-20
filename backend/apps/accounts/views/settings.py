@@ -36,16 +36,29 @@ class UserSettingsView(APIView):
         summary="GET /api/accounts/settings/",
         description="Retrieve user profile and settings including timezone, language, and notification preferences.",
         responses={
-            200: OpenApiResponse(
-                description="User settings retrieved successfully",
-                response={
-                    "type": "object",
-                    "properties": {
-                        "user": {"$ref": "#/components/schemas/UserProfile"},
-                        "settings": {"$ref": "#/components/schemas/UserSettings"},
+            200: {
+                "type": "object",
+                "properties": {
+                    "user": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "username": {"type": "string"},
+                            "email": {"type": "string"},
+                            "first_name": {"type": "string"},
+                            "last_name": {"type": "string"},
+                        },
+                    },
+                    "settings": {
+                        "type": "object",
+                        "properties": {
+                            "timezone": {"type": "string"},
+                            "language": {"type": "string"},
+                            "notifications_enabled": {"type": "boolean"},
+                        },
                     },
                 },
-            ),
+            },
             401: OpenApiResponse(description="Authentication required"),
         },
         tags=["User Settings"],

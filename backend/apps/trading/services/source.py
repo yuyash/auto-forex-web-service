@@ -112,8 +112,11 @@ class RedisTickDataSource(TickDataSource):
                     # Reconnect on connection error
                     try:
                         self.pubsub.close()
-                    except Exception:  # pylint: disable=broad-exception-caught
-                        pass
+                    except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+                        import logging
+
+                        logger_local = logging.getLogger(__name__)
+                        logger_local.debug("Failed to close pubsub on reconnect: %s", exc)
 
                     self.client = redis.Redis.from_url(
                         settings.MARKET_REDIS_URL, decode_responses=True
@@ -141,7 +144,12 @@ class RedisTickDataSource(TickDataSource):
                 payload_raw = message.get("data")
                 try:
                     payload = json.loads(payload_raw) if isinstance(payload_raw, str) else {}
-                except Exception:  # pylint: disable=broad-exception-caught
+                except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B112
+                    # Log parsing error but continue with next message
+                    import logging
+
+                    logger_local = logging.getLogger(__name__)
+                    logger_local.warning("Failed to parse tick message: %s", exc)
                     continue
 
                 kind = str(payload.get("type") or "tick")
@@ -221,16 +229,20 @@ class RedisTickDataSource(TickDataSource):
 
     def close(self) -> None:
         """Close Redis connections."""
+        import logging
+
+        logger_local = logging.getLogger(__name__)
+
         if self.pubsub:
             try:
                 self.pubsub.close()
-            except Exception:  # pylint: disable=broad-exception-caught
-                pass
+            except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+                logger_local.debug("Failed to close pubsub: %s", exc)
         if self.client:
             try:
                 self.client.close()
-            except Exception:  # pylint: disable=broad-exception-caught
-                pass
+            except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+                logger_local.debug("Failed to close Redis client: %s", exc)
 
 
 class LiveTickDataSource(TickDataSource):
@@ -280,7 +292,12 @@ class LiveTickDataSource(TickDataSource):
                 payload_raw = message.get("data")
                 try:
                     payload = json.loads(payload_raw) if isinstance(payload_raw, str) else {}
-                except Exception:  # pylint: disable=broad-exception-caught
+                except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B112
+                    # Log parsing error but continue with next message
+                    import logging
+
+                    logger_local = logging.getLogger(__name__)
+                    logger_local.warning("Failed to parse tick message: %s", exc)
                     continue
 
                 # Parse tick data
@@ -339,13 +356,17 @@ class LiveTickDataSource(TickDataSource):
 
     def close(self) -> None:
         """Close Redis connections."""
+        import logging
+
+        logger_local = logging.getLogger(__name__)
+
         if self.pubsub:
             try:
                 self.pubsub.close()
-            except Exception:  # pylint: disable=broad-exception-caught
-                pass
+            except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+                logger_local.debug("Failed to close pubsub: %s", exc)
         if self.client:
             try:
                 self.client.close()
-            except Exception:  # pylint: disable=broad-exception-caught
-                pass
+            except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+                logger_local.debug("Failed to close Redis client: %s", exc)

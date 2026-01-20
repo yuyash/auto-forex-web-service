@@ -18,7 +18,6 @@ from apps.trading.models import BacktestTasks, Executions
 from apps.trading.services.lock import TaskLockManager
 from apps.trading.views._helpers import (
     TaskExecutionPagination,
-    _get_execution_metrics_or_none,
     _paginate_list_by_page,
 )
 
@@ -433,8 +432,12 @@ class BacktestTaskStatusView(APIView):
                 msg = "Execution did not start (no worker lock acquired)"
                 try:
                     latest_execution.add_log("ERROR", msg)
-                except Exception:  # pylint: disable=broad-exception-caught
-                    pass
+                except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+                    # Log the error but continue with status update
+                    import logging
+
+                    logger_local = logging.getLogger(__name__)
+                    logger_local.warning("Failed to add execution log: %s", exc)
 
                 latest_execution.status = TaskStatus.FAILED
                 latest_execution.completed_at = timezone.now()
@@ -546,93 +549,6 @@ class BacktestTaskExecutionsView(APIView):
         paginated = paginator.paginate_queryset(executions, request)
         serializer = ExecutionsListSerializer(paginated, many=True)
         return paginator.get_paginated_response(serializer.data)
-
-
-class BacktestTaskExportView(APIView):
-    """Export backtest results as JSON."""
-
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request: Request, task_id: int) -> Response:
-        """Export complete backtest results."""
-        try:
-            task = BacktestTasks.objects.select_related("config", "user").get(
-                id=task_id, user=request.user.pk
-            )
-        except BacktestTasks.DoesNotExist:
-            return Response({"error": "Backtest task not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        latest_execution = task.get_latest_execution()
-        if not latest_execution:
-            return Response(
-                {"error": "No execution found for this task"}, status=status.HTTP_404_NOT_FOUND
-            )
-
-        metrics_obj = _get_execution_metrics_or_none(latest_execution)
-        if not metrics_obj:
-            return Response(
-                {"error": "No metrics available for export"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        metrics = None
-        if metrics_obj:
-            metrics = {
-                "total_return": str(metrics_obj.total_return),
-                "total_pnl": str(metrics_obj.total_pnl),
-                "realized_pnl": str(getattr(metrics_obj, "realized_pnl", metrics_obj.total_pnl)),
-                "unrealized_pnl": str(getattr(metrics_obj, "unrealized_pnl", "0.00")),
-                "total_trades": metrics_obj.total_trades,
-                "winning_trades": metrics_obj.winning_trades,
-                "losing_trades": metrics_obj.losing_trades,
-                "win_rate": str(metrics_obj.win_rate),
-                "max_drawdown": str(metrics_obj.max_drawdown),
-                "sharpe_ratio": str(metrics_obj.sharpe_ratio) if metrics_obj.sharpe_ratio else None,
-                "profit_factor": (
-                    str(metrics_obj.profit_factor) if metrics_obj.profit_factor else None
-                ),
-                "average_win": str(metrics_obj.average_win) if metrics_obj.average_win else None,
-                "average_loss": str(metrics_obj.average_loss) if metrics_obj.average_loss else None,
-                "trade_log": metrics_obj.trade_log or [],
-                "strategy_events": metrics_obj.strategy_events or [],
-            }
-
-        strategy_type = task.config.strategy_type if task.config else None
-        export_data = {
-            "task": {
-                "id": task.pk,
-                "name": task.name,
-                "description": task.description,
-                "strategy_type": strategy_type,
-                "instrument": task.instrument,
-                "start_time": task.start_time.isoformat(),
-                "end_time": task.end_time.isoformat(),
-                "status": task.status,
-            },
-            "configuration": {
-                "id": task.config.pk if task.config else None,
-                "name": task.config.name if task.config else None,
-                "strategy_type": strategy_type,
-                "parameters": task.config.parameters if task.config else {},
-            },
-            "execution": {
-                "id": latest_execution.pk,
-                "execution_number": latest_execution.execution_number,
-                "status": latest_execution.status,
-                "started_at": (
-                    latest_execution.started_at.isoformat() if latest_execution.started_at else None
-                ),
-                "completed_at": (
-                    latest_execution.completed_at.isoformat()
-                    if latest_execution.completed_at
-                    else None
-                ),
-                "logs": latest_execution.logs or [],
-            },
-            "metrics": metrics,
-            "exported_at": timezone.now().isoformat(),
-        }
-
-        return Response(export_data, status=status.HTTP_200_OK)
 
 
 class BacktestTaskLogsView(APIView):

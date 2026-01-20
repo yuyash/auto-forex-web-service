@@ -10,6 +10,7 @@
 
 import { OpenAPI } from './generated/core/OpenAPI';
 import { ApiError } from './generated/core/ApiError';
+import { broadcastAuthLogout } from '../utils/authEvents';
 
 /**
  * API Client Configuration
@@ -26,7 +27,7 @@ export interface ApiClientConfig {
  * Default configuration
  */
 const DEFAULT_CONFIG: Required<ApiClientConfig> = {
-  baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+  baseUrl: import.meta.env.VITE_API_BASE_URL || '',
   token: '',
   withCredentials: true,
   maxRetries: 3,
@@ -60,6 +61,33 @@ export function configureApiClient(config: ApiClientConfig): void {
     }
 
     return headers;
+  };
+
+  // Set up response interceptor for 401 errors
+  const originalRequest = OpenAPI.request;
+  OpenAPI.request = async (options: unknown) => {
+    try {
+      return await originalRequest(options);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        // Clear authentication state
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        clearAuthToken();
+
+        // Broadcast logout event for AuthContext to handle
+        broadcastAuthLogout({
+          source: 'http',
+          status: 401,
+          message: 'Session expired',
+          context: 'api_client',
+        });
+
+        // Redirect to login page
+        window.location.href = '/login';
+      }
+      throw error;
+    }
   };
 }
 

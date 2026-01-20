@@ -1,6 +1,7 @@
 // API Client utility with authentication and error handling
 
 import type { ApiError } from '../../types/common';
+import { broadcastAuthLogout } from '../../utils/authEvents';
 
 export class ApiClientError extends Error {
   status: number;
@@ -80,6 +81,30 @@ export class ApiClient {
       }
 
       const message = this.extractErrorMessage(errorData, response);
+
+      // Handle 401 Unauthorized - token expired or invalid
+      if (response.status === 401) {
+        // Clear authentication state
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+
+        // Broadcast logout event for AuthContext to handle
+        broadcastAuthLogout({
+          source: 'http',
+          status: 401,
+          message: 'Session expired',
+          context: 'legacy_api_client',
+        });
+
+        // Redirect to login page
+        window.location.href = '/login';
+
+        throw new ApiClientError(
+          response.status,
+          errorData,
+          'Your session has expired. Please log in again.'
+        );
+      }
 
       // Special handling for rate limiting
       if (response.status === 429) {

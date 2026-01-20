@@ -6,6 +6,7 @@ This package contains Celery task runners for backtesting and live trading.
 from typing import List
 
 from apps.trading.tasks.backtest import BacktestTaskRunner, _run_backtest_task_wrapper
+from apps.trading.tasks.monitoring import monitor_stuck_executions, sync_celery_task_status
 from apps.trading.tasks.trading import (
     TradingTaskRunner,
     run_trading_task,
@@ -28,4 +29,6 @@ __all__: List[str] = [
     "run_backtest_task",
     "run_trading_task",
     "stop_trading_task",
+    "monitor_stuck_executions",
+    "sync_celery_task_status",
 ]

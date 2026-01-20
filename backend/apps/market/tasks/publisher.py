@@ -184,14 +184,18 @@ class TickPublisherRunner:
         self, client: Any, lock_key: str, message: str, failed: bool = False
     ) -> None:
         """Cleanup resources and mark task as stopped."""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
         try:
             client.delete(lock_key)
-        except Exception:  # pylint: disable=broad-exception-caught
-            pass
+        except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+            logger.debug("Failed to delete lock key: %s", exc)
         try:
             client.close()
-        except Exception:  # pylint: disable=broad-exception-caught
-            pass
+        except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+            logger.debug("Failed to close Redis client: %s", exc)
 
         if self.task_service:
             status_value = (

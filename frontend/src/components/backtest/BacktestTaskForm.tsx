@@ -365,7 +365,7 @@ export default function BacktestTaskForm({
 
     // Zod has already validated and converted types, so we can use the data directly
     const apiData: BacktestTaskCreateData = {
-      config_id: completeData.config_id,
+      config: completeData.config_id,
       name: completeData.name,
       description: completeData.description,
       data_source: DataSource.POSTGRESQL,
@@ -453,6 +453,7 @@ export default function BacktestTaskForm({
                       onChange={field.onChange}
                       error={errors.config_id?.message}
                       helperText={errors.config_id?.message}
+                      required
                     />
                   )}
                 />

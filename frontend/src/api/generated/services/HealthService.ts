@@ -1,13 +1,13 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-/* eslint-disable */
+
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
 export class HealthService {
   /**
-   * Get health check status.
+   * GET /api/health/
    * Check the health status of the backend API service. Returns overall system status.
    * @returns any Service is healthy
    * @throws ApiError

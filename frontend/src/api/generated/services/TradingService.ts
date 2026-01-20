@@ -17,38 +17,45 @@ import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
 export class TradingService {
   /**
-   * /api/trading/backtest-tasks/
    * List and create backtest tasks.
-   * @param ordering Which field to use when ordering the results.
-   * @param page A page number within the paginated result set.
-   * @param search A search term.
+   * @param configId Filter by configuration ID
+   * @param ordering Order results by field (prefix with - for descending)
+   * @param page Page number
+   * @param search Search in name or description
+   * @param status Filter by task status
+   * @param strategyType Filter by strategy type
    * @returns PaginatedBacktestTaskListList
    * @throws ApiError
    */
   public static tradingBacktestTasksList(
+    configId?: number,
     ordering?: string,
     page?: number,
-    search?: string
+    search?: string,
+    status?: string,
+    strategyType?: string
   ): CancelablePromise<PaginatedBacktestTaskListList> {
     return __request(OpenAPI, {
       method: 'GET',
       url: '/api/trading/backtest-tasks/',
       query: {
+        config_id: configId,
         ordering: ordering,
         page: page,
         search: search,
+        status: status,
+        strategy_type: strategyType,
       },
     });
   }
   /**
-   * /api/trading/backtest-tasks/
    * List and create backtest tasks.
    * @param requestBody
    * @returns BacktestTaskCreate
    * @throws ApiError
    */
   public static tradingBacktestTasksCreate(
-    requestBody?: BacktestTaskCreateRequest
+    requestBody: BacktestTaskCreateRequest
   ): CancelablePromise<BacktestTaskCreate> {
     return __request(OpenAPI, {
       method: 'POST',
@@ -58,7 +65,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/backtest-tasks/{task_id}/
    * Retrieve, update, or delete a backtest task.
    * @param taskId
    * @returns BacktestTask
@@ -76,7 +82,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/backtest-tasks/{task_id}/
    * Retrieve, update, or delete a backtest task.
    * @param taskId
    * @param requestBody
@@ -85,7 +90,7 @@ export class TradingService {
    */
   public static tradingBacktestTasksUpdate(
     taskId: number,
-    requestBody?: BacktestTaskCreateRequest
+    requestBody: BacktestTaskCreateRequest
   ): CancelablePromise<BacktestTaskCreate> {
     return __request(OpenAPI, {
       method: 'PUT',
@@ -98,7 +103,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/backtest-tasks/{task_id}/
    * Retrieve, update, or delete a backtest task.
    * @param taskId
    * @param requestBody
@@ -120,7 +124,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/backtest-tasks/{task_id}/
    * Retrieve, update, or delete a backtest task.
    * @param taskId
    * @returns void
@@ -138,7 +141,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/backtest-tasks/{task_id}/copy/
    * Copy backtest task.
    * @param taskId
    * @returns any No response body
@@ -156,7 +158,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/backtest-tasks/{task_id}/executions/
    * Get execution history for backtest task.
    * @param taskId
    * @returns any No response body
@@ -174,7 +175,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/backtest-tasks/{task_id}/restart/
    * Restart backtest task with fresh state.
    * @param taskId
    * @returns any No response body
@@ -192,7 +192,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/backtest-tasks/{task_id}/resume/
    * Resume backtest task execution.
    * @param taskId
    * @returns any No response body
@@ -210,7 +209,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/backtest-tasks/{task_id}/start/
    * Start backtest task execution.
    * @param taskId
    * @returns any No response body
@@ -228,7 +226,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/backtest-tasks/{task_id}/status/
    * Get current task status and execution details.
    * @param taskId
    * @returns any No response body
@@ -246,7 +243,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/backtest-tasks/{task_id}/stop/
    * Stop backtest task execution.
    * @param taskId
    * @returns any No response body
@@ -264,7 +260,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/strategies/
    * API endpoint for listing all available trading strategies.
    * @returns any No response body
    * @throws ApiError
@@ -276,7 +271,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/strategies/{strategy_id}/defaults/
    * API endpoint for returning default parameters for a strategy.
    * @param strategyId
    * @returns any No response body
@@ -294,7 +288,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/strategy-configs/
    * List and create strategy configurations.
    * @returns any No response body
    * @throws ApiError
@@ -306,7 +299,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/strategy-configs/
    * List and create strategy configurations.
    * @returns any No response body
    * @throws ApiError
@@ -318,7 +310,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/strategy-configs/{config_id}/
    * Retrieve, update, and delete a strategy configuration.
    * @param configId
    * @returns any No response body
@@ -336,7 +327,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/strategy-configs/{config_id}/
    * Retrieve, update, and delete a strategy configuration.
    * @param configId
    * @returns any No response body
@@ -354,7 +344,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/strategy-configs/{config_id}/
    * Retrieve, update, and delete a strategy configuration.
    * @param configId
    * @returns void
@@ -372,34 +361,41 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/trading-tasks/
    * List and create trading tasks.
    *
    * GET: List all trading tasks for the authenticated user with filtering and pagination
    * POST: Create a new trading task
-   * @param ordering Which field to use when ordering the results.
-   * @param page A page number within the paginated result set.
-   * @param search A search term.
+   * @param configId Filter by configuration ID
+   * @param ordering Order results by field (prefix with - for descending)
+   * @param page Page number
+   * @param search Search in name or description
+   * @param status Filter by task status
+   * @param strategyType Filter by strategy type
    * @returns PaginatedTradingTaskListList
    * @throws ApiError
    */
   public static tradingTradingTasksList(
+    configId?: number,
     ordering?: string,
     page?: number,
-    search?: string
+    search?: string,
+    status?: string,
+    strategyType?: string
   ): CancelablePromise<PaginatedTradingTaskListList> {
     return __request(OpenAPI, {
       method: 'GET',
       url: '/api/trading/trading-tasks/',
       query: {
+        config_id: configId,
         ordering: ordering,
         page: page,
         search: search,
+        status: status,
+        strategy_type: strategyType,
       },
     });
   }
   /**
-   * /api/trading/trading-tasks/
    * List and create trading tasks.
    *
    * GET: List all trading tasks for the authenticated user with filtering and pagination
@@ -419,7 +415,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/trading-tasks/{task_id}/
    * Retrieve, update, or delete a trading task.
    *
    * GET: Retrieve trading task details
@@ -441,7 +436,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/trading-tasks/{task_id}/
    * Retrieve, update, or delete a trading task.
    *
    * GET: Retrieve trading task details
@@ -467,7 +461,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/trading-tasks/{task_id}/
    * Retrieve, update, or delete a trading task.
    *
    * GET: Retrieve trading task details
@@ -493,7 +486,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/trading-tasks/{task_id}/
    * Retrieve, update, or delete a trading task.
    *
    * GET: Retrieve trading task details
@@ -515,7 +507,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/trading-tasks/{task_id}/copy/
    * Copy trading task.
    *
    * Request body:
@@ -536,7 +527,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/trading-tasks/{task_id}/executions/
    * Get execution history for trading task.
    *
    * Returns all executions ordered by execution number (most recent first).
@@ -556,7 +546,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/trading-tasks/{task_id}/restart/
    * Restart trading task with fresh state.
    *
    * Clears strategy_state and starts a new execution. Task can be in any
@@ -580,7 +569,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/trading-tasks/{task_id}/resume/
    * Resume trading task execution.
    * @param taskId
    * @returns any No response body
@@ -598,7 +586,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/trading-tasks/{task_id}/start/
    * Start trading task execution.
    *
    * Validates task status in database AND checks celery task lock status
@@ -620,7 +607,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/trading-tasks/{task_id}/status/
    * Get current task status and execution details.
    *
    * Used by frontend for polling fallback when WebSocket connection fails.
@@ -642,7 +628,6 @@ export class TradingService {
     });
   }
   /**
-   * /api/trading/trading-tasks/{task_id}/stop/
    * Stop trading task execution.
    *
    * Validates task status in database AND checks celery task lock status

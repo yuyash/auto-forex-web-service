@@ -20,19 +20,15 @@ import { TaskStatus } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskProgress } from '../tasks/TaskProgress';
 import { MetricCard } from '../tasks/display/MetricCard';
-import { TaskActionButtons } from '../tasks/actions/TaskActionButtons';
+import { TaskControlButtons } from '../common/TaskControlButtons';
 import BacktestTaskActions from './BacktestTaskActions';
-import {
-  useStartBacktestTask,
-  useStopBacktestTask,
-  useRerunBacktestTask,
-} from '../../hooks/useBacktestTaskMutations';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
 import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 import { useToast } from '../common';
+import { TradingService } from '../../api/generated/services/TradingService';
 
 interface BacktestTaskCardProps {
   task: BacktestTask;
@@ -44,15 +40,12 @@ export default function BacktestTaskCard({
   onRefresh,
 }: BacktestTaskCardProps) {
   const navigate = useNavigate();
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
   );
-
-  const startTask = useStartBacktestTask();
-  const stopTask = useStopBacktestTask();
-  const rerunTask = useRerunBacktestTask();
+  const [isLoading, setIsLoading] = useState(false);
 
   // Fetch strategies for display names
   const { strategies } = useStrategies();
@@ -87,7 +80,7 @@ export default function BacktestTaskCard({
         polledStatus: polledStatus.status,
       });
       // Clear optimistic status since we have real status now
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+
       setOptimisticStatus(null);
       // Notify parent to refetch task list
       onRefresh?.();
@@ -109,69 +102,100 @@ export default function BacktestTaskCard({
     navigate(`/backtest-tasks/${task.id}`);
   };
 
-  const handleStart = async () => {
+  const handleStart = async (taskId: number) => {
+    setIsLoading(true);
     try {
-      // Wait for API response before updating status
-      await startTask.mutate(task.id);
-      // Only update status after successful response
+      await TradingService.tradingBacktestTasksStartCreate(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
-      // Trigger refresh after successful start
+      showSuccess('Backtest task started successfully');
       onRefresh?.();
     } catch (error) {
       console.error('Failed to start task:', error);
-      // Clear any optimistic update on error
       setOptimisticStatus(null);
-
-      // Show error notification with retry option
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to start task';
       showError(errorMessage, 8000, {
         label: 'Retry',
-        onClick: handleStart,
+        onClick: () => handleStart(taskId),
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleStop = async () => {
+  const handleStop = async (taskId: number) => {
+    setIsLoading(true);
     try {
-      // Wait for API response before updating status
-      await stopTask.mutate(task.id);
-      // Only update status after successful response
+      await TradingService.tradingBacktestTasksStopCreate(taskId);
       setOptimisticStatus(TaskStatus.STOPPED);
-      // Trigger refresh after successful stop
+      showSuccess('Backtest task stopped successfully');
       onRefresh?.();
     } catch (error) {
       console.error('Failed to stop task:', error);
-      // Clear any optimistic update on error
       setOptimisticStatus(null);
-
-      // Show error notification
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to stop task';
       showError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleRerun = async () => {
+  const handleResume = async (taskId: number) => {
+    setIsLoading(true);
     try {
-      // Wait for API response before updating status
-      await rerunTask.mutate(task.id);
-      // Only update status after successful response
+      await TradingService.tradingBacktestTasksResumeCreate(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
-      // Trigger refresh after successful rerun
+      showSuccess('Backtest task resumed successfully');
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to rerun task:', error);
-      // Clear any optimistic update on error
+      console.error('Failed to resume task:', error);
       setOptimisticStatus(null);
-
-      // Show error notification with retry option
       const errorMessage =
-        error instanceof Error ? error.message : 'Failed to rerun task';
+        error instanceof Error ? error.message : 'Failed to resume task';
       showError(errorMessage, 8000, {
         label: 'Retry',
-        onClick: handleRerun,
+        onClick: () => handleResume(taskId),
       });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRestart = async (taskId: number) => {
+    setIsLoading(true);
+    try {
+      await TradingService.tradingBacktestTasksRestartCreate(taskId);
+      setOptimisticStatus(TaskStatus.RUNNING);
+      showSuccess('Backtest task restarted successfully');
+      onRefresh?.();
+    } catch (error) {
+      console.error('Failed to restart task:', error);
+      setOptimisticStatus(null);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to restart task';
+      showError(errorMessage, 8000, {
+        label: 'Retry',
+        onClick: () => handleRestart(taskId),
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDelete = async (taskId: number) => {
+    setIsLoading(true);
+    try {
+      await TradingService.tradingBacktestTasksDestroy(taskId);
+      showSuccess('Backtest task deleted successfully');
+      onRefresh?.();
+    } catch (error) {
+      console.error('Failed to delete task:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to delete task';
+      showError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -195,10 +219,6 @@ export default function BacktestTaskCard({
 
   // Get progress from polled status for running tasks
   const progress = polledStatus?.progress || 0;
-
-  // Determine if action buttons are loading
-  const isLoading =
-    startTask.isLoading || stopTask.isLoading || rerunTask.isLoading;
 
   return (
     <Card
@@ -267,14 +287,19 @@ export default function BacktestTaskCard({
           </Box>
         </Box>
 
-        {/* Action buttons using shared component */}
+        {/* Action buttons using TaskControlButtons component */}
         <Box sx={{ mb: 2 }}>
-          <TaskActionButtons
+          <TaskControlButtons
+            taskId={task.id}
             status={displayStatus}
             onStart={handleStart}
             onStop={handleStop}
-            onRerun={handleRerun}
-            loading={isLoading}
+            onResume={handleResume}
+            onRestart={handleRestart}
+            onDelete={handleDelete}
+            isLoading={isLoading}
+            size="small"
+            showLabels={true}
           />
         </Box>
 

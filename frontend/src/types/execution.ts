@@ -46,27 +46,6 @@ export interface ExecutionMetrics {
   created_at: string;
 }
 
-// Periodic, append-only metrics snapshots during execution (best-effort)
-export interface ExecutionMetricsCheckpoint {
-  id: number;
-  execution_id: number;
-  processed?: number | null;
-  total_return: string;
-  total_pnl: string;
-  realized_pnl?: string;
-  unrealized_pnl?: string;
-  total_trades: number;
-  winning_trades: number;
-  losing_trades: number;
-  win_rate: string;
-  max_drawdown: string;
-  sharpe_ratio?: string | null;
-  profit_factor?: string | null;
-  average_win?: string;
-  average_loss?: string;
-  created_at: string;
-}
-
 export interface BacktestStrategyEvent {
   event_type: string;
   timestamp?: string;

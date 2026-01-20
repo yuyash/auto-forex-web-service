@@ -303,11 +303,16 @@ class BaseExecutor(ABC):
                         logger.debug(f"Sending heartbeat at tick {state.ticks_processed}")
                         metrics = self.performance_tracker.get_metrics()
 
-                        # Update progress (for backtests, we can estimate based on time or ticks)
-                        # For now, we'll update progress incrementally
-                        # This will be overridden to 100% at the end
-                        if self.execution.progress < 99:
-                            # Increment progress gradually (will reach ~99% before completion)
+                        # Update progress
+                        # For BacktestExecutor, calculate based on timestamp
+                        # For other executors, use incremental approach
+                        if hasattr(self, "_calculate_progress"):
+                            new_progress = self._calculate_progress(tick)  # type: ignore[attr-defined]
+                            if new_progress != self.execution.progress:
+                                self.execution.progress = new_progress
+                                self.execution.save(update_fields=["progress"])
+                        elif self.execution.progress < 99:
+                            # Fallback: increment progress gradually
                             self.execution.progress = min(self.execution.progress + 1, 99)
                             self.execution.save(update_fields=["progress"])
 

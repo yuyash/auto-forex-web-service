@@ -1,75 +1,70 @@
-// Execution API service for real-time task monitoring
+/**
+ * Execution API service using generated OpenAPI client
+ *
+ * This module provides a wrapper around the generated ExecutionsService
+ * with consistent error handling and type safety.
+ */
 
-import { apiClient } from './client';
-import type {
-  ExecutionMetricsCheckpoint,
-  EquityPoint,
-  BacktestStrategyEvent,
-  Trade,
-} from '../../types';
+import { ExecutionsService } from '../../api/generated/services/ExecutionsService';
+import { withRetry } from '../../api/client';
 
-export interface ExecutionStatusResponse {
-  execution_id: number;
-  task_id: number;
-  task_type: 'backtest' | 'trading';
-  status: string;
-  progress: number;
-  ticks_processed: number;
-  trades_executed: number;
-  current_balance: string;
-  current_pnl: string;
-  realized_pnl?: string;
-  unrealized_pnl?: string;
-  last_tick_timestamp?: string;
-  started_at: string;
-  completed_at?: string;
-}
-
-export interface ExecutionEventsResponse {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: BacktestStrategyEvent[];
-}
-
-export interface ExecutionTradesResponse {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: Trade[];
-}
-
-export interface ExecutionEquityResponse {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: EquityPoint[];
-}
-
+/**
+ * Execution API wrapper using generated client
+ */
 export const executionApi = {
+  /**
+   * Get execution details
+   */
+  getDetail: (executionId: number) => {
+    return withRetry(() => ExecutionsService.getExecutionDetail(executionId));
+  },
+
   /**
    * Get current status of an execution
    */
-  getStatus: (executionId: number): Promise<ExecutionStatusResponse> => {
-    return apiClient.get<ExecutionStatusResponse>(
-      `/trading/executions/${executionId}/status/`
+  getStatus: (executionId: number) => {
+    return withRetry(() => ExecutionsService.getExecutionStatus(executionId));
+  },
+
+  /**
+   * Get execution logs with optional filtering
+   */
+  getLogs: (
+    executionId: number,
+    params?: {
+      level?: 'debug' | 'info' | 'warning' | 'error';
+      startTime?: string;
+      endTime?: string;
+      limit?: number;
+    }
+  ) => {
+    return withRetry(() =>
+      ExecutionsService.getExecutionLogs(
+        executionId,
+        params?.endTime,
+        params?.level,
+        params?.limit,
+        params?.startTime
+      )
     );
   },
 
   /**
-   * Get events for an execution with incremental fetching
+   * Get strategy events for an execution with incremental fetching
    */
   getEvents: (
     executionId: number,
     params?: {
-      since_sequence?: number;
-      event_type?: string;
-      page_size?: number;
+      sinceSequence?: number;
+      eventType?: string;
     }
-  ): Promise<ExecutionEventsResponse> => {
-    return apiClient.get<ExecutionEventsResponse>(
-      `/trading/executions/${executionId}/events/`,
-      params
+  ) => {
+    return withRetry(() =>
+      ExecutionsService.getExecutionEvents(
+        executionId,
+        params?.eventType,
+        params?.sinceSequence
+      )
     );
   },
 
@@ -79,39 +74,71 @@ export const executionApi = {
   getTrades: (
     executionId: number,
     params?: {
-      since_sequence?: number;
+      sinceSequence?: number;
       instrument?: string;
-      direction?: 'long' | 'short';
-      page_size?: number;
+      direction?: 'buy' | 'sell';
     }
-  ): Promise<ExecutionTradesResponse> => {
-    return apiClient.get<ExecutionTradesResponse>(
-      `/trading/executions/${executionId}/trades/`,
-      params
+  ) => {
+    return withRetry(() =>
+      ExecutionsService.getExecutionTrades(
+        executionId,
+        params?.direction,
+        params?.instrument,
+        params?.sinceSequence
+      )
     );
   },
 
   /**
-   * Get equity curve for an execution with incremental fetching
+   * Get equity curve for an execution with configurable granularity
    */
   getEquity: (
     executionId: number,
-    params?: { since_sequence?: number; page_size?: number }
-  ): Promise<ExecutionEquityResponse> => {
-    return apiClient.get<ExecutionEquityResponse>(
-      `/trading/executions/${executionId}/equity/`,
-      params
+    params?: {
+      granularity?: number;
+      startTime?: string;
+      endTime?: string;
+    }
+  ) => {
+    return withRetry(() =>
+      ExecutionsService.getExecutionEquity(
+        executionId,
+        params?.endTime,
+        params?.granularity,
+        params?.startTime
+      )
     );
   },
 
   /**
-   * Get latest metrics checkpoint for an execution
+   * Get metrics data with optional granularity binning
    */
-  getMetricsLatest: (
-    executionId: number
-  ): Promise<ExecutionMetricsCheckpoint> => {
-    return apiClient.get<ExecutionMetricsCheckpoint>(
-      `/trading/executions/${executionId}/metrics/latest/`
+  getMetrics: (
+    executionId: number,
+    params?: {
+      granularity?: number;
+      startTime?: string;
+      endTime?: string;
+      lastN?: number;
+    }
+  ) => {
+    return withRetry(() =>
+      ExecutionsService.getExecutionMetrics(
+        executionId,
+        params?.endTime,
+        params?.granularity,
+        params?.lastN,
+        params?.startTime
+      )
+    );
+  },
+
+  /**
+   * Get latest metrics snapshot for an execution
+   */
+  getMetricsLatest: (executionId: number) => {
+    return withRetry(() =>
+      ExecutionsService.getExecutionLatestMetrics(executionId)
     );
   },
 };

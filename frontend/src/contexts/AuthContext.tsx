@@ -8,6 +8,7 @@ import {
 import type { ReactNode } from 'react';
 import type { User, SystemSettings, AuthContextType } from '../types/auth';
 import { AUTH_LOGOUT_EVENT, type AuthLogoutDetail } from '../utils/authEvents';
+import { setAuthToken, clearAuthToken } from '../api';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -39,6 +40,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [systemSettingsLoading, setSystemSettingsLoading] =
     useState<boolean>(true);
 
+  // Initialize OpenAPI client with stored token on mount
+  useEffect(() => {
+    if (initialState.token) {
+      setAuthToken(initialState.token);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const fetchSystemSettings = useCallback(async () => {
     setSystemSettingsLoading(true);
     try {
@@ -67,6 +75,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(newUser);
     localStorage.setItem('token', newToken);
     localStorage.setItem('user', JSON.stringify(newUser));
+    // Configure OpenAPI client with the new token
+    setAuthToken(newToken);
   }, []);
 
   const logout = useCallback(async () => {
@@ -91,6 +101,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    // Clear OpenAPI client token
+    clearAuthToken();
   }, [token]);
 
   const refreshToken = useCallback(async (): Promise<boolean> => {

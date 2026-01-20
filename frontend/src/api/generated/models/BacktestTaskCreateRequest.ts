@@ -1,7 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-/* eslint-disable */
+
 import type { DataSourceEnum } from './DataSourceEnum';
 import type { TradingModeEnum } from './TradingModeEnum';
 /**
@@ -11,7 +11,7 @@ export type BacktestTaskCreateRequest = {
   /**
    * Strategy configuration used by this task
    */
-  config?: number;
+  config: number;
   /**
    * Human-readable name for this backtest task
    */

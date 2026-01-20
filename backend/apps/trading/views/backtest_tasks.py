@@ -3,6 +3,7 @@
 from typing import cast
 
 from django.db.models import Model, Q, QuerySet
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import serializers as drf_serializers
 from rest_framework import status
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
@@ -24,6 +25,49 @@ class BacktestTaskView(ListCreateAPIView):
     """List and create backtest tasks."""
 
     permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="status",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter by task status",
+            ),
+            OpenApiParameter(
+                name="config_id",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Filter by configuration ID",
+            ),
+            OpenApiParameter(
+                name="strategy_type",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter by strategy type",
+            ),
+            OpenApiParameter(
+                name="search",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Search in name or description",
+            ),
+            OpenApiParameter(
+                name="ordering",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Order results by field (prefix with - for descending)",
+            ),
+            OpenApiParameter(
+                name="page",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Page number",
+            ),
+        ],
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
 
     def get_serializer_class(self) -> type[drf_serializers.Serializer]:
         """Return appropriate serializer based on request method."""

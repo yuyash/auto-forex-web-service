@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 import {
   Container,
@@ -14,36 +14,24 @@ import {
   FormControlLabel,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
-import type { SelectChangeEvent } from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material/Select';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../contexts/AuthContext';
 import { useOandaAccounts } from '../hooks/useOandaAccounts';
 import { useChartPreferences } from '../hooks/useChartPreferences';
-import { DashboardChart } from '../components/chart/DashboardChart';
 import { Breadcrumbs } from '../components/common';
-import ChartControls from '../components/chart/ChartControls';
 import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
 import RecentBacktestsWidget from '../components/dashboard/RecentBacktestsWidget';
 import QuickActionsWidget from '../components/dashboard/QuickActionsWidget';
-import type { Granularity } from '../types/chart';
 
 const DashboardPage = () => {
   const { t } = useTranslation('dashboard');
-  const { user } = useAuth();
 
   // Chart preferences with localStorage persistence
   const { preferences, updatePreference } = useChartPreferences();
-  const { instrument, granularity, autoRefreshEnabled, refreshInterval } =
-    preferences;
-
-  // Get timezone from user settings, default to UTC
-  const timezone = user?.timezone || 'UTC';
+  const { autoRefreshEnabled, refreshInterval } = preferences;
 
   // Data state
   const [error] = useState<string | null>(null);
-
-  // Chart reset handler
-  const [chartResetTrigger, setChartResetTrigger] = useState<number>(0);
 
   // OANDA account state - using shared hook with caching
   const {
@@ -89,24 +77,14 @@ const DashboardPage = () => {
   };
 
   // Handle instrument change
-  const handleInstrumentChange = (newInstrument: string) => {
-    updatePreference('instrument', newInstrument);
-  };
+  // const handleInstrumentChange = (newInstrument: string) => {
+  //   updatePreference('instrument', newInstrument);
+  // };
 
   // Handle granularity change
-  const handleGranularityChange = (newGranularity: Granularity) => {
-    updatePreference('granularity', newGranularity);
-  };
-
-  // Handle chart reset view
-  const handleChartResetView = useCallback(() => {
-    setChartResetTrigger((prev) => prev + 1);
-  }, []);
-
-  // Handle chart update view
-  const handleChartUpdateView = useCallback(() => {
-    setChartResetTrigger((prev) => prev + 1);
-  }, []);
+  // const handleGranularityChange = (newGranularity: Granularity) => {
+  //   updatePreference('granularity', newGranularity);
+  // };
 
   return (
     <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
@@ -216,7 +194,8 @@ const DashboardPage = () => {
             mb: 1.25,
           }}
         >
-          <ChartControls
+          {/* TODO: Implement ChartControls with new chart components */}
+          {/* <ChartControls
             instrument={instrument}
             granularity={granularity}
             onInstrumentChange={handleInstrumentChange}
@@ -225,7 +204,7 @@ const DashboardPage = () => {
             onUpdateView={handleChartUpdateView}
             showResetButton={hasOandaAccount}
             showUpdateButton={hasOandaAccount}
-          />
+          /> */}
         </Box>
 
         <Box
@@ -251,17 +230,30 @@ const DashboardPage = () => {
               </Typography>
             </Box>
           ) : (
-            <DashboardChart
-              key={chartResetTrigger}
-              instrument={instrument}
-              granularity={granularity}
-              height={500}
-              timezone={timezone}
-              autoRefresh={autoRefreshEnabled}
-              refreshInterval={refreshInterval * 1000}
-              onResetView={handleChartResetView}
-              onUpdateView={handleChartUpdateView}
-            />
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: 500,
+              }}
+            >
+              <Typography variant="body1" color="text.secondary">
+                Market chart will be available soon (migrating to MUI X Charts)
+              </Typography>
+            </Box>
+            // TODO: Implement DashboardChart with MUI X Charts
+            // <DashboardChart
+            //   key={chartResetTrigger}
+            //   instrument={instrument}
+            //   granularity={granularity}
+            //   height={500}
+            //   timezone={timezone}
+            //   autoRefresh={autoRefreshEnabled}
+            //   refreshInterval={refreshInterval * 1000}
+            //   onResetView={handleChartResetView}
+            //   onUpdateView={handleChartUpdateView}
+            // />
           )}
         </Box>
       </Paper>

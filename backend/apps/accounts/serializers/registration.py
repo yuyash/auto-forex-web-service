@@ -94,8 +94,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """Validate that passwords match."""
+        password_mismatch_msg = "Passwords do not match."  # nosec B105
         if attrs["password"] != attrs["password_confirm"]:
-            raise serializers.ValidationError({"password_confirm": "Passwords do not match."})
+            raise serializers.ValidationError({"password_confirm": password_mismatch_msg})
 
         return attrs
 

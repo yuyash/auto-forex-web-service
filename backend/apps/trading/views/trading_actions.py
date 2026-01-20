@@ -715,8 +715,12 @@ class TradingTaskStatusView(APIView):
                 msg = "Execution did not start (no worker lock acquired)"
                 try:
                     latest_execution.add_log("ERROR", msg)
-                except Exception:  # pylint: disable=broad-exception-caught
-                    pass
+                except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
+                    # Log the error but continue with status update
+                    import logging
+
+                    logger_local = logging.getLogger(__name__)
+                    logger_local.warning("Failed to add execution log: %s", exc)
 
                 latest_execution.status = TaskStatus.FAILED
                 latest_execution.completed_at = timezone.now()

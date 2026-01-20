@@ -131,8 +131,12 @@ class BacktestTickPublisherRunner:
         finally:
             try:
                 client.close()
-            except Exception:
-                pass
+            except Exception as exc:  # nosec B110
+                # Log cleanup failure but don't raise
+                import logging
+
+                logger_local = logging.getLogger(__name__)
+                logger_local.debug("Failed to close Athena client: %s", exc)
 
     def _publish_ticks(
         self,
@@ -260,5 +264,9 @@ class BacktestTickPublisherRunner:
                     }
                 ),
             )
-        except Exception:
-            pass
+        except Exception as exc:  # nosec B110
+            # Log publish failure but don't raise
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning("Failed to publish error message: %s", exc)

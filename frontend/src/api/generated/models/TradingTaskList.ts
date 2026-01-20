@@ -1,7 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-/* eslint-disable */
+
 import type { StatusEnum } from './StatusEnum';
 /**
  * Serializer for TradingTask list view (summary only).

@@ -12,6 +12,9 @@ import {
   TextField,
   Box,
   Typography,
+  CircularProgress,
+  Alert,
+  Skeleton,
 } from '@mui/material';
 
 export interface Column<T> {
@@ -32,10 +35,36 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
   emptyMessage?: string;
   stickyHeader?: boolean;
+  isLoading?: boolean;
+  error?: Error | null;
+  enableRealTimeUpdates?: boolean;
+  onRefresh?: () => void;
+  ariaLabel?: string;
 }
 
 type Order = 'asc' | 'desc';
 
+/**
+ * DataTable Component
+ *
+ * Reusable table with sorting, filtering, pagination, loading states,
+ * and real-time update support.
+ *
+ * Requirements: 11.7, 11.15
+ *
+ * @param columns - Column definitions
+ * @param data - Table data
+ * @param rowsPerPageOptions - Options for rows per page
+ * @param defaultRowsPerPage - Default rows per page
+ * @param onRowClick - Callback when row is clicked
+ * @param emptyMessage - Message to show when no data
+ * @param stickyHeader - Enable sticky header
+ * @param isLoading - Loading state
+ * @param error - Error object if data failed to load
+ * @param enableRealTimeUpdates - Enable real-time updates
+ * @param onRefresh - Callback to refresh data
+ * @param ariaLabel - Accessibility label for the table
+ */
 function DataTable<T extends Record<string, unknown>>({
   columns,
   data,
@@ -44,6 +73,11 @@ function DataTable<T extends Record<string, unknown>>({
   onRowClick,
   emptyMessage = 'No data available',
   stickyHeader = true,
+  isLoading = false,
+  error = null,
+  enableRealTimeUpdates = false,
+  onRefresh,
+  ariaLabel,
 }: DataTableProps<T>): React.ReactElement {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage);
@@ -124,8 +158,72 @@ function DataTable<T extends Record<string, unknown>>({
     return sortedData.slice(startIndex, startIndex + rowsPerPage);
   }, [sortedData, page, rowsPerPage]);
 
+  // Real-time updates effect
+  React.useEffect(() => {
+    if (enableRealTimeUpdates && onRefresh) {
+      const interval = setInterval(() => {
+        onRefresh();
+      }, 5000); // Refresh every 5 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [enableRealTimeUpdates, onRefresh]);
+
+  // Render loading skeleton
+  if (isLoading && data.length === 0) {
+    return (
+      <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+        <TableContainer sx={{ maxHeight: 600 }}>
+          <Table stickyHeader={stickyHeader}>
+            <TableHead>
+              <TableRow>
+                {columns.map((column) => (
+                  <TableCell
+                    key={String(column.id)}
+                    align={column.align || 'left'}
+                    style={{ minWidth: column.minWidth }}
+                  >
+                    {column.label}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {[...Array(5)].map((_, index) => (
+                <TableRow key={index}>
+                  {columns.map((column) => (
+                    <TableCell key={String(column.id)}>
+                      <Skeleton variant="text" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
+    );
+  }
+
+  // Render error state
+  if (error) {
+    return (
+      <Paper sx={{ width: '100%', p: 2 }}>
+        <Alert severity="error">
+          <Typography variant="body2">
+            {error.message || 'Failed to load data. Please try again.'}
+          </Typography>
+        </Alert>
+      </Paper>
+    );
+  }
+
   return (
-    <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+    <Paper
+      sx={{ width: '100%', overflow: 'hidden' }}
+      role="region"
+      aria-label={ariaLabel || 'Data table'}
+    >
       <TableContainer sx={{ maxHeight: 600 }}>
         <Table stickyHeader={stickyHeader}>
           <TableHead>
@@ -207,15 +305,31 @@ function DataTable<T extends Record<string, unknown>>({
           </TableBody>
         </Table>
       </TableContainer>
-      <TablePagination
-        rowsPerPageOptions={rowsPerPageOptions}
-        component="div"
-        count={sortedData.length}
-        rowsPerPage={rowsPerPage}
-        page={page}
-        onPageChange={handleChangePage}
-        onRowsPerPageChange={handleChangeRowsPerPage}
-      />
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <TablePagination
+          rowsPerPageOptions={rowsPerPageOptions}
+          component="div"
+          count={sortedData.length}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+        />
+        {isLoading && (
+          <Box sx={{ display: 'flex', alignItems: 'center', pr: 2 }}>
+            <CircularProgress size={20} sx={{ mr: 1 }} />
+            <Typography variant="caption" color="text.secondary">
+              Updating...
+            </Typography>
+          </Box>
+        )}
+      </Box>
     </Paper>
   );
 }

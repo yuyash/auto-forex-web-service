@@ -60,6 +60,10 @@ class BacktestExecutor(BaseExecutor):
         """
         self.task = task
 
+        # Store time range for progress calculation
+        self.start_time = task.start_time
+        self.end_time = task.end_time
+
         # Initialize error handler
         self.error_handler = ErrorHandler()
 
@@ -83,6 +87,39 @@ class BacktestExecutor(BaseExecutor):
     def _get_initial_balance(self) -> Decimal:
         """Get the initial balance for backtest."""
         return self.task.initial_balance
+
+    def _calculate_progress(self, current_tick: Tick) -> int:
+        """Calculate progress percentage based on current tick timestamp.
+
+        Args:
+            current_tick: Current tick being processed
+
+        Returns:
+            Progress percentage (0-100)
+        """
+        try:
+            # Convert timestamps to comparable format
+            from datetime import datetime
+
+            if isinstance(current_tick.timestamp, str):
+                current_time = datetime.fromisoformat(current_tick.timestamp.replace("Z", "+00:00"))
+            else:
+                current_time = current_tick.timestamp
+
+            # Calculate time-based progress
+            total_duration = (self.end_time - self.start_time).total_seconds()
+            elapsed_duration = (current_time - self.start_time).total_seconds()
+
+            if total_duration <= 0:
+                return 0
+
+            progress = int((elapsed_duration / total_duration) * 100)
+            return max(0, min(99, progress))  # Cap at 99% until completion
+
+        except Exception as e:
+            logger.warning(f"Failed to calculate progress: {e}")
+            # Fallback to current progress
+            return self.execution.progress
 
     def _process_tick(self, tick: Tick, state: ExecutionState) -> ExecutionState:
         """Process a single tick through the strategy with error handling.

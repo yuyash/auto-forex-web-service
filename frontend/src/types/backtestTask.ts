@@ -26,7 +26,7 @@ export interface BacktestTask {
 }
 
 export interface BacktestTaskCreateData {
-  config_id: number;
+  config: number;
   name: string;
   description?: string;
   data_source: DataSource;

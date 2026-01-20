@@ -301,8 +301,12 @@ class OandaService:
                 maybe_dict = as_dict()
                 if isinstance(maybe_dict, dict):
                     return maybe_dict
-            except Exception:
-                pass
+            except Exception as exc:  # nosec B110
+                # Log conversion failure but continue with fallback
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.debug("Failed to convert account data using .dict(): %s", exc)
 
         try:
             return dict(vars(account_data))
@@ -1082,7 +1086,12 @@ class OandaService:
                         for txn in page_response.body.get("transactions", []):
                             if isinstance(txn, dict):
                                 transactions.append(self._parse_transaction(txn))
-                except Exception:  # pylint: disable=broad-exception-caught
+                except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B112
+                    # Log parsing error but continue with next page
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.warning("Failed to parse transaction page: %s", exc)
                     continue
             return transactions
         except Exception as e:
