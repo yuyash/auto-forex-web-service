@@ -517,8 +517,8 @@ class BacktestTaskViewSet(ModelViewSet):
         try:
             # Filter by current execution (celery_task_id)
             logs_queryset = TaskLog.objects.filter(
-                task=task,
-                celery_task_id=task.celery_task_id,
+                task_type="backtest",
+                task_id=task.pk,
             )
 
             if level:
@@ -699,7 +699,7 @@ class BacktestTaskViewSet(ModelViewSet):
     @action(detail=True, methods=["get"])
     def trades(self, request: Request, pk: int | None = None) -> Response:
         """Get task trades from database."""
-        from apps.trading.models.execution import ExecutionTrade
+        from apps.trading.models.execution import Trades
         from apps.trading.serializers import TradeSerializer
 
         task = self.get_object()
@@ -707,10 +707,10 @@ class BacktestTaskViewSet(ModelViewSet):
 
         try:
             # Query trades from database
-            queryset = ExecutionTrade.objects.filter(
-                task=task,
-                celery_task_id=task.celery_task_id,
-            ).order_by("entry_timestamp")
+            queryset = Trades.objects.filter(
+                task_type="backtest",
+                task_id=task.pk,
+            ).order_by("timestamp")
 
             # Filter by direction if specified
             if direction:
@@ -719,13 +719,11 @@ class BacktestTaskViewSet(ModelViewSet):
             trades = queryset.values(
                 "direction",
                 "units",
-                "entry_price",
-                "exit_price",
+                "instrument",
+                "price",
+                "execution_method",
                 "pnl",
-                "pips",
-                "entry_timestamp",
-                "exit_timestamp",
-                "exit_reason",
+                "timestamp",
             )
 
             serializer = TradeSerializer(data=list(trades), many=True)
@@ -754,8 +752,8 @@ class BacktestTaskViewSet(ModelViewSet):
             # Query equity points from database
             equity_points = (
                 ExecutionEquity.objects.filter(
-                    task=task,
-                    celery_task_id=task.celery_task_id,
+                    task_type="backtest",
+                    task_id=task.pk,
                 )
                 .order_by("timestamp")
                 .values("timestamp", "balance")
@@ -1027,8 +1025,8 @@ class TradingTaskViewSet(ModelViewSet):
         try:
             # Filter by current execution (celery_task_id)
             logs_queryset = TaskLog.objects.filter(
-                task=task,
-                celery_task_id=task.celery_task_id,
+                task_type="backtest",
+                task_id=task.pk,
             )
 
             if level:
@@ -1209,7 +1207,7 @@ class TradingTaskViewSet(ModelViewSet):
     @action(detail=True, methods=["get"])
     def trades(self, request: Request, pk: int | None = None) -> Response:
         """Get task trades from database."""
-        from apps.trading.models.execution import ExecutionTrade
+        from apps.trading.models.execution import Trades
         from apps.trading.serializers import TradeSerializer
 
         task = self.get_object()
@@ -1217,10 +1215,10 @@ class TradingTaskViewSet(ModelViewSet):
 
         try:
             # Query trades from database
-            queryset = ExecutionTrade.objects.filter(
-                task=task,
-                celery_task_id=task.celery_task_id,
-            ).order_by("entry_timestamp")
+            queryset = Trades.objects.filter(
+                task_type="backtest",
+                task_id=task.pk,
+            ).order_by("timestamp")
 
             # Filter by direction if specified
             if direction:
@@ -1229,13 +1227,11 @@ class TradingTaskViewSet(ModelViewSet):
             trades = queryset.values(
                 "direction",
                 "units",
-                "entry_price",
-                "exit_price",
+                "instrument",
+                "price",
+                "execution_method",
                 "pnl",
-                "pips",
-                "entry_timestamp",
-                "exit_timestamp",
-                "exit_reason",
+                "timestamp",
             )
 
             serializer = TradeSerializer(data=list(trades), many=True)
@@ -1264,8 +1260,8 @@ class TradingTaskViewSet(ModelViewSet):
             # Query equity points from database
             equity_points = (
                 ExecutionEquity.objects.filter(
-                    task=task,
-                    celery_task_id=task.celery_task_id,
+                    task_type="backtest",
+                    task_id=task.pk,
                 )
                 .order_by("timestamp")
                 .values("timestamp", "balance")

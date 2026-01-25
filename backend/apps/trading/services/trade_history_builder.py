@@ -100,38 +100,35 @@ class TradeHistoryBuilder:
         Args:
             trades: List of trade dictionaries to persist
         """
-        from apps.trading.models import ExecutionTrade
+        from apps.trading.models import Trades
 
         trade_records = []
         for trade in trades:
-            # Parse timestamps
-            entry_ts = self._parse_timestamp(trade.get("entry_timestamp"))
-            exit_ts = self._parse_timestamp(trade.get("exit_timestamp"))
+            # Parse timestamp
+            timestamp = self._parse_timestamp(trade.get("timestamp"))
 
-            if not entry_ts:
+            if not timestamp:
                 continue
 
+            # Determine task_type based on task model
+            task_type = "backtest" if hasattr(self.task, "data_source") else "trading"
+
             trade_records.append(
-                ExecutionTrade(
-                    task=self.task,
-                    celery_task_id=self.celery_task_id,
+                Trades(
+                    task_type=task_type,
+                    task_id=self.task.pk,
+                    timestamp=timestamp,
                     direction=trade.get("direction", "unknown"),
                     units=trade.get("units", 0),
-                    entry_price=Decimal(str(trade.get("entry_price", "0"))),
-                    exit_price=Decimal(str(trade.get("exit_price", "0")))
-                    if trade.get("exit_price")
-                    else None,
+                    instrument=trade.get("instrument", ""),
+                    price=Decimal(str(trade.get("price", "0"))),
+                    execution_method=trade.get("execution_method", "unknown"),
                     pnl=Decimal(str(trade.get("pnl", "0"))) if trade.get("pnl") else None,
-                    pips=Decimal(str(trade.get("pips", "0"))) if trade.get("pips") else None,
-                    entry_timestamp=entry_ts,
-                    exit_timestamp=exit_ts,
-                    exit_reason=trade.get("exit_reason"),
-                    layer_number=trade.get("layer_number", 0),
                 )
             )
 
         if trade_records:
-            ExecutionTrade.objects.bulk_create(trade_records, ignore_conflicts=True)
+            Trades.objects.bulk_create(trade_records, ignore_conflicts=True)
 
     def _parse_timestamp(self, ts: Any) -> datetime | None:
         """Parse timestamp from various formats.

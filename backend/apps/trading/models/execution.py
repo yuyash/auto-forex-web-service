@@ -5,7 +5,7 @@ from uuid import uuid4
 from django.db import models
 
 
-class ExecutionTrade(models.Model):
+class Trades(models.Model):
     """
     Completed trade from task execution.
 
@@ -19,79 +19,60 @@ class ExecutionTrade(models.Model):
         editable=False,
         help_text="Unique identifier for this trade",
     )
-    task = models.ForeignKey(
-        "trading.BacktestTasks",
-        on_delete=models.CASCADE,
-        related_name="trades",
-        help_text="Task this trade belongs to",
+    task_type = models.CharField(
+        max_length=32,
+        db_index=True,
+        help_text="Type of task (backtest or trading)",
+    )
+    task_id = models.UUIDField(
+        db_index=True,
+        help_text="UUID of the task this trade belongs to",
+    )
+    timestamp = models.DateTimeField(
+        db_index=True,
+        help_text="When the trade was executed",
     )
     direction = models.CharField(
         max_length=10,
-        help_text="Trade direction (long/short)",
+        help_text="Trade direction (LONG/SHORT)",
     )
     units = models.IntegerField(
         help_text="Number of units traded",
     )
-    entry_price = models.DecimalField(
-        max_digits=20,
-        decimal_places=5,
-        help_text="Entry price",
+    instrument = models.CharField(
+        max_length=32,
+        help_text="Trading instrument (e.g., EUR_USD)",
     )
-    exit_price = models.DecimalField(
+    price = models.DecimalField(
         max_digits=20,
-        decimal_places=5,
-        null=True,
-        blank=True,
-        help_text="Exit price",
+        decimal_places=10,
+        help_text="Execution price",
+    )
+    execution_method = models.CharField(
+        max_length=64,
+        help_text="Event type that triggered trade (e.g., INITIAL_ENTRY, RETRACEMENT)",
     )
     pnl = models.DecimalField(
         max_digits=20,
-        decimal_places=5,
+        decimal_places=10,
         null=True,
         blank=True,
-        help_text="Profit/loss in account currency",
-    )
-    pips = models.DecimalField(
-        max_digits=20,
-        decimal_places=5,
-        null=True,
-        blank=True,
-        help_text="Profit/loss in pips",
-    )
-    entry_timestamp = models.DateTimeField(
-        help_text="When the position was opened",
-    )
-    exit_timestamp = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When the position was closed",
-    )
-    exit_reason = models.CharField(
-        max_length=50,
-        null=True,
-        blank=True,
-        help_text="Reason for exit (take_profit, stop_loss, etc.)",
-    )
-    layer_number = models.IntegerField(
-        default=0,
-        help_text="Layer number for multi-layer strategies",
+        help_text="Profit/loss for this trade (for closes)",
     )
 
     class Meta:
-        db_table = "execution_trades"
-        verbose_name = "Execution Trade"
-        verbose_name_plural = "Execution Trades"
-        ordering = ["entry_timestamp"]
+        db_table = "trades"
+        verbose_name = "Trade"
+        verbose_name_plural = "Trades"
+        ordering = ["timestamp"]
         indexes = [
-            models.Index(fields=["task", "entry_timestamp"]),
-            models.Index(fields=["task", "exit_timestamp"]),
-            models.Index(fields=["task", "direction"]),
+            models.Index(fields=["task_type", "task_id", "-timestamp"]),
+            models.Index(fields=["task_type", "task_id", "instrument"]),
+            models.Index(fields=["execution_method"]),
         ]
 
     def __str__(self) -> str:
-        return (
-            f"{self.direction} {self.units} @ {self.entry_price} -> {self.exit_price} ({self.pnl})"
-        )
+        return f"{self.direction} {self.units} {self.instrument} @ {self.price} ({self.pnl})"
 
 
 class ExecutionEquity(models.Model):

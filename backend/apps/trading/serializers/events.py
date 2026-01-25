@@ -28,21 +28,17 @@ class TradingEventSerializer(serializers.ModelSerializer):
 
 
 class TradeSerializer(serializers.Serializer):
-    """Serializer for trade data from ExecutionTrade model."""
+    """Serializer for trade data from Trades model."""
 
-    direction = serializers.ChoiceField(choices=["long", "short"])
+    direction = serializers.ChoiceField(choices=["long", "short", "LONG", "SHORT"])
     units = serializers.IntegerField()
-    entry_price = serializers.DecimalField(max_digits=20, decimal_places=5)
-    exit_price = serializers.DecimalField(
-        max_digits=20, decimal_places=5, required=False, allow_null=True
+    instrument = serializers.CharField()
+    price = serializers.DecimalField(max_digits=20, decimal_places=10)
+    execution_method = serializers.CharField()
+    pnl = serializers.DecimalField(
+        max_digits=20, decimal_places=10, required=False, allow_null=True
     )
-    pnl = serializers.DecimalField(max_digits=20, decimal_places=5, required=False, allow_null=True)
-    pips = serializers.DecimalField(
-        max_digits=20, decimal_places=5, required=False, allow_null=True
-    )
-    entry_timestamp = serializers.DateTimeField()
-    exit_timestamp = serializers.DateTimeField(required=False, allow_null=True)
-    exit_reason = serializers.CharField(required=False, allow_null=True)
+    timestamp = serializers.DateTimeField()
 
 
 class EquityPointSerializer(serializers.Serializer):
