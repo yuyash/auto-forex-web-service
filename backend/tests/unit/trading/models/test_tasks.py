@@ -418,6 +418,19 @@ class TestTradingTasksModel:
             is_active=True,
         )
 
+    def test_create_with_uuid_primary_key(self, user, config, oanda_account):
+        """Test that TradingTasks uses UUID as primary key."""
+        task = TradingTasks.objects.create(
+            name="UUID Test",
+            user=user,
+            config=config,
+            oanda_account=oanda_account,
+        )
+
+        # Verify ID is UUID
+        assert isinstance(task.id, UUID)
+        assert task.id.version == 4
+
     def test_create_trading_task_with_valid_data(self, user, config, oanda_account):
         """Test creating TradingTasks with valid fields."""
         task = TradingTasks.objects.create(

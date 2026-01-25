@@ -463,7 +463,7 @@ class TradingTasksManager(models.Manager["TradingTasks"]):
         return self.filter(config=config)
 
 
-class TradingTasks(models.Model):
+class TradingTasks(UUIDModel):
     """
     Persistent live trading task with reusable configuration.
 
@@ -472,6 +472,8 @@ class TradingTasks(models.Model):
     with each execution tracked separately.
 
     Only one task can be running per account at a time.
+
+    Inherits UUID primary key and timestamps from UUIDModel.
     """
 
     objects = TradingTasksManager()
@@ -509,14 +511,6 @@ class TradingTasks(models.Model):
         choices=TaskStatus.choices,
         db_index=True,
         help_text="Current task status",
-    )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        help_text="Timestamp when the task was created",
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        help_text="Timestamp when the task was last updated",
     )
 
     # Celery Integration
