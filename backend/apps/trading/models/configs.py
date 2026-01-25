@@ -1,10 +1,14 @@
 """Strategy configuration models."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.db import models
 
 from apps.trading.enums import StrategyType
+from apps.trading.models.base import UUIDModel
+
+if TYPE_CHECKING:
+    from apps.trading.models.tasks import BacktestTasks, TradingTasks
 
 
 class StrategyConfigurationsManager(models.Manager["StrategyConfigurations"]):
@@ -17,10 +21,18 @@ class StrategyConfigurationsManager(models.Manager["StrategyConfigurations"]):
         return self.filter(user=user)
 
 
-class StrategyConfigurations(models.Model):
-    """Reusable strategy configuration used by TradingTasks and BacktestTasks."""
+class StrategyConfigurations(UUIDModel):
+    """Reusable strategy configuration used by TradingTasks and BacktestTasks.
+
+    Inherits UUID primary key and timestamps from UUIDModel.
+    """
 
     objects = StrategyConfigurationsManager()
+
+    # Type hints for reverse relations (created by ForeignKey related_name)
+    if TYPE_CHECKING:
+        backtest_tasks: models.Manager["BacktestTasks"]
+        trading_tasks: models.Manager["TradingTasks"]
 
     user = models.ForeignKey(
         "accounts.User",
@@ -45,14 +57,6 @@ class StrategyConfigurations(models.Model):
         default="",
         help_text="Optional description of this configuration",
     )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        help_text="Timestamp when the configuration was created",
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        help_text="Timestamp when the configuration was last updated",
-    )
 
     class Meta:
         db_table = "strategy_configurations"
@@ -69,6 +73,42 @@ class StrategyConfigurations(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.strategy_type})"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert configuration to dictionary.
+
+        Returns:
+            Dictionary representation of the configuration
+        """
+        return {
+            "id": str(self.id),
+            "user_id": self.user.pk,
+            "name": self.name,
+            "strategy_type": self.strategy_type,
+            "parameters": self.parameters,
+            "description": self.description,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], user: Any) -> "StrategyConfigurations":
+        """Create configuration from dictionary.
+
+        Args:
+            data: Dictionary containing configuration data
+            user: User instance to associate with the configuration
+
+        Returns:
+            StrategyConfigurations instance
+        """
+        return cls(
+            user=user,
+            name=data["name"],
+            strategy_type=data["strategy_type"],
+            parameters=data.get("parameters", {}),
+            description=data.get("description", ""),
+        )
 
     @property
     def strategy_type_enum(self) -> "StrategyType":
@@ -91,6 +131,11 @@ class StrategyConfigurations(models.Model):
         return self.parameters or {}
 
     def is_in_use(self) -> bool:
+        """Check if configuration is currently in use by any running tasks.
+
+        Returns:
+            True if configuration is in use, False otherwise
+        """
         from apps.trading.enums import TaskStatus
         from apps.trading.models.tasks import BacktestTasks, TradingTasks
 
@@ -106,7 +151,11 @@ class StrategyConfigurations(models.Model):
         )
 
     def validate_parameters(self) -> tuple[bool, str | None]:
-        """Validate parameters against the strategy registry schema (best-effort)."""
+        """Validate parameters against the strategy registry schema (best-effort).
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
         from apps.trading.services.registry import registry
 
         if not registry.is_registered(self.strategy_type):

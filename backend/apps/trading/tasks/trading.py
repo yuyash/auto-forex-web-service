@@ -1,8 +1,11 @@
 """Celery tasks for live trading execution."""
 
+from __future__ import annotations
+
 import traceback
 from logging import Logger, getLogger
 from typing import Any
+from uuid import UUID
 
 from celery import shared_task
 from django.utils import timezone as dj_timezone
@@ -22,11 +25,11 @@ logger: Logger = getLogger(name=__name__)
     retry_backoff_max=600,
     retry_jitter=True,
 )
-def run_trading_task(self: Any, task_id: int, execution_id: int | None = None) -> None:
+def run_trading_task(self: Any, task_id: UUID, execution_id: int | None = None) -> None:
     """Celery task wrapper for running trading tasks.
 
     Args:
-        task_id: ID of the TradingTasks to execute
+        task_id: UUID of the TradingTasks to execute
         execution_id: Deprecated parameter (ignored)
     """
     task = None
@@ -152,13 +155,13 @@ def _execute_trading(task: TradingTasks) -> None:
 
 
 @shared_task(bind=True, name="trading.tasks.stop_trading_task")
-def stop_trading_task(self: Any, task_id: int, mode: str = "graceful") -> None:
+def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
     """Request stop for a running trading task.
 
     This handles complex cleanup operations like closing positions.
 
     Args:
-        task_id: ID of the trading task to stop
+        task_id: UUID of the trading task to stop
         mode: Stop mode ('immediate', 'graceful', 'graceful_close')
     """
     task_name = "trading.tasks.run_trading_task"
@@ -173,7 +176,7 @@ def stop_trading_task(self: Any, task_id: int, mode: str = "graceful") -> None:
 
 
 @shared_task(bind=True, name="trading.tasks.async_stop_trading_task")
-def async_stop_trading_task(self: Any, task_id: int, mode: str = "graceful") -> dict[str, Any]:
+def async_stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> dict[str, Any]:
     """Asynchronously stop a running trading task.
 
     This task handles the complete stop process for trading tasks including:
@@ -189,7 +192,7 @@ def async_stop_trading_task(self: Any, task_id: int, mode: str = "graceful") -> 
     for stop requests and cleans up properly (e.g., closing positions).
 
     Args:
-        task_id: ID of the trading task to stop
+        task_id: UUID of the trading task to stop
         mode: Stop mode ('immediate', 'graceful', 'graceful_close')
 
     Returns:
@@ -307,7 +310,7 @@ def async_stop_trading_task(self: Any, task_id: int, mode: str = "graceful") -> 
 
 
 @shared_task(bind=True, name="trading.tasks.async_stop_backtest_task")
-def async_stop_backtest_task(self: Any, task_id: int) -> dict[str, Any]:
+def async_stop_backtest_task(self: Any, task_id: UUID) -> dict[str, Any]:
     """Asynchronously stop a running backtest task.
 
     This task handles the complete stop process for backtest tasks including:
@@ -317,7 +320,7 @@ def async_stop_backtest_task(self: Any, task_id: int) -> dict[str, Any]:
     4. Recording completion timestamp
 
     Args:
-        task_id: ID of the backtest task to stop
+        task_id: UUID of the backtest task to stop
 
     Returns:
         dict: Result containing success status and message
@@ -455,7 +458,7 @@ def async_stop_backtest_task(self: Any, task_id: int) -> dict[str, Any]:
         return {"success": False, "error": error_msg}
 
 
-def async_stop_task(self: Any, task_id: int, task_type: str) -> dict[str, Any]:
+def async_stop_task(self: Any, task_id: UUID, task_type: str) -> dict[str, Any]:
     """Asynchronously stop a running task (backtest or trading).
 
     This task handles the complete stop process including:
@@ -464,7 +467,7 @@ def async_stop_task(self: Any, task_id: int, task_type: str) -> dict[str, Any]:
     3. Recording completion timestamp
 
     Args:
-        task_id: ID of the task to stop
+        task_id: UUID of the task to stop
         task_type: Type of task ('backtest' or 'trading')
 
     Returns:

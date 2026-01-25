@@ -1,8 +1,11 @@
 """Celery tasks for backtest execution."""
 
+from __future__ import annotations
+
 import traceback
 from logging import Logger, getLogger
 from typing import Any
+from uuid import UUID
 
 from celery import shared_task
 from django.utils import timezone as dj_timezone
@@ -22,11 +25,11 @@ logger: Logger = getLogger(__name__)
     retry_backoff_max=600,
     retry_jitter=True,
 )
-def run_backtest_task(self: Any, task_id: int, execution_id: int | None = None) -> None:
+def run_backtest_task(self: Any, task_id: UUID, execution_id: int | None = None) -> None:
     """Celery task wrapper for running backtest tasks.
 
     Args:
-        task_id: ID of the BacktestTasks to execute
+        task_id: UUID of the BacktestTasks to execute
         execution_id: Deprecated parameter (ignored)
     """
     task = None
