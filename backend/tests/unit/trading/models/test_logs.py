@@ -3,7 +3,7 @@
 import pytest
 from django.contrib.auth import get_user_model
 
-from apps.trading.enums import LogLevel, TaskStatus
+from apps.trading.enums import LogLevel, TaskStatus, TaskType
 from apps.trading.models import (
     BacktestTasks,
     StrategyConfigurations,
@@ -58,21 +58,25 @@ class TestTaskLogModel:
     def test_create_task_log(self, backtest_task):
         """Test creating a task log entry."""
         log = TaskLog.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             level=LogLevel.INFO,
             message="Test log message",
         )
 
-        assert log.task == backtest_task
+        assert log.task_type == TaskType.BACKTEST
+        assert log.task_id == backtest_task.id
         assert log.level == LogLevel.INFO
         assert log.message == "Test log message"
         assert log.timestamp is not None
         assert log.id is not None
+        assert log.details == {}
 
     def test_task_log_default_level(self, backtest_task):
         """Test task log with default level."""
         log = TaskLog.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             message="Test message",
         )
 
@@ -90,7 +94,8 @@ class TestTaskLogModel:
 
         for level in levels:
             log = TaskLog.objects.create(
-                task=backtest_task,
+                task_type=TaskType.BACKTEST,
+                task_id=backtest_task.id,
                 level=level,
                 message=f"Test {level} message",
             )
@@ -99,91 +104,109 @@ class TestTaskLogModel:
     def test_task_log_ordering(self, backtest_task):
         """Test that logs are ordered by timestamp."""
         log1 = TaskLog.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             level=LogLevel.INFO,
             message="First log",
         )
         log2 = TaskLog.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             level=LogLevel.INFO,
             message="Second log",
         )
         log3 = TaskLog.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             level=LogLevel.INFO,
             message="Third log",
         )
 
-        logs = list(TaskLog.objects.filter(task=backtest_task))
+        logs = list(TaskLog.objects.filter(task_type=TaskType.BACKTEST, task_id=backtest_task.id))
         assert logs[0] == log1
         assert logs[1] == log2
         assert logs[2] == log3
 
-    def test_task_log_foreign_key_relationship(self, backtest_task):
-        """Test foreign key relationship with task."""
+    def test_task_log_polymorphic_reference(self, backtest_task):
+        """Test polymorphic task reference."""
         log1 = TaskLog.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             level=LogLevel.INFO,
             message="Log 1",
         )
         log2 = TaskLog.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             level=LogLevel.ERROR,
             message="Log 2",
         )
 
-        # Access logs through task's related manager
-        task_logs = backtest_task.logs.all()
+        # Query logs by task_type and task_id
+        task_logs = TaskLog.objects.filter(task_type=TaskType.BACKTEST, task_id=backtest_task.id)
         assert task_logs.count() == 2
         assert log1 in task_logs
         assert log2 in task_logs
 
-    def test_task_log_cascade_delete(self, backtest_task):
-        """Test that logs are deleted when task is deleted."""
-        TaskLog.objects.create(
-            task=backtest_task,
-            level=LogLevel.INFO,
-            message="Test log",
-        )
-
-        task_id = backtest_task.id
-        backtest_task.delete()
-
-        # Verify logs are deleted
-        assert TaskLog.objects.filter(task_id=task_id).count() == 0
-
     def test_task_log_str_representation(self, backtest_task):
         """Test string representation of task log."""
         log = TaskLog.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             level=LogLevel.ERROR,
             message="This is a test error message that is quite long",
         )
 
         str_repr = str(log)
         assert log.level in str_repr
-        assert "This is a test error message that is quite long"[:50] in str_repr
+        assert str(log.task_type) in str_repr
+        assert str(log.task_id) in str_repr
 
     def test_task_log_filter_by_level(self, backtest_task):
         """Test filtering logs by level."""
         TaskLog.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             level=LogLevel.INFO,
             message="Info message",
         )
         TaskLog.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             level=LogLevel.ERROR,
             message="Error message",
         )
         TaskLog.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             level=LogLevel.ERROR,
             message="Another error",
         )
 
-        error_logs = TaskLog.objects.filter(task=backtest_task, level=LogLevel.ERROR)
+        error_logs = TaskLog.objects.filter(
+            task_type=TaskType.BACKTEST, task_id=backtest_task.id, level=LogLevel.ERROR
+        )
         assert error_logs.count() == 2
+
+    def test_task_log_with_details(self, backtest_task):
+        """Test task log with details JSONField."""
+        details = {
+            "context": "test_context",
+            "extra_info": "some extra information",
+            "nested": {"key": "value"},
+        }
+
+        log = TaskLog.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
+            level=LogLevel.INFO,
+            message="Test log with details",
+            details=details,
+        )
+
+        assert log.details == details
+        assert log.details["context"] == "test_context"
+        assert log.details["nested"]["key"] == "value"
 
 
 @pytest.mark.django_db
@@ -193,12 +216,14 @@ class TestTaskMetricModel:
     def test_create_task_metric(self, backtest_task):
         """Test creating a task metric entry."""
         metric = TaskMetric.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             metric_name="equity",
             metric_value=10500.50,
         )
 
-        assert metric.task == backtest_task
+        assert metric.task_type == TaskType.BACKTEST
+        assert metric.task_id == backtest_task.id
         assert metric.metric_name == "equity"
         assert metric.metric_value == 10500.50
         assert metric.timestamp is not None
@@ -214,7 +239,8 @@ class TestTaskMetricModel:
         }
 
         metric = TaskMetric.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             metric_name="drawdown",
             metric_value=250.75,
             metadata=metadata,
@@ -227,63 +253,59 @@ class TestTaskMetricModel:
     def test_task_metric_ordering(self, backtest_task):
         """Test that metrics are ordered by timestamp."""
         metric1 = TaskMetric.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             metric_name="equity",
             metric_value=10000.0,
         )
         metric2 = TaskMetric.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             metric_name="equity",
             metric_value=10100.0,
         )
         metric3 = TaskMetric.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             metric_name="equity",
             metric_value=10200.0,
         )
 
-        metrics = list(TaskMetric.objects.filter(task=backtest_task))
+        metrics = list(
+            TaskMetric.objects.filter(task_type=TaskType.BACKTEST, task_id=backtest_task.id)
+        )
         assert metrics[0] == metric1
         assert metrics[1] == metric2
         assert metrics[2] == metric3
 
-    def test_task_metric_foreign_key_relationship(self, backtest_task):
-        """Test foreign key relationship with task."""
+    def test_task_metric_polymorphic_reference(self, backtest_task):
+        """Test polymorphic task reference."""
         metric1 = TaskMetric.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             metric_name="equity",
             metric_value=10000.0,
         )
         metric2 = TaskMetric.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             metric_name="drawdown",
             metric_value=150.0,
         )
 
-        # Access metrics through task's related manager
-        task_metrics = backtest_task.metrics.all()
+        # Query metrics by task_type and task_id
+        task_metrics = TaskMetric.objects.filter(
+            task_type=TaskType.BACKTEST, task_id=backtest_task.id
+        )
         assert task_metrics.count() == 2
         assert metric1 in task_metrics
         assert metric2 in task_metrics
 
-    def test_task_metric_cascade_delete(self, backtest_task):
-        """Test that metrics are deleted when task is deleted."""
-        TaskMetric.objects.create(
-            task=backtest_task,
-            metric_name="equity",
-            metric_value=10000.0,
-        )
-
-        task_id = backtest_task.id
-        backtest_task.delete()
-
-        # Verify metrics are deleted
-        assert TaskMetric.objects.filter(task_id=task_id).count() == 0
-
     def test_task_metric_str_representation(self, backtest_task):
         """Test string representation of task metric."""
         metric = TaskMetric.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             metric_name="total_trades",
             metric_value=42.0,
         )
@@ -291,26 +313,33 @@ class TestTaskMetricModel:
         str_repr = str(metric)
         assert "total_trades" in str_repr
         assert "42" in str_repr
+        assert str(metric.task_type) in str_repr
+        assert str(metric.task_id) in str_repr
 
     def test_task_metric_filter_by_name(self, backtest_task):
         """Test filtering metrics by name."""
         TaskMetric.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             metric_name="equity",
             metric_value=10000.0,
         )
         TaskMetric.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             metric_name="equity",
             metric_value=10100.0,
         )
         TaskMetric.objects.create(
-            task=backtest_task,
+            task_type=TaskType.BACKTEST,
+            task_id=backtest_task.id,
             metric_name="drawdown",
             metric_value=150.0,
         )
 
-        equity_metrics = TaskMetric.objects.filter(task=backtest_task, metric_name="equity")
+        equity_metrics = TaskMetric.objects.filter(
+            task_type=TaskType.BACKTEST, task_id=backtest_task.id, metric_name="equity"
+        )
         assert equity_metrics.count() == 2
 
     def test_task_metric_multiple_metric_types(self, backtest_task):
@@ -325,16 +354,22 @@ class TestTaskMetricModel:
 
         for name, value in metrics_data:
             TaskMetric.objects.create(
-                task=backtest_task,
+                task_type=TaskType.BACKTEST,
+                task_id=backtest_task.id,
                 metric_name=name,
                 metric_value=value,
             )
 
-        assert TaskMetric.objects.filter(task=backtest_task).count() == 5
+        assert (
+            TaskMetric.objects.filter(task_type=TaskType.BACKTEST, task_id=backtest_task.id).count()
+            == 5
+        )
 
         # Verify each metric
         for name, value in metrics_data:
-            metric = TaskMetric.objects.get(task=backtest_task, metric_name=name)
+            metric = TaskMetric.objects.get(
+                task_type=TaskType.BACKTEST, task_id=backtest_task.id, metric_name=name
+            )
             assert metric.metric_value == value
 
 
@@ -347,16 +382,19 @@ class TestTaskLogAndMetricIndexes:
         # Create some logs
         for i in range(5):
             TaskLog.objects.create(
-                task=backtest_task,
+                task_type=TaskType.BACKTEST,
+                task_id=backtest_task.id,
                 level=LogLevel.INFO if i % 2 == 0 else LogLevel.ERROR,
                 message=f"Log {i}",
             )
 
         # Query using indexed fields should work efficiently
-        logs_by_task = TaskLog.objects.filter(task=backtest_task)
+        logs_by_task = TaskLog.objects.filter(task_type=TaskType.BACKTEST, task_id=backtest_task.id)
         assert logs_by_task.count() == 5
 
-        logs_by_level = TaskLog.objects.filter(task=backtest_task, level=LogLevel.ERROR)
+        logs_by_level = TaskLog.objects.filter(
+            task_type=TaskType.BACKTEST, task_id=backtest_task.id, level=LogLevel.ERROR
+        )
         assert logs_by_level.count() == 2
 
     def test_task_metric_indexes_exist(self, backtest_task):
@@ -364,14 +402,19 @@ class TestTaskLogAndMetricIndexes:
         # Create some metrics
         for i in range(5):
             TaskMetric.objects.create(
-                task=backtest_task,
+                task_type=TaskType.BACKTEST,
+                task_id=backtest_task.id,
                 metric_name="equity" if i % 2 == 0 else "drawdown",
                 metric_value=float(10000 + i * 100),
             )
 
         # Query using indexed fields should work efficiently
-        metrics_by_task = TaskMetric.objects.filter(task=backtest_task)
+        metrics_by_task = TaskMetric.objects.filter(
+            task_type=TaskType.BACKTEST, task_id=backtest_task.id
+        )
         assert metrics_by_task.count() == 5
 
-        metrics_by_name = TaskMetric.objects.filter(task=backtest_task, metric_name="equity")
+        metrics_by_name = TaskMetric.objects.filter(
+            task_type=TaskType.BACKTEST, task_id=backtest_task.id, metric_name="equity"
+        )
         assert metrics_by_name.count() == 3

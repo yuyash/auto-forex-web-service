@@ -91,27 +91,36 @@ class TradingEventsAdmin(admin.ModelAdmin):
 class TaskLogAdmin(admin.ModelAdmin):
     list_display = (
         "id",
-        "task",
+        "task_type",
+        "task_id",
         "timestamp",
         "level",
         "message",
     )
-    list_filter = ("level", "timestamp")
-    search_fields = ("task__name", "message")
+    list_filter = ("task_type", "level", "timestamp")
+    search_fields = ("task_id", "message")
     ordering = ("-timestamp",)
-    readonly_fields = ("task", "timestamp", "level", "message")
+    readonly_fields = ("task_type", "task_id", "timestamp", "level", "message", "details")
 
 
 @admin.register(TaskMetric)
 class TaskMetricAdmin(admin.ModelAdmin):
     list_display = (
         "id",
-        "task",
+        "task_type",
+        "task_id",
         "metric_name",
         "metric_value",
         "timestamp",
     )
-    list_filter = ("metric_name", "timestamp")
-    search_fields = ("task__name", "metric_name")
+    list_filter = ("task_type", "metric_name", "timestamp")
+    search_fields = ("task_id", "metric_name")
     ordering = ("-timestamp",)
-    readonly_fields = ("task", "metric_name", "metric_value", "timestamp", "metadata")
+    readonly_fields = (
+        "task_type",
+        "task_id",
+        "metric_name",
+        "metric_value",
+        "timestamp",
+        "metadata",
+    )
