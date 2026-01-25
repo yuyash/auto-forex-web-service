@@ -124,7 +124,7 @@ def _execute_trading(task: TradingTasks) -> None:
     # Create strategy instance
     strategy = registry.create(
         instrument=task.instrument,
-        pip_size=task._pip_size or task.config.get_pip_size(),
+        pip_size=task.pip_size or task.config.get_pip_size(),
         strategy_config=task.config,
         trading_mode=task.trading_mode,
     )

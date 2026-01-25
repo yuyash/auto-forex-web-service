@@ -300,7 +300,7 @@ class TestStrategyConfigurationsIntegration:
     def test_is_in_use_with_running_backtest_task(self, user):
         """Test is_in_use returns True when a running backtest task references the config."""
         from apps.trading.enums import TaskStatus
-        from apps.trading.models.tasks import BacktestTasks
+        from apps.trading.models import BacktestTasks
 
         config = StrategyConfigurations.objects.create(
             user=user,
@@ -324,7 +324,7 @@ class TestStrategyConfigurationsIntegration:
     def test_is_in_use_with_completed_backtest_task(self, user):
         """Test is_in_use returns False when only completed backtest tasks reference the config."""
         from apps.trading.enums import TaskStatus
-        from apps.trading.models.tasks import BacktestTasks
+        from apps.trading.models import BacktestTasks
 
         config = StrategyConfigurations.objects.create(
             user=user,
@@ -349,7 +349,7 @@ class TestStrategyConfigurationsIntegration:
         """Test is_in_use returns True when a running trading task references the config."""
         from apps.market.models import OandaAccounts
         from apps.trading.enums import TaskStatus
-        from apps.trading.models.tasks import TradingTasks
+        from apps.trading.models import TradingTasks
 
         config = StrategyConfigurations.objects.create(
             user=user,
@@ -380,7 +380,7 @@ class TestStrategyConfigurationsIntegration:
         """Test is_in_use returns False when only stopped trading tasks reference the config."""
         from apps.market.models import OandaAccounts
         from apps.trading.enums import TaskStatus
-        from apps.trading.models.tasks import TradingTasks
+        from apps.trading.models import TradingTasks
 
         config = StrategyConfigurations.objects.create(
             user=user,
@@ -411,7 +411,7 @@ class TestStrategyConfigurationsIntegration:
         """Test is_in_use with multiple tasks in different states."""
         from apps.market.models import OandaAccounts
         from apps.trading.enums import TaskStatus
-        from apps.trading.models.tasks import BacktestTasks, TradingTasks
+        from apps.trading.models import BacktestTasks, TradingTasks
 
         config = StrategyConfigurations.objects.create(
             user=user,
@@ -517,7 +517,7 @@ class TestStrategyConfigurationsIntegration:
 
     def test_related_name_backtest_tasks(self, user):
         """Test that backtest_tasks related name works correctly."""
-        from apps.trading.models.tasks import BacktestTasks
+        from apps.trading.models import BacktestTasks
 
         config = StrategyConfigurations.objects.create(
             user=user,
@@ -551,7 +551,7 @@ class TestStrategyConfigurationsIntegration:
     def test_related_name_trading_tasks(self, user):
         """Test that trading_tasks related name works correctly."""
         from apps.market.models import OandaAccounts
-        from apps.trading.models.tasks import TradingTasks
+        from apps.trading.models import TradingTasks
 
         config = StrategyConfigurations.objects.create(
             user=user,
@@ -591,7 +591,7 @@ class TestStrategyConfigurationsIntegration:
         """Test that config cannot be deleted when backtest tasks reference it."""
         from django.db.models import ProtectedError
 
-        from apps.trading.models.tasks import BacktestTasks
+        from apps.trading.models import BacktestTasks
 
         config = StrategyConfigurations.objects.create(
             user=user,
@@ -618,7 +618,7 @@ class TestStrategyConfigurationsIntegration:
         from django.db.models import ProtectedError
 
         from apps.market.models import OandaAccounts
-        from apps.trading.models.tasks import TradingTasks
+        from apps.trading.models import TradingTasks
 
         config = StrategyConfigurations.objects.create(
             user=user,

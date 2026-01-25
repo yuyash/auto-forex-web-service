@@ -365,7 +365,7 @@ class TaskServiceImpl(TaskService):
                     initial_balance=kwargs.get("initial_balance", 10000),
                     commission_per_trade=kwargs.get("commission_per_trade", 0),
                     instrument=kwargs.get("instrument", "USD_JPY"),
-                    _pip_size=kwargs.get("pip_size", 0.01),
+                    pip_size=kwargs.get("pip_size", 0.01),
                     trading_mode=kwargs.get("trading_mode", "netting"),
                 )
             elif task_type == TaskTypeEnum.TRADING:
@@ -397,7 +397,7 @@ class TaskServiceImpl(TaskService):
                     description=kwargs.get("description", ""),
                     sell_on_stop=kwargs.get("sell_on_stop", False),
                     instrument=kwargs.get("instrument", "USD_JPY"),
-                    _pip_size=kwargs.get("pip_size", 0.01),
+                    pip_size=kwargs.get("pip_size", 0.01),
                     trading_mode=kwargs.get("trading_mode", "netting"),
                 )
             else:

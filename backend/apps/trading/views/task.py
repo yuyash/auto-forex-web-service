@@ -16,8 +16,8 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from apps.trading.enums import LogLevel, TaskStatus
+from apps.trading.models import BacktestTasks, TradingTasks
 from apps.trading.models.logs import TaskLog
-from apps.trading.models.tasks import BacktestTasks, TradingTasks
 from apps.trading.serializers import (
     EquityPointSerializer,
     TradeSerializer,
@@ -653,37 +653,6 @@ class BacktestTaskViewSet(ModelViewSet):
             )
 
     @extend_schema(
-        summary="Get task results",
-        description="Retrieve task execution results",
-        responses={200: dict, 400: dict},
-    )
-    @action(detail=True, methods=["get"])
-    def results(self, request: Request, pk: int | None = None) -> Response:
-        """Get task results."""
-        task = self.get_object()
-
-        if task.status != TaskStatus.COMPLETED:
-            return Response(
-                {"error": "Task has not completed yet"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            # Use get_result_data to handle both inline and external storage
-            result_data = task.get_result_data()
-            return Response({"results": result_data})
-        except FileNotFoundError as e:
-            return Response(
-                {"error": f"Result data not found: {str(e)}"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to retrieve results: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-    @extend_schema(
         summary="Get task trades",
         description="Retrieve trade history from task execution state",
         parameters=[
@@ -699,7 +668,7 @@ class BacktestTaskViewSet(ModelViewSet):
     @action(detail=True, methods=["get"])
     def trades(self, request: Request, pk: int | None = None) -> Response:
         """Get task trades from database."""
-        from apps.trading.models.execution import Trades
+        from apps.trading.models.trades import Trades
         from apps.trading.serializers import TradeSerializer
 
         task = self.get_object()
@@ -743,7 +712,7 @@ class BacktestTaskViewSet(ModelViewSet):
     @action(detail=True, methods=["get"])
     def equity(self, request: Request, pk: int | None = None) -> Response:
         """Get task equity curve from database."""
-        from apps.trading.models.execution import Equities
+        from apps.trading.models.equities import Equities
         from apps.trading.serializers import EquityPointSerializer
 
         task = self.get_object()
@@ -1161,37 +1130,6 @@ class TradingTaskViewSet(ModelViewSet):
             )
 
     @extend_schema(
-        summary="Get task results",
-        description="Retrieve task execution results",
-        responses={200: dict, 400: dict},
-    )
-    @action(detail=True, methods=["get"])
-    def results(self, request: Request, pk: int | None = None) -> Response:
-        """Get task results."""
-        task = self.get_object()
-
-        if task.status != TaskStatus.COMPLETED:
-            return Response(
-                {"error": "Task has not completed yet"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            # Use get_result_data to handle both inline and external storage
-            result_data = task.get_result_data()
-            return Response({"results": result_data})
-        except FileNotFoundError as e:
-            return Response(
-                {"error": f"Result data not found: {str(e)}"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to retrieve results: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-    @extend_schema(
         summary="Get task trades",
         description="Retrieve trade history from task execution state",
         parameters=[
@@ -1207,7 +1145,7 @@ class TradingTaskViewSet(ModelViewSet):
     @action(detail=True, methods=["get"])
     def trades(self, request: Request, pk: int | None = None) -> Response:
         """Get task trades from database."""
-        from apps.trading.models.execution import Trades
+        from apps.trading.models.trades import Trades
         from apps.trading.serializers import TradeSerializer
 
         task = self.get_object()
@@ -1251,7 +1189,7 @@ class TradingTaskViewSet(ModelViewSet):
     @action(detail=True, methods=["get"])
     def equity(self, request: Request, pk: int | None = None) -> Response:
         """Get task equity curve from database."""
-        from apps.trading.models.execution import Equities
+        from apps.trading.models.equities import Equities
         from apps.trading.serializers import EquityPointSerializer
 
         task = self.get_object()

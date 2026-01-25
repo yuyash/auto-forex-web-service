@@ -124,3 +124,15 @@ class TradingMode(models.TextChoices):
 
     NETTING = "netting", "Netting Mode"
     HEDGING = "hedging", "Hedging Mode"
+
+
+class FloorSide(models.TextChoices):
+    """
+    Side used by the floor strategy for layering.
+
+    - LONG: Long positions (buy)
+    - SHORT: Short positions (sell)
+    """
+
+    LONG = "long", "Long"
+    SHORT = "short", "Short"

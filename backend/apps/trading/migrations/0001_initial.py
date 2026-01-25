@@ -188,28 +188,7 @@ class Migration(migrations.Migration):
                 'ordering': ['-created_at'],
             },
         ),
-        migrations.CreateModel(
-            name='FloorStrategyTaskState',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('status', models.CharField(choices=[('created', 'Created'), ('running', 'Running'), ('paused', 'Paused'), ('stopped', 'Stopped'), ('completed', 'Completed'), ('failed', 'Failed')], db_index=True, default='created', help_text='Persisted strategy lifecycle status', max_length=20)),
-                ('side', models.CharField(blank=True, choices=[('long', 'Long'), ('short', 'Short')], help_text='Current floor strategy side (long/short)', max_length=10, null=True)),
-                ('reference_price', models.DecimalField(blank=True, decimal_places=6, help_text='Reference price used to build/anchor floor layers', max_digits=15, null=True)),
-                ('last_tick_at', models.DateTimeField(blank=True, help_text='Timestamp of the last processed tick (best-effort)', null=True)),
-                ('started_at', models.DateTimeField(blank=True, null=True)),
-                ('paused_at', models.DateTimeField(blank=True, null=True)),
-                ('stopped_at', models.DateTimeField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('backtest_task', models.OneToOneField(blank=True, help_text='Associated backtest task (if applicable)', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='floor_state', to='trading.backtesttasks')),
-                ('trading_task', models.OneToOneField(blank=True, help_text='Associated live trading task (if applicable)', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='floor_state', to='trading.tradingtasks')),
-            ],
-            options={
-                'verbose_name': 'Floor Strategy Task State',
-                'verbose_name_plural': 'Floor Strategy Task States',
-                'db_table': 'floor_strategy_task_states',
-            },
-        ),
+
         migrations.CreateModel(
             name='ExecutionEquity',
             fields=[
@@ -253,30 +232,7 @@ class Migration(migrations.Migration):
                 'indexes': [models.Index(fields=['task', 'entry_timestamp'], name='execution_t_task_id_29d63d_idx'), models.Index(fields=['task', 'exit_timestamp'], name='execution_t_task_id_5d1ae0_idx'), models.Index(fields=['task', 'direction'], name='execution_t_task_id_134860_idx')],
             },
         ),
-        migrations.CreateModel(
-            name='FloorStrategyLayerState',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('layer_index', models.PositiveIntegerField(help_text='0-based layer index')),
-                ('is_open', models.BooleanField(default=False)),
-                ('entry_price', models.DecimalField(blank=True, decimal_places=6, help_text='Price where this layer was opened', max_digits=15, null=True)),
-                ('opened_at', models.DateTimeField(blank=True, null=True)),
-                ('closed_at', models.DateTimeField(blank=True, null=True)),
-                ('close_price', models.DecimalField(blank=True, decimal_places=6, help_text='Price where this layer was closed', max_digits=15, null=True)),
-                ('units', models.DecimalField(decimal_places=2, default=Decimal('0'), help_text='Units allocated to this layer', max_digits=15)),
-                ('realized_pnl', models.DecimalField(blank=True, decimal_places=2, help_text='Realized P&L when the layer is closed', max_digits=15, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('floor_state', models.ForeignKey(help_text='Owning floor strategy task state', on_delete=django.db.models.deletion.CASCADE, related_name='layers', to='trading.floorstrategytaskstate')),
-            ],
-            options={
-                'verbose_name': 'Floor Strategy Layer State',
-                'verbose_name_plural': 'Floor Strategy Layer States',
-                'db_table': 'floor_strategy_layer_states',
-                'indexes': [models.Index(fields=['floor_state', 'is_open'], name='floor_strat_floor_s_f620d2_idx')],
-                'constraints': [models.UniqueConstraint(fields=('floor_state', 'layer_index'), name='unique_floor_layer_per_state')],
-            },
-        ),
+
         migrations.AddIndex(
             model_name='strategyconfigurations',
             index=models.Index(fields=['user', 'strategy_type'], name='strategy_co_user_id_6ca4ea_idx'),
@@ -365,12 +321,5 @@ class Migration(migrations.Migration):
             model_name='tradingtasks',
             constraint=models.CheckConstraint(condition=models.Q(('status__in', ['created', 'created', 'running', 'stopped', 'completed', 'failed', 'stopped'])), name='valid_trading_task_status'),
         ),
-        migrations.AddIndex(
-            model_name='floorstrategytaskstate',
-            index=models.Index(fields=['status', 'updated_at'], name='floor_strat_status_dd2b69_idx'),
-        ),
-        migrations.AddConstraint(
-            model_name='floorstrategytaskstate',
-            constraint=models.CheckConstraint(condition=models.Q(models.Q(('trading_task__isnull', False), ('backtest_task__isnull', True)), models.Q(('trading_task__isnull', True), ('backtest_task__isnull', False)), _connector='OR'), name='floor_state_exactly_one_task'),
-        ),
+
     ]

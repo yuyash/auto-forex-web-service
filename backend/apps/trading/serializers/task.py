@@ -2,8 +2,8 @@
 
 from rest_framework import serializers
 
+from apps.trading.models import BacktestTasks, TradingTasks
 from apps.trading.models.logs import TaskLog, TaskMetric
-from apps.trading.models.tasks import BacktestTasks, TradingTasks
 
 
 class TaskSerializer(serializers.ModelSerializer):

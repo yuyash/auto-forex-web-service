@@ -9,14 +9,13 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from decimal import Decimal
-from typing import TYPE_CHECKING, Generic
+from typing import TYPE_CHECKING
 
 from apps.trading.dataclasses import (
     EventContext,
-    ExecutionState,
 )
-from apps.trading.dataclasses.protocols import TStrategyState
 from apps.trading.events import StrategyEvent
+from apps.trading.models.state import ExecutionState
 from apps.trading.services.controller import TaskController
 from apps.trading.services.source import TickDataSource
 from apps.trading.strategies.base import Strategy
@@ -27,7 +26,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class TaskExecutor(ABC, Generic[TStrategyState]):
+class TaskExecutor(ABC):
     """Abstract base class for task execution.
 
     This class provides the core execution loop for processing ticks through
@@ -37,7 +36,7 @@ class TaskExecutor(ABC, Generic[TStrategyState]):
     def __init__(
         self,
         *,
-        strategy: Strategy[TStrategyState],
+        strategy: Strategy,
         data_source: TickDataSource,
         controller: TaskController,
         event_context: EventContext,
@@ -65,7 +64,7 @@ class TaskExecutor(ABC, Generic[TStrategyState]):
         self.pip_size = pip_size
 
     @abstractmethod
-    def load_state(self) -> ExecutionState[TStrategyState]:
+    def load_state(self) -> ExecutionState:
         """Load execution state from storage.
 
         Returns:
@@ -74,7 +73,7 @@ class TaskExecutor(ABC, Generic[TStrategyState]):
         ...
 
     @abstractmethod
-    def save_state(self, state: ExecutionState[TStrategyState]) -> None:
+    def save_state(self, state: ExecutionState) -> None:
         """Save execution state to storage.
 
         Args:
@@ -110,7 +109,6 @@ class TaskExecutor(ABC, Generic[TStrategyState]):
             state = self.load_state()
             logger.info(
                 f"Loaded state: balance={state.current_balance}, "
-                f"positions={len(state.open_positions)}, "
                 f"ticks_processed={state.ticks_processed}"
             )
 
@@ -174,10 +172,9 @@ class TaskExecutor(ABC, Generic[TStrategyState]):
                         pass
 
                     # Update tick count and timestamp
-                    state = state.copy_with(
-                        ticks_processed=state.ticks_processed + 1,
-                        last_tick_timestamp=tick.timestamp.isoformat(),
-                    )
+                    state.ticks_processed += 1
+                    if tick.timestamp:
+                        state.last_tick_timestamp = tick.timestamp
 
                 # Save state after each batch
                 batch_count += 1
@@ -214,14 +211,14 @@ class TaskExecutor(ABC, Generic[TStrategyState]):
                 logger.warning(f"Failed to close data source: {e}")
 
 
-class BacktestExecutor(TaskExecutor[TStrategyState]):
+class BacktestExecutor(TaskExecutor):
     """Executor for backtest tasks."""
 
     def __init__(
         self,
         *,
         task: BacktestTasks,
-        strategy: Strategy[TStrategyState],
+        strategy: Strategy,
         data_source: TickDataSource,
         controller: TaskController,
     ) -> None:
@@ -249,7 +246,7 @@ class BacktestExecutor(TaskExecutor[TStrategyState]):
             event_context=event_context,
             initial_balance=task.initial_balance,
             instrument=task.instrument,
-            pip_size=task._pip_size or Decimal("0.01"),
+            pip_size=task.pip_size or Decimal("0.01"),
         )
 
         # Initialize services for data persistence
@@ -262,59 +259,48 @@ class BacktestExecutor(TaskExecutor[TStrategyState]):
         self.metrics = MetricsCalculator(task, celery_task_id)
         self.equity_tracker = EquityTracker(task, celery_task_id)
 
-    def load_state(self) -> ExecutionState[TStrategyState]:
-        """Load execution state from task model.
+    def load_state(self) -> ExecutionState:
+        """Load execution state from ExecutionState model.
 
         Returns:
             ExecutionState: Current execution state
         """
-        from apps.trading.dataclasses import ExecutionMetrics
-
         # Refresh task from database
         self.task.refresh_from_db()
 
-        # Check if we have existing state
-        if self.task.result_data and isinstance(self.task.result_data, dict):
-            state_dict = self.task.result_data.get("execution_state", {})
-            if state_dict:
-                # Load state from dict
-                state = ExecutionState.from_dict(state_dict)
-                # Deserialize strategy state
-                strategy_state = self.strategy.deserialize_state(state.strategy_state)  # type: ignore[arg-type]
-                state = state.copy_with(strategy_state=strategy_state)
-                return state  # type: ignore[return-value]
+        # Try to load from ExecutionState model
+        try:
+            state = ExecutionState.objects.get(
+                task_type="backtest",
+                task_id=self.task.pk,
+                celery_task_id=self.task.celery_task_id or "",
+            )
+            return state
 
-        # Create initial state
-        strategy_state_class = self.strategy.get_state_class()
-        initial_strategy_state = strategy_state_class()
+        except ExecutionState.DoesNotExist:
+            pass
 
-        return ExecutionState(
-            strategy_state=initial_strategy_state,
+        # Create initial state if not found
+
+        state = ExecutionState.objects.create(
+            task_type="backtest",
+            task_id=self.task.pk,
+            celery_task_id=self.task.celery_task_id or "",
+            strategy_state={},
             current_balance=self.initial_balance,
-            open_positions=[],
             ticks_processed=0,
             last_tick_timestamp=None,
-            metrics=ExecutionMetrics(),
         )
+        return state
 
-    def save_state(self, state: ExecutionState[TStrategyState]) -> None:
-        """Save execution state to task model.
+    def save_state(self, state: ExecutionState) -> None:
+        """Save execution state to ExecutionState model.
 
         Args:
             state: Execution state to save
         """
-        # Serialize state
-        # state_dict = state.to_dict()
-
-        # Update task result_data
-        # self.task.result_data = self.task.result_data or {}
-        # self.task.result_data["execution_state"] = state_dict
-        # self.task.result_data["equity_curve"] = state.equity_curve
-        # self.task.result_data["final_balance"] = str(state.current_balance)
-        # self.task.result_data["ticks_processed"] = state.ticks_processed
-        # self.task.result_data["metrics"] = state.metrics.to_dict()
-
-        self.task.save(update_fields=["result_data", "updated_at"])
+        # Save the model instance
+        state.save()
 
     def emit_events(self, events: list[StrategyEvent]) -> None:
         """Emit strategy events to database.
@@ -348,14 +334,14 @@ class BacktestExecutor(TaskExecutor[TStrategyState]):
         TradingEvents.objects.bulk_create(event_records)
 
 
-class TradingExecutor(TaskExecutor[TStrategyState]):
+class TradingExecutor(TaskExecutor):
     """Executor for live trading tasks."""
 
     def __init__(
         self,
         *,
         task: TradingTasks,
-        strategy: Strategy[TStrategyState],
+        strategy: Strategy,
         data_source: TickDataSource,
         controller: TaskController,
     ) -> None:
@@ -386,61 +372,50 @@ class TradingExecutor(TaskExecutor[TStrategyState]):
             event_context=event_context,
             initial_balance=initial_balance,
             instrument=task.instrument,
-            pip_size=task._pip_size or Decimal("0.01"),
+            pip_size=task.pip_size or Decimal("0.01"),
         )
 
-    def load_state(self) -> ExecutionState[TStrategyState]:
-        """Load execution state from task model.
+    def load_state(self) -> ExecutionState:
+        """Load execution state from ExecutionState model.
 
         Returns:
             ExecutionState: Current execution state
         """
-        from apps.trading.dataclasses import ExecutionMetrics
-
         # Refresh task from database
         self.task.refresh_from_db()
 
-        # Check if we have existing state
-        if self.task.result_data and isinstance(self.task.result_data, dict):
-            state_dict = self.task.result_data.get("execution_state", {})
-            if state_dict:
-                # Load state from dict
-                state = ExecutionState.from_dict(state_dict)
-                # Deserialize strategy state
-                strategy_state = self.strategy.deserialize_state(state.strategy_state)  # type: ignore[arg-type]
-                state = state.copy_with(strategy_state=strategy_state)
-                return state  # type: ignore[return-value]
+        # Try to load from ExecutionState model
+        try:
+            state = ExecutionState.objects.get(
+                task_type="trading",
+                task_id=self.task.pk,
+                celery_task_id=self.task.celery_task_id or "",
+            )
+            return state
 
-        # Create initial state
-        strategy_state_class = self.strategy.get_state_class()
-        initial_strategy_state = strategy_state_class()
+        except ExecutionState.DoesNotExist:
+            pass
 
-        return ExecutionState(
-            strategy_state=initial_strategy_state,
+        # Create initial state if not found
+        state = ExecutionState.objects.create(
+            task_type="trading",
+            task_id=self.task.pk,
+            celery_task_id=self.task.celery_task_id or "",
+            strategy_state={},
             current_balance=self.initial_balance,
-            open_positions=[],
             ticks_processed=0,
             last_tick_timestamp=None,
-            metrics=ExecutionMetrics(),
         )
+        return state
 
-    def save_state(self, state: ExecutionState[TStrategyState]) -> None:
-        """Save execution state to task model.
+    def save_state(self, state: ExecutionState) -> None:
+        """Save execution state to ExecutionState model.
 
         Args:
             state: Execution state to save
         """
-        # Serialize state
-        # state_dict = state.to_dict()
-
-        # Update task result_data
-        # self.task.result_data = self.task.result_data or {}
-        # self.task.result_data["execution_state"] = state_dict
-        # self.task.result_data["current_balance"] = str(state.current_balance)
-        # self.task.result_data["ticks_processed"] = state.ticks_processed
-        # self.task.result_data["metrics"] = state.metrics.to_dict()
-
-        self.task.save(update_fields=["result_data", "updated_at"])
+        # Save the model instance
+        state.save()
 
     def emit_events(self, events: list[StrategyEvent]) -> None:
         """Emit strategy events to database.

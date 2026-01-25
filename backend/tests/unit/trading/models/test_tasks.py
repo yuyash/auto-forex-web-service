@@ -273,7 +273,7 @@ class TestBacktestTasksModel:
             data_source=DataSource.POSTGRESQL,
             start_time=start_time,
             end_time=end_time,
-            _pip_size=Decimal("0.0001"),
+            pip_size=Decimal("0.0001"),
         )
         assert task2.pip_size == Decimal("0.0001")
 
@@ -582,7 +582,7 @@ class TestTradingTasksModel:
             user=user,
             config=config,
             oanda_account=oanda_account,
-            _pip_size=Decimal("0.0001"),
+            pip_size=Decimal("0.0001"),
         )
         assert task2.pip_size == Decimal("0.0001")
 

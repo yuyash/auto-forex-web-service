@@ -2,19 +2,16 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from apps.trading.dataclasses import ExecutionState, StrategyResult, StrategyState, Tick
+    from apps.trading.dataclasses import StrategyResult, Tick
     from apps.trading.enums import StrategyType as StrategyTypeEnum
     from apps.trading.models import StrategyConfigurations
+    from apps.trading.models.state import ExecutionState
 
 
-# Type variable for strategy state
-TStrategyState = TypeVar("TStrategyState", bound="StrategyState")
-
-
-class Strategy(ABC, Generic[TStrategyState]):
+class Strategy(ABC):
     """Runtime strategy interface used by executors."""
 
     instrument: str
@@ -69,70 +66,44 @@ class Strategy(ABC, Generic[TStrategyState]):
         raise NotImplementedError
 
     @abstractmethod
-    def on_tick(
-        self, *, tick: Tick, state: ExecutionState[TStrategyState]
-    ) -> StrategyResult[TStrategyState]:
+    def on_tick(self, *, tick: Tick, state: ExecutionState) -> StrategyResult:
         """Process a tick and return updated state and events.
 
         Args:
             tick: Tick dataclass containing market data
-            state: Current execution state (typed with strategy state)
+            state: Current execution state
 
         Returns:
             StrategyResult: Updated state and list of emitted events
         """
         raise NotImplementedError
 
-    def deserialize_state(self, state_dict: dict[str, Any]) -> TStrategyState:
+    def deserialize_state(self, state_dict: dict[str, Any]) -> dict[str, Any]:
         """Deserialize strategy state from database dictionary.
 
         This method is called by the executor to convert the persisted
-        dict state into the strategy's specific StrategyState implementation.
-
-        Default implementation: Calls get_state_class().from_dict(state_dict)
-        Override only if custom deserialization logic is needed.
+        dict state into the strategy's specific state format.
 
         Args:
             state_dict: Dictionary containing strategy state from database
 
         Returns:
-            Strategy-specific state object (e.g., FloorStrategyState)
+            Strategy-specific state dictionary
         """
-        state_class = self.get_state_class()
-        if hasattr(state_class, "from_dict") and callable(getattr(state_class, "from_dict")):
-            return state_class.from_dict(state_dict)  # type: ignore
-        raise NotImplementedError(
-            f"{state_class.__name__} must implement from_dict() or override deserialize_state()"
-        )
+        return state_dict
 
-    @abstractmethod
-    def get_state_class(self) -> type[TStrategyState]:
-        """Return the strategy state class.
-
-        Returns:
-            Strategy state class (e.g., FloorStrategyState)
-        """
-        raise NotImplementedError
-
-    def serialize_state(self, state: TStrategyState) -> dict[str, Any]:
+    def serialize_state(self, state: dict[str, Any]) -> dict[str, Any]:
         """Serialize strategy state to dictionary for database persistence.
 
-        Default implementation calls to_dict() on the state object.
-        Override only if custom serialization logic is needed.
-
         Args:
-            state: Strategy-specific state object
+            state: Strategy-specific state dictionary
 
         Returns:
             Dictionary for JSON storage
         """
-        if hasattr(state, "to_dict") and callable(getattr(state, "to_dict")):
-            return state.to_dict()  # type: ignore
-        raise NotImplementedError(
-            f"{type(state).__name__} must implement to_dict() or override serialize_state()"
-        )
+        return state
 
-    def on_start(self, *, state: ExecutionState[TStrategyState]) -> StrategyResult[TStrategyState]:
+    def on_start(self, *, state: ExecutionState) -> StrategyResult:
         """Called when strategy starts.
 
         Args:
@@ -141,9 +112,11 @@ class Strategy(ABC, Generic[TStrategyState]):
         Returns:
             StrategyResult: Updated state and list of emitted events
         """
-        return StrategyResult.from_state(state)
+        from apps.trading.dataclasses import StrategyResult
 
-    def on_resume(self, *, state: ExecutionState[TStrategyState]) -> StrategyResult[TStrategyState]:
+        return StrategyResult(state=state, events=[])
+
+    def on_resume(self, *, state: ExecutionState) -> StrategyResult:
         """Called when strategy resumes from a stopped state.
 
         Args:
@@ -152,9 +125,11 @@ class Strategy(ABC, Generic[TStrategyState]):
         Returns:
             StrategyResult: Updated state and list of emitted events
         """
-        return StrategyResult.from_state(state)
+        from apps.trading.dataclasses import StrategyResult
 
-    def on_stop(self, *, state: ExecutionState[TStrategyState]) -> StrategyResult[TStrategyState]:
+        return StrategyResult(state=state, events=[])
+
+    def on_stop(self, *, state: ExecutionState) -> StrategyResult:
         """Called when strategy stops.
 
         Args:
@@ -163,4 +138,6 @@ class Strategy(ABC, Generic[TStrategyState]):
         Returns:
             StrategyResult: Updated state and list of emitted events
         """
-        return StrategyResult.from_state(state)
+        from apps.trading.dataclasses import StrategyResult
+
+        return StrategyResult(state=state, events=[])

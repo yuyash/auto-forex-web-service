@@ -8,7 +8,7 @@ from apps.trading.enums import StrategyType
 from apps.trading.models.base import UUIDModel
 
 if TYPE_CHECKING:
-    from apps.trading.models.tasks import BacktestTasks, TradingTasks
+    from apps.trading.models import BacktestTasks, TradingTasks
 
 
 class StrategyConfigurationsManager(models.Manager["StrategyConfigurations"]):
@@ -137,7 +137,7 @@ class StrategyConfigurations(UUIDModel):
             True if configuration is in use, False otherwise
         """
         from apps.trading.enums import TaskStatus
-        from apps.trading.models.tasks import BacktestTasks, TradingTasks
+        from apps.trading.models import BacktestTasks, TradingTasks
 
         return (
             TradingTasks.objects.filter(

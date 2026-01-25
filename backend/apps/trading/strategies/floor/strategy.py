@@ -6,9 +6,10 @@ from decimal import Decimal
 from logging import Logger, getLogger
 from typing import TYPE_CHECKING
 
-from apps.trading.dataclasses import ExecutionState, StrategyResult, Tick
+from apps.trading.dataclasses import StrategyResult, Tick
 from apps.trading.enums import StrategyType, TradingMode
 from apps.trading.events import StrategyEvent
+from apps.trading.models.state import ExecutionState
 from apps.trading.services.registry import register_strategy
 from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.floor.calculators import IndicatorCalculator, PriceCalculator
@@ -31,7 +32,7 @@ logger: Logger = getLogger(name=__name__)
 
 
 @register_strategy(id="floor", schema="trading/schemas/floor.json", display_name="Floor Strategy")
-class FloorStrategy(Strategy[FloorStrategyState]):
+class FloorStrategy(Strategy):
     """Floor strategy implementation."""
 
     config: FloorStrategyConfig
@@ -97,22 +98,12 @@ class FloorStrategy(Strategy[FloorStrategyState]):
         """
         return FloorStrategyConfig.from_dict(strategy_config.config_dict)
 
-    def get_state_class(self) -> type[FloorStrategyState]:
-        """Return the strategy state class.
-
-        Returns:
-            FloorStrategyState class
-        """
-        return FloorStrategyState
-
-    def on_tick(
-        self, *, tick: Tick, state: ExecutionState[FloorStrategyState]
-    ) -> StrategyResult[FloorStrategyState]:
+    def on_tick(self, *, tick: Tick, state: ExecutionState) -> StrategyResult:
         """Process a tick and return updated state and events.
 
         Args:
             tick: Tick dataclass containing market data
-            state: Current execution state with FloorStrategyState
+            state: Current execution state
 
         Returns:
             StrategyResult: Updated state and list of emitted events
@@ -120,7 +111,8 @@ class FloorStrategy(Strategy[FloorStrategyState]):
         if state.ticks_processed % 10000 == 0:
             logger.info(f"FloorStrategy.on_tick called for tick {state.ticks_processed}")
 
-        s = state.strategy_state
+        # Get strategy state from model's JSONField
+        s = FloorStrategyState.from_dict(state.strategy_state)
         events: list[StrategyEvent] = []
 
         # Update state from tick
@@ -132,7 +124,9 @@ class FloorStrategy(Strategy[FloorStrategyState]):
 
         # If not running, skip trading logic
         if s.status != StrategyStatus.RUNNING:
-            return StrategyResult.with_events(state.copy_with(strategy_state=s), events)
+            # Update model's strategy_state
+            state.strategy_state = s.to_dict()
+            return StrategyResult.with_events(state, events)
 
         # Execute trading logic (delegated)
         events.extend(self.trading_engine.process_initial_entry(s, tick))
@@ -146,28 +140,27 @@ class FloorStrategy(Strategy[FloorStrategyState]):
         if state.ticks_processed % 10000 == 0:
             logger.info(f"FloorStrategy.on_tick completed, returning {len(events)} events")
 
-        return StrategyResult.with_events(state.copy_with(strategy_state=s), events)
+        # Update model's strategy_state
+        state.strategy_state = s.to_dict()
+        return StrategyResult.with_events(state, events)
 
-    def on_start(
-        self, *, state: ExecutionState[FloorStrategyState]
-    ) -> StrategyResult[FloorStrategyState]:
+    def on_start(self, *, state: ExecutionState) -> StrategyResult:
         """Called when strategy starts."""
-        s: FloorStrategyState = state.strategy_state
+        s = FloorStrategyState.from_dict(state.strategy_state)
         s.status = StrategyStatus.RUNNING
-        return StrategyResult.from_state(state.copy_with(strategy_state=s))
+        state.strategy_state = s.to_dict()
+        return StrategyResult.from_state(state)
 
-    def on_stop(
-        self, *, state: ExecutionState[FloorStrategyState]
-    ) -> StrategyResult[FloorStrategyState]:
+    def on_stop(self, *, state: ExecutionState) -> StrategyResult:
         """Called when strategy stops."""
-        s: FloorStrategyState = state.strategy_state
+        s = FloorStrategyState.from_dict(state.strategy_state)
         s.status = StrategyStatus.STOPPED
-        return StrategyResult.from_state(state.copy_with(strategy_state=s))
+        state.strategy_state = s.to_dict()
+        return StrategyResult.from_state(state)
 
-    def on_resume(
-        self, *, state: ExecutionState[FloorStrategyState]
-    ) -> StrategyResult[FloorStrategyState]:
+    def on_resume(self, *, state: ExecutionState) -> StrategyResult:
         """Called when strategy resumes."""
-        s: FloorStrategyState = state.strategy_state
+        s = FloorStrategyState.from_dict(state.strategy_state)
         s.status = StrategyStatus.RUNNING
-        return StrategyResult.from_state(state.copy_with(strategy_state=s))
+        state.strategy_state = s.to_dict()
+        return StrategyResult.from_state(state)

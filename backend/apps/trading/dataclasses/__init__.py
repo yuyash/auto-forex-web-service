@@ -9,7 +9,6 @@ from apps.trading.dataclasses.control import TaskControl
 from apps.trading.dataclasses.metrics import ExecutionMetrics
 from apps.trading.dataclasses.protocols import StrategyState, TStrategyState
 from apps.trading.dataclasses.result import StrategyResult
-from apps.trading.dataclasses.state import ExecutionState
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.dataclasses.trade import OpenPosition, TradeData
 from apps.trading.dataclasses.validation import ValidationResult
@@ -27,8 +26,6 @@ __all__ = [
     "TStrategyState",
     # Result
     "StrategyResult",
-    # State
-    "ExecutionState",
     # Tick
     "Tick",
     # Trade
