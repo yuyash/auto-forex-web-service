@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from apps.market.models import OandaAccounts
 from apps.trading.enums import DataSource, TaskStatus, TaskType, TradingMode
+from apps.trading.models.base import UUIDModel
 
 
 class BacktestTasksManager(models.Manager["BacktestTasks"]):
@@ -32,13 +33,15 @@ class BacktestTasksManager(models.Manager["BacktestTasks"]):
         return self.filter(config=config)
 
 
-class BacktestTasks(models.Model):
+class BacktestTasks(UUIDModel):
     """
     Persistent backtesting task with reusable configuration.
 
     A BacktestTasks represents a backtesting operation with specific configuration,
     data source, and time range. Tasks can be started, stopped, and rerun multiple
     times, with each execution tracked separately.
+
+    Inherits UUID primary key and timestamps from UUIDModel.
     """
 
     objects = BacktestTasksManager()
@@ -115,14 +118,6 @@ class BacktestTasks(models.Model):
         db_index=True,
         help_text="Current task status",
     )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        help_text="Timestamp when the task was created",
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        help_text="Timestamp when the task was last updated",
-    )
 
     # Celery Integration
     celery_task_id = models.CharField(
@@ -185,7 +180,6 @@ class BacktestTasks(models.Model):
         indexes = [
             models.Index(fields=["user", "status"]),
             models.Index(fields=["user", "config"]),
-            models.Index(fields=["created_at"]),
             models.Index(fields=["celery_task_id"]),
             models.Index(fields=["status", "created_at"]),
         ]
@@ -195,7 +189,6 @@ class BacktestTasks(models.Model):
                 name="unique_user_backtest_task_name",
             )
         ]
-        ordering = ["-created_at"]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.config.strategy_type})"
