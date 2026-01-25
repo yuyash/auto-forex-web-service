@@ -37,15 +37,15 @@ const STATUS_CONFIG: Record<
     color: 'primary',
     icon: PlayArrow,
   },
-  [TaskStatus.STOPPED]: {
-    label: 'Stopped',
-    color: 'default',
-    icon: Stop,
-  },
   [TaskStatus.PAUSED]: {
     label: 'Paused',
-    color: 'warning',
+    color: 'info',
     icon: Pause,
+  },
+  [TaskStatus.STOPPED]: {
+    label: 'Stopped',
+    color: 'warning',
+    icon: Stop,
   },
   [TaskStatus.COMPLETED]: {
     label: 'Completed',

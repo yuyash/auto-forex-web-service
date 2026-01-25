@@ -1,5 +1,6 @@
 // Strategy API service
-import { apiClient } from './client';
+import { TradingService } from '../../api/generated/services/TradingService';
+import { withRetry } from '../../api/client';
 
 export interface Strategy {
   id: string;
@@ -23,16 +24,15 @@ export const strategiesApi = {
    * List all available strategies
    */
   list: async (): Promise<StrategyListResponse> => {
-    return apiClient.get<StrategyListResponse>('/trading/strategies/');
+    return withRetry(() => TradingService.tradingStrategiesRetrieve());
   },
 
   /**
    * Fetch default parameters for a strategy
    */
   defaults: async (strategyId: string): Promise<StrategyDefaultsResponse> => {
-    const encoded = encodeURIComponent(strategyId);
-    return apiClient.get<StrategyDefaultsResponse>(
-      `/trading/strategies/${encoded}/defaults/`
+    return withRetry(() =>
+      TradingService.tradingStrategiesDefaultsRetrieve(strategyId)
     );
   },
 };

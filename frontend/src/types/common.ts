@@ -1,23 +1,13 @@
 // Common types and enums for task-based strategy configuration
+// Re-export generated types for consistency
 
-export enum TaskStatus {
-  CREATED = 'created',
-  RUNNING = 'running',
-  STOPPED = 'stopped',
-  PAUSED = 'paused',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-}
+export { StatusEnum as TaskStatus } from '../api/generated';
+export { DataSourceEnum as DataSource } from '../api/generated';
+export { TradingModeEnum as TradingMode } from '../api/generated';
 
 export enum TaskType {
   BACKTEST = 'backtest',
   TRADING = 'trading',
-}
-
-export enum DataSource {
-  POSTGRESQL = 'postgresql',
-  ATHENA = 'athena',
-  S3 = 's3',
 }
 
 export interface PaginatedResponse<T> {

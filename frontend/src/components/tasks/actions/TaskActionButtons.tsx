@@ -28,7 +28,7 @@ export interface TaskActionButtonsProps {
  * Shared component for task action buttons with consistent visibility logic.
  *
  * Button visibility rules:
- * - Show "Start" for created tasks (no previous execution)
+ * - Show "Start" for CREATED tasks only (never executed before)
  * - Show "Resume" for stopped/paused tasks that can resume (has previous state)
  * - Show "Restart" for stopped/paused/failed tasks to start fresh
  * - Show "Stop" for running/paused tasks
@@ -59,8 +59,8 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
   const isFailed = status === TaskStatus.FAILED;
   const isCompleted = status === TaskStatus.COMPLETED;
 
-  // Start: For CREATED or STOPPED tasks
-  const showStart = (isCreated || isStopped) && onStart;
+  // Start: For CREATED tasks only (never executed before)
+  const showStart = isCreated && onStart;
 
   // Resume: For STOPPED/PAUSED tasks that can resume (has previous state)
   const showResume = (isStopped || isPaused) && canResume && onResume;

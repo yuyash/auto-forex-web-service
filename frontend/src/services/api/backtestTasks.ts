@@ -8,8 +8,8 @@
 import { TradingService } from '../../api/generated/services/TradingService';
 import { withRetry } from '../../api/client';
 import type {
-  BacktestTaskCreateRequest,
-  PatchedBacktestTaskCreateRequest,
+  BacktestTaskRequest,
+  PatchedBacktestTaskRequest,
 } from '../../api/generated';
 
 export const backtestTasksApi = {
@@ -25,13 +25,10 @@ export const backtestTasksApi = {
     strategy_type?: string;
   }) => {
     return withRetry(() =>
-      TradingService.tradingBacktestTasksList(
-        params?.config_id,
+      TradingService.tradingTasksBacktestList(
         params?.ordering,
         params?.page,
-        params?.search,
-        params?.status,
-        params?.strategy_type
+        params?.search
       )
     );
   },
@@ -40,29 +37,29 @@ export const backtestTasksApi = {
    * Get a single backtest task by ID
    */
   get: (id: number) => {
-    return withRetry(() => TradingService.tradingBacktestTasksRetrieve(id));
+    return withRetry(() => TradingService.tradingTasksBacktestRetrieve(id));
   },
 
   /**
    * Create a new backtest task
    */
-  create: (data: BacktestTaskCreateRequest) => {
-    return withRetry(() => TradingService.tradingBacktestTasksCreate(data));
+  create: (data: BacktestTaskRequest) => {
+    return withRetry(() => TradingService.tradingTasksBacktestCreate(data));
   },
 
   /**
    * Update an existing backtest task
    */
-  update: (id: number, data: BacktestTaskCreateRequest) => {
-    return withRetry(() => TradingService.tradingBacktestTasksUpdate(id, data));
+  update: (id: number, data: BacktestTaskRequest) => {
+    return withRetry(() => TradingService.tradingTasksBacktestUpdate(id, data));
   },
 
   /**
    * Partially update an existing backtest task
    */
-  partialUpdate: (id: number, data: PatchedBacktestTaskCreateRequest) => {
+  partialUpdate: (id: number, data: PatchedBacktestTaskRequest) => {
     return withRetry(() =>
-      TradingService.tradingBacktestTasksPartialUpdate(id, data)
+      TradingService.tradingTasksBacktestPartialUpdate(id, data)
     );
   },
 
@@ -70,65 +67,51 @@ export const backtestTasksApi = {
    * Delete a backtest task
    */
   delete: (id: number) => {
-    return withRetry(() => TradingService.tradingBacktestTasksDestroy(id));
+    return withRetry(() => TradingService.tradingTasksBacktestDestroy(id));
   },
 
   /**
-   * Copy a backtest task with a new name
-   */
-  copy: (id: number) => {
-    return withRetry(() => TradingService.tradingBacktestTasksCopyCreate(id));
-  },
-
-  /**
-   * Start a backtest task execution
-   * Returns execution_id in the response
+   * Submit a backtest task for execution (new task-based API)
    */
   start: (id: number) => {
-    return withRetry(() => TradingService.tradingBacktestTasksStartCreate(id));
+    return withRetry(() =>
+      TradingService.tradingTasksBacktestSubmitCreate(id, {} as any)
+    );
   },
 
   /**
-   * Stop a running backtest task
+   * Stop a running backtest task (new task-based API)
    */
   stop: (id: number) => {
-    return withRetry(() => TradingService.tradingBacktestTasksStopCreate(id));
+    return withRetry(() =>
+      TradingService.tradingTasksBacktestStopCreate(id, {} as any)
+    );
   },
 
   /**
-   * Resume a paused backtest task
-   * Returns execution_id in the response
+   * Pause a running backtest task (new task-based API)
+   */
+  pause: (id: number) => {
+    return withRetry(() =>
+      TradingService.tradingTasksBacktestPauseCreate(id, {} as any)
+    );
+  },
+
+  /**
+   * Resume a paused backtest task (new task-based API)
    */
   resume: (id: number) => {
-    return withRetry(() => TradingService.tradingBacktestTasksResumeCreate(id));
+    return withRetry(() =>
+      TradingService.tradingTasksBacktestResumeCreate(id, {} as any)
+    );
   },
 
   /**
-   * Restart a backtest task with fresh state
-   * Returns execution_id in the response
+   * Restart a backtest task with fresh state (new task-based API)
    */
   restart: (id: number) => {
     return withRetry(() =>
-      TradingService.tradingBacktestTasksRestartCreate(id)
-    );
-  },
-
-  /**
-   * Get current task status and execution details
-   * Includes execution_id when status is "running"
-   */
-  getStatus: (id: number) => {
-    return withRetry(() =>
-      TradingService.tradingBacktestTasksStatusRetrieve(id)
-    );
-  },
-
-  /**
-   * Get execution history for a backtest task
-   */
-  getExecutions: (id: number) => {
-    return withRetry(() =>
-      TradingService.tradingBacktestTasksExecutionsRetrieve(id)
+      TradingService.tradingTasksBacktestRestartCreate(id, {} as any)
     );
   },
 };

@@ -8,8 +8,8 @@
 import { TradingService } from '../../api/generated/services/TradingService';
 import { withRetry } from '../../api/client';
 import type {
-  TradingTaskCreateRequest,
-  PatchedTradingTaskCreateRequest,
+  TradingTaskRequest,
+  PatchedTradingTaskRequest,
 } from '../../api/generated';
 
 export const tradingTasksApi = {
@@ -25,13 +25,10 @@ export const tradingTasksApi = {
     strategy_type?: string;
   }) => {
     return withRetry(() =>
-      TradingService.tradingTradingTasksList(
-        params?.config_id,
+      TradingService.tradingTasksTradingList(
         params?.ordering,
         params?.page,
-        params?.search,
-        params?.status,
-        params?.strategy_type
+        params?.search
       )
     );
   },
@@ -40,29 +37,29 @@ export const tradingTasksApi = {
    * Get a single trading task by ID
    */
   get: (id: number) => {
-    return withRetry(() => TradingService.tradingTradingTasksRetrieve(id));
+    return withRetry(() => TradingService.tradingTasksTradingRetrieve(id));
   },
 
   /**
    * Create a new trading task
    */
-  create: (data: TradingTaskCreateRequest) => {
-    return withRetry(() => TradingService.tradingTradingTasksCreate(data));
+  create: (data: TradingTaskRequest) => {
+    return withRetry(() => TradingService.tradingTasksTradingCreate(data));
   },
 
   /**
    * Update an existing trading task
    */
-  update: (id: number, data: TradingTaskCreateRequest) => {
-    return withRetry(() => TradingService.tradingTradingTasksUpdate(id, data));
+  update: (id: number, data: TradingTaskRequest) => {
+    return withRetry(() => TradingService.tradingTasksTradingUpdate(id, data));
   },
 
   /**
    * Partially update an existing trading task
    */
-  partialUpdate: (id: number, data: PatchedTradingTaskCreateRequest) => {
+  partialUpdate: (id: number, data: PatchedTradingTaskRequest) => {
     return withRetry(() =>
-      TradingService.tradingTradingTasksPartialUpdate(id, data)
+      TradingService.tradingTasksTradingPartialUpdate(id, data)
     );
   },
 
@@ -70,65 +67,50 @@ export const tradingTasksApi = {
    * Delete a trading task
    */
   delete: (id: number) => {
-    return withRetry(() => TradingService.tradingTradingTasksDestroy(id));
+    return withRetry(() => TradingService.tradingTasksTradingDestroy(id));
   },
 
   /**
-   * Copy a trading task with a new name
-   */
-  copy: (id: number) => {
-    return withRetry(() => TradingService.tradingTradingTasksCopyCreate(id));
-  },
-
-  /**
-   * Start a trading task execution
-   * Returns execution_id in the response
+   * Submit a trading task for execution (new task-based API)
    */
   start: (id: number) => {
-    return withRetry(() => TradingService.tradingTradingTasksStartCreate(id));
-  },
-
-  /**
-   * Stop a running trading task
-   * @param id - Task ID
-   * @param mode - Stop mode: 'immediate', 'graceful', or 'graceful_close'
-   */
-  stop: (id: number) => {
-    return withRetry(() => TradingService.tradingTradingTasksStopCreate(id));
-  },
-
-  /**
-   * Resume a paused trading task
-   * Returns execution_id in the response
-   */
-  resume: (id: number) => {
-    return withRetry(() => TradingService.tradingTradingTasksResumeCreate(id));
-  },
-
-  /**
-   * Restart a trading task with fresh state
-   * Returns execution_id in the response
-   */
-  restart: (id: number) => {
-    return withRetry(() => TradingService.tradingTradingTasksRestartCreate(id));
-  },
-
-  /**
-   * Get current task status and execution details
-   * Includes execution_id when status is "running"
-   */
-  getStatus: (id: number) => {
     return withRetry(() =>
-      TradingService.tradingTradingTasksStatusRetrieve(id)
+      TradingService.tradingTasksTradingSubmitCreate(id, {} as any)
     );
   },
 
   /**
-   * Get execution history for a trading task
+   * Stop a running trading task (new task-based API)
    */
-  getExecutions: (id: number) => {
+  stop: (id: number, _mode?: 'immediate' | 'graceful' | 'graceful_close') => {
     return withRetry(() =>
-      TradingService.tradingTradingTasksExecutionsRetrieve(id)
+      TradingService.tradingTasksTradingStopCreate(id, {} as any)
+    );
+  },
+
+  /**
+   * Pause a trading task (not implemented yet)
+   */
+  pause: (_id: number) => {
+    // Note: Pause endpoint doesn't exist yet
+    throw new Error('Pause is not implemented for trading tasks');
+  },
+
+  /**
+   * Resume a cancelled trading task (new task-based API)
+   */
+  resume: (id: number) => {
+    return withRetry(() =>
+      TradingService.tradingTasksTradingResumeCreate(id, {} as any)
+    );
+  },
+
+  /**
+   * Restart a trading task with fresh state (new task-based API)
+   */
+  restart: (id: number) => {
+    return withRetry(() =>
+      TradingService.tradingTasksTradingRestartCreate(id, {} as any)
     );
   },
 };

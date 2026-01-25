@@ -1,6 +1,7 @@
 """Views for strategy configuration management."""
 
 from django.db import models
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -13,7 +14,7 @@ from apps.trading.serializers import (
     StrategyConfigDetailSerializer,
     StrategyConfigListSerializer,
 )
-from apps.trading.views._helpers import TaskExecutionPagination
+from apps.trading.views.pagination import TaskExecutionPagination
 
 
 class StrategyConfigView(APIView):
@@ -21,7 +22,13 @@ class StrategyConfigView(APIView):
 
     permission_classes = [IsAuthenticated]
     pagination_class = TaskExecutionPagination
+    serializer_class = StrategyConfigListSerializer
 
+    @extend_schema(
+        summary="List strategy configurations",
+        description="List all strategy configurations for the authenticated user",
+        responses={200: StrategyConfigListSerializer(many=True)},
+    )
     def get(self, request: Request) -> Response:
         from apps.trading.models import StrategyConfigurations
 
@@ -42,6 +49,12 @@ class StrategyConfigView(APIView):
         serializer = StrategyConfigListSerializer(paginated_queryset, many=True)
         return paginator.get_paginated_response(serializer.data)
 
+    @extend_schema(
+        summary="Create strategy configuration",
+        description="Create a new strategy configuration",
+        request=StrategyConfigCreateSerializer,
+        responses={201: StrategyConfigDetailSerializer, 400: dict},
+    )
     def post(self, request: Request) -> Response:
         serializer = StrategyConfigCreateSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
@@ -65,7 +78,13 @@ class StrategyConfigDetailView(APIView):
     """Retrieve, update, and delete a strategy configuration."""
 
     permission_classes = [IsAuthenticated]
+    serializer_class = StrategyConfigDetailSerializer
 
+    @extend_schema(
+        summary="Get strategy configuration",
+        description="Retrieve a specific strategy configuration",
+        responses={200: StrategyConfigDetailSerializer, 404: dict},
+    )
     def get(self, request: Request, config_id: int) -> Response:
         from apps.trading.serializers import StrategyConfigDetailSerializer
 
@@ -77,6 +96,12 @@ class StrategyConfigDetailView(APIView):
         serializer = StrategyConfigDetailSerializer(config)
         return Response(serializer.data)
 
+    @extend_schema(
+        summary="Update strategy configuration",
+        description="Update an existing strategy configuration",
+        request=StrategyConfigCreateSerializer,
+        responses={200: StrategyConfigDetailSerializer, 400: dict, 404: dict},
+    )
     def put(self, request: Request, config_id: int) -> Response:
         from apps.trading.serializers import (
             StrategyConfigCreateSerializer,
@@ -99,6 +124,11 @@ class StrategyConfigDetailView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @extend_schema(
+        summary="Delete strategy configuration",
+        description="Delete a strategy configuration (fails if in use by active tasks)",
+        responses={204: None, 400: dict, 404: dict},
+    )
     def delete(self, request: Request, config_id: int) -> Response:
         try:
             config = StrategyConfigurations.objects.get(id=config_id, user=request.user.pk)

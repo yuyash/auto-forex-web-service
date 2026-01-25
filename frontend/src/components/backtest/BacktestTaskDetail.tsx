@@ -1,15 +1,14 @@
 /**
  * BacktestTaskDetail Component
  *
- * Main detail view for backtest tasks using execution-based API endpoints.
- * Uses ExecutionDataProvider to fetch execution_id and displays task info,
- * latest metrics, and tab navigation for Events, Logs, Trades, Equity, and Metrics.
+ * Main detail view for backtest tasks using task-based API endpoints.
+ * Displays task info and tab navigation for Events, Logs, Trades, Equity, and Metrics.
  *
  * Requirements: 11.5, 11.6
  */
 
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Container,
@@ -22,17 +21,18 @@ import {
   CircularProgress,
   Alert,
   Chip,
+  Grid,
+  Divider,
 } from '@mui/material';
 import { useBacktestTask } from '../../hooks/useBacktestTasks';
-import { ExecutionDataProvider, useToast } from '../common';
+import { useToast } from '../common';
 import { TaskControlButtons } from '../tasks/actions/TaskControlButtons';
-import { EventsTable } from './detail/EventsTable';
-import { LogsTable } from './detail/LogsTable';
-import { TradesTable } from './detail/TradesTable';
-import { EquityChart } from './detail/EquityChart';
-import { MetricsChart } from './detail/MetricsChart';
+import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
+import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
+import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
+import { TaskEquityChart } from '../tasks/detail/TaskEquityChart';
+import { TaskMetricsChart } from '../tasks/detail/TaskMetricsChart';
 import { TaskStatus, TaskType } from '../../types/common';
-import { ExecutionsService } from '../../api/generated/services/ExecutionsService';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -66,49 +66,52 @@ function a11yProps(index: number) {
   };
 }
 
-interface LatestMetrics {
-  realized_pnl: string;
-  unrealized_pnl: string;
-  total_pnl: string;
-  open_positions: number;
-  total_trades: number;
-  timestamp: string;
-}
-
 export const BacktestTaskDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const taskId = parseInt(id || '0', 10);
   const { showError } = useToast();
 
-  const [tabValue, setTabValue] = useState(0);
-  const [latestMetrics, setLatestMetrics] = useState<LatestMetrics | null>(
-    null
-  );
-  const [metricsLoading, setMetricsLoading] = useState(false);
+  // Get tab from URL, default to 'overview'
+  const tabParam = searchParams.get('tab') || 'overview';
+  const tabMap: Record<string, number> = {
+    overview: 0,
+    events: 1,
+    logs: 2,
+    trades: 3,
+    equity: 4,
+    metrics: 5,
+  };
+  const tabNames = [
+    'overview',
+    'events',
+    'logs',
+    'trades',
+    'equity',
+    'metrics',
+  ];
+  const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
 
   const { data: task, isLoading, error, refetch } = useBacktestTask(taskId);
 
+  // Sync tab value with URL
+  useEffect(() => {
+    const newTabValue = tabMap[tabParam] || 0;
+    if (newTabValue !== tabValue) {
+      setTabValue(newTabValue);
+    }
+  }, [tabParam]);
+
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
+    // Update URL with tab name
+    const tabName = tabNames[newValue];
+    setSearchParams({ tab: tabName });
   };
 
   const handleBack = () => {
     navigate('/backtest-tasks');
-  };
-
-  const fetchLatestMetrics = async (executionId: number) => {
-    try {
-      setMetricsLoading(true);
-      const response =
-        await ExecutionsService.getExecutionLatestMetrics(executionId);
-      setLatestMetrics(response);
-    } catch (err) {
-      console.error('Failed to fetch latest metrics:', err);
-      setLatestMetrics(null);
-    } finally {
-      setMetricsLoading(false);
-    }
   };
 
   const getStatusColor = (
@@ -211,108 +214,6 @@ export const BacktestTaskDetail: React.FC = () => {
             />
           </Box>
         </Box>
-
-        {/* Use ExecutionDataProvider to get execution_id */}
-        <ExecutionDataProvider taskId={taskId} taskType={TaskType.BACKTEST}>
-          {(executionId, isLoadingExecution) => (
-            <Box sx={{ mt: 2 }}>
-              {isLoadingExecution ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <CircularProgress size={16} />
-                  <Typography variant="body2" color="text.secondary">
-                    Loading execution data...
-                  </Typography>
-                </Box>
-              ) : executionId ? (
-                <>
-                  <Typography variant="body2" color="text.secondary">
-                    Execution ID: {executionId}
-                  </Typography>
-
-                  {/* Fetch and display latest metrics */}
-                  {!latestMetrics && !metricsLoading && (
-                    <Box sx={{ mt: 1 }}>
-                      <Link
-                        component="button"
-                        variant="body2"
-                        onClick={() => fetchLatestMetrics(executionId)}
-                      >
-                        Load latest metrics
-                      </Link>
-                    </Box>
-                  )}
-
-                  {metricsLoading && (
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        mt: 1,
-                      }}
-                    >
-                      <CircularProgress size={16} />
-                      <Typography variant="body2" color="text.secondary">
-                        Loading metrics...
-                      </Typography>
-                    </Box>
-                  )}
-
-                  {latestMetrics && (
-                    <Box
-                      sx={{ mt: 2, display: 'flex', gap: 3, flexWrap: 'wrap' }}
-                    >
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          Realized PnL
-                        </Typography>
-                        <Typography variant="body1" fontWeight="medium">
-                          ${parseFloat(latestMetrics.realized_pnl).toFixed(2)}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          Unrealized PnL
-                        </Typography>
-                        <Typography variant="body1" fontWeight="medium">
-                          ${parseFloat(latestMetrics.unrealized_pnl).toFixed(2)}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          Total PnL
-                        </Typography>
-                        <Typography variant="body1" fontWeight="medium">
-                          ${parseFloat(latestMetrics.total_pnl).toFixed(2)}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          Open Positions
-                        </Typography>
-                        <Typography variant="body1" fontWeight="medium">
-                          {latestMetrics.open_positions}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          Total Trades
-                        </Typography>
-                        <Typography variant="body1" fontWeight="medium">
-                          {latestMetrics.total_trades}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  )}
-                </>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  No execution data available
-                </Typography>
-              )}
-            </Box>
-          )}
-        </ExecutionDataProvider>
       </Paper>
 
       {/* Tabs */}
@@ -323,96 +224,246 @@ export const BacktestTaskDetail: React.FC = () => {
           aria-label="task detail tabs"
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
-          <Tab label="Events" {...a11yProps(0)} />
-          <Tab label="Logs" {...a11yProps(1)} />
-          <Tab label="Trades" {...a11yProps(2)} />
-          <Tab label="Equity" {...a11yProps(3)} />
-          <Tab label="Metrics" {...a11yProps(4)} />
+          <Tab label="Overview" {...a11yProps(0)} />
+          <Tab label="Events" {...a11yProps(1)} />
+          <Tab label="Logs" {...a11yProps(2)} />
+          <Tab label="Trades" {...a11yProps(3)} />
+          <Tab label="Equity" {...a11yProps(4)} />
+          <Tab label="Metrics" {...a11yProps(5)} />
         </Tabs>
 
-        {/* Use ExecutionDataProvider for tab content */}
-        <ExecutionDataProvider taskId={taskId} taskType={TaskType.BACKTEST}>
-          {(executionId) => (
-            <>
-              <TabPanel value={tabValue} index={0}>
-                {executionId ? (
-                  <EventsTable
-                    executionId={executionId}
-                    enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-                  />
-                ) : (
-                  <Box sx={{ p: 3 }}>
-                    <Alert severity="info">
-                      No execution data available. Start the task to see events.
-                    </Alert>
+        {/* Overview Tab */}
+        <TabPanel value={tabValue} index={0}>
+          <Box sx={{ p: 3 }}>
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="h6" gutterBottom>
+                  Task Information
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Name
+                    </Typography>
+                    <Typography variant="body1">{task.name}</Typography>
                   </Box>
-                )}
-              </TabPanel>
 
-              <TabPanel value={tabValue} index={1}>
-                {executionId ? (
-                  <LogsTable
-                    executionId={executionId}
-                    enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-                  />
-                ) : (
-                  <Box sx={{ p: 3 }}>
-                    <Alert severity="info">
-                      No execution data available. Start the task to see logs.
-                    </Alert>
-                  </Box>
-                )}
-              </TabPanel>
+                  {task.description && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Description
+                      </Typography>
+                      <Typography variant="body1">
+                        {task.description}
+                      </Typography>
+                    </Box>
+                  )}
 
-              <TabPanel value={tabValue} index={2}>
-                {executionId ? (
-                  <TradesTable
-                    executionId={executionId}
-                    enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-                  />
-                ) : (
-                  <Box sx={{ p: 3 }}>
-                    <Alert severity="info">
-                      No execution data available. Start the task to see trades.
-                    </Alert>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Instrument
+                    </Typography>
+                    <Typography variant="body1">{task.instrument}</Typography>
                   </Box>
-                )}
-              </TabPanel>
 
-              <TabPanel value={tabValue} index={3}>
-                {executionId ? (
-                  <EquityChart
-                    executionId={executionId}
-                    enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-                  />
-                ) : (
-                  <Box sx={{ p: 3 }}>
-                    <Alert severity="info">
-                      No execution data available. Start the task to see equity
-                      chart.
-                    </Alert>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Pip Size
+                    </Typography>
+                    <Typography variant="body1">{task.pip_size}</Typography>
                   </Box>
-                )}
-              </TabPanel>
 
-              <TabPanel value={tabValue} index={4}>
-                {executionId ? (
-                  <MetricsChart
-                    executionId={executionId}
-                    enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-                  />
-                ) : (
-                  <Box sx={{ p: 3 }}>
-                    <Alert severity="info">
-                      No execution data available. Start the task to see
-                      metrics.
-                    </Alert>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Trading Mode
+                    </Typography>
+                    <Typography
+                      variant="body1"
+                      sx={{ textTransform: 'capitalize' }}
+                    >
+                      {task.trading_mode}
+                    </Typography>
                   </Box>
-                )}
-              </TabPanel>
-            </>
-          )}
-        </ExecutionDataProvider>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Status
+                    </Typography>
+                    <Box sx={{ mt: 0.5 }}>
+                      <Chip
+                        label={task.status}
+                        color={getStatusColor(task.status)}
+                        size="small"
+                      />
+                    </Box>
+                  </Box>
+                </Box>
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="h6" gutterBottom>
+                  Configuration
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Strategy Configuration
+                    </Typography>
+                    <Link
+                      component="button"
+                      variant="body1"
+                      onClick={() =>
+                        navigate(`/configurations/${task.config_id}`)
+                      }
+                      sx={{ textAlign: 'left' }}
+                    >
+                      {task.config_name}
+                    </Link>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Strategy Type
+                    </Typography>
+                    <Typography
+                      variant="body1"
+                      sx={{ textTransform: 'capitalize' }}
+                    >
+                      {task.strategy_type}
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Data Source
+                    </Typography>
+                    <Typography
+                      variant="body1"
+                      sx={{ textTransform: 'capitalize' }}
+                    >
+                      {task.data_source}
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Initial Balance
+                    </Typography>
+                    <Typography variant="body1">
+                      ${parseFloat(task.initial_balance).toFixed(2)}
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Commission Per Trade
+                    </Typography>
+                    <Typography variant="body1">
+                      ${parseFloat(task.commission_per_trade).toFixed(2)}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Backtest Period
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Start Time
+                    </Typography>
+                    <Typography variant="body1">
+                      {new Date(task.start_time).toLocaleString()}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      End Time
+                    </Typography>
+                    <Typography variant="body1">
+                      {new Date(task.end_time).toLocaleString()}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Grid>
+
+              {(task.started_at || task.completed_at) && (
+                <Grid size={{ xs: 12 }}>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="h6" gutterBottom>
+                    Execution Timeline
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {task.started_at && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Started At
+                        </Typography>
+                        <Typography variant="body1">
+                          {new Date(task.started_at).toLocaleString()}
+                        </Typography>
+                      </Box>
+                    )}
+                    {task.completed_at && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Completed At
+                        </Typography>
+                        <Typography variant="body1">
+                          {new Date(task.completed_at).toLocaleString()}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </Grid>
+              )}
+            </Grid>
+          </Box>
+        </TabPanel>
+
+        {/* Task-based tab content */}
+        <TabPanel value={tabValue} index={1}>
+          <TaskEventsTable
+            taskId={taskId}
+            taskType={TaskType.BACKTEST}
+            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
+          />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={2}>
+          <TaskLogsTable
+            taskId={taskId}
+            taskType={TaskType.BACKTEST}
+            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
+          />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={3}>
+          <TaskTradesTable
+            taskId={taskId}
+            taskType={TaskType.BACKTEST}
+            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
+          />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={4}>
+          <TaskEquityChart
+            taskId={taskId}
+            taskType={TaskType.BACKTEST}
+            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
+          />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={5}>
+          <TaskMetricsChart
+            taskId={taskId}
+            taskType={TaskType.BACKTEST}
+            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
+          />
+        </TabPanel>
       </Paper>
     </Container>
   );

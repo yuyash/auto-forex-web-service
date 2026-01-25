@@ -27,6 +27,7 @@ class OandaApiHealthView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    serializer_class = OandaApiHealthStatusSerializer
 
     def _get_account(self, request: Request) -> OandaAccounts | None:
         account_id = request.query_params.get("account_id")

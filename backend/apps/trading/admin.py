@@ -3,13 +3,10 @@ from django.contrib import admin
 from apps.trading.models import (
     BacktestTasks,
     CeleryTaskStatus,
-    Executions,
     StrategyConfigurations,
-    StrategyEvents,
-    TaskExecutionResult,
-    TradeLogs,
+    TaskLog,
+    TaskMetric,
     TradingEvent,
-    TradingMetrics,
     TradingTasks,
 )
 
@@ -55,32 +52,6 @@ class TradingTasksAdmin(admin.ModelAdmin):
     ordering = ("-created_at",)
 
 
-@admin.register(Executions)
-class ExecutionsAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "task_type",
-        "task_id",
-        "execution_number",
-        "status",
-        "progress",
-        "started_at",
-        "completed_at",
-        "created_at",
-    )
-    list_filter = ("task_type", "status", "created_at")
-    search_fields = ("task_type", "task_id", "error_message")
-    ordering = ("-created_at",)
-
-
-@admin.register(TaskExecutionResult)
-class TaskExecutionResultAdmin(admin.ModelAdmin):
-    list_display = ("id", "task_type", "task_id", "success", "oanda_account_id", "created_at")
-    list_filter = ("task_type", "success", "created_at")
-    search_fields = ("task_type", "task_id", "oanda_account_id", "error")
-    ordering = ("-created_at",)
-
-
 @admin.register(CeleryTaskStatus)
 class CeleryTaskStatusAdmin(admin.ModelAdmin):
     list_display = (
@@ -116,124 +87,31 @@ class TradingEventAdmin(admin.ModelAdmin):
     ordering = ("-created_at",)
 
 
-@admin.register(TradingMetrics)
-class TradingMetricsAdmin(admin.ModelAdmin):
+@admin.register(TaskLog)
+class TaskLogAdmin(admin.ModelAdmin):
     list_display = (
         "id",
-        "execution",
-        "sequence",
+        "task",
         "timestamp",
-        "realized_pnl",
-        "unrealized_pnl",
-        "total_pnl",
-        "open_positions",
-        "total_trades",
-        "created_at",
+        "level",
+        "message",
     )
-    list_filter = ("created_at", "timestamp")
-    search_fields = ("execution__id", "sequence")
-    ordering = ("-created_at",)
-    readonly_fields = (
-        "execution",
-        "sequence",
-        "timestamp",
-        "realized_pnl",
-        "unrealized_pnl",
-        "total_pnl",
-        "open_positions",
-        "total_trades",
-        "tick_ask_min",
-        "tick_ask_max",
-        "tick_ask_avg",
-        "tick_bid_min",
-        "tick_bid_max",
-        "tick_bid_avg",
-        "tick_mid_min",
-        "tick_mid_max",
-        "tick_mid_avg",
-        "created_at",
-        "updated_at",
-    )
-    fieldsets = (
-        (
-            "Execution Info",
-            {
-                "fields": ("execution", "sequence", "timestamp"),
-            },
-        ),
-        (
-            "PnL Metrics",
-            {
-                "fields": ("realized_pnl", "unrealized_pnl", "total_pnl"),
-            },
-        ),
-        (
-            "Position Metrics",
-            {
-                "fields": ("open_positions", "total_trades"),
-            },
-        ),
-        (
-            "Tick Statistics - Ask",
-            {
-                "fields": ("tick_ask_min", "tick_ask_max", "tick_ask_avg"),
-            },
-        ),
-        (
-            "Tick Statistics - Bid",
-            {
-                "fields": ("tick_bid_min", "tick_bid_max", "tick_bid_avg"),
-            },
-        ),
-        (
-            "Tick Statistics - Mid",
-            {
-                "fields": ("tick_mid_min", "tick_mid_max", "tick_mid_avg"),
-            },
-        ),
-        (
-            "Timestamps",
-            {
-                "fields": ("created_at", "updated_at"),
-            },
-        ),
-    )
+    list_filter = ("level", "timestamp")
+    search_fields = ("task__name", "message")
+    ordering = ("-timestamp",)
+    readonly_fields = ("task", "timestamp", "level", "message")
 
 
-@admin.register(TradeLogs)
-class TradeLogsAdmin(admin.ModelAdmin):
+@admin.register(TaskMetric)
+class TaskMetricAdmin(admin.ModelAdmin):
     list_display = (
         "id",
-        "execution",
-        "sequence",
-        "created_at",
-    )
-    list_filter = ("created_at",)
-    search_fields = ("execution__id", "sequence")
-    ordering = ("-created_at",)
-    readonly_fields = ("execution", "sequence", "trade", "created_at")
-
-
-@admin.register(StrategyEvents)
-class StrategyEventsAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "execution",
-        "sequence",
-        "event_type",
-        "strategy_type",
+        "task",
+        "metric_name",
+        "metric_value",
         "timestamp",
-        "created_at",
     )
-    list_filter = ("event_type", "strategy_type", "created_at", "timestamp")
-    search_fields = ("execution__id", "sequence", "event_type", "strategy_type")
-    ordering = ("-created_at",)
-    readonly_fields = (
-        "execution",
-        "sequence",
-        "event_type",
-        "strategy_type",
-        "timestamp",
-        "event",
-        "created_at",
-    )
+    list_filter = ("metric_name", "timestamp")
+    search_fields = ("task__name", "metric_name")
+    ordering = ("-timestamp",)
+    readonly_fields = ("task", "metric_name", "metric_value", "timestamp", "metadata")

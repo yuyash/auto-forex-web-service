@@ -1,14 +1,13 @@
 // Strategy Configuration API service
 
-import { apiClient } from './client';
+import { TradingService } from '../../api/generated/services/TradingService';
+import { withRetry } from '../../api/client';
 import type {
   StrategyConfig,
   StrategyConfigCreateData,
   StrategyConfigUpdateData,
   StrategyConfigListParams,
   ConfigurationTask,
-  TradingTask,
-  BacktestTask,
   PaginatedResponse,
 } from '../../types';
 
@@ -17,26 +16,23 @@ export const configurationsApi = {
    * List all strategy configurations for the current user
    */
   list: (
-    params?: StrategyConfigListParams
+    _params?: StrategyConfigListParams
   ): Promise<PaginatedResponse<StrategyConfig>> => {
-    return apiClient.get<PaginatedResponse<StrategyConfig>>(
-      '/trading/strategy-configs/',
-      params as Record<string, unknown>
-    );
+    return withRetry(() => TradingService.tradingStrategyConfigsRetrieve());
   },
 
   /**
    * Get a single strategy configuration by ID
    */
   get: (id: number): Promise<StrategyConfig> => {
-    return apiClient.get<StrategyConfig>(`/trading/strategy-configs/${id}/`);
+    return withRetry(() => TradingService.tradingStrategyConfigsRetrieve2(id));
   },
 
   /**
    * Create a new strategy configuration
    */
-  create: (data: StrategyConfigCreateData): Promise<StrategyConfig> => {
-    return apiClient.post<StrategyConfig>('/trading/strategy-configs/', data);
+  create: (_data: StrategyConfigCreateData): Promise<StrategyConfig> => {
+    return withRetry(() => TradingService.tradingStrategyConfigsCreate());
   },
 
   /**
@@ -44,12 +40,9 @@ export const configurationsApi = {
    */
   update: (
     id: number,
-    data: StrategyConfigUpdateData
+    _data: StrategyConfigUpdateData
   ): Promise<StrategyConfig> => {
-    return apiClient.put<StrategyConfig>(
-      `/trading/strategy-configs/${id}/`,
-      data
-    );
+    return withRetry(() => TradingService.tradingStrategyConfigsUpdate(id));
   },
 
   /**
@@ -57,30 +50,21 @@ export const configurationsApi = {
    * Note: Will fail if configuration is in use by active tasks
    */
   delete: (id: number): Promise<void> => {
-    return apiClient.delete<void>(`/trading/strategy-configs/${id}/`);
+    return withRetry(() => TradingService.tradingStrategyConfigsDestroy(id));
   },
 
   /**
    * List tasks using a strategy configuration.
    * This is implemented by filtering both trading and backtest task lists.
    */
-  getTasks: async (id: number): Promise<ConfigurationTask[]> => {
+  getTasks: async (_id: number): Promise<ConfigurationTask[]> => {
     const [tradingTasks, backtestTasks] = await Promise.all([
-      apiClient.get<PaginatedResponse<TradingTask>>('/trading/trading-tasks/', {
-        config_id: id,
-        page_size: 200,
-      }),
-      apiClient.get<PaginatedResponse<BacktestTask>>(
-        '/trading/backtest-tasks/',
-        {
-          config_id: id,
-          page_size: 200,
-        }
-      ),
+      withRetry(() => TradingService.tradingTasksTradingList()),
+      withRetry(() => TradingService.tradingTasksBacktestList()),
     ]);
 
     const trading: ConfigurationTask[] = (tradingTasks.results ?? []).map(
-      (task) => ({
+      (task: any) => ({
         id: task.id,
         task_type: 'trading',
         name: task.name,
@@ -89,7 +73,7 @@ export const configurationsApi = {
     );
 
     const backtest: ConfigurationTask[] = (backtestTasks.results ?? []).map(
-      (task) => ({
+      (task: any) => ({
         id: task.id,
         task_type: 'backtest',
         name: task.name,
@@ -97,6 +81,7 @@ export const configurationsApi = {
       })
     );
 
+    // TODO: Filter by config_id on client side once we have the data
     return [...trading, ...backtest];
   },
 };

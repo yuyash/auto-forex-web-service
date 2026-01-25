@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { UserSettingsUpdateRequest } from '../models/UserSettingsUpdateRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
@@ -42,13 +43,13 @@ export class UserSettingsService {
    * @throws ApiError
    */
   public static accountsSettingsUpdate(
-    requestBody?: Record<string, any>
+    requestBody?: UserSettingsUpdateRequest
   ): CancelablePromise<any> {
     return __request(OpenAPI, {
       method: 'PUT',
       url: '/api/accounts/settings/',
       body: requestBody,
-      mediaType: 'type',
+      mediaType: 'application/json',
       errors: {
         400: `Validation error`,
         401: `Authentication required`,

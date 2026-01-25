@@ -2,6 +2,8 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { EmailVerificationRequest } from '../models/EmailVerificationRequest';
+import type { ResendVerificationRequest } from '../models/ResendVerificationRequest';
 import type { UserLoginRequest } from '../models/UserLoginRequest';
 import type { UserRegistrationRequest } from '../models/UserRegistrationRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -125,13 +127,13 @@ export class AuthenticationService {
    * @throws ApiError
    */
   public static accountsAuthResendVerificationCreate(
-    requestBody?: Record<string, any>
+    requestBody: ResendVerificationRequest
   ): CancelablePromise<any> {
     return __request(OpenAPI, {
       method: 'POST',
       url: '/api/accounts/auth/resend-verification',
       body: requestBody,
-      mediaType: 'type',
+      mediaType: 'application/json',
       errors: {
         400: `Email is required or already verified`,
       },
@@ -145,13 +147,13 @@ export class AuthenticationService {
    * @throws ApiError
    */
   public static accountsAuthVerifyEmailCreate(
-    requestBody?: Record<string, any>
+    requestBody: EmailVerificationRequest
   ): CancelablePromise<any> {
     return __request(OpenAPI, {
       method: 'POST',
       url: '/api/accounts/auth/verify-email',
       body: requestBody,
-      mediaType: 'type',
+      mediaType: 'application/json',
       errors: {
         400: `Invalid or expired token`,
       },

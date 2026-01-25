@@ -9,8 +9,7 @@ https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
 
 import os
 
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import AllowedHostsOriginValidator
+from channels.routing import ProtocolTypeRouter
 from django.core.asgi import get_asgi_application
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
@@ -19,16 +18,9 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 # is populated before importing code that may import ORM models.
 django_asgi_app = get_asgi_application()
 
-# Import routing and JWT auth middleware after Django is initialized
-# pylint: disable=wrong-import-position
-from apps.accounts.middlewares import jwt_auth_middleware_stack  # noqa: E402
-from config.routing import websocket_urlpatterns  # noqa: E402
-
+# Use HTTP-only protocol router (WebSocket support removed in favor of polling)
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
-        "websocket": AllowedHostsOriginValidator(
-            jwt_auth_middleware_stack(URLRouter(websocket_urlpatterns))
-        ),
     }
 )

@@ -1,8 +1,8 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-
-import type { DirectionEnum } from './DirectionEnum';
+/* eslint-disable */
+import type { Direction530Enum } from './Direction530Enum';
 import type { OrderTypeEnum } from './OrderTypeEnum';
 /**
  * Serializer for creating orders.
@@ -27,7 +27,7 @@ export type OrderRequest = {
    * * `long` - long
    * * `short` - short
    */
-  direction: DirectionEnum;
+  direction: Direction530Enum;
   /**
    * Number of units to trade
    */

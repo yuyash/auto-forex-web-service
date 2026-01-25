@@ -1,8 +1,10 @@
 """Task models for backtesting and live trading."""
 
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
+from celery.result import AsyncResult
 from django.db import models
 from django.utils import timezone
 
@@ -122,6 +124,60 @@ class BacktestTasks(models.Model):
         help_text="Timestamp when the task was last updated",
     )
 
+    # Celery Integration
+    celery_task_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Celery task ID for tracking execution",
+    )
+
+    # Execution State
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the task execution started",
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the task execution completed",
+    )
+
+    # Error Tracking
+    error_message = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Error message if task failed",
+    )
+    error_traceback = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Full error traceback if task failed",
+    )
+    retry_count = models.IntegerField(
+        default=0,
+        help_text="Number of times this task has been retried",
+    )
+    max_retries = models.IntegerField(
+        default=3,
+        help_text="Maximum number of retries allowed",
+    )
+
+    # Results
+    result_data = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Execution results data",
+    )
+    result_data_external_ref = models.CharField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="Reference to externally stored result data (e.g., fs://path or s3://bucket/key)",
+    )
+
     class Meta:
         db_table = "backtest_tasks"
         verbose_name = "Backtest Task"
@@ -130,6 +186,8 @@ class BacktestTasks(models.Model):
             models.Index(fields=["user", "status"]),
             models.Index(fields=["user", "config"]),
             models.Index(fields=["created_at"]),
+            models.Index(fields=["celery_task_id"]),
+            models.Index(fields=["status", "created_at"]),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -141,6 +199,105 @@ class BacktestTasks(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.config.strategy_type})"
+
+    def get_celery_result(self) -> AsyncResult | None:
+        """Retrieve the Celery AsyncResult for this task.
+
+        Returns:
+            AsyncResult | None: The Celery AsyncResult if celery_task_id is set, None otherwise
+        """
+        if self.celery_task_id:
+            return AsyncResult(self.celery_task_id)
+        return None
+
+    def update_from_celery_state(self) -> None:
+        """Synchronize task status with Celery task state.
+
+        Maps Celery task states to Task statuses and updates the task accordingly.
+
+        Note: Does not overwrite terminal states (STOPPED, COMPLETED, FAILED, PAUSED) or
+        states during transitions (STOP_REQUESTED) to prevent race conditions with async
+        stop operations.
+
+        Priority order:
+        1. Terminal states - never overwrite
+        2. CeleryTaskStatus.STOP_REQUESTED - don't overwrite during stop
+        3. CeleryTaskStatus state - use if available
+        4. Celery AsyncResult state - fallback
+        """
+        from apps.trading.services.status_sync import sync_task_status_from_celery
+
+        sync_task_status_from_celery(self, self.get_celery_result())
+
+    def cancel(self) -> bool:
+        """Cancel the running task.
+
+        Returns:
+            bool: True if task was successfully cancelled, False otherwise
+        """
+        if self.status in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
+            result = self.get_celery_result()
+            if result:
+                result.revoke(terminate=True)
+            self.status = TaskStatus.STOPPED
+            self.completed_at = timezone.now()
+            self.save(update_fields=["status", "completed_at", "updated_at"])
+            return True
+        return False
+
+    @property
+    def duration(self) -> timedelta | None:
+        """Calculate task execution duration.
+
+        Returns:
+            timedelta | None: Duration if both started_at and completed_at are set, None otherwise
+        """
+        if self.started_at and self.completed_at:
+            return self.completed_at - self.started_at
+        return None
+
+    def set_result_data(self, data: Any) -> None:
+        """Set result data, automatically using external storage if needed.
+
+        Args:
+            data: Result data to store
+        """
+        from apps.trading.services.storage import ExternalStorageService
+
+        storage_service = ExternalStorageService()
+        inline_data, external_ref = storage_service.store_if_needed(self.pk, data)
+
+        self.result_data = inline_data
+        self.result_data_external_ref = external_ref
+        self.save(update_fields=["result_data", "result_data_external_ref", "updated_at"])
+
+    def get_result_data(self) -> Any:
+        """Get result data from inline or external storage.
+
+        Returns:
+            Any: The result data
+
+        Raises:
+            FileNotFoundError: If external reference is invalid
+        """
+        from apps.trading.services.storage import ExternalStorageService
+
+        storage_service = ExternalStorageService()
+        return storage_service.retrieve_data(self.result_data, self.result_data_external_ref)
+
+    def clear_result_data(self) -> None:
+        """Clear result data from both inline and external storage."""
+        from apps.trading.services.storage import ExternalStorageService
+
+        # Delete external data if it exists
+        if self.result_data_external_ref:
+            storage_service = ExternalStorageService()
+            storage_service.delete_external_data(self.result_data_external_ref)
+
+        # Clear both fields
+        self.result_data = None
+        self.result_data_external_ref = None
+        self.save(update_fields=["result_data", "result_data_external_ref", "updated_at"])
 
     def validate_configuration(self) -> tuple[bool, str | None]:
         """Validate task configuration before execution."""
@@ -175,36 +332,25 @@ class BacktestTasks(models.Model):
         self.status = TaskStatus.STOPPED
         self.save(update_fields=["status", "updated_at"])
 
-        # Mark current execution as stopped
-        latest_execution = self.get_latest_execution()
-        if latest_execution and latest_execution.status == TaskStatus.RUNNING:
-            from django.utils import timezone
+    def pause(self) -> None:
+        """Pause a running backtest task.
 
-            latest_execution.status = TaskStatus.STOPPED
-            latest_execution.completed_at = timezone.now()
-            latest_execution.save(update_fields=["status", "completed_at"])
-
-    def resume(self) -> None:
-        """Resume a stopped backtest task.
-
-        Transitions task back to running state. The execution will continue
-        from the last persisted state.
+        Transitions task to paused state. The execution state is preserved.
 
         Raises:
-            ValueError: If task is not stopped
+            ValueError: If task is not running
         """
-        if self.status != TaskStatus.STOPPED:
-            raise ValueError("Task is not stopped")
+        if self.status != TaskStatus.RUNNING:
+            raise ValueError("Task is not running")
 
-        self.status = TaskStatus.RUNNING
+        self.status = TaskStatus.PAUSED
         self.save(update_fields=["status", "updated_at"])
 
-    def restart(self) -> None:
-        """Restart the backtest task from the beginning.
+    def restart(self) -> bool:
+        """Restart a task from the beginning, clearing all execution data.
 
-        Clears all persisted execution state and starts fresh.
-        Task can be in any state (stopped, failed, completed) to be restarted,
-        but not running.
+        Returns:
+            bool: True if task was successfully restarted, False otherwise
 
         Raises:
             ValueError: If task is currently running
@@ -212,16 +358,45 @@ class BacktestTasks(models.Model):
         if self.status == TaskStatus.RUNNING:
             raise ValueError("Cannot restart a task that is currently running. Stop it first.")
 
-        # Clear persisted state by deleting execution snapshots
-        latest_execution = self.get_latest_execution()
-        if latest_execution:
-            # Delete execution snapshots to clear state
-            from apps.trading.models import ExecutionSnapshot  # type: ignore[attr-defined]
+        if self.status in [
+            TaskStatus.COMPLETED,
+            TaskStatus.FAILED,
+            TaskStatus.STOPPED,
+            TaskStatus.STOPPED,
+        ]:
+            # Clear result data (including external storage)
+            self.clear_result_data()
 
-            ExecutionSnapshot.objects.filter(execution=latest_execution).delete()  # type: ignore[attr-defined]
+            # Clear all events associated with this task
+            from apps.trading.models import TradingEvent
 
-        self.status = TaskStatus.RUNNING
-        self.save(update_fields=["status", "updated_at"])
+            TradingEvent.objects.filter(task_type="backtest", task_id=self.pk).delete()
+
+            # Clear all other execution data
+            self.celery_task_id = None
+            self.status = TaskStatus.CREATED
+            self.started_at = None
+            self.completed_at = None
+            self.error_message = None
+            self.error_traceback = None
+            self.retry_count += 1
+            self.save()
+            return True
+        return False
+
+    def resume(self) -> bool:
+        """Resume a paused task, preserving execution context.
+
+        Returns:
+            bool: True if task was successfully resumed, False otherwise
+        """
+        if self.status == TaskStatus.PAUSED:
+            # Keep existing execution data, just change status back to running
+            self.celery_task_id = None
+            self.status = TaskStatus.RUNNING
+            self.save()
+            return True
+        return False
 
     def copy(self, new_name: str) -> "BacktestTasks":
         """Create a copy of this backtest task with a new name."""
@@ -246,7 +421,6 @@ class BacktestTasks(models.Model):
 
     def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:  # type: ignore[override]
         """Delete the task and stop any running Celery tasks."""
-        from apps.trading.enums import TaskType
         from apps.trading.services.lock import TaskLockManager
 
         # Stop the Celery task if running
@@ -255,28 +429,6 @@ class BacktestTasks(models.Model):
             lock_manager.set_cancellation_flag(TaskType.BACKTEST, self.pk)
 
         return super().delete(*args, **kwargs)
-
-    def get_latest_execution(self) -> Any:
-        """Get the most recent execution for this task."""
-        from apps.trading.models.execution import Executions
-
-        return (
-            Executions.objects.filter(
-                task_type=TaskType.BACKTEST,
-                task_id=self.pk,
-            )
-            .order_by("-execution_number")
-            .first()
-        )
-
-    def get_execution_history(self) -> Any:
-        """Get all executions for this task, ordered by execution number."""
-        from apps.trading.models.execution import Executions
-
-        return Executions.objects.filter(
-            task_type=TaskType.BACKTEST,
-            task_id=self.pk,
-        ).order_by("-execution_number")
 
     @property
     def pip_size(self) -> Decimal:
@@ -373,6 +525,61 @@ class TradingTasks(models.Model):
         auto_now=True,
         help_text="Timestamp when the task was last updated",
     )
+
+    # Celery Integration
+    celery_task_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Celery task ID for tracking execution",
+    )
+
+    # Execution State
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the task execution started",
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the task execution completed",
+    )
+
+    # Error Tracking
+    error_message = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Error message if task failed",
+    )
+    error_traceback = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Full error traceback if task failed",
+    )
+    retry_count = models.IntegerField(
+        default=0,
+        help_text="Number of times this task has been retried",
+    )
+    max_retries = models.IntegerField(
+        default=3,
+        help_text="Maximum number of retries allowed",
+    )
+
+    # Results
+    result_data = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Execution results data",
+    )
+    result_data_external_ref = models.CharField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="Reference to externally stored result data (e.g., fs://path or s3://bucket/key)",
+    )
+
     sell_on_stop = models.BooleanField(
         default=False,
         help_text="Close all positions when task is stopped",
@@ -416,9 +623,12 @@ class TradingTasks(models.Model):
                 condition=models.Q(
                     status__in=[
                         TaskStatus.CREATED,
+                        TaskStatus.CREATED,
                         TaskStatus.RUNNING,
                         TaskStatus.STOPPED,
+                        TaskStatus.COMPLETED,
                         TaskStatus.FAILED,
+                        TaskStatus.STOPPED,
                     ]
                 ),
                 name="valid_trading_task_status",
@@ -429,11 +639,112 @@ class TradingTasks(models.Model):
             models.Index(fields=["user", "config"]),
             models.Index(fields=["oanda_account", "status"]),
             models.Index(fields=["created_at"]),
+            models.Index(fields=["celery_task_id"]),
+            models.Index(fields=["status", "created_at"]),
         ]
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.config.strategy_type}) - {self.oanda_account.account_id}"
+
+    def get_celery_result(self) -> AsyncResult | None:
+        """Retrieve the Celery AsyncResult for this task.
+
+        Returns:
+            AsyncResult | None: The Celery AsyncResult if celery_task_id is set, None otherwise
+        """
+        if self.celery_task_id:
+            return AsyncResult(self.celery_task_id)
+        return None
+
+    def update_from_celery_state(self) -> None:
+        """Synchronize task status with Celery task state.
+
+        Maps Celery task states to Task statuses and updates the task accordingly.
+
+        Note: Does not overwrite terminal states (STOPPED, COMPLETED, FAILED, PAUSED) or
+        states during transitions (STOP_REQUESTED) to prevent race conditions with async
+        stop operations.
+
+        Priority order:
+        1. Terminal states - never overwrite
+        2. CeleryTaskStatus.STOP_REQUESTED - don't overwrite during stop
+        3. CeleryTaskStatus state - use if available
+        4. Celery AsyncResult state - fallback
+        """
+        from apps.trading.services.status_sync import sync_task_status_from_celery
+
+        sync_task_status_from_celery(self, self.get_celery_result())
+
+    def cancel(self) -> bool:
+        """Cancel the running task.
+
+        Returns:
+            bool: True if task was successfully cancelled, False otherwise
+        """
+        if self.status in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
+            result = self.get_celery_result()
+            if result:
+                result.revoke(terminate=True)
+            self.status = TaskStatus.STOPPED
+            self.completed_at = timezone.now()
+            self.save(update_fields=["status", "completed_at", "updated_at"])
+            return True
+        return False
+
+    @property
+    def duration(self) -> timedelta | None:
+        """Calculate task execution duration.
+
+        Returns:
+            timedelta | None: Duration if both started_at and completed_at are set, None otherwise
+        """
+        if self.started_at and self.completed_at:
+            return self.completed_at - self.started_at
+        return None
+
+    def set_result_data(self, data: Any) -> None:
+        """Set result data, automatically using external storage if needed.
+
+        Args:
+            data: Result data to store
+        """
+        from apps.trading.services.storage import ExternalStorageService
+
+        storage_service = ExternalStorageService()
+        inline_data, external_ref = storage_service.store_if_needed(self.pk, data)
+
+        self.result_data = inline_data
+        self.result_data_external_ref = external_ref
+        self.save(update_fields=["result_data", "result_data_external_ref", "updated_at"])
+
+    def get_result_data(self) -> Any:
+        """Get result data from inline or external storage.
+
+        Returns:
+            Any: The result data
+
+        Raises:
+            FileNotFoundError: If external reference is invalid
+        """
+        from apps.trading.services.storage import ExternalStorageService
+
+        storage_service = ExternalStorageService()
+        return storage_service.retrieve_data(self.result_data, self.result_data_external_ref)
+
+    def clear_result_data(self) -> None:
+        """Clear result data from both inline and external storage."""
+        from apps.trading.services.storage import ExternalStorageService
+
+        # Delete external data if it exists
+        if self.result_data_external_ref:
+            storage_service = ExternalStorageService()
+            storage_service.delete_external_data(self.result_data_external_ref)
+
+        # Clear both fields
+        self.result_data = None
+        self.result_data_external_ref = None
+        self.save(update_fields=["result_data", "result_data_external_ref", "updated_at"])
 
     def start(self) -> None:
         """
@@ -481,12 +792,6 @@ class TradingTasks(models.Model):
         self.status = TaskStatus.RUNNING
         self.save(update_fields=["status", "trading_mode", "updated_at"])
 
-        # Mark current execution as running
-        latest_execution = self.get_latest_execution()
-        if latest_execution and latest_execution.status == TaskStatus.STOPPED:
-            latest_execution.status = TaskStatus.RUNNING
-            latest_execution.save(update_fields=["status"])
-
     def stop(self) -> None:
         """
         Stop a running trading task.
@@ -505,58 +810,14 @@ class TradingTasks(models.Model):
         self.status = TaskStatus.STOPPED
         self.save(update_fields=["status", "updated_at"])
 
-        # Mark current execution as stopped
-        latest_execution = self.get_latest_execution()
-        if latest_execution and latest_execution.status == TaskStatus.RUNNING:
-            latest_execution.status = TaskStatus.STOPPED
-            latest_execution.completed_at = timezone.now()
-            latest_execution.save(update_fields=["status", "completed_at"])
-
-    def resume(self) -> None:
-        """
-        Resume a stopped trading task.
-
-        Transitions task back to running state. The execution will continue
-        from the last persisted state.
-
-        Raises:
-            ValueError: If task is not stopped or another task is running on the account
-        """
-        if self.status != TaskStatus.STOPPED:
-            raise ValueError("Task is not stopped")
-
-        # Check if another task is running on this account
-        other_running_tasks = TradingTasks.objects.filter(
-            oanda_account=self.oanda_account,
-            status=TaskStatus.RUNNING,
-        ).exclude(pk=self.pk)
-
-        if other_running_tasks.exists():
-            other_task = other_running_tasks.first()
-            if other_task:
-                raise ValueError(
-                    f"Another task '{other_task.name}' is already running on this account. "
-                    "Only one task can run per account at a time."
-                )
-
-        # Update task status
-        self.status = TaskStatus.RUNNING
-        self.save(update_fields=["status", "updated_at"])
-
-        # Mark current execution as running
-        latest_execution = self.get_latest_execution()
-        if latest_execution and latest_execution.status == TaskStatus.STOPPED:
-            latest_execution.status = TaskStatus.RUNNING
-            latest_execution.save(update_fields=["status"])
-
-    def restart(self, *, clear_state: bool = True) -> None:
-        """Restart task from the beginning.
-
-        Clears all persisted execution state and starts fresh.
-        Task can be in any state (stopped, failed) to be restarted, but not running.
+    def restart(self, *, clear_state: bool = True) -> bool:
+        """Restart task from the beginning, clearing all execution data.
 
         Args:
             clear_state: Whether to clear persisted strategy state (default: True)
+
+        Returns:
+            bool: True if task was successfully restarted, False otherwise
 
         Raises:
             ValueError: If task is currently running or another task is running on the account
@@ -578,19 +839,72 @@ class TradingTasks(models.Model):
                     "Only one task can run per account at a time."
                 )
 
-        if clear_state:
-            self.strategy_state = {}
+        if self.status in [
+            TaskStatus.COMPLETED,
+            TaskStatus.FAILED,
+            TaskStatus.STOPPED,
+            TaskStatus.STOPPED,
+        ]:
+            # Clear result data (including external storage)
+            self.clear_result_data()
 
-            # Clear persisted state by deleting execution snapshots
-            latest_execution = self.get_latest_execution()
-            if latest_execution:
-                # Delete execution snapshots to clear state
-                from apps.trading.models import ExecutionSnapshot  # type: ignore[attr-defined]
+            # Clear all events associated with this task
+            from apps.trading.models import TradingEvent
 
-                ExecutionSnapshot.objects.filter(execution=latest_execution).delete()  # type: ignore[attr-defined]
+            TradingEvent.objects.filter(task_type="trading", task_id=self.pk).delete()
 
-        self.status = TaskStatus.RUNNING
-        self.save(update_fields=["status", "strategy_state", "updated_at"])
+            # Clear all other execution data
+            self.celery_task_id = None
+            self.status = TaskStatus.CREATED
+            self.started_at = None
+            self.completed_at = None
+            self.error_message = None
+            self.error_traceback = None
+            self.retry_count += 1
+
+            if clear_state:
+                self.strategy_state = {}
+
+            self.save()
+            return True
+        return False
+
+    def resume(self) -> bool:
+        """Resume a cancelled or interrupted task, preserving execution context.
+
+        For trading tasks, this allows resuming from STOPPED state.
+        STOPPED is the normal completion state for trading tasks, and they can be
+        resumed to continue trading.
+
+        Returns:
+            bool: True if task was successfully resumed, False otherwise
+
+        Raises:
+            ValueError: If another task is running on the account
+        """
+        if self.status not in [TaskStatus.STOPPED, TaskStatus.STOPPED]:
+            return False
+
+        # Check if another task is running on this account
+        other_running_tasks = TradingTasks.objects.filter(
+            oanda_account=self.oanda_account,
+            status=TaskStatus.RUNNING,
+        ).exclude(pk=self.pk)
+
+        if other_running_tasks.exists():
+            other_task = other_running_tasks.first()
+            if other_task:
+                raise ValueError(
+                    f"Another task '{other_task.name}' is already running on this account. "
+                    "Only one task can run per account at a time."
+                )
+
+        # Keep existing execution data but reset status
+        self.celery_task_id = None
+        self.status = TaskStatus.CREATED
+        self.completed_at = None
+        self.save()
+        return True
 
     def copy(self, new_name: str) -> "TradingTasks":
         """
@@ -628,7 +942,6 @@ class TradingTasks(models.Model):
 
     def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:  # type: ignore[override]
         """Delete the task and stop any running Celery tasks."""
-        from apps.trading.enums import TaskType
         from apps.trading.services.lock import TaskLockManager
 
         # Stop the Celery task if running
@@ -637,28 +950,6 @@ class TradingTasks(models.Model):
             lock_manager.set_cancellation_flag(TaskType.TRADING, self.pk)
 
         return super().delete(*args, **kwargs)
-
-    def get_latest_execution(self) -> Any:
-        """Get the most recent execution for this task."""
-        from apps.trading.models.execution import Executions
-
-        return (
-            Executions.objects.filter(
-                task_type=TaskType.TRADING,
-                task_id=self.pk,
-            )
-            .order_by("-execution_number")
-            .first()
-        )
-
-    def get_execution_history(self) -> Any:
-        """Get all executions for this task, ordered by execution number."""
-        from apps.trading.models.execution import Executions
-
-        return Executions.objects.filter(
-            task_type=TaskType.TRADING,
-            task_id=self.pk,
-        ).order_by("-execution_number")
 
     def validate_configuration(self) -> tuple[bool, str | None]:
         """

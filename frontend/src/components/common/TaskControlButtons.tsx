@@ -24,6 +24,7 @@ import {
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 import type { TaskStatus } from '../../types/common';
+import { TaskStatus as TaskStatusEnum } from '../../types/common';
 
 export interface TaskControlButtonsProps {
   taskId: number;
@@ -93,17 +94,19 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   orientation = 'horizontal',
 }) => {
   // Determine which buttons should be enabled based on status
-  const canStart =
-    status === 'created' ||
-    status === 'stopped' ||
-    status === 'failed' ||
-    status === 'completed';
-  const canStop = status === 'running' || status === 'paused';
-  const canPause = status === 'running';
-  const canResume = status === 'paused';
-  const canRestart =
-    status === 'stopped' || status === 'completed' || status === 'failed';
-  const canDelete = status !== 'running' && status !== 'paused';
+  const canStart = [TaskStatusEnum.CREATED, TaskStatusEnum.PENDING].includes(
+    status
+  );
+
+  const canStop = [TaskStatusEnum.RUNNING].includes(status);
+  const canPause = status === TaskStatusEnum.RUNNING;
+  const canResume = [TaskStatusEnum.STOPPED].includes(status);
+  const canRestart = [
+    TaskStatusEnum.STOPPED,
+    TaskStatusEnum.COMPLETED,
+    TaskStatusEnum.FAILED,
+  ].includes(status);
+  const canDelete = ![TaskStatusEnum.RUNNING].includes(status);
 
   const handleAction = async (
     action?: (taskId: number) => void | Promise<void>

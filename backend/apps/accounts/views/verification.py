@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import User
+from apps.accounts.serializers import EmailVerificationSerializer, ResendVerificationSerializer
 from apps.accounts.services.email import AccountEmailService
 
 logger: Logger = getLogger(name=__name__)
@@ -26,15 +27,12 @@ class EmailVerificationView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes: list = []
+    serializer_class = EmailVerificationSerializer
 
     @extend_schema(
         summary="POST /api/accounts/auth/verify-email",
         description="Verify user email address using the verification token sent via email.",
-        request={
-            "type": "object",
-            "properties": {"token": {"type": "string"}},
-            "required": ["token"],
-        },
+        request=EmailVerificationSerializer,
         responses={
             200: OpenApiResponse(description="Email verified successfully"),
             400: OpenApiResponse(description="Invalid or expired token"),
@@ -100,6 +98,7 @@ class ResendVerificationEmailView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes: list = []
+    serializer_class = ResendVerificationSerializer
 
     def build_verification_url(self, request: Request, token: str) -> str:
         """Build email verification URL."""
@@ -115,11 +114,7 @@ class ResendVerificationEmailView(APIView):
     @extend_schema(
         summary="POST /api/accounts/auth/resend-verification",
         description="Resend email verification link to the specified email address.",
-        request={
-            "type": "object",
-            "properties": {"email": {"type": "string", "format": "email"}},
-            "required": ["email"],
-        },
+        request=ResendVerificationSerializer,
         responses={
             200: OpenApiResponse(description="Verification email sent"),
             400: OpenApiResponse(description="Email is required or already verified"),

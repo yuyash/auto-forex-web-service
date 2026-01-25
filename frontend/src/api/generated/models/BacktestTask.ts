@@ -6,14 +6,10 @@ import type { DataSourceEnum } from './DataSourceEnum';
 import type { StatusEnum } from './StatusEnum';
 import type { TradingModeEnum } from './TradingModeEnum';
 /**
- * Serializer for BacktestTasks full details.
+ * Serializer for BacktestTasks with execution data.
  */
 export type BacktestTask = {
   readonly id: number;
-  readonly user_id: number;
-  readonly config_id: number;
-  readonly config_name: string;
-  readonly strategy_type: string;
   /**
    * Human-readable name for this backtest task
    */
@@ -22,6 +18,86 @@ export type BacktestTask = {
    * Optional description of this backtest task
    */
   description?: string;
+  /**
+   * Get the task type.
+   *
+   * Args:
+   * obj: Task instance
+   *
+   * Returns:
+   * str: "backtest" or "trading"
+   */
+  readonly task_type: string;
+  /**
+   * Current task status
+   *
+   * * `created` - Created
+   * * `running` - Running
+   * * `paused` - Paused
+   * * `stopped` - Stopped
+   * * `completed` - Completed
+   * * `failed` - Failed
+   */
+  readonly status: StatusEnum;
+  /**
+   * Timestamp when the task was created
+   */
+  readonly created_at: string;
+  /**
+   * Timestamp when the task was last updated
+   */
+  readonly updated_at: string;
+  /**
+   * Timestamp when the task execution started
+   */
+  readonly started_at: string | null;
+  /**
+   * Timestamp when the task execution completed
+   */
+  readonly completed_at: string | null;
+  /**
+   * Calculate task execution duration in seconds.
+   *
+   * Args:
+   * obj: Task instance
+   *
+   * Returns:
+   * float | None: Duration in seconds if both started_at and completed_at are set,
+   * None otherwise
+   */
+  readonly duration: number | null;
+  /**
+   * Celery task ID for tracking execution
+   */
+  readonly celery_task_id: string | null;
+  /**
+   * Number of times this task has been retried
+   */
+  retry_count?: number;
+  /**
+   * Maximum number of retries allowed
+   */
+  max_retries?: number;
+  /**
+   * Error message if task failed
+   */
+  readonly error_message: string | null;
+  /**
+   * Full error traceback if task failed
+   */
+  readonly error_traceback: string | null;
+  /**
+   * Execution results data
+   */
+  readonly result_data: any;
+  /**
+   * User who created this backtest task
+   */
+  readonly user: number;
+  /**
+   * Strategy configuration used by this task
+   */
+  config: number;
   /**
    * Data source for historical tick data
    *
@@ -47,17 +123,6 @@ export type BacktestTask = {
    */
   commission_per_trade?: string;
   /**
-   * Get pip_size as Decimal with default value.
-   *
-   * Returns:
-   * Decimal: Pip size for the instrument, defaults to 0.01 if not set
-   *
-   * Example:
-   * >>> task = BacktestTask.objects.get(id=1)
-   * >>> pip_size = task.pip_size  # Always returns Decimal
-   */
-  readonly pip_size: number;
-  /**
    * Trading instrument (e.g., EUR_USD, USD_JPY)
    */
   instrument?: string;
@@ -68,26 +133,4 @@ export type BacktestTask = {
    * * `hedging` - Hedging Mode
    */
   trading_mode?: TradingModeEnum;
-  /**
-   * Current task status
-   *
-   * * `created` - Created
-   * * `running` - Running
-   * * `stopped` - Stopped
-   * * `completed` - Completed
-   * * `failed` - Failed
-   */
-  readonly status: StatusEnum;
-  /**
-   * Get summary of latest execution.
-   */
-  readonly latest_execution: Record<string, any> | null;
-  /**
-   * Timestamp when the task was created
-   */
-  readonly created_at: string;
-  /**
-   * Timestamp when the task was last updated
-   */
-  readonly updated_at: string;
 };

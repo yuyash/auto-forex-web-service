@@ -67,7 +67,7 @@ class TestJWTService:
         with patch.object(service, "decode_token") as mock_decode:
             mock_decode.return_value = {"user_id": 1}
 
-            with patch("apps.accounts.services.jwt.User.objects.get") as mock_get:
+            with patch("apps.accounts.models.User.objects.get") as mock_get:
                 mock_user = MagicMock()
                 mock_get.return_value = mock_user
 

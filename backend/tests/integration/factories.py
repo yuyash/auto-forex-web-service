@@ -16,7 +16,6 @@ from apps.market.enums import ApiType, Jurisdiction
 from apps.market.models import OandaAccounts, TickData
 from apps.trading.models import (
     BacktestTasks,
-    Executions,
     StrategyConfigurations,
     TradingTasks,
 )
@@ -159,22 +158,6 @@ class TradingTaskFactory(DjangoModelFactory):
     name = factory.Faker("catch_phrase")
     instrument = "USD_JPY"
     status = "created"
-
-
-class ExecutionFactory(DjangoModelFactory):
-    """Factory for creating test executions."""
-
-    class Meta:
-        model = Executions
-
-    user = factory.SubFactory(UserFactory)
-    account = factory.SubFactory(OandaAccountFactory)
-    strategy_config = factory.SubFactory(StrategyConfigurationFactory)
-    execution_type = "backtest"
-    status = "pending"
-    initial_balance = factory.Faker(
-        "pydecimal", left_digits=6, right_digits=2, positive=True, min_value=10000, max_value=100000
-    )
 
 
 class UserNotificationFactory(DjangoModelFactory):

@@ -28,6 +28,8 @@ import {
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 import { useToast } from '../common';
+import { backtestTasksApi } from '../../services/api';
+import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 import { TradingService } from '../../api/generated/services/TradingService';
 
 interface BacktestTaskCardProps {
@@ -80,8 +82,11 @@ export default function BacktestTaskCard({
         polledStatus: polledStatus.status,
       });
       // Clear optimistic status since we have real status now
-
       setOptimisticStatus(null);
+
+      // Invalidate cache to force fresh data fetch
+      invalidateBacktestTasksCache();
+
       // Notify parent to refetch task list
       onRefresh?.();
     }
@@ -105,7 +110,7 @@ export default function BacktestTaskCard({
   const handleStart = async (taskId: number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingBacktestTasksStartCreate(taskId);
+      await backtestTasksApi.start(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess('Backtest task started successfully');
       onRefresh?.();
@@ -126,7 +131,7 @@ export default function BacktestTaskCard({
   const handleStop = async (taskId: number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingBacktestTasksStopCreate(taskId);
+      await backtestTasksApi.stop(taskId);
       setOptimisticStatus(TaskStatus.STOPPED);
       showSuccess('Backtest task stopped successfully');
       onRefresh?.();
@@ -144,7 +149,7 @@ export default function BacktestTaskCard({
   const handleResume = async (taskId: number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingBacktestTasksResumeCreate(taskId);
+      await backtestTasksApi.resume(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess('Backtest task resumed successfully');
       onRefresh?.();
@@ -165,7 +170,7 @@ export default function BacktestTaskCard({
   const handleRestart = async (taskId: number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingBacktestTasksRestartCreate(taskId);
+      await backtestTasksApi.restart(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess('Backtest task restarted successfully');
       onRefresh?.();

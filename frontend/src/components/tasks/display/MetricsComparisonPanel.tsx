@@ -21,6 +21,7 @@ import {
 } from '@mui/icons-material';
 import { formatCurrency, formatPercentage } from '../../../utils/formatters';
 import type { TaskExecution } from '../../../types';
+import { TaskStatus } from '../../../types/common';
 
 interface MetricsComparisonPanelProps {
   executions: TaskExecution[];
@@ -228,9 +229,9 @@ export const MetricsComparisonPanel: React.FC<MetricsComparisonPanelProps> = ({
                         label={exec.status}
                         size="small"
                         color={
-                          exec.status === 'completed'
+                          exec.status === TaskStatus.COMPLETED
                             ? 'success'
-                            : exec.status === 'failed'
+                            : exec.status === TaskStatus.FAILED
                               ? 'error'
                               : 'default'
                         }

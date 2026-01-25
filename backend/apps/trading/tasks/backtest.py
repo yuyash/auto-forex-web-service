@@ -1,156 +1,176 @@
-from __future__ import annotations
+"""Celery tasks for backtest execution."""
 
-import time
+import traceback
 from logging import Logger, getLogger
 from typing import Any
 
 from celery import shared_task
-from django.conf import settings
+from django.utils import timezone as dj_timezone
 
-from apps.trading.enums import TaskStatus, TaskType
-from apps.trading.models import (
-    BacktestTasks,
-    CeleryTaskStatus,
+from apps.trading.enums import LogLevel, TaskStatus
+from apps.trading.models import BacktestTasks, TaskLog
+
+logger: Logger = getLogger(__name__)
+
+
+@shared_task(
+    bind=True,
+    name="trading.tasks.run_backtest_task",
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3, "countdown": 60},
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
 )
-from apps.trading.services.executor import BacktestExecutor
-from apps.trading.services.lifecycle import ExecutionLifecycle, StrategyCreationContext
-from apps.trading.services.source import RedisTickDataSource
-from apps.trading.tasks.base import BaseTaskRunner
+def run_backtest_task(self: Any, task_id: int, execution_id: int | None = None) -> None:
+    """Celery task wrapper for running backtest tasks.
 
-logger: Logger = getLogger(name=__name__)
+    Args:
+        task_id: ID of the BacktestTasks to execute
+        execution_id: Deprecated parameter (ignored)
+    """
+    task = None
 
+    try:
+        # Load the task to update it
+        task = BacktestTasks.objects.get(pk=task_id)
 
-class BacktestTaskRunner(BaseTaskRunner):
-    """Task runner for backtest tasks."""
+        # Update task status to RUNNING and record start time
+        task.status = TaskStatus.RUNNING
+        task.started_at = dj_timezone.now()
+        task.celery_task_id = self.request.id
+        task.save(update_fields=["status", "started_at", "celery_task_id"])
 
-    @staticmethod
-    def _backtest_channel_for_request(request_id: str) -> str:
-        """Get the Redis channel name for a backtest request."""
-        prefix = getattr(settings, "MARKET_BACKTEST_TICK_CHANNEL_PREFIX", "market:backtest:ticks:")
-        return f"{prefix}{request_id}"
-
-    def _create_data_source(self) -> RedisTickDataSource:
-        """Create data source for backtest execution."""
-        # Type assertion for BacktestTasks
-        assert isinstance(self.task, BacktestTasks), "Task must be BacktestTasks"
-
-        task_id = self.task.pk
-        request_id = f"backtest:{task_id}:{int(time.time())}"
-        channel = self._backtest_channel_for_request(request_id)
-
-        start = self._isoformat(self.task.start_time)
-        end = self._isoformat(self.task.end_time)
-        instrument = self.task.instrument
-
-        def trigger_publisher() -> None:
-            """Trigger the market service to publish ticks."""
-            from apps.market.tasks import publish_ticks_for_backtest
-
-            publish_ticks_for_backtest.delay(  # type: ignore[attr-defined]
-                instrument=instrument,
-                start=start,
-                end=end,
-                request_id=request_id,
-            )
-            logger.info(
-                f"Backtest data source enqueued tick publisher (request_id={request_id}, "
-                f"instrument={instrument}, start={start}, end={end})"
-            )
-
-        return RedisTickDataSource(
-            channel=channel,
-            batch_size=100,
-            trigger_publisher=trigger_publisher,
+        # Log task start
+        TaskLog.objects.create(
+            task=task,
+            celery_task_id=self.request.id,
+            level=LogLevel.INFO,
+            message="Backtest task execution started",
         )
 
-    def _create_executor(self, data_source: RedisTickDataSource, strategy: Any) -> BacktestExecutor:
-        """Create BacktestExecutor instance."""
-        # Type assertion for BacktestTasks
-        assert isinstance(self.task, BacktestTasks), "Task must be BacktestTasks"
+        # Execute the backtest
+        _execute_backtest(task)
 
-        return BacktestExecutor(
-            data_source=data_source,
-            strategy=strategy,
-            execution=self.execution,
-            task=self.task,
+        # Mark as completed
+        task.refresh_from_db()
+        task.status = TaskStatus.COMPLETED
+        task.completed_at = dj_timezone.now()
+        task.save(update_fields=["status", "completed_at"])
+
+        # Log task completion
+        TaskLog.objects.create(
+            task=task,
+            celery_task_id=task.celery_task_id,
+            level=LogLevel.INFO,
+            message="Backtest task completed successfully",
         )
 
-    def run(self, task_id: int, execution_id: int | None = None) -> None:
-        """Run a backtest task using BacktestExecutor."""
-        # Initialize Celery task service
-        self._initialize_task_service(
-            task_name="trading.tasks.run_backtest_task",
-            task_id=task_id,
-            kind="backtest",
+    except BacktestTasks.DoesNotExist:
+        logger.error(f"BacktestTasks {task_id} not found")
+        raise
+
+    except Exception as e:
+        # Capture error details and update task
+        error_message = str(e)
+        error_traceback = traceback.format_exc()
+
+        logger.error(
+            f"Backtest task {task_id} failed: {error_message}",
+            exc_info=True,
         )
 
-        logger.info(f"Backtest task started (task_id={task_id}, execution_id={execution_id})")
-
-        try:
-            # Load the backtest task
-            self.task: BacktestTasks = BacktestTasks.objects.select_related("config", "user").get(
-                pk=task_id
+        if task:
+            # Update task with error information
+            task.status = TaskStatus.FAILED
+            task.completed_at = dj_timezone.now()
+            task.error_message = error_message
+            task.error_traceback = error_traceback
+            task.save(
+                update_fields=[
+                    "status",
+                    "completed_at",
+                    "error_message",
+                    "error_traceback",
+                ]
             )
-        except BacktestTasks.DoesNotExist:
-            logger.error(f"BacktestTasks {task_id} not found")
-            self.task_service.mark_stopped(
-                status=CeleryTaskStatus.Status.FAILED, status_message="Task not found"
+
+            # Log error
+            TaskLog.objects.create(
+                task=task,
+                celery_task_id=task.celery_task_id,
+                level=LogLevel.ERROR,
+                message=f"Backtest task execution failed: {type(e).__name__}: {error_message}",
             )
-            return
 
-        # Setup execution context (with stale execution check)
-        try:
-            self._setup_execution_context(
-                task_id=task_id,
-                execution_id=execution_id,
-                task_type=TaskType.BACKTEST,
-                log_message="Backtest execution started",
-            )
-        except ValueError as e:
-            # Stale execution detected - skip this task
-            logger.warning(
-                "Skipping stale backtest execution: task_id=%d, execution_id=%s, reason=%s",
-                task_id,
-                execution_id,
-                str(e),
-            )
-            self.task_service.mark_stopped(
-                status=CeleryTaskStatus.Status.FAILED,
-                status_message=f"Stale execution skipped: {str(e)}",
-            )
-            return
-
-        # Create strategy with automatic error handling
-        with StrategyCreationContext(
-            execution=self.execution,
-            task=self.task,
-            event_emitter=self.event_emitter,
-            task_service=self.task_service,
-            strategy_config=self.task.config,
-        ) as strategy_ctx:
-            strategy = strategy_ctx.create_strategy()
-            if strategy is None:
-                return  # Error was handled by context manager
-
-        # Create data source and executor
-        data_source = self._create_data_source()
-        executor = self._create_executor(data_source, strategy)
-
-        # Execute with lifecycle management
-        with ExecutionLifecycle(
-            execution=self.execution,
-            task=self.task,
-            event_emitter=self.event_emitter,
-            task_service=self.task_service,
-            success_status=TaskStatus.COMPLETED,
-        ) as lifecycle:
-            lifecycle.set_strategy_type(self.task.config.strategy_type)
-            executor.execute()
+        # Re-raise to trigger Celery retry
+        raise
 
 
-# Create a wrapper function that Celery can call
-@shared_task(bind=True, name="trading.tasks.run_backtest_task")
-def _run_backtest_task_wrapper(self: Any, task_id: int, execution_id: int | None = None) -> None:
-    """Celery task wrapper for running backtest tasks."""
-    runner = BacktestTaskRunner()
-    runner.run(task_id, execution_id)
+def _execute_backtest(task: BacktestTasks) -> None:
+    """Execute a backtest task.
+
+    Args:
+        task: Backtest task to execute
+    """
+    from apps.trading.services.controller import TaskController
+    from apps.trading.services.executor import BacktestExecutor
+    from apps.trading.services.registry import register_all_strategies, registry
+    from apps.trading.services.source import RedisTickDataSource
+
+    # Register all strategies
+    register_all_strategies()
+
+    # Create strategy instance
+    strategy = registry.create(
+        instrument=task.instrument,
+        pip_size=task._pip_size or task.config.get_pip_size(),
+        strategy_config=task.config,
+        trading_mode=task.trading_mode,
+    )
+
+    # Create data source - use task.pk as request_id to match publisher
+    request_id = str(task.pk)
+    channel = f"market:backtest:ticks:{request_id}"
+    data_source = RedisTickDataSource(
+        channel=channel,
+        batch_size=100,
+        trigger_publisher=lambda: _trigger_backtest_publisher(task),
+    )
+
+    # Create controller
+    controller = TaskController(
+        task_name="trading.tasks.run_backtest_task",
+        instance_key=str(task.pk),
+    )
+
+    # Create executor
+    executor = BacktestExecutor(
+        task=task,
+        strategy=strategy,
+        data_source=data_source,
+        controller=controller,
+    )
+
+    # Execute
+    executor.execute()
+
+
+def _trigger_backtest_publisher(task: BacktestTasks) -> None:
+    """Trigger the backtest data publisher.
+
+    Args:
+        task: Backtest task
+    """
+    from apps.market.tasks import publish_ticks_for_backtest
+
+    # Use task.pk as the request_id to match the channel
+    request_id = str(task.pk)
+
+    # Trigger async task to publish ticks
+    publish_ticks_for_backtest.delay(
+        instrument=task.instrument,
+        start=task.start_time.isoformat(),
+        end=task.end_time.isoformat(),
+        request_id=request_id,
+    )

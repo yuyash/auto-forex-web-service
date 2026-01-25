@@ -3,18 +3,27 @@
 from typing import Any, cast
 
 from django.conf import settings
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.trading.serializers import StrategyListSerializer
+
 
 class StrategyView(APIView):
     """API endpoint for listing all available trading strategies."""
 
     permission_classes = [IsAuthenticated]
+    serializer_class = StrategyListSerializer
 
+    @extend_schema(
+        summary="List available strategies",
+        description="Get all available trading strategies with their configuration schemas",
+        responses={200: StrategyListSerializer},
+    )
     def get(self, _request: Request) -> Response:
         from apps.trading.services.registry import registry
 
@@ -45,6 +54,11 @@ class StrategyDefaultsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Get strategy defaults",
+        description="Get default configuration parameters for a specific strategy",
+        responses={200: dict, 404: dict},
+    )
     def get(self, _request: Request, strategy_id: str) -> Response:
         from apps.trading.services.registry import registry
 

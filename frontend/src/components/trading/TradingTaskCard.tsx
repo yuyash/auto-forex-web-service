@@ -29,6 +29,8 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import { tradingTasksApi } from '../../services/api';
+import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
 import { TradingService } from '../../api/generated/services/TradingService';
 
 import type { StopMode } from '../../hooks/useTradingTaskMutations';
@@ -90,8 +92,11 @@ export default function TradingTaskCard({
         polledStatus: polledStatus.status,
       });
       // Clear optimistic status since we have real status now
-
       setOptimisticStatus(null);
+
+      // Invalidate cache to force fresh data fetch
+      invalidateTradingTasksCache();
+
       // Notify parent to refetch task list
       onRefresh?.();
     }

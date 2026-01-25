@@ -9,22 +9,27 @@ from apps.trading.serializers.backtest import (
     BacktestTaskSerializer,
 )
 from apps.trading.serializers.events import (
-    StrategyEventsSerializer,
-    StructuredLogSerializer,
+    EquityPointSerializer,
+    TradeSerializer,
+    TradingEventSerializer,
 )
-from apps.trading.serializers.execution import (
-    ExecutionsDetailSerializer,
-    ExecutionsListSerializer,
-    ExecutionsSerializer,
-    ExecutionsWithStructuredDataSerializer,
-)
-from apps.trading.serializers.metrics import TradingMetricsSerializer
 from apps.trading.serializers.strategy import (
     StrategyConfigCreateSerializer,
     StrategyConfigDetailSerializer,
     StrategyConfigListSerializer,
     StrategyConfigSerializer,
     StrategyListSerializer,
+)
+from apps.trading.serializers.task import (
+    BacktestTaskSerializer as BacktestTaskSerializerNew,
+)
+from apps.trading.serializers.task import (
+    TaskLogSerializer,
+    TaskMetricSerializer,
+    TaskSerializer,
+)
+from apps.trading.serializers.task import (
+    TradingTaskSerializer as TradingTaskSerializerNew,
 )
 from apps.trading.serializers.tick import TickDataCSVSerializer, TickDataSerializer
 from apps.trading.serializers.trading import (
@@ -38,22 +43,22 @@ __all__ = [
     "BacktestTaskCreateSerializer",
     "BacktestTaskListSerializer",
     "BacktestTaskSerializer",
-    # Events
-    "StrategyEventsSerializer",
-    "StructuredLogSerializer",
-    # Execution
-    "ExecutionsDetailSerializer",
-    "ExecutionsListSerializer",
-    "ExecutionsSerializer",
-    "ExecutionsWithStructuredDataSerializer",
-    # Metrics
-    "TradingMetricsSerializer",
+    # Events, Trades, Equity
+    "TradingEventSerializer",
+    "TradeSerializer",
+    "EquityPointSerializer",
     # Strategy
     "StrategyConfigCreateSerializer",
     "StrategyConfigDetailSerializer",
     "StrategyConfigListSerializer",
     "StrategyConfigSerializer",
     "StrategyListSerializer",
+    # Task (new unified serializers)
+    "BacktestTaskSerializerNew",
+    "TaskLogSerializer",
+    "TaskMetricSerializer",
+    "TaskSerializer",
+    "TradingTaskSerializerNew",
     # Tick
     "TickDataCSVSerializer",
     "TickDataSerializer",

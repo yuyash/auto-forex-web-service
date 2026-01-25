@@ -1,223 +1,202 @@
 """
-Monitoring tasks for detecting and handling stuck executions.
+Monitoring tasks for task status reconciliation.
 
-This module provides periodic tasks that monitor execution health and
-automatically clean up stuck or orphaned tasks.
+This module provides periodic tasks that monitor task health and
+automatically reconcile task statuses with Celery task states.
 """
 
-from datetime import timedelta
 from logging import Logger, getLogger
 from typing import Any
 
 from celery import shared_task
-from django.db.models import Q
+from django.db import transaction
 from django.utils import timezone
 
 from apps.trading.enums import TaskStatus
-from apps.trading.models import BacktestTasks, Executions, TradingTasks
+from apps.trading.models import BacktestTasks, TradingTasks
 
 logger: Logger = getLogger(__name__)
 
-# Timeout thresholds
-EXECUTION_TIMEOUT_MINUTES = 60  # Consider stuck after 60 minutes with no updates
-HEARTBEAT_CHECK_MINUTES = 5  # Check for stuck tasks every 5 minutes
 
-
-@shared_task(name="trading.monitor_stuck_executions")
-def monitor_stuck_executions() -> dict[str, Any]:
+@shared_task(name="trading.reconcile_task_statuses")
+def reconcile_task_statuses() -> object:
     """
-    Monitor for stuck executions and mark them as failed.
+    Reconcile task statuses with Celery task states.
 
-    An execution is considered stuck if:
-    1. Status is 'running' or 'queued'
-    2. Started more than EXECUTION_TIMEOUT_MINUTES ago
-    3. No Celery task is actively processing it
+    This periodic task queries all running tasks and compares their status
+    with the corresponding Celery task state. If a mismatch is detected,
+    the task status is updated to match the Celery state.
+
+    This helps recover from situations where:
+    - Celery tasks complete but fail to update the task status
+    - Network issues prevent status updates
+    - Application crashes during status transitions
 
     Returns:
-        Dictionary with monitoring results
+        Dictionary with reconciliation results including:
+        - checked_at: Timestamp when reconciliation ran
+        - backtest_checked: Number of backtest tasks checked
+        - trading_checked: Number of trading tasks checked
+        - backtest_reconciled: Number of backtest tasks reconciled
+        - trading_reconciled: Number of trading tasks reconciled
+        - reconciled_tasks: List of reconciled task details
+        - errors: List of any errors encountered
     """
-    logger.info("Starting stuck execution monitoring")
+    checked_at = timezone.now()
+    reconciled_tasks: list[dict[str, Any]] = []
+    errors: list[str] = []
 
-    timeout_threshold = timezone.now() - timedelta(minutes=EXECUTION_TIMEOUT_MINUTES)
+    backtest_checked = 0
+    trading_checked = 0
+    backtest_reconciled = 0
+    trading_reconciled = 0
 
-    # Find potentially stuck executions
-    stuck_executions = Executions.objects.filter(
-        Q(status=TaskStatus.RUNNING) | Q(status=TaskStatus.CREATED),
-        started_at__lt=timeout_threshold,
-        completed_at__isnull=True,
-    )
+    logger.info("Starting task status reconciliation")
 
-    results: dict[str, Any] = {
-        "checked_at": timezone.now().isoformat(),
-        "timeout_threshold": timeout_threshold.isoformat(),
-        "stuck_count": 0,
-        "cleaned_up": [],
-        "errors": [],
-    }
+    # Reconcile BacktestTasks
+    try:
+        running_backtest_tasks = BacktestTasks.objects.filter(status=TaskStatus.RUNNING)
+        backtest_checked = running_backtest_tasks.count()
 
-    for execution in stuck_executions:
-        try:
-            # Check if there's an active Celery task
-            from celery import current_app
+        for task in running_backtest_tasks:
+            try:
+                result = task.get_celery_result()
+                if result:
+                    celery_state = result.state
+                    expected_status = _map_celery_to_task_status(celery_state)
 
-            active_tasks = current_app.control.inspect().active()
-            is_active = False
-
-            if active_tasks:
-                for worker_tasks in active_tasks.values():
-                    for task in worker_tasks:
-                        # Check if this execution's Celery task is active
-                        task_args = task.get("args", [])
-                        if (
-                            len(task_args) >= 2
-                            and task_args[0] == execution.task_type
-                            and task_args[1] == execution.task_id
-                        ):
-                            is_active = True
-                            break
-                    if is_active:
-                        break
-
-            if not is_active:
-                # Mark execution as failed
-                execution.status = TaskStatus.FAILED
-                execution.completed_at = timezone.now()
-                execution.error_message = (
-                    f"Execution stuck - no active Celery task found. "
-                    f"Started at {execution.started_at}, "
-                    f"timeout threshold: {EXECUTION_TIMEOUT_MINUTES} minutes"
-                )
-                execution.save(update_fields=["status", "completed_at", "error_message"])
-
-                # Update parent task status
-                if execution.task_type == "backtest":
-                    task = BacktestTasks.objects.get(id=execution.task_id)
-                else:
-                    task = TradingTasks.objects.get(id=execution.task_id)
-
-                task.status = TaskStatus.FAILED
-                task.save(update_fields=["status", "updated_at"])
-
-                results["stuck_count"] += 1
-                results["cleaned_up"].append(
-                    {
-                        "execution_id": execution.id,
-                        "task_type": execution.task_type,
-                        "task_id": execution.task_id,
-                        "started_at": execution.started_at.isoformat(),
-                    }
-                )
-
-                logger.warning(
-                    f"Cleaned up stuck execution: {execution.id} "
-                    f"(task_type={execution.task_type}, task_id={execution.task_id})"
-                )
-
-        except Exception as e:
-            error_msg = f"Error processing execution {execution.id}: {str(e)}"
-            logger.exception(error_msg)
-            results["errors"].append(error_msg)
-
-    logger.info(
-        f"Stuck execution monitoring complete. "
-        f"Found and cleaned up {results['stuck_count']} stuck executions"
-    )
-
-    return results
-
-
-@shared_task(name="trading.sync_celery_task_status")
-def sync_celery_task_status() -> dict[str, Any]:
-    """
-    Sync execution status with Celery task status.
-
-    Checks all running/queued executions and verifies they have
-    corresponding active Celery tasks. Marks orphaned executions as failed.
-
-    Returns:
-        Dictionary with sync results
-    """
-    logger.info("Starting Celery task status sync")
-
-    from celery import current_app
-
-    # Get all active Celery tasks
-    active_tasks = current_app.control.inspect().active()
-    active_execution_ids = set()
-
-    if active_tasks:
-        for worker_tasks in active_tasks.values():
-            for task in worker_tasks:
-                # Extract execution info from task args
-                task_args = task.get("args", [])
-                if len(task_args) >= 2:
-                    task_type = task_args[0]
-                    task_id = task_args[1]
-                    # Find corresponding execution
-                    try:
-                        execution = Executions.objects.get(
-                            task_type=task_type, task_id=task_id, completed_at__isnull=True
+                    if task.status != expected_status:
+                        logger.warning(
+                            f"Status mismatch for BacktestTask {task.id} ('{task.name}'): "  # type: ignore[attr-defined]
+                            f"Task={task.status}, Celery={celery_state}, Expected={expected_status}"
                         )
-                        active_execution_ids.add(execution.id)
-                    except Executions.DoesNotExist:
-                        pass
 
-    # Find running/queued executions without active Celery tasks
-    orphaned_executions = Executions.objects.filter(
-        Q(status=TaskStatus.RUNNING) | Q(status=TaskStatus.CREATED), completed_at__isnull=True
-    ).exclude(id__in=active_execution_ids)
+                        # Update task status atomically
+                        with transaction.atomic():
+                            task.status = expected_status
+                            if expected_status in [
+                                TaskStatus.COMPLETED,
+                                TaskStatus.FAILED,
+                                TaskStatus.STOPPED,
+                            ]:
+                                task.completed_at = checked_at
+                            task.save(update_fields=["status", "completed_at", "updated_at"])
 
-    results: dict[str, Any] = {
-        "checked_at": timezone.now().isoformat(),
-        "active_celery_tasks": len(active_execution_ids),
-        "orphaned_count": 0,
-        "synced": [],
-        "errors": [],
-    }
+                        backtest_reconciled += 1
+                        reconciled_tasks.append(
+                            {
+                                "task_id": str(task.id),  # type: ignore[attr-defined]
+                                "task_name": task.name,
+                                "task_type": "backtest",
+                                "old_status": task.status,
+                                "new_status": expected_status,
+                                "celery_state": celery_state,
+                            }
+                        )
 
-    for execution in orphaned_executions:
-        try:
-            # Only mark as failed if it's been running for a while
-            # (to avoid race conditions with newly started tasks)
-            if execution.started_at and (timezone.now() - execution.started_at) > timedelta(
-                minutes=5
-            ):
-                execution.status = TaskStatus.FAILED
-                execution.completed_at = timezone.now()
-                execution.error_message = "Execution orphaned - no corresponding Celery task found"
-                execution.save(update_fields=["status", "completed_at", "error_message"])
+                        logger.info(
+                            f"Reconciled BacktestTask {task.id}: {task.status} -> {expected_status}"  # type: ignore[attr-defined]
+                        )
+            except Exception as e:
+                error_msg = f"Error reconciling BacktestTask {task.id}: {str(e)}"  # type: ignore[attr-defined]
+                logger.error(error_msg, exc_info=True)
+                errors.append(error_msg)
 
-                # Update parent task
-                if execution.task_type == "backtest":
-                    task = BacktestTasks.objects.get(id=execution.task_id)
-                else:
-                    task = TradingTasks.objects.get(id=execution.task_id)
+    except Exception as e:
+        error_msg = f"Error querying backtest tasks: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        errors.append(error_msg)
 
-                task.status = TaskStatus.FAILED
-                task.save(update_fields=["status", "updated_at"])
+    # Reconcile TradingTasks
+    try:
+        running_trading_tasks = TradingTasks.objects.filter(status=TaskStatus.RUNNING)
+        trading_checked = running_trading_tasks.count()
 
-                results["orphaned_count"] += 1
-                results["synced"].append(
-                    {
-                        "execution_id": execution.id,
-                        "task_type": execution.task_type,
-                        "task_id": execution.task_id,
-                    }
-                )
+        for task in running_trading_tasks:
+            try:
+                result = task.get_celery_result()
+                if result:
+                    celery_state = result.state
+                    expected_status = _map_celery_to_task_status(celery_state)
 
-                logger.warning(
-                    f"Synced orphaned execution: {execution.id} "
-                    f"(task_type={execution.task_type}, task_id={execution.task_id})"
-                )
+                    if task.status != expected_status:
+                        logger.warning(
+                            f"Status mismatch for TradingTask {task.id} ('{task.name}'): "  # type: ignore[attr-defined]
+                            f"Task={task.status}, Celery={celery_state}, Expected={expected_status}"
+                        )
 
-        except Exception as e:
-            error_msg = f"Error syncing execution {execution.id}: {str(e)}"
-            logger.exception(error_msg)
-            results["errors"].append(error_msg)
+                        # Update task status atomically
+                        with transaction.atomic():
+                            task.status = expected_status
+                            if expected_status in [
+                                TaskStatus.COMPLETED,
+                                TaskStatus.FAILED,
+                                TaskStatus.STOPPED,
+                            ]:
+                                task.completed_at = checked_at
+                            task.save(update_fields=["status", "completed_at", "updated_at"])
+
+                        trading_reconciled += 1
+                        reconciled_tasks.append(
+                            {
+                                "task_id": str(task.id),  # type: ignore[attr-defined]
+                                "task_name": task.name,
+                                "task_type": "trading",
+                                "old_status": task.status,
+                                "new_status": expected_status,
+                                "celery_state": celery_state,
+                            }
+                        )
+
+                        logger.info(
+                            f"Reconciled TradingTask {task.id}: {task.status} -> {expected_status}"  # type: ignore[attr-defined]
+                        )
+            except Exception as e:
+                error_msg = f"Error reconciling TradingTask {task.id}: {str(e)}"  # type: ignore[attr-defined]
+                logger.error(error_msg, exc_info=True)
+                errors.append(error_msg)
+
+    except Exception as e:
+        error_msg = f"Error querying trading tasks: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        errors.append(error_msg)
+
+    total_checked = backtest_checked + trading_checked
+    total_reconciled = backtest_reconciled + trading_reconciled
 
     logger.info(
-        f"Celery task status sync complete. "
-        f"Found and synced {results['orphaned_count']} orphaned executions"
+        f"Task status reconciliation completed: "
+        f"checked={total_checked}, reconciled={total_reconciled}, errors={len(errors)}"
     )
 
-    return results
+    return {
+        "checked_at": checked_at.isoformat(),
+        "backtest_checked": backtest_checked,
+        "trading_checked": trading_checked,
+        "backtest_reconciled": backtest_reconciled,
+        "trading_reconciled": trading_reconciled,
+        "total_checked": total_checked,
+        "total_reconciled": total_reconciled,
+        "reconciled_tasks": reconciled_tasks,
+        "errors": errors,
+    }
+
+
+def _map_celery_to_task_status(celery_state: str) -> TaskStatus:
+    """
+    Map Celery task state to Task status.
+
+    Args:
+        celery_state: Celery task state (PENDING, STARTED, SUCCESS, FAILURE, REVOKED)
+
+    Returns:
+        TaskStatus: Corresponding task status
+    """
+    celery_to_task_status = {
+        "PENDING": TaskStatus.PENDING,
+        "STARTED": TaskStatus.RUNNING,
+        "SUCCESS": TaskStatus.COMPLETED,
+        "FAILURE": TaskStatus.FAILED,
+        "REVOKED": TaskStatus.STOPPED,
+    }
+    return celery_to_task_status.get(celery_state, TaskStatus.RUNNING)

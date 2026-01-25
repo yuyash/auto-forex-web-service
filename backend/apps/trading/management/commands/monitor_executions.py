@@ -1,75 +1,37 @@
 """
-Management command to manually trigger execution monitoring.
+Management command to manually trigger task status reconciliation.
 
-This command can be used to check for stuck executions and sync
-Celery task status without waiting for the periodic tasks.
+This command can be used to reconcile task statuses with Celery
+without waiting for the periodic task.
 """
 
 from django.core.management.base import BaseCommand
 
-from apps.trading.tasks.monitoring import monitor_stuck_executions, sync_celery_task_status
+from apps.trading.tasks.monitoring import reconcile_task_statuses
 
 
 class Command(BaseCommand):
-    """Monitor and clean up stuck executions."""
+    """Reconcile task statuses with Celery."""
 
-    help = "Monitor for stuck executions and sync Celery task status"
-
-    def add_arguments(self, parser):
-        """Add command arguments."""
-        parser.add_argument(
-            "--sync-only",
-            action="store_true",
-            help="Only sync Celery task status, skip stuck execution monitoring",
-        )
-        parser.add_argument(
-            "--monitor-only",
-            action="store_true",
-            help="Only monitor stuck executions, skip Celery task sync",
-        )
+    help = "Reconcile task statuses with Celery task states"
 
     def handle(self, *args, **options):
         """Execute the command."""
-        sync_only = options.get("sync_only", False)
-        monitor_only = options.get("monitor_only", False)
+        self.stdout.write(self.style.WARNING("Reconciling task statuses..."))
+        results = reconcile_task_statuses()
 
-        if not sync_only:
-            self.stdout.write(self.style.WARNING("Monitoring stuck executions..."))
-            results = monitor_stuck_executions()
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"✓ Found and cleaned up {results['stuck_count']} stuck executions"
+        self.stdout.write(self.style.SUCCESS(f"✓ Reconciled {results['reconciled_count']} tasks"))
+
+        if results["reconciled_tasks"]:
+            for item in results["reconciled_tasks"]:
+                self.stdout.write(
+                    f"  - {item['task_type'].title()} Task {item['task_id']} "
+                    f"({item['task_name']}): {item['old_status']} -> {item['new_status']}"
                 )
-            )
-            if results["cleaned_up"]:
-                for item in results["cleaned_up"]:
-                    self.stdout.write(
-                        f"  - Execution {item['execution_id']} "
-                        f"({item['task_type']} task {item['task_id']})"
-                    )
-            if results["errors"]:
-                self.stdout.write(self.style.ERROR(f"Errors: {len(results['errors'])}"))
-                for error in results["errors"]:
-                    self.stdout.write(f"  - {error}")
 
-        if not monitor_only:
-            self.stdout.write(self.style.WARNING("\nSyncing Celery task status..."))
-            results = sync_celery_task_status()
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"✓ Active Celery tasks: {results['active_celery_tasks']}, "
-                    f"Orphaned executions: {results['orphaned_count']}"
-                )
-            )
-            if results["synced"]:
-                for item in results["synced"]:
-                    self.stdout.write(
-                        f"  - Execution {item['execution_id']} "
-                        f"({item['task_type']} task {item['task_id']})"
-                    )
-            if results["errors"]:
-                self.stdout.write(self.style.ERROR(f"Errors: {len(results['errors'])}"))
-                for error in results["errors"]:
-                    self.stdout.write(f"  - {error}")
+        if results["errors"]:
+            self.stdout.write(self.style.ERROR(f"Errors: {len(results['errors'])}"))
+            for error in results["errors"]:
+                self.stdout.write(f"  - {error}")
 
-        self.stdout.write(self.style.SUCCESS("\n✓ Monitoring complete"))
+        self.stdout.write(self.style.SUCCESS("\n✓ Reconciliation complete"))

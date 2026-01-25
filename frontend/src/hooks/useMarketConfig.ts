@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { apiClient } from '../services/api';
+import { MarketService } from '../api/generated/services/MarketService';
 import type { Granularity } from '../types/chart';
 
 interface GranularityOption {
@@ -29,10 +29,8 @@ export const useSupportedInstruments = () => {
     const fetchInstruments = async () => {
       try {
         setIsLoading(true);
-        const response = await apiClient.get<InstrumentsResponse>(
-          '/market/instruments/'
-        );
-        setInstruments(response.instruments);
+        const response = await MarketService.listSupportedInstruments();
+        setInstruments(response.instruments || []);
         setError(null);
       } catch (err) {
         console.error('Failed to fetch instruments:', err);
@@ -78,11 +76,9 @@ export const useSupportedGranularities = () => {
     const fetchGranularities = async () => {
       try {
         setIsLoading(true);
-        const response = await apiClient.get<GranularitiesResponse>(
-          '/market/candles/granularities/'
-        );
+        const response = await MarketService.listSupportedGranularities();
         // Filter out second-based granularities (S5, S10, S15, S30)
-        const filteredGranularities = response.granularities.filter(
+        const filteredGranularities = (response.granularities || []).filter(
           (g) => !g.value.startsWith('S')
         );
         setGranularities(filteredGranularities);

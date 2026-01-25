@@ -3,282 +3,48 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { BacktestTask } from '../models/BacktestTask';
-import type { BacktestTaskCreate } from '../models/BacktestTaskCreate';
-import type { BacktestTaskCreateRequest } from '../models/BacktestTaskCreateRequest';
-import type { PaginatedBacktestTaskListList } from '../models/PaginatedBacktestTaskListList';
-import type { PaginatedTradingTaskListList } from '../models/PaginatedTradingTaskListList';
-import type { PatchedBacktestTaskCreateRequest } from '../models/PatchedBacktestTaskCreateRequest';
-import type { PatchedTradingTaskCreateRequest } from '../models/PatchedTradingTaskCreateRequest';
+import type { BacktestTaskRequest } from '../models/BacktestTaskRequest';
+import type { PaginatedBacktestTaskList } from '../models/PaginatedBacktestTaskList';
+import type { PaginatedEquityPointList } from '../models/PaginatedEquityPointList';
+import type { PaginatedStrategyConfigListList } from '../models/PaginatedStrategyConfigListList';
+import type { PaginatedTaskLogList } from '../models/PaginatedTaskLogList';
+import type { PaginatedTaskMetricList } from '../models/PaginatedTaskMetricList';
+import type { PaginatedTradeList } from '../models/PaginatedTradeList';
+import type { PaginatedTradingEventList } from '../models/PaginatedTradingEventList';
+import type { PaginatedTradingTaskList } from '../models/PaginatedTradingTaskList';
+import type { PatchedBacktestTaskRequest } from '../models/PatchedBacktestTaskRequest';
+import type { PatchedTradingTaskRequest } from '../models/PatchedTradingTaskRequest';
+import type { StrategyConfigCreateRequest } from '../models/StrategyConfigCreateRequest';
+import type { StrategyConfigDetail } from '../models/StrategyConfigDetail';
+import type { StrategyList } from '../models/StrategyList';
 import type { TradingTask } from '../models/TradingTask';
-import type { TradingTaskCreate } from '../models/TradingTaskCreate';
-import type { TradingTaskCreateRequest } from '../models/TradingTaskCreateRequest';
+import type { TradingTaskRequest } from '../models/TradingTaskRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
 export class TradingService {
   /**
-   * List and create backtest tasks.
-   * @param configId Filter by configuration ID
-   * @param ordering Order results by field (prefix with - for descending)
-   * @param page Page number
-   * @param search Search in name or description
-   * @param status Filter by task status
-   * @param strategyType Filter by strategy type
-   * @returns PaginatedBacktestTaskListList
+   * List available strategies
+   * Get all available trading strategies with their configuration schemas
+   * @returns StrategyList
    * @throws ApiError
    */
-  public static tradingBacktestTasksList(
-    configId?: number,
-    ordering?: string,
-    page?: number,
-    search?: string,
-    status?: string,
-    strategyType?: string
-  ): CancelablePromise<PaginatedBacktestTaskListList> {
-    return __request(OpenAPI, {
-      method: 'GET',
-      url: '/api/trading/backtest-tasks/',
-      query: {
-        config_id: configId,
-        ordering: ordering,
-        page: page,
-        search: search,
-        status: status,
-        strategy_type: strategyType,
-      },
-    });
-  }
-  /**
-   * List and create backtest tasks.
-   * @param requestBody
-   * @returns BacktestTaskCreate
-   * @throws ApiError
-   */
-  public static tradingBacktestTasksCreate(
-    requestBody: BacktestTaskCreateRequest
-  ): CancelablePromise<BacktestTaskCreate> {
-    return __request(OpenAPI, {
-      method: 'POST',
-      url: '/api/trading/backtest-tasks/',
-      body: requestBody,
-      mediaType: 'application/json',
-    });
-  }
-  /**
-   * Retrieve, update, or delete a backtest task.
-   * @param taskId
-   * @returns BacktestTask
-   * @throws ApiError
-   */
-  public static tradingBacktestTasksRetrieve(
-    taskId: number
-  ): CancelablePromise<BacktestTask> {
-    return __request(OpenAPI, {
-      method: 'GET',
-      url: '/api/trading/backtest-tasks/{task_id}/',
-      path: {
-        task_id: taskId,
-      },
-    });
-  }
-  /**
-   * Retrieve, update, or delete a backtest task.
-   * @param taskId
-   * @param requestBody
-   * @returns BacktestTaskCreate
-   * @throws ApiError
-   */
-  public static tradingBacktestTasksUpdate(
-    taskId: number,
-    requestBody: BacktestTaskCreateRequest
-  ): CancelablePromise<BacktestTaskCreate> {
-    return __request(OpenAPI, {
-      method: 'PUT',
-      url: '/api/trading/backtest-tasks/{task_id}/',
-      path: {
-        task_id: taskId,
-      },
-      body: requestBody,
-      mediaType: 'application/json',
-    });
-  }
-  /**
-   * Retrieve, update, or delete a backtest task.
-   * @param taskId
-   * @param requestBody
-   * @returns BacktestTaskCreate
-   * @throws ApiError
-   */
-  public static tradingBacktestTasksPartialUpdate(
-    taskId: number,
-    requestBody?: PatchedBacktestTaskCreateRequest
-  ): CancelablePromise<BacktestTaskCreate> {
-    return __request(OpenAPI, {
-      method: 'PATCH',
-      url: '/api/trading/backtest-tasks/{task_id}/',
-      path: {
-        task_id: taskId,
-      },
-      body: requestBody,
-      mediaType: 'application/json',
-    });
-  }
-  /**
-   * Retrieve, update, or delete a backtest task.
-   * @param taskId
-   * @returns void
-   * @throws ApiError
-   */
-  public static tradingBacktestTasksDestroy(
-    taskId: number
-  ): CancelablePromise<void> {
-    return __request(OpenAPI, {
-      method: 'DELETE',
-      url: '/api/trading/backtest-tasks/{task_id}/',
-      path: {
-        task_id: taskId,
-      },
-    });
-  }
-  /**
-   * Copy backtest task.
-   * @param taskId
-   * @returns any No response body
-   * @throws ApiError
-   */
-  public static tradingBacktestTasksCopyCreate(
-    taskId: number
-  ): CancelablePromise<any> {
-    return __request(OpenAPI, {
-      method: 'POST',
-      url: '/api/trading/backtest-tasks/{task_id}/copy/',
-      path: {
-        task_id: taskId,
-      },
-    });
-  }
-  /**
-   * Get execution history for backtest task.
-   * @param taskId
-   * @returns any No response body
-   * @throws ApiError
-   */
-  public static tradingBacktestTasksExecutionsRetrieve(
-    taskId: number
-  ): CancelablePromise<any> {
-    return __request(OpenAPI, {
-      method: 'GET',
-      url: '/api/trading/backtest-tasks/{task_id}/executions/',
-      path: {
-        task_id: taskId,
-      },
-    });
-  }
-  /**
-   * Restart backtest task with fresh state.
-   * @param taskId
-   * @returns any No response body
-   * @throws ApiError
-   */
-  public static tradingBacktestTasksRestartCreate(
-    taskId: number
-  ): CancelablePromise<any> {
-    return __request(OpenAPI, {
-      method: 'POST',
-      url: '/api/trading/backtest-tasks/{task_id}/restart/',
-      path: {
-        task_id: taskId,
-      },
-    });
-  }
-  /**
-   * Resume backtest task execution.
-   * @param taskId
-   * @returns any No response body
-   * @throws ApiError
-   */
-  public static tradingBacktestTasksResumeCreate(
-    taskId: number
-  ): CancelablePromise<any> {
-    return __request(OpenAPI, {
-      method: 'POST',
-      url: '/api/trading/backtest-tasks/{task_id}/resume/',
-      path: {
-        task_id: taskId,
-      },
-    });
-  }
-  /**
-   * Start backtest task execution.
-   * @param taskId
-   * @returns any No response body
-   * @throws ApiError
-   */
-  public static tradingBacktestTasksStartCreate(
-    taskId: number
-  ): CancelablePromise<any> {
-    return __request(OpenAPI, {
-      method: 'POST',
-      url: '/api/trading/backtest-tasks/{task_id}/start/',
-      path: {
-        task_id: taskId,
-      },
-    });
-  }
-  /**
-   * Get current task status and execution details.
-   * @param taskId
-   * @returns any No response body
-   * @throws ApiError
-   */
-  public static tradingBacktestTasksStatusRetrieve(
-    taskId: number
-  ): CancelablePromise<any> {
-    return __request(OpenAPI, {
-      method: 'GET',
-      url: '/api/trading/backtest-tasks/{task_id}/status/',
-      path: {
-        task_id: taskId,
-      },
-    });
-  }
-  /**
-   * Stop backtest task execution.
-   * @param taskId
-   * @returns any No response body
-   * @throws ApiError
-   */
-  public static tradingBacktestTasksStopCreate(
-    taskId: number
-  ): CancelablePromise<any> {
-    return __request(OpenAPI, {
-      method: 'POST',
-      url: '/api/trading/backtest-tasks/{task_id}/stop/',
-      path: {
-        task_id: taskId,
-      },
-    });
-  }
-  /**
-   * API endpoint for listing all available trading strategies.
-   * @returns any No response body
-   * @throws ApiError
-   */
-  public static tradingStrategiesRetrieve(): CancelablePromise<any> {
+  public static tradingStrategiesRetrieve(): CancelablePromise<StrategyList> {
     return __request(OpenAPI, {
       method: 'GET',
       url: '/api/trading/strategies/',
     });
   }
   /**
-   * API endpoint for returning default parameters for a strategy.
+   * Get strategy defaults
+   * Get default configuration parameters for a specific strategy
    * @param strategyId
-   * @returns any No response body
+   * @returns any
    * @throws ApiError
    */
   public static tradingStrategiesDefaultsRetrieve(
     strategyId: string
-  ): CancelablePromise<any> {
+  ): CancelablePromise<Record<string, any>> {
     return __request(OpenAPI, {
       method: 'GET',
       url: '/api/trading/strategies/{strategy_id}/defaults/',
@@ -288,36 +54,53 @@ export class TradingService {
     });
   }
   /**
-   * List and create strategy configurations.
-   * @returns any No response body
+   * List strategy configurations
+   * List all strategy configurations for the authenticated user
+   * @param page A page number within the paginated result set.
+   * @param pageSize Number of results to return per page.
+   * @returns PaginatedStrategyConfigListList
    * @throws ApiError
    */
-  public static tradingStrategyConfigsRetrieve(): CancelablePromise<any> {
+  public static tradingStrategyConfigsList(
+    page?: number,
+    pageSize?: number
+  ): CancelablePromise<PaginatedStrategyConfigListList> {
     return __request(OpenAPI, {
       method: 'GET',
       url: '/api/trading/strategy-configs/',
+      query: {
+        page: page,
+        page_size: pageSize,
+      },
     });
   }
   /**
-   * List and create strategy configurations.
-   * @returns any No response body
+   * Create strategy configuration
+   * Create a new strategy configuration
+   * @param requestBody
+   * @returns StrategyConfigDetail
    * @throws ApiError
    */
-  public static tradingStrategyConfigsCreate(): CancelablePromise<any> {
+  public static tradingStrategyConfigsCreate(
+    requestBody: StrategyConfigCreateRequest
+  ): CancelablePromise<StrategyConfigDetail> {
     return __request(OpenAPI, {
       method: 'POST',
       url: '/api/trading/strategy-configs/',
+      body: requestBody,
+      mediaType: 'application/json',
     });
   }
   /**
-   * Retrieve, update, and delete a strategy configuration.
+   * Get strategy configuration
+   * Retrieve a specific strategy configuration
    * @param configId
-   * @returns any No response body
+   * @returns StrategyConfigDetail
    * @throws ApiError
    */
-  public static tradingStrategyConfigsRetrieve2(
+  public static tradingStrategyConfigsRetrieve(
     configId: number
-  ): CancelablePromise<any> {
+  ): CancelablePromise<StrategyConfigDetail> {
     return __request(OpenAPI, {
       method: 'GET',
       url: '/api/trading/strategy-configs/{config_id}/',
@@ -327,24 +110,30 @@ export class TradingService {
     });
   }
   /**
-   * Retrieve, update, and delete a strategy configuration.
+   * Update strategy configuration
+   * Update an existing strategy configuration
    * @param configId
-   * @returns any No response body
+   * @param requestBody
+   * @returns StrategyConfigDetail
    * @throws ApiError
    */
   public static tradingStrategyConfigsUpdate(
-    configId: number
-  ): CancelablePromise<any> {
+    configId: number,
+    requestBody: StrategyConfigCreateRequest
+  ): CancelablePromise<StrategyConfigDetail> {
     return __request(OpenAPI, {
       method: 'PUT',
       url: '/api/trading/strategy-configs/{config_id}/',
       path: {
         config_id: configId,
       },
+      body: requestBody,
+      mediaType: 'application/json',
     });
   }
   /**
-   * Retrieve, update, and delete a strategy configuration.
+   * Delete strategy configuration
+   * Delete a strategy configuration (fails if in use by active tasks)
    * @param configId
    * @returns void
    * @throws ApiError
@@ -361,293 +150,924 @@ export class TradingService {
     });
   }
   /**
-   * List and create trading tasks.
+   * ViewSet for BacktestTask operations with task-centric API.
    *
-   * GET: List all trading tasks for the authenticated user with filtering and pagination
-   * POST: Create a new trading task
-   * @param configId Filter by configuration ID
-   * @param ordering Order results by field (prefix with - for descending)
-   * @param page Page number
-   * @param search Search in name or description
-   * @param status Filter by task status
-   * @param strategyType Filter by strategy type
-   * @returns PaginatedTradingTaskListList
+   * Provides CRUD operations and task lifecycle management including:
+   * - submit: Submit task for execution
+   * - cancel: Cancel running task
+   * - restart: Restart task from beginning
+   * - resume: Resume cancelled task
+   * - logs: Retrieve task logs with pagination
+   * - metrics: Retrieve task metrics with filtering
+   * - results: Retrieve task results
+   * @param ordering Which field to use when ordering the results.
+   * @param page A page number within the paginated result set.
+   * @param search A search term.
+   * @returns PaginatedBacktestTaskList
    * @throws ApiError
    */
-  public static tradingTradingTasksList(
-    configId?: number,
+  public static tradingTasksBacktestList(
     ordering?: string,
     page?: number,
-    search?: string,
-    status?: string,
-    strategyType?: string
-  ): CancelablePromise<PaginatedTradingTaskListList> {
+    search?: string
+  ): CancelablePromise<PaginatedBacktestTaskList> {
     return __request(OpenAPI, {
       method: 'GET',
-      url: '/api/trading/trading-tasks/',
+      url: '/api/trading/tasks/backtest/',
       query: {
-        config_id: configId,
         ordering: ordering,
         page: page,
         search: search,
-        status: status,
-        strategy_type: strategyType,
       },
     });
   }
   /**
-   * List and create trading tasks.
+   * ViewSet for BacktestTask operations with task-centric API.
    *
-   * GET: List all trading tasks for the authenticated user with filtering and pagination
-   * POST: Create a new trading task
+   * Provides CRUD operations and task lifecycle management including:
+   * - submit: Submit task for execution
+   * - cancel: Cancel running task
+   * - restart: Restart task from beginning
+   * - resume: Resume cancelled task
+   * - logs: Retrieve task logs with pagination
+   * - metrics: Retrieve task metrics with filtering
+   * - results: Retrieve task results
    * @param requestBody
-   * @returns TradingTaskCreate
+   * @returns BacktestTask
    * @throws ApiError
    */
-  public static tradingTradingTasksCreate(
-    requestBody?: TradingTaskCreateRequest
-  ): CancelablePromise<TradingTaskCreate> {
+  public static tradingTasksBacktestCreate(
+    requestBody: BacktestTaskRequest
+  ): CancelablePromise<BacktestTask> {
     return __request(OpenAPI, {
       method: 'POST',
-      url: '/api/trading/trading-tasks/',
+      url: '/api/trading/tasks/backtest/',
       body: requestBody,
       mediaType: 'application/json',
     });
   }
   /**
-   * Retrieve, update, or delete a trading task.
+   * ViewSet for BacktestTask operations with task-centric API.
    *
-   * GET: Retrieve trading task details
-   * PUT/PATCH: Update trading task
-   * DELETE: Delete trading task
-   * @param taskId
-   * @returns TradingTask
+   * Provides CRUD operations and task lifecycle management including:
+   * - submit: Submit task for execution
+   * - cancel: Cancel running task
+   * - restart: Restart task from beginning
+   * - resume: Resume cancelled task
+   * - logs: Retrieve task logs with pagination
+   * - metrics: Retrieve task metrics with filtering
+   * - results: Retrieve task results
+   * @param id A unique integer value identifying this Backtest Task.
+   * @returns BacktestTask
    * @throws ApiError
    */
-  public static tradingTradingTasksRetrieve(
-    taskId: number
-  ): CancelablePromise<TradingTask> {
+  public static tradingTasksBacktestRetrieve(
+    id: number
+  ): CancelablePromise<BacktestTask> {
     return __request(OpenAPI, {
       method: 'GET',
-      url: '/api/trading/trading-tasks/{task_id}/',
+      url: '/api/trading/tasks/backtest/{id}/',
       path: {
-        task_id: taskId,
+        id: id,
       },
     });
   }
   /**
-   * Retrieve, update, or delete a trading task.
+   * ViewSet for BacktestTask operations with task-centric API.
    *
-   * GET: Retrieve trading task details
-   * PUT/PATCH: Update trading task
-   * DELETE: Delete trading task
-   * @param taskId
+   * Provides CRUD operations and task lifecycle management including:
+   * - submit: Submit task for execution
+   * - cancel: Cancel running task
+   * - restart: Restart task from beginning
+   * - resume: Resume cancelled task
+   * - logs: Retrieve task logs with pagination
+   * - metrics: Retrieve task metrics with filtering
+   * - results: Retrieve task results
+   * @param id A unique integer value identifying this Backtest Task.
    * @param requestBody
-   * @returns TradingTaskCreate
+   * @returns BacktestTask
    * @throws ApiError
    */
-  public static tradingTradingTasksUpdate(
-    taskId: number,
-    requestBody?: TradingTaskCreateRequest
-  ): CancelablePromise<TradingTaskCreate> {
+  public static tradingTasksBacktestUpdate(
+    id: number,
+    requestBody: BacktestTaskRequest
+  ): CancelablePromise<BacktestTask> {
     return __request(OpenAPI, {
       method: 'PUT',
-      url: '/api/trading/trading-tasks/{task_id}/',
+      url: '/api/trading/tasks/backtest/{id}/',
       path: {
-        task_id: taskId,
+        id: id,
       },
       body: requestBody,
       mediaType: 'application/json',
     });
   }
   /**
-   * Retrieve, update, or delete a trading task.
+   * ViewSet for BacktestTask operations with task-centric API.
    *
-   * GET: Retrieve trading task details
-   * PUT/PATCH: Update trading task
-   * DELETE: Delete trading task
-   * @param taskId
+   * Provides CRUD operations and task lifecycle management including:
+   * - submit: Submit task for execution
+   * - cancel: Cancel running task
+   * - restart: Restart task from beginning
+   * - resume: Resume cancelled task
+   * - logs: Retrieve task logs with pagination
+   * - metrics: Retrieve task metrics with filtering
+   * - results: Retrieve task results
+   * @param id A unique integer value identifying this Backtest Task.
    * @param requestBody
-   * @returns TradingTaskCreate
+   * @returns BacktestTask
    * @throws ApiError
    */
-  public static tradingTradingTasksPartialUpdate(
-    taskId: number,
-    requestBody?: PatchedTradingTaskCreateRequest
-  ): CancelablePromise<TradingTaskCreate> {
+  public static tradingTasksBacktestPartialUpdate(
+    id: number,
+    requestBody?: PatchedBacktestTaskRequest
+  ): CancelablePromise<BacktestTask> {
     return __request(OpenAPI, {
       method: 'PATCH',
-      url: '/api/trading/trading-tasks/{task_id}/',
+      url: '/api/trading/tasks/backtest/{id}/',
       path: {
-        task_id: taskId,
+        id: id,
       },
       body: requestBody,
       mediaType: 'application/json',
     });
   }
   /**
-   * Retrieve, update, or delete a trading task.
+   * ViewSet for BacktestTask operations with task-centric API.
    *
-   * GET: Retrieve trading task details
-   * PUT/PATCH: Update trading task
-   * DELETE: Delete trading task
-   * @param taskId
+   * Provides CRUD operations and task lifecycle management including:
+   * - submit: Submit task for execution
+   * - cancel: Cancel running task
+   * - restart: Restart task from beginning
+   * - resume: Resume cancelled task
+   * - logs: Retrieve task logs with pagination
+   * - metrics: Retrieve task metrics with filtering
+   * - results: Retrieve task results
+   * @param id A unique integer value identifying this Backtest Task.
    * @returns void
    * @throws ApiError
    */
-  public static tradingTradingTasksDestroy(
-    taskId: number
+  public static tradingTasksBacktestDestroy(
+    id: number
   ): CancelablePromise<void> {
     return __request(OpenAPI, {
       method: 'DELETE',
-      url: '/api/trading/trading-tasks/{task_id}/',
+      url: '/api/trading/tasks/backtest/{id}/',
       path: {
-        task_id: taskId,
+        id: id,
       },
     });
   }
   /**
-   * Copy trading task.
-   *
-   * Request body:
-   * - new_name: Name for the copied task (required)
-   * @param taskId
-   * @returns any No response body
+   * Get task equity curve
+   * Retrieve equity curve data from task execution state
+   * @param id A unique integer value identifying this Backtest Task.
+   * @param ordering Which field to use when ordering the results.
+   * @param page A page number within the paginated result set.
+   * @param search A search term.
+   * @returns PaginatedEquityPointList
    * @throws ApiError
    */
-  public static tradingTradingTasksCopyCreate(
-    taskId: number
-  ): CancelablePromise<any> {
-    return __request(OpenAPI, {
-      method: 'POST',
-      url: '/api/trading/trading-tasks/{task_id}/copy/',
-      path: {
-        task_id: taskId,
-      },
-    });
-  }
-  /**
-   * Get execution history for trading task.
-   *
-   * Returns all executions ordered by execution number (most recent first).
-   * @param taskId
-   * @returns any No response body
-   * @throws ApiError
-   */
-  public static tradingTradingTasksExecutionsRetrieve(
-    taskId: number
-  ): CancelablePromise<any> {
+  public static tradingTasksBacktestEquityList(
+    id: number,
+    ordering?: string,
+    page?: number,
+    search?: string
+  ): CancelablePromise<PaginatedEquityPointList> {
     return __request(OpenAPI, {
       method: 'GET',
-      url: '/api/trading/trading-tasks/{task_id}/executions/',
+      url: '/api/trading/tasks/backtest/{id}/equity/',
       path: {
-        task_id: taskId,
+        id: id,
+      },
+      query: {
+        ordering: ordering,
+        page: page,
+        search: search,
       },
     });
   }
   /**
-   * Restart trading task with fresh state.
-   *
-   * Clears strategy_state and starts a new execution. Task can be in any
-   * state (stopped, failed) to be restarted, but not running or paused.
-   *
-   * Request body:
-   * - clear_state: bool (default: True) - Clear strategy state
-   * @param taskId
-   * @returns any No response body
+   * Get task events
+   * Retrieve task events with filtering
+   * @param id A unique integer value identifying this Backtest Task.
+   * @param eventType Filter by event type
+   * @param limit Maximum number of events to return (default: 100)
+   * @param ordering Which field to use when ordering the results.
+   * @param page A page number within the paginated result set.
+   * @param search A search term.
+   * @param severity Filter by severity (info, warning, error)
+   * @returns PaginatedTradingEventList
    * @throws ApiError
    */
-  public static tradingTradingTasksRestartCreate(
-    taskId: number
-  ): CancelablePromise<any> {
-    return __request(OpenAPI, {
-      method: 'POST',
-      url: '/api/trading/trading-tasks/{task_id}/restart/',
-      path: {
-        task_id: taskId,
-      },
-    });
-  }
-  /**
-   * Resume trading task execution.
-   * @param taskId
-   * @returns any No response body
-   * @throws ApiError
-   */
-  public static tradingTradingTasksResumeCreate(
-    taskId: number
-  ): CancelablePromise<any> {
-    return __request(OpenAPI, {
-      method: 'POST',
-      url: '/api/trading/trading-tasks/{task_id}/resume/',
-      path: {
-        task_id: taskId,
-      },
-    });
-  }
-  /**
-   * Start trading task execution.
-   *
-   * Validates task status in database AND checks celery task lock status
-   * before starting. Creates a new TaskExecution and queues the trading
-   * task for processing. Enforces one active task per account constraint.
-   * @param taskId
-   * @returns any No response body
-   * @throws ApiError
-   */
-  public static tradingTradingTasksStartCreate(
-    taskId: number
-  ): CancelablePromise<any> {
-    return __request(OpenAPI, {
-      method: 'POST',
-      url: '/api/trading/trading-tasks/{task_id}/start/',
-      path: {
-        task_id: taskId,
-      },
-    });
-  }
-  /**
-   * Get current task status and execution details.
-   *
-   * Used by frontend for polling fallback when WebSocket connection fails.
-   * Returns current status, progress percentage, and latest execution details.
-   * Also detects and auto-completes stale running/stopped tasks.
-   * @param taskId
-   * @returns any No response body
-   * @throws ApiError
-   */
-  public static tradingTradingTasksStatusRetrieve(
-    taskId: number
-  ): CancelablePromise<any> {
+  public static tradingTasksBacktestEventsList(
+    id: number,
+    eventType?: string,
+    limit?: number,
+    ordering?: string,
+    page?: number,
+    search?: string,
+    severity?: string
+  ): CancelablePromise<PaginatedTradingEventList> {
     return __request(OpenAPI, {
       method: 'GET',
-      url: '/api/trading/trading-tasks/{task_id}/status/',
+      url: '/api/trading/tasks/backtest/{id}/events/',
       path: {
-        task_id: taskId,
+        id: id,
+      },
+      query: {
+        event_type: eventType,
+        limit: limit,
+        ordering: ordering,
+        page: page,
+        search: search,
+        severity: severity,
       },
     });
   }
   /**
-   * Stop trading task execution.
-   *
-   * Validates task status in database AND checks celery task lock status
-   * before stopping. Updates task to stopped state and triggers cleanup.
-   *
-   * Request body (optional):
-   * - mode: Stop mode ('immediate', 'graceful', 'graceful_close')
-   * Default: 'graceful'
-   * @param taskId
-   * @returns any No response body
+   * Get task logs
+   * Retrieve task execution logs with pagination and filtering
+   * @param id A unique integer value identifying this Backtest Task.
+   * @param level Filter by log level (DEBUG, INFO, WARNING, ERROR)
+   * @param limit Maximum number of logs to return (default: 100)
+   * @param offset Number of logs to skip (default: 0)
+   * @param ordering Which field to use when ordering the results.
+   * @param page A page number within the paginated result set.
+   * @param search A search term.
+   * @returns PaginatedTaskLogList
    * @throws ApiError
    */
-  public static tradingTradingTasksStopCreate(
-    taskId: number
-  ): CancelablePromise<any> {
+  public static tradingTasksBacktestLogsList(
+    id: number,
+    level?: string,
+    limit?: number,
+    offset?: number,
+    ordering?: string,
+    page?: number,
+    search?: string
+  ): CancelablePromise<PaginatedTaskLogList> {
+    return __request(OpenAPI, {
+      method: 'GET',
+      url: '/api/trading/tasks/backtest/{id}/logs/',
+      path: {
+        id: id,
+      },
+      query: {
+        level: level,
+        limit: limit,
+        offset: offset,
+        ordering: ordering,
+        page: page,
+        search: search,
+      },
+    });
+  }
+  /**
+   * Get task metrics
+   * Retrieve task execution metrics with filtering
+   * @param id A unique integer value identifying this Backtest Task.
+   * @param endTime Filter metrics before this timestamp (ISO format)
+   * @param metricName Filter by metric name
+   * @param ordering Which field to use when ordering the results.
+   * @param page A page number within the paginated result set.
+   * @param search A search term.
+   * @param startTime Filter metrics after this timestamp (ISO format)
+   * @returns PaginatedTaskMetricList
+   * @throws ApiError
+   */
+  public static tradingTasksBacktestMetricsList(
+    id: number,
+    endTime?: string,
+    metricName?: string,
+    ordering?: string,
+    page?: number,
+    search?: string,
+    startTime?: string
+  ): CancelablePromise<PaginatedTaskMetricList> {
+    return __request(OpenAPI, {
+      method: 'GET',
+      url: '/api/trading/tasks/backtest/{id}/metrics/',
+      path: {
+        id: id,
+      },
+      query: {
+        end_time: endTime,
+        metric_name: metricName,
+        ordering: ordering,
+        page: page,
+        search: search,
+        start_time: startTime,
+      },
+    });
+  }
+  /**
+   * Pause running task
+   * Pause a running task, preserving execution state
+   * @param id A unique integer value identifying this Backtest Task.
+   * @param requestBody
+   * @returns BacktestTask
+   * @throws ApiError
+   */
+  public static tradingTasksBacktestPauseCreate(
+    id: number,
+    requestBody: BacktestTaskRequest
+  ): CancelablePromise<BacktestTask> {
     return __request(OpenAPI, {
       method: 'POST',
-      url: '/api/trading/trading-tasks/{task_id}/stop/',
+      url: '/api/trading/tasks/backtest/{id}/pause/',
       path: {
-        task_id: taskId,
+        id: id,
+      },
+      body: requestBody,
+      mediaType: 'application/json',
+    });
+  }
+  /**
+   * Restart task from beginning
+   * Restart a task from the beginning, clearing all execution data
+   * @param id A unique integer value identifying this Backtest Task.
+   * @param requestBody
+   * @returns BacktestTask
+   * @throws ApiError
+   */
+  public static tradingTasksBacktestRestartCreate(
+    id: number,
+    requestBody: BacktestTaskRequest
+  ): CancelablePromise<BacktestTask> {
+    return __request(OpenAPI, {
+      method: 'POST',
+      url: '/api/trading/tasks/backtest/{id}/restart/',
+      path: {
+        id: id,
+      },
+      body: requestBody,
+      mediaType: 'application/json',
+    });
+  }
+  /**
+   * Get task results
+   * Retrieve task execution results
+   * @param id A unique integer value identifying this Backtest Task.
+   * @returns any
+   * @throws ApiError
+   */
+  public static tradingTasksBacktestResultsRetrieve(
+    id: number
+  ): CancelablePromise<Record<string, any>> {
+    return __request(OpenAPI, {
+      method: 'GET',
+      url: '/api/trading/tasks/backtest/{id}/results/',
+      path: {
+        id: id,
+      },
+    });
+  }
+  /**
+   * Resume paused task
+   * Resume a paused task, continuing execution from where it left off
+   * @param id A unique integer value identifying this Backtest Task.
+   * @param requestBody
+   * @returns BacktestTask
+   * @throws ApiError
+   */
+  public static tradingTasksBacktestResumeCreate(
+    id: number,
+    requestBody: BacktestTaskRequest
+  ): CancelablePromise<BacktestTask> {
+    return __request(OpenAPI, {
+      method: 'POST',
+      url: '/api/trading/tasks/backtest/{id}/resume/',
+      path: {
+        id: id,
+      },
+      body: requestBody,
+      mediaType: 'application/json',
+    });
+  }
+  /**
+   * Stop running task
+   * Stop a currently running or paused task
+   * @param id A unique integer value identifying this Backtest Task.
+   * @param requestBody
+   * @returns BacktestTask
+   * @throws ApiError
+   */
+  public static tradingTasksBacktestStopCreate(
+    id: number,
+    requestBody: BacktestTaskRequest
+  ): CancelablePromise<BacktestTask> {
+    return __request(OpenAPI, {
+      method: 'POST',
+      url: '/api/trading/tasks/backtest/{id}/stop/',
+      path: {
+        id: id,
+      },
+      body: requestBody,
+      mediaType: 'application/json',
+    });
+  }
+  /**
+   * Submit task for execution
+   * Submit a pending task to Celery for execution
+   * @param id A unique integer value identifying this Backtest Task.
+   * @param requestBody
+   * @returns BacktestTask
+   * @throws ApiError
+   */
+  public static tradingTasksBacktestSubmitCreate(
+    id: number,
+    requestBody: BacktestTaskRequest
+  ): CancelablePromise<BacktestTask> {
+    return __request(OpenAPI, {
+      method: 'POST',
+      url: '/api/trading/tasks/backtest/{id}/submit/',
+      path: {
+        id: id,
+      },
+      body: requestBody,
+      mediaType: 'application/json',
+    });
+  }
+  /**
+   * Get task trades
+   * Retrieve trade history from task execution state
+   * @param id A unique integer value identifying this Backtest Task.
+   * @param direction Filter by trade direction (buy/sell)
+   * @param ordering Which field to use when ordering the results.
+   * @param page A page number within the paginated result set.
+   * @param search A search term.
+   * @returns PaginatedTradeList
+   * @throws ApiError
+   */
+  public static tradingTasksBacktestTradesList(
+    id: number,
+    direction?: string,
+    ordering?: string,
+    page?: number,
+    search?: string
+  ): CancelablePromise<PaginatedTradeList> {
+    return __request(OpenAPI, {
+      method: 'GET',
+      url: '/api/trading/tasks/backtest/{id}/trades/',
+      path: {
+        id: id,
+      },
+      query: {
+        direction: direction,
+        ordering: ordering,
+        page: page,
+        search: search,
+      },
+    });
+  }
+  /**
+   * ViewSet for TradingTask operations with task-centric API.
+   *
+   * Provides CRUD operations and task lifecycle management including:
+   * - submit: Submit task for execution
+   * - cancel: Cancel running task
+   * - restart: Restart task from beginning
+   * - resume: Resume cancelled task
+   * - logs: Retrieve task logs with pagination
+   * - metrics: Retrieve task metrics with filtering
+   * - results: Retrieve task results
+   * @param ordering Which field to use when ordering the results.
+   * @param page A page number within the paginated result set.
+   * @param search A search term.
+   * @returns PaginatedTradingTaskList
+   * @throws ApiError
+   */
+  public static tradingTasksTradingList(
+    ordering?: string,
+    page?: number,
+    search?: string
+  ): CancelablePromise<PaginatedTradingTaskList> {
+    return __request(OpenAPI, {
+      method: 'GET',
+      url: '/api/trading/tasks/trading/',
+      query: {
+        ordering: ordering,
+        page: page,
+        search: search,
+      },
+    });
+  }
+  /**
+   * ViewSet for TradingTask operations with task-centric API.
+   *
+   * Provides CRUD operations and task lifecycle management including:
+   * - submit: Submit task for execution
+   * - cancel: Cancel running task
+   * - restart: Restart task from beginning
+   * - resume: Resume cancelled task
+   * - logs: Retrieve task logs with pagination
+   * - metrics: Retrieve task metrics with filtering
+   * - results: Retrieve task results
+   * @param requestBody
+   * @returns TradingTask
+   * @throws ApiError
+   */
+  public static tradingTasksTradingCreate(
+    requestBody: TradingTaskRequest
+  ): CancelablePromise<TradingTask> {
+    return __request(OpenAPI, {
+      method: 'POST',
+      url: '/api/trading/tasks/trading/',
+      body: requestBody,
+      mediaType: 'application/json',
+    });
+  }
+  /**
+   * ViewSet for TradingTask operations with task-centric API.
+   *
+   * Provides CRUD operations and task lifecycle management including:
+   * - submit: Submit task for execution
+   * - cancel: Cancel running task
+   * - restart: Restart task from beginning
+   * - resume: Resume cancelled task
+   * - logs: Retrieve task logs with pagination
+   * - metrics: Retrieve task metrics with filtering
+   * - results: Retrieve task results
+   * @param id A unique integer value identifying this Trading Task.
+   * @returns TradingTask
+   * @throws ApiError
+   */
+  public static tradingTasksTradingRetrieve(
+    id: number
+  ): CancelablePromise<TradingTask> {
+    return __request(OpenAPI, {
+      method: 'GET',
+      url: '/api/trading/tasks/trading/{id}/',
+      path: {
+        id: id,
+      },
+    });
+  }
+  /**
+   * ViewSet for TradingTask operations with task-centric API.
+   *
+   * Provides CRUD operations and task lifecycle management including:
+   * - submit: Submit task for execution
+   * - cancel: Cancel running task
+   * - restart: Restart task from beginning
+   * - resume: Resume cancelled task
+   * - logs: Retrieve task logs with pagination
+   * - metrics: Retrieve task metrics with filtering
+   * - results: Retrieve task results
+   * @param id A unique integer value identifying this Trading Task.
+   * @param requestBody
+   * @returns TradingTask
+   * @throws ApiError
+   */
+  public static tradingTasksTradingUpdate(
+    id: number,
+    requestBody: TradingTaskRequest
+  ): CancelablePromise<TradingTask> {
+    return __request(OpenAPI, {
+      method: 'PUT',
+      url: '/api/trading/tasks/trading/{id}/',
+      path: {
+        id: id,
+      },
+      body: requestBody,
+      mediaType: 'application/json',
+    });
+  }
+  /**
+   * ViewSet for TradingTask operations with task-centric API.
+   *
+   * Provides CRUD operations and task lifecycle management including:
+   * - submit: Submit task for execution
+   * - cancel: Cancel running task
+   * - restart: Restart task from beginning
+   * - resume: Resume cancelled task
+   * - logs: Retrieve task logs with pagination
+   * - metrics: Retrieve task metrics with filtering
+   * - results: Retrieve task results
+   * @param id A unique integer value identifying this Trading Task.
+   * @param requestBody
+   * @returns TradingTask
+   * @throws ApiError
+   */
+  public static tradingTasksTradingPartialUpdate(
+    id: number,
+    requestBody?: PatchedTradingTaskRequest
+  ): CancelablePromise<TradingTask> {
+    return __request(OpenAPI, {
+      method: 'PATCH',
+      url: '/api/trading/tasks/trading/{id}/',
+      path: {
+        id: id,
+      },
+      body: requestBody,
+      mediaType: 'application/json',
+    });
+  }
+  /**
+   * ViewSet for TradingTask operations with task-centric API.
+   *
+   * Provides CRUD operations and task lifecycle management including:
+   * - submit: Submit task for execution
+   * - cancel: Cancel running task
+   * - restart: Restart task from beginning
+   * - resume: Resume cancelled task
+   * - logs: Retrieve task logs with pagination
+   * - metrics: Retrieve task metrics with filtering
+   * - results: Retrieve task results
+   * @param id A unique integer value identifying this Trading Task.
+   * @returns void
+   * @throws ApiError
+   */
+  public static tradingTasksTradingDestroy(
+    id: number
+  ): CancelablePromise<void> {
+    return __request(OpenAPI, {
+      method: 'DELETE',
+      url: '/api/trading/tasks/trading/{id}/',
+      path: {
+        id: id,
+      },
+    });
+  }
+  /**
+   * Get task equity curve
+   * Retrieve equity curve data from task execution state
+   * @param id A unique integer value identifying this Trading Task.
+   * @param ordering Which field to use when ordering the results.
+   * @param page A page number within the paginated result set.
+   * @param search A search term.
+   * @returns PaginatedEquityPointList
+   * @throws ApiError
+   */
+  public static tradingTasksTradingEquityList(
+    id: number,
+    ordering?: string,
+    page?: number,
+    search?: string
+  ): CancelablePromise<PaginatedEquityPointList> {
+    return __request(OpenAPI, {
+      method: 'GET',
+      url: '/api/trading/tasks/trading/{id}/equity/',
+      path: {
+        id: id,
+      },
+      query: {
+        ordering: ordering,
+        page: page,
+        search: search,
+      },
+    });
+  }
+  /**
+   * Get task events
+   * Retrieve task events with filtering
+   * @param id A unique integer value identifying this Trading Task.
+   * @param eventType Filter by event type
+   * @param limit Maximum number of events to return (default: 100)
+   * @param ordering Which field to use when ordering the results.
+   * @param page A page number within the paginated result set.
+   * @param search A search term.
+   * @param severity Filter by severity (info, warning, error)
+   * @returns PaginatedTradingEventList
+   * @throws ApiError
+   */
+  public static tradingTasksTradingEventsList(
+    id: number,
+    eventType?: string,
+    limit?: number,
+    ordering?: string,
+    page?: number,
+    search?: string,
+    severity?: string
+  ): CancelablePromise<PaginatedTradingEventList> {
+    return __request(OpenAPI, {
+      method: 'GET',
+      url: '/api/trading/tasks/trading/{id}/events/',
+      path: {
+        id: id,
+      },
+      query: {
+        event_type: eventType,
+        limit: limit,
+        ordering: ordering,
+        page: page,
+        search: search,
+        severity: severity,
+      },
+    });
+  }
+  /**
+   * Get task logs
+   * Retrieve task execution logs with pagination and filtering
+   * @param id A unique integer value identifying this Trading Task.
+   * @param level Filter by log level (DEBUG, INFO, WARNING, ERROR)
+   * @param limit Maximum number of logs to return (default: 100)
+   * @param offset Number of logs to skip (default: 0)
+   * @param ordering Which field to use when ordering the results.
+   * @param page A page number within the paginated result set.
+   * @param search A search term.
+   * @returns PaginatedTaskLogList
+   * @throws ApiError
+   */
+  public static tradingTasksTradingLogsList(
+    id: number,
+    level?: string,
+    limit?: number,
+    offset?: number,
+    ordering?: string,
+    page?: number,
+    search?: string
+  ): CancelablePromise<PaginatedTaskLogList> {
+    return __request(OpenAPI, {
+      method: 'GET',
+      url: '/api/trading/tasks/trading/{id}/logs/',
+      path: {
+        id: id,
+      },
+      query: {
+        level: level,
+        limit: limit,
+        offset: offset,
+        ordering: ordering,
+        page: page,
+        search: search,
+      },
+    });
+  }
+  /**
+   * Get task metrics
+   * Retrieve task execution metrics with filtering
+   * @param id A unique integer value identifying this Trading Task.
+   * @param endTime Filter metrics before this timestamp (ISO format)
+   * @param metricName Filter by metric name
+   * @param ordering Which field to use when ordering the results.
+   * @param page A page number within the paginated result set.
+   * @param search A search term.
+   * @param startTime Filter metrics after this timestamp (ISO format)
+   * @returns PaginatedTaskMetricList
+   * @throws ApiError
+   */
+  public static tradingTasksTradingMetricsList(
+    id: number,
+    endTime?: string,
+    metricName?: string,
+    ordering?: string,
+    page?: number,
+    search?: string,
+    startTime?: string
+  ): CancelablePromise<PaginatedTaskMetricList> {
+    return __request(OpenAPI, {
+      method: 'GET',
+      url: '/api/trading/tasks/trading/{id}/metrics/',
+      path: {
+        id: id,
+      },
+      query: {
+        end_time: endTime,
+        metric_name: metricName,
+        ordering: ordering,
+        page: page,
+        search: search,
+        start_time: startTime,
+      },
+    });
+  }
+  /**
+   * Restart task from beginning
+   * Restart a task from the beginning, clearing all execution data
+   * @param id A unique integer value identifying this Trading Task.
+   * @param requestBody
+   * @returns TradingTask
+   * @throws ApiError
+   */
+  public static tradingTasksTradingRestartCreate(
+    id: number,
+    requestBody: TradingTaskRequest
+  ): CancelablePromise<TradingTask> {
+    return __request(OpenAPI, {
+      method: 'POST',
+      url: '/api/trading/tasks/trading/{id}/restart/',
+      path: {
+        id: id,
+      },
+      body: requestBody,
+      mediaType: 'application/json',
+    });
+  }
+  /**
+   * Get task results
+   * Retrieve task execution results
+   * @param id A unique integer value identifying this Trading Task.
+   * @returns any
+   * @throws ApiError
+   */
+  public static tradingTasksTradingResultsRetrieve(
+    id: number
+  ): CancelablePromise<Record<string, any>> {
+    return __request(OpenAPI, {
+      method: 'GET',
+      url: '/api/trading/tasks/trading/{id}/results/',
+      path: {
+        id: id,
+      },
+    });
+  }
+  /**
+   * Resume cancelled task
+   * Resume a cancelled task, preserving execution context
+   * @param id A unique integer value identifying this Trading Task.
+   * @param requestBody
+   * @returns TradingTask
+   * @throws ApiError
+   */
+  public static tradingTasksTradingResumeCreate(
+    id: number,
+    requestBody: TradingTaskRequest
+  ): CancelablePromise<TradingTask> {
+    return __request(OpenAPI, {
+      method: 'POST',
+      url: '/api/trading/tasks/trading/{id}/resume/',
+      path: {
+        id: id,
+      },
+      body: requestBody,
+      mediaType: 'application/json',
+    });
+  }
+  /**
+   * Cancel running task
+   * Cancel a currently running task
+   * @param id A unique integer value identifying this Trading Task.
+   * @param requestBody
+   * @returns TradingTask
+   * @throws ApiError
+   */
+  public static tradingTasksTradingStopCreate(
+    id: number,
+    requestBody: TradingTaskRequest
+  ): CancelablePromise<TradingTask> {
+    return __request(OpenAPI, {
+      method: 'POST',
+      url: '/api/trading/tasks/trading/{id}/stop/',
+      path: {
+        id: id,
+      },
+      body: requestBody,
+      mediaType: 'application/json',
+    });
+  }
+  /**
+   * Submit task for execution
+   * Submit a pending task to Celery for execution
+   * @param id A unique integer value identifying this Trading Task.
+   * @param requestBody
+   * @returns TradingTask
+   * @throws ApiError
+   */
+  public static tradingTasksTradingSubmitCreate(
+    id: number,
+    requestBody: TradingTaskRequest
+  ): CancelablePromise<TradingTask> {
+    return __request(OpenAPI, {
+      method: 'POST',
+      url: '/api/trading/tasks/trading/{id}/submit/',
+      path: {
+        id: id,
+      },
+      body: requestBody,
+      mediaType: 'application/json',
+    });
+  }
+  /**
+   * Get task trades
+   * Retrieve trade history from task execution state
+   * @param id A unique integer value identifying this Trading Task.
+   * @param direction Filter by trade direction (buy/sell)
+   * @param ordering Which field to use when ordering the results.
+   * @param page A page number within the paginated result set.
+   * @param search A search term.
+   * @returns PaginatedTradeList
+   * @throws ApiError
+   */
+  public static tradingTasksTradingTradesList(
+    id: number,
+    direction?: string,
+    ordering?: string,
+    page?: number,
+    search?: string
+  ): CancelablePromise<PaginatedTradeList> {
+    return __request(OpenAPI, {
+      method: 'GET',
+      url: '/api/trading/tasks/trading/{id}/trades/',
+      path: {
+        id: id,
+      },
+      query: {
+        direction: direction,
+        ordering: ordering,
+        page: page,
+        search: search,
       },
     });
   }

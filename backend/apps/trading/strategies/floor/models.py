@@ -23,9 +23,6 @@ class FloorStrategyConfig:
 
     This is parsed from apps.trading.models.StrategyConfig.config_dict
     and contains all Floor-specific parameters.
-
-    Note: instrument and pip_size are NOT included here as they're passed
-    separately to FloorStrategy.__init__
     """
 
     base_lot_size: Decimal

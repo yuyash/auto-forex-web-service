@@ -31,6 +31,8 @@ class ExecutionState(Generic[TStrategyState]):
         ticks_processed: Number of ticks processed so far
         last_tick_timestamp: Timestamp of the last processed tick (ISO format)
         metrics: Current performance metrics
+        equity_curve: Time series of balance snapshots
+        trades: List of completed trades
     Example:
         >>> state: ExecutionState[FloorStrategyState] = ExecutionState(
         ...     strategy_state=FloorStrategyState(),
@@ -47,6 +49,8 @@ class ExecutionState(Generic[TStrategyState]):
     ticks_processed: int
     last_tick_timestamp: str | None = None
     metrics: ExecutionMetrics = field(default_factory=ExecutionMetrics)
+    equity_curve: list[dict[str, str]] = field(default_factory=list)
+    trades: list[dict[str, Any]] = field(default_factory=list)
 
     def copy_with(self, **changes: Any) -> "ExecutionState[TStrategyState]":
         """Create a copy of this state with specified changes.
@@ -77,6 +81,8 @@ class ExecutionState(Generic[TStrategyState]):
             "ticks_processed": self.ticks_processed,
             "last_tick_timestamp": self.last_tick_timestamp,
             "metrics": self.metrics.to_dict(),
+            "equity_curve": self.equity_curve,
+            "trades": self.trades,
         }
 
     @staticmethod
@@ -109,6 +115,16 @@ class ExecutionState(Generic[TStrategyState]):
             else ExecutionMetrics()
         )
 
+        # Parse equity curve
+        equity_curve = data.get("equity_curve", [])
+        if not isinstance(equity_curve, list):
+            equity_curve = []
+
+        # Parse trades
+        trades = data.get("trades", [])
+        if not isinstance(trades, list):
+            trades = []
+
         # Note: strategy_state is kept as dict here.
         # The strategy implementation should convert it using its from_dict method.
         return ExecutionState(
@@ -118,4 +134,6 @@ class ExecutionState(Generic[TStrategyState]):
             ticks_processed=int(data.get("ticks_processed", 0)),
             last_tick_timestamp=data.get("last_tick_timestamp"),
             metrics=metrics,
+            equity_curve=equity_curve,
+            trades=trades,
         )

@@ -14,7 +14,6 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     config_id = serializers.IntegerField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
-    latest_execution = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTasks
@@ -35,7 +34,6 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "instrument",
             "trading_mode",
             "status",
-            "latest_execution",
             "created_at",
             "updated_at",
         ]
@@ -46,24 +44,9 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "config_name",
             "strategy_type",
             "status",
-            "latest_execution",
             "created_at",
             "updated_at",
         ]
-
-    def get_latest_execution(self, obj: BacktestTasks) -> dict | None:
-        """Get summary of latest execution."""
-        execution = obj.get_latest_execution()
-        if not execution:
-            return None
-
-        return {
-            "id": execution.id,
-            "execution_number": execution.execution_number,
-            "status": execution.status,
-            "started_at": execution.started_at,
-            "completed_at": execution.completed_at,
-        }
 
 
 class BacktestTaskListSerializer(serializers.ModelSerializer):

@@ -3,22 +3,12 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { StatusEnum } from './StatusEnum';
+import type { TradingModeEnum } from './TradingModeEnum';
 /**
- * Serializer for TradingTask full details.
+ * Serializer for TradingTasks with execution data.
  */
 export type TradingTask = {
   readonly id: number;
-  readonly user_id: number;
-  readonly config_id: number;
-  readonly config_name: string;
-  readonly strategy_type: string;
-  /**
-   * Get instrument from configuration parameters.
-   */
-  readonly instrument: string;
-  readonly account_id: number;
-  readonly account_name: string;
-  readonly account_type: string;
   /**
    * Human-readable name for this trading task
    */
@@ -28,31 +18,26 @@ export type TradingTask = {
    */
   description?: string;
   /**
-   * Close all positions when task is stopped
+   * Get the task type.
+   *
+   * Args:
+   * obj: Task instance
+   *
+   * Returns:
+   * str: "backtest" or "trading"
    */
-  sell_on_stop?: boolean;
+  readonly task_type: string;
   /**
    * Current task status
    *
    * * `created` - Created
    * * `running` - Running
+   * * `paused` - Paused
    * * `stopped` - Stopped
    * * `completed` - Completed
    * * `failed` - Failed
    */
   readonly status: StatusEnum;
-  /**
-   * Get summary of latest execution with metrics.
-   */
-  readonly latest_execution: Record<string, any> | null;
-  /**
-   * Check if task has saved strategy state.
-   */
-  readonly has_strategy_state: boolean;
-  /**
-   * Check if task can be resumed with state recovery.
-   */
-  readonly can_resume: boolean;
   /**
    * Timestamp when the task was created
    */
@@ -61,4 +46,78 @@ export type TradingTask = {
    * Timestamp when the task was last updated
    */
   readonly updated_at: string;
+  /**
+   * Timestamp when the task execution started
+   */
+  readonly started_at: string | null;
+  /**
+   * Timestamp when the task execution completed
+   */
+  readonly completed_at: string | null;
+  /**
+   * Calculate task execution duration in seconds.
+   *
+   * Args:
+   * obj: Task instance
+   *
+   * Returns:
+   * float | None: Duration in seconds if both started_at and completed_at are set,
+   * None otherwise
+   */
+  readonly duration: number | null;
+  /**
+   * Celery task ID for tracking execution
+   */
+  readonly celery_task_id: string | null;
+  /**
+   * Number of times this task has been retried
+   */
+  retry_count?: number;
+  /**
+   * Maximum number of retries allowed
+   */
+  max_retries?: number;
+  /**
+   * Error message if task failed
+   */
+  readonly error_message: string | null;
+  /**
+   * Full error traceback if task failed
+   */
+  readonly error_traceback: string | null;
+  /**
+   * Execution results data
+   */
+  readonly result_data: any;
+  /**
+   * User who created this trading task
+   */
+  readonly user: number;
+  /**
+   * Strategy configuration used by this task
+   */
+  config: number;
+  /**
+   * OANDA account used for trading
+   */
+  oanda_account: number;
+  /**
+   * Close all positions when task is stopped
+   */
+  sell_on_stop?: boolean;
+  /**
+   * Trading instrument (e.g., EUR_USD, USD_JPY)
+   */
+  instrument?: string;
+  /**
+   * Trading mode: netting (aggregated positions) or hedging (independent trades)
+   *
+   * * `netting` - Netting Mode
+   * * `hedging` - Hedging Mode
+   */
+  trading_mode?: TradingModeEnum;
+  /**
+   * Strategy-specific state for persistence across restarts
+   */
+  readonly strategy_state: any;
 };

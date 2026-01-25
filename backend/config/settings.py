@@ -231,20 +231,14 @@ CELERY_TASK_ROUTES = {
     "trading.tasks.stop_trading_task": {"queue": "trading"},
     "trading.tasks.run_backtest_task": {"queue": "trading"},
     # Monitoring tasks
-    "trading.monitor_stuck_executions": {"queue": "default"},
-    "trading.sync_celery_task_status": {"queue": "default"},
+    "trading.reconcile_task_statuses": {"queue": "default"},
 }
 
 # Celery Beat periodic task schedule
 CELERY_BEAT_SCHEDULE = {
-    "monitor-stuck-executions": {
-        "task": "trading.monitor_stuck_executions",
+    "reconcile-task-statuses": {
+        "task": "trading.reconcile_task_statuses",
         "schedule": 300.0,  # Run every 5 minutes
-        "options": {"queue": "default"},
-    },
-    "sync-celery-task-status": {
-        "task": "trading.sync_celery_task_status",
-        "schedule": 180.0,  # Run every 3 minutes
         "options": {"queue": "default"},
     },
 }
@@ -394,7 +388,6 @@ SPECTACULAR_SETTINGS = {
         {"name": "health", "description": "System health checks"},
         {"name": "market", "description": "Market data and OANDA account management"},
         {"name": "trading", "description": "Trading tasks and execution management"},
-        {"name": "executions", "description": "Execution data and metrics"},
     ],
     "CONTACT": {
         "name": "Auto Forex Support",

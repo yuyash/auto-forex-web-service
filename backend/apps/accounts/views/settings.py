@@ -14,6 +14,7 @@ from apps.accounts.serializers import (
     PublicAccountSettingsSerializer,
     UserProfileSerializer,
     UserSettingsSerializer,
+    UserSettingsUpdateSerializer,
 )
 
 logger: Logger = getLogger(name=__name__)
@@ -31,6 +32,7 @@ class UserSettingsView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    serializer_class = UserSettingsUpdateSerializer
 
     @extend_schema(
         summary="GET /api/accounts/settings/",
@@ -92,20 +94,7 @@ class UserSettingsView(APIView):
     @extend_schema(
         summary="PUT /api/accounts/settings/",
         description="Update user profile and settings. Can update timezone, language, notification preferences, etc.",
-        request={
-            "type": "object",
-            "properties": {
-                "timezone": {"type": "string"},
-                "language": {"type": "string", "enum": ["en", "ja"]},
-                "first_name": {"type": "string"},
-                "last_name": {"type": "string"},
-                "username": {"type": "string"},
-                "notification_enabled": {"type": "boolean"},
-                "notification_email": {"type": "boolean"},
-                "notification_browser": {"type": "boolean"},
-                "settings_json": {"type": "object"},
-            },
-        },
+        request=UserSettingsUpdateSerializer,
         responses={
             200: OpenApiResponse(description="Settings updated successfully"),
             400: OpenApiResponse(description="Validation error"),

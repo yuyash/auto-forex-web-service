@@ -13,17 +13,13 @@ from .errors import (
     ValidationError,
     retry_with_backoff,
 )
-from .executor import BacktestExecutor
 from .registry import register_all_strategies, registry
-from .state import StateManager
 from .validation import TaskValidator
 
 __all__ = [
     "registry",
     "register_all_strategies",
-    "StateManager",
     "TaskController",
-    "BacktestExecutor",
     "ErrorHandler",
     "ErrorAction",
     "ErrorCategory",

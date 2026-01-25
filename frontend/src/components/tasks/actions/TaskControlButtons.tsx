@@ -23,12 +23,12 @@ import {
 } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { backtestTasksApi, tradingTasksApi } from '../../../services/api';
-import { TaskType } from '../../../types';
+import { TaskType, TaskStatus } from '../../../types';
 
 interface TaskControlButtonsProps {
   taskId: number;
   taskType: TaskType;
-  currentStatus: string;
+  currentStatus: TaskStatus;
   onSuccess?: () => void;
   onError?: (error: Error) => void;
 }
@@ -52,7 +52,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
     taskType === TaskType.BACKTEST ? backtestTasksApi : tradingTasksApi;
 
   // Start mutation
-  const startMutation = useMutation({
+  const startMutation = useMutation<unknown, Error, void>({
     mutationFn: () => api.start(taskId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['execution-status'] });
@@ -70,10 +70,10 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   });
 
   // Stop mutation
-  const stopMutation = useMutation({
+  const stopMutation = useMutation<unknown, Error, void>({
     mutationFn: () => {
       if (taskType === TaskType.TRADING) {
-        return tradingTasksApi.stop(taskId, stopMode);
+        return tradingTasksApi.stop(taskId);
       }
       return backtestTasksApi.stop(taskId);
     },
@@ -95,7 +95,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   });
 
   // Pause mutation (trading only)
-  const pauseMutation = useMutation({
+  const pauseMutation = useMutation<unknown, Error, void>({
     mutationFn: () => tradingTasksApi.pause(taskId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['execution-status'] });
@@ -108,7 +108,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   });
 
   // Resume mutation (trading only)
-  const resumeMutation = useMutation({
+  const resumeMutation = useMutation<unknown, Error, void>({
     mutationFn: () => tradingTasksApi.resume(taskId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['execution-status'] });
@@ -120,12 +120,17 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
     },
   });
 
-  // Restart mutation (trading only)
-  const restartMutation = useMutation({
-    mutationFn: () => tradingTasksApi.restart(taskId, clearState),
+  // Restart mutation
+  const restartMutation = useMutation<unknown, Error, void>({
+    mutationFn: () => api.restart(taskId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['execution-status'] });
-      queryClient.invalidateQueries({ queryKey: ['trading-task', taskId] });
+      queryClient.invalidateQueries({
+        queryKey:
+          taskType === TaskType.BACKTEST
+            ? ['backtest-task', taskId]
+            : ['trading-task', taskId],
+      });
       setRestartDialogOpen(false);
       onSuccess?.();
     },
@@ -142,15 +147,26 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
     resumeMutation.isPending ||
     restartMutation.isPending;
 
-  const canStart = ['created', 'stopped', 'completed', 'failed'].includes(
-    currentStatus
-  );
-  const canStop = ['running', 'pending'].includes(currentStatus);
-  const canPause = taskType === TaskType.TRADING && currentStatus === 'running';
-  const canResume = taskType === TaskType.TRADING && currentStatus === 'paused';
-  const canRestart =
-    taskType === TaskType.TRADING &&
-    ['stopped', 'completed', 'failed'].includes(currentStatus);
+  const canStart = [TaskStatus.CREATED].includes(currentStatus);
+
+  const canStop = currentStatus === TaskStatus.RUNNING;
+
+  const canPause = currentStatus === TaskStatus.RUNNING;
+
+  const canResume = currentStatus === TaskStatus.PAUSED;
+
+  const canRestart = [
+    TaskStatus.STOPPED,
+    TaskStatus.COMPLETED,
+    TaskStatus.FAILED,
+  ].includes(currentStatus);
+
+  const hasAnyButton =
+    canStart || canStop || canPause || canResume || canRestart;
+
+  if (!hasAnyButton) {
+    return null;
+  }
 
   return (
     <>

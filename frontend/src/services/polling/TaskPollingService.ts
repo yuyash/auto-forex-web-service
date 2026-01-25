@@ -1,6 +1,6 @@
 // Task Polling Service - HTTP polling for task status and details
 
-import { apiClient } from '../api/client';
+import { TradingService } from '../../api/generated/services/TradingService';
 import type { BacktestTask, TradingTask } from '../../types';
 import type { ExecutionSummary } from '../../types/execution';
 import { TaskStatus } from '../../types/common';
@@ -187,24 +187,34 @@ export class TaskPollingService {
    * Fetch task status
    */
   private async fetchStatus(): Promise<TaskStatusResponse> {
-    const endpoint = `/trading/${this.taskType}-tasks/${this.taskId}/status/`;
-    return apiClient.get<TaskStatusResponse>(endpoint);
+    const task =
+      this.taskType === 'backtest'
+        ? await TradingService.tradingTasksBacktestRetrieve(this.taskId)
+        : await TradingService.tradingTasksTradingRetrieve(this.taskId);
+
+    return {
+      task_id: task.id,
+      task_type: this.taskType,
+      status: task.status as TaskStatus,
+      progress: 0,
+      started_at: task.started_at || null,
+      completed_at: task.completed_at || null,
+      error_message: task.error_message || null,
+    };
   }
 
   /**
    * Fetch task details
    */
   private async fetchDetails(): Promise<TaskDetailsResponse> {
-    const endpoint = `/trading/${this.taskType}-tasks/${this.taskId}/`;
-    const task = await apiClient.get<BacktestTask | TradingTask>(endpoint);
-
-    // Extract current execution from task
-    const current_execution: ExecutionSummary | null =
-      'latest_execution' in task ? (task.latest_execution ?? null) : null;
+    const task =
+      this.taskType === 'backtest'
+        ? await TradingService.tradingTasksBacktestRetrieve(this.taskId)
+        : await TradingService.tradingTasksTradingRetrieve(this.taskId);
 
     return {
-      task,
-      current_execution,
+      task: task as BacktestTask | TradingTask,
+      current_execution: null,
     };
   }
 

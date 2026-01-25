@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import WarningIcon from '@mui/icons-material/Warning';
 import { useConfigurationMutations } from '../../hooks/useConfigurationMutations';
+import { TaskStatus } from '../../types/common';
 import type {
   StrategyConfig,
   ConfigurationTask,
@@ -74,7 +75,8 @@ const ConfigurationDeleteDialog = ({
   };
 
   const activeTasks = tasks.filter(
-    (task) => task.status === 'running' || task.status === 'created'
+    (task) =>
+      task.status === TaskStatus.RUNNING || task.status === TaskStatus.PENDING
   );
   const hasActiveTasks = activeTasks.length > 0;
 
@@ -159,11 +161,11 @@ const ConfigurationDeleteDialog = ({
                           label={task.status}
                           size="small"
                           color={
-                            task.status === 'running'
+                            task.status === TaskStatus.RUNNING
                               ? 'success'
-                              : task.status === 'completed'
+                              : task.status === TaskStatus.COMPLETED
                                 ? 'default'
-                                : task.status === 'failed'
+                                : task.status === TaskStatus.FAILED
                                   ? 'error'
                                   : 'default'
                           }

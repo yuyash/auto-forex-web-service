@@ -19,8 +19,6 @@ export { default as GlobalKeyboardShortcuts } from './GlobalKeyboardShortcuts';
 export { VirtualizedList } from './VirtualizedList';
 export { VirtualizedTable } from './VirtualizedTable';
 export type { VirtualizedTableColumn } from './VirtualizedTable';
-export { ExecutionDataProvider } from './ExecutionDataProvider';
-export type { ExecutionDataProviderProps } from './ExecutionDataProvider';
 export { ChartContainer } from './ChartContainer';
 export type { ChartContainerProps, GranularityOption } from './ChartContainer';
 export { TaskControlButtons } from './TaskControlButtons';

@@ -6,13 +6,11 @@ from django.contrib.auth import get_user_model
 
 from apps.trading.admin import (
     BacktestTasksAdmin,
-    ExecutionsAdmin,
     StrategyConfigurationsAdmin,
     TradingTasksAdmin,
 )
 from apps.trading.models import (
     BacktestTasks,
-    Executions,
     StrategyConfigurations,
     TradingTasks,
 )
@@ -53,22 +51,6 @@ class TestTradingTasksAdmin:
     def test_trading_task_admin_list_display(self):
         """Test list_display is configured."""
         admin_instance = TradingTasksAdmin(TradingTasks, admin.site)
-        assert hasattr(admin_instance, "list_display")
-        assert len(admin_instance.list_display) > 0
-
-
-@pytest.mark.django_db
-class TestExecutionsAdmin:
-    """Test ExecutionsAdmin."""
-
-    def test_execution_admin_registered(self):
-        """Test Executions is registered in admin."""
-        assert Executions in admin.site._registry
-        assert isinstance(admin.site._registry[Executions], ExecutionsAdmin)
-
-    def test_execution_admin_list_display(self):
-        """Test list_display is configured."""
-        admin_instance = ExecutionsAdmin(Executions, admin.site)
         assert hasattr(admin_instance, "list_display")
         assert len(admin_instance.list_display) > 0
 

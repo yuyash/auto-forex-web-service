@@ -51,9 +51,6 @@ export const LogPanel: React.FC<LogPanelProps> = ({
   const logContainerRef = useRef<HTMLDivElement>(null);
   const isUserScrollingRef = useRef(false);
 
-  // Note: WebSocket log streaming has been removed.
-  // Logs are now fetched via HTTP API and stored in the database.
-
   // Auto-scroll to latest log entry when new logs arrive
   useEffect(() => {
     if (autoScroll && !isUserScrollingRef.current && logContainerRef.current) {

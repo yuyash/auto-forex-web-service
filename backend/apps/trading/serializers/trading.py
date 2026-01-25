@@ -19,7 +19,6 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
-    latest_execution = serializers.SerializerMethodField()
     # State management fields for frontend button logic
     has_strategy_state = serializers.SerializerMethodField()
     can_resume = serializers.SerializerMethodField()
@@ -40,7 +39,6 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "description",
             "sell_on_stop",
             "status",
-            "latest_execution",
             # State management fields
             "has_strategy_state",
             "can_resume",
@@ -58,7 +56,6 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "account_name",
             "account_type",
             "status",
-            "latest_execution",
             "has_strategy_state",
             "can_resume",
             "created_at",
@@ -80,50 +77,6 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     def get_can_resume(self, obj: TradingTasks) -> bool:
         """Check if task can be resumed with state recovery."""
         return obj.can_resume()
-
-    def get_latest_execution(self, obj: TradingTasks) -> dict | None:
-        """Get summary of latest execution with metrics."""
-        execution = obj.get_latest_execution()
-        if not execution:
-            return None
-
-        result = {
-            "id": execution.id,
-            "execution_number": execution.execution_number,
-            "status": execution.status,
-            "started_at": execution.started_at,
-            "completed_at": execution.completed_at,
-        }
-
-        # Include metrics if available
-        if hasattr(execution, "metrics") and execution.metrics:
-            metrics = execution.metrics
-            result.update(
-                {
-                    "total_pnl": str(metrics.total_pnl),
-                    "realized_pnl": str(metrics.realized_pnl),
-                    "unrealized_pnl": str(metrics.unrealized_pnl),
-                    "total_trades": metrics.total_trades,
-                    "winning_trades": metrics.winning_trades,
-                    "losing_trades": metrics.losing_trades,
-                    "win_rate": str(metrics.win_rate),
-                }
-            )
-        else:
-            # Default values when no metrics exist yet
-            result.update(
-                {
-                    "total_pnl": "0.00",
-                    "realized_pnl": "0.00",
-                    "unrealized_pnl": "0.00",
-                    "total_trades": 0,
-                    "winning_trades": 0,
-                    "losing_trades": 0,
-                    "win_rate": "0.00",
-                }
-            )
-
-        return result
 
 
 class TradingTaskListSerializer(serializers.ModelSerializer):

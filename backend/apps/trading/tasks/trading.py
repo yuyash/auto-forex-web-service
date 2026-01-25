@@ -1,30 +1,154 @@
-from __future__ import annotations
+"""Celery tasks for live trading execution."""
 
+import traceback
 from logging import Logger, getLogger
 from typing import Any
 
 from celery import shared_task
-from django.conf import settings
 from django.utils import timezone as dj_timezone
 
-from apps.trading.enums import TaskStatus, TaskType
-from apps.trading.models import (
-    CeleryTaskStatus,
-    TradingTasks,
-)
-from apps.trading.services.executor import TradingExecutor
-from apps.trading.services.lifecycle import ExecutionLifecycle, StrategyCreationContext
-from apps.trading.services.source import LiveTickDataSource
-from apps.trading.tasks.base import BaseTaskRunner
+from apps.trading.enums import LogLevel, TaskStatus
+from apps.trading.models import CeleryTaskStatus, TaskLog, TradingTasks
 
 logger: Logger = getLogger(name=__name__)
 
 
-@shared_task(bind=True, name="trading.tasks.run_trading_task")
+@shared_task(
+    bind=True,
+    name="trading.tasks.run_trading_task",
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3, "countdown": 60},
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
 def run_trading_task(self: Any, task_id: int, execution_id: int | None = None) -> None:
-    """Run a live trading task using TradingExecutor."""
-    runner = TradingTaskRunner()
-    runner.run(task_id, execution_id)
+    """Celery task wrapper for running trading tasks.
+
+    Args:
+        task_id: ID of the TradingTasks to execute
+        execution_id: Deprecated parameter (ignored)
+    """
+    task = None
+
+    try:
+        # Load the task to update it
+        task = TradingTasks.objects.get(pk=task_id)
+
+        # Update task status to RUNNING and record start time
+        task.status = TaskStatus.RUNNING
+        task.started_at = dj_timezone.now()
+        task.celery_task_id = self.request.id
+        task.save(update_fields=["status", "started_at", "celery_task_id"])
+
+        # Log task start
+        TaskLog.objects.create(
+            task=task,
+            level=LogLevel.INFO,
+            message="Trading task execution started",
+        )
+
+        # Execute the trading task
+        _execute_trading(task)
+
+        # Mark as stopped (trading tasks run until stopped)
+        task.refresh_from_db()
+        task.status = TaskStatus.STOPPED
+        task.completed_at = dj_timezone.now()
+        task.save(update_fields=["status", "completed_at"])
+
+        # Log task completion
+        TaskLog.objects.create(
+            task=task,
+            level=LogLevel.INFO,
+            message="Trading task stopped successfully",
+        )
+
+    except TradingTasks.DoesNotExist:
+        logger.error(f"TradingTasks {task_id} not found")
+        raise
+
+    except Exception as e:
+        # Capture error details and update task
+        error_message = str(e)
+        error_traceback = traceback.format_exc()
+
+        logger.error(
+            f"Trading task {task_id} failed: {error_message}",
+            exc_info=True,
+        )
+
+        if task:
+            # Update task with error information
+            task.status = TaskStatus.FAILED
+            task.completed_at = dj_timezone.now()
+            task.error_message = error_message
+            task.error_traceback = error_traceback
+            task.save(
+                update_fields=[
+                    "status",
+                    "completed_at",
+                    "error_message",
+                    "error_traceback",
+                ]
+            )
+
+            # Log error
+            TaskLog.objects.create(
+                task=task,
+                level=LogLevel.ERROR,
+                message=f"Trading task execution failed: {type(e).__name__}: {error_message}",
+            )
+
+        # Re-raise to trigger Celery retry
+        raise
+
+
+def _execute_trading(task: TradingTasks) -> None:
+    """Execute a trading task.
+
+    Args:
+        task: Trading task to execute
+    """
+    from apps.trading.services.controller import TaskController
+    from apps.trading.services.executor import TradingExecutor
+    from apps.trading.services.registry import register_all_strategies, registry
+    from apps.trading.services.source import LiveTickDataSource
+
+    # Register all strategies
+    register_all_strategies()
+
+    # Create strategy instance
+    strategy = registry.create(
+        instrument=task.instrument,
+        pip_size=task._pip_size or task.config.get_pip_size(),
+        strategy_config=task.config,
+        trading_mode=task.trading_mode,
+    )
+
+    # Create data source for live ticks
+    channel = f"live:{task.oanda_account.account_id}:{task.instrument}"
+    data_source = LiveTickDataSource(
+        channel=channel,
+        instrument=task.instrument,
+    )
+
+    # Create controller
+    controller = TaskController(
+        task_name="trading.tasks.run_trading_task",
+        instance_key=str(task.pk),
+    )
+
+    # Create executor
+    executor = TradingExecutor(
+        task=task,
+        strategy=strategy,
+        data_source=data_source,
+        controller=controller,
+    )
+
+    # Execute
+    executor.execute()
 
 
 @shared_task(bind=True, name="trading.tasks.stop_trading_task")
@@ -32,8 +156,6 @@ def stop_trading_task(self: Any, task_id: int, mode: str = "graceful") -> None:
     """Request stop for a running trading task.
 
     This handles complex cleanup operations like closing positions.
-    Backtest tasks use a simpler direct stop mechanism via
-    TaskLockManager.set_cancellation_flag().
 
     Args:
         task_id: ID of the trading task to stop
@@ -50,102 +172,532 @@ def stop_trading_task(self: Any, task_id: int, mode: str = "graceful") -> None:
     logger.info(f"Stop requested for trading task {task_id} (mode={mode})")
 
 
-class TradingTaskRunner(BaseTaskRunner):
-    """Task runner for live trading tasks."""
+@shared_task(bind=True, name="trading.tasks.async_stop_trading_task")
+def async_stop_trading_task(self: Any, task_id: int, mode: str = "graceful") -> dict[str, Any]:
+    """Asynchronously stop a running trading task.
 
-    def _create_data_source(self) -> LiveTickDataSource:
-        """Create data source for live trading execution."""
-        channel = settings.MARKET_TICK_CHANNEL
-        return LiveTickDataSource(
-            channel=channel,
-            instrument=self.task.instrument,
-        )
+    This task handles the complete stop process for trading tasks including:
+    1. Setting stop flag in CeleryTaskStatus (graceful cooperative stop)
+    2. Waiting for the task to stop itself
+    3. Updating the task status in the database if needed
 
-    def _create_executor(self, data_source: LiveTickDataSource, strategy: Any) -> TradingExecutor:
-        """Create TradingExecutor instance."""
-        # Type assertion for TradingTasks
-        assert isinstance(self.task, TradingTasks), "Task must be TradingTasks"
+    Note: The market publisher task (publish_oanda_ticks) is NOT stopped because
+    it's a shared singleton per OANDA account that may be used by other trading tasks.
+    The supervisor (ensure_tick_pubsub_running) manages the publisher lifecycle.
 
-        from apps.market.services.oanda import OandaService
+    Trading tasks use a graceful stop mechanism where the running task checks
+    for stop requests and cleans up properly (e.g., closing positions).
 
-        trading_service = OandaService(account=self.task.oanda_account)
+    Args:
+        task_id: ID of the trading task to stop
+        mode: Stop mode ('immediate', 'graceful', 'graceful_close')
 
-        return TradingExecutor(
-            data_source=data_source,
-            strategy=strategy,
-            trading_service=trading_service,
-            execution=self.execution,
-            task=self.task,
-        )
+    Returns:
+        dict: Result containing success status and message
+    """
+    import time
 
-    def run(self, task_id: int, execution_id: int | None = None) -> None:
-        """Execute the trading task."""
-        # Initialize Celery task service
-        self._initialize_task_service(
-            task_name="trading.tasks.run_trading_task",
-            task_id=task_id,
-            kind="trading",
-        )
+    from celery import current_app
 
-        logger.info(f"Trading task started (task_id={task_id}, execution_id={execution_id})")
+    logger.info(
+        "Async stop trading task started",
+        extra={"task_id": task_id, "mode": mode},
+    )
 
+    try:
+        from apps.trading.models import TradingTasks
+
+        # Get the task
         try:
-            # Load the trading task
-            self.task: TradingTasks = TradingTasks.objects.select_related(
-                "config", "oanda_account", "user"
-            ).get(pk=task_id)
+            task = TradingTasks.objects.get(pk=task_id)
         except TradingTasks.DoesNotExist:
-            logger.error(f"TradingTasks {task_id} not found")
-            self.task_service.mark_stopped(
-                status=CeleryTaskStatus.Status.FAILED, status_message="Task not found"
-            )
-            return
+            error_msg = f"Trading task {task_id} not found"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
 
-        # Setup execution context (with stale execution check)
+        # Check if task is in a stoppable state
+        if task.status not in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
+            error_msg = f"Task {task_id} is not in a stoppable state (status: {task.status})"
+            logger.warning(error_msg)
+            return {"success": False, "error": error_msg}
+
+        # Set stop flag for the trading task (graceful cooperative stop)
+        task_name = "trading.tasks.run_trading_task"
+        instance_key = str(task_id)
+        CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
+            status=CeleryTaskStatus.Status.STOP_REQUESTED,
+            status_message=f"stop_requested mode={mode}",
+            last_heartbeat_at=dj_timezone.now(),
+        )
+
+        logger.info(
+            "Stop flag set for trading task",
+            extra={"task_id": task_id, "mode": mode},
+        )
+
+        # Note: We do NOT stop the market publisher (publish_oanda_ticks) because:
+        # 1. It's a shared singleton per OANDA account
+        # 2. Other trading tasks may be using the same account
+        # 3. The supervisor manages its lifecycle
+
+        # Wait for the trading task to stop itself (with timeout)
+        max_wait_seconds = 30
+        check_interval = 1
+        elapsed = 0
+
+        while elapsed < max_wait_seconds:
+            time.sleep(check_interval)
+            elapsed += check_interval
+
+            task.refresh_from_db()
+            if task.status == TaskStatus.STOPPED:
+                logger.info(
+                    "Trading task stopped gracefully",
+                    extra={"task_id": task_id, "elapsed_seconds": elapsed},
+                )
+                return {
+                    "success": True,
+                    "message": f"Trading task {task_id} stopped gracefully",
+                    "task_id": task_id,
+                    "elapsed_seconds": elapsed,
+                }
+
+        # If task didn't stop within timeout, force status update
+        logger.warning(
+            "Trading task did not stop within timeout, forcing status update",
+            extra={"task_id": task_id, "timeout_seconds": max_wait_seconds},
+        )
+
+        # Revoke the Celery task as last resort
+        if task.celery_task_id:
+            try:
+                current_app.control.revoke(task.celery_task_id, terminate=True)
+                logger.info(
+                    "Celery task revoked after timeout",
+                    extra={"task_id": task_id, "celery_task_id": task.celery_task_id},
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to revoke Celery task: {str(e)}",
+                    extra={"task_id": task_id, "celery_task_id": task.celery_task_id},
+                    exc_info=True,
+                )
+
+        task.status = TaskStatus.STOPPED
+        task.completed_at = dj_timezone.now()
+        task.save(update_fields=["status", "completed_at", "updated_at"])
+
+        TaskLog.objects.create(
+            task=task,
+            level=LogLevel.WARNING,
+            message=f"Trading task stopped after timeout ({max_wait_seconds}s)",
+        )
+
+        return {
+            "success": True,
+            "message": f"Trading task {task_id} stopped (forced after timeout)",
+            "task_id": task_id,
+            "forced": True,
+        }
+
+    except Exception as e:
+        error_msg = f"Unexpected error stopping trading task {task_id}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {"success": False, "error": error_msg}
+
+
+@shared_task(bind=True, name="trading.tasks.async_stop_backtest_task")
+def async_stop_backtest_task(self: Any, task_id: int) -> dict[str, Any]:
+    """Asynchronously stop a running backtest task.
+
+    This task handles the complete stop process for backtest tasks including:
+    1. Stopping the market publisher task (publish_ticks_for_backtest)
+    2. Revoking the Celery task (immediate termination)
+    3. Updating the task status in the database
+    4. Recording completion timestamp
+
+    Args:
+        task_id: ID of the backtest task to stop
+
+    Returns:
+        dict: Result containing success status and message
+    """
+    from celery import current_app
+
+    logger.info(
+        "Async stop backtest task started",
+        extra={"task_id": task_id},
+    )
+
+    try:
+        from apps.trading.models import BacktestTasks
+
+        # Get the task
         try:
-            self._setup_execution_context(
-                task_id=task_id,
-                execution_id=execution_id,
-                task_type=TaskType.TRADING,
-                log_message="Trading execution started",
+            task = BacktestTasks.objects.get(pk=task_id)
+        except BacktestTasks.DoesNotExist:
+            error_msg = f"Backtest task {task_id} not found"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+
+        # Check if task is in a stoppable state
+        if task.status not in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
+            error_msg = f"Task {task_id} is not in a stoppable state (status: {task.status})"
+            logger.warning(error_msg)
+            return {"success": False, "error": error_msg}
+
+        # Step 1: Stop the market publisher task for backtest
+        # The publisher uses request_id as instance_key
+        # We need to find the request_id associated with this backtest
+        publisher_task_name = "market.tasks.publish_ticks_for_backtest"
+
+        # Try to find and stop any publisher tasks for this backtest
+        # The request_id pattern is typically based on the backtest task
+        from apps.market.models import CeleryTaskStatus as MarketCeleryTaskStatus
+
+        # Find all running publisher tasks and stop those related to this backtest
+        # The instance_key for backtest publisher is the request_id
+        publisher_tasks = MarketCeleryTaskStatus.objects.filter(
+            task_name=publisher_task_name,
+            status=MarketCeleryTaskStatus.Status.RUNNING,
+        )
+
+        stopped_publishers = 0
+        for pub_task in publisher_tasks:
+            # Stop the publisher task
+            MarketCeleryTaskStatus.objects.filter(
+                task_name=publisher_task_name,
+                instance_key=pub_task.instance_key,
+            ).update(
+                status=MarketCeleryTaskStatus.Status.STOP_REQUESTED,
+                status_message=f"stop_requested by backtest task {task_id}",
+                last_heartbeat_at=dj_timezone.now(),
             )
-        except ValueError as e:
-            # Stale execution detected - skip this task
+
+            # Also revoke the Celery task if we have the ID
+            if pub_task.celery_task_id:
+                try:
+                    current_app.control.revoke(pub_task.celery_task_id, terminate=True)
+                    logger.info(
+                        "Market publisher Celery task revoked",
+                        extra={
+                            "backtest_task_id": task_id,
+                            "publisher_celery_task_id": pub_task.celery_task_id,
+                            "request_id": pub_task.instance_key,
+                        },
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to revoke publisher Celery task: {str(e)}",
+                        extra={
+                            "backtest_task_id": task_id,
+                            "publisher_celery_task_id": pub_task.celery_task_id,
+                        },
+                        exc_info=True,
+                    )
+
+            stopped_publishers += 1
+
+        if stopped_publishers > 0:
+            logger.info(
+                "Stop flag set for market publisher(s)",
+                extra={"backtest_task_id": task_id, "count": stopped_publishers},
+            )
+        else:
+            logger.info(
+                "No active market publisher tasks found for backtest",
+                extra={"backtest_task_id": task_id},
+            )
+
+        # Step 2: Revoke the backtest Celery task if it exists (this may take time)
+        if task.celery_task_id:
+            try:
+                current_app.control.revoke(task.celery_task_id, terminate=True)
+                logger.info(
+                    "Backtest Celery task revoked",
+                    extra={"task_id": task_id, "celery_task_id": task.celery_task_id},
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to revoke backtest Celery task: {str(e)}",
+                    extra={"task_id": task_id, "celery_task_id": task.celery_task_id},
+                    exc_info=True,
+                )
+                # Continue with status update even if revoke fails
+
+        # Step 3: Update task status
+        task.status = TaskStatus.STOPPED
+        task.completed_at = dj_timezone.now()
+        task.save(update_fields=["status", "completed_at", "updated_at"])
+
+        # Log task stop
+        TaskLog.objects.create(
+            task=task,
+            level=LogLevel.INFO,
+            message="Backtest task stopped via async stop request",
+        )
+
+        logger.info(
+            "Backtest task stopped successfully",
+            extra={"task_id": task_id, "publishers_stopped": stopped_publishers},
+        )
+
+        return {
+            "success": True,
+            "message": f"Backtest task {task_id} stopped successfully",
+            "task_id": task_id,
+            "publishers_stopped": stopped_publishers,
+        }
+
+    except Exception as e:
+        error_msg = f"Unexpected error stopping backtest task {task_id}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {"success": False, "error": error_msg}
+
+
+def async_stop_trading_task(self: Any, task_id: int, mode: str = "graceful") -> dict[str, Any]:
+    """Asynchronously stop a running trading task.
+
+    This task handles the complete stop process for trading tasks including:
+    1. Setting stop flag in CeleryTaskStatus (graceful cooperative stop)
+    2. Stopping the market publisher task (publish_oanda_ticks)
+    3. Waiting for the task to stop itself
+    4. Updating the task status in the database if needed
+
+    Trading tasks use a graceful stop mechanism where the running task checks
+    for stop requests and cleans up properly (e.g., closing positions).
+
+    Args:
+        task_id: ID of the trading task to stop
+        mode: Stop mode ('immediate', 'graceful', 'graceful_close')
+
+    Returns:
+        dict: Result containing success status and message
+    """
+    import time
+
+    from celery import current_app
+
+    logger.info(
+        "Async stop trading task started",
+        extra={"task_id": task_id, "mode": mode},
+    )
+
+    try:
+        from apps.trading.models import TradingTasks
+
+        # Get the task
+        try:
+            task = TradingTasks.objects.get(pk=task_id)
+        except TradingTasks.DoesNotExist:
+            error_msg = f"Trading task {task_id} not found"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+
+        # Check if task is in a stoppable state
+        if task.status not in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
+            error_msg = f"Task {task_id} is not in a stoppable state (status: {task.status})"
+            logger.warning(error_msg)
+            return {"success": False, "error": error_msg}
+
+        # Step 1: Set stop flag for the trading task (graceful cooperative stop)
+        task_name = "trading.tasks.run_trading_task"
+        instance_key = str(task_id)
+        CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
+            status=CeleryTaskStatus.Status.STOP_REQUESTED,
+            status_message=f"stop_requested mode={mode}",
+            last_heartbeat_at=dj_timezone.now(),
+        )
+
+        logger.info(
+            "Stop flag set for trading task",
+            extra={"task_id": task_id, "mode": mode},
+        )
+
+        # Step 2: Stop the market publisher task
+        publisher_task_name = "market.tasks.publish_oanda_ticks"
+        publisher_instance_key = str(task.oanda_account.pk)
+
+        # Set stop flag for publisher
+        from apps.market.models import CeleryTaskStatus as MarketCeleryTaskStatus
+
+        publisher_updated = MarketCeleryTaskStatus.objects.filter(
+            task_name=publisher_task_name, instance_key=publisher_instance_key
+        ).update(
+            status=MarketCeleryTaskStatus.Status.STOP_REQUESTED,
+            status_message="stop_requested by trading task",
+            last_heartbeat_at=dj_timezone.now(),
+        )
+
+        if publisher_updated:
+            logger.info(
+                "Stop flag set for market publisher",
+                extra={
+                    "task_id": task_id,
+                    "account_id": task.oanda_account.pk,
+                    "publisher_task": publisher_task_name,
+                },
+            )
+        else:
             logger.warning(
-                "Skipping stale trading execution: task_id=%d, execution_id=%s, reason=%s",
-                task_id,
-                execution_id,
-                str(e),
+                "Market publisher task not found or already stopped",
+                extra={"task_id": task_id, "account_id": task.oanda_account.pk},
             )
-            self.task_service.mark_stopped(
-                status=CeleryTaskStatus.Status.FAILED,
-                status_message=f"Stale execution skipped: {str(e)}",
-            )
-            return
 
-        # Create strategy with automatic error handling
-        with StrategyCreationContext(
-            execution=self.execution,
-            task=self.task,
-            event_emitter=self.event_emitter,
-            task_service=self.task_service,
-            strategy_config=self.task.config,
-        ) as strategy_ctx:
-            strategy = strategy_ctx.create_strategy()
-            if strategy is None:
-                return  # Error was handled by context manager
+        # Step 3: Wait for the trading task to stop itself (with timeout)
+        max_wait_seconds = 30
+        check_interval = 1
+        elapsed = 0
 
-        # Create data source and executor
-        data_source = self._create_data_source()
-        executor = self._create_executor(data_source, strategy)
+        while elapsed < max_wait_seconds:
+            time.sleep(check_interval)
+            elapsed += check_interval
 
-        # Execute with lifecycle management
-        with ExecutionLifecycle(
-            execution=self.execution,
-            task=self.task,
-            event_emitter=self.event_emitter,
-            task_service=self.task_service,
-            success_status=TaskStatus.STOPPED,  # Trading tasks stop, not complete
-        ) as lifecycle:
-            lifecycle.set_strategy_type(self.task.config.strategy_type)
-            executor.execute()
+            task.refresh_from_db()
+            if task.status == TaskStatus.STOPPED:
+                logger.info(
+                    "Trading task stopped gracefully",
+                    extra={"task_id": task_id, "elapsed_seconds": elapsed},
+                )
+                return {
+                    "success": True,
+                    "message": f"Trading task {task_id} stopped gracefully",
+                    "task_id": task_id,
+                    "elapsed_seconds": elapsed,
+                }
+
+        # Step 4: If task didn't stop within timeout, force status update
+        logger.warning(
+            "Trading task did not stop within timeout, forcing status update",
+            extra={"task_id": task_id, "timeout_seconds": max_wait_seconds},
+        )
+
+        # Revoke the Celery task as last resort
+        if task.celery_task_id:
+            try:
+                current_app.control.revoke(task.celery_task_id, terminate=True)
+                logger.info(
+                    "Celery task revoked after timeout",
+                    extra={"task_id": task_id, "celery_task_id": task.celery_task_id},
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to revoke Celery task: {str(e)}",
+                    extra={"task_id": task_id, "celery_task_id": task.celery_task_id},
+                    exc_info=True,
+                )
+
+        task.status = TaskStatus.STOPPED
+        task.completed_at = dj_timezone.now()
+        task.save(update_fields=["status", "completed_at", "updated_at"])
+
+        TaskLog.objects.create(
+            task=task,
+            level=LogLevel.WARNING,
+            message=f"Trading task stopped after timeout ({max_wait_seconds}s)",
+        )
+
+        return {
+            "success": True,
+            "message": f"Trading task {task_id} stopped (forced after timeout)",
+            "task_id": task_id,
+            "forced": True,
+        }
+
+    except Exception as e:
+        error_msg = f"Unexpected error stopping trading task {task_id}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {"success": False, "error": error_msg}
+
+
+def async_stop_task(self: Any, task_id: int, task_type: str) -> dict[str, Any]:
+    """Asynchronously stop a running task (backtest or trading).
+
+    This task handles the complete stop process including:
+    1. Revoking the Celery task
+    2. Updating the task status in the database
+    3. Recording completion timestamp
+
+    Args:
+        task_id: ID of the task to stop
+        task_type: Type of task ('backtest' or 'trading')
+
+    Returns:
+        dict: Result containing success status and message
+    """
+    from celery import current_app
+
+    logger.info(
+        "Async stop task started",
+        extra={"task_id": task_id, "task_type": task_type},
+    )
+
+    try:
+        # Import models based on task type
+        if task_type == "backtest":
+            from apps.trading.models import BacktestTasks as TaskModel
+        elif task_type == "trading":
+            from apps.trading.models import TradingTasks as TaskModel
+        else:
+            error_msg = f"Invalid task type: {task_type}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+
+        # Get the task
+        try:
+            task = TaskModel.objects.get(pk=task_id)
+        except TaskModel.DoesNotExist:
+            error_msg = f"Task {task_id} not found"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+
+        # Check if task is in a stoppable state
+        if task.status not in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
+            error_msg = f"Task {task_id} is not in a stoppable state (status: {task.status})"
+            logger.warning(error_msg)
+            return {"success": False, "error": error_msg}
+
+        # Revoke the Celery task if it exists
+        if task.celery_task_id:
+            try:
+                current_app.control.revoke(task.celery_task_id, terminate=True)
+                logger.info(
+                    "Celery task revoked",
+                    extra={"task_id": task_id, "celery_task_id": task.celery_task_id},
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to revoke Celery task: {str(e)}",
+                    extra={"task_id": task_id, "celery_task_id": task.celery_task_id},
+                    exc_info=True,
+                )
+                # Continue with status update even if revoke fails
+
+        # Update task status
+        task.status = TaskStatus.STOPPED
+        task.completed_at = dj_timezone.now()
+        task.save(update_fields=["status", "completed_at", "updated_at"])
+
+        # Log task stop
+        TaskLog.objects.create(
+            task=task,
+            level=LogLevel.INFO,
+            message="Task stopped via async stop request",
+        )
+
+        logger.info(
+            "Task stopped successfully",
+            extra={"task_id": task_id, "task_type": task_type},
+        )
+
+        return {
+            "success": True,
+            "message": f"Task {task_id} stopped successfully",
+            "task_id": task_id,
+            "task_type": task_type,
+        }
+
+    except Exception as e:
+        error_msg = f"Unexpected error stopping task {task_id}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {"success": False, "error": error_msg}
