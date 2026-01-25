@@ -743,7 +743,7 @@ class BacktestTaskViewSet(ModelViewSet):
     @action(detail=True, methods=["get"])
     def equity(self, request: Request, pk: int | None = None) -> Response:
         """Get task equity curve from database."""
-        from apps.trading.models.execution import ExecutionEquity
+        from apps.trading.models.execution import Equities
         from apps.trading.serializers import EquityPointSerializer
 
         task = self.get_object()
@@ -751,7 +751,7 @@ class BacktestTaskViewSet(ModelViewSet):
         try:
             # Query equity points from database
             equity_points = (
-                ExecutionEquity.objects.filter(
+                Equities.objects.filter(
                     task_type="backtest",
                     task_id=task.pk,
                 )
@@ -1251,7 +1251,7 @@ class TradingTaskViewSet(ModelViewSet):
     @action(detail=True, methods=["get"])
     def equity(self, request: Request, pk: int | None = None) -> Response:
         """Get task equity curve from database."""
-        from apps.trading.models.execution import ExecutionEquity
+        from apps.trading.models.execution import Equities
         from apps.trading.serializers import EquityPointSerializer
 
         task = self.get_object()
@@ -1259,7 +1259,7 @@ class TradingTaskViewSet(ModelViewSet):
         try:
             # Query equity points from database
             equity_points = (
-                ExecutionEquity.objects.filter(
+                Equities.objects.filter(
                     task_type="backtest",
                     task_id=task.pk,
                 )

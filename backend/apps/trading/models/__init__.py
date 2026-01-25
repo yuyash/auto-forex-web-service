@@ -7,7 +7,7 @@ This package organizes trading models into logical modules:
 - events: TradingEvents
 - celery: CeleryTaskStatus
 - logs: TaskLog, TaskMetric
-- execution: Trades, ExecutionEquity
+- execution: Trades, Equities
 """
 
 from apps.trading.models.celery import CeleryTaskStatus
@@ -16,7 +16,7 @@ from apps.trading.models.configs import (
     StrategyConfigurationsManager,
 )
 from apps.trading.models.events import TradingEvents
-from apps.trading.models.execution import ExecutionEquity, Trades
+from apps.trading.models.execution import Equities, Trades
 from apps.trading.models.floor import (
     FloorSide,
     FloorStrategyLayerState,
@@ -55,5 +55,5 @@ __all__ = [
     "TaskMetric",
     # Execution Data
     "Trades",
-    "ExecutionEquity",
+    "Equities",
 ]

@@ -42,7 +42,7 @@ class TradeSerializer(serializers.Serializer):
 
 
 class EquityPointSerializer(serializers.Serializer):
-    """Serializer for equity curve data points from ExecutionEquity model."""
+    """Serializer for equity curve data points from Equities model."""
 
     timestamp = serializers.DateTimeField()
     balance = serializers.DecimalField(max_digits=20, decimal_places=2)

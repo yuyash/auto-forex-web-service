@@ -75,12 +75,13 @@ class Trades(models.Model):
         return f"{self.direction} {self.units} {self.instrument} @ {self.price} ({self.pnl})"
 
 
-class ExecutionEquity(models.Model):
+class Equities(models.Model):
     """
     Equity curve point for task execution.
 
     Stores balance snapshots at specific timestamps to build equity curve.
     Points are created periodically or when significant balance changes occur.
+    Uses polymorphic task reference to support both BacktestTasks and TradingTasks.
     """
 
     id = models.UUIDField(
@@ -89,11 +90,14 @@ class ExecutionEquity(models.Model):
         editable=False,
         help_text="Unique identifier for this equity point",
     )
-    task = models.ForeignKey(
-        "trading.BacktestTasks",
-        on_delete=models.CASCADE,
-        related_name="equity_points",
-        help_text="Task this equity point belongs to",
+    task_type = models.CharField(
+        max_length=32,
+        db_index=True,
+        help_text="Type of task (backtest or trading)",
+    )
+    task_id = models.UUIDField(
+        db_index=True,
+        help_text="UUID of the task this equity point belongs to",
     )
     celery_task_id = models.CharField(
         max_length=255,
@@ -116,17 +120,17 @@ class ExecutionEquity(models.Model):
     )
 
     class Meta:
-        db_table = "execution_equity_points"
-        verbose_name = "Execution Equity"
-        verbose_name_plural = "Execution Equity"
+        db_table = "equities"
+        verbose_name = "Equity"
+        verbose_name_plural = "Equities"
         ordering = ["timestamp"]
         indexes = [
-            models.Index(fields=["task", "timestamp"]),
-            models.Index(fields=["task", "celery_task_id"]),
+            models.Index(fields=["task_type", "task_id", "timestamp"]),
+            models.Index(fields=["task_type", "task_id", "celery_task_id"]),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["task", "celery_task_id", "timestamp"],
+                fields=["task_type", "task_id", "celery_task_id", "timestamp"],
                 name="unique_task_execution_equity_timestamp",
             ),
         ]

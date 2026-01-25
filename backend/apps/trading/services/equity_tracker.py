@@ -36,10 +36,11 @@ class EquityTracker:
             balance: Account balance at this point
             ticks_processed: Number of ticks processed
         """
-        from apps.trading.models import ExecutionEquity
+        from apps.trading.models import Equities
 
-        ExecutionEquity.objects.update_or_create(
-            task=self.task,
+        Equities.objects.update_or_create(
+            task_type="backtest",
+            task_id=self.task.pk,
             celery_task_id=self.celery_task_id,
             timestamp=timestamp,
             defaults={
