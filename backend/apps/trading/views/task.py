@@ -613,18 +613,26 @@ class BacktestTaskViewSet(ModelViewSet):
     )
     @action(detail=True, methods=["get"])
     def events(self, request: Request, pk: int | None = None) -> Response:
-        """Get task events with filtering."""
-        from apps.trading.models import TradingEvent
+        """Get task events with filtering.
+
+        Query parameters:
+        - event_type: Filter by event type
+        - severity: Filter by severity level
+        - celery_task_id: Filter by specific execution (optional)
+        - limit: Maximum number of events to return (default: 100)
+        """
+        from apps.trading.models import TradingEvents
         from apps.trading.serializers import TradingEventSerializer
 
         task = self.get_object()
 
         event_type = request.query_params.get("event_type")
         severity = request.query_params.get("severity")
+        celery_task_id = request.query_params.get("celery_task_id")
         limit = int(request.query_params.get("limit", 100))
 
         try:
-            queryset = TradingEvent.objects.filter(task_type="backtest", task_id=task.pk).order_by(
+            queryset = TradingEvents.objects.filter(task_type="backtest", task_id=task.pk).order_by(
                 "-created_at"
             )
 
@@ -632,6 +640,8 @@ class BacktestTaskViewSet(ModelViewSet):
                 queryset = queryset.filter(event_type=event_type)
             if severity:
                 queryset = queryset.filter(severity=severity)
+            if celery_task_id:
+                queryset = queryset.filter(celery_task_id=celery_task_id)
 
             events = queryset[:limit]
             serializer = TradingEventSerializer(events, many=True)
@@ -1113,18 +1123,26 @@ class TradingTaskViewSet(ModelViewSet):
     )
     @action(detail=True, methods=["get"])
     def events(self, request: Request, pk: int | None = None) -> Response:
-        """Get task events with filtering."""
-        from apps.trading.models import TradingEvent
+        """Get task events with filtering.
+
+        Query parameters:
+        - event_type: Filter by event type
+        - severity: Filter by severity level
+        - celery_task_id: Filter by specific execution (optional)
+        - limit: Maximum number of events to return (default: 100)
+        """
+        from apps.trading.models import TradingEvents
         from apps.trading.serializers import TradingEventSerializer
 
         task = self.get_object()
 
         event_type = request.query_params.get("event_type")
         severity = request.query_params.get("severity")
+        celery_task_id = request.query_params.get("celery_task_id")
         limit = int(request.query_params.get("limit", 100))
 
         try:
-            queryset = TradingEvent.objects.filter(task_type="trading", task_id=task.pk).order_by(
+            queryset = TradingEvents.objects.filter(task_type="trading", task_id=task.pk).order_by(
                 "-created_at"
             )
 
@@ -1132,6 +1150,8 @@ class TradingTaskViewSet(ModelViewSet):
                 queryset = queryset.filter(event_type=event_type)
             if severity:
                 queryset = queryset.filter(severity=severity)
+            if celery_task_id:
+                queryset = queryset.filter(celery_task_id=celery_task_id)
 
             events = queryset[:limit]
             serializer = TradingEventSerializer(events, many=True)

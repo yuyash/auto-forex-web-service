@@ -2,14 +2,14 @@
 
 from rest_framework import serializers
 
-from apps.trading.models import TradingEvent
+from apps.trading.models import TradingEvents
 
 
 class TradingEventSerializer(serializers.ModelSerializer):
-    """Serializer for TradingEvent model."""
+    """Serializer for TradingEvents model."""
 
     class Meta:
-        model = TradingEvent
+        model = TradingEvents
         fields = [
             "id",
             "event_type",
@@ -20,6 +20,7 @@ class TradingEventSerializer(serializers.ModelSerializer):
             "instrument",
             "task_type",
             "task_id",
+            "celery_task_id",
             "details",
             "created_at",
         ]

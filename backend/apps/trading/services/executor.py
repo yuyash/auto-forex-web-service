@@ -304,15 +304,15 @@ class BacktestExecutor(TaskExecutor[TStrategyState]):
             state: Execution state to save
         """
         # Serialize state
-        state_dict = state.to_dict()
+        # state_dict = state.to_dict()
 
         # Update task result_data
-        self.task.result_data = self.task.result_data or {}
-        self.task.result_data["execution_state"] = state_dict
-        self.task.result_data["equity_curve"] = state.equity_curve
-        self.task.result_data["final_balance"] = str(state.current_balance)
-        self.task.result_data["ticks_processed"] = state.ticks_processed
-        self.task.result_data["metrics"] = state.metrics.to_dict()
+        # self.task.result_data = self.task.result_data or {}
+        # self.task.result_data["execution_state"] = state_dict
+        # self.task.result_data["equity_curve"] = state.equity_curve
+        # self.task.result_data["final_balance"] = str(state.current_balance)
+        # self.task.result_data["ticks_processed"] = state.ticks_processed
+        # self.task.result_data["metrics"] = state.metrics.to_dict()
 
         self.task.save(update_fields=["result_data", "updated_at"])
 
@@ -325,13 +325,14 @@ class BacktestExecutor(TaskExecutor[TStrategyState]):
         if not events:
             return
 
-        from apps.trading.models import TradingEvent
+        from apps.trading.models import TradingEvents
 
         # Create event records
         event_records = [
-            TradingEvent(
+            TradingEvents(
                 task_type="backtest",
                 task_id=self.task.pk,
+                celery_task_id=self.task.celery_task_id,
                 event_type=event.event_type,
                 severity="info",
                 description=str(event.to_dict()),
@@ -344,7 +345,7 @@ class BacktestExecutor(TaskExecutor[TStrategyState]):
         ]
 
         # Bulk create
-        TradingEvent.objects.bulk_create(event_records)
+        TradingEvents.objects.bulk_create(event_records)
 
 
 class TradingExecutor(TaskExecutor[TStrategyState]):
@@ -430,14 +431,14 @@ class TradingExecutor(TaskExecutor[TStrategyState]):
             state: Execution state to save
         """
         # Serialize state
-        state_dict = state.to_dict()
+        # state_dict = state.to_dict()
 
         # Update task result_data
-        self.task.result_data = self.task.result_data or {}
-        self.task.result_data["execution_state"] = state_dict
-        self.task.result_data["current_balance"] = str(state.current_balance)
-        self.task.result_data["ticks_processed"] = state.ticks_processed
-        self.task.result_data["metrics"] = state.metrics.to_dict()
+        # self.task.result_data = self.task.result_data or {}
+        # self.task.result_data["execution_state"] = state_dict
+        # self.task.result_data["current_balance"] = str(state.current_balance)
+        # self.task.result_data["ticks_processed"] = state.ticks_processed
+        # self.task.result_data["metrics"] = state.metrics.to_dict()
 
         self.task.save(update_fields=["result_data", "updated_at"])
 
@@ -450,13 +451,14 @@ class TradingExecutor(TaskExecutor[TStrategyState]):
         if not events:
             return
 
-        from apps.trading.models import TradingEvent
+        from apps.trading.models import TradingEvents
 
         # Create event records
         event_records = [
-            TradingEvent(
+            TradingEvents(
                 task_type="trading",
                 task_id=self.task.pk,
+                celery_task_id=self.task.celery_task_id,
                 event_type=event.event_type,
                 severity="info",
                 description=str(event.to_dict()),
@@ -469,4 +471,4 @@ class TradingExecutor(TaskExecutor[TStrategyState]):
         ]
 
         # Bulk create
-        TradingEvent.objects.bulk_create(event_records)
+        TradingEvents.objects.bulk_create(event_records)

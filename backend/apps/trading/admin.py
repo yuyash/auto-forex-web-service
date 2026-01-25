@@ -6,7 +6,7 @@ from apps.trading.models import (
     StrategyConfigurations,
     TaskLog,
     TaskMetric,
-    TradingEvent,
+    TradingEvents,
     TradingTasks,
 )
 
@@ -69,8 +69,8 @@ class CeleryTaskStatusAdmin(admin.ModelAdmin):
     ordering = ("-updated_at",)
 
 
-@admin.register(TradingEvent)
-class TradingEventAdmin(admin.ModelAdmin):
+@admin.register(TradingEvents)
+class TradingEventsAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "created_at",

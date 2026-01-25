@@ -4,15 +4,15 @@ import pytest
 from django.contrib.auth import get_user_model
 
 from apps.trading.models import (
-    TradingEvent,
+    TradingEvents,
 )
 
 User = get_user_model()
 
 
 @pytest.mark.django_db
-class TestTradingEventModel:
-    """Test TradingEvent model."""
+class TestTradingEventsModel:
+    """Test TradingEvents model."""
 
     def test_create_trading_event(self):
         """Test creating a trading event."""
@@ -22,7 +22,7 @@ class TestTradingEventModel:
             password="testpass123",
         )
 
-        event = TradingEvent.objects.create(
+        event = TradingEvents.objects.create(
             user=user,
             event_type="trade_opened",
             severity="info",
@@ -47,7 +47,7 @@ class TestTradingEventModel:
             "price": "1.1000",
         }
 
-        event = TradingEvent.objects.create(
+        event = TradingEvents.objects.create(
             user=user,
             event_type="trade_opened",
             severity="info",

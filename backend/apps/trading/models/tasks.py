@@ -160,19 +160,6 @@ class BacktestTasks(UUIDModel):
         help_text="Maximum number of retries allowed",
     )
 
-    # Results
-    result_data = models.JSONField(
-        null=True,
-        blank=True,
-        help_text="Execution results data",
-    )
-    result_data_external_ref = models.CharField(
-        max_length=500,
-        null=True,
-        blank=True,
-        help_text="Reference to externally stored result data (e.g., fs://path or s3://bucket/key)",
-    )
-
     class Meta:
         db_table = "backtest_tasks"
         verbose_name = "Backtest Task"
@@ -361,9 +348,9 @@ class BacktestTasks(UUIDModel):
             self.clear_result_data()
 
             # Clear all events associated with this task
-            from apps.trading.models import TradingEvent
+            from apps.trading.models import TradingEvents
 
-            TradingEvent.objects.filter(task_type="backtest", task_id=self.pk).delete()
+            TradingEvents.objects.filter(task_type="backtest", task_id=self.pk).delete()
 
             # Clear all other execution data
             self.celery_task_id = None
@@ -552,19 +539,6 @@ class TradingTasks(UUIDModel):
     max_retries = models.IntegerField(
         default=3,
         help_text="Maximum number of retries allowed",
-    )
-
-    # Results
-    result_data = models.JSONField(
-        null=True,
-        blank=True,
-        help_text="Execution results data",
-    )
-    result_data_external_ref = models.CharField(
-        max_length=500,
-        null=True,
-        blank=True,
-        help_text="Reference to externally stored result data (e.g., fs://path or s3://bucket/key)",
     )
 
     sell_on_stop = models.BooleanField(
@@ -836,9 +810,9 @@ class TradingTasks(UUIDModel):
             self.clear_result_data()
 
             # Clear all events associated with this task
-            from apps.trading.models import TradingEvent
+            from apps.trading.models import TradingEvents
 
-            TradingEvent.objects.filter(task_type="trading", task_id=self.pk).delete()
+            TradingEvents.objects.filter(task_type="trading", task_id=self.pk).delete()
 
             # Clear all other execution data
             self.celery_task_id = None
@@ -996,10 +970,3 @@ class TradingTasks(UUIDModel):
             int: The primary key of the associated OANDA account
         """
         return self.oanda_account_id  # type: ignore[return-value]
-
-
-class FloorSide(models.TextChoices):
-    """Side used by the floor strategy for layering."""
-
-    LONG = "long", "Long"
-    SHORT = "short", "Short"
