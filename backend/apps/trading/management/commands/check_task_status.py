@@ -70,8 +70,8 @@ class Command(BaseCommand):
                 self.stdout.write(f"  State: {result.state}")
                 try:
                     self.stdout.write(f"  Info: {result.info}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.stdout.write(f"  Info: <unavailable: {e}>")
 
         # Status summary
         if task.status == "running":

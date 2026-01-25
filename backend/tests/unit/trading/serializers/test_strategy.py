@@ -14,7 +14,7 @@ class TestStrategyConfigSerializer:
 
     def test_serialize_strategy_config(self):
         """Test serializing strategy configuration."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
+        user = User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",

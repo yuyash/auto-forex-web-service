@@ -75,6 +75,7 @@ export const tradingTasksApi = {
    */
   start: (id: number) => {
     return withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksTradingSubmitCreate(id, {} as any)
     );
   },
@@ -82,8 +83,13 @@ export const tradingTasksApi = {
   /**
    * Stop a running trading task (new task-based API)
    */
-  stop: (id: number, _mode?: 'immediate' | 'graceful' | 'graceful_close') => {
+  stop: (
+    id: number,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _mode?: 'immediate' | 'graceful' | 'graceful_close'
+  ) => {
     return withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksTradingStopCreate(id, {} as any)
     );
   },
@@ -91,7 +97,10 @@ export const tradingTasksApi = {
   /**
    * Pause a trading task (not implemented yet)
    */
-  pause: (_id: number) => {
+  pause: (
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _id: number
+  ) => {
     // Note: Pause endpoint doesn't exist yet
     throw new Error('Pause is not implemented for trading tasks');
   },
@@ -101,6 +110,7 @@ export const tradingTasksApi = {
    */
   resume: (id: number) => {
     return withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksTradingResumeCreate(id, {} as any)
     );
   },
@@ -110,6 +120,7 @@ export const tradingTasksApi = {
    */
   restart: (id: number) => {
     return withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksTradingRestartCreate(id, {} as any)
     );
   },

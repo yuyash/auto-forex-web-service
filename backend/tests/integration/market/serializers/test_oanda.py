@@ -1,4 +1,5 @@
 """Unit tests for OandaAccountsSerializer."""
+
 from typing import Any
 
 

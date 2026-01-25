@@ -14,7 +14,7 @@ class TestStrategyConfigurationsModel:
 
     def test_config_dict_returns_parsed_json(self):
         """Test config_dict property returns parsed JSON."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
+        user = User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -34,7 +34,7 @@ class TestStrategyConfigurationsModel:
 
     def test_str_representation(self):
         """Test string representation."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
+        user = User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",

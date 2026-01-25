@@ -19,7 +19,7 @@ class TestFloorStrategyTaskStateModel:
 
     def test_create_floor_strategy_task_state(self):
         """Test creating floor strategy task state."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
+        user = User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -59,7 +59,7 @@ class TestFloorStrategyTaskStateModel:
 
     def test_one_to_one_relationship_with_task(self):
         """Test one-to-one relationship with task."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
+        user = User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -105,7 +105,7 @@ class TestFloorStrategyLayerStateModel:
 
     def test_create_floor_strategy_layer_state(self):
         """Test creating floor strategy layer state."""
-        user = User.objects.create_user(    # type: ignore[attr-defined]
+        user = User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",

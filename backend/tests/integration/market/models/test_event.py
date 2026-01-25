@@ -1,4 +1,5 @@
 """Unit tests for MarketEvent model."""
+
 from typing import Any
 
 

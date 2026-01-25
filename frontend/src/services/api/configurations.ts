@@ -16,6 +16,7 @@ export const configurationsApi = {
    * List all strategy configurations for the current user
    */
   list: (
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _params?: StrategyConfigListParams
   ): Promise<PaginatedResponse<StrategyConfig>> => {
     return withRetry(() => TradingService.tradingStrategyConfigsRetrieve());
@@ -31,7 +32,10 @@ export const configurationsApi = {
   /**
    * Create a new strategy configuration
    */
-  create: (_data: StrategyConfigCreateData): Promise<StrategyConfig> => {
+  create: (
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _data: StrategyConfigCreateData
+  ): Promise<StrategyConfig> => {
     return withRetry(() => TradingService.tradingStrategyConfigsCreate());
   },
 
@@ -40,6 +44,7 @@ export const configurationsApi = {
    */
   update: (
     id: number,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _data: StrategyConfigUpdateData
   ): Promise<StrategyConfig> => {
     return withRetry(() => TradingService.tradingStrategyConfigsUpdate(id));
@@ -57,13 +62,17 @@ export const configurationsApi = {
    * List tasks using a strategy configuration.
    * This is implemented by filtering both trading and backtest task lists.
    */
-  getTasks: async (_id: number): Promise<ConfigurationTask[]> => {
+  getTasks: async (
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _id: number
+  ): Promise<ConfigurationTask[]> => {
     const [tradingTasks, backtestTasks] = await Promise.all([
       withRetry(() => TradingService.tradingTasksTradingList()),
       withRetry(() => TradingService.tradingTasksBacktestList()),
     ]);
 
     const trading: ConfigurationTask[] = (tradingTasks.results ?? []).map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (task: any) => ({
         id: task.id,
         task_type: 'trading',
@@ -73,6 +82,7 @@ export const configurationsApi = {
     );
 
     const backtest: ConfigurationTask[] = (backtestTasks.results ?? []).map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (task: any) => ({
         id: task.id,
         task_type: 'backtest',

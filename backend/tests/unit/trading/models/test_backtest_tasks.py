@@ -20,7 +20,7 @@ class TestBacktestTasksModel:
     @pytest.fixture
     def user(self):
         """Create a test user."""
-        return User.objects.create_user(      # type: ignore[attr-defined]
+        return User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -148,7 +148,7 @@ class TestBacktestTasksModel:
 
     def test_manager_for_user(self, user, config):
         """Test manager method for_user."""
-        user2 = User.objects.create_user(      # type: ignore[attr-defined]
+        user2 = User.objects.create_user(  # type: ignore[attr-defined]
             username="testuser2",
             email="test2@example.com",
             password="testpass123",

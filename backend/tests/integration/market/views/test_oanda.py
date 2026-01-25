@@ -1,4 +1,5 @@
 """Unit tests for OANDA account views."""
+
 from typing import Any
 
 

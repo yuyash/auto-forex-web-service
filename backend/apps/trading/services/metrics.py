@@ -109,33 +109,51 @@ class MetricsCalculator:
 
         # Update averages (weighted by new trades)
         if winning_pnls:
-            new_avg_win = sum(winning_pnls) / len(winning_pnls)
+            new_avg_win = Decimal(str(sum(winning_pnls) / len(winning_pnls)))
             # Weighted average with existing
             if metrics.winning_trades > 0:
-                average_win = (
-                    metrics.average_win * metrics.winning_trades + new_avg_win * len(winning_pnls)
-                ) / winning_trades
+                average_win = Decimal(
+                    str(
+                        (
+                            metrics.average_win * metrics.winning_trades
+                            + new_avg_win * len(winning_pnls)
+                        )
+                        / winning_trades
+                    )
+                )
             else:
                 average_win = new_avg_win
         else:
             average_win = metrics.average_win
 
         if losing_pnls:
-            new_avg_loss = sum(losing_pnls) / len(losing_pnls)
+            new_avg_loss = Decimal(str(sum(losing_pnls) / len(losing_pnls)))
             # Weighted average with existing
             if metrics.losing_trades > 0:
-                average_loss = (
-                    metrics.average_loss * metrics.losing_trades + new_avg_loss * len(losing_pnls)
-                ) / losing_trades
+                average_loss = Decimal(
+                    str(
+                        (
+                            metrics.average_loss * metrics.losing_trades
+                            + new_avg_loss * len(losing_pnls)
+                        )
+                        / losing_trades
+                    )
+                )
             else:
                 average_loss = new_avg_loss
         else:
             average_loss = metrics.average_loss
 
         # Calculate profit factor
-        total_wins = winning_trades * average_win if winning_trades > 0 else Decimal("0")
-        total_losses = abs(losing_trades * average_loss) if losing_trades > 0 else Decimal("0")
-        profit_factor = total_wins / total_losses if total_losses > 0 else Decimal("0")
+        total_wins = (
+            Decimal(str(winning_trades * average_win)) if winning_trades > 0 else Decimal("0")
+        )
+        total_losses = (
+            abs(Decimal(str(losing_trades * average_loss))) if losing_trades > 0 else Decimal("0")
+        )
+        profit_factor = (
+            Decimal(str(total_wins / total_losses)) if total_losses > 0 else Decimal("0")
+        )
 
         # Update max drawdown (simplified - track if current PnL drops below previous peak)
         max_drawdown = metrics.max_drawdown

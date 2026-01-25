@@ -1,4 +1,5 @@
 """Unit tests for OandaApiHealthStatusSerializer."""
+
 from typing import Any
 
 

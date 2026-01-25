@@ -75,6 +75,7 @@ export const backtestTasksApi = {
    */
   start: (id: number) => {
     return withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksBacktestSubmitCreate(id, {} as any)
     );
   },
@@ -84,6 +85,7 @@ export const backtestTasksApi = {
    */
   stop: (id: number) => {
     return withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksBacktestStopCreate(id, {} as any)
     );
   },
@@ -93,6 +95,7 @@ export const backtestTasksApi = {
    */
   pause: (id: number) => {
     return withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksBacktestPauseCreate(id, {} as any)
     );
   },
@@ -102,6 +105,7 @@ export const backtestTasksApi = {
    */
   resume: (id: number) => {
     return withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksBacktestResumeCreate(id, {} as any)
     );
   },
@@ -111,6 +115,7 @@ export const backtestTasksApi = {
    */
   restart: (id: number) => {
     return withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksBacktestRestartCreate(id, {} as any)
     );
   },

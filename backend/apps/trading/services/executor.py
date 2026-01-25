@@ -137,38 +137,41 @@ class TaskExecutor(ABC, Generic[TStrategyState]):
 
                     # Update metrics and trades from events
                     if result.events:
+                        # TODO: Re-enable trade history and metrics tracking
                         # Build trades (persists to DB)
-                        new_trades = self.trade_history_builder.process_events(result.events)
-                        if new_trades:
-                            trades = state.trades + new_trades
-                            state = state.copy_with(trades=trades)
+                        # new_trades = self.trade_history_builder.process_events(result.events)
+                        # if new_trades:
+                        #     trades = state.trades + new_trades
+                        #     state = state.copy_with(trades=trades)
 
                         # Update metrics (persists to DB per minute)
-                        updated_metrics = self.metrics.update_metrics_from_events(
-                            state.metrics,
-                            result.events,
-                        )
+                        # updated_metrics = self.metrics.update_metrics_from_events(
+                        #     state.metrics,
+                        #     result.events,
+                        # )
 
                         # Check if balance changed (trade closed)
-                        balance_changed = updated_metrics.total_trades > state.metrics.total_trades
+                        # balance_changed = updated_metrics.total_trades > state.metrics.total_trades
 
-                        state = state.copy_with(metrics=updated_metrics)
+                        # state = state.copy_with(metrics=updated_metrics)
 
                         # Add equity point and persist if balance changed
-                        if balance_changed and tick.timestamp:
-                            equity_point = {
-                                "timestamp": tick.timestamp.isoformat(),
-                                "balance": str(state.current_balance),
-                            }
-                            equity_curve = state.equity_curve + [equity_point]
-                            state = state.copy_with(equity_curve=equity_curve)
+                        # TODO: Re-enable equity tracking
+                        # if balance_changed and tick.timestamp:
+                        #     equity_point = {
+                        #         "timestamp": tick.timestamp.isoformat(),
+                        #         "balance": str(state.current_balance),
+                        #     }
+                        #     equity_curve = state.equity_curve + [equity_point]
+                        #     state = state.copy_with(equity_curve=equity_curve)
 
-                            # Persist equity point to database
-                            self.equity_tracker.record_equity_point(
-                                tick.timestamp,
-                                state.current_balance,
-                                state.ticks_processed,
-                            )
+                        #     # Persist equity point to database
+                        #     self.equity_tracker.record_equity_point(
+                        #         tick.timestamp,
+                        #         state.current_balance,
+                        #         state.ticks_processed,
+                        #     )
+                        pass
 
                     # Update tick count and timestamp
                     state = state.copy_with(
@@ -463,7 +466,7 @@ class TradingExecutor(TaskExecutor[TStrategyState]):
                 details=event.to_dict(),
             )
             for event in events
-        ]]
+        ]
 
         # Bulk create
         TradingEvent.objects.bulk_create(event_records)

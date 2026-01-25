@@ -193,7 +193,7 @@ def _map_celery_to_task_status(celery_state: str) -> TaskStatus:
         TaskStatus: Corresponding task status
     """
     celery_to_task_status = {
-        "PENDING": TaskStatus.PENDING,
+        "PENDING": TaskStatus.CREATED,
         "STARTED": TaskStatus.RUNNING,
         "SUCCESS": TaskStatus.COMPLETED,
         "FAILURE": TaskStatus.FAILED,

@@ -896,7 +896,7 @@ class TradingTaskViewSet(ModelViewSet):
             mode = request.data.get("mode", "graceful")
 
             # Dispatch async task
-            result = async_stop_trading_task.apply_async(
+            result = async_stop_trading_task.apply_async(  # type: ignore[attr-defined]
                 args=[task.pk],
                 kwargs={"mode": mode},
                 countdown=0,

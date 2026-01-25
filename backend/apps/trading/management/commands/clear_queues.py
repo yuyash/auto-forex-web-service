@@ -42,7 +42,7 @@ class Command(BaseCommand):
             if length > 0:
                 self.stdout.write(f"\n{queue}: {length} tasks")
                 if not dry_run:
-                    cleared = r.delete(queue)
+                    r.delete(queue)
                     self.stdout.write(self.style.WARNING(f"  ✓ Cleared {length} tasks"))
                     total_cleared += length
                 else:

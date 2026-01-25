@@ -7,7 +7,7 @@
  * Requirements: 11.14, 11.15
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -95,13 +95,9 @@ export const TradingTaskDetail: React.FC = () => {
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
 
-  // Sync tab value with URL
-  useEffect(() => {
-    const newTabValue = tabMap[tabParam] || 0;
-    if (newTabValue !== tabValue) {
-      setTabValue(newTabValue);
-    }
-  }, [tabParam]);
+  // Derive tab value from URL parameter (use this for rendering)
+  const currentTabValue =
+    tabMap[tabParam] !== undefined ? tabMap[tabParam] : tabValue;
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -219,7 +215,7 @@ export const TradingTaskDetail: React.FC = () => {
       {/* Tabs */}
       <Paper sx={{ mb: 3 }}>
         <Tabs
-          value={tabValue}
+          value={currentTabValue}
           onChange={handleTabChange}
           aria-label="task detail tabs"
           sx={{ borderBottom: 1, borderColor: 'divider' }}
@@ -233,7 +229,7 @@ export const TradingTaskDetail: React.FC = () => {
         </Tabs>
 
         {/* Overview Tab */}
-        <TabPanel value={tabValue} index={0}>
+        <TabPanel value={currentTabValue} index={0}>
           <Box sx={{ p: 3 }}>
             <Grid container spacing={3}>
               <Grid size={{ xs: 12, md: 6 }}>
@@ -388,7 +384,7 @@ export const TradingTaskDetail: React.FC = () => {
         </TabPanel>
 
         {/* Task-based tab content */}
-        <TabPanel value={tabValue} index={1}>
+        <TabPanel value={currentTabValue} index={1}>
           <TaskEventsTable
             taskId={taskId}
             taskType={TaskType.TRADING}
@@ -396,7 +392,7 @@ export const TradingTaskDetail: React.FC = () => {
           />
         </TabPanel>
 
-        <TabPanel value={tabValue} index={2}>
+        <TabPanel value={currentTabValue} index={2}>
           <TaskLogsTable
             taskId={taskId}
             taskType={TaskType.TRADING}
@@ -404,7 +400,7 @@ export const TradingTaskDetail: React.FC = () => {
           />
         </TabPanel>
 
-        <TabPanel value={tabValue} index={3}>
+        <TabPanel value={currentTabValue} index={3}>
           <TaskTradesTable
             taskId={taskId}
             taskType={TaskType.TRADING}
@@ -412,7 +408,7 @@ export const TradingTaskDetail: React.FC = () => {
           />
         </TabPanel>
 
-        <TabPanel value={tabValue} index={4}>
+        <TabPanel value={currentTabValue} index={4}>
           <TaskEquityChart
             taskId={taskId}
             taskType={TaskType.TRADING}
@@ -420,7 +416,7 @@ export const TradingTaskDetail: React.FC = () => {
           />
         </TabPanel>
 
-        <TabPanel value={tabValue} index={5}>
+        <TabPanel value={currentTabValue} index={5}>
           <TaskMetricsChart
             taskId={taskId}
             taskType={TaskType.TRADING}

@@ -29,7 +29,6 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
-import { tradingTasksApi } from '../../services/api';
 import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
 import { TradingService } from '../../api/generated/services/TradingService';
 

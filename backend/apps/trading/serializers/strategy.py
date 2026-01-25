@@ -144,7 +144,9 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
         # Type narrowing: request.user is authenticated in view
         return StrategyConfigurations.objects.create_for_user(user, **validated_data)
 
-    def update(self, instance: StrategyConfigurations, validated_data: dict) -> StrategyConfigurations:
+    def update(
+        self, instance: StrategyConfigurations, validated_data: dict
+    ) -> StrategyConfigurations:
         """Update strategy configuration."""
         # Don't allow updating strategy_type if config is in use
         if (

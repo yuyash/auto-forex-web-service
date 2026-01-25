@@ -1,4 +1,5 @@
 """Unit tests for health views."""
+
 from typing import Any
 
 

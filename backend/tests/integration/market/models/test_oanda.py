@@ -1,4 +1,5 @@
 """Unit tests for OandaAccounts model."""
+
 from typing import Any
 
 

@@ -254,6 +254,7 @@ class TestTaskExecutor:
         executor.execute()
 
         # Verify execution stopped early (processed only 1 tick from first batch)
+        assert executor._state is not None
         assert executor._state.ticks_processed == 1
 
         # Verify on_stop was still called
@@ -343,7 +344,7 @@ class TestBacktestExecutor:
         executor = BacktestExecutor(
             task=task,
             strategy=mock_strategy,
-            data_source=data_source,
+            data_source=data_source,  # type: ignore[arg-type]
             controller=controller,
         )
 
@@ -389,7 +390,7 @@ class TestTradingExecutor:
         executor = TradingExecutor(
             task=task,
             strategy=mock_strategy,
-            data_source=data_source,
+            data_source=data_source,  # type: ignore[arg-type]
             controller=controller,
         )
 

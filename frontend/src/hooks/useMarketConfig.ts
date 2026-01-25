@@ -7,16 +7,6 @@ interface GranularityOption {
   label: string;
 }
 
-interface InstrumentsResponse {
-  instruments: string[];
-  count: number;
-}
-
-interface GranularitiesResponse {
-  granularities: GranularityOption[];
-  count: number;
-}
-
 /**
  * Hook to fetch supported currency pairs from backend
  */
