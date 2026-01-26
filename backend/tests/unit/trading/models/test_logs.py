@@ -1,4 +1,4 @@
-"""Unit tests for TaskLog and TaskMetric models."""
+"""Unit tests for TaskLog model."""
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -8,7 +8,6 @@ from apps.trading.models import (
     BacktestTasks,
     StrategyConfigurations,
     TaskLog,
-    TaskMetric,
 )
 
 User = get_user_model()
@@ -210,171 +209,7 @@ class TestTaskLogModel:
 
 
 @pytest.mark.django_db
-class TestTaskMetricModel:
-    """Test TaskMetric model."""
-
-    def test_create_task_metric(self, backtest_task):
-        """Test creating a task metric entry."""
-        metric = TaskMetric.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=backtest_task.id,
-            metric_name="equity",
-            metric_value=10500.50,
-        )
-
-        assert metric.task_type == TaskType.BACKTEST
-        assert metric.task_id == backtest_task.id
-        assert metric.metric_name == "equity"
-        assert metric.metric_value == 10500.50
-        assert metric.timestamp is not None
-        assert metric.id is not None
-        assert metric.metadata is None
-
-    def test_task_metric_with_metadata(self, backtest_task):
-        """Test creating a metric with metadata."""
-        metadata = {
-            "instrument": "EUR_USD",
-            "strategy": "floor",
-            "layer": 3,
-        }
-
-        metric = TaskMetric.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=backtest_task.id,
-            metric_name="drawdown",
-            metric_value=250.75,
-            metadata=metadata,
-        )
-
-        assert metric.metadata == metadata
-        assert metric.metadata["instrument"] == "EUR_USD"
-        assert metric.metadata["layer"] == 3
-
-    def test_task_metric_ordering(self, backtest_task):
-        """Test that metrics are ordered by timestamp."""
-        metric1 = TaskMetric.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=backtest_task.id,
-            metric_name="equity",
-            metric_value=10000.0,
-        )
-        metric2 = TaskMetric.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=backtest_task.id,
-            metric_name="equity",
-            metric_value=10100.0,
-        )
-        metric3 = TaskMetric.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=backtest_task.id,
-            metric_name="equity",
-            metric_value=10200.0,
-        )
-
-        metrics = list(
-            TaskMetric.objects.filter(task_type=TaskType.BACKTEST, task_id=backtest_task.id)
-        )
-        assert metrics[0] == metric1
-        assert metrics[1] == metric2
-        assert metrics[2] == metric3
-
-    def test_task_metric_polymorphic_reference(self, backtest_task):
-        """Test polymorphic task reference."""
-        metric1 = TaskMetric.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=backtest_task.id,
-            metric_name="equity",
-            metric_value=10000.0,
-        )
-        metric2 = TaskMetric.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=backtest_task.id,
-            metric_name="drawdown",
-            metric_value=150.0,
-        )
-
-        # Query metrics by task_type and task_id
-        task_metrics = TaskMetric.objects.filter(
-            task_type=TaskType.BACKTEST, task_id=backtest_task.id
-        )
-        assert task_metrics.count() == 2
-        assert metric1 in task_metrics
-        assert metric2 in task_metrics
-
-    def test_task_metric_str_representation(self, backtest_task):
-        """Test string representation of task metric."""
-        metric = TaskMetric.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=backtest_task.id,
-            metric_name="total_trades",
-            metric_value=42.0,
-        )
-
-        str_repr = str(metric)
-        assert "total_trades" in str_repr
-        assert "42" in str_repr
-        assert str(metric.task_type) in str_repr
-        assert str(metric.task_id) in str_repr
-
-    def test_task_metric_filter_by_name(self, backtest_task):
-        """Test filtering metrics by name."""
-        TaskMetric.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=backtest_task.id,
-            metric_name="equity",
-            metric_value=10000.0,
-        )
-        TaskMetric.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=backtest_task.id,
-            metric_name="equity",
-            metric_value=10100.0,
-        )
-        TaskMetric.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=backtest_task.id,
-            metric_name="drawdown",
-            metric_value=150.0,
-        )
-
-        equity_metrics = TaskMetric.objects.filter(
-            task_type=TaskType.BACKTEST, task_id=backtest_task.id, metric_name="equity"
-        )
-        assert equity_metrics.count() == 2
-
-    def test_task_metric_multiple_metric_types(self, backtest_task):
-        """Test storing different types of metrics."""
-        metrics_data = [
-            ("equity", 10000.0),
-            ("drawdown", 250.5),
-            ("total_trades", 42.0),
-            ("win_rate", 0.65),
-            ("profit_factor", 1.85),
-        ]
-
-        for name, value in metrics_data:
-            TaskMetric.objects.create(
-                task_type=TaskType.BACKTEST,
-                task_id=backtest_task.id,
-                metric_name=name,
-                metric_value=value,
-            )
-
-        assert (
-            TaskMetric.objects.filter(task_type=TaskType.BACKTEST, task_id=backtest_task.id).count()
-            == 5
-        )
-
-        # Verify each metric
-        for name, value in metrics_data:
-            metric = TaskMetric.objects.get(
-                task_type=TaskType.BACKTEST, task_id=backtest_task.id, metric_name=name
-            )
-            assert metric.metric_value == value
-
-
-@pytest.mark.django_db
-class TestTaskLogAndMetricIndexes:
+class TestTaskLogIndexes:
     """Test that indexes are properly configured."""
 
     def test_task_log_indexes_exist(self, backtest_task):
@@ -396,25 +231,3 @@ class TestTaskLogAndMetricIndexes:
             task_type=TaskType.BACKTEST, task_id=backtest_task.id, level=LogLevel.ERROR
         )
         assert logs_by_level.count() == 2
-
-    def test_task_metric_indexes_exist(self, backtest_task):
-        """Test that TaskMetric indexes are configured."""
-        # Create some metrics
-        for i in range(5):
-            TaskMetric.objects.create(
-                task_type=TaskType.BACKTEST,
-                task_id=backtest_task.id,
-                metric_name="equity" if i % 2 == 0 else "drawdown",
-                metric_value=float(10000 + i * 100),
-            )
-
-        # Query using indexed fields should work efficiently
-        metrics_by_task = TaskMetric.objects.filter(
-            task_type=TaskType.BACKTEST, task_id=backtest_task.id
-        )
-        assert metrics_by_task.count() == 5
-
-        metrics_by_name = TaskMetric.objects.filter(
-            task_type=TaskType.BACKTEST, task_id=backtest_task.id, metric_name="equity"
-        )
-        assert metrics_by_name.count() == 3

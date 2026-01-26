@@ -5,7 +5,6 @@ from apps.trading.models import (
     CeleryTaskStatus,
     StrategyConfigurations,
     TaskLog,
-    TaskMetric,
     TradingEvents,
     TradingTasks,
 )
@@ -101,26 +100,3 @@ class TaskLogAdmin(admin.ModelAdmin):
     search_fields = ("task_id", "message")
     ordering = ("-timestamp",)
     readonly_fields = ("task_type", "task_id", "timestamp", "level", "message", "details")
-
-
-@admin.register(TaskMetric)
-class TaskMetricAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "task_type",
-        "task_id",
-        "metric_name",
-        "metric_value",
-        "timestamp",
-    )
-    list_filter = ("task_type", "metric_name", "timestamp")
-    search_fields = ("task_id", "metric_name")
-    ordering = ("-timestamp",)
-    readonly_fields = (
-        "task_type",
-        "task_id",
-        "metric_name",
-        "metric_value",
-        "timestamp",
-        "metadata",
-    )

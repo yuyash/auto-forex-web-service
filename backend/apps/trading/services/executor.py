@@ -251,12 +251,10 @@ class BacktestExecutor(TaskExecutor):
 
         # Initialize services for data persistence
         from apps.trading.services.equity_tracker import EquityTracker
-        from apps.trading.services.metrics import MetricsCalculator
         from apps.trading.services.trade_history_builder import TradeHistoryBuilder
 
         celery_task_id = task.celery_task_id or ""
         self.trade_history_builder = TradeHistoryBuilder(task, celery_task_id)
-        self.metrics = MetricsCalculator(task, celery_task_id)
         self.equity_tracker = EquityTracker(task, celery_task_id)
 
     def load_state(self) -> ExecutionState:

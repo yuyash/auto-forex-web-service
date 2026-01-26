@@ -1,7 +1,6 @@
 """Task-centric API views for unified task management."""
 
 import logging
-from datetime import datetime
 from logging import Logger
 from typing import Any
 from uuid import UUID
@@ -26,7 +25,6 @@ from apps.trading.serializers import (
 from apps.trading.serializers.task import (
     BacktestTaskSerializer,
     TaskLogSerializer,
-    TaskMetricSerializer,
     TradingTaskSerializer,
 )
 from apps.trading.services.service import TaskService, TaskServiceImpl
@@ -118,7 +116,6 @@ class BacktestTaskViewSet(ModelViewSet):
     - restart: Restart task from beginning
     - resume: Resume cancelled task
     - logs: Retrieve task logs with pagination
-    - metrics: Retrieve task metrics with filtering
     - results: Retrieve task results
     """
 
@@ -534,59 +531,6 @@ class BacktestTaskViewSet(ModelViewSet):
             )
 
     @extend_schema(
-        summary="Get task metrics",
-        description="Retrieve task execution metrics with filtering",
-        parameters=[
-            OpenApiParameter(
-                name="metric_name",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                description="Filter by metric name",
-            ),
-            OpenApiParameter(
-                name="start_time",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                description="Filter metrics after this timestamp (ISO format)",
-            ),
-            OpenApiParameter(
-                name="end_time",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                description="Filter metrics before this timestamp (ISO format)",
-            ),
-        ],
-        responses={200: TaskMetricSerializer(many=True)},
-    )
-    @action(detail=True, methods=["get"])
-    def metrics(self, request: Request, pk: int | None = None) -> Response:
-        """Get task metrics with filtering."""
-        task = self.get_object()
-
-        metric_name = request.query_params.get("metric_name")
-        start_time_str = request.query_params.get("start_time")
-        end_time_str = request.query_params.get("end_time")
-
-        # Parse timestamps if provided
-        start_time = datetime.fromisoformat(start_time_str) if start_time_str else None
-        end_time = datetime.fromisoformat(end_time_str) if end_time_str else None
-
-        try:
-            metrics = self.task_service.get_task_metrics(
-                UUID(int=task.pk),
-                metric_name=metric_name,
-                start_time=start_time,
-                end_time=end_time,
-            )
-            serializer = TaskMetricSerializer(metrics, many=True)
-            return Response({"results": serializer.data})
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to retrieve metrics: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    @extend_schema(
         summary="Get task events",
         description="Retrieve task events with filtering",
         parameters=[
@@ -748,7 +692,6 @@ class TradingTaskViewSet(ModelViewSet):
     - restart: Restart task from beginning
     - resume: Resume cancelled task
     - logs: Retrieve task logs with pagination
-    - metrics: Retrieve task metrics with filtering
     - results: Retrieve task results
     """
 
@@ -1007,59 +950,6 @@ class TradingTaskViewSet(ModelViewSet):
         except Exception as e:
             return Response(
                 {"error": f"Failed to retrieve logs: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    @extend_schema(
-        summary="Get task metrics",
-        description="Retrieve task execution metrics with filtering",
-        parameters=[
-            OpenApiParameter(
-                name="metric_name",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                description="Filter by metric name",
-            ),
-            OpenApiParameter(
-                name="start_time",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                description="Filter metrics after this timestamp (ISO format)",
-            ),
-            OpenApiParameter(
-                name="end_time",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                description="Filter metrics before this timestamp (ISO format)",
-            ),
-        ],
-        responses={200: TaskMetricSerializer(many=True)},
-    )
-    @action(detail=True, methods=["get"])
-    def metrics(self, request: Request, pk: int | None = None) -> Response:
-        """Get task metrics with filtering."""
-        task = self.get_object()
-
-        metric_name = request.query_params.get("metric_name")
-        start_time_str = request.query_params.get("start_time")
-        end_time_str = request.query_params.get("end_time")
-
-        # Parse timestamps if provided
-        start_time = datetime.fromisoformat(start_time_str) if start_time_str else None
-        end_time = datetime.fromisoformat(end_time_str) if end_time_str else None
-
-        try:
-            metrics = self.task_service.get_task_metrics(
-                UUID(int=task.pk),
-                metric_name=metric_name,
-                start_time=start_time,
-                end_time=end_time,
-            )
-            serializer = TaskMetricSerializer(metrics, many=True)
-            return Response({"results": serializer.data})
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to retrieve metrics: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

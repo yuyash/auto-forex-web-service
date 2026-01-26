@@ -11,14 +11,13 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime
 from logging import Logger
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 if TYPE_CHECKING:
     from apps.trading.enums import LogLevel, TaskStatus, TaskType
-    from apps.trading.models import BacktestTasks, TaskLog, TaskMetric, TradingTasks
+    from apps.trading.models import BacktestTasks, TaskLog, TradingTasks
 
 # Configure structured logging
 logger: Logger = logging.getLogger(name=__name__)
@@ -187,86 +186,6 @@ class TaskService(ABC):
             ValueError: If task does not exist
         """
         ...
-
-    @abstractmethod
-    def get_task_metrics(
-        self,
-        task_id: UUID,
-        *,
-        metric_name: str | None = None,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
-    ) -> list[TaskMetric]:
-        """Retrieve task execution metrics with filtering.
-
-        Args:
-            task_id: UUID of the task
-            metric_name: Optional metric name filter
-            start_time: Optional start time for time range filter
-            end_time: Optional end time for time range filter
-
-        Returns:
-            list[TaskMetric]: List of task metric entries
-
-        Raises:
-            ValueError: If task does not exist
-        """
-        ...
-
-
-class TaskServiceProtocol(Protocol):
-    """Protocol for task service implementations.
-
-    This protocol defines the expected interface for task service implementations,
-    allowing for type checking and dependency injection.
-    """
-
-    def create_task(
-        self,
-        *,
-        task_type: TaskType,
-        user_id: int,
-        name: str,
-        config_id: int,
-        **kwargs: dict,
-    ) -> BacktestTasks | TradingTasks: ...
-
-    def submit_task(
-        self,
-        task: BacktestTasks | TradingTasks,
-    ) -> BacktestTasks | TradingTasks: ...
-
-    def cancel_task(self, task_id: UUID) -> bool: ...
-
-    def restart_task(
-        self,
-        task_id: UUID,
-    ) -> BacktestTasks | TradingTasks: ...
-
-    def resume_task(
-        self,
-        task_id: UUID,
-    ) -> BacktestTasks | TradingTasks: ...
-
-    def get_task_status(self, task_id: UUID) -> TaskStatus: ...
-
-    def get_task_logs(
-        self,
-        task_id: UUID,
-        *,
-        level: LogLevel | None = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[TaskLog]: ...
-
-    def get_task_metrics(
-        self,
-        task_id: UUID,
-        *,
-        metric_name: str | None = None,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
-    ) -> list[TaskMetric]: ...
 
 
 class TaskServiceImpl(TaskService):
@@ -871,86 +790,3 @@ class TaskServiceImpl(TaskService):
                 exc_info=True,
             )
             raise ValueError(f"Failed to get task logs: {str(e)}") from e
-
-    def get_task_metrics(
-        self,
-        task_id: UUID,
-        *,
-        metric_name: str | None = None,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
-    ) -> list[TaskMetric]:
-        """Retrieve task execution metrics with filtering.
-
-        Args:
-            task_id: UUID of the task
-            metric_name: Optional metric name filter
-            start_time: Optional start time for time range filter
-            end_time: Optional end time for time range filter
-
-        Returns:
-            list[TaskMetric]: List of task metric entries
-
-        Raises:
-            ValueError: If task does not exist
-        """
-        from apps.trading.models import BacktestTasks, TaskMetric, TradingTasks
-
-        logger.debug(
-            "Getting task metrics",
-            extra={
-                "task_id": str(task_id),
-                "metric_name": metric_name,
-                "start_time": start_time,
-                "end_time": end_time,
-            },
-        )
-
-        try:
-            # Verify task exists
-            task_exists = (
-                BacktestTasks.objects.filter(pk=task_id).exists()
-                or TradingTasks.objects.filter(pk=task_id).exists()
-            )
-            if not task_exists:
-                logger.error(
-                    "Task not found",
-                    extra={"task_id": str(task_id)},
-                )
-                raise ValueError(f"Task with id {task_id} does not exist")
-
-            # Build query
-            queryset = TaskMetric.objects.filter(task_id=task_id)
-
-            # Apply metric name filter if provided
-            if metric_name is not None:
-                queryset = queryset.filter(metric_name=metric_name)
-
-            # Apply time range filters if provided
-            if start_time is not None:
-                queryset = queryset.filter(timestamp__gte=start_time)
-            if end_time is not None:
-                queryset = queryset.filter(timestamp__lte=end_time)
-
-            # Order by timestamp
-            queryset = queryset.order_by("timestamp")
-
-            metrics = list(queryset)
-
-            logger.debug(
-                "Retrieved task metrics",
-                extra={"task_id": str(task_id), "metric_count": len(metrics)},
-            )
-
-            return metrics
-
-        except ValueError:
-            # Re-raise ValueError as-is (already logged)
-            raise
-        except Exception as e:
-            logger.error(
-                "Unexpected error getting task metrics",
-                extra={"task_id": str(task_id)},
-                exc_info=True,
-            )
-            raise ValueError(f"Failed to get task metrics: {str(e)}") from e

@@ -3,7 +3,7 @@
 from rest_framework import serializers
 
 from apps.trading.models import BacktestTasks, TradingTasks
-from apps.trading.models.logs import TaskLog, TaskMetric
+from apps.trading.models.logs import TaskLog
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -133,26 +133,5 @@ class TaskLogSerializer(serializers.ModelSerializer):
             "timestamp",
             "level",
             "message",
-        ]
-        read_only_fields = ["id", "timestamp"]
-
-
-class TaskMetricSerializer(serializers.ModelSerializer):
-    """
-    Serializer for TaskMetric model.
-
-    Provides access to task execution metrics with name, value, timestamp,
-    and optional metadata.
-    """
-
-    class Meta:
-        model = TaskMetric
-        fields = [
-            "id",
-            "task",
-            "metric_name",
-            "metric_value",
-            "timestamp",
-            "metadata",
         ]
         read_only_fields = ["id", "timestamp"]
