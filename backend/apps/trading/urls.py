@@ -8,12 +8,13 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from apps.trading.views import (
+    BacktestTaskViewSet,
     StrategyConfigDetailView,
     StrategyConfigView,
     StrategyDefaultsView,
     StrategyView,
+    TradingTaskViewSet,
 )
-from apps.trading.views.task import BacktestTaskViewSet, TradingTaskViewSet
 
 app_name = "trading"
 

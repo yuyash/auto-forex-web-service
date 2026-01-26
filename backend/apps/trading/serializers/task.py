@@ -35,7 +35,6 @@ class TaskSerializer(serializers.ModelSerializer):
             "max_retries",
             "error_message",
             "error_traceback",
-            "result_data",
         ]
         read_only_fields = [
             "id",
@@ -47,7 +46,6 @@ class TaskSerializer(serializers.ModelSerializer):
             "completed_at",
             "error_message",
             "error_traceback",
-            "result_data",
         ]
 
     def get_duration(self, obj: BacktestTasks | TradingTasks) -> float | None:
@@ -129,9 +127,12 @@ class TaskLogSerializer(serializers.ModelSerializer):
         model = TaskLog
         fields = [
             "id",
-            "task",
+            "task_type",
+            "task_id",
+            "celery_task_id",
             "timestamp",
             "level",
             "message",
+            "details",
         ]
         read_only_fields = ["id", "timestamp"]

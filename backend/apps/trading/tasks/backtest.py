@@ -13,7 +13,7 @@ from django.utils import timezone as dj_timezone
 from apps.trading.enums import LogLevel, TaskStatus
 from apps.trading.models import BacktestTasks, TaskLog
 
-logger: Logger = getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 @shared_task(
@@ -25,20 +25,17 @@ logger: Logger = getLogger(__name__)
     retry_backoff_max=600,
     retry_jitter=True,
 )
-def run_backtest_task(self: Any, task_id: UUID, execution_id: int | None = None) -> None:
+def run_backtest_task(self: Any, task_id: UUID) -> None:
     """Celery task wrapper for running backtest tasks.
 
     Args:
         task_id: UUID of the BacktestTasks to execute
-        execution_id: Deprecated parameter (ignored)
     """
     task = None
 
     try:
-        # Load the task to update it
+        logger.info(f"Starting a new celery backtest task. Task ID: {task_id}.")
         task = BacktestTasks.objects.get(pk=task_id)
-
-        # Update task status to RUNNING and record start time
         task.status = TaskStatus.RUNNING
         task.started_at = dj_timezone.now()
         task.celery_task_id = self.request.id
@@ -53,7 +50,7 @@ def run_backtest_task(self: Any, task_id: UUID, execution_id: int | None = None)
         )
 
         # Execute the backtest
-        _execute_backtest(task)
+        execute_backtest(task)
 
         # Mark as completed
         task.refresh_from_db()
@@ -68,49 +65,15 @@ def run_backtest_task(self: Any, task_id: UUID, execution_id: int | None = None)
             level=LogLevel.INFO,
             message="Backtest task completed successfully",
         )
-
     except BacktestTasks.DoesNotExist:
         logger.error(f"BacktestTasks {task_id} not found")
         raise
-
     except Exception as e:
-        # Capture error details and update task
-        error_message = str(e)
-        error_traceback = traceback.format_exc()
-
-        logger.error(
-            f"Backtest task {task_id} failed: {error_message}",
-            exc_info=True,
-        )
-
-        if task:
-            # Update task with error information
-            task.status = TaskStatus.FAILED
-            task.completed_at = dj_timezone.now()
-            task.error_message = error_message
-            task.error_traceback = error_traceback
-            task.save(
-                update_fields=[
-                    "status",
-                    "completed_at",
-                    "error_message",
-                    "error_traceback",
-                ]
-            )
-
-            # Log error
-            TaskLog.objects.create(
-                task=task,
-                celery_task_id=task.celery_task_id,
-                level=LogLevel.ERROR,
-                message=f"Backtest task execution failed: {type(e).__name__}: {error_message}",
-            )
-
-        # Re-raise to trigger Celery retry
+        handle_exception(task_id, task, e)
         raise
 
 
-def _execute_backtest(task: BacktestTasks) -> None:
+def execute_backtest(task: BacktestTasks) -> None:
     """Execute a backtest task.
 
     Args:
@@ -138,7 +101,7 @@ def _execute_backtest(task: BacktestTasks) -> None:
     data_source = RedisTickDataSource(
         channel=channel,
         batch_size=100,
-        trigger_publisher=lambda: _trigger_backtest_publisher(task),
+        trigger_publisher=lambda: trigger_backtest_publisher(task),
     )
 
     # Create controller
@@ -159,7 +122,41 @@ def _execute_backtest(task: BacktestTasks) -> None:
     executor.execute()
 
 
-def _trigger_backtest_publisher(task: BacktestTasks) -> None:
+def handle_exception(task_id: UUID, task: BacktestTasks | None, error: Exception) -> None:
+    # Capture error details and update task
+    error_message = str(error)
+    error_traceback = traceback.format_exc()
+
+    logger.error(
+        f"Backtest task {task_id} failed: {error_message}",
+        exc_info=True,
+    )
+
+    if task:
+        # Update task with error information
+        task.status = TaskStatus.FAILED
+        task.completed_at = dj_timezone.now()
+        task.error_message = error_message
+        task.error_traceback = error_traceback
+        task.save(
+            update_fields=[
+                "status",
+                "completed_at",
+                "error_message",
+                "error_traceback",
+            ]
+        )
+
+        # Log error
+        TaskLog.objects.create(
+            task=task,
+            celery_task_id=task.celery_task_id,
+            level=LogLevel.ERROR,
+            message=f"Backtest task execution failed: {type(error).__name__}: {error_message}",
+        )
+
+
+def trigger_backtest_publisher(task: BacktestTasks) -> None:
     """Trigger the backtest data publisher.
 
     Args:
@@ -177,3 +174,25 @@ def _trigger_backtest_publisher(task: BacktestTasks) -> None:
         end=task.end_time.isoformat(),
         request_id=request_id,
     )
+
+
+@shared_task(bind=True, name="trading.tasks.stop_backtest_task")
+def stop_backtest_task(self: Any, task_id: UUID) -> None:
+    """Request stop for a running backtest task.
+
+    This sets the stop flag for graceful cooperative stop.
+
+    Args:
+        task_id: UUID of the backtest task to stop
+    """
+    from apps.trading.models import CeleryTaskStatus
+
+    task_name = "trading.tasks.run_backtest_task"
+    instance_key = str(task_id)
+    CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
+        status=CeleryTaskStatus.Status.STOP_REQUESTED,
+        status_message="stop_requested",
+        last_heartbeat_at=dj_timezone.now(),
+    )
+
+    logger.info(f"Stop requested for backtest task {task_id}")

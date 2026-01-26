@@ -2,32 +2,31 @@ openapi: 3.0.3
 info:
   title: Auto Forex Trading API
   version: 1.0.0
-  description: API for managing algorithmic forex trading operations across multiple
+  description:
+    API for managing algorithmic forex trading operations across multiple
     OANDA accounts
-  contact:
-    name: Auto Forex Support
-    email: support@autoforex.example.com
   license:
     name: Proprietary
 paths:
   /api/accounts/auth/login:
     post:
       operationId: accounts_auth_login_create
-      description: Authenticate user with email and password. Returns JWT token on
+      description:
+        Authenticate user with email and password. Returns JWT token on
         success. Rate limited to 5 attempts per 15 minutes per IP address.
       summary: POST /api/accounts/auth/login
       tags:
-      - Authentication
+        - Authentication
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserLoginRequest'
+              $ref: "#/components/schemas/UserLoginRequest"
         required: true
       security:
-      - {}
+        - {}
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
@@ -51,26 +50,27 @@ paths:
                       language:
                         type: string
           description: Login successful
-        '401':
+        "401":
           description: Invalid credentials
-        '403':
+        "403":
           description: Account locked or email not whitelisted
-        '429':
+        "429":
           description: Too many failed login attempts
-        '503':
+        "503":
           description: Login is disabled
   /api/accounts/auth/logout:
     post:
       operationId: accounts_auth_logout_create
-      description: Logout user and terminate all active sessions. Requires valid JWT
+      description:
+        Logout user and terminate all active sessions. Requires valid JWT
         token in Authorization header.
       summary: POST /api/accounts/auth/logout
       tags:
-      - Authentication
+        - Authentication
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
@@ -81,20 +81,21 @@ paths:
                   sessions_terminated:
                     type: integer
           description: Logout successful
-        '401':
+        "401":
           description: Invalid or expired token
   /api/accounts/auth/refresh:
     post:
       operationId: accounts_auth_refresh_create
-      description: Refresh an existing JWT token to extend its expiration time. Requires
+      description:
+        Refresh an existing JWT token to extend its expiration time. Requires
         valid JWT token in Authorization header.
       summary: POST /api/accounts/auth/refresh
       tags:
-      - Authentication
+        - Authentication
       security:
-      - {}
+        - {}
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
@@ -118,9 +119,9 @@ paths:
                       language:
                         type: string
           description: Token refreshed successfully
-        '401':
+        "401":
           description: Invalid or expired token
-        '500':
+        "500":
           description: Failed to retrieve user information
   /api/accounts/auth/register:
     post:
@@ -128,17 +129,17 @@ paths:
       description: Register a new user account and send email verification link.
       summary: POST /api/accounts/auth/register
       tags:
-      - Authentication
+        - Authentication
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserRegistrationRequest'
+              $ref: "#/components/schemas/UserRegistrationRequest"
         required: true
       security:
-      - {}
+        - {}
       responses:
-        '201':
+        "201":
           content:
             application/json:
               schema:
@@ -164,9 +165,9 @@ paths:
                   email_sent:
                     type: boolean
           description: User registered successfully
-        '400':
+        "400":
           description: Validation error
-        '503':
+        "503":
           description: Registration is disabled
   /api/accounts/auth/resend-verification:
     post:
@@ -174,64 +175,66 @@ paths:
       description: Resend email verification link to the specified email address.
       summary: POST /api/accounts/auth/resend-verification
       tags:
-      - Authentication
+        - Authentication
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ResendVerificationRequest'
+              $ref: "#/components/schemas/ResendVerificationRequest"
         required: true
       security:
-      - {}
+        - {}
       responses:
-        '200':
+        "200":
           description: Verification email sent
-        '400':
+        "400":
           description: Email is required or already verified
   /api/accounts/auth/verify-email:
     post:
       operationId: accounts_auth_verify_email_create
-      description: Verify user email address using the verification token sent via
+      description:
+        Verify user email address using the verification token sent via
         email.
       summary: POST /api/accounts/auth/verify-email
       tags:
-      - Authentication
+        - Authentication
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EmailVerificationRequest'
+              $ref: "#/components/schemas/EmailVerificationRequest"
         required: true
       security:
-      - {}
+        - {}
       responses:
-        '200':
+        "200":
           description: Email verified successfully
-        '400':
+        "400":
           description: Invalid or expired token
   /api/accounts/notifications:
     get:
       operationId: accounts_notifications_retrieve
-      description: Retrieve list of notifications for the authenticated user. Supports
+      description:
+        Retrieve list of notifications for the authenticated user. Supports
         filtering by read status and limiting results.
       summary: GET /api/accounts/notifications
       parameters:
-      - in: query
-        name: limit
-        schema:
-          type: integer
-        description: 'Maximum number of notifications to return (1-200, default: 50)'
-      - in: query
-        name: unread_only
-        schema:
-          type: boolean
-        description: Filter to show only unread notifications
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          description: "Maximum number of notifications to return (1-200, default: 50)"
+        - in: query
+          name: unread_only
+          schema:
+            type: boolean
+          description: Filter to show only unread notifications
       tags:
-      - Notifications
+        - Notifications
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
@@ -248,10 +251,10 @@ paths:
                     severity:
                       type: string
                       enum:
-                      - info
-                      - warning
-                      - error
-                      - critical
+                        - info
+                        - warning
+                        - error
+                        - critical
                     timestamp:
                       type: string
                       format: date-time
@@ -262,9 +265,9 @@ paths:
                     extra_data:
                       type: object
           description: Notifications retrieved successfully
-        '401':
+        "401":
           description: Authentication required
-        '500':
+        "500":
           description: Failed to retrieve notifications
   /api/accounts/notifications/{notification_id}/read:
     post:
@@ -272,24 +275,24 @@ paths:
       description: Mark a single notification as read for the authenticated user.
       summary: POST /api/accounts/notifications/{notification_id}/read
       parameters:
-      - in: path
-        name: notification_id
-        schema:
-          type: integer
-        description: ID of the notification to mark as read
-        required: true
+        - in: path
+          name: notification_id
+          schema:
+            type: integer
+          description: ID of the notification to mark as read
+          required: true
       tags:
-      - Notifications
+        - Notifications
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           description: Notification marked as read
-        '401':
+        "401":
           description: Authentication required
-        '404':
+        "404":
           description: Notification not found
-        '500':
+        "500":
           description: Failed to mark notification as read
   /api/accounts/notifications/read-all:
     post:
@@ -297,11 +300,11 @@ paths:
       description: Mark all unread notifications as read for the authenticated user.
       summary: POST /api/accounts/notifications/read-all
       tags:
-      - Notifications
+        - Notifications
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
@@ -312,22 +315,23 @@ paths:
                   count:
                     type: integer
           description: All notifications marked as read
-        '401':
+        "401":
           description: Authentication required
-        '500':
+        "500":
           description: Failed to mark all notifications as read
   /api/accounts/settings/:
     get:
       operationId: accounts_settings_retrieve
-      description: Retrieve user profile and settings including timezone, language,
+      description:
+        Retrieve user profile and settings including timezone, language,
         and notification preferences.
       summary: GET /api/accounts/settings/
       tags:
-      - User Settings
+        - User Settings
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
@@ -355,60 +359,63 @@ paths:
                         type: string
                       notifications_enabled:
                         type: boolean
-          description: ''
-        '401':
+          description: ""
+        "401":
           description: Authentication required
     put:
       operationId: accounts_settings_update
-      description: Update user profile and settings. Can update timezone, language,
+      description:
+        Update user profile and settings. Can update timezone, language,
         notification preferences, etc.
       summary: PUT /api/accounts/settings/
       tags:
-      - User Settings
+        - User Settings
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserSettingsUpdateRequest'
+              $ref: "#/components/schemas/UserSettingsUpdateRequest"
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           description: Settings updated successfully
-        '400':
+        "400":
           description: Validation error
-        '401':
+        "401":
           description: Authentication required
   /api/accounts/settings/public:
     get:
       operationId: accounts_settings_public_retrieve
-      description: Retrieve public account settings including registration and login
+      description:
+        Retrieve public account settings including registration and login
         availability. No authentication required.
       summary: GET /api/accounts/settings/public
       tags:
-      - Public Settings
+        - Public Settings
       security:
-      - cookieAuth: []
-      - {}
+        - cookieAuth: []
+        - {}
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PublicAccountSettings'
+                $ref: "#/components/schemas/PublicAccountSettings"
           description: Public settings retrieved successfully
   /api/health/:
     get:
       operationId: health_check
-      description: Check the health status of the backend API service. Returns overall
+      description:
+        Check the health status of the backend API service. Returns overall
         system status.
       summary: GET /api/health/
       tags:
-      - health
+        - health
       security:
-      - {}
+        - {}
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
@@ -417,7 +424,7 @@ paths:
                   status:
                     type: string
                     enum:
-                    - healthy
+                      - healthy
                     description: Overall health status
                   timestamp:
                     type: string
@@ -427,15 +434,15 @@ paths:
                     type: integer
                     description: Response time in milliseconds
                 required:
-                - status
-                - timestamp
-                - response_time_ms
+                  - status
+                  - timestamp
+                  - response_time_ms
                 example:
                   status: healthy
-                  timestamp: '2024-01-18T12:00:00Z'
+                  timestamp: "2024-01-18T12:00:00Z"
                   response_time_ms: 15
           description: Service is healthy
-        '503':
+        "503":
           content:
             application/json:
               schema:
@@ -444,7 +451,7 @@ paths:
                   status:
                     type: string
                     enum:
-                    - unhealthy
+                      - unhealthy
                     description: Overall health status
                   timestamp:
                     type: string
@@ -454,12 +461,12 @@ paths:
                     type: integer
                     description: Response time in milliseconds
                 required:
-                - status
-                - timestamp
-                - response_time_ms
+                  - status
+                  - timestamp
+                  - response_time_ms
                 example:
                   status: unhealthy
-                  timestamp: '2024-01-18T12:00:00Z'
+                  timestamp: "2024-01-18T12:00:00Z"
                   response_time_ms: 20
           description: Service is unhealthy
   /api/market/accounts/:
@@ -468,130 +475,131 @@ paths:
       description: Retrieve all OANDA accounts for the authenticated user
       summary: GET /api/market/accounts/
       tags:
-      - Market - Accounts
+        - Market - Accounts
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/OandaAccounts'
+                  $ref: "#/components/schemas/OandaAccounts"
           description: List of OANDA accounts
-        '401':
+        "401":
           description: Authentication required
     post:
       operationId: create_oanda_account
       description: Add a new OANDA account for the authenticated user
       summary: POST /api/market/accounts/
       tags:
-      - Market - Accounts
+        - Market - Accounts
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OandaAccountsRequest'
+              $ref: "#/components/schemas/OandaAccountsRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '201':
+        "201":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OandaAccounts'
+                $ref: "#/components/schemas/OandaAccounts"
           description: Account created successfully
-        '400':
+        "400":
           description: Invalid data
-        '401':
+        "401":
           description: Authentication required
   /api/market/accounts/{account_id}/:
     get:
       operationId: get_oanda_account_detail
-      description: Retrieve detailed information about a specific OANDA account including
+      description:
+        Retrieve detailed information about a specific OANDA account including
         live data from OANDA API
       summary: GET /api/market/accounts/{account_id}/
       parameters:
-      - in: path
-        name: account_id
-        schema:
-          type: integer
-        description: OANDA account database ID
-        required: true
+        - in: path
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+          required: true
       tags:
-      - Market - Accounts
+        - Market - Accounts
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OandaAccounts'
+                $ref: "#/components/schemas/OandaAccounts"
           description: Account details retrieved successfully
-        '401':
+        "401":
           description: Authentication required
-        '404':
+        "404":
           description: Account not found
     put:
       operationId: update_oanda_account
       description: Update a specific OANDA account
       summary: PUT /api/market/accounts/{account_id}/
       parameters:
-      - in: path
-        name: account_id
-        schema:
-          type: integer
-        description: OANDA account database ID
-        required: true
+        - in: path
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+          required: true
       tags:
-      - Market - Accounts
+        - Market - Accounts
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OandaAccountsRequest'
+              $ref: "#/components/schemas/OandaAccountsRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OandaAccounts'
+                $ref: "#/components/schemas/OandaAccounts"
           description: Account updated successfully
-        '400':
+        "400":
           description: Invalid data
-        '401':
+        "401":
           description: Authentication required
-        '404':
+        "404":
           description: Account not found
     delete:
       operationId: delete_oanda_account
       description: Delete a specific OANDA account
       summary: DELETE /api/market/accounts/{account_id}/
       parameters:
-      - in: path
-        name: account_id
-        schema:
-          type: integer
-        description: OANDA account database ID
-        required: true
+        - in: path
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+          required: true
       tags:
-      - Market - Accounts
+        - Market - Accounts
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           description: Account deleted successfully
-        '400':
+        "400":
           description: Account is in use
-        '401':
+        "401":
           description: Authentication required
-        '404':
+        "404":
           description: Account not found
   /api/market/candles/:
     get:
@@ -599,125 +607,126 @@ paths:
       description: Fetch historical candle data from OANDA for charting and analysis
       summary: GET /api/market/candles/
       parameters:
-      - in: query
-        name: account_id
-        schema:
-          type: string
-        description: OANDA account ID (uses default if not provided)
-      - in: query
-        name: after
-        schema:
-          type: integer
-        description: Unix timestamp for fetching newer data
-      - in: query
-        name: before
-        schema:
-          type: integer
-        description: Unix timestamp for fetching older data
-      - in: query
-        name: count
-        schema:
-          type: integer
-          default: 100
-        description: Number of candles to fetch (1-5000)
-      - in: query
-        name: from_time
-        schema:
-          type: string
-        description: Start time in RFC3339 format
-      - in: query
-        name: granularity
-        schema:
-          type: string
-          default: H1
-        description: Candle granularity (S5, M1, H1, D, etc.)
-      - in: query
-        name: instrument
-        schema:
-          type: string
-        description: Currency pair (e.g., EUR_USD, GBP_USD)
-        required: true
-      - in: query
-        name: to_time
-        schema:
-          type: string
-        description: End time in RFC3339 format
+        - in: query
+          name: account_id
+          schema:
+            type: string
+          description: OANDA account ID (uses default if not provided)
+        - in: query
+          name: after
+          schema:
+            type: integer
+          description: Unix timestamp for fetching newer data
+        - in: query
+          name: before
+          schema:
+            type: integer
+          description: Unix timestamp for fetching older data
+        - in: query
+          name: count
+          schema:
+            type: integer
+            default: 100
+          description: Number of candles to fetch (1-5000)
+        - in: query
+          name: from_time
+          schema:
+            type: string
+          description: Start time in RFC3339 format
+        - in: query
+          name: granularity
+          schema:
+            type: string
+            default: H1
+          description: Candle granularity (S5, M1, H1, D, etc.)
+        - in: query
+          name: instrument
+          schema:
+            type: string
+          description: Currency pair (e.g., EUR_USD, GBP_USD)
+          required: true
+        - in: query
+          name: to_time
+          schema:
+            type: string
+          description: End time in RFC3339 format
       tags:
-      - market
+        - market
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/market/candles/granularities/:
     get:
       operationId: list_supported_granularities
       description: Retrieve list of supported OANDA granularities/timeframes
       summary: GET /api/market/granularities/
       tags:
-      - market
+        - market
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/market/health/oanda/:
     get:
       operationId: get_oanda_health_status
-      description: Retrieve the latest health check status for the selected OANDA
+      description:
+        Retrieve the latest health check status for the selected OANDA
         account
       summary: GET /api/market/health/oanda/
       parameters:
-      - in: query
-        name: account_id
-        schema:
-          type: string
-        description: OANDA account ID (uses default if not provided)
+        - in: query
+          name: account_id
+          schema:
+            type: string
+          description: OANDA account ID (uses default if not provided)
       tags:
-      - Market - Health
+        - Market - Health
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OandaApiHealthStatus'
+                $ref: "#/components/schemas/OandaApiHealthStatus"
           description: Health status retrieved successfully
-        '400':
+        "400":
           description: No OANDA account found
     post:
       operationId: check_oanda_health
       description: Perform a live health check against OANDA API and persist the result
       summary: POST /api/market/health/oanda/
       parameters:
-      - in: query
-        name: account_id
-        schema:
-          type: string
-        description: OANDA account ID (uses default if not provided)
+        - in: query
+          name: account_id
+          schema:
+            type: string
+          description: OANDA account ID (uses default if not provided)
       tags:
-      - Market - Health
+        - Market - Health
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OandaApiHealthStatus'
+                $ref: "#/components/schemas/OandaApiHealthStatus"
           description: Health check performed successfully
-        '400':
+        "400":
           description: No OANDA account found
   /api/market/instruments/:
     get:
@@ -725,280 +734,282 @@ paths:
       description: Retrieve list of supported currency pairs from OANDA API
       summary: GET /api/market/instruments/
       tags:
-      - market
+        - market
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/market/instruments/{instrument}/:
     get:
       operationId: get_instrument_detail
       description: Fetch detailed information about a specific currency pair
       summary: GET /api/market/instruments/{instrument}/
       parameters:
-      - in: path
-        name: instrument
-        schema:
-          type: string
-        description: Currency pair (e.g., EUR_USD)
-        required: true
+        - in: path
+          name: instrument
+          schema:
+            type: string
+          description: Currency pair (e.g., EUR_USD)
+          required: true
       tags:
-      - market
+        - market
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/market/market/status/:
     get:
       operationId: get_market_status
-      description: Retrieve current forex market open/close status and trading session
+      description:
+        Retrieve current forex market open/close status and trading session
         information
       summary: GET /api/market/status/
       tags:
-      - market
+        - market
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/market/orders/:
     get:
       operationId: list_orders
       description: List user's orders directly from OANDA API
       summary: GET /api/market/orders/
       parameters:
-      - in: query
-        name: account_id
-        schema:
-          type: integer
-        description: Filter by OANDA account ID
-      - in: query
-        name: count
-        schema:
-          type: integer
-          default: 50
-        description: Number of orders to return
-      - in: query
-        name: instrument
-        schema:
-          type: string
-        description: Filter by currency pair
-      - in: query
-        name: status
-        schema:
-          type: string
-          default: all
-        description: Filter by order status (pending/all)
+        - in: query
+          name: account_id
+          schema:
+            type: integer
+          description: Filter by OANDA account ID
+        - in: query
+          name: count
+          schema:
+            type: integer
+            default: 50
+          description: Number of orders to return
+        - in: query
+          name: instrument
+          schema:
+            type: string
+          description: Filter by currency pair
+        - in: query
+          name: status
+          schema:
+            type: string
+            default: all
+          description: Filter by order status (pending/all)
       tags:
-      - Market - Orders
+        - Market - Orders
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
     post:
       operationId: create_order
       description: Submit new order (market, limit, stop, OCO)
       summary: POST /api/market/orders/
       tags:
-      - Market - Orders
+        - Market - Orders
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrderRequest'
+              $ref: "#/components/schemas/OrderRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '201':
+        "201":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/market/orders/{order_id}/:
     get:
       operationId: get_order_detail
       description: Retrieve order details from OANDA API
       summary: GET /api/market/orders/{order_id}/
       parameters:
-      - in: query
-        name: account_id
-        schema:
-          type: integer
-        description: OANDA account database ID
-        required: true
-      - in: path
-        name: order_id
-        schema:
-          type: string
-        description: OANDA Order ID
-        required: true
+        - in: query
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+          required: true
+        - in: path
+          name: order_id
+          schema:
+            type: string
+          description: OANDA Order ID
+          required: true
       tags:
-      - Market - Orders
+        - Market - Orders
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
     delete:
       operationId: cancel_order
       description: Cancel a pending order via OANDA API
       summary: DELETE /api/market/orders/{order_id}/
       parameters:
-      - in: query
-        name: account_id
-        schema:
-          type: integer
-        description: OANDA account database ID
-        required: true
-      - in: path
-        name: order_id
-        schema:
-          type: string
-        description: OANDA Order ID
-        required: true
+        - in: query
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+          required: true
+        - in: path
+          name: order_id
+          schema:
+            type: string
+          description: OANDA Order ID
+          required: true
       tags:
-      - Market - Orders
+        - Market - Orders
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/market/positions/:
     get:
       operationId: list_positions
       description: Retrieve positions directly from OANDA API
       summary: GET /api/market/positions/
       parameters:
-      - in: query
-        name: account_id
-        schema:
-          type: integer
-        description: OANDA account database ID
-      - in: query
-        name: instrument
-        schema:
-          type: string
-        description: Currency pair filter
-      - in: query
-        name: status
-        schema:
-          type: string
-          default: open
-        description: Position status (open/closed/all)
+        - in: query
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+        - in: query
+          name: instrument
+          schema:
+            type: string
+          description: Currency pair filter
+        - in: query
+          name: status
+          schema:
+            type: string
+            default: open
+          description: Position status (open/closed/all)
       tags:
-      - Market - Positions
+        - Market - Positions
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
     put:
       operationId: open_position
       description: Open a new position by submitting a market order via OANDA
       summary: PUT /api/market/positions/
       tags:
-      - Market - Positions
+        - Market - Positions
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PositionRequest'
+              $ref: "#/components/schemas/PositionRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '201':
+        "201":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/market/positions/{position_id}/:
     get:
       operationId: get_position_detail
-      description: Retrieve detailed information for a specific trade/position from
+      description:
+        Retrieve detailed information for a specific trade/position from
         OANDA
       summary: GET /api/market/positions/{position_id}/
       parameters:
-      - in: query
-        name: account_id
-        schema:
-          type: integer
-        description: OANDA account database ID
-        required: true
-      - in: path
-        name: position_id
-        schema:
-          type: string
-        description: OANDA Trade ID
-        required: true
+        - in: query
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+          required: true
+        - in: path
+          name: position_id
+          schema:
+            type: string
+          description: OANDA Trade ID
+          required: true
       tags:
-      - Market - Positions
+        - Market - Positions
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
     patch:
       operationId: close_position
       description: Close a position via OANDA API
       summary: PATCH /api/market/positions/{position_id}/
       parameters:
-      - in: path
-        name: position_id
-        schema:
-          type: string
-        description: OANDA Trade ID
-        required: true
+        - in: path
+          name: position_id
+          schema:
+            type: string
+          description: OANDA Trade ID
+          required: true
       tags:
-      - Market - Positions
+        - Market - Positions
       requestBody:
         content:
           application/json:
@@ -1006,219 +1017,219 @@ paths:
               type: object
               additionalProperties: {}
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/trading/strategies/:
     get:
       operationId: trading_strategies_retrieve
       description: Get all available trading strategies with their configuration schemas
       summary: List available strategies
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StrategyList'
-          description: ''
+                $ref: "#/components/schemas/StrategyList"
+          description: ""
   /api/trading/strategies/{strategy_id}/defaults/:
     get:
       operationId: trading_strategies_defaults_retrieve
       description: Get default configuration parameters for a specific strategy
       summary: Get strategy defaults
       parameters:
-      - in: path
-        name: strategy_id
-        schema:
-          type: string
-        required: true
+        - in: path
+          name: strategy_id
+          schema:
+            type: string
+          required: true
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
-        '404':
+          description: ""
+        "404":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/trading/strategy-configs/:
     get:
       operationId: trading_strategy_configs_list
       description: List all strategy configurations for the authenticated user
       summary: List strategy configurations
       parameters:
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: page_size
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
+        - name: page
+          required: false
+          in: query
+          description: A page number within the paginated result set.
+          schema:
+            type: integer
+        - name: page_size
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedStrategyConfigListList'
-          description: ''
+                $ref: "#/components/schemas/PaginatedStrategyConfigListList"
+          description: ""
     post:
       operationId: trading_strategy_configs_create
       description: Create a new strategy configuration
       summary: Create strategy configuration
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StrategyConfigCreateRequest'
+              $ref: "#/components/schemas/StrategyConfigCreateRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '201':
+        "201":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StrategyConfigDetail'
-          description: ''
-        '400':
+                $ref: "#/components/schemas/StrategyConfigDetail"
+          description: ""
+        "400":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/trading/strategy-configs/{config_id}/:
     get:
       operationId: trading_strategy_configs_retrieve
       description: Retrieve a specific strategy configuration
       summary: Get strategy configuration
       parameters:
-      - in: path
-        name: config_id
-        schema:
-          type: integer
-        required: true
+        - in: path
+          name: config_id
+          schema:
+            type: integer
+          required: true
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StrategyConfigDetail'
-          description: ''
-        '404':
+                $ref: "#/components/schemas/StrategyConfigDetail"
+          description: ""
+        "404":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
     put:
       operationId: trading_strategy_configs_update
       description: Update an existing strategy configuration
       summary: Update strategy configuration
       parameters:
-      - in: path
-        name: config_id
-        schema:
-          type: integer
-        required: true
+        - in: path
+          name: config_id
+          schema:
+            type: integer
+          required: true
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StrategyConfigCreateRequest'
+              $ref: "#/components/schemas/StrategyConfigCreateRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StrategyConfigDetail'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: {}
-          description: ''
-        '404':
+                $ref: "#/components/schemas/StrategyConfigDetail"
+          description: ""
+        "400":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
+        "404":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
     delete:
       operationId: trading_strategy_configs_destroy
       description: Delete a strategy configuration (fails if in use by active tasks)
       summary: Delete strategy configuration
       parameters:
-      - in: path
-        name: config_id
-        schema:
-          type: integer
-        required: true
+        - in: path
+          name: config_id
+          schema:
+            type: integer
+          required: true
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '204':
+        "204":
           description: No response body
-        '400':
+        "400":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
-        '404':
+          description: ""
+        "404":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/trading/tasks/backtest/:
     get:
       operationId: trading_tasks_backtest_list
@@ -1227,42 +1238,44 @@ paths:
 
         Provides CRUD operations and task lifecycle management including:
         - submit: Submit task for execution
-        - cancel: Cancel running task
+        - stop: Stop running task
+        - pause: Pause running task
         - restart: Restart task from beginning
-        - resume: Resume cancelled task
+        - resume: Resume paused task
         - logs: Retrieve task logs with pagination
-        - metrics: Retrieve task metrics with filtering
-        - results: Retrieve task results
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+        - equity: Retrieve equity curve
       parameters:
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: page
+          required: false
+          in: query
+          description: A page number within the paginated result set.
+          schema:
+            type: integer
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedBacktestTaskList'
-          description: ''
+                $ref: "#/components/schemas/PaginatedBacktestTaskList"
+          description: ""
     post:
       operationId: trading_tasks_backtest_create
       description: |-
@@ -1270,29 +1283,31 @@ paths:
 
         Provides CRUD operations and task lifecycle management including:
         - submit: Submit task for execution
-        - cancel: Cancel running task
+        - stop: Stop running task
+        - pause: Pause running task
         - restart: Restart task from beginning
-        - resume: Resume cancelled task
+        - resume: Resume paused task
         - logs: Retrieve task logs with pagination
-        - metrics: Retrieve task metrics with filtering
-        - results: Retrieve task results
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+        - equity: Retrieve equity curve
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BacktestTaskRequest'
+              $ref: "#/components/schemas/BacktestTaskRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '201':
+        "201":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BacktestTask'
-          description: ''
+                $ref: "#/components/schemas/BacktestTask"
+          description: ""
   /api/trading/tasks/backtest/{id}/:
     get:
       operationId: trading_tasks_backtest_retrieve
@@ -1301,30 +1316,33 @@ paths:
 
         Provides CRUD operations and task lifecycle management including:
         - submit: Submit task for execution
-        - cancel: Cancel running task
+        - stop: Stop running task
+        - pause: Pause running task
         - restart: Restart task from beginning
-        - resume: Resume cancelled task
+        - resume: Resume paused task
         - logs: Retrieve task logs with pagination
-        - metrics: Retrieve task metrics with filtering
-        - results: Retrieve task results
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+        - equity: Retrieve equity curve
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BacktestTask'
-          description: ''
+                $ref: "#/components/schemas/BacktestTask"
+          description: ""
     put:
       operationId: trading_tasks_backtest_update
       description: |-
@@ -1332,36 +1350,39 @@ paths:
 
         Provides CRUD operations and task lifecycle management including:
         - submit: Submit task for execution
-        - cancel: Cancel running task
+        - stop: Stop running task
+        - pause: Pause running task
         - restart: Restart task from beginning
-        - resume: Resume cancelled task
+        - resume: Resume paused task
         - logs: Retrieve task logs with pagination
-        - metrics: Retrieve task metrics with filtering
-        - results: Retrieve task results
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+        - equity: Retrieve equity curve
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BacktestTaskRequest'
+              $ref: "#/components/schemas/BacktestTaskRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BacktestTask'
-          description: ''
+                $ref: "#/components/schemas/BacktestTask"
+          description: ""
     patch:
       operationId: trading_tasks_backtest_partial_update
       description: |-
@@ -1369,35 +1390,38 @@ paths:
 
         Provides CRUD operations and task lifecycle management including:
         - submit: Submit task for execution
-        - cancel: Cancel running task
+        - stop: Stop running task
+        - pause: Pause running task
         - restart: Restart task from beginning
-        - resume: Resume cancelled task
+        - resume: Resume paused task
         - logs: Retrieve task logs with pagination
-        - metrics: Retrieve task metrics with filtering
-        - results: Retrieve task results
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+        - equity: Retrieve equity curve
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedBacktestTaskRequest'
+              $ref: "#/components/schemas/PatchedBacktestTaskRequest"
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BacktestTask'
-          description: ''
+                $ref: "#/components/schemas/BacktestTask"
+          description: ""
     delete:
       operationId: trading_tasks_backtest_destroy
       description: |-
@@ -1405,541 +1429,469 @@ paths:
 
         Provides CRUD operations and task lifecycle management including:
         - submit: Submit task for execution
-        - cancel: Cancel running task
+        - stop: Stop running task
+        - pause: Pause running task
         - restart: Restart task from beginning
-        - resume: Resume cancelled task
+        - resume: Resume paused task
         - logs: Retrieve task logs with pagination
-        - metrics: Retrieve task metrics with filtering
-        - results: Retrieve task results
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+        - equity: Retrieve equity curve
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '204':
+        "204":
           description: No response body
-  /api/trading/tasks/backtest/{id}/equity/:
+  /api/trading/tasks/backtest/{id}/equities/:
     get:
-      operationId: trading_tasks_backtest_equity_list
+      operationId: trading_tasks_backtest_equities_list
       description: Retrieve equity curve data from task execution state
       summary: Get task equity curve
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: page
+          required: false
+          in: query
+          description: A page number within the paginated result set.
+          schema:
+            type: integer
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedEquityPointList'
-          description: ''
+                $ref: "#/components/schemas/PaginatedEquityPointList"
+          description: ""
   /api/trading/tasks/backtest/{id}/events/:
     get:
       operationId: trading_tasks_backtest_events_list
       description: Retrieve task events with filtering
       summary: Get task events
       parameters:
-      - in: query
-        name: event_type
-        schema:
-          type: string
-        description: Filter by event type
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
-      - in: query
-        name: limit
-        schema:
-          type: integer
-        description: 'Maximum number of events to return (default: 100)'
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: severity
-        schema:
-          type: string
-        description: Filter by severity (info, warning, error)
+        - in: query
+          name: event_type
+          schema:
+            type: string
+          description: Filter by event type
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          description: "Maximum number of events to return (default: 100)"
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: page
+          required: false
+          in: query
+          description: A page number within the paginated result set.
+          schema:
+            type: integer
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
+        - in: query
+          name: severity
+          schema:
+            type: string
+          description: Filter by severity (info, warning, error)
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedTradingEventList'
-          description: ''
+                $ref: "#/components/schemas/PaginatedTradingEventList"
+          description: ""
   /api/trading/tasks/backtest/{id}/logs/:
     get:
       operationId: trading_tasks_backtest_logs_list
       description: Retrieve task execution logs with pagination and filtering
       summary: Get task logs
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
-      - in: query
-        name: level
-        schema:
-          type: string
-        description: Filter by log level (DEBUG, INFO, WARNING, ERROR)
-      - in: query
-        name: limit
-        schema:
-          type: integer
-        description: 'Maximum number of logs to return (default: 100)'
-      - in: query
-        name: offset
-        schema:
-          type: integer
-        description: 'Number of logs to skip (default: 0)'
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - in: query
+          name: level
+          schema:
+            type: string
+          description: Filter by log level (DEBUG, INFO, WARNING, ERROR)
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          description: "Maximum number of logs to return (default: 100)"
+        - in: query
+          name: offset
+          schema:
+            type: integer
+          description: "Number of logs to skip (default: 0)"
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: page
+          required: false
+          in: query
+          description: A page number within the paginated result set.
+          schema:
+            type: integer
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedTaskLogList'
-          description: ''
-  /api/trading/tasks/backtest/{id}/metrics/:
-    get:
-      operationId: trading_tasks_backtest_metrics_list
-      description: Retrieve task execution metrics with filtering
-      summary: Get task metrics
-      parameters:
-      - in: query
-        name: end_time
-        schema:
-          type: string
-        description: Filter metrics before this timestamp (ISO format)
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
-      - in: query
-        name: metric_name
-        schema:
-          type: string
-        description: Filter by metric name
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: start_time
-        schema:
-          type: string
-        description: Filter metrics after this timestamp (ISO format)
-      tags:
-      - trading
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedTaskMetricList'
-          description: ''
+                $ref: "#/components/schemas/PaginatedTaskLogList"
+          description: ""
   /api/trading/tasks/backtest/{id}/pause/:
     post:
       operationId: trading_tasks_backtest_pause_create
       description: Pause a running task, preserving execution state
       summary: Pause running task
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BacktestTaskRequest'
+              $ref: "#/components/schemas/BacktestTaskRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BacktestTask'
-          description: ''
-        '400':
+                $ref: "#/components/schemas/BacktestTask"
+          description: ""
+        "400":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/trading/tasks/backtest/{id}/restart/:
     post:
       operationId: trading_tasks_backtest_restart_create
       description: Restart a task from the beginning, clearing all execution data
       summary: Restart task from beginning
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BacktestTaskRequest'
+              $ref: "#/components/schemas/BacktestTaskRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BacktestTask'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: {}
-          description: ''
-        '404':
+                $ref: "#/components/schemas/BacktestTask"
+          description: ""
+        "400":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
-        '500':
+          description: ""
+        "404":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
-  /api/trading/tasks/backtest/{id}/results/:
-    get:
-      operationId: trading_tasks_backtest_results_retrieve
-      description: Retrieve task execution results
-      summary: Get task results
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
-      tags:
-      - trading
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
+          description: ""
+        "500":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: {}
-          description: ''
+          description: ""
   /api/trading/tasks/backtest/{id}/resume/:
     post:
       operationId: trading_tasks_backtest_resume_create
       description: Resume a paused task, continuing execution from where it left off
       summary: Resume paused task
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BacktestTaskRequest'
+              $ref: "#/components/schemas/BacktestTaskRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BacktestTask'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: {}
-          description: ''
-        '404':
+                $ref: "#/components/schemas/BacktestTask"
+          description: ""
+        "400":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
-        '500':
+          description: ""
+        "404":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
+        "500":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/tasks/backtest/{id}/start/:
+    post:
+      operationId: trading_tasks_backtest_start_create
+      description:
+        Submit a pending task to Celery for execution. Only tasks in CREATED
+        status can be submitted. Use restart or resume for STOPPED tasks.
+      summary: Submit task for execution
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BacktestTaskRequest"
+        required: true
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BacktestTask"
+          description: ""
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+        "500":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
   /api/trading/tasks/backtest/{id}/stop/:
     post:
       operationId: trading_tasks_backtest_stop_create
-      description: Stop a currently running or paused task
+      description: Stop a currently running or paused task asynchronously
       summary: Stop running task
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BacktestTaskRequest'
+              $ref: "#/components/schemas/BacktestTaskRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BacktestTask'
-          description: ''
-        '400':
+        "202":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
-        '404':
+          description: ""
+        "400":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
-        '500':
+          description: ""
+        "404":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
-  /api/trading/tasks/backtest/{id}/submit/:
-    post:
-      operationId: trading_tasks_backtest_submit_create
-      description: Submit a pending task to Celery for execution
-      summary: Submit task for execution
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
-      tags:
-      - trading
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BacktestTaskRequest'
-        required: true
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BacktestTask'
-          description: ''
-        '400':
+          description: ""
+        "500":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
-        '500':
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: {}
-          description: ''
+          description: ""
   /api/trading/tasks/backtest/{id}/trades/:
     get:
       operationId: trading_tasks_backtest_trades_list
       description: Retrieve trade history from task execution state
       summary: Get task trades
       parameters:
-      - in: query
-        name: direction
-        schema:
-          type: string
-        description: Filter by trade direction (buy/sell)
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Backtest Task.
-        required: true
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - in: query
+          name: direction
+          schema:
+            type: string
+          description: Filter by trade direction (buy/sell)
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: page
+          required: false
+          in: query
+          description: A page number within the paginated result set.
+          schema:
+            type: integer
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedTradeList'
-          description: ''
+                $ref: "#/components/schemas/PaginatedTradeList"
+          description: ""
   /api/trading/tasks/trading/:
     get:
       operationId: trading_tasks_trading_list
@@ -1948,42 +1900,43 @@ paths:
 
         Provides CRUD operations and task lifecycle management including:
         - submit: Submit task for execution
-        - cancel: Cancel running task
+        - stop: Stop running task
         - restart: Restart task from beginning
         - resume: Resume cancelled task
         - logs: Retrieve task logs with pagination
-        - metrics: Retrieve task metrics with filtering
-        - results: Retrieve task results
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+        - equity: Retrieve equity curve
       parameters:
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: page
+          required: false
+          in: query
+          description: A page number within the paginated result set.
+          schema:
+            type: integer
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedTradingTaskList'
-          description: ''
+                $ref: "#/components/schemas/PaginatedTradingTaskList"
+          description: ""
     post:
       operationId: trading_tasks_trading_create
       description: |-
@@ -1991,29 +1944,30 @@ paths:
 
         Provides CRUD operations and task lifecycle management including:
         - submit: Submit task for execution
-        - cancel: Cancel running task
+        - stop: Stop running task
         - restart: Restart task from beginning
         - resume: Resume cancelled task
         - logs: Retrieve task logs with pagination
-        - metrics: Retrieve task metrics with filtering
-        - results: Retrieve task results
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+        - equity: Retrieve equity curve
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TradingTaskRequest'
+              $ref: "#/components/schemas/TradingTaskRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '201':
+        "201":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TradingTask'
-          description: ''
+                $ref: "#/components/schemas/TradingTask"
+          description: ""
   /api/trading/tasks/trading/{id}/:
     get:
       operationId: trading_tasks_trading_retrieve
@@ -2022,30 +1976,32 @@ paths:
 
         Provides CRUD operations and task lifecycle management including:
         - submit: Submit task for execution
-        - cancel: Cancel running task
+        - stop: Stop running task
         - restart: Restart task from beginning
         - resume: Resume cancelled task
         - logs: Retrieve task logs with pagination
-        - metrics: Retrieve task metrics with filtering
-        - results: Retrieve task results
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+        - equity: Retrieve equity curve
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TradingTask'
-          description: ''
+                $ref: "#/components/schemas/TradingTask"
+          description: ""
     put:
       operationId: trading_tasks_trading_update
       description: |-
@@ -2053,36 +2009,38 @@ paths:
 
         Provides CRUD operations and task lifecycle management including:
         - submit: Submit task for execution
-        - cancel: Cancel running task
+        - stop: Stop running task
         - restart: Restart task from beginning
         - resume: Resume cancelled task
         - logs: Retrieve task logs with pagination
-        - metrics: Retrieve task metrics with filtering
-        - results: Retrieve task results
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+        - equity: Retrieve equity curve
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TradingTaskRequest'
+              $ref: "#/components/schemas/TradingTaskRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TradingTask'
-          description: ''
+                $ref: "#/components/schemas/TradingTask"
+          description: ""
     patch:
       operationId: trading_tasks_trading_partial_update
       description: |-
@@ -2090,35 +2048,37 @@ paths:
 
         Provides CRUD operations and task lifecycle management including:
         - submit: Submit task for execution
-        - cancel: Cancel running task
+        - stop: Stop running task
         - restart: Restart task from beginning
         - resume: Resume cancelled task
         - logs: Retrieve task logs with pagination
-        - metrics: Retrieve task metrics with filtering
-        - results: Retrieve task results
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+        - equity: Retrieve equity curve
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedTradingTaskRequest'
+              $ref: "#/components/schemas/PatchedTradingTaskRequest"
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TradingTask'
-          description: ''
+                $ref: "#/components/schemas/TradingTask"
+          description: ""
     delete:
       operationId: trading_tasks_trading_destroy
       description: |-
@@ -2126,462 +2086,390 @@ paths:
 
         Provides CRUD operations and task lifecycle management including:
         - submit: Submit task for execution
-        - cancel: Cancel running task
+        - stop: Stop running task
         - restart: Restart task from beginning
         - resume: Resume cancelled task
         - logs: Retrieve task logs with pagination
-        - metrics: Retrieve task metrics with filtering
-        - results: Retrieve task results
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+        - equity: Retrieve equity curve
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '204':
+        "204":
           description: No response body
-  /api/trading/tasks/trading/{id}/equity/:
+  /api/trading/tasks/trading/{id}/equities/:
     get:
-      operationId: trading_tasks_trading_equity_list
+      operationId: trading_tasks_trading_equities_list
       description: Retrieve equity curve data from task execution state
       summary: Get task equity curve
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: page
+          required: false
+          in: query
+          description: A page number within the paginated result set.
+          schema:
+            type: integer
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedEquityPointList'
-          description: ''
+                $ref: "#/components/schemas/PaginatedEquityPointList"
+          description: ""
   /api/trading/tasks/trading/{id}/events/:
     get:
       operationId: trading_tasks_trading_events_list
       description: Retrieve task events with filtering
       summary: Get task events
       parameters:
-      - in: query
-        name: event_type
-        schema:
-          type: string
-        description: Filter by event type
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
-      - in: query
-        name: limit
-        schema:
-          type: integer
-        description: 'Maximum number of events to return (default: 100)'
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: severity
-        schema:
-          type: string
-        description: Filter by severity (info, warning, error)
+        - in: query
+          name: event_type
+          schema:
+            type: string
+          description: Filter by event type
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          description: "Maximum number of events to return (default: 100)"
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: page
+          required: false
+          in: query
+          description: A page number within the paginated result set.
+          schema:
+            type: integer
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
+        - in: query
+          name: severity
+          schema:
+            type: string
+          description: Filter by severity (info, warning, error)
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedTradingEventList'
-          description: ''
+                $ref: "#/components/schemas/PaginatedTradingEventList"
+          description: ""
   /api/trading/tasks/trading/{id}/logs/:
     get:
       operationId: trading_tasks_trading_logs_list
       description: Retrieve task execution logs with pagination and filtering
       summary: Get task logs
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
-      - in: query
-        name: level
-        schema:
-          type: string
-        description: Filter by log level (DEBUG, INFO, WARNING, ERROR)
-      - in: query
-        name: limit
-        schema:
-          type: integer
-        description: 'Maximum number of logs to return (default: 100)'
-      - in: query
-        name: offset
-        schema:
-          type: integer
-        description: 'Number of logs to skip (default: 0)'
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - in: query
+          name: level
+          schema:
+            type: string
+          description: Filter by log level (DEBUG, INFO, WARNING, ERROR)
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          description: "Maximum number of logs to return (default: 100)"
+        - in: query
+          name: offset
+          schema:
+            type: integer
+          description: "Number of logs to skip (default: 0)"
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: page
+          required: false
+          in: query
+          description: A page number within the paginated result set.
+          schema:
+            type: integer
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedTaskLogList'
-          description: ''
-  /api/trading/tasks/trading/{id}/metrics/:
-    get:
-      operationId: trading_tasks_trading_metrics_list
-      description: Retrieve task execution metrics with filtering
-      summary: Get task metrics
-      parameters:
-      - in: query
-        name: end_time
-        schema:
-          type: string
-        description: Filter metrics before this timestamp (ISO format)
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
-      - in: query
-        name: metric_name
-        schema:
-          type: string
-        description: Filter by metric name
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: start_time
-        schema:
-          type: string
-        description: Filter metrics after this timestamp (ISO format)
-      tags:
-      - trading
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedTaskMetricList'
-          description: ''
+                $ref: "#/components/schemas/PaginatedTaskLogList"
+          description: ""
   /api/trading/tasks/trading/{id}/restart/:
     post:
       operationId: trading_tasks_trading_restart_create
       description: Restart a task from the beginning, clearing all execution data
       summary: Restart task from beginning
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TradingTaskRequest'
+              $ref: "#/components/schemas/TradingTaskRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TradingTask'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: {}
-          description: ''
-  /api/trading/tasks/trading/{id}/results/:
-    get:
-      operationId: trading_tasks_trading_results_retrieve
-      description: Retrieve task execution results
-      summary: Get task results
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
-      tags:
-      - trading
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
+                $ref: "#/components/schemas/TradingTask"
+          description: ""
+        "400":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: {}
-          description: ''
+          description: ""
   /api/trading/tasks/trading/{id}/resume/:
     post:
       operationId: trading_tasks_trading_resume_create
       description: Resume a cancelled task, preserving execution context
       summary: Resume cancelled task
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TradingTaskRequest'
+              $ref: "#/components/schemas/TradingTaskRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TradingTask'
-          description: ''
-        '400':
+                $ref: "#/components/schemas/TradingTask"
+          description: ""
+        "400":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
+  /api/trading/tasks/trading/{id}/start/:
+    post:
+      operationId: trading_tasks_trading_start_create
+      description:
+        Submit a pending task to Celery for execution. Only tasks in CREATED
+        status can be submitted. Use restart or resume for STOPPED tasks.
+      summary: Submit task for execution
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradingTaskRequest"
+        required: true
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingTask"
+          description: ""
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
   /api/trading/tasks/trading/{id}/stop/:
     post:
       operationId: trading_tasks_trading_stop_create
-      description: Cancel a currently running task
-      summary: Cancel running task
+      description:
+        Stop a currently running task asynchronously (graceful stop for
+        trading tasks)
+      summary: Stop running task
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
       tags:
-      - trading
+        - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TradingTaskRequest'
+              $ref: "#/components/schemas/TradingTaskRequest"
         required: true
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TradingTask'
-          description: ''
-        '400':
+        "202":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
-  /api/trading/tasks/trading/{id}/submit/:
-    post:
-      operationId: trading_tasks_trading_submit_create
-      description: Submit a pending task to Celery for execution
-      summary: Submit task for execution
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
-      tags:
-      - trading
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TradingTaskRequest'
-        required: true
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TradingTask'
-          description: ''
-        '400':
+          description: ""
+        "400":
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
+          description: ""
   /api/trading/tasks/trading/{id}/trades/:
     get:
       operationId: trading_tasks_trading_trades_list
       description: Retrieve trade history from task execution state
       summary: Get task trades
       parameters:
-      - in: query
-        name: direction
-        schema:
-          type: string
-        description: Filter by trade direction (buy/sell)
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Trading Task.
-        required: true
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - in: query
+          name: direction
+          schema:
+            type: string
+          description: Filter by trade direction (buy/sell)
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: page
+          required: false
+          in: query
+          description: A page number within the paginated result set.
+          schema:
+            type: integer
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - trading
+        - trading
       security:
-      - cookieAuth: []
+        - cookieAuth: []
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedTradeList'
-          description: ''
+                $ref: "#/components/schemas/PaginatedTradeList"
+          description: ""
 components:
   schemas:
     ApiTypeEnum:
       enum:
-      - practice
-      - live
+        - practice
+        - live
       type: string
       description: |-
         * `practice` - Practice
@@ -2591,8 +2479,10 @@ components:
       description: Serializer for BacktestTasks with execution data.
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
           readOnly: true
+          description: Unique identifier for this record
         name:
           type: string
           description: Human-readable name for this backtest task
@@ -2613,7 +2503,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusEnum'
+            - $ref: "#/components/schemas/StatusEnum"
           readOnly: true
           description: |-
             Current task status
@@ -2628,12 +2518,12 @@ components:
           type: string
           format: date-time
           readOnly: true
-          description: Timestamp when the task was created
+          description: Timestamp when this record was created
         updated_at:
           type: string
           format: date-time
           readOnly: true
-          description: Timestamp when the task was last updated
+          description: Timestamp when this record was last updated
         started_at:
           type: string
           format: date-time
@@ -2685,20 +2575,17 @@ components:
           readOnly: true
           nullable: true
           description: Full error traceback if task failed
-        result_data:
-          readOnly: true
-          nullable: true
-          description: Execution results data
         user:
           type: integer
           readOnly: true
           description: User who created this backtest task
         config:
-          type: integer
+          type: string
+          format: uuid
           description: Strategy configuration used by this task
         data_source:
           allOf:
-          - $ref: '#/components/schemas/DataSourceEnum'
+            - $ref: "#/components/schemas/DataSourceEnum"
           description: |-
             Data source for historical tick data
 
@@ -2729,30 +2616,29 @@ components:
           maxLength: 20
         trading_mode:
           allOf:
-          - $ref: '#/components/schemas/TradingModeEnum'
+            - $ref: "#/components/schemas/TradingModeEnum"
           description: |-
             Trading mode: netting (aggregated positions) or hedging (independent trades)
 
             * `netting` - Netting Mode
             * `hedging` - Hedging Mode
       required:
-      - celery_task_id
-      - completed_at
-      - config
-      - created_at
-      - duration
-      - end_time
-      - error_message
-      - error_traceback
-      - id
-      - name
-      - result_data
-      - start_time
-      - started_at
-      - status
-      - task_type
-      - updated_at
-      - user
+        - celery_task_id
+        - completed_at
+        - config
+        - created_at
+        - duration
+        - end_time
+        - error_message
+        - error_traceback
+        - id
+        - name
+        - start_time
+        - started_at
+        - status
+        - task_type
+        - updated_at
+        - user
     BacktestTaskRequest:
       type: object
       description: Serializer for BacktestTasks with execution data.
@@ -2776,11 +2662,12 @@ components:
           minimum: -2147483648
           description: Maximum number of retries allowed
         config:
-          type: integer
+          type: string
+          format: uuid
           description: Strategy configuration used by this task
         data_source:
           allOf:
-          - $ref: '#/components/schemas/DataSourceEnum'
+            - $ref: "#/components/schemas/DataSourceEnum"
           description: |-
             Data source for historical tick data
 
@@ -2812,22 +2699,22 @@ components:
           maxLength: 20
         trading_mode:
           allOf:
-          - $ref: '#/components/schemas/TradingModeEnum'
+            - $ref: "#/components/schemas/TradingModeEnum"
           description: |-
             Trading mode: netting (aggregated positions) or hedging (independent trades)
 
             * `netting` - Netting Mode
             * `hedging` - Hedging Mode
       required:
-      - config
-      - end_time
-      - name
-      - start_time
+        - config
+        - end_time
+        - name
+        - start_time
     DataSourceEnum:
       enum:
-      - postgresql
-      - athena
-      - s3
+        - postgresql
+        - athena
+        - s3
       type: string
       description: |-
         * `postgresql` - PostgreSQL
@@ -2835,8 +2722,8 @@ components:
         * `s3` - AWS S3
     Direction530Enum:
       enum:
-      - long
-      - short
+        - long
+        - short
       type: string
       description: |-
         * `long` - long
@@ -2850,10 +2737,10 @@ components:
           minLength: 1
           description: Email verification token
       required:
-      - token
+        - token
     EquityPoint:
       type: object
-      description: Serializer for equity curve data points.
+      description: Serializer for equity curve data points from Equities model.
       properties:
         timestamp:
           type: string
@@ -2862,29 +2749,14 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
-        equity:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
-        realized_pnl:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
-        unrealized_pnl:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
       required:
-      - balance
-      - equity
-      - realized_pnl
-      - timestamp
-      - unrealized_pnl
+        - balance
+        - timestamp
     JurisdictionEnum:
       enum:
-      - US
-      - JP
-      - OTHER
+        - US
+        - JP
+        - OTHER
       type: string
       description: |-
         * `US` - United States
@@ -2892,19 +2764,19 @@ components:
         * `OTHER` - Other/International
     LanguageEnum:
       enum:
-      - en
-      - ja
+        - en
+        - ja
       type: string
       description: |-
         * `en` - en
         * `ja` - ja
     LevelEnum:
       enum:
-      - DEBUG
-      - INFO
-      - WARNING
-      - ERROR
-      - CRITICAL
+        - DEBUG
+        - INFO
+        - WARNING
+        - ERROR
+        - CRITICAL
       type: string
       description: |-
         * `DEBUG` - Debug
@@ -2925,7 +2797,7 @@ components:
           maxLength: 100
         api_type:
           allOf:
-          - $ref: '#/components/schemas/ApiTypeEnum'
+            - $ref: "#/components/schemas/ApiTypeEnum"
           description: |-
             API endpoint type (practice or live)
 
@@ -2933,7 +2805,7 @@ components:
             * `live` - Live
         jurisdiction:
           allOf:
-          - $ref: '#/components/schemas/JurisdictionEnum'
+            - $ref: "#/components/schemas/JurisdictionEnum"
           description: |-
             Regulatory jurisdiction for this account
 
@@ -2985,14 +2857,14 @@ components:
           readOnly: true
           description: Timestamp when the account was last updated
       required:
-      - account_id
-      - balance
-      - created_at
-      - id
-      - margin_available
-      - margin_used
-      - unrealized_pnl
-      - updated_at
+        - account_id
+        - balance
+        - created_at
+        - id
+        - margin_available
+        - margin_used
+        - unrealized_pnl
+        - updated_at
     OandaAccountsRequest:
       type: object
       description: Serializer for OANDA account.
@@ -3009,7 +2881,7 @@ components:
           description: OANDA API token (will be encrypted)
         api_type:
           allOf:
-          - $ref: '#/components/schemas/ApiTypeEnum'
+            - $ref: "#/components/schemas/ApiTypeEnum"
           description: |-
             API endpoint type (practice or live)
 
@@ -3017,7 +2889,7 @@ components:
             * `live` - Live
         jurisdiction:
           allOf:
-          - $ref: '#/components/schemas/JurisdictionEnum'
+            - $ref: "#/components/schemas/JurisdictionEnum"
           description: |-
             Regulatory jurisdiction for this account
 
@@ -3036,8 +2908,8 @@ components:
           type: boolean
           description: Whether this is the default account for market data collection
       required:
-      - account_id
-      - api_token
+        - account_id
+        - api_token
     OandaApiHealthStatus:
       type: object
       properties:
@@ -3072,15 +2944,15 @@ components:
           type: string
           readOnly: true
       required:
-      - account
-      - api_type
-      - checked_at
-      - error_message
-      - http_status
-      - id
-      - is_available
-      - latency_ms
-      - oanda_account_id
+        - account
+        - api_type
+        - checked_at
+        - error_message
+        - http_status
+        - id
+        - is_available
+        - latency_ms
+        - oanda_account_id
     OrderRequest:
       type: object
       description: Serializer for creating orders.
@@ -3092,7 +2964,7 @@ components:
           maxLength: 10
         order_type:
           allOf:
-          - $ref: '#/components/schemas/OrderTypeEnum'
+            - $ref: "#/components/schemas/OrderTypeEnum"
           description: |-
             Type of order
 
@@ -3102,7 +2974,7 @@ components:
             * `oco` - oco
         direction:
           allOf:
-          - $ref: '#/components/schemas/Direction530Enum'
+            - $ref: "#/components/schemas/Direction530Enum"
           description: |-
             Trade direction
 
@@ -3144,16 +3016,16 @@ components:
           nullable: true
           description: Stop price (for OCO orders)
       required:
-      - direction
-      - instrument
-      - order_type
-      - units
+        - direction
+        - instrument
+        - order_type
+        - units
     OrderTypeEnum:
       enum:
-      - market
-      - limit
-      - stop
-      - oco
+        - market
+        - limit
+        - stop
+        - oco
       type: string
       description: |-
         * `market` - market
@@ -3163,8 +3035,8 @@ components:
     PaginatedBacktestTaskList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3182,12 +3054,12 @@ components:
         results:
           type: array
           items:
-            $ref: '#/components/schemas/BacktestTask'
+            $ref: "#/components/schemas/BacktestTask"
     PaginatedEquityPointList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3205,12 +3077,12 @@ components:
         results:
           type: array
           items:
-            $ref: '#/components/schemas/EquityPoint'
+            $ref: "#/components/schemas/EquityPoint"
     PaginatedStrategyConfigListList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3228,12 +3100,12 @@ components:
         results:
           type: array
           items:
-            $ref: '#/components/schemas/StrategyConfigList'
+            $ref: "#/components/schemas/StrategyConfigList"
     PaginatedTaskLogList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3251,35 +3123,12 @@ components:
         results:
           type: array
           items:
-            $ref: '#/components/schemas/TaskLog'
-    PaginatedTaskMetricList:
-      type: object
-      required:
-      - count
-      - results
-      properties:
-        count:
-          type: integer
-          example: 123
-        next:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/TaskMetric'
+            $ref: "#/components/schemas/TaskLog"
     PaginatedTradeList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3297,12 +3146,12 @@ components:
         results:
           type: array
           items:
-            $ref: '#/components/schemas/Trade'
+            $ref: "#/components/schemas/Trade"
     PaginatedTradingEventList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3320,12 +3169,12 @@ components:
         results:
           type: array
           items:
-            $ref: '#/components/schemas/TradingEvent'
+            $ref: "#/components/schemas/TradingEvent"
     PaginatedTradingTaskList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3343,7 +3192,7 @@ components:
         results:
           type: array
           items:
-            $ref: '#/components/schemas/TradingTask'
+            $ref: "#/components/schemas/TradingTask"
     PatchedBacktestTaskRequest:
       type: object
       description: Serializer for BacktestTasks with execution data.
@@ -3367,11 +3216,12 @@ components:
           minimum: -2147483648
           description: Maximum number of retries allowed
         config:
-          type: integer
+          type: string
+          format: uuid
           description: Strategy configuration used by this task
         data_source:
           allOf:
-          - $ref: '#/components/schemas/DataSourceEnum'
+            - $ref: "#/components/schemas/DataSourceEnum"
           description: |-
             Data source for historical tick data
 
@@ -3403,7 +3253,7 @@ components:
           maxLength: 20
         trading_mode:
           allOf:
-          - $ref: '#/components/schemas/TradingModeEnum'
+            - $ref: "#/components/schemas/TradingModeEnum"
           description: |-
             Trading mode: netting (aggregated positions) or hedging (independent trades)
 
@@ -3432,7 +3282,8 @@ components:
           minimum: -2147483648
           description: Maximum number of retries allowed
         config:
-          type: integer
+          type: string
+          format: uuid
           description: Strategy configuration used by this task
         oanda_account:
           type: integer
@@ -3447,7 +3298,7 @@ components:
           maxLength: 20
         trading_mode:
           allOf:
-          - $ref: '#/components/schemas/TradingModeEnum'
+            - $ref: "#/components/schemas/TradingModeEnum"
           description: |-
             Trading mode: netting (aggregated positions) or hedging (independent trades)
 
@@ -3462,7 +3313,7 @@ components:
           minLength: 1
           maxLength: 10
         direction:
-          $ref: '#/components/schemas/Direction530Enum'
+          $ref: "#/components/schemas/Direction530Enum"
         units:
           type: string
           format: decimal
@@ -3478,9 +3329,9 @@ components:
           pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
           nullable: true
       required:
-      - direction
-      - instrument
-      - units
+        - direction
+        - instrument
+        - units
     PublicAccountSettings:
       type: object
       description: Serializer for public account settings (no authentication required).
@@ -3504,15 +3355,15 @@ components:
           minLength: 1
           description: Email address to resend verification to
       required:
-      - email
+        - email
     StatusEnum:
       enum:
-      - created
-      - running
-      - paused
-      - stopped
-      - completed
-      - failed
+        - created
+        - running
+        - paused
+        - stopped
+        - completed
+        - failed
       type: string
       description: |-
         * `created` - Created
@@ -3544,15 +3395,17 @@ components:
           type: string
           description: Optional description of this configuration
       required:
-      - name
-      - strategy_type
+        - name
+        - strategy_type
     StrategyConfigDetail:
       type: object
       description: Serializer for strategy configuration full details.
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
           readOnly: true
+          description: Unique identifier for this record
         user_id:
           type: integer
           readOnly: true
@@ -3577,27 +3430,29 @@ components:
           type: string
           format: date-time
           readOnly: true
-          description: Timestamp when the configuration was created
+          description: Timestamp when this record was created
         updated_at:
           type: string
           format: date-time
           readOnly: true
-          description: Timestamp when the configuration was last updated
+          description: Timestamp when this record was last updated
       required:
-      - created_at
-      - id
-      - is_in_use
-      - name
-      - strategy_type
-      - updated_at
-      - user_id
+        - created_at
+        - id
+        - is_in_use
+        - name
+        - strategy_type
+        - updated_at
+        - user_id
     StrategyConfigList:
       type: object
       description: Serializer for strategy configuration list view (summary only).
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
           readOnly: true
+          description: Unique identifier for this record
         user_id:
           type: integer
           readOnly: true
@@ -3621,21 +3476,21 @@ components:
           type: string
           format: date-time
           readOnly: true
-          description: Timestamp when the configuration was created
+          description: Timestamp when this record was created
         updated_at:
           type: string
           format: date-time
           readOnly: true
-          description: Timestamp when the configuration was last updated
+          description: Timestamp when this record was last updated
       required:
-      - created_at
-      - description
-      - id
-      - is_in_use
-      - name
-      - strategy_type
-      - updated_at
-      - user_id
+        - created_at
+        - description
+        - id
+        - is_in_use
+        - name
+        - strategy_type
+        - updated_at
+        - user_id
     StrategyList:
       type: object
       description: Serializer for listing available strategies.
@@ -3655,11 +3510,11 @@ components:
         config_schema:
           description: Configuration schema
       required:
-      - class_name
-      - config_schema
-      - description
-      - id
-      - name
+        - class_name
+        - config_schema
+        - description
+        - id
+        - name
     TaskLog:
       type: object
       description: |-
@@ -3672,9 +3527,23 @@ components:
           format: uuid
           readOnly: true
           description: Unique identifier for this log entry
-        task:
-          type: integer
-          description: Task this log entry belongs to
+        task_type:
+          allOf:
+            - $ref: "#/components/schemas/TaskTypeEnum"
+          description: |-
+            Type of task (backtest or trading)
+
+            * `backtest` - Backtest
+            * `trading` - Trading
+        task_id:
+          type: string
+          format: uuid
+          description: UUID of the task this log entry belongs to
+        celery_task_id:
+          type: string
+          nullable: true
+          description: Celery task ID for this execution
+          maxLength: 255
         timestamp:
           type: string
           format: date-time
@@ -3682,7 +3551,7 @@ components:
           description: When this log entry was created
         level:
           allOf:
-          - $ref: '#/components/schemas/LevelEnum'
+            - $ref: "#/components/schemas/LevelEnum"
           description: |-
             Log severity level
 
@@ -3694,99 +3563,68 @@ components:
         message:
           type: string
           description: Log message content
+        details:
+          description: Additional structured log details
       required:
-      - id
-      - message
-      - task
-      - timestamp
-    TaskMetric:
-      type: object
+        - id
+        - message
+        - task_id
+        - task_type
+        - timestamp
+    TaskTypeEnum:
+      enum:
+        - backtest
+        - trading
+      type: string
       description: |-
-        Serializer for TaskMetric model.
-
-        Provides access to task execution metrics with name, value, timestamp,
-        and optional metadata.
-      properties:
-        id:
-          type: string
-          format: uuid
-          readOnly: true
-          description: Unique identifier for this metric entry
-        task:
-          type: integer
-          description: Task this metric belongs to
-        metric_name:
-          type: string
-          description: Name of the metric (e.g., 'equity', 'drawdown', 'trades_count')
-          maxLength: 255
-        metric_value:
-          type: number
-          format: double
-          description: Numeric value of the metric
-        timestamp:
-          type: string
-          format: date-time
-          readOnly: true
-          description: When this metric was recorded
-        metadata:
-          nullable: true
-          description: Optional additional metadata for this metric
-      required:
-      - id
-      - metric_name
-      - metric_value
-      - task
-      - timestamp
+        * `backtest` - Backtest
+        * `trading` - Trading
     Trade:
       type: object
-      description: Serializer for trade data from execution state.
+      description: Serializer for trade data from Trades model.
       properties:
-        sequence:
+        direction:
+          $ref: "#/components/schemas/TradeDirectionEnum"
+        units:
           type: integer
-        timestamp:
-          type: string
-          format: date-time
         instrument:
           type: string
-        direction:
-          $ref: '#/components/schemas/TradeDirectionEnum'
-        units:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
         price:
           type: string
           format: decimal
-          pattern: ^-?\d{0,15}(?:\.\d{0,5})?$
+          pattern: ^-?\d{0,10}(?:\.\d{0,10})?$
+        execution_method:
+          type: string
         pnl:
           type: string
           format: decimal
-          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+          pattern: ^-?\d{0,10}(?:\.\d{0,10})?$
           nullable: true
-        commission:
+        timestamp:
           type: string
-          format: decimal
-          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
-          nullable: true
-        details: {}
+          format: date-time
       required:
-      - direction
-      - instrument
-      - price
-      - sequence
-      - timestamp
-      - units
+        - direction
+        - execution_method
+        - instrument
+        - price
+        - timestamp
+        - units
     TradeDirectionEnum:
       enum:
-      - buy
-      - sell
+        - long
+        - short
+        - LONG
+        - SHORT
       type: string
       description: |-
-        * `buy` - buy
-        * `sell` - sell
+        * `long` - long
+        * `short` - short
+        * `LONG` - LONG
+        * `SHORT` - SHORT
     TradingEvent:
       type: object
-      description: Serializer for TradingEvent model.
+      description: Serializer for TradingEvents model.
       properties:
         id:
           type: integer
@@ -3813,24 +3651,28 @@ components:
           type: string
           maxLength: 32
         task_id:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          type: string
+          format: uuid
           nullable: true
+        celery_task_id:
+          type: string
+          nullable: true
+          description: Celery task ID for tracking specific execution
+          maxLength: 255
         details: {}
         created_at:
           type: string
           format: date-time
           readOnly: true
       required:
-      - created_at
-      - description
-      - event_type
-      - id
+        - created_at
+        - description
+        - event_type
+        - id
     TradingModeEnum:
       enum:
-      - netting
-      - hedging
+        - netting
+        - hedging
       type: string
       description: |-
         * `netting` - Netting Mode
@@ -3840,8 +3682,10 @@ components:
       description: Serializer for TradingTasks with execution data.
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
           readOnly: true
+          description: Unique identifier for this record
         name:
           type: string
           description: Human-readable name for this trading task
@@ -3862,7 +3706,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusEnum'
+            - $ref: "#/components/schemas/StatusEnum"
           readOnly: true
           description: |-
             Current task status
@@ -3877,12 +3721,12 @@ components:
           type: string
           format: date-time
           readOnly: true
-          description: Timestamp when the task was created
+          description: Timestamp when this record was created
         updated_at:
           type: string
           format: date-time
           readOnly: true
-          description: Timestamp when the task was last updated
+          description: Timestamp when this record was last updated
         started_at:
           type: string
           format: date-time
@@ -3934,16 +3778,13 @@ components:
           readOnly: true
           nullable: true
           description: Full error traceback if task failed
-        result_data:
-          readOnly: true
-          nullable: true
-          description: Execution results data
         user:
           type: integer
           readOnly: true
           description: User who created this trading task
         config:
-          type: integer
+          type: string
+          format: uuid
           description: Strategy configuration used by this task
         oanda_account:
           type: integer
@@ -3957,7 +3798,7 @@ components:
           maxLength: 20
         trading_mode:
           allOf:
-          - $ref: '#/components/schemas/TradingModeEnum'
+            - $ref: "#/components/schemas/TradingModeEnum"
           description: |-
             Trading mode: netting (aggregated positions) or hedging (independent trades)
 
@@ -3967,23 +3808,22 @@ components:
           readOnly: true
           description: Strategy-specific state for persistence across restarts
       required:
-      - celery_task_id
-      - completed_at
-      - config
-      - created_at
-      - duration
-      - error_message
-      - error_traceback
-      - id
-      - name
-      - oanda_account
-      - result_data
-      - started_at
-      - status
-      - strategy_state
-      - task_type
-      - updated_at
-      - user
+        - celery_task_id
+        - completed_at
+        - config
+        - created_at
+        - duration
+        - error_message
+        - error_traceback
+        - id
+        - name
+        - oanda_account
+        - started_at
+        - status
+        - strategy_state
+        - task_type
+        - updated_at
+        - user
     TradingTaskRequest:
       type: object
       description: Serializer for TradingTasks with execution data.
@@ -4007,7 +3847,8 @@ components:
           minimum: -2147483648
           description: Maximum number of retries allowed
         config:
-          type: integer
+          type: string
+          format: uuid
           description: Strategy configuration used by this task
         oanda_account:
           type: integer
@@ -4022,16 +3863,16 @@ components:
           maxLength: 20
         trading_mode:
           allOf:
-          - $ref: '#/components/schemas/TradingModeEnum'
+            - $ref: "#/components/schemas/TradingModeEnum"
           description: |-
             Trading mode: netting (aggregated positions) or hedging (independent trades)
 
             * `netting` - Netting Mode
             * `hedging` - Hedging Mode
       required:
-      - config
-      - name
-      - oanda_account
+        - config
+        - name
+        - oanda_account
     UserLoginRequest:
       type: object
       description: Serializer for user login.
@@ -4047,8 +3888,8 @@ components:
           minLength: 1
           description: User's password
       required:
-      - email
-      - password
+        - email
+        - password
     UserRegistrationRequest:
       type: object
       description: Serializer for user registration.
@@ -4082,9 +3923,9 @@ components:
           minLength: 1
           description: Confirm password
       required:
-      - email
-      - password
-      - password_confirm
+        - email
+        - password
+        - password_confirm
     UserSettingsUpdateRequest:
       type: object
       description: Serializer for updating user settings.
@@ -4093,7 +3934,7 @@ components:
           type: string
           minLength: 1
         language:
-          $ref: '#/components/schemas/LanguageEnum'
+          $ref: "#/components/schemas/LanguageEnum"
         first_name:
           type: string
         last_name:
@@ -4114,16 +3955,16 @@ components:
       in: cookie
       name: sessionid
 servers:
-- url: http://localhost:8000
-  description: Development server
-- url: https://api.autoforex.example.com
-  description: Production server
+  - url: http://localhost:8000
+    description: Development server
+  - url: https://api.autoforex.example.com
+    description: Production server
 tags:
-- name: accounts
-  description: User account management
-- name: health
-  description: System health checks
-- name: market
-  description: Market data and OANDA account management
-- name: trading
-  description: Trading tasks and execution management
+  - name: accounts
+    description: User account management
+  - name: health
+    description: System health checks
+  - name: market
+    description: Market data and OANDA account management
+  - name: trading
+    description: Trading tasks and execution management
