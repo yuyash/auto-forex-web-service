@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from apps.trading.dataclasses import (
     EventContext,
 )
+from apps.trading.enums import TaskType
 from apps.trading.events import StrategyEvent
 from apps.trading.models.state import ExecutionState
 from apps.trading.services.controller import TaskController
@@ -237,6 +238,8 @@ class BacktestExecutor(TaskExecutor):
             user=task.user,
             account=None,  # No account for backtests
             instrument=task.instrument,
+            task_id=task.pk,
+            task_type=TaskType.BACKTEST,
         )
 
         super().__init__(
@@ -358,6 +361,8 @@ class TradingExecutor(TaskExecutor):
             user=task.user,
             account=task.oanda_account,
             instrument=task.instrument,
+            task_id=task.pk,
+            task_type=TaskType.TRADING,
         )
 
         # Get initial balance from OANDA account
