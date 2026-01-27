@@ -27,7 +27,7 @@ class TestCeleryTaskStatusModel:
     def test_status_choices(self) -> None:
         """Test status choices."""
         assert CeleryTaskStatus.Status.RUNNING == "running"
-        assert CeleryTaskStatus.Status.STOP_REQUESTED == "stop_requested"
+        assert CeleryTaskStatus.Status.STOPPING == "stopping"
         assert CeleryTaskStatus.Status.STOPPED == "stopped"
         assert CeleryTaskStatus.Status.COMPLETED == "completed"
         assert CeleryTaskStatus.Status.FAILED == "failed"

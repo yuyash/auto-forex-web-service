@@ -2,7 +2,7 @@
 
 from django.core.management.base import BaseCommand
 
-from apps.trading.models import BacktestTasks, TradingTasks
+from apps.trading.models import BacktestTask, TradingTask
 
 
 class Command(BaseCommand):
@@ -14,7 +14,7 @@ class Command(BaseCommand):
         """Handle the command."""
         # List backtest tasks
         self.stdout.write(self.style.SUCCESS("\n=== Backtest Tasks ==="))
-        backtest_tasks = BacktestTasks.objects.all().order_by("pk")
+        backtest_tasks = BacktestTask.objects.all().order_by("pk")
         if not backtest_tasks:
             self.stdout.write("  (none)")
         for task in backtest_tasks:
@@ -24,7 +24,7 @@ class Command(BaseCommand):
 
         # List trading tasks
         self.stdout.write(self.style.SUCCESS("\n=== Trading Tasks ==="))
-        trading_tasks = TradingTasks.objects.all().order_by("pk")
+        trading_tasks = TradingTask.objects.all().order_by("pk")
         if not trading_tasks:
             self.stdout.write("  (none)")
         for task in trading_tasks:

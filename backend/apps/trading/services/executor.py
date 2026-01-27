@@ -23,7 +23,7 @@ from apps.trading.services.source import TickDataSource
 from apps.trading.strategies.base import Strategy
 
 if TYPE_CHECKING:
-    from apps.trading.models import BacktestTasks, TradingTasks
+    from apps.trading.models import BacktestTask, TradingTask
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -219,7 +219,7 @@ class BacktestExecutor(TaskExecutor):
     def __init__(
         self,
         *,
-        task: BacktestTasks,
+        task: BacktestTask,
         strategy: Strategy,
         data_source: TickDataSource,
         controller: TaskController,
@@ -305,11 +305,11 @@ class BacktestExecutor(TaskExecutor):
         if not events:
             return
 
-        from apps.trading.models import TradingEvents
+        from apps.trading.models import TradingEvent
 
         # Create event records
         event_records = [
-            TradingEvents(
+            TradingEvent(
                 task_type="backtest",
                 task_id=self.task.pk,
                 celery_task_id=self.task.celery_task_id,
@@ -325,7 +325,7 @@ class BacktestExecutor(TaskExecutor):
         ]
 
         # Bulk create
-        TradingEvents.objects.bulk_create(event_records)
+        TradingEvent.objects.bulk_create(event_records)
 
 
 class TradingExecutor(TaskExecutor):
@@ -334,7 +334,7 @@ class TradingExecutor(TaskExecutor):
     def __init__(
         self,
         *,
-        task: TradingTasks,
+        task: TradingTask,
         strategy: Strategy,
         data_source: TickDataSource,
         controller: TaskController,
@@ -422,11 +422,11 @@ class TradingExecutor(TaskExecutor):
         if not events:
             return
 
-        from apps.trading.models import TradingEvents
+        from apps.trading.models import TradingEvent
 
         # Create event records
         event_records = [
-            TradingEvents(
+            TradingEvent(
                 task_type="trading",
                 task_id=self.task.pk,
                 celery_task_id=self.task.celery_task_id,
@@ -442,4 +442,4 @@ class TradingExecutor(TaskExecutor):
         ]
 
         # Bulk create
-        TradingEvents.objects.bulk_create(event_records)
+        TradingEvent.objects.bulk_create(event_records)

@@ -5,13 +5,13 @@ from uuid import uuid4
 from django.db import models
 
 
-class Equities(models.Model):
+class Equity(models.Model):
     """
     Equity curve point for task execution.
 
     Stores balance snapshots at specific timestamps to build equity curve.
     Points are created periodically or when significant balance changes occur.
-    Uses polymorphic task reference to support both BacktestTasks and TradingTasks.
+    Uses polymorphic task reference to support both BacktestTask and TradingTask.
     """
 
     id = models.UUIDField(

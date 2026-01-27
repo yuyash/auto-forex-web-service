@@ -15,9 +15,9 @@ from apps.accounts.models import UserNotification
 from apps.market.enums import ApiType, Jurisdiction
 from apps.market.models import OandaAccounts, TickData
 from apps.trading.models import (
-    BacktestTasks,
-    StrategyConfigurations,
-    TradingTasks,
+    BacktestTask,
+    StrategyConfiguration,
+    TradingTask,
 )
 
 User = get_user_model()
@@ -108,7 +108,7 @@ class StrategyConfigurationFactory(DjangoModelFactory):
     """Factory for creating test strategy configurations."""
 
     class Meta:
-        model = StrategyConfigurations
+        model = StrategyConfiguration
 
     user = factory.SubFactory(UserFactory)
     name = factory.Faker("catch_phrase")
@@ -129,7 +129,7 @@ class BacktestTaskFactory(DjangoModelFactory):
     """Factory for creating test backtest tasks."""
 
     class Meta:
-        model = BacktestTasks
+        model = BacktestTask
 
     user = factory.SubFactory(UserFactory)
     name = factory.Faker("catch_phrase")
@@ -150,7 +150,7 @@ class TradingTaskFactory(DjangoModelFactory):
     """Factory for creating test trading tasks."""
 
     class Meta:
-        model = TradingTasks
+        model = TradingTask
 
     user = factory.SubFactory(UserFactory)
     oanda_account = factory.SubFactory(OandaAccountFactory)

@@ -14,7 +14,7 @@ class ExecutionState(UUIDModel):
     strategy-specific state, current balance, and progress tracking.
     It replaces the result_data JSON field and FloorStrategyTaskState model.
 
-    The model uses a polymorphic reference to tasks (BacktestTasks or TradingTasks)
+    The model uses a polymorphic reference to tasks (BacktestTask or TradingTask)
     via task_type and task_id fields, allowing it to work with both task types.
 
     Attributes:

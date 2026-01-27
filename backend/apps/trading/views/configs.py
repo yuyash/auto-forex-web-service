@@ -8,7 +8,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.trading.models import StrategyConfigurations
+from apps.trading.models import StrategyConfiguration
 from apps.trading.serializers import (
     StrategyConfigCreateSerializer,
     StrategyConfigDetailSerializer,
@@ -30,12 +30,12 @@ class StrategyConfigView(APIView):
         responses={200: StrategyConfigListSerializer(many=True)},
     )
     def get(self, request: Request) -> Response:
-        from apps.trading.models import StrategyConfigurations
+        from apps.trading.models import StrategyConfiguration
 
         strategy_type = request.query_params.get("strategy_type")
         search = request.query_params.get("search")
 
-        queryset = StrategyConfigurations.objects.filter(user=request.user.pk)
+        queryset = StrategyConfiguration.objects.filter(user=request.user.pk)
         if strategy_type:
             queryset = queryset.filter(strategy_type=strategy_type)
         if search:
@@ -89,8 +89,8 @@ class StrategyConfigDetailView(APIView):
         from apps.trading.serializers import StrategyConfigDetailSerializer
 
         try:
-            config = StrategyConfigurations.objects.get(id=config_id, user=request.user.pk)
-        except StrategyConfigurations.DoesNotExist:
+            config = StrategyConfiguration.objects.get(id=config_id, user=request.user.pk)
+        except StrategyConfiguration.DoesNotExist:
             return Response({"error": "Configuration not found"}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = StrategyConfigDetailSerializer(config)
@@ -109,8 +109,8 @@ class StrategyConfigDetailView(APIView):
         )
 
         try:
-            config = StrategyConfigurations.objects.get(id=config_id, user=request.user.pk)
-        except StrategyConfigurations.DoesNotExist:
+            config = StrategyConfiguration.objects.get(id=config_id, user=request.user.pk)
+        except StrategyConfiguration.DoesNotExist:
             return Response({"error": "Configuration not found"}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = StrategyConfigCreateSerializer(
@@ -131,8 +131,8 @@ class StrategyConfigDetailView(APIView):
     )
     def delete(self, request: Request, config_id: int) -> Response:
         try:
-            config = StrategyConfigurations.objects.get(id=config_id, user=request.user.pk)
-        except StrategyConfigurations.DoesNotExist:
+            config = StrategyConfiguration.objects.get(id=config_id, user=request.user.pk)
+        except StrategyConfiguration.DoesNotExist:
             return Response({"error": "Configuration not found"}, status=status.HTTP_404_NOT_FOUND)
 
         if config.is_in_use():

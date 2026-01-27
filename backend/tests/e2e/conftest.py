@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from apps.market.models import OandaAccounts
-from apps.trading.models import StrategyConfigurations
+from apps.trading.models import StrategyConfiguration
 
 User = get_user_model()
 
@@ -36,7 +36,7 @@ def authenticated_client(api_client, test_user):
 @pytest.fixture
 def strategy_config(test_user):
     """Create a test strategy configuration."""
-    return StrategyConfigurations.objects.create(
+    return StrategyConfiguration.objects.create(
         user=test_user,
         name="E2E Test Strategy",
         strategy_type="floor",

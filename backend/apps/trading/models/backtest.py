@@ -10,38 +10,38 @@ from apps.trading.enums import DataSource, TaskStatus, TradingMode
 from apps.trading.models.base import UUIDModel
 
 
-class BacktestTasksManager(models.Manager["BacktestTasks"]):
-    """Custom manager for BacktestTasks model."""
+class BacktestTaskManager(models.Manager["BacktestTask"]):
+    """Custom manager for BacktestTask model."""
 
-    def for_user(self, user: Any) -> models.QuerySet["BacktestTasks"]:
+    def for_user(self, user: Any) -> models.QuerySet["BacktestTask"]:
         """Get backtest tasks for a specific user."""
         return self.filter(user=user)
 
-    def running(self) -> models.QuerySet["BacktestTasks"]:
+    def running(self) -> models.QuerySet["BacktestTask"]:
         """Get all running backtest tasks."""
         return self.filter(status=TaskStatus.RUNNING)
 
-    def completed(self) -> models.QuerySet["BacktestTasks"]:
+    def completed(self) -> models.QuerySet["BacktestTask"]:
         """Get all completed backtest tasks."""
         return self.filter(status=TaskStatus.COMPLETED)
 
-    def by_config(self, config: Any) -> models.QuerySet["BacktestTasks"]:
+    def by_config(self, config: Any) -> models.QuerySet["BacktestTask"]:
         """Get backtest tasks using a specific strategy configuration."""
         return self.filter(config=config)
 
 
-class BacktestTasks(UUIDModel):
+class BacktestTask(UUIDModel):
     """
     Persistent backtesting task with reusable configuration.
 
-    A BacktestTasks represents a backtesting operation with specific configuration,
+    A BacktestTask represents a backtesting operation with specific configuration,
     data source, and time range. Tasks can be started, stopped, and rerun multiple
     times, with each execution tracked separately.
 
     Inherits UUID primary key and timestamps from UUIDModel.
     """
 
-    objects = BacktestTasksManager()
+    objects = BacktestTaskManager()
 
     name = models.CharField(
         max_length=255,
@@ -59,7 +59,7 @@ class BacktestTasks(UUIDModel):
         help_text="User who created this backtest task",
     )
     config = models.ForeignKey(
-        "StrategyConfigurations",
+        "StrategyConfiguration",
         on_delete=models.PROTECT,
         related_name="backtest_tasks",
         help_text="Strategy configuration used by this task",
@@ -198,15 +198,15 @@ class BacktestTasks(UUIDModel):
 
         return True, None
 
-    def copy(self, new_name: str) -> "BacktestTasks":
+    def copy(self, new_name: str) -> "BacktestTask":
         """Create a copy of this backtest task with a new name."""
         if new_name == self.name:
             raise ValueError("New name must be different from current name")
 
-        if BacktestTasks.objects.filter(user=self.user, name=new_name).exists():
+        if BacktestTask.objects.filter(user=self.user, name=new_name).exists():
             raise ValueError(f"A backtest task with name '{new_name}' already exists")
 
-        return BacktestTasks.objects.create(
+        return BacktestTask.objects.create(
             user=self.user,
             config=self.config,
             name=new_name,

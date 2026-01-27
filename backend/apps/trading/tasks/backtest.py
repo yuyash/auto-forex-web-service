@@ -11,7 +11,7 @@ from celery import shared_task
 from django.utils import timezone as dj_timezone
 
 from apps.trading.enums import LogLevel, TaskStatus
-from apps.trading.models import BacktestTasks, TaskLog
+from apps.trading.models import BacktestTask, TaskLog
 
 logger: Logger = getLogger(name=__name__)
 
@@ -29,13 +29,13 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
     """Celery task wrapper for running backtest tasks.
 
     Args:
-        task_id: UUID of the BacktestTasks to execute
+        task_id: UUID of the BacktestTask to execute
     """
     task = None
 
     try:
         logger.info(f"Starting a new celery backtest task. Task ID: {task_id}.")
-        task = BacktestTasks.objects.get(pk=task_id)
+        task = BacktestTask.objects.get(pk=task_id)
 
         # Update status to RUNNING now that the task is actually executing
         task.status = TaskStatus.RUNNING
@@ -66,15 +66,15 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             level=LogLevel.INFO,
             message="Backtest task completed successfully",
         )
-    except BacktestTasks.DoesNotExist:
-        logger.error(f"BacktestTasks {task_id} not found")
+    except BacktestTask.DoesNotExist:
+        logger.error(f"BacktestTask {task_id} not found")
         raise
     except Exception as e:
         handle_exception(task_id, task, e)
         raise
 
 
-def execute_backtest(task: BacktestTasks) -> None:
+def execute_backtest(task: BacktestTask) -> None:
     """Execute a backtest task.
 
     Args:
@@ -124,7 +124,7 @@ def execute_backtest(task: BacktestTasks) -> None:
     executor.execute()
 
 
-def handle_exception(task_id: UUID, task: BacktestTasks | None, error: Exception) -> None:
+def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception) -> None:
     # Capture error details and update task
     error_message = str(error)
     error_traceback = traceback.format_exc()
@@ -158,7 +158,7 @@ def handle_exception(task_id: UUID, task: BacktestTasks | None, error: Exception
         )
 
 
-def trigger_backtest_publisher(task: BacktestTasks) -> None:
+def trigger_backtest_publisher(task: BacktestTask) -> None:
     """Trigger the backtest data publisher.
 
     Args:
@@ -190,7 +190,7 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
     from apps.trading.enums import TaskStatus
 
     try:
-        task = BacktestTasks.objects.get(pk=task_id)
+        task = BacktestTask.objects.get(pk=task_id)
 
         # Only stop if task is in STOPPING state
         if task.status == TaskStatus.STOPPING:
@@ -221,6 +221,6 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
             logger.warning(
                 f"Backtest task {task_id} not in STOPPING state (current: {task.status})"
             )
-    except BacktestTasks.DoesNotExist:
+    except BacktestTask.DoesNotExist:
         logger.error(f"Backtest task {task_id} not found")
         raise

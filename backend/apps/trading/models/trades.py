@@ -5,7 +5,7 @@ from uuid import uuid4
 from django.db import models
 
 
-class Trades(models.Model):
+class Trade(models.Model):
     """
     Completed trade from task execution.
 

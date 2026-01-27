@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from apps.trading.enums import LogLevel, TaskStatus
-from apps.trading.models import TradingTasks
+from apps.trading.models import TradingTask
 from apps.trading.models.logs import TaskLog
 from apps.trading.serializers import (
     EquityPointSerializer,
@@ -54,10 +54,10 @@ class TradingTaskViewSet(ModelViewSet):
         super().__init__(**kwargs)
         self.task_service: TaskService = TaskService()
 
-    def get_queryset(self) -> QuerySet[TradingTasks]:
+    def get_queryset(self) -> QuerySet[TradingTask]:
         """Get trading tasks for the authenticated user with filtering."""
         assert isinstance(self.request, Request)
-        queryset = TradingTasks.objects.filter(user=self.request.user.pk).select_related(
+        queryset = TradingTask.objects.filter(user=self.request.user.pk).select_related(
             "config", "user", "oanda_account"
         )
 
@@ -326,7 +326,7 @@ class TradingTaskViewSet(ModelViewSet):
     @action(detail=True, methods=["get"])
     def events(self, request: Request, pk: int | None = None) -> Response:
         """Get task events with filtering."""
-        from apps.trading.models import TradingEvents
+        from apps.trading.models import TradingEvent
 
         task = self.get_object()
 
@@ -336,7 +336,7 @@ class TradingTaskViewSet(ModelViewSet):
         limit = int(request.query_params.get("limit", 100))
 
         try:
-            queryset = TradingEvents.objects.filter(task_type="trading", task_id=task.pk).order_by(
+            queryset = TradingEvent.objects.filter(task_type="trading", task_id=task.pk).order_by(
                 "-created_at"
             )
 
@@ -372,14 +372,14 @@ class TradingTaskViewSet(ModelViewSet):
     @action(detail=True, methods=["get"])
     def trades(self, request: Request, pk: int | None = None) -> Response:
         """Get task trades from database."""
-        from apps.trading.models.trades import Trades
+        from apps.trading.models.trades import Trade
 
         task = self.get_object()
         direction = request.query_params.get("direction")
 
         try:
             # Query trades from database
-            queryset = Trades.objects.filter(
+            queryset = Trade.objects.filter(
                 task_type="trading",
                 task_id=task.pk,
             ).order_by("timestamp")
@@ -415,14 +415,14 @@ class TradingTaskViewSet(ModelViewSet):
     @action(detail=True, methods=["get"])
     def equities(self, request: Request, pk: int | None = None) -> Response:
         """Get task equity curve from database."""
-        from apps.trading.models.equities import Equities
+        from apps.trading.models.equities import Equity
 
         task = self.get_object()
 
         try:
             # Query equity points from database
             equity_points = (
-                Equities.objects.filter(
+                Equity.objects.filter(
                     task_type="trading",
                     task_id=task.pk,
                 )

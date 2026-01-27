@@ -111,25 +111,6 @@ class CeleryTaskService:
 
         self._last_heartbeat_monotonic = now_monotonic
 
-    def should_stop(self, *, force: bool = False) -> bool:
-        now_monotonic = time.monotonic()
-        if (
-            not force
-            and (now_monotonic - self._last_stop_check_monotonic) < self.stop_check_interval_seconds
-        ):
-            return self._cached_should_stop
-
-        status = (
-            CeleryTaskStatus.objects.filter(
-                task_name=self.task_name, instance_key=self.instance_key
-            )
-            .values_list("status", flat=True)
-            .first()
-        )
-        self._cached_should_stop = status == CeleryTaskStatus.Status.STOP_REQUESTED
-        self._last_stop_check_monotonic = now_monotonic
-        return self._cached_should_stop
-
     def mark_stopped(
         self,
         *,

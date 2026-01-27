@@ -97,7 +97,7 @@ class TestCeleryTaskServiceIntegration:
             task_name="market.tasks.test_task4",
             instance_key="test_instance4",
         )
-        task.status = CeleryTaskStatus.Status.STOP_REQUESTED
+        task.status = CeleryTaskStatus.Status.STOPPING
         task.save()
 
         # Now should stop

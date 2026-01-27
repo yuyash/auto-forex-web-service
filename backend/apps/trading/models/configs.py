@@ -8,31 +8,31 @@ from apps.trading.enums import StrategyType
 from apps.trading.models.base import UUIDModel
 
 if TYPE_CHECKING:
-    from apps.trading.models import BacktestTasks, TradingTasks
+    from apps.trading.models import BacktestTask, TradingTask
 
 
-class StrategyConfigurationsManager(models.Manager["StrategyConfigurations"]):
-    """Custom manager for StrategyConfigurations model."""
+class StrategyConfigurationManager(models.Manager["StrategyConfiguration"]):
+    """Custom manager for StrategyConfiguration model."""
 
-    def create_for_user(self, user: Any, **kwargs: Any) -> "StrategyConfigurations":
+    def create_for_user(self, user: Any, **kwargs: Any) -> "StrategyConfiguration":
         return self.create(user=user, **kwargs)
 
-    def for_user(self, user: Any) -> models.QuerySet["StrategyConfigurations"]:
+    def for_user(self, user: Any) -> models.QuerySet["StrategyConfiguration"]:
         return self.filter(user=user)
 
 
-class StrategyConfigurations(UUIDModel):
-    """Reusable strategy configuration used by TradingTasks and BacktestTasks.
+class StrategyConfiguration(UUIDModel):
+    """Reusable strategy configuration used by TradingTask and BacktestTask.
 
     Inherits UUID primary key and timestamps from UUIDModel.
     """
 
-    objects = StrategyConfigurationsManager()
+    objects = StrategyConfigurationManager()
 
     # Type hints for reverse relations (created by ForeignKey related_name)
     if TYPE_CHECKING:
-        backtest_tasks: models.Manager["BacktestTasks"]
-        trading_tasks: models.Manager["TradingTasks"]
+        backtest_tasks: models.Manager["BacktestTask"]
+        trading_tasks: models.Manager["TradingTask"]
 
     user = models.ForeignKey(
         "accounts.User",
@@ -92,7 +92,7 @@ class StrategyConfigurations(UUIDModel):
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], user: Any) -> "StrategyConfigurations":
+    def from_dict(cls, data: dict[str, Any], user: Any) -> "StrategyConfiguration":
         """Create configuration from dictionary.
 
         Args:
@@ -100,7 +100,7 @@ class StrategyConfigurations(UUIDModel):
             user: User instance to associate with the configuration
 
         Returns:
-            StrategyConfigurations instance
+            StrategyConfiguration instance
         """
         return cls(
             user=user,
@@ -137,14 +137,14 @@ class StrategyConfigurations(UUIDModel):
             True if configuration is in use, False otherwise
         """
         from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTasks, TradingTasks
+        from apps.trading.models import BacktestTask, TradingTask
 
         return (
-            TradingTasks.objects.filter(
+            TradingTask.objects.filter(
                 config=self,
                 status=TaskStatus.RUNNING,
             ).exists()
-            or BacktestTasks.objects.filter(
+            or BacktestTask.objects.filter(
                 config=self,
                 status=TaskStatus.RUNNING,
             ).exists()

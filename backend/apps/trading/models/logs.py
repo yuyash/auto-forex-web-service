@@ -15,7 +15,7 @@ class TaskLog(models.Model):
     severity level, and message content. Logs are ordered chronologically
     and indexed for efficient querying by task and level.
 
-    Uses polymorphic task reference to support both BacktestTasks and TradingTasks.
+    Uses polymorphic task reference to support both BacktestTask and TradingTask.
     """
 
     id = models.UUIDField(

@@ -12,6 +12,7 @@ class CeleryTaskStatus(models.Model):
 
     class Status(models.TextChoices):
         RUNNING = "running", "Running"
+        STOPPING = "stopping", "Stopping"
         STOPPED = "stopped", "Stopped"
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"

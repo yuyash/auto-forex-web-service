@@ -78,7 +78,7 @@ class TestTaskManagementSignalHandlerIntegration:
 
         # Verify status was updated
         task.refresh_from_db()
-        assert task.status == CeleryTaskStatus.Status.STOP_REQUESTED
+        assert task.status == CeleryTaskStatus.Status.STOPPING
         assert "Test cancellation" in task.status_message
 
 

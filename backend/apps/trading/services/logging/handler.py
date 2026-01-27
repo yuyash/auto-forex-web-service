@@ -4,9 +4,9 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from apps.trading.models.backtest import BacktestTasks
+from apps.trading.models.backtest import BacktestTask
 from apps.trading.models.logs import TaskLog
-from apps.trading.models.trading import TradingTasks
+from apps.trading.models.trading import TradingTask
 
 
 class JSONLoggingHandler(logging.Handler):
@@ -17,12 +17,12 @@ class JSONLoggingHandler(logging.Handler):
     and persists them to the TaskLog model for queryable storage.
     """
 
-    def __init__(self, task: BacktestTasks | TradingTasks) -> None:
+    def __init__(self, task: BacktestTask | TradingTask) -> None:
         """
         Initialize the JSON logging handler.
 
         Args:
-            task: The task instance (BacktestTasks or TradingTasks) to associate logs with
+            task: The task instance (BacktestTask or TradingTask) to associate logs with
         """
         super().__init__()
         self.task = task
@@ -75,7 +75,7 @@ class JSONLoggingHandler(logging.Handler):
                 "level": record.levelname,
                 "message": record.getMessage(),
                 "task_id": str(self.task.pk),
-                "task_type": ("backtest" if isinstance(self.task, BacktestTasks) else "trading"),
+                "task_type": ("backtest" if isinstance(self.task, BacktestTask) else "trading"),
                 "logger": record.name,
                 "context": context,
             }

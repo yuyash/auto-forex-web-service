@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from apps.trading.models import BacktestTasks, TradingTasks
+from apps.trading.models import BacktestTask, TradingTask
 from apps.trading.models.logs import TaskLog
 
 
@@ -10,7 +10,7 @@ class TaskSerializer(serializers.ModelSerializer):
     """
     Serializer for Task models with execution data.
 
-    Provides a unified interface for both BacktestTasks and TradingTasks,
+    Provides a unified interface for both BacktestTask and TradingTask,
     including execution state, timestamps, error information, and results.
     """
 
@@ -18,7 +18,7 @@ class TaskSerializer(serializers.ModelSerializer):
     task_type = serializers.SerializerMethodField()
 
     class Meta:
-        model = BacktestTasks  # Base model, will be overridden in subclasses
+        model = BacktestTask  # Base model, will be overridden in subclasses
         fields = [
             "id",
             "name",
@@ -48,7 +48,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "error_traceback",
         ]
 
-    def get_duration(self, obj: BacktestTasks | TradingTasks) -> float | None:
+    def get_duration(self, obj: BacktestTask | TradingTask) -> float | None:
         """
         Calculate task execution duration in seconds.
 
@@ -63,7 +63,7 @@ class TaskSerializer(serializers.ModelSerializer):
             return obj.duration.total_seconds()
         return None
 
-    def get_task_type(self, obj: BacktestTasks | TradingTasks) -> str:
+    def get_task_type(self, obj: BacktestTask | TradingTask) -> str:
         """
         Get the task type.
 
@@ -73,18 +73,18 @@ class TaskSerializer(serializers.ModelSerializer):
         Returns:
             str: "backtest" or "trading"
         """
-        if isinstance(obj, BacktestTasks):
+        if isinstance(obj, BacktestTask):
             return "backtest"
-        elif isinstance(obj, TradingTasks):
+        elif isinstance(obj, TradingTask):
             return "trading"
         return "unknown"
 
 
 class BacktestTaskSerializer(TaskSerializer):
-    """Serializer for BacktestTasks with execution data."""
+    """Serializer for BacktestTask with execution data."""
 
     class Meta(TaskSerializer.Meta):
-        model = BacktestTasks
+        model = BacktestTask
         fields = TaskSerializer.Meta.fields + [
             "user",
             "config",
@@ -100,10 +100,10 @@ class BacktestTaskSerializer(TaskSerializer):
 
 
 class TradingTaskSerializer(TaskSerializer):
-    """Serializer for TradingTasks with execution data."""
+    """Serializer for TradingTask with execution data."""
 
     class Meta(TaskSerializer.Meta):
-        model = TradingTasks
+        model = TradingTask
         fields = TaskSerializer.Meta.fields + [
             "user",
             "config",

@@ -11,7 +11,7 @@ from celery import shared_task
 from django.utils import timezone as dj_timezone
 
 from apps.trading.enums import LogLevel, TaskStatus
-from apps.trading.models import CeleryTaskStatus, TaskLog, TradingTasks
+from apps.trading.models import CeleryTaskStatus, TaskLog, TradingTask
 
 logger: Logger = getLogger(name=__name__)
 
@@ -29,13 +29,13 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
     """Celery task wrapper for running trading tasks.
 
     Args:
-        task_id: UUID of the TradingTasks to execute
+        task_id: UUID of the TradingTask to execute
     """
     task = None
 
     try:
         logger.info(f"Starting a new celery trading task. Task ID: {task_id}.")
-        task = TradingTasks.objects.get(pk=task_id)
+        task = TradingTask.objects.get(pk=task_id)
 
         # Update status to RUNNING now that the task is actually executing
         task.status = TaskStatus.RUNNING
@@ -64,15 +64,15 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
             level=LogLevel.INFO,
             message="Trading task stopped successfully",
         )
-    except TradingTasks.DoesNotExist:
-        logger.error(f"TradingTasks {task_id} not found")
+    except TradingTask.DoesNotExist:
+        logger.error(f"TradingTask {task_id} not found")
         raise
     except Exception as e:
         handle_exception(task_id, task, e)
         raise
 
 
-def execute_trading(task: TradingTasks) -> None:
+def execute_trading(task: TradingTask) -> None:
     """Execute a trading task.
 
     Args:
@@ -120,7 +120,7 @@ def execute_trading(task: TradingTasks) -> None:
     executor.execute()
 
 
-def handle_exception(task_id: UUID, task: TradingTasks | None, error: Exception) -> None:
+def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) -> None:
     # Capture error details and update task
     error_message = str(error)
     error_traceback = traceback.format_exc()
@@ -166,7 +166,7 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
     from apps.trading.enums import TaskStatus
 
     try:
-        task = TradingTasks.objects.get(pk=task_id)
+        task = TradingTask.objects.get(pk=task_id)
 
         # Only stop if task is in STOPPING state
         if task.status == TaskStatus.STOPPING:
@@ -193,6 +193,6 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
             logger.info(f"Trading task {task_id} stopped successfully (mode={mode})")
         else:
             logger.warning(f"Trading task {task_id} not in STOPPING state (current: {task.status})")
-    except TradingTasks.DoesNotExist:
+    except TradingTask.DoesNotExist:
         logger.error(f"Trading task {task_id} not found")
         raise

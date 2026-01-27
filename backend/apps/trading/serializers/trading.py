@@ -3,7 +3,7 @@
 from rest_framework import serializers
 
 from apps.market.models import OandaAccounts
-from apps.trading.models import StrategyConfigurations, TradingTasks
+from apps.trading.models import StrategyConfiguration, TradingTask
 
 
 class TradingTaskSerializer(serializers.ModelSerializer):
@@ -24,7 +24,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     can_resume = serializers.SerializerMethodField()
 
     class Meta:
-        model = TradingTasks
+        model = TradingTask
         fields = [
             "id",
             "user_id",
@@ -62,7 +62,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def get_instrument(self, obj: TradingTasks) -> str:
+    def get_instrument(self, obj: TradingTask) -> str:
         """Get instrument from configuration parameters."""
         if obj.config and obj.config.parameters:
             instrument = obj.config.parameters.get("instrument")
@@ -70,11 +70,11 @@ class TradingTaskSerializer(serializers.ModelSerializer):
                 return str(instrument)
         return "EUR_USD"
 
-    def get_has_strategy_state(self, obj: TradingTasks) -> bool:
+    def get_has_strategy_state(self, obj: TradingTask) -> bool:
         """Check if task has saved strategy state."""
         return obj.has_strategy_state()
 
-    def get_can_resume(self, obj: TradingTasks) -> bool:
+    def get_can_resume(self, obj: TradingTask) -> bool:
         """Check if task can be resumed with state recovery."""
         return obj.can_resume()
 
@@ -94,7 +94,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
 
     class Meta:
-        model = TradingTasks
+        model = TradingTask
         fields = [
             "id",
             "user_id",
@@ -114,7 +114,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_instrument(self, obj: TradingTasks) -> str:
+    def get_instrument(self, obj: TradingTask) -> str:
         """Get instrument from configuration parameters."""
         if obj.config and obj.config.parameters:
             instrument = obj.config.parameters.get("instrument")
@@ -131,7 +131,7 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
     """
 
     class Meta:
-        model = TradingTasks
+        model = TradingTask
         fields = [
             "config",
             "oanda_account",
@@ -148,7 +148,7 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "sell_on_stop": {"required": False},
         }
 
-    def validate_config(self, value: StrategyConfigurations) -> StrategyConfigurations:
+    def validate_config(self, value: StrategyConfiguration) -> StrategyConfiguration:
         """Validate that config belongs to the user."""
         user = self.context["request"].user
         if value.user != user:
@@ -181,13 +181,13 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
 
         return attrs
 
-    def create(self, validated_data: dict) -> TradingTasks:
+    def create(self, validated_data: dict) -> TradingTask:
         """Create trading task with user from context."""
         user = self.context["request"].user
         validated_data["user"] = user
-        return TradingTasks.objects.create(**validated_data)
+        return TradingTask.objects.create(**validated_data)
 
-    def update(self, instance: TradingTasks, validated_data: dict) -> TradingTasks:
+    def update(self, instance: TradingTask, validated_data: dict) -> TradingTask:
         """Update trading task."""
         # Don't allow updating if task is running
         if instance.status == "running":

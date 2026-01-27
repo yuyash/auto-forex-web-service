@@ -16,7 +16,7 @@ from uuid import UUID
 if TYPE_CHECKING:
     from celery.result import AsyncResult
 
-    from apps.trading.models import BacktestTasks, TradingTasks
+    from apps.trading.models import BacktestTask, TradingTask
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -48,8 +48,8 @@ class TaskService:
 
     def start_task(
         self,
-        task: BacktestTasks | TradingTasks,
-    ) -> BacktestTasks | TradingTasks:
+        task: BacktestTask | TradingTask,
+    ) -> BacktestTask | TradingTask:
         """Submit a task to Celery for execution.
 
         Sets task status to STARTING and submits to Celery queue.
@@ -59,7 +59,7 @@ class TaskService:
             task: Task instance to submit
 
         Returns:
-            BacktestTasks | TradingTasks: The updated task instance
+            BacktestTask | TradingTask: The updated task instance
 
         Raises:
             ValueError: If task is not in CREATED status
@@ -68,7 +68,7 @@ class TaskService:
         from uuid import uuid4
 
         from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTasks
+        from apps.trading.models import BacktestTask
         from apps.trading.tasks import run_backtest_task, run_trading_task
 
         logger.info(
@@ -97,7 +97,7 @@ class TaskService:
                 raise ValueError(f"Task configuration is invalid: {error_message}")
 
             # Determine which Celery task to call based on task type
-            if isinstance(task, BacktestTasks):
+            if isinstance(task, BacktestTask):
                 celery_task = run_backtest_task
             else:
                 celery_task = run_trading_task
@@ -164,22 +164,22 @@ class TaskService:
             ValueError: If task does not exist or is not in a stoppable state
         """
         from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTasks, TradingTasks
+        from apps.trading.models import BacktestTask, TradingTask
         from apps.trading.tasks import stop_backtest_task, stop_trading_task
 
         logger.info("Stopping task", extra={"task_id": str(task_id), "mode": mode})
 
         try:
-            # Try to find the task in either BacktestTasks or TradingTasks
+            # Try to find the task in either BacktestTask or TradingTask
             task = None
             is_backtest = False
             try:
-                task = BacktestTasks.objects.get(pk=task_id)
+                task = BacktestTask.objects.get(pk=task_id)
                 is_backtest = True
-            except BacktestTasks.DoesNotExist:
+            except BacktestTask.DoesNotExist:
                 try:
-                    task = TradingTasks.objects.get(pk=task_id)
-                except TradingTasks.DoesNotExist as e:
+                    task = TradingTask.objects.get(pk=task_id)
+                except TradingTask.DoesNotExist as e:
                     logger.error(
                         "Task not found",
                         extra={"task_id": str(task_id)},
@@ -240,19 +240,19 @@ class TaskService:
             ValueError: If task does not exist or is not running
         """
         from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTasks, TradingTasks
+        from apps.trading.models import BacktestTask, TradingTask
 
         logger.info("Pausing task", extra={"task_id": str(task_id)})
 
         try:
-            # Try to find the task in either BacktestTasks or TradingTasks
+            # Try to find the task in either BacktestTask or TradingTask
             task = None
             try:
-                task = BacktestTasks.objects.get(pk=task_id)
-            except BacktestTasks.DoesNotExist:
+                task = BacktestTask.objects.get(pk=task_id)
+            except BacktestTask.DoesNotExist:
                 try:
-                    task = TradingTasks.objects.get(pk=task_id)
-                except TradingTasks.DoesNotExist as e:
+                    task = TradingTask.objects.get(pk=task_id)
+                except TradingTask.DoesNotExist as e:
                     logger.error(
                         "Task not found",
                         extra={"task_id": str(task_id)},
@@ -308,19 +308,19 @@ class TaskService:
         from django.utils import timezone
 
         from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTasks, TradingTasks
+        from apps.trading.models import BacktestTask, TradingTask
 
         logger.info("Cancelling task", extra={"task_id": str(task_id)})
 
         try:
-            # Try to find the task in either BacktestTasks or TradingTasks
+            # Try to find the task in either BacktestTask or TradingTask
             task = None
             try:
-                task = BacktestTasks.objects.get(pk=task_id)
-            except BacktestTasks.DoesNotExist:
+                task = BacktestTask.objects.get(pk=task_id)
+            except BacktestTask.DoesNotExist:
                 try:
-                    task = TradingTasks.objects.get(pk=task_id)
-                except TradingTasks.DoesNotExist as e:
+                    task = TradingTask.objects.get(pk=task_id)
+                except TradingTask.DoesNotExist as e:
                     logger.error(
                         "Task not found",
                         extra={"task_id": str(task_id)},
@@ -364,7 +364,7 @@ class TaskService:
     def restart_task(
         self,
         task_id: UUID,
-    ) -> BacktestTasks | TradingTasks:
+    ) -> BacktestTask | TradingTask:
         """Restart a task from the beginning, clearing all execution data.
 
         Clears all previous execution data and resets status to CREATED.
@@ -374,29 +374,29 @@ class TaskService:
             task_id: UUID of the task to restart
 
         Returns:
-            BacktestTasks | TradingTasks: The restarted task instance
+            BacktestTask | TradingTask: The restarted task instance
 
         Raises:
             ValueError: If task cannot be restarted (e.g., currently running)
             ValueError: If retry_count exceeds max_retries
         """
         from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTasks, TradingEvents, TradingTasks
+        from apps.trading.models import BacktestTask, TradingEvent, TradingTask
 
         logger.info("Restarting task", extra={"task_id": str(task_id)})
 
         try:
-            # Try to find the task in either BacktestTasks or TradingTasks
+            # Try to find the task in either BacktestTask or TradingTask
             task = None
             task_type = None
             try:
-                task = BacktestTasks.objects.get(pk=task_id)
+                task = BacktestTask.objects.get(pk=task_id)
                 task_type = "backtest"
-            except BacktestTasks.DoesNotExist:
+            except BacktestTask.DoesNotExist:
                 try:
-                    task = TradingTasks.objects.get(pk=task_id)
+                    task = TradingTask.objects.get(pk=task_id)
                     task_type = "trading"
-                except TradingTasks.DoesNotExist as e:
+                except TradingTask.DoesNotExist as e:
                     logger.error(
                         "Task not found",
                         extra={"task_id": str(task_id)},
@@ -430,7 +430,7 @@ class TaskService:
                 )
 
             # Clear all events associated with this task
-            TradingEvents.objects.filter(task_type=task_type, task_id=task.pk).delete()
+            TradingEvent.objects.filter(task_type=task_type, task_id=task.pk).delete()
 
             # Clear all execution data
             task.celery_task_id = None
@@ -463,7 +463,7 @@ class TaskService:
     def resume_task(
         self,
         task_id: UUID,
-    ) -> BacktestTasks | TradingTasks:
+    ) -> BacktestTask | TradingTask:
         """Resume a paused task, preserving execution context.
 
         Preserves existing execution data (started_at, logs, metrics) but clears
@@ -473,25 +473,25 @@ class TaskService:
             task_id: UUID of the task to resume
 
         Returns:
-            BacktestTasks | TradingTasks: The resumed task instance
+            BacktestTask | TradingTask: The resumed task instance
 
         Raises:
             ValueError: If task cannot be resumed (e.g., not paused)
         """
         from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTasks, TradingTasks
+        from apps.trading.models import BacktestTask, TradingTask
 
         logger.info("Resuming task", extra={"task_id": str(task_id)})
 
         try:
-            # Try to find the task in either BacktestTasks or TradingTasks
+            # Try to find the task in either BacktestTask or TradingTask
             task = None
             try:
-                task = BacktestTasks.objects.get(pk=task_id)
-            except BacktestTasks.DoesNotExist:
+                task = BacktestTask.objects.get(pk=task_id)
+            except BacktestTask.DoesNotExist:
                 try:
-                    task = TradingTasks.objects.get(pk=task_id)
-                except TradingTasks.DoesNotExist as e:
+                    task = TradingTask.objects.get(pk=task_id)
+                except TradingTask.DoesNotExist as e:
                     logger.error(
                         "Task not found",
                         extra={"task_id": str(task_id)},

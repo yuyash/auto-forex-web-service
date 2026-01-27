@@ -42,7 +42,7 @@ class TaskController:
         Args:
             task_name: Name of the Celery task
             instance_key: Unique identifier for this task instance
-            task_id: ID of the task model (BacktestTasks or TradingTasks)
+            task_id: ID of the task model (BacktestTask or TradingTask)
             stop_check_interval_seconds: How often to check for stop signals (default: 1.0)
             heartbeat_interval_seconds: How often to send heartbeats (default: 5.0)
         """
@@ -122,7 +122,7 @@ class TaskController:
         import time
 
         from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTasks, TradingTasks
+        from apps.trading.models import BacktestTask, TradingTask
 
         now = time.monotonic()
         if not force and (now - self._last_stop_check) < self.stop_check_interval_seconds:
@@ -131,13 +131,13 @@ class TaskController:
         # Check task status directly
         try:
             task = (
-                BacktestTasks.objects.filter(pk=self.task_id)
+                BacktestTask.objects.filter(pk=self.task_id)
                 .values_list("status", flat=True)
                 .first()
             )
             if task is None:
                 task = (
-                    TradingTasks.objects.filter(pk=self.task_id)
+                    TradingTask.objects.filter(pk=self.task_id)
                     .values_list("status", flat=True)
                     .first()
                 )

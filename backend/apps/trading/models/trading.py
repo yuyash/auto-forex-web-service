@@ -11,35 +11,35 @@ from apps.trading.enums import TaskStatus, TradingMode
 from apps.trading.models.base import UUIDModel
 
 
-class TradingTasksManager(models.Manager["TradingTasks"]):
-    """Custom manager for TradingTasks model."""
+class TradingTaskManager(models.Manager["TradingTask"]):
+    """Custom manager for TradingTask model."""
 
-    def for_user(self, user: Any) -> models.QuerySet["TradingTasks"]:
+    def for_user(self, user: Any) -> models.QuerySet["TradingTask"]:
         """Get trading tasks for a specific user."""
         return self.filter(user=user)
 
-    def active(self) -> models.QuerySet["TradingTasks"]:
+    def active(self) -> models.QuerySet["TradingTask"]:
         """Get all active (running) trading tasks."""
         return self.filter(status=TaskStatus.RUNNING)
 
-    def running(self) -> models.QuerySet["TradingTasks"]:
+    def running(self) -> models.QuerySet["TradingTask"]:
         """Get all running trading tasks."""
         return self.filter(status=TaskStatus.RUNNING)
 
-    def for_account(self, account: Any) -> models.QuerySet["TradingTasks"]:
+    def for_account(self, account: Any) -> models.QuerySet["TradingTask"]:
         """Get trading tasks for a specific OANDA account."""
         return self.filter(oanda_account=account)
 
-    def by_config(self, config: Any) -> models.QuerySet["TradingTasks"]:
+    def by_config(self, config: Any) -> models.QuerySet["TradingTask"]:
         """Get trading tasks using a specific strategy configuration."""
         return self.filter(config=config)
 
 
-class TradingTasks(UUIDModel):
+class TradingTask(UUIDModel):
     """
     Persistent live trading task with reusable configuration.
 
-    A TradingTasks represents a live trading operation with specific configuration
+    A TradingTask represents a live trading operation with specific configuration
     and account. Tasks can be started, stopped, paused, and resumed multiple times,
     with each execution tracked separately.
 
@@ -48,7 +48,7 @@ class TradingTasks(UUIDModel):
     Inherits UUID primary key and timestamps from UUIDModel.
     """
 
-    objects = TradingTasksManager()
+    objects = TradingTaskManager()
 
     user = models.ForeignKey(
         "accounts.User",
@@ -57,7 +57,7 @@ class TradingTasks(UUIDModel):
         help_text="User who created this trading task",
     )
     config = models.ForeignKey(
-        "trading.StrategyConfigurations",
+        "trading.StrategyConfiguration",
         on_delete=models.PROTECT,
         related_name="trading_tasks",
         help_text="Strategy configuration used by this task",
@@ -203,7 +203,7 @@ class TradingTasks(UUIDModel):
             return self.completed_at - self.started_at
         return None
 
-    def copy(self, new_name: str) -> "TradingTasks":
+    def copy(self, new_name: str) -> "TradingTask":
         """
         Create a copy of this task with a new name.
 
@@ -213,7 +213,7 @@ class TradingTasks(UUIDModel):
             new_name: Name for the new task
 
         Returns:
-            TradingTasks: The newly created task
+            TradingTask: The newly created task
 
         Raises:
             ValueError: If new_name is the same as current name or already exists
@@ -222,11 +222,11 @@ class TradingTasks(UUIDModel):
             raise ValueError("New name must be different from current name")
 
         # Check if name already exists for this user
-        if TradingTasks.objects.filter(user=self.user, name=new_name).exists():
+        if TradingTask.objects.filter(user=self.user, name=new_name).exists():
             raise ValueError(f"A trading task with name '{new_name}' already exists")
 
         # Create copy
-        new_task = TradingTasks.objects.create(
+        new_task = TradingTask.objects.create(
             user=self.user,
             config=self.config,
             oanda_account=self.oanda_account,

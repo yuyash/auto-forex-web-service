@@ -3,7 +3,7 @@
 from django.db import models
 
 
-class TradingEvents(models.Model):
+class TradingEvent(models.Model):
     """Persistent event log for the trading app.
 
     This is intentionally independent from any market/accounts event mechanisms.

@@ -1,11 +1,11 @@
 """Trading models package.
 
 This package organizes trading models into logical modules:
-- configs: StrategyConfigurations and related
-- backtest: BacktestTasks
-- trading: TradingTasks
+- configs: StrategyConfiguration and related
+- backtest: BacktestTask
+- trading: TradingTask
 - state: ExecutionState
-- events: TradingEvents
+- events: TradingEvent
 - celery: CeleryTaskStatus
 - logs: TaskLog
 - trades: Trades
@@ -15,42 +15,42 @@ Note: FloorSide enum has been moved to apps.trading.enums
 """
 
 from apps.trading.models.backtest import (
-    BacktestTasks,
-    BacktestTasksManager,
+    BacktestTask,
+    BacktestTaskManager,
 )
 from apps.trading.models.celery import CeleryTaskStatus
 from apps.trading.models.configs import (
-    StrategyConfigurations,
-    StrategyConfigurationsManager,
+    StrategyConfiguration,
+    StrategyConfigurationManager,
 )
-from apps.trading.models.equities import Equities
-from apps.trading.models.events import TradingEvents
+from apps.trading.models.equities import Equity
+from apps.trading.models.events import TradingEvent
 from apps.trading.models.logs import TaskLog
 from apps.trading.models.state import ExecutionState
-from apps.trading.models.trades import Trades
+from apps.trading.models.trades import Trade
 from apps.trading.models.trading import (
-    TradingTasks,
-    TradingTasksManager,
+    TradingTask,
+    TradingTaskManager,
 )
 
 __all__ = [
     # Configs
-    "StrategyConfigurations",
-    "StrategyConfigurationsManager",
+    "StrategyConfiguration",
+    "StrategyConfigurationManager",
     # Tasks
-    "BacktestTasks",
-    "BacktestTasksManager",
-    "TradingTasks",
-    "TradingTasksManager",
+    "BacktestTask",
+    "BacktestTaskManager",
+    "TradingTask",
+    "TradingTaskManager",
     # State
     "ExecutionState",
     # Events
-    "TradingEvents",
+    "TradingEvent",
     # Celery
     "CeleryTaskStatus",
     # Logs
     "TaskLog",
     # Execution Data
-    "Trades",
-    "Equities",
+    "Trade",
+    "Equity",
 ]

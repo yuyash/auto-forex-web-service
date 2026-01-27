@@ -2,7 +2,7 @@
 
 from django.core.management.base import BaseCommand
 
-from apps.trading.models import BacktestTasks, CeleryTaskStatus, TradingTasks
+from apps.trading.models import BacktestTask, CeleryTaskStatus, TradingTask
 
 
 class Command(BaseCommand):
@@ -31,10 +31,10 @@ class Command(BaseCommand):
 
         # Get the task
         if task_type == "backtest":
-            model = BacktestTasks
+            model = BacktestTask
             task_name = "trading.tasks.run_backtest_task"
         else:
-            model = TradingTasks
+            model = TradingTask
             task_name = "trading.tasks.run_trading_task"
 
         try:

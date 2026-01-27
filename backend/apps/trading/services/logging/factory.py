@@ -2,13 +2,13 @@
 
 import logging
 
-from apps.trading.models.backtest import BacktestTasks
-from apps.trading.models.trading import TradingTasks
+from apps.trading.models.backtest import BacktestTask
+from apps.trading.models.trading import TradingTask
 from apps.trading.services.logging.handler import JSONLoggingHandler
 
 
 def get_task_logger(
-    task: BacktestTasks | TradingTasks,
+    task: BacktestTask | TradingTask,
     logger_name: str | None = None,
     level: int = logging.INFO,
 ) -> logging.Logger:
@@ -21,7 +21,7 @@ def get_task_logger(
     multiple times for the same logger.
 
     Args:
-        task: The task instance (BacktestTasks or TradingTasks) to associate logs with
+        task: The task instance (BacktestTask or TradingTask) to associate logs with
         logger_name: Optional logger name. If not provided, defaults to a unique name
                     based on task type and ID (e.g., "backtest.550e8400-e29b-41d4-a716-446655440000")
         level: Log level (defaults to INFO). Use logging.DEBUG, logging.INFO,
@@ -31,13 +31,13 @@ def get_task_logger(
         Configured logger instance with JSONLoggingHandler attached
 
     Example:
-        >>> task = BacktestTasks.objects.get(pk=task_id)
+        >>> task = BacktestTask.objects.get(pk=task_id)
         >>> logger = get_task_logger(task, level=logging.DEBUG)
         >>> logger.info("Strategy started", extra={"instrument": "USD_JPY"})
     """
     # Generate default logger name if not provided
     if logger_name is None:
-        task_type = "backtest" if isinstance(task, BacktestTasks) else "trading"
+        task_type = "backtest" if isinstance(task, BacktestTask) else "trading"
         logger_name = f"{task_type}.{task.pk}"
 
     # Get or create logger

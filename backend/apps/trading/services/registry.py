@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from apps.trading.strategies.base import Strategy
 
 if TYPE_CHECKING:
-    from apps.trading.models import StrategyConfigurations
+    from apps.trading.models import StrategyConfiguration
 
 
 @dataclass(frozen=True)
@@ -71,7 +71,7 @@ class StrategyRegistry:
         *,
         instrument: str,
         pip_size: Decimal,
-        strategy_config: "StrategyConfigurations",
+        strategy_config: "StrategyConfiguration",
         trading_mode: Any = None,
     ) -> Strategy:
         """Create a strategy instance.

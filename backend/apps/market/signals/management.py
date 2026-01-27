@@ -64,7 +64,7 @@ class TaskManagementSignalHandler(SignalHandler):
         qs = CeleryTaskStatus.objects.filter(task_name=str(task_name), instance_key=key)
 
         updated = qs.exclude(status=CeleryTaskStatus.Status.STOPPED).update(
-            status=CeleryTaskStatus.Status.STOP_REQUESTED,
+            status=CeleryTaskStatus.Status.STOPPING,
             status_message=(reason or "Stop requested"),
             updated_at=now,
         )

@@ -1,25 +1,25 @@
 from django.contrib import admin
 
 from apps.trading.models import (
-    BacktestTasks,
+    BacktestTask,
     CeleryTaskStatus,
-    StrategyConfigurations,
+    StrategyConfiguration,
     TaskLog,
-    TradingEvents,
-    TradingTasks,
+    TradingEvent,
+    TradingTask,
 )
 
 
-@admin.register(StrategyConfigurations)
-class StrategyConfigurationsAdmin(admin.ModelAdmin):
+@admin.register(StrategyConfiguration)
+class StrategyConfigurationAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "name", "strategy_type", "created_at", "updated_at")
     list_filter = ("strategy_type", "created_at")
     search_fields = ("name", "strategy_type", "user__email", "user__username")
     ordering = ("-created_at",)
 
 
-@admin.register(BacktestTasks)
-class BacktestTasksAdmin(admin.ModelAdmin):
+@admin.register(BacktestTask)
+class BacktestTaskAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "user",
@@ -35,8 +35,8 @@ class BacktestTasksAdmin(admin.ModelAdmin):
     ordering = ("-created_at",)
 
 
-@admin.register(TradingTasks)
-class TradingTasksAdmin(admin.ModelAdmin):
+@admin.register(TradingTask)
+class TradingTaskAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "user",
@@ -68,8 +68,8 @@ class CeleryTaskStatusAdmin(admin.ModelAdmin):
     ordering = ("-updated_at",)
 
 
-@admin.register(TradingEvents)
-class TradingEventsAdmin(admin.ModelAdmin):
+@admin.register(TradingEvent)
+class TradingEventAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "created_at",
