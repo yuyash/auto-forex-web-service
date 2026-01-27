@@ -75,7 +75,9 @@ class Command(BaseCommand):
 
         # Revoke Celery task
         if task.celery_task_id:
-            result = task.get_celery_result()
+            from apps.trading.services.task import get_celery_result
+
+            result = get_celery_result(task.celery_task_id)
             if result:
                 result.revoke(terminate=True)
                 self.stdout.write(f"✓ Revoked Celery task {task.celery_task_id}")

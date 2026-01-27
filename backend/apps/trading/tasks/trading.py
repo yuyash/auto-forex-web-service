@@ -36,10 +36,11 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
     try:
         logger.info(f"Starting a new celery trading task. Task ID: {task_id}.")
         task = TradingTasks.objects.get(pk=task_id)
+
+        # Update status to RUNNING now that the task is actually executing
         task.status = TaskStatus.RUNNING
         task.started_at = dj_timezone.now()
-        task.celery_task_id = self.request.id
-        task.save(update_fields=["status", "started_at", "celery_task_id"])
+        task.save(update_fields=["status", "started_at", "updated_at"])
 
         # Log task start
         TaskLog.objects.create(
@@ -104,6 +105,7 @@ def execute_trading(task: TradingTasks) -> None:
     controller = TaskController(
         task_name="trading.tasks.run_trading_task",
         instance_key=str(task.pk),
+        task_id=task.pk,
     )
 
     # Create executor
@@ -153,20 +155,44 @@ def handle_exception(task_id: UUID, task: TradingTasks | None, error: Exception)
 
 @shared_task(bind=True, name="trading.tasks.stop_trading_task")
 def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
-    """Request stop for a running trading task.
+    """Stop a running trading task.
 
-    This handles complex cleanup operations like closing positions.
+    This performs the actual stop operation, updating the task to STOPPED status.
 
     Args:
         task_id: UUID of the trading task to stop
         mode: Stop mode ('immediate', 'graceful', 'graceful_close')
     """
-    task_name = "trading.tasks.run_trading_task"
-    instance_key = str(task_id)
-    CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
-        status=CeleryTaskStatus.Status.STOP_REQUESTED,
-        status_message=f"stop_requested mode={mode}",
-        last_heartbeat_at=dj_timezone.now(),
-    )
+    from apps.trading.enums import TaskStatus
 
-    logger.info(f"Stop requested for trading task {task_id} (mode={mode})")
+    try:
+        task = TradingTasks.objects.get(pk=task_id)
+
+        # Only stop if task is in STOPPING state
+        if task.status == TaskStatus.STOPPING:
+            # Revoke the Celery task if it exists
+            if task.celery_task_id:
+                from celery import current_app
+
+                current_app.control.revoke(task.celery_task_id, terminate=True)
+
+            # Update task status to STOPPED
+            task.status = TaskStatus.STOPPED
+            task.completed_at = dj_timezone.now()
+            task.save(update_fields=["status", "completed_at", "updated_at"])
+
+            # Update CeleryTaskStatus
+            task_name = "trading.tasks.run_trading_task"
+            instance_key = str(task_id)
+            CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
+                status=CeleryTaskStatus.Status.STOPPED,
+                stopped_at=dj_timezone.now(),
+                last_heartbeat_at=dj_timezone.now(),
+            )
+
+            logger.info(f"Trading task {task_id} stopped successfully (mode={mode})")
+        else:
+            logger.warning(f"Trading task {task_id} not in STOPPING state (current: {task.status})")
+    except TradingTasks.DoesNotExist:
+        logger.error(f"Trading task {task_id} not found")
+        raise

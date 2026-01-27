@@ -26,7 +26,7 @@ from apps.trading.serializers.task import (
     TaskLogSerializer,
     TradingTaskSerializer,
 )
-from apps.trading.services.service import TaskService, TaskServiceImpl
+from apps.trading.services.task import TaskService
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -52,7 +52,7 @@ class TradingTaskViewSet(ModelViewSet):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self.task_service: TaskService = TaskServiceImpl()
+        self.task_service: TaskService = TaskService()
 
     def get_queryset(self) -> QuerySet[TradingTasks]:
         """Get trading tasks for the authenticated user with filtering."""
@@ -121,7 +121,7 @@ class TradingTaskViewSet(ModelViewSet):
             )
 
         try:
-            task = self.task_service.submit_task(task)
+            task = self.task_service.start_task(task)
             serializer = self.get_serializer(task)
             return Response({"results": serializer.data})
         except Exception as e:
@@ -145,50 +145,44 @@ class TradingTaskViewSet(ModelViewSet):
             extra={"task_id": task.pk, "user_id": request.user.pk},
         )
 
-        # Validate task status
-        if task.status not in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
-            logger.warning(
-                "API: Task not in stoppable state",
-                extra={"task_id": task.pk, "status": task.status},
-            )
-            return Response(
-                {
-                    "error": "Task cannot be stopped",
-                    "detail": f"Task is in {task.status} status",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         try:
-            # Import and dispatch stop task
-            from apps.trading.tasks.trading import stop_trading_task
-
             # Get stop mode from request (default: graceful)
             mode = request.data.get("mode", "graceful")
 
-            # Dispatch stop task
-            result = stop_trading_task.apply_async(  # type: ignore[attr-defined]
-                args=[task.pk],
-                kwargs={"mode": mode},
-                countdown=0,
-            )
+            # Use TaskService to stop the task
+            success = self.task_service.stop_task(task.pk, mode=mode)
 
-            logger.info(
-                "API: Stop task dispatched",
-                extra={"task_id": task.pk, "celery_task_id": result.id, "mode": mode},
-            )
+            if success:
+                logger.info(
+                    "API: Stop task initiated",
+                    extra={"task_id": task.pk, "mode": mode},
+                )
 
+                return Response(
+                    {
+                        "message": "Stop request submitted (graceful stop)",
+                        "task_id": task.pk,
+                        "mode": mode,
+                        "status": "stopping",
+                    },
+                    status=status.HTTP_202_ACCEPTED,
+                )
+            else:
+                return Response(
+                    {"error": "Failed to initiate stop"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+        except ValueError as e:
+            # Task not found or not in stoppable state
+            logger.warning(
+                "API: Cannot stop task",
+                extra={"task_id": task.pk, "error": str(e)},
+            )
             return Response(
-                {
-                    "message": "Stop request submitted (graceful stop)",
-                    "task_id": task.pk,
-                    "stop_task_id": result.id,
-                    "mode": mode,
-                    "status": "stopping",
-                },
-                status=status.HTTP_202_ACCEPTED,
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-
         except Exception:
             logger.error(
                 "API: Unexpected error stopping task",

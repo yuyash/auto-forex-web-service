@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from decimal import Decimal
+from logging import Logger
 from typing import TYPE_CHECKING
 
 from apps.trading.dataclasses import (
@@ -24,7 +25,7 @@ from apps.trading.strategies.base import Strategy
 if TYPE_CHECKING:
     from apps.trading.models import BacktestTasks, TradingTasks
 
-logger = logging.getLogger(__name__)
+logger: Logger = logging.getLogger(name=__name__)
 
 
 class TaskExecutor(ABC):
@@ -251,14 +252,6 @@ class BacktestExecutor(TaskExecutor):
             instrument=task.instrument,
             pip_size=task.pip_size or Decimal("0.01"),
         )
-
-        # Initialize services for data persistence
-        from apps.trading.services.equity_tracker import EquityTracker
-        from apps.trading.services.trade_history_builder import TradeHistoryBuilder
-
-        celery_task_id = task.celery_task_id or ""
-        self.trade_history_builder = TradeHistoryBuilder(task, celery_task_id)
-        self.equity_tracker = EquityTracker(task, celery_task_id)
 
     def load_state(self) -> ExecutionState:
         """Load execution state from ExecutionState model.

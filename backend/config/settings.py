@@ -230,18 +230,10 @@ CELERY_TASK_ROUTES = {
     "trading.tasks.run_trading_task": {"queue": "trading"},
     "trading.tasks.stop_trading_task": {"queue": "trading"},
     "trading.tasks.run_backtest_task": {"queue": "trading"},
-    # Monitoring tasks
-    "trading.reconcile_task_statuses": {"queue": "default"},
 }
 
 # Celery Beat periodic task schedule
-CELERY_BEAT_SCHEDULE = {
-    "reconcile-task-statuses": {
-        "task": "trading.reconcile_task_statuses",
-        "schedule": 300.0,  # Run every 5 minutes
-        "options": {"queue": "default"},
-    },
-}
+CELERY_BEAT_SCHEDULE = {}
 
 
 # =============================================================================

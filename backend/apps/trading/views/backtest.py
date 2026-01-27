@@ -25,7 +25,7 @@ from apps.trading.serializers.task import (
     BacktestTaskSerializer,
     TaskLogSerializer,
 )
-from apps.trading.services.service import TaskService, TaskServiceImpl
+from apps.trading.services.task import TaskService
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -52,7 +52,7 @@ class BacktestTaskViewSet(ModelViewSet):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self.task_service: TaskService = TaskServiceImpl()
+        self.task_service: TaskService = TaskService()
 
     def get_queryset(self) -> QuerySet[BacktestTasks]:
         """Get backtest tasks for the authenticated user with filtering."""
@@ -127,10 +127,10 @@ class BacktestTaskViewSet(ModelViewSet):
             )
 
         try:
-            task = self.task_service.submit_task(task)
+            task = self.task_service.start_task(task)
             serializer = self.get_serializer(task)
             logger.info(
-                "API: Task submitted successfully",
+                "API: Task started successfully",
                 extra={"task_id": task.pk, "celery_task_id": task.celery_task_id},
             )
             return Response({"results": serializer.data})
@@ -185,45 +185,40 @@ class BacktestTaskViewSet(ModelViewSet):
             extra={"task_id": task.pk, "user_id": request.user.pk},
         )
 
-        # Validate task status
-        if task.status not in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
+        try:
+            # Use TaskService to stop the task
+            success = self.task_service.stop_task(task.pk)
+
+            if success:
+                logger.info(
+                    "API: Stop task initiated",
+                    extra={"task_id": task.pk},
+                )
+
+                return Response(
+                    {
+                        "message": "Stop request submitted",
+                        "task_id": task.pk,
+                        "status": "stopping",
+                    },
+                    status=status.HTTP_202_ACCEPTED,
+                )
+            else:
+                return Response(
+                    {"error": "Failed to initiate stop"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+        except ValueError as e:
+            # Task not found or not in stoppable state
             logger.warning(
-                "API: Task not in stoppable state",
-                extra={"task_id": task.pk, "status": task.status},
+                "API: Cannot stop task",
+                extra={"task_id": task.pk, "error": str(e)},
             )
             return Response(
-                {
-                    "error": "Task cannot be stopped",
-                    "detail": f"Task is in {task.status} status",
-                },
+                {"error": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        try:
-            # Import and dispatch stop task
-            from apps.trading.tasks.backtest import stop_backtest_task
-
-            # Dispatch stop task
-            result = stop_backtest_task.apply_async(
-                args=[task.pk],
-                countdown=0,
-            )
-
-            logger.info(
-                "API: Stop task dispatched",
-                extra={"task_id": task.pk, "celery_task_id": result.id},
-            )
-
-            return Response(
-                {
-                    "message": "Stop request submitted",
-                    "task_id": task.pk,
-                    "stop_task_id": result.id,
-                    "status": "stopping",
-                },
-                status=status.HTTP_202_ACCEPTED,
-            )
-
         except Exception:
             # Unexpected errors
             logger.error(
@@ -253,9 +248,16 @@ class BacktestTaskViewSet(ModelViewSet):
             )
 
         try:
-            task.pause()
-            serializer = self.get_serializer(task)
-            return Response({"results": serializer.data})
+            # Use TaskService to pause the task
+            success = self.task_service.pause_task(UUID(int=task.pk))
+            if success:
+                serializer = self.get_serializer(task)
+                return Response({"results": serializer.data})
+            else:
+                return Response(
+                    {"error": "Failed to pause task"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
         except Exception as e:
             return Response(
                 {"error": f"Failed to pause task: {str(e)}"},
@@ -278,13 +280,11 @@ class BacktestTaskViewSet(ModelViewSet):
         )
 
         try:
-            # Restart clears data and sets to CREATED
-            task.restart()
-            # Then submit to start execution
-            task = self.task_service.submit_task(task)
+            # Use TaskService to restart and resubmit
+            task = self.task_service.restart_task(UUID(int=task.pk))
             serializer = self.get_serializer(task)
             logger.info(
-                "API: Task restarted and submitted successfully",
+                "API: Task restarted successfully",
                 extra={"task_id": task.pk, "retry_count": task.retry_count},
             )
             return Response({"results": serializer.data})
@@ -347,9 +347,8 @@ class BacktestTaskViewSet(ModelViewSet):
             )
 
         try:
-            task.resume()
-            # Resubmit to Celery
-            task = self.task_service.submit_task(task)
+            # Use TaskService to resume and resubmit
+            task = self.task_service.resume_task(UUID(int=task.pk))
             serializer = self.get_serializer(task)
             logger.info(
                 "API: Task resumed successfully",

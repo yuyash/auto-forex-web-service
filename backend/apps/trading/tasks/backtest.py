@@ -36,10 +36,11 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
     try:
         logger.info(f"Starting a new celery backtest task. Task ID: {task_id}.")
         task = BacktestTasks.objects.get(pk=task_id)
+
+        # Update status to RUNNING now that the task is actually executing
         task.status = TaskStatus.RUNNING
         task.started_at = dj_timezone.now()
-        task.celery_task_id = self.request.id
-        task.save(update_fields=["status", "started_at", "celery_task_id"])
+        task.save(update_fields=["status", "started_at", "updated_at"])
 
         # Log task start
         TaskLog.objects.create(
@@ -108,6 +109,7 @@ def execute_backtest(task: BacktestTasks) -> None:
     controller = TaskController(
         task_name="trading.tasks.run_backtest_task",
         instance_key=str(task.pk),
+        task_id=task.pk,
     )
 
     # Create executor
@@ -178,21 +180,47 @@ def trigger_backtest_publisher(task: BacktestTasks) -> None:
 
 @shared_task(bind=True, name="trading.tasks.stop_backtest_task")
 def stop_backtest_task(self: Any, task_id: UUID) -> None:
-    """Request stop for a running backtest task.
+    """Stop a running backtest task.
 
-    This sets the stop flag for graceful cooperative stop.
+    This performs the actual stop operation, updating the task to STOPPED status.
 
     Args:
         task_id: UUID of the backtest task to stop
     """
-    from apps.trading.models import CeleryTaskStatus
+    from apps.trading.enums import TaskStatus
 
-    task_name = "trading.tasks.run_backtest_task"
-    instance_key = str(task_id)
-    CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
-        status=CeleryTaskStatus.Status.STOP_REQUESTED,
-        status_message="stop_requested",
-        last_heartbeat_at=dj_timezone.now(),
-    )
+    try:
+        task = BacktestTasks.objects.get(pk=task_id)
 
-    logger.info(f"Stop requested for backtest task {task_id}")
+        # Only stop if task is in STOPPING state
+        if task.status == TaskStatus.STOPPING:
+            # Revoke the Celery task if it exists
+            if task.celery_task_id:
+                from celery import current_app
+
+                current_app.control.revoke(task.celery_task_id, terminate=True)
+
+            # Update task status to STOPPED
+            task.status = TaskStatus.STOPPED
+            task.completed_at = dj_timezone.now()
+            task.save(update_fields=["status", "completed_at", "updated_at"])
+
+            # Update CeleryTaskStatus
+            from apps.trading.models import CeleryTaskStatus
+
+            task_name = "trading.tasks.run_backtest_task"
+            instance_key = str(task_id)
+            CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
+                status=CeleryTaskStatus.Status.STOPPED,
+                stopped_at=dj_timezone.now(),
+                last_heartbeat_at=dj_timezone.now(),
+            )
+
+            logger.info(f"Backtest task {task_id} stopped successfully")
+        else:
+            logger.warning(
+                f"Backtest task {task_id} not in STOPPING state (current: {task.status})"
+            )
+    except BacktestTasks.DoesNotExist:
+        logger.error(f"Backtest task {task_id} not found")
+        raise

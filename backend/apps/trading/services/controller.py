@@ -33,6 +33,7 @@ class TaskController:
         *,
         task_name: str,
         instance_key: str,
+        task_id: int,
         stop_check_interval_seconds: float = 1.0,
         heartbeat_interval_seconds: float = 5.0,
     ) -> None:
@@ -41,11 +42,16 @@ class TaskController:
         Args:
             task_name: Name of the Celery task
             instance_key: Unique identifier for this task instance
+            task_id: ID of the task model (BacktestTasks or TradingTasks)
             stop_check_interval_seconds: How often to check for stop signals (default: 1.0)
             heartbeat_interval_seconds: How often to send heartbeats (default: 5.0)
         """
         self.task_name = task_name
         self.instance_key = instance_key
+        self.task_id = task_id
+        self._last_stop_check = 0.0
+        self._cached_should_stop = False
+        self.stop_check_interval_seconds = stop_check_interval_seconds
         self._service = CeleryTaskService(
             task_name=task_name,
             instance_key=instance_key,
@@ -103,8 +109,8 @@ class TaskController:
     def check_control(self, *, force: bool = False) -> TaskControl:
         """Check for control signals (stop, pause requests).
 
-        This method checks the task status in the database to see if a stop
-        or pause has been requested. Checks are throttled based on
+        This method checks the task's status in the database to see if a stop
+        has been requested (status == STOPPING). Checks are throttled based on
         stop_check_interval_seconds to avoid excessive database queries.
 
         Args:
@@ -113,11 +119,35 @@ class TaskController:
         Returns:
             TaskControl: Control flags indicating requested actions
         """
-        should_stop = self._service.should_stop(force=force)
-        # Note: Current implementation only supports stop requests.
-        # Pause functionality can be added when needed by extending
-        # CeleryTaskStatus.Status to include PAUSE_REQUESTED.
-        return TaskControl(should_stop=should_stop)  # type: ignore[call-arg]
+        import time
+
+        from apps.trading.enums import TaskStatus
+        from apps.trading.models import BacktestTasks, TradingTasks
+
+        now = time.monotonic()
+        if not force and (now - self._last_stop_check) < self.stop_check_interval_seconds:
+            return TaskControl(should_stop=self._cached_should_stop)  # type: ignore[call-arg]
+
+        # Check task status directly
+        try:
+            task = (
+                BacktestTasks.objects.filter(pk=self.task_id)
+                .values_list("status", flat=True)
+                .first()
+            )
+            if task is None:
+                task = (
+                    TradingTasks.objects.filter(pk=self.task_id)
+                    .values_list("status", flat=True)
+                    .first()
+                )
+
+            self._cached_should_stop = task == TaskStatus.STOPPING
+        except Exception:
+            self._cached_should_stop = False
+
+        self._last_stop_check = now
+        return TaskControl(should_stop=self._cached_should_stop)  # type: ignore[call-arg]
 
     def stop(
         self,

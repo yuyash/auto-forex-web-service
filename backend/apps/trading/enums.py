@@ -26,8 +26,10 @@ class TaskStatus(models.TextChoices):
     """
 
     CREATED = "created", "Created"
+    STARTING = "starting", "Starting"
     RUNNING = "running", "Running"
     PAUSED = "paused", "Paused"
+    STOPPING = "stopping", "Stopping"
     STOPPED = "stopped", "Stopped"
     COMPLETED = "completed", "Completed"
     FAILED = "failed", "Failed"

@@ -14,7 +14,6 @@ from .errors import (
     retry_with_backoff,
 )
 from .registry import register_all_strategies, registry
-from .validation import TaskValidator
 
 __all__ = [
     "registry",
@@ -30,5 +29,4 @@ __all__ = [
     "BusinessLogicError",
     "RetryConfig",
     "retry_with_backoff",
-    "TaskValidator",
 ]

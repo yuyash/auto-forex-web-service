@@ -4,12 +4,10 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
-from celery.result import AsyncResult
 from django.db import models
-from django.utils import timezone
 
 from apps.market.models import OandaAccounts
-from apps.trading.enums import TaskStatus, TaskType, TradingMode
+from apps.trading.enums import TaskStatus, TradingMode
 from apps.trading.models.base import UUIDModel
 
 
@@ -194,51 +192,6 @@ class TradingTasks(UUIDModel):
     def __str__(self) -> str:
         return f"{self.name} ({self.config.strategy_type}) - {self.oanda_account.account_id}"
 
-    def get_celery_result(self) -> AsyncResult | None:
-        """Retrieve the Celery AsyncResult for this task.
-
-        Returns:
-            AsyncResult | None: The Celery AsyncResult if celery_task_id is set, None otherwise
-        """
-        if self.celery_task_id:
-            return AsyncResult(self.celery_task_id)
-        return None
-
-    def update_from_celery_state(self) -> None:
-        """Synchronize task status with Celery task state.
-
-        Maps Celery task states to Task statuses and updates the task accordingly.
-
-        Note: Does not overwrite terminal states (STOPPED, COMPLETED, FAILED, PAUSED) or
-        states during transitions (STOP_REQUESTED) to prevent race conditions with async
-        stop operations.
-
-        Priority order:
-        1. Terminal states - never overwrite
-        2. CeleryTaskStatus.STOP_REQUESTED - don't overwrite during stop
-        3. CeleryTaskStatus state - use if available
-        4. Celery AsyncResult state - fallback
-        """
-        from apps.trading.services.status_sync import sync_task_status_from_celery
-
-        sync_task_status_from_celery(self, self.get_celery_result())
-
-    def cancel(self) -> bool:
-        """Cancel the running task.
-
-        Returns:
-            bool: True if task was successfully cancelled, False otherwise
-        """
-        if self.status in [TaskStatus.RUNNING, TaskStatus.PAUSED]:
-            result = self.get_celery_result()
-            if result:
-                result.revoke(terminate=True)
-            self.status = TaskStatus.STOPPED
-            self.completed_at = timezone.now()
-            self.save(update_fields=["status", "completed_at", "updated_at"])
-            return True
-        return False
-
     @property
     def duration(self) -> timedelta | None:
         """Calculate task execution duration.
@@ -249,163 +202,6 @@ class TradingTasks(UUIDModel):
         if self.started_at and self.completed_at:
             return self.completed_at - self.started_at
         return None
-
-    def start(self) -> None:
-        """
-        Start the trading task.
-
-        Transitions task to running state. The actual Executions record
-        will be created by the Celery task that performs the trading.
-        Enforces one active task per account constraint.
-
-        Raises:
-            ValueError: If task is already running or another task is running on the account
-        """
-        if self.status == TaskStatus.RUNNING:
-            raise ValueError("Task is already running")
-
-        # Check if another task is running on this account
-        other_running_tasks = TradingTasks.objects.filter(
-            oanda_account=self.oanda_account,
-            status=TaskStatus.RUNNING,
-        ).exclude(pk=self.pk)
-
-        if other_running_tasks.exists():
-            other_task = other_running_tasks.first()
-            if other_task:
-                raise ValueError(
-                    f"Another task '{other_task.name}' is already running on this account. "
-                    "Only one task can run per account at a time."
-                )
-
-        # Fetch trading_mode from OANDA if not set
-        if not self.trading_mode or self.trading_mode == TradingMode.NETTING:
-            try:
-                from apps.market.services.oanda import OandaService
-
-                oanda_service = OandaService(self.oanda_account)
-                position_mode = oanda_service.get_account_position_mode()
-                self.trading_mode = (
-                    TradingMode.HEDGING if position_mode == "hedging" else TradingMode.NETTING
-                )
-            except Exception:
-                # Default to netting if fetch fails
-                self.trading_mode = TradingMode.NETTING
-
-        # Update task status
-        self.status = TaskStatus.RUNNING
-        self.save(update_fields=["status", "trading_mode", "updated_at"])
-
-    def stop(self) -> None:
-        """
-        Stop a running trading task.
-
-        Transitions task to stopped state and marks current execution as stopped.
-        The execution state is automatically persisted, allowing the task to be
-        resumed later.
-
-        Raises:
-            ValueError: If task is not running
-        """
-        if self.status != TaskStatus.RUNNING:
-            raise ValueError("Task is not running")
-
-        # Update task status
-        self.status = TaskStatus.STOPPED
-        self.save(update_fields=["status", "updated_at"])
-
-    def restart(self, *, clear_state: bool = True) -> bool:
-        """Restart task from the beginning, clearing all execution data.
-
-        Args:
-            clear_state: Whether to clear persisted strategy state (default: True)
-
-        Returns:
-            bool: True if task was successfully restarted, False otherwise
-
-        Raises:
-            ValueError: If task is currently running or another task is running on the account
-        """
-        if self.status == TaskStatus.RUNNING:
-            raise ValueError("Cannot restart a task that is currently running. Stop it first.")
-
-        # Check if another task is running on this account
-        other_running_tasks = TradingTasks.objects.filter(
-            oanda_account=self.oanda_account,
-            status=TaskStatus.RUNNING,
-        ).exclude(pk=self.pk)
-
-        if other_running_tasks.exists():
-            other_task = other_running_tasks.first()
-            if other_task:
-                raise ValueError(
-                    f"Another task '{other_task.name}' is already running on this account. "
-                    "Only one task can run per account at a time."
-                )
-
-        if self.status in [
-            TaskStatus.COMPLETED,
-            TaskStatus.FAILED,
-            TaskStatus.STOPPED,
-            TaskStatus.STOPPED,
-        ]:
-            # Clear all events associated with this task
-            from apps.trading.models import TradingEvents
-
-            TradingEvents.objects.filter(task_type="trading", task_id=self.pk).delete()
-
-            # Clear all other execution data
-            self.celery_task_id = None
-            self.status = TaskStatus.CREATED
-            self.started_at = None
-            self.completed_at = None
-            self.error_message = None
-            self.error_traceback = None
-            self.retry_count += 1
-
-            if clear_state:
-                self.strategy_state = {}
-
-            self.save()
-            return True
-        return False
-
-    def resume(self) -> bool:
-        """Resume a cancelled or interrupted task, preserving execution context.
-
-        For trading tasks, this allows resuming from STOPPED state.
-        STOPPED is the normal completion state for trading tasks, and they can be
-        resumed to continue trading.
-
-        Returns:
-            bool: True if task was successfully resumed, False otherwise
-
-        Raises:
-            ValueError: If another task is running on the account
-        """
-        if self.status not in [TaskStatus.STOPPED, TaskStatus.STOPPED]:
-            return False
-
-        # Check if another task is running on this account
-        other_running_tasks = TradingTasks.objects.filter(
-            oanda_account=self.oanda_account,
-            status=TaskStatus.RUNNING,
-        ).exclude(pk=self.pk)
-
-        if other_running_tasks.exists():
-            other_task = other_running_tasks.first()
-            if other_task:
-                raise ValueError(
-                    f"Another task '{other_task.name}' is already running on this account. "
-                    "Only one task can run per account at a time."
-                )
-
-        # Keep existing execution data but reset status
-        self.celery_task_id = None
-        self.status = TaskStatus.CREATED
-        self.completed_at = None
-        self.save()
-        return True
 
     def copy(self, new_name: str) -> "TradingTasks":
         """
@@ -442,13 +238,15 @@ class TradingTasks(UUIDModel):
         return new_task
 
     def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:  # type: ignore[override]
-        """Delete the task and stop any running Celery tasks."""
-        from apps.trading.services.lock import TaskLockManager
+        """Delete the task.
 
-        # Stop the Celery task if running
-        if self.status == TaskStatus.RUNNING:
-            lock_manager = TaskLockManager()
-            lock_manager.set_cancellation_flag(TaskType.TRADING, self.pk)
+        Raises:
+            ValueError: If task is in an active state (STARTING, RUNNING, STOPPING)
+        """
+        if self.status in [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.STOPPING]:
+            raise ValueError(
+                f"Cannot delete task in {self.status} state. Stop the task first before deleting."
+            )
 
         return super().delete(*args, **kwargs)
 
