@@ -128,9 +128,9 @@ class TradingMode(models.TextChoices):
     HEDGING = "hedging", "Hedging Mode"
 
 
-class FloorSide(models.TextChoices):
+class Direction(models.TextChoices):
     """
-    Side used by the floor strategy for layering.
+    Trading direction for positions and orders.
 
     - LONG: Long positions (buy)
     - SHORT: Short positions (sell)
@@ -138,3 +138,7 @@ class FloorSide(models.TextChoices):
 
     LONG = "long", "Long"
     SHORT = "short", "Short"
+
+
+# Deprecated: Use Direction instead
+FloorSide = Direction  # Backward compatibility alias

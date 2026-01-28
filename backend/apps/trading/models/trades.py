@@ -1,4 +1,4 @@
-"""Trade execution model."""
+"""Trade execution models."""
 
 from uuid import uuid4
 

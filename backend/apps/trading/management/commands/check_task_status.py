@@ -64,9 +64,10 @@ class Command(BaseCommand):
 
         # Check Celery AsyncResult
         if task.celery_task_id:
-            from apps.trading.services.task import get_celery_result
+            from apps.trading.services.task import TaskService
 
-            result = get_celery_result(task.celery_task_id)
+            task_service = TaskService()
+            result = task_service.get_celery_result(task.celery_task_id)
             if result:
                 self.stdout.write("\nCelery AsyncResult:")
                 self.stdout.write(f"  State: {result.state}")

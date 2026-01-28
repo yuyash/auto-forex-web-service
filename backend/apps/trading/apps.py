@@ -19,6 +19,6 @@ class TradingConfig(AppConfig):
         """
         # Import here to avoid circular imports
         # pylint: disable=import-outside-toplevel
-        from apps.trading.services.registry import register_all_strategies
+        from apps.trading.strategies.registry import register_all_strategies
 
         register_all_strategies()

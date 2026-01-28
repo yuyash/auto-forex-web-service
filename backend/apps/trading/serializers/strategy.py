@@ -79,7 +79,7 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
 
     def validate_strategy_type(self, value: str) -> str:
         """Validate strategy type exists in registry."""
-        from apps.trading.services.registry import registry
+        from apps.trading.strategies.registry import registry
 
         if not registry.is_registered(value):
             available = ", ".join(registry.list_strategies())

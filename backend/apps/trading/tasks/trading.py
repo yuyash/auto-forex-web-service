@@ -79,9 +79,9 @@ def execute_trading(task: TradingTask) -> None:
         task: Trading task to execute
     """
     from apps.trading.services.controller import TaskController
-    from apps.trading.services.executor import TradingExecutor
-    from apps.trading.services.registry import register_all_strategies, registry
-    from apps.trading.services.source import LiveTickDataSource
+    from apps.trading.strategies.registry import register_all_strategies, registry
+    from apps.trading.tasks.executor import TradingExecutor
+    from apps.trading.tasks.source import LiveTickDataSource
 
     # Register all strategies
     register_all_strategies()

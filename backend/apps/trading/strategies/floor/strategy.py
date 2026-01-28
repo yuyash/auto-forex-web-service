@@ -10,7 +10,6 @@ from apps.trading.dataclasses import StrategyResult, Tick
 from apps.trading.enums import StrategyType, TradingMode
 from apps.trading.events import StrategyEvent
 from apps.trading.models.state import ExecutionState
-from apps.trading.services.registry import register_strategy
 from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.floor.calculators import IndicatorCalculator, PriceCalculator
 from apps.trading.strategies.floor.components import (
@@ -23,6 +22,7 @@ from apps.trading.strategies.floor.history import PriceHistoryManager
 from apps.trading.strategies.floor.models import FloorStrategyConfig, FloorStrategyState
 from apps.trading.strategies.floor.monitors import MarginProtectionMonitor, VolatilityMonitor
 from apps.trading.strategies.floor.trading import TradingEngine
+from apps.trading.strategies.registry import register_strategy
 
 if TYPE_CHECKING:
     from apps.trading.models import StrategyConfiguration

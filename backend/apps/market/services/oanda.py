@@ -206,16 +206,20 @@ class OandaService:
 
     Provides methods to fetch orders, positions, and account details
     directly from OANDA without database caching.
+
+    Supports dry-run mode for backtesting and simulation.
     """
 
-    def __init__(self, account: OandaAccounts):
+    def __init__(self, account: OandaAccounts, dry_run: bool = False):
         """
         Initialize OANDA API client.
 
         Args:
             account: OandaAccounts instance with API credentials
+            dry_run: If True, simulate API calls without making actual requests
         """
         self.account = account
+        self.dry_run = dry_run
         rest_hostname = str(account.api_hostname)
         stream_hostname = self._to_stream_hostname(rest_hostname)
 
@@ -242,11 +246,16 @@ class OandaService:
         self.event_service = MarketEventService()
         self._account_resource_cache: dict[str, Any] | None = None
 
+        # Dry-run state
+        self._dry_run_order_counter = 0
+        self._dry_run_positions: dict[str, Position] = {}
+
         logger.info(
-            "OANDA service initialized (account_id=%s, api_hostname=%s, stream_hostname=%s)",
+            "OANDA service initialized (account_id=%s, api_hostname=%s, stream_hostname=%s, dry_run=%s)",
             str(getattr(account, "account_id", "")),
             rest_hostname,
             stream_hostname,
+            dry_run,
         )
 
     @staticmethod
@@ -454,6 +463,10 @@ class OandaService:
             MarketOrder representing the closeout fill.
         """
 
+        # Dry-run mode: simulate position close
+        if self.dry_run:
+            return self._simulate_position_close(position, units)
+
         try:
             if units is not None:
                 if units <= 0:
@@ -594,6 +607,10 @@ class OandaService:
     def create_market_order(self, request: MarketOrderRequest) -> MarketOrder:
         direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
         abs_units = abs(request.units)
+
+        # Dry-run mode: simulate order execution
+        if self.dry_run:
+            return self._simulate_market_order(request, direction, abs_units)
 
         order_request = {
             "instrument": request.instrument,
@@ -1451,3 +1468,150 @@ class OandaService:
             )
 
             raise ComplianceViolationError(error_message)
+
+    def _simulate_market_order(
+        self, request: MarketOrderRequest, direction: OrderDirection, abs_units: Decimal
+    ) -> MarketOrder:
+        """Simulate market order execution for dry-run mode."""
+        from apps.market.models import TickData as TickDataModel
+
+        self._dry_run_order_counter += 1
+        order_id = f"DRY-{self._dry_run_order_counter}"
+        now = datetime.now(UTC)
+
+        # Get latest tick data for the instrument to simulate fill price
+        try:
+            latest_tick = (
+                TickDataModel.objects.filter(instrument=request.instrument)
+                .order_by("-timestamp")
+                .first()
+            )
+            if latest_tick:
+                # Use bid for sells, ask for buys
+                fill_price = (
+                    latest_tick.ask if direction == OrderDirection.LONG else latest_tick.bid
+                )
+            else:
+                # Fallback to a reasonable default if no tick data
+                fill_price = Decimal("1.0000")
+        except Exception:
+            fill_price = Decimal("1.0000")
+
+        # Update dry-run position tracking
+        position_key = f"{request.instrument}_{direction.value}"
+        if position_key in self._dry_run_positions:
+            existing = self._dry_run_positions[position_key]
+            # Update weighted average price
+            total_units = existing.units + abs_units
+            new_avg_price = (
+                existing.average_price * existing.units + fill_price * abs_units
+            ) / total_units
+            self._dry_run_positions[position_key] = Position(
+                instrument=request.instrument,
+                direction=direction,
+                units=total_units,
+                average_price=new_avg_price,
+                unrealized_pnl=Decimal("0"),
+                trade_ids=[order_id],
+                account_id=str(self.account.account_id),
+            )
+        else:
+            self._dry_run_positions[position_key] = Position(
+                instrument=request.instrument,
+                direction=direction,
+                units=abs_units,
+                average_price=fill_price,
+                unrealized_pnl=Decimal("0"),
+                trade_ids=[order_id],
+                account_id=str(self.account.account_id),
+            )
+
+        logger.info(
+            "[DRY-RUN] Market order simulated: %s %s %s @ %s",
+            direction.value,
+            abs_units,
+            request.instrument,
+            fill_price,
+        )
+
+        return MarketOrder(
+            order_id=order_id,
+            instrument=str(request.instrument),
+            order_type=OrderType.MARKET,
+            direction=direction,
+            units=abs_units,
+            price=fill_price,
+            state=OrderState.FILLED,
+            time_in_force="FOK",
+            create_time=now,
+            fill_time=now,
+        )
+
+    def _simulate_position_close(self, position: Position, units: Decimal | None) -> MarketOrder:
+        """Simulate position close for dry-run mode."""
+        from apps.market.models import TickData as TickDataModel
+
+        self._dry_run_order_counter += 1
+        order_id = f"DRY-CLOSE-{self._dry_run_order_counter}"
+        now = datetime.now(UTC)
+
+        # Get latest tick data for close price
+        try:
+            latest_tick = (
+                TickDataModel.objects.filter(instrument=position.instrument)
+                .order_by("-timestamp")
+                .first()
+            )
+            if latest_tick:
+                # Use opposite side for closing: bid for long close, ask for short close
+                close_price = (
+                    latest_tick.bid
+                    if position.direction == OrderDirection.LONG
+                    else latest_tick.ask
+                )
+            else:
+                close_price = Decimal("1.0000")
+        except Exception:
+            close_price = Decimal("1.0000")
+
+        # Update dry-run position tracking
+        position_key = f"{position.instrument}_{position.direction.value}"
+        if position_key in self._dry_run_positions:
+            if units is None or units >= position.units:
+                # Close entire position
+                del self._dry_run_positions[position_key]
+                close_units = position.units
+            else:
+                # Partial close
+                remaining_units = position.units - units
+                self._dry_run_positions[position_key] = Position(
+                    instrument=position.instrument,
+                    direction=position.direction,
+                    units=remaining_units,
+                    average_price=position.average_price,
+                    unrealized_pnl=Decimal("0"),
+                    trade_ids=position.trade_ids,
+                    account_id=position.account_id,
+                )
+                close_units = units
+
+        logger.info(
+            "[DRY-RUN] Position close simulated: %s %s %s @ %s",
+            position.direction.value,
+            close_units,
+            position.instrument,
+            close_price,
+        )
+
+        return MarketOrder(
+            order_id=order_id,
+            instrument=position.instrument,
+            order_type=OrderType.MARKET,
+            direction=position.direction,
+            units=close_units,
+            price=close_price,
+            state=OrderState.FILLED,
+            time_in_force="FOK",
+            create_time=now,
+            fill_time=now,
+        )

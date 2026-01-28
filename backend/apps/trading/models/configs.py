@@ -156,7 +156,7 @@ class StrategyConfiguration(UUIDModel):
         Returns:
             Tuple of (is_valid, error_message)
         """
-        from apps.trading.services.registry import registry
+        from apps.trading.strategies.registry import registry
 
         if not registry.is_registered(self.strategy_type):
             return False, f"Strategy type '{self.strategy_type}' is not registered"

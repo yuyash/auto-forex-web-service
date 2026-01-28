@@ -1,6 +1,14 @@
 """Event and log models for trading."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from django.db import models
+
+if TYPE_CHECKING:
+    from apps.trading.dataclasses.context import EventContext
+    from apps.trading.events.base import StrategyEvent
 
 
 class TradingEvent(models.Model):
@@ -55,3 +63,34 @@ class TradingEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.created_at.isoformat()} [{self.severity}] {self.event_type}"
+
+    @classmethod
+    def from_event(
+        cls,
+        *,
+        event: "StrategyEvent",
+        context: "EventContext",
+        celery_task_id: str | None = None,
+    ) -> "TradingEvent":
+        """Create a TradingEvent instance from a StrategyEvent.
+
+        Args:
+            event: Strategy event to convert
+            context: Event context with user, account, instrument, task info
+            celery_task_id: Optional Celery task ID
+
+        Returns:
+            TradingEvent: New TradingEvent instance (not saved to database)
+        """
+        return cls(
+            task_type=context.task_type.value,
+            task_id=context.task_id,
+            celery_task_id=celery_task_id,
+            event_type=event.event_type,
+            severity="info",
+            description=str(event.to_dict()),
+            user=context.user,
+            account=context.account,
+            instrument=context.instrument,
+            details=event.to_dict(),
+        )

@@ -25,7 +25,7 @@ class StrategyView(APIView):
         responses={200: StrategyListSerializer},
     )
     def get(self, _request: Request) -> Response:
-        from apps.trading.services.registry import registry
+        from apps.trading.strategies.registry import registry
 
         strategies_info = registry.get_all_strategies_info()
 
@@ -60,7 +60,7 @@ class StrategyDefaultsView(APIView):
         responses={200: dict, 404: dict},
     )
     def get(self, _request: Request, strategy_id: str) -> Response:
-        from apps.trading.services.registry import registry
+        from apps.trading.strategies.registry import registry
 
         strategy_key = str(strategy_id or "").strip()
         if not registry.is_registered(strategy_key):

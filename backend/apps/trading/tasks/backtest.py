@@ -81,9 +81,9 @@ def execute_backtest(task: BacktestTask) -> None:
         task: Backtest task to execute
     """
     from apps.trading.services.controller import TaskController
-    from apps.trading.services.executor import BacktestExecutor
-    from apps.trading.services.registry import register_all_strategies, registry
-    from apps.trading.services.source import RedisTickDataSource
+    from apps.trading.strategies.registry import register_all_strategies, registry
+    from apps.trading.tasks.executor import BacktestExecutor
+    from apps.trading.tasks.source import RedisTickDataSource
 
     # Register all strategies
     register_all_strategies()

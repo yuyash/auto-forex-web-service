@@ -26,6 +26,8 @@ from apps.trading.models.configs import (
 from apps.trading.models.equities import Equity
 from apps.trading.models.events import TradingEvent
 from apps.trading.models.logs import TaskLog
+from apps.trading.models.orders import Order
+from apps.trading.models.positions import Position
 from apps.trading.models.state import ExecutionState
 from apps.trading.models.trades import Trade
 from apps.trading.models.trading import (
@@ -51,6 +53,8 @@ __all__ = [
     # Logs
     "TaskLog",
     # Execution Data
+    "Order",
+    "Position",
     "Trade",
     "Equity",
 ]

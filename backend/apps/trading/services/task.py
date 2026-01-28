@@ -21,22 +21,6 @@ if TYPE_CHECKING:
 logger: Logger = logging.getLogger(name=__name__)
 
 
-def get_celery_result(celery_task_id: str | None) -> AsyncResult | None:
-    """Get Celery AsyncResult for a task ID.
-
-    Args:
-        celery_task_id: Celery task ID
-
-    Returns:
-        AsyncResult | None: Celery AsyncResult if task ID exists, None otherwise
-    """
-    if celery_task_id:
-        from celery.result import AsyncResult
-
-        return AsyncResult(celery_task_id)
-    return None
-
-
 class TaskService:
     """Service for managing task lifecycle.
 
@@ -45,6 +29,22 @@ class TaskService:
     - Task stopping with STOPPING state
     - Task restart and resume operations
     """
+
+    @staticmethod
+    def get_celery_result(celery_task_id: str | None) -> AsyncResult | None:
+        """Get Celery AsyncResult for a task ID.
+
+        Args:
+            celery_task_id: Celery task ID
+
+        Returns:
+            AsyncResult | None: Celery AsyncResult if task ID exists, None otherwise
+        """
+        if celery_task_id:
+            from celery.result import AsyncResult
+
+            return AsyncResult(celery_task_id)
+        return None
 
     def start_task(
         self,
@@ -336,7 +336,7 @@ class TaskService:
                 return False
 
             # Revoke Celery task if it exists
-            result = get_celery_result(task.celery_task_id)
+            result = self.get_celery_result(task.celery_task_id)
             if result:
                 result.revoke(terminate=True)
 

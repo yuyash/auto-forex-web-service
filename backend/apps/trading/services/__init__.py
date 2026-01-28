@@ -1,10 +1,12 @@
 """Service layer for the trading app."""
 
 from .controller import TaskController
-from .registry import register_all_strategies, registry
+from .handler import EventHandler
+from .order import OrderService, OrderServiceError
 
 __all__ = [
-    "registry",
-    "register_all_strategies",
     "TaskController",
+    "EventHandler",
+    "OrderService",
+    "OrderServiceError",
 ]
