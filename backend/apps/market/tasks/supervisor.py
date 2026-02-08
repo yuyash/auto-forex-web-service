@@ -160,8 +160,8 @@ class TickSupervisorRunner:
                 "Registering publisher celery task (account_id=%s)",
                 account_pk,
             )
-            publish_oanda_ticks.delay(account_id=account_pk)  # type: ignore[attr-defined]
+            publish_oanda_ticks.delay(account_id=account_pk)
 
         if not client.exists(subscriber_lock):
             logger.info("Creating subscriber celery task")
-            subscribe_ticks_to_db.delay()  # type: ignore[attr-defined]
+            subscribe_ticks_to_db.delay()

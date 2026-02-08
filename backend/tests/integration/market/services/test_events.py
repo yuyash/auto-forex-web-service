@@ -29,7 +29,7 @@ class TestMarketEventServiceIntegration:
         service = MarketEventService()
 
         service.log_event(
-            event_type=MarketEventType.ORDER_SUBMITTED,  # type: ignore[arg-type]
+            event_type=MarketEventType.ORDER_SUBMITTED,
             description="Test event description",
             severity=MarketEventSeverity.INFO,
             category=MarketEventCategory.MARKET,
@@ -55,7 +55,7 @@ class TestMarketEventServiceIntegration:
         service = MarketEventService()
 
         service.log_event(
-            event_type=MarketEventType.ORDER_FAILED,  # type: ignore[arg-type]
+            event_type=MarketEventType.ORDER_FAILED,
             description="Simple event",
             severity=MarketEventSeverity.WARNING,
             category=MarketEventCategory.MARKET,
@@ -74,7 +74,7 @@ class TestMarketEventServiceIntegration:
         service = MarketEventService()
 
         service.log_trading_event(
-            event_type=MarketEventType.ORDER_SUBMITTED,  # type: ignore[arg-type]
+            event_type=MarketEventType.ORDER_SUBMITTED,
             description="Trade executed",
             user=user,
         )

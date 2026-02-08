@@ -20,9 +20,9 @@ from apps.trading.events import StrategyEvent
 from apps.trading.models import TradingEvent
 from apps.trading.models.state import ExecutionState
 from apps.trading.services.controller import TaskController
+from apps.trading.services.engine import TradingEngine
 from apps.trading.services.handler import EventHandler
 from apps.trading.services.order import OrderService, OrderServiceError
-from apps.trading.strategies.base import Strategy
 from apps.trading.tasks.source import TickDataSource
 
 if TYPE_CHECKING:
@@ -35,13 +35,13 @@ class TaskExecutor:
     """Abstract base class for task execution.
 
     This class provides the core execution loop for processing ticks through
-    a strategy, managing state, and handling lifecycle events.
+    a trading engine, managing state, and handling lifecycle events.
     """
 
     def __init__(
         self,
         *,
-        strategy: Strategy,
+        engine: TradingEngine,
         data_source: TickDataSource,
         controller: TaskController,
         event_context: EventContext,
@@ -49,13 +49,12 @@ class TaskExecutor:
         instrument: str,
         pip_size: Decimal,
         task: BacktestTask | TradingTask,
-        task_type: TaskType,
         order_service: OrderService,
     ) -> None:
         """Initialize the executor.
 
         Args:
-            strategy: Strategy instance to execute
+            engine: Trading engine instance
             data_source: Tick data source
             controller: Task controller for lifecycle management
             event_context: Context for event emission
@@ -63,10 +62,9 @@ class TaskExecutor:
             instrument: Trading instrument
             pip_size: Pip size for the instrument
             task: Task instance (BacktestTask or TradingTask)
-            task_type: Type of task (BACKTEST or TRADING)
             order_service: Service for executing orders
         """
-        self.strategy = strategy
+        self.engine = engine
         self.data_source = data_source
         self.controller = controller
         self.event_context = event_context
@@ -74,9 +72,21 @@ class TaskExecutor:
         self.instrument = instrument
         self.pip_size = pip_size
         self.task = task
-        self.task_type = task_type
         self.order_service = order_service
         self.event_handler = EventHandler(order_service, instrument)
+
+    @property
+    def task_type(self) -> TaskType:
+        """Determine task type from task instance.
+
+        Returns:
+            TaskType enum value
+        """
+        from apps.trading.models import BacktestTask
+
+        if isinstance(self.task, BacktestTask):
+            return TaskType.BACKTEST
+        return TaskType.TRADING
 
     @abstractmethod
     def handle_events(self, events: List[TradingEvent]) -> None:
@@ -173,7 +183,7 @@ class TaskExecutor:
             )
 
             # Call on_start
-            result = self.strategy.on_start(state=state)
+            result = self.engine.on_start(state=state)
             state = result.state
             self.save_events(result.events)
             self.save_state(state)
@@ -189,7 +199,7 @@ class TaskExecutor:
 
                 # Process each tick in batch
                 for tick in tick_batch:
-                    result = self.strategy.on_tick(tick=tick, state=state)
+                    result = self.engine.on_tick(tick=tick, state=state)
                     state = result.state
                     events: List[TradingEvent] = self.save_events(result.events)
 
@@ -248,7 +258,7 @@ class TaskExecutor:
                     )
 
             # Call on_stop
-            result = self.strategy.on_stop(state=state)
+            result = self.engine.on_stop(state=state)
             state = result.state
             self.save_events(result.events)
             self.save_state(state)
@@ -278,7 +288,7 @@ class BacktestExecutor(TaskExecutor):
         self,
         *,
         task: BacktestTask,
-        strategy: Strategy,
+        engine: TradingEngine,
         data_source: TickDataSource,
         controller: TaskController,
     ) -> None:
@@ -286,7 +296,7 @@ class BacktestExecutor(TaskExecutor):
 
         Args:
             task: Backtest task instance
-            strategy: Strategy instance to execute
+            engine: Trading engine instance
             data_source: Tick data source
             controller: Task controller for lifecycle management
         """
@@ -314,7 +324,7 @@ class BacktestExecutor(TaskExecutor):
         )
 
         super().__init__(
-            strategy=strategy,
+            engine=engine,
             data_source=data_source,
             controller=controller,
             event_context=event_context,
@@ -322,7 +332,6 @@ class BacktestExecutor(TaskExecutor):
             instrument=task.instrument,
             pip_size=task.pip_size or Decimal("0.01"),
             task=task,
-            task_type=TaskType.BACKTEST,
             order_service=order_service,
         )
 
@@ -361,7 +370,7 @@ class TradingExecutor(TaskExecutor):
         self,
         *,
         task: TradingTask,
-        strategy: Strategy,
+        engine: TradingEngine,
         data_source: TickDataSource,
         controller: TaskController,
     ) -> None:
@@ -369,7 +378,7 @@ class TradingExecutor(TaskExecutor):
 
         Args:
             task: Trading task instance
-            strategy: Strategy instance to execute
+            engine: Trading engine instance
             data_source: Tick data source
             controller: Task controller for lifecycle management
         """
@@ -393,7 +402,7 @@ class TradingExecutor(TaskExecutor):
         )
 
         super().__init__(
-            strategy=strategy,
+            engine=engine,
             data_source=data_source,
             controller=controller,
             event_context=event_context,
@@ -401,7 +410,6 @@ class TradingExecutor(TaskExecutor):
             instrument=task.instrument,
             pip_size=task.pip_size,
             task=task,
-            task_type=TaskType.TRADING,
             order_service=order_service,
         )
 

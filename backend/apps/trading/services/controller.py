@@ -126,7 +126,7 @@ class TaskController:
 
         now = time.monotonic()
         if not force and (now - self._last_stop_check) < self.stop_check_interval_seconds:
-            return TaskControl(should_stop=self._cached_should_stop)  # type: ignore[call-arg]
+            return TaskControl(should_stop=self._cached_should_stop)
 
         # Check task status directly
         try:
@@ -147,7 +147,7 @@ class TaskController:
             self._cached_should_stop = False
 
         self._last_stop_check = now
-        return TaskControl(should_stop=self._cached_should_stop)  # type: ignore[call-arg]
+        return TaskControl(should_stop=self._cached_should_stop)
 
     def stop(
         self,

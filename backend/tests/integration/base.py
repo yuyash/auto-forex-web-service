@@ -118,7 +118,7 @@ class APIIntegrationTestCase(IntegrationTestCase):
 
     def assert_response_success(
         self,
-        response: Response,  # type: ignore[type-arg]
+        response: Response,
         status_code: int = 200,
     ) -> None:
         """
@@ -137,7 +137,7 @@ class APIIntegrationTestCase(IntegrationTestCase):
 
     def assert_response_error(
         self,
-        response: Response,  # type: ignore[type-arg]
+        response: Response,
         status_code: int,
         error_code: str | None = None,
     ) -> None:
@@ -157,7 +157,7 @@ class APIIntegrationTestCase(IntegrationTestCase):
         )
 
         if error_code is not None:
-            self.assertIn(  # type: ignore[arg-type]
+            self.assertIn(
                 "error",
                 response.data,  # ty:ignore[invalid-argument-type]
                 "Expected 'error' field in error response",
@@ -192,7 +192,7 @@ class APIIntegrationTestCase(IntegrationTestCase):
             )
         """
         for field, expected_type in expected_structure.items():
-            self.assertIn(  # type: ignore[arg-type]
+            self.assertIn(
                 field,
                 data,
                 f"Expected field '{field}' in response data",
@@ -206,7 +206,7 @@ class APIIntegrationTestCase(IntegrationTestCase):
 
     def assert_paginated_response(
         self,
-        response: Response,  # type: ignore[type-arg]
+        response: Response,
         expected_count: int | None = None,
     ) -> None:
         """
@@ -216,7 +216,7 @@ class APIIntegrationTestCase(IntegrationTestCase):
             response: DRF Response object
             expected_count: Optional expected count of results
         """
-        self.assert_response_success(response)  # type: ignore[arg-type]
+        self.assert_response_success(response)
         self.assertIn("results", response.data)  # type: ignore[arg-type]
         self.assertIsInstance(response.data["results"], list)  # ty:ignore[not-subscriptable]
 

@@ -219,7 +219,7 @@ class BacktestTask(UUIDModel):
             status=TaskStatus.CREATED,
         )
 
-    def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:  # type: ignore[override]
+    def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:
         """Delete the task.
 
         Raises:

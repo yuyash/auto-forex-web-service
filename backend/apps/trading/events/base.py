@@ -964,7 +964,7 @@ class GenericStrategyEvent(StrategyEvent):
             event_type = EventType(event_type_str)
         except ValueError:
             # If not a valid EventType, use the string as-is
-            event_type = event_type_str  # type: ignore
+            event_type = event_type_str
 
         timestamp_raw = event_dict.get("timestamp")
         timestamp = None
@@ -981,7 +981,7 @@ class GenericStrategyEvent(StrategyEvent):
         data = {k: v for k, v in event_dict.items() if k not in {"event_type", "timestamp"}}
 
         return cls(
-            event_type=event_type,  # type: ignore
+            event_type=event_type,
             timestamp=timestamp,
             data=data,
         )

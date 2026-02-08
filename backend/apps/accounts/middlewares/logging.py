@@ -48,7 +48,7 @@ class HTTPAccessLoggingMiddleware:
             return None
 
         if bool(getattr(user, "is_authenticated", False)):
-            return user  # type: ignore[return-value]
+            return user
 
         return None
 

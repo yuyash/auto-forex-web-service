@@ -250,7 +250,7 @@ class SecurityEventService:
             event_type_enum = EventType(event_type)
         except ValueError:
             # If event_type is not in enum, use it as-is
-            event_type_enum = event_type  # type: ignore[assignment]
+            event_type_enum = event_type
 
         try:
             severity_enum = EventSeverity(severity)

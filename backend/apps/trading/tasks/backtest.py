@@ -81,19 +81,15 @@ def execute_backtest(task: BacktestTask) -> None:
         task: Backtest task to execute
     """
     from apps.trading.services.controller import TaskController
-    from apps.trading.strategies.registry import register_all_strategies, registry
+    from apps.trading.services.engine import TradingEngine
     from apps.trading.tasks.executor import BacktestExecutor
     from apps.trading.tasks.source import RedisTickDataSource
 
-    # Register all strategies
-    register_all_strategies()
-
-    # Create strategy instance
-    strategy = registry.create(
+    # Create trading engine
+    engine = TradingEngine(
         instrument=task.instrument,
         pip_size=task.pip_size or task.config.get_pip_size(),
         strategy_config=task.config,
-        trading_mode=task.trading_mode,
     )
 
     # Create data source - use task.pk as request_id to match publisher
@@ -115,7 +111,7 @@ def execute_backtest(task: BacktestTask) -> None:
     # Create executor
     executor = BacktestExecutor(
         task=task,
-        strategy=strategy,
+        engine=engine,
         data_source=data_source,
         controller=controller,
     )

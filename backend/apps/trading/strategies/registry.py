@@ -105,7 +105,7 @@ class StrategyRegistry:
             # Type ignore for dynamic parameter passing
             return strategy_cls(instrument, pip_size, parsed_config, trading_mode=trading_mode)  # type: ignore[call-arg]
 
-        # Instantiate strategy with parsed config (backward compatibility)
+        # Instantiate strategy with parsed config
         return strategy_cls(instrument, pip_size, parsed_config)
 
 
@@ -172,9 +172,9 @@ def register_all_strategies() -> None:
 
     if not registry.is_registered("floor"):
         # Import triggers decorator registration.
-        from apps.trading.strategies import floor as floor_module
+        from apps.trading.strategies.floor import strategy as floor_strategy
 
-        _ = floor_module.FloorStrategy
+        _ = floor_strategy.FloorStrategy
 
 
 __all__ = [

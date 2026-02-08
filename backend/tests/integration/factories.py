@@ -72,7 +72,7 @@ class OandaAccountFactory(DjangoModelFactory):
     is_used = False
 
     @factory.post_generation
-    def set_encrypted_token(obj, create, extracted, **kwargs):  # type: ignore[no-untyped-def]
+    def set_encrypted_token(obj, create, extracted, **kwargs):
         """Set encrypted API token after creation."""
         if not create:
             return

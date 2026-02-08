@@ -36,7 +36,7 @@ class JWTAuthMiddleware(BaseMiddleware):
                 token = auth_header.split(" ")[1]
 
         if token:
-            user = await self.get_user_from_token(token)
+            user = await self.get_user_from_token(token)  # type: ignore[misc]
             if user:
                 scope["user"] = user
                 logger.debug(

@@ -122,7 +122,7 @@ ALLOWED_HOSTS = ["*"]
 
 # Disable HTTPS requirements in tests
 SECURE_SSL_REDIRECT = False  # type: ignore[assignment]
-SESSION_COOKIE_SECURE = False  # type: ignore[assignment]
+SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False  # type: ignore[assignment]
 
 # =============================================================================

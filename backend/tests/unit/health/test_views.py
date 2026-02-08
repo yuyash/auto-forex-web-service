@@ -86,6 +86,7 @@ class TestHealthView:
             response = view.get(request)
 
             assert response.status_code == 200
+            assert response.data is not None
             assert response.data["status"] == "healthy"
             assert "timestamp" in response.data
             assert "response_time_ms" in response.data
@@ -114,6 +115,7 @@ class TestHealthView:
             response = view.get(request)
 
             assert response.status_code == 503
+            assert response.data is not None
             assert response.data["status"] == "unhealthy"
 
     def test_health_view_logs_client_ip(self) -> None:

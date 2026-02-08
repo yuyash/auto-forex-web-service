@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
+from apps.accounts.models import User
 from apps.accounts.signals import create_user_settings
 
 
@@ -17,7 +18,7 @@ class TestCreateUserSettingsSignal:
 
         with patch("apps.accounts.signals.UserSettings.objects.create") as mock_create:
             create_user_settings(
-                sender=MagicMock(),
+                sender=User,
                 instance=mock_user,
                 created=True,
             )
@@ -30,7 +31,7 @@ class TestCreateUserSettingsSignal:
 
         with patch("apps.accounts.signals.UserSettings.objects.create") as mock_create:
             create_user_settings(
-                sender=MagicMock(),
+                sender=User,
                 instance=mock_user,
                 created=False,
             )

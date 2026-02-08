@@ -65,7 +65,7 @@ class TickData(models.Model):
     def __str__(self) -> str:
         return f"{self.instrument} @ {self.timestamp} - Bid: {self.bid}, Ask: {self.ask}"
 
-    def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+    def save(self, *args, **kwargs) -> None:
         """
         Override save to automatically calculate mid if not provided.
         """
