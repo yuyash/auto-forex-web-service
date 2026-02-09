@@ -15,7 +15,7 @@ from apps.trading.events import (
     VolatilityLockEvent,
 )
 from apps.trading.models import Position
-from apps.trading.services.order import OrderService, OrderServiceError
+from apps.trading.order import OrderService, OrderServiceError
 
 if TYPE_CHECKING:
     from apps.trading.models import TradingEvent

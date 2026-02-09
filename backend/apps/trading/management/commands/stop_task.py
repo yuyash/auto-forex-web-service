@@ -5,7 +5,7 @@ from uuid import UUID
 from django.core.management.base import BaseCommand
 
 from apps.trading.models import BacktestTask, TradingTask
-from apps.trading.services.task import TaskService
+from apps.trading.tasks.service import TaskService
 
 
 class Command(BaseCommand):

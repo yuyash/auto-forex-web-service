@@ -6,23 +6,25 @@ strategies, manages state, and handles lifecycle events.
 
 from __future__ import annotations
 
+import json
 import logging
+import time
 from abc import abstractmethod
 from decimal import Decimal
 from logging import Logger
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Any, List
 
-from apps.trading.dataclasses import (
-    EventContext,
-)
-from apps.trading.enums import TaskType
+import redis
+from django.conf import settings
+
+from apps.trading.dataclasses import EventContext, TaskControl
+from apps.trading.engine import TradingEngine
+from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.events import StrategyEvent
+from apps.trading.events.handler import EventHandler
 from apps.trading.models import TradingEvent
 from apps.trading.models.state import ExecutionState
-from apps.trading.services.controller import TaskController
-from apps.trading.services.engine import TradingEngine
-from apps.trading.services.handler import EventHandler
-from apps.trading.services.order import OrderService, OrderServiceError
+from apps.trading.order import OrderService, OrderServiceError
 from apps.trading.tasks.source import TickDataSource
 
 if TYPE_CHECKING:
@@ -35,7 +37,8 @@ class TaskExecutor:
     """Abstract base class for task execution.
 
     This class provides the core execution loop for processing ticks through
-    a trading engine, managing state, and handling lifecycle events.
+    a trading engine, managing state, handling lifecycle events, and coordinating
+    task execution via Redis.
     """
 
     def __init__(
@@ -43,30 +46,35 @@ class TaskExecutor:
         *,
         engine: TradingEngine,
         data_source: TickDataSource,
-        controller: TaskController,
         event_context: EventContext,
         initial_balance: Decimal,
         instrument: str,
         pip_size: Decimal,
         task: BacktestTask | TradingTask,
         order_service: OrderService,
+        redis_url: str | None = None,
+        stop_check_interval_seconds: float = 1.0,
+        heartbeat_interval_seconds: float = 5.0,
+        ttl_seconds: int = 3600,
     ) -> None:
         """Initialize the executor.
 
         Args:
             engine: Trading engine instance
             data_source: Tick data source
-            controller: Task controller for lifecycle management
             event_context: Context for event emission
             initial_balance: Initial account balance
             instrument: Trading instrument
             pip_size: Pip size for the instrument
             task: Task instance (BacktestTask or TradingTask)
             order_service: Service for executing orders
+            redis_url: Redis URL (defaults to MARKET_REDIS_URL from settings)
+            stop_check_interval_seconds: How often to check for stop signals (default: 1.0)
+            heartbeat_interval_seconds: How often to send heartbeats (default: 5.0)
+            ttl_seconds: Time to live for task state in Redis (default: 1 hour)
         """
         self.engine = engine
         self.data_source = data_source
-        self.controller = controller
         self.event_context = event_context
         self.initial_balance = initial_balance
         self.instrument = instrument
@@ -74,6 +82,178 @@ class TaskExecutor:
         self.task = task
         self.order_service = order_service
         self.event_handler = EventHandler(order_service, instrument)
+
+        # Task coordination via Redis
+        self.stop_check_interval_seconds = float(stop_check_interval_seconds)
+        self.heartbeat_interval_seconds = float(heartbeat_interval_seconds)
+        self.ttl_seconds = int(ttl_seconds)
+
+        # Determine task name and instance key
+        if isinstance(task, BacktestTask):
+            self._task_name = "trading.tasks.run_backtest_task"
+        else:
+            self._task_name = "trading.tasks.run_trading_task"
+        self._instance_key = str(task.pk)
+        self._task_id = int(task.pk)
+
+        # Redis key for this task instance
+        self._redis_key = f"task:coord:{self._task_name}:{self._instance_key}"
+
+        # Redis client
+        url = redis_url or settings.MARKET_REDIS_URL
+        self._redis = redis.Redis.from_url(url, decode_responses=True)
+
+        # Throttling state
+        self._last_stop_check = 0.0
+        self._cached_should_stop = False
+        self._last_heartbeat = 0.0
+
+    def _start_coordination(
+        self,
+        *,
+        celery_task_id: str | None = None,
+        worker: str | None = None,
+        meta: dict[str, Any] | None = None,
+    ) -> None:
+        """Start Redis-based task coordination.
+
+        Args:
+            celery_task_id: Celery task ID
+            worker: Worker hostname
+            meta: Additional metadata
+        """
+        now = time.time()
+        state = {
+            "status": "running",
+            "celery_task_id": celery_task_id or "",
+            "worker": worker or "",
+            "started_at": now,
+            "last_heartbeat_at": now,
+            "stopped_at": "",
+            "status_message": "",
+            "meta": json.dumps(meta or {}),
+        }
+
+        self._redis.hset(self._redis_key, mapping=state)
+        self._redis.expire(self._redis_key, self.ttl_seconds)
+
+    def _heartbeat(
+        self,
+        *,
+        status_message: str | None = None,
+        meta_update: dict[str, Any] | None = None,
+        force: bool = False,
+    ) -> None:
+        """Send heartbeat (throttled).
+
+        Args:
+            status_message: Optional status message
+            meta_update: Optional metadata updates
+            force: If True, bypass throttling
+        """
+        now = time.monotonic()
+        if not force and (now - self._last_heartbeat) < self.heartbeat_interval_seconds:
+            return
+
+        updates: dict[str, str | float] = {"last_heartbeat_at": time.time()}
+
+        if status_message is not None:
+            updates["status_message"] = status_message
+
+        if meta_update is not None:
+            existing_meta_str = self._redis.hget(self._redis_key, "meta") or "{}"
+            try:
+                existing_meta = json.loads(existing_meta_str)
+            except (json.JSONDecodeError, TypeError):
+                existing_meta = {}
+            merged_meta = {**existing_meta, **meta_update}
+            updates["meta"] = json.dumps(merged_meta)
+
+        # Type ignore for Redis stubs - our dict is compatible
+        self._redis.hset(self._redis_key, mapping=updates)  # type: ignore[arg-type]
+        self._redis.expire(self._redis_key, self.ttl_seconds)
+        self._last_heartbeat = now
+
+    def _check_control(self, *, force: bool = False) -> TaskControl:
+        """Check for stop signals (throttled).
+
+        Args:
+            force: If True, bypass throttling
+
+        Returns:
+            TaskControl: Control flags
+        """
+        now = time.monotonic()
+        if not force and (now - self._last_stop_check) < self.stop_check_interval_seconds:
+            return TaskControl(should_stop=self._cached_should_stop)
+
+        # Check Redis
+        redis_status = self._redis.hget(self._redis_key, "status")
+        should_stop_redis = redis_status == "stopping"
+
+        # Check database (fallback)
+        try:
+            from apps.trading.models import BacktestTask, TradingTask
+
+            task = (
+                BacktestTask.objects.filter(pk=self._task_id)
+                .values_list("status", flat=True)
+                .first()
+            )
+            if task is None:
+                task = (
+                    TradingTask.objects.filter(pk=self._task_id)
+                    .values_list("status", flat=True)
+                    .first()
+                )
+
+            should_stop_db = task == TaskStatus.STOPPING
+        except Exception:
+            should_stop_db = False
+
+        self._cached_should_stop = should_stop_redis or should_stop_db
+        self._last_stop_check = now
+
+        return TaskControl(should_stop=self._cached_should_stop)
+
+    def _stop_coordination(
+        self,
+        *,
+        status_message: str | None = None,
+        failed: bool = False,
+    ) -> None:
+        """Mark task as stopped in Redis.
+
+        Args:
+            status_message: Optional message
+            failed: If True, mark as failed
+        """
+        status = "failed" if failed else "stopped"
+        now = time.time()
+        updates: dict[str, str | float] = {
+            "status": status,
+            "stopped_at": now,
+            "last_heartbeat_at": now,
+        }
+
+        if status_message is not None:
+            updates["status_message"] = status_message
+
+        # Type ignore for Redis stubs - our dict is compatible
+        self._redis.hset(self._redis_key, mapping=updates)  # type: ignore[arg-type]
+        self._redis.expire(self._redis_key, 300)  # 5 min cleanup
+
+    def _cleanup_coordination(self) -> None:
+        """Cleanup Redis resources."""
+        try:
+            self._redis.delete(self._redis_key)
+        except Exception:  # nosec
+            pass
+        finally:
+            try:
+                self._redis.close()
+            except Exception:  # nosec
+                pass
 
     @property
     def task_type(self) -> TaskType:
@@ -172,8 +352,8 @@ class TaskExecutor:
         6. Saves final state
         """
         try:
-            # Start controller
-            self.controller.start()
+            # Start coordination
+            self._start_coordination()
 
             # Load state
             state = self.load_state()
@@ -192,7 +372,7 @@ class TaskExecutor:
             batch_count = 0
             for tick_batch in self.data_source:
                 # Check for stop signal
-                control = self.controller.check_control()
+                control = self._check_control()
                 if control.should_stop:
                     logger.info("Stop signal received, stopping execution")
                     break
@@ -253,9 +433,7 @@ class TaskExecutor:
 
                 # Send heartbeat
                 if batch_count % 10 == 0:
-                    self.controller.heartbeat(
-                        status_message=f"Processed {state.ticks_processed} ticks"
-                    )
+                    self._heartbeat(status_message=f"Processed {state.ticks_processed} ticks")
 
             # Call on_stop
             result = self.engine.on_stop(state=state)
@@ -264,14 +442,14 @@ class TaskExecutor:
             self.save_state(state)
 
             # Mark as stopped
-            self.controller.stop(status_message="Execution completed successfully")
+            self._stop_coordination(status_message="Execution completed successfully")
             logger.info(
                 f"Execution completed: ticks_processed={state.ticks_processed}, "
                 f"final_balance={state.current_balance}"
             )
         except Exception as e:
             logger.error(f"Execution failed: {e}", exc_info=True)
-            self.controller.stop(status_message=f"Execution failed: {e}", failed=True)
+            self._stop_coordination(status_message=f"Execution failed: {e}", failed=True)
             raise
         finally:
             # Clean up data source
@@ -279,6 +457,8 @@ class TaskExecutor:
                 self.data_source.close()
             except Exception as e:
                 logger.warning(f"Failed to close data source: {e}")
+            # Clean up Redis
+            self._cleanup_coordination()
 
 
 class BacktestExecutor(TaskExecutor):
@@ -290,7 +470,6 @@ class BacktestExecutor(TaskExecutor):
         task: BacktestTask,
         engine: TradingEngine,
         data_source: TickDataSource,
-        controller: TaskController,
     ) -> None:
         """Initialize the backtest executor.
 
@@ -298,7 +477,6 @@ class BacktestExecutor(TaskExecutor):
             task: Backtest task instance
             engine: Trading engine instance
             data_source: Tick data source
-            controller: Task controller for lifecycle management
         """
         # Create event context
         event_context = EventContext(
@@ -326,7 +504,6 @@ class BacktestExecutor(TaskExecutor):
         super().__init__(
             engine=engine,
             data_source=data_source,
-            controller=controller,
             event_context=event_context,
             initial_balance=task.initial_balance,
             instrument=task.instrument,
@@ -372,7 +549,6 @@ class TradingExecutor(TaskExecutor):
         task: TradingTask,
         engine: TradingEngine,
         data_source: TickDataSource,
-        controller: TaskController,
     ) -> None:
         """Initialize the trading executor.
 
@@ -380,7 +556,6 @@ class TradingExecutor(TaskExecutor):
             task: Trading task instance
             engine: Trading engine instance
             data_source: Tick data source
-            controller: Task controller for lifecycle management
         """
         # Create event context
         event_context = EventContext(
@@ -404,7 +579,6 @@ class TradingExecutor(TaskExecutor):
         super().__init__(
             engine=engine,
             data_source=data_source,
-            controller=controller,
             event_context=event_context,
             initial_balance=initial_balance,
             instrument=task.instrument,

@@ -10,13 +10,19 @@ from __future__ import annotations
 
 import logging
 from logging import Logger
-from typing import TYPE_CHECKING
-from uuid import UUID
+from uuid import UUID, uuid4
 
-if TYPE_CHECKING:
-    from celery.result import AsyncResult
+from celery.result import AsyncResult
+from django.utils import timezone
 
-    from apps.trading.models import BacktestTask, TradingTask
+from apps.trading.enums import TaskStatus
+from apps.trading.models import BacktestTask, TradingEvent, TradingTask
+from apps.trading.tasks import (
+    run_backtest_task,
+    run_trading_task,
+    stop_backtest_task,
+    stop_trading_task,
+)
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -41,15 +47,10 @@ class TaskService:
             AsyncResult | None: Celery AsyncResult if task ID exists, None otherwise
         """
         if celery_task_id:
-            from celery.result import AsyncResult
-
             return AsyncResult(celery_task_id)
         return None
 
-    def start_task(
-        self,
-        task: BacktestTask | TradingTask,
-    ) -> BacktestTask | TradingTask:
+    def start_task(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
         """Submit a task to Celery for execution.
 
         Sets task status to STARTING and submits to Celery queue.
@@ -65,11 +66,6 @@ class TaskService:
             ValueError: If task is not in CREATED status
             RuntimeError: If Celery submission fails
         """
-        from uuid import uuid4
-
-        from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTask
-        from apps.trading.tasks import run_backtest_task, run_trading_task
 
         logger.info(
             "Submitting task",
@@ -150,7 +146,7 @@ class TaskService:
     def stop_task(self, task_id: UUID, mode: str = "graceful") -> bool:
         """Stop a running task.
 
-        Sets task status to STOPPING and triggers the Celery stop task.
+        Sets task status to STOPPING and signals Redis coordinator to stop.
         The Celery task will update to STOPPED when it actually stops.
 
         Args:
@@ -163,9 +159,6 @@ class TaskService:
         Raises:
             ValueError: If task does not exist or is not in a stoppable state
         """
-        from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTask, TradingTask
-        from apps.trading.tasks import stop_backtest_task, stop_trading_task
 
         logger.info("Stopping task", extra={"task_id": str(task_id), "mode": mode})
 
@@ -173,12 +166,15 @@ class TaskService:
             # Try to find the task in either BacktestTask or TradingTask
             task = None
             is_backtest = False
+            task_name = None
             try:
                 task = BacktestTask.objects.get(pk=task_id)
                 is_backtest = True
+                task_name = "trading.tasks.run_backtest_task"
             except BacktestTask.DoesNotExist:
                 try:
                     task = TradingTask.objects.get(pk=task_id)
+                    task_name = "trading.tasks.run_trading_task"
                 except TradingTask.DoesNotExist as e:
                     logger.error(
                         "Task not found",
@@ -197,9 +193,19 @@ class TaskService:
                     f"Only STARTING, RUNNING, or PAUSED tasks can be stopped."
                 )
 
-            # Update task status to STOPPING
+            # Update task status to STOPPING in database
             task.status = TaskStatus.STOPPING
             task.save(update_fields=["status", "updated_at"])
+
+            # Signal Redis to stop
+            import redis
+            from django.conf import settings
+
+            redis_client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
+            redis_key = f"task:coord:{task_name}:{task_id}"
+            redis_client.hset(redis_key, "status", "stopping")
+            redis_client.expire(redis_key, 3600)
+            redis_client.close()
 
             # Trigger the appropriate Celery stop task
             if is_backtest:
@@ -213,7 +219,6 @@ class TaskService:
             )
 
             return True
-
         except ValueError:
             # Re-raise ValueError as-is (already logged)
             raise
@@ -239,8 +244,6 @@ class TaskService:
         Raises:
             ValueError: If task does not exist or is not running
         """
-        from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTask, TradingTask
 
         logger.info("Pausing task", extra={"task_id": str(task_id)})
 
@@ -305,10 +308,6 @@ class TaskService:
         Raises:
             ValueError: If task does not exist
         """
-        from django.utils import timezone
-
-        from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTask, TradingTask
 
         logger.info("Cancelling task", extra={"task_id": str(task_id)})
 
@@ -380,8 +379,6 @@ class TaskService:
             ValueError: If task cannot be restarted (e.g., currently running)
             ValueError: If retry_count exceeds max_retries
         """
-        from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTask, TradingEvent, TradingTask
 
         logger.info("Restarting task", extra={"task_id": str(task_id)})
 
@@ -478,8 +475,6 @@ class TaskService:
         Raises:
             ValueError: If task cannot be resumed (e.g., not paused)
         """
-        from apps.trading.enums import TaskStatus
-        from apps.trading.models import BacktestTask, TradingTask
 
         logger.info("Resuming task", extra={"task_id": str(task_id)})
 

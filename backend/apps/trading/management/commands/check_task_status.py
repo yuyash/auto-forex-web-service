@@ -64,7 +64,7 @@ class Command(BaseCommand):
 
         # Check Celery AsyncResult
         if task.celery_task_id:
-            from apps.trading.services.task import TaskService
+            from apps.trading.tasks.service import TaskService
 
             task_service = TaskService()
             result = task_service.get_celery_result(task.celery_task_id)

@@ -5,8 +5,6 @@ from apps.trading.strategies.floor.models import (
     CandleData,
     FloorStrategyConfig,
     FloorStrategyState,
-    Layer,
-    Position,
 )
 from apps.trading.strategies.floor.strategy import FloorStrategy
 
@@ -17,7 +15,5 @@ __all__ = [
     "CandleData",
     "FloorStrategyConfig",
     "FloorStrategyState",
-    "Layer",
-    "Position",
     "FloorStrategy",
 ]

@@ -26,7 +26,7 @@ from apps.trading.serializers.task import (
     TaskLogSerializer,
     TradingTaskSerializer,
 )
-from apps.trading.services.task import TaskService
+from apps.trading.tasks.service import TaskService
 
 logger: Logger = logging.getLogger(name=__name__)
 

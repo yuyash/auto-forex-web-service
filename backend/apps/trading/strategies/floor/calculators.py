@@ -2,8 +2,8 @@
 
 from decimal import Decimal
 
+from apps.trading.models import Layer
 from apps.trading.strategies.floor.enums import Direction, Progression
-from apps.trading.strategies.floor.models import Layer
 
 
 class ProgressionCalculator:
@@ -91,7 +91,7 @@ class PnLCalculator:
         Returns:
             P&L in pips (positive for profit, negative for loss)
         """
-        if not layer.positions or not layer.direction:
+        if layer.position_count == 0 or not layer.direction:
             return Decimal("0")
 
         avg_entry = layer.average_entry_price
@@ -119,7 +119,7 @@ class PnLCalculator:
         Returns:
             Unrealized P&L in quote currency
         """
-        if not layer.positions or not layer.direction:
+        if layer.position_count == 0 or not layer.direction:
             return Decimal("0")
 
         pnl_pips = self.calculate_layer_pnl_pips(layer, current_bid, current_ask)

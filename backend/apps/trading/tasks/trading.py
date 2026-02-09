@@ -10,8 +10,11 @@ from uuid import UUID
 from celery import shared_task
 from django.utils import timezone as dj_timezone
 
+from apps.trading.engine import TradingEngine
 from apps.trading.enums import LogLevel, TaskStatus
 from apps.trading.models import CeleryTaskStatus, TaskLog, TradingTask
+from apps.trading.tasks.executor import TradingExecutor
+from apps.trading.tasks.source import LiveTickDataSource
 
 logger: Logger = getLogger(name=__name__)
 
@@ -78,10 +81,6 @@ def execute_trading(task: TradingTask) -> None:
     Args:
         task: Trading task to execute
     """
-    from apps.trading.services.controller import TaskController
-    from apps.trading.services.engine import TradingEngine
-    from apps.trading.tasks.executor import TradingExecutor
-    from apps.trading.tasks.source import LiveTickDataSource
 
     # Create trading engine
     engine = TradingEngine(
@@ -97,19 +96,12 @@ def execute_trading(task: TradingTask) -> None:
         instrument=task.instrument,
     )
 
-    # Create controller
-    controller = TaskController(
-        task_name="trading.tasks.run_trading_task",
-        instance_key=str(task.pk),
-        task_id=task.pk,
-    )
-
+    # Create manager
     # Create executor
     executor = TradingExecutor(
         task=task,
         engine=engine,
         data_source=data_source,
-        controller=controller,
     )
 
     # Execute

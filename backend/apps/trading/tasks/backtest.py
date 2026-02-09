@@ -10,8 +10,11 @@ from uuid import UUID
 from celery import shared_task
 from django.utils import timezone as dj_timezone
 
+from apps.trading.engine import TradingEngine
 from apps.trading.enums import LogLevel, TaskStatus
 from apps.trading.models import BacktestTask, TaskLog
+from apps.trading.tasks.executor import BacktestExecutor
+from apps.trading.tasks.source import RedisTickDataSource
 
 logger: Logger = getLogger(name=__name__)
 
@@ -67,10 +70,10 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             message="Backtest task completed successfully",
         )
     except BacktestTask.DoesNotExist:
-        logger.error(f"BacktestTask {task_id} not found")
+        logger.error(msg=f"BacktestTask {task_id} not found")
         raise
-    except Exception as e:
-        handle_exception(task_id, task, e)
+    except Exception as error:
+        handle_exception(task_id, task, error)
         raise
 
 
@@ -80,10 +83,6 @@ def execute_backtest(task: BacktestTask) -> None:
     Args:
         task: Backtest task to execute
     """
-    from apps.trading.services.controller import TaskController
-    from apps.trading.services.engine import TradingEngine
-    from apps.trading.tasks.executor import BacktestExecutor
-    from apps.trading.tasks.source import RedisTickDataSource
 
     # Create trading engine
     engine = TradingEngine(
@@ -101,19 +100,10 @@ def execute_backtest(task: BacktestTask) -> None:
         trigger_publisher=lambda: trigger_backtest_publisher(task),
     )
 
-    # Create controller
-    controller = TaskController(
-        task_name="trading.tasks.run_backtest_task",
-        instance_key=str(task.pk),
-        task_id=task.pk,
-    )
-
-    # Create executor
     executor = BacktestExecutor(
         task=task,
         engine=engine,
         data_source=data_source,
-        controller=controller,
     )
 
     # Execute

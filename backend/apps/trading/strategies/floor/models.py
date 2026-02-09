@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from apps.trading.strategies.floor.enums import Direction, Progression, StrategyStatus
+from apps.trading.strategies.floor.enums import Progression, StrategyStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,130 +110,6 @@ class FloorStrategyConfig:
 
 
 @dataclass
-class Position:
-    """Individual position in FIFO order.
-
-    Attributes:
-        entry_price: Entry price
-        units: Position size in units
-        entry_time: Entry timestamp
-        direction: LONG or SHORT
-    """
-
-    entry_price: Decimal
-    units: Decimal
-    entry_time: datetime
-    direction: Direction
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "entry_price": str(self.entry_price),
-            "units": str(self.units),
-            "entry_time": self.entry_time.isoformat(),
-            "direction": self.direction.value,
-        }
-
-    @staticmethod
-    def from_dict(data: dict[str, Any]) -> Position:
-        """Create from dictionary."""
-        return Position(
-            entry_price=Decimal(str(data["entry_price"])),
-            units=Decimal(str(data["units"])),
-            entry_time=datetime.fromisoformat(data["entry_time"]),
-            direction=Direction(data["direction"]),
-        )
-
-
-@dataclass
-class Layer:
-    """Trading layer containing FIFO-ordered positions.
-
-    Attributes:
-        index: Layer index (0, 1, 2, ...)
-        positions: FIFO-ordered list of positions
-        retracement_count: Number of retracements in this layer
-    """
-
-    index: int
-    positions: list[Position] = field(default_factory=list)
-    retracement_count: int = 0
-
-    @property
-    def direction(self) -> Direction | None:
-        """Get layer direction from first position."""
-        return self.positions[0].direction if self.positions else None
-
-    @property
-    def total_units(self) -> Decimal:
-        """Get total units across all positions."""
-        return sum((p.units for p in self.positions), Decimal("0"))
-
-    @property
-    def average_entry_price(self) -> Decimal:
-        """Calculate weighted average entry price."""
-        if not self.positions:
-            return Decimal("0")
-
-        total_cost = sum((p.entry_price * p.units for p in self.positions), Decimal("0"))
-        total_units = self.total_units
-
-        return total_cost / total_units if total_units > 0 else Decimal("0")
-
-    def add_position(self, position: Position) -> None:
-        """Add position to end of FIFO queue."""
-        self.positions.append(position)
-
-    def close_units_fifo(self, units_to_close: Decimal) -> list[Position]:
-        """Close units from oldest positions first (FIFO).
-
-        Returns:
-            List of closed positions (fully or partially)
-        """
-        closed: list[Position] = []
-        remaining = units_to_close
-
-        while remaining > 0 and self.positions:
-            oldest = self.positions[0]
-
-            if oldest.units <= remaining:
-                # Close entire position
-                closed.append(oldest)
-                remaining -= oldest.units
-                self.positions.pop(0)
-            else:
-                # Partial close
-                closed_portion = Position(
-                    entry_price=oldest.entry_price,
-                    units=remaining,
-                    entry_time=oldest.entry_time,
-                    direction=oldest.direction,
-                )
-                closed.append(closed_portion)
-                oldest.units -= remaining
-                remaining = Decimal("0")
-
-        return closed
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "index": self.index,
-            "positions": [p.to_dict() for p in self.positions],
-            "retracement_count": self.retracement_count,
-        }
-
-    @staticmethod
-    def from_dict(data: dict[str, Any]) -> Layer:
-        """Create from dictionary."""
-        return Layer(
-            index=data["index"],
-            positions=[Position.from_dict(p) for p in data.get("positions", [])],
-            retracement_count=data.get("retracement_count", 0),
-        )
-
-
-@dataclass
 class CandleData:
     """Candle data for trend detection."""
 
@@ -263,7 +138,6 @@ class FloorStrategyState:
 
     Attributes:
         status: Strategy status
-        layers: List of active layers
         candles: Historical candle data
         current_candle_close: Current candle close price
         last_mid: Last mid price
@@ -274,7 +148,6 @@ class FloorStrategyState:
     """
 
     status: StrategyStatus = StrategyStatus.RUNNING
-    layers: list[Layer] = field(default_factory=list)
     candles: list[CandleData] = field(default_factory=list)
     current_candle_close: Decimal | None = None
     last_mid: Decimal | None = None
@@ -287,7 +160,6 @@ class FloorStrategyState:
         """Convert to dictionary."""
         return {
             "status": self.status.value,
-            "layers": [layer.to_dict() for layer in self.layers],
             "candles": [c.to_dict() for c in self.candles],
             "current_candle_close": str(self.current_candle_close)
             if self.current_candle_close
@@ -308,7 +180,6 @@ class FloorStrategyState:
 
         return FloorStrategyState(
             status=StrategyStatus(data.get("status", StrategyStatus.RUNNING.value)),
-            layers=[Layer.from_dict(layer) for layer in data.get("layers", [])],
             candles=[CandleData.from_dict(c) for c in data.get("candles", [])],
             current_candle_close=_decimal_or_none(data.get("current_candle_close")),
             last_mid=_decimal_or_none(data.get("last_mid")),
