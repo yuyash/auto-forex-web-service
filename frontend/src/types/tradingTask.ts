@@ -3,13 +3,13 @@ import { TaskStatus } from './common';
 import type { ExecutionSummary } from './execution';
 
 export interface TradingTask {
-  id: number;
+  id: string;
   user_id: number;
-  config_id: number;
+  config_id: string;
   config_name: string;
   strategy_type: string;
   instrument: string;
-  account_id: number;
+  account_id: string;
   account_name: string;
   account_type: 'live' | 'practice';
   name: string;
@@ -27,18 +27,18 @@ export interface TradingTask {
 }
 
 export interface TradingTaskCreateData {
-  config_id: number;
-  account_id: number;
+  config_id: string;
+  account_id: string;
   name: string;
   description?: string;
   sell_on_stop?: boolean;
 }
 
 export interface TradingTaskUpdateData {
-  config?: number;
+  config?: string;
   name?: string;
   description?: string;
-  account_id?: number;
+  account_id?: string;
   sell_on_stop?: boolean;
 }
 
@@ -47,8 +47,8 @@ export interface TradingTaskListParams {
   page_size?: number;
   search?: string;
   status?: TaskStatus;
-  config_id?: number;
-  account_id?: number;
+  config_id?: string;
+  account_id?: string;
   strategy_type?: string;
   ordering?: string;
 }

@@ -6,7 +6,10 @@
  * Serializer for strategy configuration full details.
  */
 export type StrategyConfigDetail = {
-  readonly id: number;
+  /**
+   * Unique identifier for this record
+   */
+  readonly id: string;
   readonly user_id: number;
   /**
    * Human-readable name for this configuration
@@ -29,11 +32,11 @@ export type StrategyConfigDetail = {
    */
   readonly is_in_use: boolean;
   /**
-   * Timestamp when the configuration was created
+   * Timestamp when this record was created
    */
   readonly created_at: string;
   /**
-   * Timestamp when the configuration was last updated
+   * Timestamp when this record was last updated
    */
   readonly updated_at: string;
 };

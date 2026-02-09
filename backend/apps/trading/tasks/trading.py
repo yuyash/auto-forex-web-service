@@ -11,7 +11,7 @@ from celery import shared_task
 from django.utils import timezone as dj_timezone
 
 from apps.trading.engine import TradingEngine
-from apps.trading.enums import LogLevel, TaskStatus
+from apps.trading.enums import LogLevel, TaskStatus, TaskType
 from apps.trading.models import CeleryTaskStatus, TaskLog, TradingTask
 from apps.trading.tasks.executor import TradingExecutor
 from apps.trading.tasks.source import LiveTickDataSource
@@ -47,7 +47,9 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
 
         # Log task start
         TaskLog.objects.create(
-            task=task,
+            task_type=TaskType.TRADING,
+            task_id=task.pk,
+            celery_task_id=self.request.id,
             level=LogLevel.INFO,
             message="Trading task execution started",
         )
@@ -63,7 +65,9 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
 
         # Log task completion
         TaskLog.objects.create(
-            task=task,
+            task_type=TaskType.TRADING,
+            task_id=task.pk,
+            celery_task_id=task.celery_task_id,
             level=LogLevel.INFO,
             message="Trading task stopped successfully",
         )
@@ -135,7 +139,9 @@ def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) 
 
         # Log error
         TaskLog.objects.create(
-            task=task,
+            task_type=TaskType.TRADING,
+            task_id=task.pk,
+            celery_task_id=task.celery_task_id,
             level=LogLevel.ERROR,
             message=f"Trading task execution failed: {type(error).__name__}: {error_message}",
         )

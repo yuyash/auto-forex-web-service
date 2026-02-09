@@ -218,18 +218,20 @@ class BacktestTickPublisherRunner:
         count: int,
     ) -> None:
         """Send EOF marker to channel."""
-        client.publish(
-            channel,
-            json.dumps(
-                {
-                    "type": "eof",
-                    "request_id": str(request_id),
-                    "instrument": str(instrument),
-                    "start": str(start),
-                    "end": str(end),
-                    "count": count,
-                }
-            ),
+        eof_message = {
+            "type": "eof",
+            "request_id": str(request_id),
+            "instrument": str(instrument),
+            "start": str(start),
+            "end": str(end),
+            "count": count,
+        }
+
+        subscribers = client.publish(channel, json.dumps(eof_message))
+
+        logger.info(
+            f"Sent EOF to channel {channel} (request_id={request_id}, "
+            f"count={count}, subscribers={subscribers})"
         )
 
     def _send_stopped(

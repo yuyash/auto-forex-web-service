@@ -22,11 +22,10 @@ export const configurationSchema = z.object({
 // Backtest task validation schema
 export const backtestTaskSchema = z
   .object({
-    config_id: z.coerce
-      .number({
-        message: 'Configuration must be a number',
-      })
-      .positive('Configuration is required'),
+    config_id: z
+      .string()
+      .min(1, 'Configuration is required')
+      .uuid('Configuration must be a valid ID'),
     name: z
       .string()
       .min(1, 'Name is required')
@@ -66,8 +65,8 @@ export const backtestTaskSchema = z
 
 // Trading task validation schema
 export const tradingTaskSchema = z.object({
-  config_id: z.number().positive('Configuration is required'),
-  oanda_account_id: z.number().positive('Account is required'),
+  config_id: z.string().min(1, 'Configuration is required'),
+  oanda_account_id: z.string().min(1, 'Account is required'),
   name: z
     .string()
     .min(1, 'Name is required')
@@ -149,9 +148,9 @@ export const validateInstrument = (
 
 // Export types inferred from schemas
 export type ConfigurationFormData = z.infer<typeof configurationSchema>;
-// Explicitly define the output type since z.coerce doesn't infer properly
+// Explicitly define the output type
 export type BacktestTaskSchemaOutput = {
-  config_id: number;
+  config_id: string;
   name: string;
   description?: string;
   data_source: DataSource;

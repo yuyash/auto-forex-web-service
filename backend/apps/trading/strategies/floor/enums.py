@@ -2,12 +2,9 @@
 
 from enum import Enum
 
+from apps.trading.enums import Direction  # Use the main Direction enum
 
-class Direction(str, Enum):
-    """Trading direction."""
-
-    LONG = "long"
-    SHORT = "short"
+__all__ = ["Direction", "StrategyStatus", "Progression"]
 
 
 class StrategyStatus(str, Enum):

@@ -68,12 +68,12 @@ interface BacktestTaskFormProps {
 interface ReviewContentProps {
   selectedConfig: {
     name: string;
-    id: number;
+    id: string;
     description?: string;
     parameters?: Record<string, unknown>;
   };
   formValues: {
-    config_id: number;
+    config_id: string;
     name: string;
     description?: string;
     data_source: DataSource;
@@ -229,7 +229,7 @@ export default function BacktestTaskForm({
 
   const resolvedDefaultValues = useMemo(() => {
     const baseDefaults: BacktestTaskSchemaOutput = {
-      config_id: 0,
+      config_id: '',
       name: '',
       description: '',
       data_source: DataSource.POSTGRESQL,
@@ -300,15 +300,10 @@ export default function BacktestTaskForm({
   const configurations = configurationsData?.results || [];
   const { strategies } = useStrategies();
 
-  // Convert config_id to number for the API call
-  const configIdNumber =
-    typeof selectedConfigId === 'string'
-      ? selectedConfigId === ''
-        ? 0
-        : Number(selectedConfigId)
-      : selectedConfigId || 0;
+  // config_id is now a UUID string
+  const configIdString = selectedConfigId || '';
 
-  const { data: selectedConfig } = useConfiguration(configIdNumber);
+  const { data: selectedConfig } = useConfiguration(configIdString);
 
   const handleNext = async () => {
     // Save current form values to state BEFORE validation
@@ -694,7 +689,7 @@ export default function BacktestTaskForm({
       case 2: {
         // Use the saved formData state which contains all values from all steps
         const formValues = {
-          config_id: formData.config_id as number,
+          config_id: formData.config_id as string,
           name: formData.name as string,
           description: formData.description,
           data_source: formData.data_source as DataSource,

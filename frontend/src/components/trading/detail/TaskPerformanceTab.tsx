@@ -13,7 +13,7 @@ import {
   type SelectChangeEvent,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
-import { MetricCard } from '../../tasks/display/MetricCard';
+import { StatCard } from '../../tasks/display/StatCard';
 import { EquityCurveChart } from '../../tasks/charts/EquityCurveChart';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
 import { FloorLayerLog } from '../../backtest/FloorLayerLog';
@@ -401,7 +401,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
       {(hasMetrics || !!metricsCheckpoint) && (
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <MetricCard
+            <StatCard
               title="Total Return"
               value={`${parseFloat(
                 (metrics ?? metricsCheckpoint)?.total_return ?? '0'
@@ -419,7 +419,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           </Grid>
 
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <MetricCard
+            <StatCard
               title="Win Rate"
               value={`${parseFloat(
                 (metrics ?? metricsCheckpoint)?.win_rate ?? '0'
@@ -431,7 +431,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           </Grid>
 
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <MetricCard
+            <StatCard
               title="Total Trades"
               value={
                 (metrics ?? metricsCheckpoint)?.total_trades?.toString() ?? '0'
@@ -443,7 +443,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           </Grid>
 
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <MetricCard
+            <StatCard
               title="Max Drawdown"
               value={`${parseFloat(
                 (metrics ?? metricsCheckpoint)?.max_drawdown ?? '0'

@@ -4,7 +4,7 @@
 /* eslint-disable */
 import type { TradingModeEnum } from './TradingModeEnum';
 /**
- * Serializer for TradingTasks with execution data.
+ * Serializer for TradingTask with execution data.
  */
 export type PatchedTradingTaskRequest = {
   /**
@@ -26,7 +26,7 @@ export type PatchedTradingTaskRequest = {
   /**
    * Strategy configuration used by this task
    */
-  config?: number;
+  config?: string;
   /**
    * OANDA account used for trading
    */

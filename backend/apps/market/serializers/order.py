@@ -5,6 +5,8 @@ from typing import Any
 
 from rest_framework import serializers
 
+from apps.trading.enums import Direction
+
 
 class OrderSerializer(serializers.Serializer):  # pylint: disable=abstract-method
     """Serializer for creating orders."""
@@ -21,7 +23,7 @@ class OrderSerializer(serializers.Serializer):  # pylint: disable=abstract-metho
     )
     direction = serializers.ChoiceField(
         required=True,
-        choices=["long", "short"],
+        choices=Direction.choices,
         help_text="Trade direction",
     )
     units = serializers.DecimalField(

@@ -31,8 +31,6 @@ class TaskSerializer(serializers.ModelSerializer):
             "completed_at",
             "duration",
             "celery_task_id",
-            "retry_count",
-            "max_retries",
             "error_message",
             "error_traceback",
         ]
@@ -83,6 +81,8 @@ class TaskSerializer(serializers.ModelSerializer):
 class BacktestTaskSerializer(TaskSerializer):
     """Serializer for BacktestTask with execution data."""
 
+    progress = serializers.SerializerMethodField()
+
     class Meta(TaskSerializer.Meta):
         model = BacktestTask
         fields = TaskSerializer.Meta.fields + [
@@ -95,8 +95,57 @@ class BacktestTaskSerializer(TaskSerializer):
             "commission_per_trade",
             "instrument",
             "trading_mode",
+            "progress",
         ]
         read_only_fields = TaskSerializer.Meta.read_only_fields + ["user"]
+
+    def get_progress(self, obj: BacktestTask) -> int:
+        """
+        Calculate backtest progress percentage based on current tick timestamp.
+
+        Progress is calculated as:
+        (current_tick_timestamp - start_time) / (end_time - start_time) * 100
+
+        Args:
+            obj: BacktestTask instance
+
+        Returns:
+            int: Progress percentage (0-100)
+        """
+        from apps.trading.models.state import ExecutionState
+
+        # Only calculate progress for running tasks
+        if obj.status != "running":
+            return 0
+
+        # Get the latest execution state for this task
+        try:
+            execution_state = (
+                ExecutionState.objects.filter(
+                    task_type="backtest",
+                    task_id=obj.pk,
+                )
+                .order_by("-updated_at")
+                .first()
+            )
+
+            if not execution_state or not execution_state.last_tick_timestamp:
+                return 0
+
+            # Calculate progress based on time
+            total_duration = (obj.end_time - obj.start_time).total_seconds()
+            if total_duration <= 0:
+                return 0
+
+            elapsed = (execution_state.last_tick_timestamp - obj.start_time).total_seconds()
+            progress = int((elapsed / total_duration) * 100)
+
+            # Clamp between 0 and 100
+            return max(0, min(100, progress))
+
+        except Exception:
+            # If anything goes wrong, return 0
+            return 0
 
 
 class TradingTaskSerializer(TaskSerializer):

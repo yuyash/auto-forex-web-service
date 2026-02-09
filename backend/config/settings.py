@@ -388,6 +388,8 @@ SPECTACULAR_SETTINGS = {
     "LICENSE": {
         "name": "Proprietary",
     },
+    "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
+    "COMPONENT_NO_READ_ONLY_REQUIRED": True,
 }
 
 

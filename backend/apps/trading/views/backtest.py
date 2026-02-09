@@ -3,7 +3,6 @@
 import logging
 from logging import Logger
 from typing import Any
-from uuid import UUID
 
 from django.db.models import Q, QuerySet
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -98,19 +97,23 @@ class BacktestTaskViewSet(ModelViewSet):
         task = self.get_object()
 
         logger.info(
-            "API: Submitting task",
-            extra={"task_id": task.pk, "user_id": request.user.pk},
+            f"[API:START] Request received - task_id={task.pk}, user_id={request.user.pk}, "
+            f"current_status={task.status}, instrument={task.instrument}, "
+            f"start_time={task.start_time}, end_time={task.end_time}"
         )
 
         # Validate task status - only CREATED tasks can be submitted
         if task.status != TaskStatus.CREATED:
             logger.warning(
-                "API: Task not in valid status to submit",
-                extra={"task_id": task.pk, "status": task.status},
+                f"[API:START] INVALID_STATUS - task_id={task.pk}, status={task.status}, "
+                f"expected=CREATED"
             )
 
             # Provide helpful error message for STOPPED tasks
             if task.status == TaskStatus.STOPPED:
+                logger.info(
+                    f"[API:START] Task is STOPPED, suggesting restart/resume - task_id={task.pk}"
+                )
                 return Response(
                     {
                         "error": "Cannot submit a stopped task",
@@ -128,20 +131,18 @@ class BacktestTaskViewSet(ModelViewSet):
             )
 
         try:
+            logger.info(f"[API:START] Calling TaskService.start_task - task_id={task.pk}")
             task = self.task_service.start_task(task)
             serializer = self.get_serializer(task)
             logger.info(
-                "API: Task started successfully",
-                extra={"task_id": task.pk, "celery_task_id": task.celery_task_id},
+                f"[API:START] SUCCESS - task_id={task.pk}, celery_task_id={task.celery_task_id}, "
+                f"new_status={task.status}"
             )
             return Response({"results": serializer.data})
 
         except ValueError as e:
             # Configuration or validation errors
-            logger.warning(
-                "API: Task submission validation failed",
-                extra={"task_id": task.pk, "error": str(e)},
-            )
+            logger.warning(f"[API:START] VALIDATION_FAILED - task_id={task.pk}, error={str(e)}")
             return Response(
                 {"error": "Validation error", "detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -150,8 +151,7 @@ class BacktestTaskViewSet(ModelViewSet):
         except RuntimeError as e:
             # Celery connection or submission errors
             logger.error(
-                "API: Task submission failed",
-                extra={"task_id": task.pk},
+                f"[API:START] SUBMISSION_FAILED - task_id={task.pk}, error={str(e)}",
                 exc_info=True,
             )
             return Response(
@@ -159,11 +159,10 @@ class BacktestTaskViewSet(ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        except Exception:
+        except Exception as e:
             # Unexpected errors
             logger.error(
-                "API: Unexpected error submitting task",
-                extra={"task_id": task.pk},
+                f"[API:START] UNEXPECTED_ERROR - task_id={task.pk}, error={str(e)}",
                 exc_info=True,
             )
             return Response(
@@ -182,19 +181,17 @@ class BacktestTaskViewSet(ModelViewSet):
         task = self.get_object()
 
         logger.info(
-            "API: Stopping task asynchronously",
-            extra={"task_id": task.pk, "user_id": request.user.pk},
+            f"[API:STOP] Request received - task_id={task.pk}, user_id={request.user.pk}, "
+            f"current_status={task.status}, celery_task_id={task.celery_task_id}"
         )
 
         try:
             # Use TaskService to stop the task
+            logger.info(f"[API:STOP] Calling TaskService.stop_task - task_id={task.pk}")
             success = self.task_service.stop_task(task.pk)
 
             if success:
-                logger.info(
-                    "API: Stop task initiated",
-                    extra={"task_id": task.pk},
-                )
+                logger.info(f"[API:STOP] SUCCESS - Stop request initiated for task_id={task.pk}")
 
                 return Response(
                     {
@@ -205,6 +202,9 @@ class BacktestTaskViewSet(ModelViewSet):
                     status=status.HTTP_202_ACCEPTED,
                 )
             else:
+                logger.error(
+                    f"[API:STOP] FAILED - TaskService returned False for task_id={task.pk}"
+                )
                 return Response(
                     {"error": "Failed to initiate stop"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -212,19 +212,15 @@ class BacktestTaskViewSet(ModelViewSet):
 
         except ValueError as e:
             # Task not found or not in stoppable state
-            logger.warning(
-                "API: Cannot stop task",
-                extra={"task_id": task.pk, "error": str(e)},
-            )
+            logger.warning(f"[API:STOP] VALIDATION_FAILED - task_id={task.pk}, error={str(e)}")
             return Response(
                 {"error": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except Exception:
+        except Exception as e:
             # Unexpected errors
             logger.error(
-                "API: Unexpected error stopping task",
-                extra={"task_id": task.pk},
+                f"[API:STOP] UNEXPECTED_ERROR - task_id={task.pk}, error={str(e)}",
                 exc_info=True,
             )
             return Response(
@@ -242,7 +238,16 @@ class BacktestTaskViewSet(ModelViewSet):
         """Pause running task."""
         task = self.get_object()
 
+        logger.info(
+            f"[API:PAUSE] Request received - task_id={task.pk}, user_id={request.user.pk}, "
+            f"current_status={task.status}"
+        )
+
         if task.status != TaskStatus.RUNNING:
+            logger.warning(
+                f"[API:PAUSE] INVALID_STATUS - task_id={task.pk}, status={task.status}, "
+                f"expected=RUNNING"
+            )
             return Response(
                 {"error": "Task must be running to pause"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -250,16 +255,25 @@ class BacktestTaskViewSet(ModelViewSet):
 
         try:
             # Use TaskService to pause the task
-            success = self.task_service.pause_task(UUID(int=task.pk))
+            logger.info(f"[API:PAUSE] Calling TaskService.pause_task - task_id={task.pk}")
+            success = self.task_service.pause_task(task.pk)
             if success:
+                logger.info(f"[API:PAUSE] SUCCESS - task_id={task.pk}")
                 serializer = self.get_serializer(task)
                 return Response({"results": serializer.data})
             else:
+                logger.error(
+                    f"[API:PAUSE] FAILED - TaskService returned False for task_id={task.pk}"
+                )
                 return Response(
                     {"error": "Failed to pause task"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
         except Exception as e:
+            logger.error(
+                f"[API:PAUSE] UNEXPECTED_ERROR - task_id={task.pk}, error={str(e)}",
+                exc_info=True,
+            )
             return Response(
                 {"error": f"Failed to pause task: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -276,17 +290,18 @@ class BacktestTaskViewSet(ModelViewSet):
         task = self.get_object()
 
         logger.info(
-            "API: Restarting task",
-            extra={"task_id": task.pk, "user_id": request.user.pk},
+            f"[API:RESTART] Request received - task_id={task.pk}, user_id={request.user.pk}, "
+            f"current_status={task.status}, celery_task_id={task.celery_task_id}"
         )
 
         try:
             # Use TaskService to restart and resubmit
-            task = self.task_service.restart_task(UUID(int=task.pk))
+            logger.info(f"[API:RESTART] Calling TaskService.restart_task for task_id={task.pk}")
+            task = self.task_service.restart_task(task.pk)
             serializer = self.get_serializer(task)
             logger.info(
-                "API: Task restarted successfully",
-                extra={"task_id": task.pk, "retry_count": task.retry_count},
+                f"[API:RESTART] SUCCESS - task_id={task.pk}, new_status={task.status}, "
+                f"new_celery_task_id={task.celery_task_id}"
             )
             return Response({"results": serializer.data})
 
@@ -294,8 +309,8 @@ class BacktestTaskViewSet(ModelViewSet):
             # Task not found, retry limit exceeded, or invalid state
             error_msg = str(e)
             logger.warning(
-                "API: Task restart validation failed",
-                extra={"task_id": task.pk, "error": error_msg},
+                f"[API:RESTART] VALIDATION_FAILED - task_id={task.pk}, "
+                f"current_status={task.status}, error={error_msg}"
             )
             return Response(
                 {"error": "Validation error", "detail": error_msg},
@@ -305,8 +320,7 @@ class BacktestTaskViewSet(ModelViewSet):
         except RuntimeError as e:
             # Celery submission errors
             logger.error(
-                "API: Task restart submission failed",
-                extra={"task_id": task.pk},
+                f"[API:RESTART] SUBMISSION_FAILED - task_id={task.pk}, error={str(e)}",
                 exc_info=True,
             )
             return Response(
@@ -314,11 +328,10 @@ class BacktestTaskViewSet(ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        except Exception:
+        except Exception as e:
             # Unexpected errors
             logger.error(
-                "API: Unexpected error restarting task",
-                extra={"task_id": task.pk},
+                f"[API:RESTART] UNEXPECTED_ERROR - task_id={task.pk}, error={str(e)}",
                 exc_info=True,
             )
             return Response(
@@ -337,11 +350,15 @@ class BacktestTaskViewSet(ModelViewSet):
         task = self.get_object()
 
         logger.info(
-            "API: Resuming task",
-            extra={"task_id": task.pk, "user_id": request.user.pk},
+            f"[API:RESUME] Request received - task_id={task.pk}, user_id={request.user.pk}, "
+            f"current_status={task.status}"
         )
 
         if task.status != TaskStatus.PAUSED:
+            logger.warning(
+                f"[API:RESUME] INVALID_STATUS - task_id={task.pk}, status={task.status}, "
+                f"expected=PAUSED"
+            )
             return Response(
                 {"error": "Task must be paused to resume"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -349,11 +366,11 @@ class BacktestTaskViewSet(ModelViewSet):
 
         try:
             # Use TaskService to resume and resubmit
-            task = self.task_service.resume_task(UUID(int=task.pk))
+            logger.info(f"[API:RESUME] Calling TaskService.resume_task - task_id={task.pk}")
+            task = self.task_service.resume_task(task.pk)
             serializer = self.get_serializer(task)
             logger.info(
-                "API: Task resumed successfully",
-                extra={"task_id": task.pk},
+                f"[API:RESUME] SUCCESS - task_id={task.pk}, new_celery_task_id={task.celery_task_id}"
             )
             return Response({"results": serializer.data})
 
@@ -361,18 +378,14 @@ class BacktestTaskViewSet(ModelViewSet):
             # Task not found or invalid state
             error_msg = str(e)
             if "does not exist" in error_msg:
-                logger.error(
-                    "API: Task not found for resume",
-                    extra={"task_id": task.pk},
-                )
+                logger.error(f"[API:RESUME] TASK_NOT_FOUND - task_id={task.pk}, error={error_msg}")
                 return Response(
                     {"error": "Task not found", "detail": error_msg},
                     status=status.HTTP_404_NOT_FOUND,
                 )
             else:
                 logger.warning(
-                    "API: Task resume validation failed",
-                    extra={"task_id": task.pk, "error": error_msg},
+                    f"[API:RESUME] VALIDATION_FAILED - task_id={task.pk}, error={error_msg}"
                 )
                 return Response(
                     {"error": "Validation error", "detail": error_msg},
@@ -382,8 +395,7 @@ class BacktestTaskViewSet(ModelViewSet):
         except RuntimeError as e:
             # Celery submission errors
             logger.error(
-                "API: Task resume submission failed",
-                extra={"task_id": task.pk},
+                f"[API:RESUME] SUBMISSION_FAILED - task_id={task.pk}, error={str(e)}",
                 exc_info=True,
             )
             return Response(
@@ -391,11 +403,10 @@ class BacktestTaskViewSet(ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        except Exception:
+        except Exception as e:
             # Unexpected errors
             logger.error(
-                "API: Unexpected error resuming task",
-                extra={"task_id": task.pk},
+                f"[API:RESUME] UNEXPECTED_ERROR - task_id={task.pk}, error={str(e)}",
                 exc_info=True,
             )
             return Response(
@@ -494,26 +505,24 @@ class BacktestTaskViewSet(ModelViewSet):
         celery_task_id = request.query_params.get("celery_task_id")
         limit = int(request.query_params.get("limit", 100))
 
-        try:
-            queryset = TradingEvent.objects.filter(task_type="backtest", task_id=task.pk).order_by(
-                "-created_at"
-            )
+        queryset = TradingEvent.objects.filter(task_type="backtest", task_id=task.pk).order_by(
+            "-created_at"
+        )
 
-            if event_type:
-                queryset = queryset.filter(event_type=event_type)
-            if severity:
-                queryset = queryset.filter(severity=severity)
-            if celery_task_id:
-                queryset = queryset.filter(celery_task_id=celery_task_id)
+        if event_type:
+            queryset = queryset.filter(event_type=event_type)
+        if severity:
+            queryset = queryset.filter(severity=severity)
+        if celery_task_id:
+            queryset = queryset.filter(celery_task_id=celery_task_id)
 
-            events = queryset[:limit]
-            serializer = TradingEventSerializer(events, many=True)
-            return Response({"results": serializer.data})
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to retrieve events: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        events = queryset[:limit]
+        serializer = TradingEventSerializer(events, many=True)
+
+        # Return paginated format expected by frontend
+        return Response(
+            {"count": queryset.count(), "next": None, "previous": None, "results": serializer.data}
+        )
 
     @extend_schema(
         summary="Get task trades",
@@ -536,35 +545,33 @@ class BacktestTaskViewSet(ModelViewSet):
         task = self.get_object()
         direction = request.query_params.get("direction")
 
-        try:
-            # Query trades from database
-            queryset = Trade.objects.filter(
-                task_type="backtest",
-                task_id=task.pk,
-            ).order_by("timestamp")
+        # Query trades from database
+        queryset = Trade.objects.filter(
+            task_type="backtest",
+            task_id=task.pk,
+        ).order_by("timestamp")
 
-            # Filter by direction if specified
-            if direction:
-                queryset = queryset.filter(direction=direction)
+        # Filter by direction if specified
+        if direction:
+            queryset = queryset.filter(direction=direction)
 
-            trades = queryset.values(
-                "direction",
-                "units",
-                "instrument",
-                "price",
-                "execution_method",
-                "pnl",
-                "timestamp",
-            )
+        trades = queryset.values(
+            "direction",
+            "units",
+            "instrument",
+            "price",
+            "execution_method",
+            "pnl",
+            "timestamp",
+        )
 
-            serializer = TradeSerializer(data=list(trades), many=True)
-            serializer.is_valid(raise_exception=True)
-            return Response({"results": serializer.data})
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to retrieve trades: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        serializer = TradeSerializer(data=list(trades), many=True)
+        serializer.is_valid(raise_exception=True)
+
+        # Return paginated format expected by frontend
+        return Response(
+            {"count": queryset.count(), "next": None, "previous": None, "results": serializer.data}
+        )
 
     @extend_schema(
         summary="Get task equity curve",
@@ -578,22 +585,25 @@ class BacktestTaskViewSet(ModelViewSet):
 
         task = self.get_object()
 
-        try:
-            # Query equity points from database
-            equity_points = (
-                Equity.objects.filter(
-                    task_type="backtest",
-                    task_id=task.pk,
-                )
-                .order_by("timestamp")
-                .values("timestamp", "balance")
+        # Query equity points from database
+        equity_points = (
+            Equity.objects.filter(
+                task_type="backtest",
+                task_id=task.pk,
             )
+            .order_by("timestamp")
+            .values("timestamp", "balance")
+        )
 
-            serializer = EquityPointSerializer(data=list(equity_points), many=True)
-            serializer.is_valid(raise_exception=True)
-            return Response({"results": serializer.data})
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to retrieve equity: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        serializer = EquityPointSerializer(data=list(equity_points), many=True)
+        serializer.is_valid(raise_exception=True)
+
+        # Return paginated format expected by frontend
+        return Response(
+            {
+                "count": len(equity_points),
+                "next": None,
+                "previous": None,
+                "results": serializer.data,
+            }
+        )

@@ -206,11 +206,11 @@ function ThemedApp() {
       <CssBaseline />
       <QueryProvider>
         <ToastProvider>
-          <AuthProvider>
-            <BrowserRouter>
+          <BrowserRouter>
+            <AuthProvider>
               <AppRoutes />
-            </BrowserRouter>
-          </AuthProvider>
+            </AuthProvider>
+          </BrowserRouter>
         </ToastProvider>
       </QueryProvider>
     </ThemeProvider>

@@ -3,9 +3,10 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Serializer for equity curve data points from Equities model.
+ * * `backtest` - Backtest
+ * * `trading` - Trading
  */
-export type EquityPoint = {
-  timestamp: string;
-  balance: string;
-};
+export enum TaskTypeEnum {
+  BACKTEST = 'backtest',
+  TRADING = 'trading',
+}

@@ -2,7 +2,7 @@
  * TradingTaskDetail Component
  *
  * Main detail view for trading tasks using task-based API endpoints.
- * Displays task info and tab navigation for Events, Logs, Trades, Equity, and Metrics.
+ * Displays task info and tab navigation for Events, Logs, Trades, and Equity.
  *
  * Requirements: 11.14, 11.15
  */
@@ -20,7 +20,6 @@ import {
   Link,
   CircularProgress,
   Alert,
-  Chip,
   Grid,
   Divider,
 } from '@mui/material';
@@ -28,10 +27,10 @@ import { useTradingTask } from '../../hooks/useTradingTasks';
 import { useToast } from '../common';
 import { TaskControlButtons } from '../tasks/actions/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
+import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
 import { TaskEquityChart } from '../tasks/detail/TaskEquityChart';
-import { TaskMetricsChart } from '../tasks/detail/TaskMetricsChart';
 import { TaskStatus, TaskType } from '../../types/common';
 
 interface TabPanelProps {
@@ -70,7 +69,7 @@ export const TradingTaskDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const taskId = parseInt(id || '0', 10);
+  const taskId = id || '';
   const { showError } = useToast();
 
   // Get tab from URL, default to 'overview'
@@ -81,16 +80,8 @@ export const TradingTaskDetail: React.FC = () => {
     logs: 2,
     trades: 3,
     equity: 4,
-    metrics: 5,
   };
-  const tabNames = [
-    'overview',
-    'events',
-    'logs',
-    'trades',
-    'equity',
-    'metrics',
-  ];
+  const tabNames = ['overview', 'events', 'logs', 'trades', 'equity'];
   const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
@@ -108,30 +99,6 @@ export const TradingTaskDetail: React.FC = () => {
 
   const handleBack = () => {
     navigate('/trading-tasks');
-  };
-
-  const getStatusColor = (
-    status: TaskStatus
-  ):
-    | 'default'
-    | 'primary'
-    | 'secondary'
-    | 'success'
-    | 'error'
-    | 'warning'
-    | 'info' => {
-    switch (status) {
-      case TaskStatus.RUNNING:
-        return 'primary';
-      case TaskStatus.COMPLETED:
-        return 'success';
-      case TaskStatus.FAILED:
-        return 'error';
-      case TaskStatus.STOPPED:
-        return 'warning';
-      default:
-        return 'default';
-    }
   };
 
   if (isLoading) {
@@ -182,11 +149,7 @@ export const TradingTaskDetail: React.FC = () => {
               <Typography variant="h4" component="h1">
                 {task.name}
               </Typography>
-              <Chip
-                label={task.status}
-                color={getStatusColor(task.status)}
-                size="small"
-              />
+              <StatusBadge status={task.status} />
             </Box>
 
             <Typography variant="body2" color="text.secondary">
@@ -225,7 +188,6 @@ export const TradingTaskDetail: React.FC = () => {
           <Tab label="Logs" {...a11yProps(2)} />
           <Tab label="Trades" {...a11yProps(3)} />
           <Tab label="Equity" {...a11yProps(4)} />
-          <Tab label="Metrics" {...a11yProps(5)} />
         </Tabs>
 
         {/* Overview Tab */}
@@ -286,10 +248,10 @@ export const TradingTaskDetail: React.FC = () => {
                       Status
                     </Typography>
                     <Box sx={{ mt: 0.5 }}>
-                      <Chip
-                        label={task.status}
-                        color={getStatusColor(task.status)}
+                      <StatusBadge
+                        status={task.status}
                         size="small"
+                        showIcon={false}
                       />
                     </Box>
                   </Box>
@@ -410,14 +372,6 @@ export const TradingTaskDetail: React.FC = () => {
 
         <TabPanel value={currentTabValue} index={4}>
           <TaskEquityChart
-            taskId={taskId}
-            taskType={TaskType.TRADING}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-          />
-        </TabPanel>
-
-        <TabPanel value={currentTabValue} index={5}>
-          <TaskMetricsChart
             taskId={taskId}
             taskType={TaskType.TRADING}
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}

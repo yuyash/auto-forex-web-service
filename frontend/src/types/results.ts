@@ -1,5 +1,4 @@
 import type { TaskStatus, TaskType } from './common';
-import type { ExecutionMetrics } from './execution';
 
 export interface TaskResultsExecutionSummary {
   id: number;
@@ -15,7 +14,6 @@ export interface TaskResultsExecutionSummary {
  * Unified results payload for both trading and backtest tasks.
  *
  * - `live` mirrors Redis live snapshot when present
- * - `metrics` mirrors the latest execution metrics when present
  */
 export interface TaskResults {
   task_id: number;
@@ -25,7 +23,4 @@ export interface TaskResults {
 
   has_live: boolean;
   live?: Record<string, unknown> | null;
-
-  has_metrics: boolean;
-  metrics?: ExecutionMetrics | null;
 }

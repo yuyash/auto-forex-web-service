@@ -19,7 +19,7 @@ import type { BacktestTask } from '../../types/backtestTask';
 import { TaskStatus } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskProgress } from '../tasks/TaskProgress';
-import { MetricCard } from '../tasks/display/MetricCard';
+import { StatCard } from '../tasks/display/StatCard';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import BacktestTaskActions from './BacktestTaskActions';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
@@ -107,7 +107,7 @@ export default function BacktestTaskCard({
     navigate(`/backtest-tasks/${task.id}`);
   };
 
-  const handleStart = async (taskId: number) => {
+  const handleStart = async (taskId: string) => {
     setIsLoading(true);
     try {
       await backtestTasksApi.start(taskId);
@@ -128,7 +128,7 @@ export default function BacktestTaskCard({
     }
   };
 
-  const handleStop = async (taskId: number) => {
+  const handleStop = async (taskId: string) => {
     setIsLoading(true);
     try {
       await backtestTasksApi.stop(taskId);
@@ -146,7 +146,7 @@ export default function BacktestTaskCard({
     }
   };
 
-  const handleResume = async (taskId: number) => {
+  const handleResume = async (taskId: string) => {
     setIsLoading(true);
     try {
       await backtestTasksApi.resume(taskId);
@@ -167,7 +167,7 @@ export default function BacktestTaskCard({
     }
   };
 
-  const handleRestart = async (taskId: number) => {
+  const handleRestart = async (taskId: string) => {
     setIsLoading(true);
     try {
       await backtestTasksApi.restart(taskId);
@@ -188,10 +188,10 @@ export default function BacktestTaskCard({
     }
   };
 
-  const handleDelete = async (taskId: number) => {
+  const handleDelete = async (taskId: string) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingBacktestTasksDestroy(taskId);
+      await TradingService.tradingTasksBacktestDestroy(taskId);
       showSuccess('Backtest task deleted successfully');
       onRefresh?.();
     } catch (error) {
@@ -252,20 +252,27 @@ export default function BacktestTaskCard({
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
               <StatusBadge status={displayStatus} />
-              <Chip
-                label={getStrategyDisplayName(
-                  strategies,
-                  currentTask.strategy_type
-                )}
-                size="small"
-                variant="outlined"
-              />
-              <Chip
-                label={currentTask.config_name}
-                size="small"
-                variant="outlined"
-                color="primary"
-              />
+              {getStrategyDisplayName(
+                strategies,
+                currentTask.strategy_type
+              ) && (
+                <Chip
+                  label={getStrategyDisplayName(
+                    strategies,
+                    currentTask.strategy_type
+                  )}
+                  size="small"
+                  variant="outlined"
+                />
+              )}
+              {currentTask.config_name && (
+                <Chip
+                  label={currentTask.config_name}
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                />
+              )}
             </Box>
             <Typography variant="body2" color="text.secondary">
               {formatDate(currentTask.start_time)} to{' '}
@@ -320,13 +327,13 @@ export default function BacktestTaskCard({
           </Box>
         )}
 
-        {/* Metrics for completed tasks */}
+        {/* Stats for completed tasks */}
         {displayStatus === TaskStatus.COMPLETED &&
           currentTask.latest_execution && (
             <Grid container spacing={2} sx={{ mt: 1 }}>
               {currentTask.latest_execution.total_return && (
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <MetricCard
+                  <StatCard
                     title="Total Return"
                     value={`${currentTask.latest_execution.total_return}%`}
                     color={
@@ -339,7 +346,7 @@ export default function BacktestTaskCard({
               )}
               {currentTask.latest_execution.win_rate && (
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <MetricCard
+                  <StatCard
                     title="Win Rate"
                     value={`${currentTask.latest_execution.win_rate}%`}
                   />
@@ -347,7 +354,7 @@ export default function BacktestTaskCard({
               )}
               {currentTask.latest_execution.total_trades !== undefined && (
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <MetricCard
+                  <StatCard
                     title="Total Trades"
                     value={currentTask.latest_execution.total_trades.toString()}
                   />

@@ -20,7 +20,7 @@ import { useNavigate } from 'react-router-dom';
 import type { TradingTask } from '../../types/tradingTask';
 import { TaskStatus } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
-import { MetricCard } from '../tasks/display/MetricCard';
+import { StatCard } from '../tasks/display/StatCard';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import TradingTaskActions from './TradingTaskActions';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
@@ -396,26 +396,26 @@ export default function TradingTaskCard({
           />
         </Box>
 
-        {/* Live Metrics for Running/Paused Tasks */}
+        {/* Live Stats for Running/Paused Tasks */}
         {(displayStatus === TaskStatus.RUNNING ||
           displayStatus === TaskStatus.PAUSED) && (
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid size={{ xs: 6, sm: 4 }}>
-              <MetricCard
+              <StatCard
                 title="Live P&L"
                 value={`$${currentPnL.toFixed(2)}`}
                 color={currentPnL >= 0 ? 'success' : 'error'}
               />
             </Grid>
             <Grid size={{ xs: 6, sm: 4 }}>
-              <MetricCard
+              <StatCard
                 title="Open Positions"
                 value={openPositions.toString()}
               />
             </Grid>
             {currentTask.latest_execution?.total_trades !== undefined && (
               <Grid size={{ xs: 6, sm: 4 }}>
-                <MetricCard
+                <StatCard
                   title="Total Trades"
                   value={currentTask.latest_execution.total_trades.toString()}
                 />
@@ -424,14 +424,14 @@ export default function TradingTaskCard({
           </Grid>
         )}
 
-        {/* Performance Metrics for Stopped/Completed Tasks */}
+        {/* Performance Stats for Stopped/Completed Tasks */}
         {(displayStatus === TaskStatus.STOPPED ||
           displayStatus === TaskStatus.COMPLETED) &&
           currentTask.latest_execution && (
             <Grid container spacing={2} sx={{ mt: 1 }}>
               {currentTask.latest_execution.total_return && (
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <MetricCard
+                  <StatCard
                     title="Total Return"
                     value={`${currentTask.latest_execution.total_return}%`}
                     color={
@@ -444,7 +444,7 @@ export default function TradingTaskCard({
               )}
               {currentTask.latest_execution.win_rate && (
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <MetricCard
+                  <StatCard
                     title="Win Rate"
                     value={`${currentTask.latest_execution.win_rate}%`}
                   />
@@ -452,7 +452,7 @@ export default function TradingTaskCard({
               )}
               {currentTask.latest_execution.total_trades !== undefined && (
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <MetricCard
+                  <StatCard
                     title="Total Trades"
                     value={currentTask.latest_execution.total_trades.toString()}
                   />

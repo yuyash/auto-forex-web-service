@@ -27,14 +27,14 @@ import type { TaskStatus } from '../../types/common';
 import { TaskStatus as TaskStatusEnum } from '../../types/common';
 
 export interface TaskControlButtonsProps {
-  taskId: number;
+  taskId: string | number;
   status: TaskStatus;
-  onStart?: (taskId: number) => void | Promise<void>;
-  onStop?: (taskId: number) => void | Promise<void>;
-  onPause?: (taskId: number) => void | Promise<void>;
-  onResume?: (taskId: number) => void | Promise<void>;
-  onRestart?: (taskId: number) => void | Promise<void>;
-  onDelete?: (taskId: number) => void | Promise<void>;
+  onStart?: (taskId: string | number) => void | Promise<void>;
+  onStop?: (taskId: string | number) => void | Promise<void>;
+  onPause?: (taskId: string | number) => void | Promise<void>;
+  onResume?: (taskId: string | number) => void | Promise<void>;
+  onRestart?: (taskId: string | number) => void | Promise<void>;
+  onDelete?: (taskId: string | number) => void | Promise<void>;
   isLoading?: boolean;
   disabled?: boolean;
   size?: 'small' | 'medium' | 'large';

@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -40,7 +39,7 @@ function formatValue(value: unknown): string {
 
 export default function ConfigurationDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const configId = useMemo(() => Number(id), [id]);
+  const configId = id || '';
   const navigate = useNavigate();
 
   const { data: configuration, isLoading, error } = useConfiguration(configId);

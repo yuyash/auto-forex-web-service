@@ -3,6 +3,7 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { LevelEnum } from './LevelEnum';
+import type { TaskTypeEnum } from './TaskTypeEnum';
 /**
  * Serializer for TaskLog model.
  *
@@ -14,9 +15,20 @@ export type TaskLog = {
    */
   readonly id: string;
   /**
-   * Task this log entry belongs to
+   * Type of task (backtest or trading)
+   *
+   * * `backtest` - Backtest
+   * * `trading` - Trading
    */
-  task: number;
+  task_type: TaskTypeEnum;
+  /**
+   * UUID of the task this log entry belongs to
+   */
+  task_id: string;
+  /**
+   * Celery task ID for this execution
+   */
+  celery_task_id?: string | null;
   /**
    * When this log entry was created
    */
@@ -35,4 +47,8 @@ export type TaskLog = {
    * Log message content
    */
   message: string;
+  /**
+   * Additional structured log details
+   */
+  details?: any;
 };

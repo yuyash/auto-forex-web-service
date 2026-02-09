@@ -25,6 +25,12 @@ export interface ApiClientConfig {
 
 /**
  * Default configuration
+ *
+ * In development, we use an empty baseUrl to let Vite's proxy handle /api requests.
+ * The proxy is configured in vite.config.ts to forward /api -> http://localhost:8000
+ * This avoids CORS issues during development.
+ *
+ * In production, set VITE_API_BASE_URL to your backend URL.
  */
 const DEFAULT_CONFIG: Required<ApiClientConfig> = {
   baseUrl: import.meta.env.VITE_API_BASE_URL || '',
@@ -66,25 +72,68 @@ export function configureApiClient(config: ApiClientConfig): void {
   // Set up response interceptor for 401 errors
   const originalRequest = OpenAPI.request;
   OpenAPI.request = async (options: unknown) => {
-    try {
-      return await originalRequest(options);
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        // Clear authentication state
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        clearAuthToken();
+    const requestOptions = options as Record<string, unknown>;
+    const requestId = Math.random().toString(36).substring(7);
+    const timestamp = new Date().toISOString();
 
-        // Broadcast logout event for AuthContext to handle
-        broadcastAuthLogout({
-          source: 'http',
-          status: 401,
-          message: 'Session expired',
-          context: 'api_client',
+    console.log(`[API:REQUEST:${requestId}] ${timestamp}`, {
+      method: requestOptions.method,
+      url: requestOptions.url,
+      body: requestOptions.body,
+      headers: requestOptions.headers,
+    });
+
+    try {
+      const response = await originalRequest(options);
+
+      console.log(`[API:RESPONSE:${requestId}] ${timestamp} SUCCESS`, {
+        method: requestOptions.method,
+        url: requestOptions.url,
+        status: 200,
+        data: response,
+      });
+
+      return response;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        console.error(`[API:RESPONSE:${requestId}] ${timestamp} ERROR`, {
+          method: requestOptions.method,
+          url: requestOptions.url,
+          status: error.status,
+          statusText: error.statusText,
+          body: error.body,
+          message: error.message,
         });
 
-        // Redirect to login page
-        window.location.href = '/login';
+        if (error.status === 401) {
+          console.warn(
+            `[API:AUTH] 401 Unauthorized - Clearing auth and redirecting to login`
+          );
+          // Clear authentication state
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          clearAuthToken();
+
+          // Broadcast logout event for AuthContext to handle
+          broadcastAuthLogout({
+            source: 'http',
+            status: 401,
+            message: 'Session expired',
+            context: 'api_client',
+          });
+
+          // Redirect to login page
+          window.location.href = '/login';
+        }
+      } else {
+        console.error(
+          `[API:RESPONSE:${requestId}] ${timestamp} NETWORK_ERROR`,
+          {
+            method: requestOptions.method,
+            url: requestOptions.url,
+            error: error,
+          }
+        );
       }
       throw error;
     }

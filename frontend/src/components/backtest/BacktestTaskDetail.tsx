@@ -2,12 +2,12 @@
  * BacktestTaskDetail Component
  *
  * Main detail view for backtest tasks using task-based API endpoints.
- * Displays task info and tab navigation for Events, Logs, Trades, Equity, and Metrics.
+ * Displays task info and tab navigation for Events, Logs, Trades, and Equity.
  *
  * Requirements: 11.5, 11.6
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -20,18 +20,19 @@ import {
   Link,
   CircularProgress,
   Alert,
-  Chip,
   Grid,
   Divider,
 } from '@mui/material';
 import { useBacktestTask } from '../../hooks/useBacktestTasks';
+import { useTaskPolling } from '../../hooks/useTaskPolling';
 import { useToast } from '../common';
 import { TaskControlButtons } from '../tasks/actions/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
+import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
 import { TaskEquityChart } from '../tasks/detail/TaskEquityChart';
-import { TaskMetricsChart } from '../tasks/detail/TaskMetricsChart';
+import { TaskProgress } from '../tasks/TaskProgress';
 import { TaskStatus, TaskType } from '../../types/common';
 
 interface TabPanelProps {
@@ -70,7 +71,7 @@ export const BacktestTaskDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const taskId = parseInt(id || '0', 10);
+  const taskId = id || '';
   const { showError } = useToast();
 
   // Get tab from URL, default to 'overview'
@@ -81,19 +82,49 @@ export const BacktestTaskDetail: React.FC = () => {
     logs: 2,
     trades: 3,
     equity: 4,
-    metrics: 5,
   };
-  const tabNames = [
-    'overview',
-    'events',
-    'logs',
-    'trades',
-    'equity',
-    'metrics',
-  ];
+  const tabNames = ['overview', 'events', 'logs', 'trades', 'equity'];
   const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
 
   const { data: task, isLoading, error, refetch } = useBacktestTask(taskId);
+
+  // Use HTTP polling for task status updates
+  const {
+    status: polledStatus,
+    startPolling,
+    isPolling,
+  } = useTaskPolling(taskId, 'backtest', {
+    enabled: !!taskId,
+    pollStatus: true,
+    interval: 3000, // Poll every 3 seconds for active tasks
+  });
+
+  // Refetch when status changes
+  const prevStatusRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (polledStatus) {
+      console.log('[BacktestTaskDetail] Polled status update:', polledStatus);
+
+      // Always update if status changed
+      if (polledStatus.status !== prevStatusRef.current) {
+        console.log(
+          `[BacktestTaskDetail] Status changed: ${prevStatusRef.current} -> ${polledStatus.status}, refetching`
+        );
+        refetch();
+      }
+      prevStatusRef.current = polledStatus.status;
+    }
+  }, [polledStatus, refetch]);
+
+  // Log status for debugging
+  useEffect(() => {
+    if (task) {
+      console.log('[BacktestTaskDetail] Status:', {
+        taskStatus: task.status,
+        polledStatus: polledStatus?.status,
+      });
+    }
+  }, [task, polledStatus?.status]);
 
   // Derive tab value from URL parameter (use this for rendering)
   const currentTabValue =
@@ -108,30 +139,6 @@ export const BacktestTaskDetail: React.FC = () => {
 
   const handleBack = () => {
     navigate('/backtest-tasks');
-  };
-
-  const getStatusColor = (
-    status: TaskStatus
-  ):
-    | 'default'
-    | 'primary'
-    | 'secondary'
-    | 'success'
-    | 'error'
-    | 'warning'
-    | 'info' => {
-    switch (status) {
-      case TaskStatus.RUNNING:
-        return 'primary';
-      case TaskStatus.COMPLETED:
-        return 'success';
-      case TaskStatus.FAILED:
-        return 'error';
-      case TaskStatus.STOPPED:
-        return 'warning';
-      default:
-        return 'default';
-    }
   };
 
   if (isLoading) {
@@ -182,15 +189,11 @@ export const BacktestTaskDetail: React.FC = () => {
               <Typography variant="h4" component="h1">
                 {task.name}
               </Typography>
-              <Chip
-                label={task.status}
-                color={getStatusColor(task.status)}
-                size="small"
-              />
+              <StatusBadge status={polledStatus?.status || task.status} />
             </Box>
 
             <Typography variant="body2" color="text.secondary">
-              Configuration: {task.config_name} • Strategy: {task.strategy_type}
+              {task.strategy_type}
             </Typography>
 
             {task.description && (
@@ -198,14 +201,36 @@ export const BacktestTaskDetail: React.FC = () => {
                 {task.description}
               </Typography>
             )}
+
+            {/* Progress Bar */}
+            <Box sx={{ mt: 2, maxWidth: 600 }}>
+              <TaskProgress
+                status={polledStatus?.status || task.status}
+                progress={task.progress || 0}
+                compact={false}
+                showPercentage={true}
+              />
+            </Box>
           </Box>
 
           <Box sx={{ display: 'flex', gap: 1 }}>
             <TaskControlButtons
               taskId={taskId}
               taskType={TaskType.BACKTEST}
-              currentStatus={task.status}
-              onSuccess={refetch}
+              currentStatus={polledStatus?.status || task.status}
+              onSuccess={() => {
+                console.log(
+                  '[BacktestTaskDetail] Task action success, refetching'
+                );
+                refetch();
+                // Restart polling when task is restarted/resumed
+                if (!isPolling) {
+                  console.log(
+                    '[BacktestTaskDetail] Restarting polling after task action'
+                  );
+                  startPolling();
+                }
+              }}
               onError={(error) => showError(error.message)}
             />
           </Box>
@@ -225,7 +250,6 @@ export const BacktestTaskDetail: React.FC = () => {
           <Tab label="Logs" {...a11yProps(2)} />
           <Tab label="Trades" {...a11yProps(3)} />
           <Tab label="Equity" {...a11yProps(4)} />
-          <Tab label="Metrics" {...a11yProps(5)} />
         </Tabs>
 
         {/* Overview Tab */}
@@ -286,10 +310,10 @@ export const BacktestTaskDetail: React.FC = () => {
                       Status
                     </Typography>
                     <Box sx={{ mt: 0.5 }}>
-                      <Chip
-                        label={task.status}
-                        color={getStatusColor(task.status)}
+                      <StatusBadge
+                        status={polledStatus?.status || task.status}
                         size="small"
+                        showIcon={false}
                       />
                     </Box>
                   </Box>
@@ -425,7 +449,9 @@ export const BacktestTaskDetail: React.FC = () => {
           <TaskEventsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
           />
         </TabPanel>
 
@@ -433,7 +459,9 @@ export const BacktestTaskDetail: React.FC = () => {
           <TaskLogsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
           />
         </TabPanel>
 
@@ -441,7 +469,9 @@ export const BacktestTaskDetail: React.FC = () => {
           <TaskTradesTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
           />
         </TabPanel>
 
@@ -449,15 +479,9 @@ export const BacktestTaskDetail: React.FC = () => {
           <TaskEquityChart
             taskId={taskId}
             taskType={TaskType.BACKTEST}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-          />
-        </TabPanel>
-
-        <TabPanel value={currentTabValue} index={5}>
-          <TaskMetricsChart
-            taskId={taskId}
-            taskType={TaskType.BACKTEST}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
           />
         </TabPanel>
       </Paper>

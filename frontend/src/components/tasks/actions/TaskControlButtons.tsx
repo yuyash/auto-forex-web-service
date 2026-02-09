@@ -53,8 +53,14 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
 
   // Start mutation
   const startMutation = useMutation<unknown, Error, void>({
-    mutationFn: () => api.start(taskId),
-    onSuccess: () => {
+    mutationFn: () => {
+      console.log(
+        `[TaskControl:START] Initiating start - taskId=${taskId}, taskType=${taskType}`
+      );
+      return api.start(taskId);
+    },
+    onSuccess: (data) => {
+      console.log(`[TaskControl:START] SUCCESS - taskId=${taskId}`, data);
       queryClient.invalidateQueries({ queryKey: ['execution-status'] });
       queryClient.invalidateQueries({
         queryKey:
@@ -65,6 +71,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       onSuccess?.();
     },
     onError: (error: Error) => {
+      console.error(`[TaskControl:START] ERROR - taskId=${taskId}`, error);
       onError?.(error);
     },
   });
@@ -72,12 +79,16 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   // Stop mutation
   const stopMutation = useMutation<unknown, Error, void>({
     mutationFn: () => {
+      console.log(
+        `[TaskControl:STOP] Initiating stop - taskId=${taskId}, taskType=${taskType}, mode=${stopMode}`
+      );
       if (taskType === TaskType.TRADING) {
         return tradingTasksApi.stop(taskId);
       }
       return backtestTasksApi.stop(taskId);
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log(`[TaskControl:STOP] SUCCESS - taskId=${taskId}`, data);
       queryClient.invalidateQueries({ queryKey: ['execution-status'] });
       queryClient.invalidateQueries({
         queryKey:
@@ -89,6 +100,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       onSuccess?.();
     },
     onError: (error: Error) => {
+      console.error(`[TaskControl:STOP] ERROR - taskId=${taskId}`, error);
       setStopDialogOpen(false);
       onError?.(error);
     },
@@ -96,34 +108,50 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
 
   // Pause mutation (trading only)
   const pauseMutation = useMutation<unknown, Error, void>({
-    mutationFn: () => tradingTasksApi.pause(taskId),
-    onSuccess: () => {
+    mutationFn: () => {
+      console.log(`[TaskControl:PAUSE] Initiating pause - taskId=${taskId}`);
+      return tradingTasksApi.pause(taskId);
+    },
+    onSuccess: (data) => {
+      console.log(`[TaskControl:PAUSE] SUCCESS - taskId=${taskId}`, data);
       queryClient.invalidateQueries({ queryKey: ['execution-status'] });
       queryClient.invalidateQueries({ queryKey: ['trading-task', taskId] });
       onSuccess?.();
     },
     onError: (error: Error) => {
+      console.error(`[TaskControl:PAUSE] ERROR - taskId=${taskId}`, error);
       onError?.(error);
     },
   });
 
   // Resume mutation (trading only)
   const resumeMutation = useMutation<unknown, Error, void>({
-    mutationFn: () => tradingTasksApi.resume(taskId),
-    onSuccess: () => {
+    mutationFn: () => {
+      console.log(`[TaskControl:RESUME] Initiating resume - taskId=${taskId}`);
+      return tradingTasksApi.resume(taskId);
+    },
+    onSuccess: (data) => {
+      console.log(`[TaskControl:RESUME] SUCCESS - taskId=${taskId}`, data);
       queryClient.invalidateQueries({ queryKey: ['execution-status'] });
       queryClient.invalidateQueries({ queryKey: ['trading-task', taskId] });
       onSuccess?.();
     },
     onError: (error: Error) => {
+      console.error(`[TaskControl:RESUME] ERROR - taskId=${taskId}`, error);
       onError?.(error);
     },
   });
 
   // Restart mutation
   const restartMutation = useMutation<unknown, Error, void>({
-    mutationFn: () => api.restart(taskId),
-    onSuccess: () => {
+    mutationFn: () => {
+      console.log(
+        `[TaskControl:RESTART] Initiating restart - taskId=${taskId}, taskType=${taskType}, clearState=${clearState}`
+      );
+      return api.restart(taskId);
+    },
+    onSuccess: (data) => {
+      console.log(`[TaskControl:RESTART] SUCCESS - taskId=${taskId}`, data);
       queryClient.invalidateQueries({ queryKey: ['execution-status'] });
       queryClient.invalidateQueries({
         queryKey:
@@ -135,6 +163,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       onSuccess?.();
     },
     onError: (error: Error) => {
+      console.error(`[TaskControl:RESTART] ERROR - taskId=${taskId}`, error);
       setRestartDialogOpen(false);
       onError?.(error);
     },

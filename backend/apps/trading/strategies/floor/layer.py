@@ -86,14 +86,8 @@ class LayerManager:
 
         units = self._calculate_units(layer.index, layer.retracement_count + 1)
 
-        # Note: This creates a Position model instance but doesn't save it
-        # The actual saving should be handled by the caller
-        position = Position(
-            entry_price=entry_price,
-            units=int(units),
-            entry_time=timestamp,
-            direction=layer.direction,
-        )
+        # Note: Position creation is handled elsewhere
+        # This method just updates the layer state
 
         # Increment retracement count
         layer.retracement_count += 1
@@ -137,7 +131,6 @@ class LayerManager:
             List of (layer_index, closed_positions) tuples
         """
         closed_by_layer: list[tuple[int, list[PositionInfo]]] = []
-        remaining = units_to_close
 
         # Sort all positions across all layers in FIFO order
         all_positions: list[tuple[Layer, int]] = []

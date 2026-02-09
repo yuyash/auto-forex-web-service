@@ -88,7 +88,7 @@ function a11yProps(index: number) {
 export default function TradingTaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const taskId = parseInt(id || '0', 10);
+  const taskId = id || '';
 
   const [tabValue, setTabValue] = useState(2); // Default to Executions tab (index 2)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -103,15 +103,16 @@ export default function TradingTaskDetailPage() {
   const { strategies } = useStrategies();
 
   // Use HTTP polling for task status updates (Requirements 1.2, 1.3, 4.3, 4.4)
-  const { status: polledStatus, refetch: refetchPolledStatus } = useTaskPolling(
-    taskId,
-    'trading',
-    {
-      enabled: !!taskId,
-      pollStatus: true,
-      interval: 3000, // Poll every 3 seconds for active tasks
-    }
-  );
+  const {
+    status: polledStatus,
+    refetch: refetchPolledStatus,
+    startPolling,
+    isPolling,
+  } = useTaskPolling(taskId, 'trading', {
+    enabled: !!taskId,
+    pollStatus: true,
+    interval: 3000, // Poll every 3 seconds for active tasks
+  });
 
   // Refetch when status changes
   const prevStatusRef = useRef<string | undefined>(undefined);
@@ -143,6 +144,23 @@ export default function TradingTaskDetailPage() {
       prevStatusRef.current = polledStatus.status;
     }
   }, [polledStatus, task, refetch]);
+
+  // Restart polling when task transitions from terminal to non-terminal state
+  useEffect(() => {
+    if (!task) return;
+
+    const isNonTerminalStatus = (status: TaskStatus) =>
+      status === TaskStatus.PENDING ||
+      status === TaskStatus.RUNNING ||
+      status === TaskStatus.PAUSED ||
+      status === TaskStatus.STOPPING;
+
+    // If task is in non-terminal state but polling is stopped, restart it
+    if (isNonTerminalStatus(task.status) && !isPolling) {
+      console.log('[TradingTaskDetail] Task restarted, resuming polling');
+      startPolling();
+    }
+  }, [task, isPolling, startPolling]);
 
   // Refetch task data after mutations complete
   useEffect(() => {

@@ -81,13 +81,19 @@ class RedisTickDataSource(TickDataSource):
 
         Yields:
             Batches of Tick objects"""
-        # Initialize Redis connection
+        # Initialize Redis connection FIRST before triggering publisher
         self.client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
         self.pubsub = self.client.pubsub(ignore_subscribe_messages=True)
         self.pubsub.subscribe(self.channel)
         logger.info(f"RedisTickDataSource subscribed to channel: {self.channel}")
 
-        # Trigger the publisher if callback provided
+        # CRITICAL: Wait a moment to ensure subscription is fully established
+        # This prevents race condition where publisher sends messages before we're ready
+        import time
+
+        time.sleep(0.1)
+
+        # Trigger the publisher AFTER subscription is established
         if self.trigger_publisher:
             logger.info(f"Triggering publisher for channel: {self.channel}")
             self.trigger_publisher()
@@ -96,6 +102,10 @@ class RedisTickDataSource(TickDataSource):
         max_reconnect_attempts = 3
         reconnect_count = 0
         messages_received = 0
+
+        # Timeout mechanism to prevent infinite waiting
+        consecutive_timeouts = 0
+        max_consecutive_timeouts = 300  # 5 minutes of consecutive timeouts (300 * 1 second)
 
         try:
             while True:
@@ -126,11 +136,28 @@ class RedisTickDataSource(TickDataSource):
                     continue
 
                 if not message:
+                    consecutive_timeouts += 1
+
+                    # Check if we've been waiting too long without messages
+                    if consecutive_timeouts >= max_consecutive_timeouts:
+                        logger.warning(
+                            f"RedisTickDataSource: No messages received for {max_consecutive_timeouts} seconds "
+                            f"on channel {self.channel}. Assuming stream ended. "
+                            f"Total messages received: {messages_received}"
+                        )
+                        # Yield any pending batch before exiting
+                        if batch:
+                            yield batch
+                        break
+
                     # Yield any pending batch on timeout
                     if batch:
                         yield batch
                         batch = []
                     continue
+
+                # Reset timeout counter when we receive a message
+                consecutive_timeouts = 0
 
                 messages_received += 1
                 if messages_received % 10000 == 0:
@@ -156,6 +183,10 @@ class RedisTickDataSource(TickDataSource):
 
                 # Handle EOF - end of data stream
                 if kind == "eof":
+                    logger.info(
+                        f"RedisTickDataSource: Received EOF on channel {self.channel}. "
+                        f"Total messages received: {messages_received}"
+                    )
                     # Yield any remaining ticks
                     if batch:
                         yield batch
@@ -163,6 +194,10 @@ class RedisTickDataSource(TickDataSource):
 
                 # Handle terminal messages
                 if kind in {"stopped", "error"}:
+                    logger.info(
+                        f"RedisTickDataSource: Received {kind} signal on channel {self.channel}. "
+                        f"Total messages received: {messages_received}"
+                    )
                     if batch:
                         yield batch
                     break

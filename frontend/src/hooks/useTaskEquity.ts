@@ -47,8 +47,8 @@ export const useTaskEquity = ({
 
       const response =
         taskType === TaskType.BACKTEST
-          ? await TradingService.tradingTasksBacktestEquityList(taskId)
-          : await TradingService.tradingTasksTradingEquityList(taskId);
+          ? await TradingService.tradingTasksBacktestEquitiesList(taskId)
+          : await TradingService.tradingTasksTradingEquitiesList(taskId);
 
       setEquityPoints(Array.isArray(response) ? response : []);
     } catch (err) {

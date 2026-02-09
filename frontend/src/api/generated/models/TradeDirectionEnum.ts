@@ -3,10 +3,12 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * * `buy` - buy
- * * `sell` - sell
+ * * `long` - long
+ * * `short` - short
+ * * `LONG` - LONG
+ * * `SHORT` - SHORT
  */
 export enum TradeDirectionEnum {
-  BUY = 'buy',
-  SELL = 'sell',
+  LONG = 'long',
+  SHORT = 'short',
 }

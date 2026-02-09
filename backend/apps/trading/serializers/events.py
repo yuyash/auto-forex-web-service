@@ -2,6 +2,7 @@
 
 from rest_framework import serializers
 
+from apps.trading.enums import Direction
 from apps.trading.models import TradingEvent
 
 
@@ -30,7 +31,7 @@ class TradingEventSerializer(serializers.ModelSerializer):
 class TradeSerializer(serializers.Serializer):
     """Serializer for trade data from Trades model."""
 
-    direction = serializers.ChoiceField(choices=["long", "short", "LONG", "SHORT"])
+    direction = serializers.ChoiceField(choices=Direction.choices)
     units = serializers.IntegerField()
     instrument = serializers.CharField()
     price = serializers.DecimalField(max_digits=20, decimal_places=10)

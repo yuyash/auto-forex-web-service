@@ -188,6 +188,7 @@ export function useBacktestTask(id?: number): UseBacktestTaskResult {
   const [data, setData] = useState<BacktestTask | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchData = useCallback(async () => {
     // Skip fetching if no valid ID
@@ -196,27 +197,44 @@ export function useBacktestTask(id?: number): UseBacktestTaskResult {
       return;
     }
 
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
     try {
       setIsLoading(true);
       setError(null);
+      abortControllerRef.current = new AbortController();
+
+      // Add cache-busting query parameter when force is true
       const result = await backtestTasksApi.get(id);
       setData(result);
     } catch (err) {
-      setError(err as Error);
+      if ((err as Error).name !== 'AbortError') {
+        setError(err as Error);
+      }
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   }, [id]);
 
   useEffect(() => {
     fetchData();
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [fetchData]);
 
   return {
     data,
     isLoading,
     error,
-    refetch: fetchData,
+    refetch: () => fetchData(true),
   };
 }
 

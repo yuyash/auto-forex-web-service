@@ -4,12 +4,14 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from apps.trading.enums import Direction
+
 
 class PositionSerializer(serializers.Serializer):  # pylint: disable=abstract-method
     """Serializer for opening a position via a market order."""
 
     instrument = serializers.CharField(required=True, max_length=10)
-    direction = serializers.ChoiceField(required=True, choices=["long", "short"])
+    direction = serializers.ChoiceField(required=True, choices=Direction.choices)
     units = serializers.DecimalField(
         required=True,
         max_digits=15,

@@ -14,7 +14,11 @@ export type TradingEvent = {
   account?: number | null;
   instrument?: string | null;
   task_type?: string;
-  task_id?: number | null;
+  task_id?: string | null;
+  /**
+   * Celery task ID for tracking specific execution
+   */
+  celery_task_id?: string | null;
   details?: any;
   readonly created_at: string;
 };

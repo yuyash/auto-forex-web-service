@@ -147,14 +147,6 @@ class BacktestTask(UUIDModel):
         blank=True,
         help_text="Full error traceback if task failed",
     )
-    retry_count = models.IntegerField(
-        default=0,
-        help_text="Number of times this task has been retried",
-    )
-    max_retries = models.IntegerField(
-        default=3,
-        help_text="Maximum number of retries allowed",
-    )
 
     class Meta:
         db_table = "backtest_tasks"

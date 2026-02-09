@@ -1,10 +1,13 @@
 """Serializers for backtest tasks."""
 
+import logging
 from decimal import Decimal
 
 from rest_framework import serializers
 
 from apps.trading.models import BacktestTask, StrategyConfiguration
+
+logger = logging.getLogger(__name__)
 
 
 class BacktestTaskSerializer(serializers.ModelSerializer):
@@ -14,6 +17,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     config_id = serializers.IntegerField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
+    progress = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask
@@ -34,6 +38,10 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "instrument",
             "trading_mode",
             "status",
+            "progress",
+            "started_at",
+            "completed_at",
+            "error_message",
             "created_at",
             "updated_at",
         ]
@@ -44,9 +52,83 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "config_name",
             "strategy_type",
             "status",
+            "progress",
+            "started_at",
+            "completed_at",
+            "error_message",
             "created_at",
             "updated_at",
         ]
+
+    def get_progress(self, obj: BacktestTask) -> int:
+        """Calculate progress percentage based on current tick timestamp.
+
+        Returns:
+            int: Progress percentage (0-100)
+        """
+        from apps.trading.enums import TaskStatus, TaskType
+        from apps.trading.models.state import ExecutionState
+
+        # Only calculate progress for running tasks
+        if obj.status != TaskStatus.RUNNING:
+            return 0
+
+        # Get the execution state to find the last processed tick timestamp
+        try:
+            # Force a fresh query by using .only() to bypass query cache
+            # and ensure we get the latest data from the database
+            from django.db import connection
+
+            # Clear any stale connections to ensure fresh data
+            connection.close_if_unusable_or_obsolete()
+
+            state = (
+                ExecutionState.objects.filter(
+                    task_type=TaskType.BACKTEST.value,
+                    task_id=obj.pk,
+                )
+                .only("last_tick_timestamp", "ticks_processed", "updated_at")
+                .order_by("-updated_at")
+                .first()
+            )
+
+            if not state:
+                logger.debug(f"[BacktestTaskSerializer] No ExecutionState found for task {obj.pk}")
+                return 0
+
+            if not state.last_tick_timestamp:
+                logger.debug(
+                    f"[BacktestTaskSerializer] ExecutionState exists but last_tick_timestamp is None "
+                    f"for task {obj.pk}, ticks_processed={state.ticks_processed}"
+                )
+                return 0
+
+            # Calculate progress based on tick timestamp vs backtest time range
+            total_duration = (obj.end_time - obj.start_time).total_seconds()
+            if total_duration <= 0:
+                logger.warning(
+                    f"[BacktestTaskSerializer] Invalid time range for task {obj.pk}: "
+                    f"start={obj.start_time}, end={obj.end_time}"
+                )
+                return 0
+
+            elapsed = (state.last_tick_timestamp - obj.start_time).total_seconds()
+            progress = int((elapsed / total_duration) * 100)
+
+            logger.debug(
+                f"[BacktestTaskSerializer] Progress for task {obj.pk}: {progress}% "
+                f"(elapsed={elapsed}s, total={total_duration}s, last_tick={state.last_tick_timestamp})"
+            )
+
+            # Clamp between 0 and 99 (never show 100% until completed)
+            return max(0, min(progress, 99))
+
+        except Exception as e:
+            logger.error(
+                f"[BacktestTaskSerializer] Error calculating progress for task {obj.pk}: {e}",
+                exc_info=True,
+            )
+            return 0
 
 
 class BacktestTaskListSerializer(serializers.ModelSerializer):
@@ -56,6 +138,7 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
     config_id = serializers.IntegerField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
+    progress = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask
@@ -75,10 +158,86 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
             "instrument",
             "trading_mode",
             "status",
+            "progress",
+            "started_at",
+            "completed_at",
+            "error_message",
             "created_at",
             "updated_at",
         ]
         read_only_fields = fields
+
+    def get_progress(self, obj: BacktestTask) -> int:
+        """Calculate progress percentage based on current tick timestamp.
+
+        Returns:
+            int: Progress percentage (0-100)
+        """
+        from apps.trading.enums import TaskStatus, TaskType
+        from apps.trading.models.state import ExecutionState
+
+        # Only calculate progress for running tasks
+        if obj.status != TaskStatus.RUNNING:
+            return 0
+
+        # Get the execution state to find the last processed tick timestamp
+        try:
+            # Force a fresh query by using .only() to bypass query cache
+            # and ensure we get the latest data from the database
+            from django.db import connection
+
+            # Clear any stale connections to ensure fresh data
+            connection.close_if_unusable_or_obsolete()
+
+            state = (
+                ExecutionState.objects.filter(
+                    task_type=TaskType.BACKTEST.value,
+                    task_id=obj.pk,
+                )
+                .only("last_tick_timestamp", "ticks_processed", "updated_at")
+                .order_by("-updated_at")
+                .first()
+            )
+
+            if not state:
+                logger.debug(
+                    f"[BacktestTaskListSerializer] No ExecutionState found for task {obj.pk}"
+                )
+                return 0
+
+            if not state.last_tick_timestamp:
+                logger.debug(
+                    f"[BacktestTaskListSerializer] ExecutionState exists but last_tick_timestamp is None "
+                    f"for task {obj.pk}, ticks_processed={state.ticks_processed}"
+                )
+                return 0
+
+            # Calculate progress based on tick timestamp vs backtest time range
+            total_duration = (obj.end_time - obj.start_time).total_seconds()
+            if total_duration <= 0:
+                logger.warning(
+                    f"[BacktestTaskListSerializer] Invalid time range for task {obj.pk}: "
+                    f"start={obj.start_time}, end={obj.end_time}"
+                )
+                return 0
+
+            elapsed = (state.last_tick_timestamp - obj.start_time).total_seconds()
+            progress = int((elapsed / total_duration) * 100)
+
+            logger.debug(
+                f"[BacktestTaskListSerializer] Progress for task {obj.pk}: {progress}% "
+                f"(elapsed={elapsed}s, total={total_duration}s, last_tick={state.last_tick_timestamp})"
+            )
+
+            # Clamp between 0 and 99 (never show 100% until completed)
+            return max(0, min(progress, 99))
+
+        except Exception as e:
+            logger.error(
+                f"[BacktestTaskListSerializer] Error calculating progress for task {obj.pk}: {e}",
+                exc_info=True,
+            )
+            return 0
 
 
 class BacktestTaskCreateSerializer(serializers.ModelSerializer):
@@ -181,9 +340,6 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict) -> BacktestTask:
         """Create backtest task with user from context."""
-        import logging
-
-        logger = logging.getLogger(__name__)
         logger.error(f"Creating backtest task with data: {validated_data}")
 
         user = self.context["request"].user

@@ -34,11 +34,10 @@ import {
 // Update schema - only editable fields
 const backtestTaskUpdateSchema = z
   .object({
-    config_id: z.coerce
-      .number({
-        message: 'Configuration must be a number',
-      })
-      .positive('Configuration is required'),
+    config_id: z
+      .string()
+      .min(1, 'Configuration is required')
+      .uuid('Configuration must be a valid ID'),
     data_source: z.nativeEnum(DataSource),
     start_time: z.string().min(1, 'Start date is required'),
     end_time: z.string().min(1, 'End date is required'),
@@ -105,14 +104,9 @@ export default function BacktestTaskUpdateForm({
   // Watch selected config
   // eslint-disable-next-line react-hooks/incompatible-library
   const selectedConfigId = watch('config_id');
-  const configIdNumber =
-    typeof selectedConfigId === 'string'
-      ? selectedConfigId === ''
-        ? 0
-        : Number(selectedConfigId)
-      : selectedConfigId || 0;
+  const configIdString = selectedConfigId || '';
 
-  const { data: selectedConfig } = useConfiguration(configIdNumber);
+  const { data: selectedConfig } = useConfiguration(configIdString);
 
   const onSubmit = async (data: BacktestTaskUpdateData) => {
     setSubmitError(null);

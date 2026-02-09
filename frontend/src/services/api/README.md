@@ -22,7 +22,7 @@ The API layer has been refactored to use a generated OpenAPI client (from `opena
 ### API Wrappers (`src/services/api/`)
 
 - **client.ts** - Legacy API client (being phased out)
-- **executionApi.ts** - Execution-based endpoints (status, logs, events, trades, equity, metrics)
+- **executionApi.ts** - Execution-based endpoints (status, logs, events, trades, equity)
 - **backtestTasks.ts** - Backtest task operations (CRUD + lifecycle control)
 - **tradingTasks.ts** - Trading task operations (CRUD + lifecycle control)
 - **configurations.ts** - Strategy configuration CRUD operations
@@ -86,7 +86,6 @@ const logs = await executionApi.getLogs(executionId, { limit: 100 });
 const events = await executionApi.getEvents(executionId);
 const trades = await executionApi.getTrades(executionId);
 const equity = await executionApi.getEquity(executionId, { granularity: 60 });
-const metrics = await executionApi.getMetrics(executionId);
 ```
 
 ### Granular Equity Curve
@@ -153,8 +152,6 @@ console.log('New execution ID:', restartResp.execution_id);
 - `GET /api/executions/{id}/events/` - Get strategy events (with incremental fetch)
 - `GET /api/executions/{id}/trades/` - Get trade logs (with incremental fetch)
 - `GET /api/executions/{id}/equity/` - Get equity curve (with granularity binning)
-- `GET /api/executions/{id}/metrics/` - Get metrics (with granularity binning)
-- `GET /api/executions/{id}/metrics/latest/` - Get latest metrics snapshot
 
 ### Backtest Task Endpoints
 
@@ -239,7 +236,6 @@ The following task-specific data endpoints have been removed:
 - `GET /api/backtest-tasks/{id}/equity-curve/` → Use `GET /api/executions/{execution_id}/equity/`
 - `GET /api/backtest-tasks/{id}/strategy-events/` → Use `GET /api/executions/{execution_id}/events/`
 - `GET /api/backtest-tasks/{id}/trade-logs/` → Use `GET /api/executions/{execution_id}/trades/`
-- `GET /api/backtest-tasks/{id}/metrics-checkpoint/` → Use `GET /api/executions/{execution_id}/metrics/latest/`
 
 Same removals apply to trading task endpoints.
 

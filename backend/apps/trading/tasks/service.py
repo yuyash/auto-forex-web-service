@@ -68,41 +68,56 @@ class TaskService:
         """
 
         logger.info(
-            "Submitting task",
-            extra={"task_id": task.pk, "task_status": task.status},
+            f"[SERVICE:START] Submitting task - task_id={task.pk}, task_status={task.status}, "
+            f"instrument={task.instrument}, start_time={getattr(task, 'start_time', 'N/A')}, "
+            f"end_time={getattr(task, 'end_time', 'N/A')}"
         )
 
         try:
             # Validate task status
             if task.status != TaskStatus.CREATED:
                 logger.warning(
-                    "Task not in CREATED status",
-                    extra={"task_id": task.pk, "current_status": task.status},
+                    f"[SERVICE:START] INVALID_STATUS - task_id={task.pk}, "
+                    f"current_status={task.status}, expected=CREATED"
                 )
                 raise ValueError(
                     f"Task must be in CREATED status to submit (current status: {task.status})"
                 )
 
             # Validate task configuration
+            logger.info(f"[SERVICE:START] Validating configuration - task_id={task.pk}")
             is_valid, error_message = task.validate_configuration()
             if not is_valid:
                 logger.error(
-                    "Task configuration validation failed",
-                    extra={"task_id": task.pk, "error": error_message},
+                    f"[SERVICE:START] CONFIG_INVALID - task_id={task.pk}, error={error_message}"
                 )
                 raise ValueError(f"Task configuration is invalid: {error_message}")
 
             # Determine which Celery task to call based on task type
             if isinstance(task, BacktestTask):
                 celery_task = run_backtest_task
+                task_type = "backtest"
             else:
                 celery_task = run_trading_task
+                task_type = "trading"
+
+            logger.info(
+                f"[SERVICE:START] Task type determined - task_id={task.pk}, type={task_type}"
+            )
 
             # Generate a unique Celery task ID
             celery_task_id = str(uuid4())
+            logger.info(
+                f"[SERVICE:START] Generated Celery task ID - task_id={task.pk}, "
+                f"celery_task_id={celery_task_id}"
+            )
 
             try:
                 # Submit to Celery
+                logger.info(
+                    f"[SERVICE:START] Submitting to Celery - task_id={task.pk}, "
+                    f"celery_task_id={celery_task_id}"
+                )
                 result = celery_task.apply_async(
                     args=[task.pk],
                     task_id=celery_task_id,
@@ -115,19 +130,33 @@ class TaskService:
                 task.save(update_fields=["celery_task_id", "status", "updated_at"])
 
                 logger.info(
-                    "Task submitted successfully",
-                    extra={
-                        "task_id": task.pk,
-                        "celery_task_id": result.id,
-                    },
+                    f"[SERVICE:START] Task submitted to Celery - task_id={task.pk}, "
+                    f"celery_task_id={result.id}, new_status={task.status}"
                 )
+
+                # Check if worker is responsive
+                from celery import current_app
+
+                inspect = current_app.control.inspect()
+                active_workers = inspect.active()
+
+                if not active_workers:
+                    logger.warning(
+                        f"[SERVICE:START] NO_WORKERS - No active Celery workers detected. "
+                        f"Task may not be processed. task_id={task.pk}, celery_task_id={result.id}"
+                    )
+                else:
+                    logger.info(
+                        f"[SERVICE:START] Active workers found - task_id={task.pk}, "
+                        f"workers={list(active_workers.keys())}"
+                    )
 
                 return task
 
             except Exception as e:
                 logger.error(
-                    "Celery submission failed",
-                    extra={"task_id": task.pk, "celery_task_id": celery_task_id},
+                    f"[SERVICE:START] CELERY_SUBMISSION_FAILED - task_id={task.pk}, "
+                    f"celery_task_id={celery_task_id}, error={str(e)}",
                     exc_info=True,
                 )
                 raise RuntimeError(f"Failed to submit task to Celery: {str(e)}") from e
@@ -137,8 +166,7 @@ class TaskService:
             raise
         except Exception as e:
             logger.error(
-                "Unexpected error submitting task",
-                extra={"task_id": task.pk},
+                f"[SERVICE:START] UNEXPECTED_ERROR - task_id={task.pk}, error={str(e)}",
                 exc_info=True,
             )
             raise RuntimeError(f"Unexpected error during task submission: {str(e)}") from e
@@ -157,10 +185,10 @@ class TaskService:
             bool: True if stop was successfully initiated, False otherwise
 
         Raises:
-            ValueError: If task does not exist or is not in a stoppable state
+            ValueError: If task does not exist
         """
 
-        logger.info("Stopping task", extra={"task_id": str(task_id), "mode": mode})
+        logger.info(f"[SERVICE:STOP] Stopping task - task_id={task_id}, mode={mode}")
 
         try:
             # Try to find the task in either BacktestTask or TradingTask
@@ -171,52 +199,89 @@ class TaskService:
                 task = BacktestTask.objects.get(pk=task_id)
                 is_backtest = True
                 task_name = "trading.tasks.run_backtest_task"
+                logger.info(f"[SERVICE:STOP] Found backtest task - task_id={task_id}")
             except BacktestTask.DoesNotExist:
                 try:
                     task = TradingTask.objects.get(pk=task_id)
                     task_name = "trading.tasks.run_trading_task"
+                    logger.info(f"[SERVICE:STOP] Found trading task - task_id={task_id}")
                 except TradingTask.DoesNotExist as e:
-                    logger.error(
-                        "Task not found",
-                        extra={"task_id": str(task_id)},
-                    )
+                    logger.error(f"[SERVICE:STOP] TASK_NOT_FOUND - task_id={task_id}")
                     raise ValueError(f"Task with id {task_id} does not exist") from e
 
-            # Validate task is in a stoppable state
-            if task.status not in [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.PAUSED]:
-                logger.warning(
-                    "Task not in stoppable state",
-                    extra={"task_id": str(task_id), "status": task.status},
+            logger.info(
+                f"[SERVICE:STOP] Current task state - task_id={task_id}, status={task.status}, "
+                f"celery_task_id={task.celery_task_id}"
+            )
+
+            # Allow stopping from ANY state - user control is paramount
+            # If already stopped/completed/failed, just return success
+            if task.status in [TaskStatus.STOPPED, TaskStatus.COMPLETED, TaskStatus.FAILED]:
+                logger.info(
+                    f"[SERVICE:STOP] Task already in terminal state - task_id={task_id}, "
+                    f"status={task.status}"
                 )
-                raise ValueError(
-                    f"Task cannot be stopped in {task.status} state. "
-                    f"Only STARTING, RUNNING, or PAUSED tasks can be stopped."
-                )
+                return True
 
             # Update task status to STOPPING in database
+            logger.info(f"[SERVICE:STOP] Updating task status to STOPPING - task_id={task_id}")
             task.status = TaskStatus.STOPPING
             task.save(update_fields=["status", "updated_at"])
 
             # Signal Redis to stop
+            logger.info(f"[SERVICE:STOP] Signaling Redis coordinator - task_id={task_id}")
             import redis
             from django.conf import settings
 
-            redis_client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
-            redis_key = f"task:coord:{task_name}:{task_id}"
-            redis_client.hset(redis_key, "status", "stopping")
-            redis_client.expire(redis_key, 3600)
-            redis_client.close()
+            try:
+                redis_client = redis.Redis.from_url(
+                    settings.MARKET_REDIS_URL, decode_responses=True
+                )
+                redis_key = f"task:coord:{task_name}:{task_id}"
+                redis_client.hset(redis_key, "status", "stopping")
+                redis_client.expire(redis_key, 3600)
+                logger.info(
+                    f"[SERVICE:STOP] Redis signal sent - task_id={task_id}, key={redis_key}"
+                )
+                redis_client.close()
+            except Exception as e:
+                logger.warning(
+                    f"[SERVICE:STOP] Redis signal failed (non-fatal) - task_id={task_id}, error={str(e)}"
+                )
+
+            # Revoke Celery task if it exists
+            if task.celery_task_id:
+                try:
+                    logger.info(
+                        f"[SERVICE:STOP] Revoking Celery task - task_id={task_id}, "
+                        f"celery_task_id={task.celery_task_id}"
+                    )
+                    from celery import current_app
+
+                    current_app.control.revoke(
+                        task.celery_task_id, terminate=True, signal="SIGKILL"
+                    )
+                    logger.info(f"[SERVICE:STOP] Celery task revoked - task_id={task_id}")
+                except Exception as e:
+                    logger.warning(
+                        f"[SERVICE:STOP] Celery revoke failed (non-fatal) - task_id={task_id}, "
+                        f"error={str(e)}"
+                    )
 
             # Trigger the appropriate Celery stop task
-            if is_backtest:
-                stop_backtest_task.delay(task_id)
-            else:
-                stop_trading_task.delay(task_id, mode)
+            logger.info(f"[SERVICE:STOP] Triggering Celery stop task - task_id={task_id}")
+            try:
+                if is_backtest:
+                    stop_backtest_task.delay(task_id)
+                else:
+                    stop_trading_task.delay(task_id, mode)
+            except Exception as e:
+                logger.warning(
+                    f"[SERVICE:STOP] Stop task trigger failed (non-fatal) - task_id={task_id}, "
+                    f"error={str(e)}"
+                )
 
-            logger.info(
-                "Task stop initiated successfully",
-                extra={"task_id": str(task_id), "mode": mode},
-            )
+            logger.info(f"[SERVICE:STOP] SUCCESS - Stop initiated for task_id={task_id}")
 
             return True
         except ValueError:
@@ -224,8 +289,7 @@ class TaskService:
             raise
         except Exception as e:
             logger.error(
-                "Unexpected error stopping task",
-                extra={"task_id": str(task_id)},
+                f"[SERVICE:STOP] UNEXPECTED_ERROR - task_id={task_id}, error={str(e)}",
                 exc_info=True,
             )
             raise ValueError(f"Failed to stop task: {str(e)}") from e
@@ -367,7 +431,7 @@ class TaskService:
         """Restart a task from the beginning, clearing all execution data.
 
         Clears all previous execution data and resets status to CREATED.
-        Increments retry_count, then resubmits the task.
+        Then resubmits the task.
 
         Args:
             task_id: UUID of the task to restart
@@ -376,11 +440,10 @@ class TaskService:
             BacktestTask | TradingTask: The restarted task instance
 
         Raises:
-            ValueError: If task cannot be restarted (e.g., currently running)
-            ValueError: If retry_count exceeds max_retries
+            ValueError: If task does not exist
         """
 
-        logger.info("Restarting task", extra={"task_id": str(task_id)})
+        logger.info(f"[SERVICE:RESTART] Restarting task - task_id={task_id}")
 
         try:
             # Try to find the task in either BacktestTask or TradingTask
@@ -389,70 +452,103 @@ class TaskService:
             try:
                 task = BacktestTask.objects.get(pk=task_id)
                 task_type = "backtest"
+                logger.info(f"[SERVICE:RESTART] Found backtest task - task_id={task_id}")
             except BacktestTask.DoesNotExist:
                 try:
                     task = TradingTask.objects.get(pk=task_id)
                     task_type = "trading"
+                    logger.info(f"[SERVICE:RESTART] Found trading task - task_id={task_id}")
                 except TradingTask.DoesNotExist as e:
-                    logger.error(
-                        "Task not found",
-                        extra={"task_id": str(task_id)},
-                    )
+                    logger.error(f"[SERVICE:RESTART] TASK_NOT_FOUND - task_id={task_id}")
                     raise ValueError(f"Task with id {task_id} does not exist") from e
 
-            # Validate task is not currently running
+            logger.info(
+                f"[SERVICE:RESTART] Current task state - task_id={task_id}, status={task.status}, "
+                f"celery_task_id={task.celery_task_id}, started_at={task.started_at}, "
+                f"completed_at={task.completed_at}"
+            )
+
+            # If task is active, stop it first
             if task.status in [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.STOPPING]:
-                raise ValueError(f"Cannot restart a task in {task.status} state. Stop it first.")
+                logger.info(
+                    f"[SERVICE:RESTART] Task is active, stopping first - task_id={task_id}, "
+                    f"status={task.status}"
+                )
+                try:
+                    self.stop_task(task_id)
+                    # Wait a moment for stop to take effect
+                    import time
 
-            # Check retry count limit
-            if task.retry_count >= task.max_retries:
-                logger.warning(
-                    "Task retry limit exceeded",
-                    extra={
-                        "task_id": str(task_id),
-                        "retry_count": task.retry_count,
-                        "max_retries": task.max_retries,
-                    },
-                )
-                raise ValueError(
-                    f"Task has reached maximum retry limit "
-                    f"(retry_count={task.retry_count}, max_retries={task.max_retries})"
-                )
+                    time.sleep(1)
+                    task.refresh_from_db()
+                    logger.info(
+                        f"[SERVICE:RESTART] Task stopped - task_id={task_id}, new_status={task.status}"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"[SERVICE:RESTART] Stop failed, forcing restart anyway - task_id={task_id}, "
+                        f"error={str(e)}"
+                    )
 
-            # Only restart if task is in a terminal state
-            if task.status not in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.STOPPED]:
-                raise ValueError(
-                    f"Task cannot be restarted from {task.status} state. "
-                    "Only COMPLETED, FAILED, or STOPPED tasks can be restarted."
-                )
+            # Force revoke any Celery task
+            if task.celery_task_id:
+                try:
+                    logger.info(
+                        f"[SERVICE:RESTART] Force revoking Celery task - task_id={task_id}, "
+                        f"celery_task_id={task.celery_task_id}"
+                    )
+                    from celery import current_app
+
+                    current_app.control.revoke(
+                        task.celery_task_id, terminate=True, signal="SIGKILL"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"[SERVICE:RESTART] Celery revoke failed (non-fatal) - task_id={task_id}, "
+                        f"error={str(e)}"
+                    )
 
             # Clear all events associated with this task
-            TradingEvent.objects.filter(task_type=task_type, task_id=task.pk).delete()
+            logger.info(
+                f"[SERVICE:RESTART] Clearing events - task_id={task_id}, task_type={task_type}"
+            )
+            events_deleted = TradingEvent.objects.filter(
+                task_type=task_type, task_id=task.pk
+            ).delete()
+            logger.info(
+                f"[SERVICE:RESTART] Events cleared - task_id={task_id}, count={events_deleted[0]}"
+            )
+
+            # Clear execution state
+            logger.info(f"[SERVICE:RESTART] Clearing execution state - task_id={task_id}")
+            from apps.trading.models.state import ExecutionState
+
+            ExecutionState.objects.filter(task_type=task_type, task_id=task.pk).delete()
 
             # Clear all execution data
+            logger.info(f"[SERVICE:RESTART] Clearing execution data - task_id={task_id}")
             task.celery_task_id = None
             task.status = TaskStatus.CREATED
             task.started_at = None
             task.completed_at = None
             task.error_message = None
             task.error_traceback = None
-            task.retry_count += 1
             task.save()
 
             logger.info(
-                "Task restarted, resubmitting",
-                extra={"task_id": str(task_id), "retry_count": task.retry_count},
+                f"[SERVICE:RESTART] Task reset to CREATED - task_id={task_id}, "
+                f"new_status={task.status}"
             )
 
             # Resubmit the task
+            logger.info(f"[SERVICE:RESTART] Resubmitting task - task_id={task_id}")
             return self.start_task(task)
 
         except ValueError:
             raise
         except Exception as e:
             logger.error(
-                "Unexpected error restarting task",
-                extra={"task_id": str(task_id)},
+                f"[SERVICE:RESTART] UNEXPECTED_ERROR - task_id={task_id}, error={str(e)}",
                 exc_info=True,
             )
             raise ValueError(f"Failed to restart task: {str(e)}") from e
@@ -499,6 +595,28 @@ class TaskService:
                     f"Task cannot be resumed from {task.status} state. "
                     "Only PAUSED tasks can be resumed."
                 )
+
+            # Check for status mismatch: task is PAUSED in DB but Celery task is still running
+            if task.celery_task_id:
+                result = self.get_celery_result(task.celery_task_id)
+                if result:
+                    celery_state = result.state
+                    # Check if Celery task is in an active state
+                    if celery_state in ["PENDING", "STARTED", "RETRY"]:
+                        logger.warning(
+                            "Task status mismatch detected",
+                            extra={
+                                "task_id": str(task_id),
+                                "db_status": task.status,
+                                "celery_state": celery_state,
+                                "celery_task_id": task.celery_task_id,
+                            },
+                        )
+                        raise ValueError(
+                            f"Task status mismatch: task is marked as PAUSED in database "
+                            f"but Celery task is still {celery_state}. "
+                            "Please wait for the task to fully stop before resuming."
+                        )
 
             # Keep existing execution data, just clear celery_task_id and reset status
             task.celery_task_id = None

@@ -3,7 +3,6 @@
 import logging
 from logging import Logger
 from typing import Any
-from uuid import UUID
 
 from django.db.models import Q, QuerySet
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -205,7 +204,7 @@ class TradingTaskViewSet(ModelViewSet):
         task = self.get_object()
 
         try:
-            task = self.task_service.restart_task(UUID(int=task.pk))
+            task = self.task_service.restart_task(task.pk)
             serializer = self.get_serializer(task)
             return Response({"results": serializer.data})
         except ValueError as e:
@@ -230,7 +229,7 @@ class TradingTaskViewSet(ModelViewSet):
         task = self.get_object()
 
         try:
-            task = self.task_service.resume_task(UUID(int=task.pk))
+            task = self.task_service.resume_task(task.pk)
             serializer = self.get_serializer(task)
             return Response({"results": serializer.data})
         except ValueError as e:
@@ -335,26 +334,24 @@ class TradingTaskViewSet(ModelViewSet):
         celery_task_id = request.query_params.get("celery_task_id")
         limit = int(request.query_params.get("limit", 100))
 
-        try:
-            queryset = TradingEvent.objects.filter(task_type="trading", task_id=task.pk).order_by(
-                "-created_at"
-            )
+        queryset = TradingEvent.objects.filter(task_type="trading", task_id=task.pk).order_by(
+            "-created_at"
+        )
 
-            if event_type:
-                queryset = queryset.filter(event_type=event_type)
-            if severity:
-                queryset = queryset.filter(severity=severity)
-            if celery_task_id:
-                queryset = queryset.filter(celery_task_id=celery_task_id)
+        if event_type:
+            queryset = queryset.filter(event_type=event_type)
+        if severity:
+            queryset = queryset.filter(severity=severity)
+        if celery_task_id:
+            queryset = queryset.filter(celery_task_id=celery_task_id)
 
-            events = queryset[:limit]
-            serializer = TradingEventSerializer(events, many=True)
-            return Response({"results": serializer.data})
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to retrieve events: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        events = queryset[:limit]
+        serializer = TradingEventSerializer(events, many=True)
+
+        # Return paginated format expected by frontend
+        return Response(
+            {"count": queryset.count(), "next": None, "previous": None, "results": serializer.data}
+        )
 
     @extend_schema(
         summary="Get task trades",
@@ -377,35 +374,33 @@ class TradingTaskViewSet(ModelViewSet):
         task = self.get_object()
         direction = request.query_params.get("direction")
 
-        try:
-            # Query trades from database
-            queryset = Trade.objects.filter(
-                task_type="trading",
-                task_id=task.pk,
-            ).order_by("timestamp")
+        # Query trades from database
+        queryset = Trade.objects.filter(
+            task_type="trading",
+            task_id=task.pk,
+        ).order_by("timestamp")
 
-            # Filter by direction if specified
-            if direction:
-                queryset = queryset.filter(direction=direction)
+        # Filter by direction if specified
+        if direction:
+            queryset = queryset.filter(direction=direction)
 
-            trades = queryset.values(
-                "direction",
-                "units",
-                "instrument",
-                "price",
-                "execution_method",
-                "pnl",
-                "timestamp",
-            )
+        trades = queryset.values(
+            "direction",
+            "units",
+            "instrument",
+            "price",
+            "execution_method",
+            "pnl",
+            "timestamp",
+        )
 
-            serializer = TradeSerializer(data=list(trades), many=True)
-            serializer.is_valid(raise_exception=True)
-            return Response({"results": serializer.data})
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to retrieve trades: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        serializer = TradeSerializer(data=list(trades), many=True)
+        serializer.is_valid(raise_exception=True)
+
+        # Return paginated format expected by frontend
+        return Response(
+            {"count": queryset.count(), "next": None, "previous": None, "results": serializer.data}
+        )
 
     @extend_schema(
         summary="Get task equity curve",
@@ -419,22 +414,25 @@ class TradingTaskViewSet(ModelViewSet):
 
         task = self.get_object()
 
-        try:
-            # Query equity points from database
-            equity_points = (
-                Equity.objects.filter(
-                    task_type="trading",
-                    task_id=task.pk,
-                )
-                .order_by("timestamp")
-                .values("timestamp", "balance")
+        # Query equity points from database
+        equity_points = (
+            Equity.objects.filter(
+                task_type="trading",
+                task_id=task.pk,
             )
+            .order_by("timestamp")
+            .values("timestamp", "balance")
+        )
 
-            serializer = EquityPointSerializer(data=list(equity_points), many=True)
-            serializer.is_valid(raise_exception=True)
-            return Response({"results": serializer.data})
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to retrieve equity: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        serializer = EquityPointSerializer(data=list(equity_points), many=True)
+        serializer.is_valid(raise_exception=True)
+
+        # Return paginated format expected by frontend
+        return Response(
+            {
+                "count": len(equity_points),
+                "next": None,
+                "previous": None,
+                "results": serializer.data,
+            }
+        )

@@ -5,7 +5,7 @@
 import type { DataSourceEnum } from './DataSourceEnum';
 import type { TradingModeEnum } from './TradingModeEnum';
 /**
- * Serializer for BacktestTasks with execution data.
+ * Serializer for BacktestTask with execution data.
  */
 export type PatchedBacktestTaskRequest = {
   /**
@@ -27,7 +27,7 @@ export type PatchedBacktestTaskRequest = {
   /**
    * Strategy configuration used by this task
    */
-  config?: number;
+  config?: string;
   /**
    * Data source for historical tick data
    *

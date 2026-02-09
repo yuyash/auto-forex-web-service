@@ -45,7 +45,7 @@ class OrderService:
 
     def __init__(
         self,
-        account: OandaAccounts,
+        account: OandaAccounts | None,
         task: BacktestTask | TradingTask,
         dry_run: bool = False,
     ):
@@ -53,7 +53,7 @@ class OrderService:
         Initialize order service.
 
         Args:
-            account: OANDA account to use for trading
+            account: OANDA account to use for trading (optional for dry_run mode)
             task: Trading or backtest task
             dry_run: If True, simulate orders without actual execution
         """
@@ -72,9 +72,10 @@ class OrderService:
         else:
             self.task_type = TaskType.TRADING
 
+        account_id = account.account_id if account else "DRY-RUN"
         logger.info(
             "OrderService initialized (account=%s, task=%s, task_type=%s, dry_run=%s)",
-            account.account_id,
+            account_id,
             task.id,
             self.task_type,
             dry_run,
@@ -424,6 +425,8 @@ class OrderService:
             OrderDirection.LONG if position.direction == Direction.LONG else OrderDirection.SHORT
         )
 
+        account_id = str(self.account.account_id) if self.account else "DRY-RUN-ACCOUNT"
+
         return OandaPosition(
             instrument=position.instrument,
             direction=oanda_direction,
@@ -431,7 +434,7 @@ class OrderService:
             average_price=position.entry_price,
             unrealized_pnl=position.unrealized_pnl,
             trade_ids=[],
-            account_id=str(self.account.account_id),
+            account_id=account_id,
         )
 
     def get_open_positions(self, instrument: str | None = None) -> list[Position]:

@@ -21,7 +21,7 @@ export const backtestTasksApi = {
     page?: number;
     search?: string;
     status?: string;
-    config_id?: number;
+    config_id?: string;
     strategy_type?: string;
   }) => {
     return withRetry(() =>
@@ -36,7 +36,7 @@ export const backtestTasksApi = {
   /**
    * Get a single backtest task by ID
    */
-  get: (id: number) => {
+  get: (id: string) => {
     return withRetry(() => TradingService.tradingTasksBacktestRetrieve(id));
   },
 
@@ -50,14 +50,14 @@ export const backtestTasksApi = {
   /**
    * Update an existing backtest task
    */
-  update: (id: number, data: BacktestTaskRequest) => {
+  update: (id: string, data: BacktestTaskRequest) => {
     return withRetry(() => TradingService.tradingTasksBacktestUpdate(id, data));
   },
 
   /**
    * Partially update an existing backtest task
    */
-  partialUpdate: (id: number, data: PatchedBacktestTaskRequest) => {
+  partialUpdate: (id: string, data: PatchedBacktestTaskRequest) => {
     return withRetry(() =>
       TradingService.tradingTasksBacktestPartialUpdate(id, data)
     );
@@ -66,24 +66,24 @@ export const backtestTasksApi = {
   /**
    * Delete a backtest task
    */
-  delete: (id: number) => {
+  delete: (id: string) => {
     return withRetry(() => TradingService.tradingTasksBacktestDestroy(id));
   },
 
   /**
    * Submit a backtest task for execution (new task-based API)
    */
-  start: (id: number) => {
+  start: (id: string) => {
     return withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksBacktestSubmitCreate(id, {} as any)
+      TradingService.tradingTasksBacktestStartCreate(id, {} as any)
     );
   },
 
   /**
    * Stop a running backtest task (new task-based API)
    */
-  stop: (id: number) => {
+  stop: (id: string) => {
     return withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksBacktestStopCreate(id, {} as any)
@@ -93,7 +93,7 @@ export const backtestTasksApi = {
   /**
    * Pause a running backtest task (new task-based API)
    */
-  pause: (id: number) => {
+  pause: (id: string) => {
     return withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksBacktestPauseCreate(id, {} as any)
@@ -103,7 +103,7 @@ export const backtestTasksApi = {
   /**
    * Resume a paused backtest task (new task-based API)
    */
-  resume: (id: number) => {
+  resume: (id: string) => {
     return withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksBacktestResumeCreate(id, {} as any)
@@ -113,7 +113,7 @@ export const backtestTasksApi = {
   /**
    * Restart a backtest task with fresh state (new task-based API)
    */
-  restart: (id: number) => {
+  restart: (id: string) => {
     return withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksBacktestRestartCreate(id, {} as any)

@@ -4,16 +4,14 @@
 /* eslint-disable */
 import type { TradeDirectionEnum } from './TradeDirectionEnum';
 /**
- * Serializer for trade data from execution state.
+ * Serializer for trade data from Trades model.
  */
 export type Trade = {
-  sequence: number;
-  timestamp: string;
-  instrument: string;
   direction: TradeDirectionEnum;
-  units: string;
+  units: number;
+  instrument: string;
   price: string;
+  execution_method: string;
   pnl?: string | null;
-  commission?: string | null;
-  details?: any;
+  timestamp: string;
 };

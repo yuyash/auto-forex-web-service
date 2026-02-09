@@ -5,10 +5,13 @@
 import type { StatusEnum } from './StatusEnum';
 import type { TradingModeEnum } from './TradingModeEnum';
 /**
- * Serializer for TradingTasks with execution data.
+ * Serializer for TradingTask with execution data.
  */
 export type TradingTask = {
-  readonly id: number;
+  /**
+   * Unique identifier for this record
+   */
+  readonly id: string;
   /**
    * Human-readable name for this trading task
    */
@@ -31,19 +34,21 @@ export type TradingTask = {
    * Current task status
    *
    * * `created` - Created
+   * * `starting` - Starting
    * * `running` - Running
    * * `paused` - Paused
+   * * `stopping` - Stopping
    * * `stopped` - Stopped
    * * `completed` - Completed
    * * `failed` - Failed
    */
   readonly status: StatusEnum;
   /**
-   * Timestamp when the task was created
+   * Timestamp when this record was created
    */
   readonly created_at: string;
   /**
-   * Timestamp when the task was last updated
+   * Timestamp when this record was last updated
    */
   readonly updated_at: string;
   /**
@@ -86,17 +91,13 @@ export type TradingTask = {
    */
   readonly error_traceback: string | null;
   /**
-   * Execution results data
-   */
-  readonly result_data: any;
-  /**
    * User who created this trading task
    */
   readonly user: number;
   /**
    * Strategy configuration used by this task
    */
-  config: number;
+  config: string;
   /**
    * OANDA account used for trading
    */

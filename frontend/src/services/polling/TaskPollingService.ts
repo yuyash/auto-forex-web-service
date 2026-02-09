@@ -8,7 +8,7 @@ import { TaskStatus } from '../../types/common';
 export type TaskType = 'backtest' | 'trading';
 
 export interface TaskStatusResponse {
-  task_id: number;
+  task_id: string;
   task_type: TaskType;
   status: TaskStatus;
   progress: number;
@@ -54,14 +54,14 @@ interface PollingState {
  * - Stops polling when task completes or fails
  */
 export class TaskPollingService {
-  private taskId: number;
+  private taskId: string;
   private taskType: TaskType;
   private callbacks: PollingCallbacks;
   private options: Required<PollingOptions>;
   private state: PollingState;
 
   constructor(
-    taskId: number,
+    taskId: string,
     taskType: TaskType,
     callbacks: PollingCallbacks = {},
     options: PollingOptions = {}
@@ -168,10 +168,7 @@ export class TaskPollingService {
       this.state.retryCount = 0;
       this.state.currentInterval = this.options.interval;
 
-      // Stop polling if task is in terminal state
-      if (this.isTerminalStatus(status.status)) {
-        this.stopPolling();
-      }
+      // Continue polling regardless of task status to detect any status changes
 
       // Optionally fetch details
       if (this.callbacks.onDetailsUpdate) {
@@ -196,7 +193,7 @@ export class TaskPollingService {
       task_id: task.id,
       task_type: this.taskType,
       status: task.status as TaskStatus,
-      progress: 0,
+      progress: task.progress || 0, // Use progress from backend
       started_at: task.started_at || null,
       completed_at: task.completed_at || null,
       error_message: task.error_message || null,

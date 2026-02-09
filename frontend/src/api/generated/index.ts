@@ -26,7 +26,6 @@ export type { PaginatedBacktestTaskList } from './models/PaginatedBacktestTaskLi
 export type { PaginatedEquityPointList } from './models/PaginatedEquityPointList';
 export type { PaginatedStrategyConfigListList } from './models/PaginatedStrategyConfigListList';
 export type { PaginatedTaskLogList } from './models/PaginatedTaskLogList';
-export type { PaginatedTaskMetricList } from './models/PaginatedTaskMetricList';
 export type { PaginatedTradeList } from './models/PaginatedTradeList';
 export type { PaginatedTradingEventList } from './models/PaginatedTradingEventList';
 export type { PaginatedTradingTaskList } from './models/PaginatedTradingTaskList';
@@ -41,7 +40,7 @@ export type { StrategyConfigDetail } from './models/StrategyConfigDetail';
 export type { StrategyConfigList } from './models/StrategyConfigList';
 export type { StrategyList } from './models/StrategyList';
 export type { TaskLog } from './models/TaskLog';
-export type { TaskMetric } from './models/TaskMetric';
+export { TaskTypeEnum } from './models/TaskTypeEnum';
 export type { Trade } from './models/Trade';
 export { TradeDirectionEnum } from './models/TradeDirectionEnum';
 export type { TradingEvent } from './models/TradingEvent';

@@ -18,8 +18,8 @@ import {
 } from '../../../hooks/useStrategies';
 
 interface ConfigurationSelectorProps {
-  value: number | string | undefined;
-  onChange: (value: number) => void;
+  value: string | undefined;
+  onChange: (value: string) => void;
   configurations: StrategyConfig[];
   isLoading?: boolean;
   error?: string;
@@ -86,12 +86,8 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
         label={label}
         onChange={(e) => {
           const val = e.target.value;
-          // MUI Select returns string even though value prop is number
-          if (
-            typeof val === 'number' ||
-            (typeof val === 'string' && val !== '')
-          ) {
-            onChange(typeof val === 'string' ? Number(val) : val);
+          if (typeof val === 'string' && val !== '') {
+            onChange(val);
           }
         }}
         MenuProps={{

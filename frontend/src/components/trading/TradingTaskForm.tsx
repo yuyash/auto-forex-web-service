@@ -47,8 +47,8 @@ const steps = ['Account', 'Configuration', 'Review'];
 
 // Validation schema
 const tradingTaskSchema = z.object({
-  account_id: z.number().min(1, 'Account is required'),
-  config_id: z.number().min(1, 'Configuration is required'),
+  account_id: z.string().min(1, 'Account is required'),
+  config_id: z.string().min(1, 'Configuration is required'),
   name: z.string().min(1, 'Name is required').max(255),
   description: z.string().optional(),
   risk_acknowledged: z.boolean().optional(),
@@ -57,7 +57,7 @@ const tradingTaskSchema = z.object({
 type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
 
 interface TradingTaskFormProps {
-  taskId?: number;
+  taskId?: string;
   initialData?: Partial<TradingTaskCreateData>;
 }
 
@@ -83,8 +83,8 @@ export default function TradingTaskForm({
   } = useForm<TradingTaskFormData>({
     resolver: zodResolver(tradingTaskSchema),
     defaultValues: {
-      account_id: initialData?.account_id || 0,
-      config_id: initialData?.config_id || 0,
+      account_id: initialData?.account_id || '',
+      config_id: initialData?.config_id || '',
       name: initialData?.name || '',
       description: initialData?.description || '',
       risk_acknowledged: false,
@@ -123,16 +123,8 @@ export default function TradingTaskForm({
       ? formData.account_id
       : selectedAccountId;
 
-  // Convert account_id to number for finding the account
-  const accountIdNumber =
-    typeof effectiveAccountId === 'string'
-      ? effectiveAccountId === ''
-        ? 0
-        : Number(effectiveAccountId)
-      : effectiveAccountId || 0;
-
   const selectedAccount = accounts.find(
-    (account) => account.id === accountIdNumber
+    (account) => account.id === effectiveAccountId
   );
 
   // Fetch all configurations and strategies
@@ -140,19 +132,13 @@ export default function TradingTaskForm({
   const configurations = configurationsData?.results || [];
   const { strategies } = useStrategies();
 
-  // Convert config_id to number for the API call
-  const configIdNumber =
-    typeof selectedConfigId === 'string'
-      ? selectedConfigId === ''
-        ? 0
-        : Number(selectedConfigId)
-      : selectedConfigId || 0;
-
-  const { data: selectedConfig } = useConfiguration(configIdNumber);
+  const { data: selectedConfig } = useConfiguration(
+    selectedConfigId || undefined
+  );
 
   // Check if account already has an active task (only if valid account selected)
   const { data: existingTasks } = useTradingTasks(
-    selectedAccountId && selectedAccountId > 0
+    selectedAccountId
       ? {
           account_id: selectedAccountId,
           status: TaskStatus.RUNNING,

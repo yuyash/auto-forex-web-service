@@ -21,7 +21,7 @@ export const tradingTasksApi = {
     page?: number;
     search?: string;
     status?: string;
-    config_id?: number;
+    config_id?: string;
     strategy_type?: string;
   }) => {
     return withRetry(() =>
@@ -36,7 +36,7 @@ export const tradingTasksApi = {
   /**
    * Get a single trading task by ID
    */
-  get: (id: number) => {
+  get: (id: string) => {
     return withRetry(() => TradingService.tradingTasksTradingRetrieve(id));
   },
 
@@ -50,14 +50,14 @@ export const tradingTasksApi = {
   /**
    * Update an existing trading task
    */
-  update: (id: number, data: TradingTaskRequest) => {
+  update: (id: string, data: TradingTaskRequest) => {
     return withRetry(() => TradingService.tradingTasksTradingUpdate(id, data));
   },
 
   /**
    * Partially update an existing trading task
    */
-  partialUpdate: (id: number, data: PatchedTradingTaskRequest) => {
+  partialUpdate: (id: string, data: PatchedTradingTaskRequest) => {
     return withRetry(() =>
       TradingService.tradingTasksTradingPartialUpdate(id, data)
     );
@@ -66,14 +66,14 @@ export const tradingTasksApi = {
   /**
    * Delete a trading task
    */
-  delete: (id: number) => {
+  delete: (id: string) => {
     return withRetry(() => TradingService.tradingTasksTradingDestroy(id));
   },
 
   /**
    * Submit a trading task for execution (new task-based API)
    */
-  start: (id: number) => {
+  start: (id: string) => {
     return withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksTradingSubmitCreate(id, {} as any)
@@ -84,7 +84,7 @@ export const tradingTasksApi = {
    * Stop a running trading task (new task-based API)
    */
   stop: (
-    id: number,
+    id: string,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _mode?: 'immediate' | 'graceful' | 'graceful_close'
   ) => {
@@ -99,7 +99,7 @@ export const tradingTasksApi = {
    */
   pause: (
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _id: number
+    _id: string
   ) => {
     // Note: Pause endpoint doesn't exist yet
     throw new Error('Pause is not implemented for trading tasks');
@@ -108,7 +108,7 @@ export const tradingTasksApi = {
   /**
    * Resume a cancelled trading task (new task-based API)
    */
-  resume: (id: number) => {
+  resume: (id: string) => {
     return withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksTradingResumeCreate(id, {} as any)
@@ -118,7 +118,7 @@ export const tradingTasksApi = {
   /**
    * Restart a trading task with fresh state (new task-based API)
    */
-  restart: (id: number) => {
+  restart: (id: string) => {
     return withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       TradingService.tradingTasksTradingRestartCreate(id, {} as any)

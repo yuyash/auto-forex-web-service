@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from logging import Logger, getLogger
+from typing import Any
 
 from apps.trading.enums import StrategyType
 from apps.trading.strategies.base import Strategy
@@ -77,3 +78,18 @@ class FloorStrategy(Strategy):
     def strategy_type(self) -> StrategyType:
         """Return strategy type."""
         return StrategyType.FLOOR
+
+    def on_tick(self, *, tick, state) -> Any:
+        """Process a tick and return updated state and events.
+
+        Args:
+            tick: Tick dataclass containing market data
+            state: Current execution state
+
+        Returns:
+            StrategyResult: Updated state and list of emitted events
+        """
+        from apps.trading.dataclasses import StrategyResult
+
+        # TODO: Implement tick processing logic
+        return StrategyResult(state=state, events=[])

@@ -210,39 +210,18 @@ class OandaService:
     Supports dry-run mode for backtesting and simulation.
     """
 
-    def __init__(self, account: OandaAccounts, dry_run: bool = False):
+    def __init__(self, account: OandaAccounts | None = None, dry_run: bool = False):
         """
         Initialize OANDA API client.
 
         Args:
-            account: OandaAccounts instance with API credentials
+            account: OandaAccounts instance with API credentials (optional for dry_run mode)
             dry_run: If True, simulate API calls without making actual requests
         """
         self.account = account
         self.dry_run = dry_run
-        rest_hostname = str(account.api_hostname)
-        stream_hostname = self._to_stream_hostname(rest_hostname)
-
-        self.api = v20.Context(
-            hostname=rest_hostname,
-            token=account.get_api_token(),
-            poll_timeout=10,
-        )
-
-        # v20 Context uses a single hostname for both REST and streaming.
-        # OANDA streams live on a different hostname (stream-*) than REST (api-*).
-        # If we use the REST host for pricing.stream, OANDA returns 404.
-        self.stream_hostname = stream_hostname
-        self.stream_api = v20.Context(
-            hostname=stream_hostname,
-            token=account.get_api_token(),
-            stream_timeout=int(getattr(settings, "OANDA_STREAM_TIMEOUT", 30)),
-            poll_timeout=10,
-        )
-
         self.max_retries = 3
         self.retry_delay = 0.5  # seconds
-        self.compliance_manager = ComplianceService(account)
         self.event_service = MarketEventService()
         self._account_resource_cache: dict[str, Any] | None = None
 
@@ -250,13 +229,48 @@ class OandaService:
         self._dry_run_order_counter = 0
         self._dry_run_positions: dict[str, Position] = {}
 
-        logger.info(
-            "OANDA service initialized (account_id=%s, api_hostname=%s, stream_hostname=%s, dry_run=%s)",
-            str(getattr(account, "account_id", "")),
-            rest_hostname,
-            stream_hostname,
-            dry_run,
-        )
+        # Only initialize API connections if we have an account
+        # In dry-run mode without an account, we skip all API calls
+        if account is not None:
+            rest_hostname = str(account.api_hostname)
+            stream_hostname = self._to_stream_hostname(rest_hostname)
+
+            self.api = v20.Context(
+                hostname=rest_hostname,
+                token=account.get_api_token(),
+                poll_timeout=10,
+            )
+
+            # v20 Context uses a single hostname for both REST and streaming.
+            # OANDA streams live on a different hostname (stream-*) than REST (api-*).
+            # If we use the REST host for pricing.stream, OANDA returns 404.
+            self.stream_hostname = stream_hostname
+            self.stream_api = v20.Context(
+                hostname=stream_hostname,
+                token=account.get_api_token(),
+                stream_timeout=int(getattr(settings, "OANDA_STREAM_TIMEOUT", 30)),
+                poll_timeout=10,
+            )
+
+            self.compliance_manager = ComplianceService(account)
+
+            logger.info(
+                "OANDA service initialized (account_id=%s, api_hostname=%s, stream_hostname=%s, dry_run=%s)",
+                str(getattr(account, "account_id", "")),
+                rest_hostname,
+                stream_hostname,
+                dry_run,
+            )
+        else:
+            # No account - dry-run only mode
+            self.api = None
+            self.stream_api = None
+            self.stream_hostname = None
+            self.compliance_manager = None
+
+            logger.info(
+                "OANDA service initialized in dry-run mode without account (simulation only)"
+            )
 
     @staticmethod
     def _to_stream_hostname(hostname: str) -> str:
@@ -328,6 +342,8 @@ class OandaService:
         This is used to expose broker flags/parameters (e.g. `hedgingEnabled`) and
         to avoid repeated network calls by caching within this service instance.
         """
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
 
         if not refresh and self._account_resource_cache is not None:
             return self._account_resource_cache
@@ -347,15 +363,19 @@ class OandaService:
             self._account_resource_cache = account_resource
             return account_resource
         except Exception as e:
+            account_id = self.account.account_id if self.account else "unknown"
             logger.error(
                 "Error fetching account resource for %s: %s",
-                self.account.account_id,
+                account_id,
                 str(e),
                 exc_info=True,
             )
             raise OandaAPIError(f"Error fetching account resource: {str(e)}") from e
 
     def cancel_order(self, order: Order) -> CancelledOrder:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             response = self.api.order.cancel(self.account.account_id, order.order_id)
             if response.status not in (200, 201):
@@ -395,16 +415,20 @@ class OandaService:
             )
 
         except Exception as e:
+            account_id = self.account.account_id if self.account else "unknown"
             logger.error(
                 "Error cancelling order %s for %s: %s",
                 order.order_id,
-                self.account.account_id,
+                account_id,
                 str(e),
                 exc_info=True,
             )
             raise OandaAPIError(f"Error cancelling order: {str(e)}") from e
 
     def close_trade(self, trade: OpenTrade, units: Decimal | None = None) -> MarketOrder:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             kwargs: dict[str, Any] = {"units": str(units) if units else "ALL"}
             response = self.api.trade.close(self.account.account_id, trade.trade_id, **kwargs)
@@ -439,10 +463,11 @@ class OandaService:
             )
 
         except Exception as e:
+            account_id = self.account.account_id if self.account else "unknown"
             logger.error(
                 "Error closing trade %s for %s: %s",
                 trade.trade_id,
-                self.account.account_id,
+                account_id,
                 str(e),
                 exc_info=True,
             )
@@ -462,10 +487,16 @@ class OandaService:
         Returns:
             MarketOrder representing the closeout fill.
         """
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
 
         # Dry-run mode: simulate position close
         if self.dry_run:
             return self._simulate_position_close(position, units)
+
+        # Require account for live trading
+        if self.account is None:
+            raise OandaAPIError("Account required for live trading")
 
         try:
             if units is not None:
@@ -539,6 +570,8 @@ class OandaService:
             raise OandaAPIError(f"Error closing position: {str(e)}") from e
 
     def create_limit_order(self, request: LimitOrderRequest) -> LimitOrder:
+        assert self.account is not None, "Account not initialized"
+
         direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
         abs_units = abs(request.units)
 
@@ -611,6 +644,10 @@ class OandaService:
         # Dry-run mode: simulate order execution
         if self.dry_run:
             return self._simulate_market_order(request, direction, abs_units)
+
+        # Require account for live trading
+        if self.account is None:
+            raise OandaAPIError("Account required for live trading")
 
         order_request = {
             "instrument": request.instrument,
@@ -705,6 +742,8 @@ class OandaService:
         raise OandaAPIError(f"Market order rejected: {reject_reason_str}")
 
     def create_stop_order(self, request: StopOrderRequest) -> StopOrder:
+        assert self.account is not None, "Account not initialized"
+
         direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
         abs_units = abs(request.units)
 
@@ -810,6 +849,8 @@ class OandaService:
         Raises:
             OandaAPIError: If API call fails
         """
+        assert self.account is not None, "Account not initialized"
+
         try:
             account_data = self.get_account_resource()
 
@@ -851,14 +892,16 @@ class OandaService:
         Raises:
             OandaAPIError: If the API call fails
         """
+        assert self.account is not None, "Account not initialized"
 
         try:
             account_data = self.get_account_resource()
             return bool(account_data.get("hedgingEnabled", False))
         except Exception as e:
+            account_id = self.account.account_id if self.account else "unknown"
             logger.error(
                 "Error fetching account hedging mode for %s: %s",
-                self.account.account_id,
+                account_id,
                 str(e),
                 exc_info=True,
             )
@@ -882,6 +925,9 @@ class OandaService:
         Raises:
             OandaAPIError: If API call fails
         """
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             response = self.api.position.list_open(self.account.account_id)
 
@@ -942,6 +988,9 @@ class OandaService:
         Raises:
             OandaAPIError: If API call fails
         """
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             response = self.api.trade.list_open(self.account.account_id)
 
@@ -990,6 +1039,9 @@ class OandaService:
             raise OandaAPIError(f"Error fetching trades: {str(e)}") from e
 
     def get_pending_orders(self, instrument: str | None = None) -> list[PendingOrder]:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             response = self.api.order.list_pending(self.account.account_id)
             if response.status != 200:
@@ -1015,6 +1067,9 @@ class OandaService:
     def get_order_history(
         self, instrument: str | None = None, count: int = 50, state: str = "ALL"
     ) -> list[Order]:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             kwargs: dict[str, Any] = {"count": count, "state": state}
             if instrument:
@@ -1039,6 +1094,9 @@ class OandaService:
             raise OandaAPIError(f"Error fetching order history: {str(e)}") from e
 
     def get_order(self, order_id: str) -> Order:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             response = self.api.order.get(self.account.account_id, order_id)
             if response.status != 200:
@@ -1061,6 +1119,9 @@ class OandaService:
         page_size: int = 100,
         transaction_type: str | None = None,
     ) -> list[Transaction]:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             kwargs: dict[str, Any] = {"pageSize": page_size}
             if from_time:
@@ -1112,9 +1173,10 @@ class OandaService:
                     continue
             return transactions
         except Exception as e:
+            account_id = self.account.account_id if self.account else "unknown"
             logger.error(
                 "Error fetching transactions for %s: %s",
-                self.account.account_id,
+                account_id,
                 str(e),
                 exc_info=True,
             )
@@ -1127,6 +1189,9 @@ class OandaService:
         snapshot: bool = True,
         include_heartbeats: bool = False,
     ) -> Iterator[TickData]:
+        assert self.stream_api is not None, "Stream API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         instruments_param = instruments if isinstance(instruments, str) else ",".join(instruments)
 
         response = self.stream_api.pricing.stream(
@@ -1261,6 +1326,9 @@ class OandaService:
         )
 
     def _execute_with_retry(self, order_data: dict[str, Any]) -> Any:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         last_error: str | None = None
 
         for attempt in range(self.max_retries):
@@ -1338,7 +1406,7 @@ class OandaService:
             average_price=avg_price,
             unrealized_pnl=unrealized_pl,
             trade_ids=[str(t) for t in trade_ids],
-            account_id=str(self.account.account_id),
+            account_id=str(self.account.account_id) if self.account else "",
         )
 
     def _parse_iso_datetime(self, value: Any) -> datetime | None:
@@ -1449,6 +1517,10 @@ class OandaService:
             return None
 
     def _validate_compliance(self, order_request: dict[str, Any]) -> None:
+        # Skip compliance checks if no account (dry-run only mode)
+        if self.account is None or self.compliance_manager is None:
+            return
+
         is_valid, error_message = self.compliance_manager.validate_order(order_request)
 
         if not is_valid:
@@ -1499,6 +1571,8 @@ class OandaService:
 
         # Update dry-run position tracking
         position_key = f"{request.instrument}_{direction.value}"
+        account_id = str(self.account.account_id) if self.account else "DRY-RUN-ACCOUNT"
+
         if position_key in self._dry_run_positions:
             existing = self._dry_run_positions[position_key]
             # Update weighted average price
@@ -1513,7 +1587,7 @@ class OandaService:
                 average_price=new_avg_price,
                 unrealized_pnl=Decimal("0"),
                 trade_ids=[order_id],
-                account_id=str(self.account.account_id),
+                account_id=account_id,
             )
         else:
             self._dry_run_positions[position_key] = Position(
@@ -1523,7 +1597,7 @@ class OandaService:
                 average_price=fill_price,
                 unrealized_pnl=Decimal("0"),
                 trade_ids=[order_id],
-                account_id=str(self.account.account_id),
+                account_id=account_id,
             )
 
         logger.info(

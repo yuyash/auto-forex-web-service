@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING
 
 from apps.trading.enums import Direction
 from apps.trading.events import (
@@ -14,13 +13,10 @@ from apps.trading.events import (
     TakeProfitEvent,
     VolatilityLockEvent,
 )
-from apps.trading.models import Position
+from apps.trading.models import Position, TradingEvent
 from apps.trading.order import OrderService, OrderServiceError
 
-if TYPE_CHECKING:
-    from apps.trading.models import TradingEvent
-
-logger: Logger = getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 class EventHandler:

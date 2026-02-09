@@ -1,7 +1,7 @@
 // Strategy Configuration types
 
 export interface StrategyConfig {
-  id: number;
+  id: string;
   user_id: number;
   name: string;
   strategy_type: string;
@@ -34,7 +34,7 @@ export interface StrategyConfigListParams {
 }
 
 export interface ConfigurationTask {
-  id: number;
+  id: string;
   task_type: 'backtest' | 'trading';
   name: string;
   status: string;

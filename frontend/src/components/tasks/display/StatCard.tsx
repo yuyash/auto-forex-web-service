@@ -2,9 +2,8 @@ import React from 'react';
 import { Card, CardContent, Typography, Box, Skeleton } from '@mui/material';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
-import { getMetricAriaLabel } from '../../../utils/ariaUtils';
 
-interface MetricCardProps {
+interface StatCardProps {
   title: string;
   value: string | number;
   subtitle?: string;
@@ -16,7 +15,7 @@ interface MetricCardProps {
   onClick?: () => void;
 }
 
-export const MetricCard: React.FC<MetricCardProps> = React.memo(
+export const StatCard: React.FC<StatCardProps> = React.memo(
   ({
     title,
     value,
@@ -65,7 +64,7 @@ export const MetricCard: React.FC<MetricCardProps> = React.memo(
     return (
       <Card
         role="article"
-        aria-label={getMetricAriaLabel(title, value)}
+        aria-label={`${title}: ${value}`}
         tabIndex={onClick ? 0 : undefined}
         onKeyDown={onClick ? handleKeyDown : undefined}
         sx={{

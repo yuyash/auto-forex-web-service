@@ -19,6 +19,7 @@ import {
 import WarningIcon from '@mui/icons-material/Warning';
 import { useConfigurationMutations } from '../../hooks/useConfigurationMutations';
 import { TaskStatus } from '../../types/common';
+import { StatusBadge } from '../tasks/display/StatusBadge';
 import type {
   StrategyConfig,
   ConfigurationTask,
@@ -157,18 +158,10 @@ const ConfigurationDeleteDialog = ({
                           variant="outlined"
                           sx={{ fontSize: '0.7rem' }}
                         />
-                        <Chip
-                          label={task.status}
+                        <StatusBadge
+                          status={task.status}
                           size="small"
-                          color={
-                            task.status === TaskStatus.RUNNING
-                              ? 'success'
-                              : task.status === TaskStatus.COMPLETED
-                                ? 'default'
-                                : task.status === TaskStatus.FAILED
-                                  ? 'error'
-                                  : 'default'
-                          }
+                          showIcon={false}
                           sx={{ fontSize: '0.7rem' }}
                         />
                       </Box>

@@ -19,7 +19,7 @@ import {
 
 // Update schema - only editable fields
 const tradingTaskUpdateSchema = z.object({
-  config_id: z.number().min(1, 'Configuration is required'),
+  config_id: z.string().min(1, 'Configuration is required'),
 });
 
 type TradingTaskUpdateData = z.infer<typeof tradingTaskUpdateSchema>;

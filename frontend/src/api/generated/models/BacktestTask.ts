@@ -6,10 +6,13 @@ import type { DataSourceEnum } from './DataSourceEnum';
 import type { StatusEnum } from './StatusEnum';
 import type { TradingModeEnum } from './TradingModeEnum';
 /**
- * Serializer for BacktestTasks with execution data.
+ * Serializer for BacktestTask with execution data.
  */
 export type BacktestTask = {
-  readonly id: number;
+  /**
+   * Unique identifier for this record
+   */
+  readonly id: string;
   /**
    * Human-readable name for this backtest task
    */
@@ -32,19 +35,21 @@ export type BacktestTask = {
    * Current task status
    *
    * * `created` - Created
+   * * `starting` - Starting
    * * `running` - Running
    * * `paused` - Paused
+   * * `stopping` - Stopping
    * * `stopped` - Stopped
    * * `completed` - Completed
    * * `failed` - Failed
    */
   readonly status: StatusEnum;
   /**
-   * Timestamp when the task was created
+   * Timestamp when this record was created
    */
   readonly created_at: string;
   /**
-   * Timestamp when the task was last updated
+   * Timestamp when this record was last updated
    */
   readonly updated_at: string;
   /**
@@ -87,17 +92,13 @@ export type BacktestTask = {
    */
   readonly error_traceback: string | null;
   /**
-   * Execution results data
-   */
-  readonly result_data: any;
-  /**
    * User who created this backtest task
    */
   readonly user: number;
   /**
    * Strategy configuration used by this task
    */
-  config: number;
+  config: string;
   /**
    * Data source for historical tick data
    *
