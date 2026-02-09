@@ -10,17 +10,14 @@ from __future__ import annotations
 
 from decimal import Decimal
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING
 
 from apps.trading.dataclasses import StrategyResult, Tick
 from apps.trading.enums import StrategyType
+from apps.trading.models import StrategyConfiguration
 from apps.trading.models.state import ExecutionState
+from apps.trading.strategies.base import Strategy
 
-if TYPE_CHECKING:
-    from apps.trading.models import StrategyConfiguration
-    from apps.trading.strategies.base import Strategy
-
-logger: Logger = getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 class TradingEngine:
@@ -95,6 +92,13 @@ class TradingEngine:
         Returns:
             Updated state and events
         """
+        if state.ticks_processed % 5000 == 0:
+            logger.debug(
+                "Processing tick: timestamp=%s, bid=%s, ask=%s",
+                tick.timestamp,
+                tick.bid,
+                tick.ask,
+            )
         return self.strategy.on_tick(tick=tick, state=state)
 
     def on_start(self, *, state: ExecutionState) -> StrategyResult:
@@ -106,6 +110,7 @@ class TradingEngine:
         Returns:
             Updated state
         """
+        logger.info("Strategy starting")
         return self.strategy.on_start(state=state)
 
     def on_stop(self, *, state: ExecutionState) -> StrategyResult:
@@ -117,6 +122,7 @@ class TradingEngine:
         Returns:
             Updated state
         """
+        logger.info("Strategy stopping")
         return self.strategy.on_stop(state=state)
 
     def on_resume(self, *, state: ExecutionState) -> StrategyResult:

@@ -9,6 +9,7 @@ import pytest
 
 from apps.market.models import CeleryTaskStatus, TickData
 from apps.market.tasks.backtest import BacktestTickPublisherRunner
+from apps.trading.enums import TaskStatus
 
 
 @pytest.mark.django_db
@@ -75,3 +76,57 @@ class TestBacktestTickPublisherRunnerIntegration:
         # Verify tick data was created
         tick_count = TickData.objects.filter(instrument="EUR_USD").count()
         assert tick_count == 1
+
+    def test_should_stop_publishing_checks_executor_status(self) -> None:
+        """Test that _should_stop_publishing checks executor status."""
+        from apps.trading.models import BacktestTask
+
+        # Create a backtest task
+        task = BacktestTask.objects.create(
+            task_id="test-request-789",
+            instrument="EUR_USD",
+            start_time=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
+            end_time=datetime(2024, 1, 2, 0, 0, 0, tzinfo=UTC),
+            initial_balance=Decimal("10000.00"),
+            status=TaskStatus.RUNNING,
+        )
+
+        # Create runner and mock task service
+        runner = BacktestTickPublisherRunner()
+        mock_service = MagicMock()
+        mock_service.should_stop.return_value = False
+        runner.task_service = mock_service
+
+        # Should not stop when task is running
+        assert not runner._should_stop_publishing("test-request-789")
+
+        # Update task to stopping
+        task.status = TaskStatus.STOPPING
+        task.save()
+
+        # Should stop when task is stopping
+        assert runner._should_stop_publishing("test-request-789")
+
+        # Update task to stopped
+        task.status = TaskStatus.STOPPED
+        task.save()
+
+        # Should stop when task is stopped
+        assert runner._should_stop_publishing("test-request-789")
+
+        # Update task to failed
+        task.status = TaskStatus.FAILED
+        task.save()
+
+        # Should stop when task is failed
+        assert runner._should_stop_publishing("test-request-789")
+
+    def test_should_stop_publishing_checks_own_stop_signal(self) -> None:
+        """Test that _should_stop_publishing checks its own stop signal."""
+        runner = BacktestTickPublisherRunner()
+        mock_service = MagicMock()
+        mock_service.should_stop.return_value = True
+        runner.task_service = mock_service
+
+        # Should stop when own stop signal is set
+        assert runner._should_stop_publishing("test-request-999")

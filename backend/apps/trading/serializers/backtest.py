@@ -70,27 +70,25 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
         from apps.trading.models.state import ExecutionState
 
         # Only calculate progress for running tasks
-        if obj.status != TaskStatus.RUNNING:
+        # For completed tasks, return 100; for failed/stopped, return last known progress
+        if obj.status == TaskStatus.COMPLETED:
+            return 100
+        elif obj.status != TaskStatus.RUNNING:
+            # For FAILED, STOPPED, etc., return 0 to avoid showing stale progress
             return 0
 
-        # Get the execution state to find the last processed tick timestamp
+        # Get the execution state for the current celery task only
         try:
-            # Force a fresh query by using .only() to bypass query cache
-            # and ensure we get the latest data from the database
-            from django.db import connection
+            # Filter by celery_task_id to get state for current execution only
+            if not obj.celery_task_id:
+                logger.debug(f"[BacktestTaskSerializer] No celery_task_id for task {obj.pk}")
+                return 0
 
-            # Clear any stale connections to ensure fresh data
-            connection.close_if_unusable_or_obsolete()
-
-            state = (
-                ExecutionState.objects.filter(
-                    task_type=TaskType.BACKTEST.value,
-                    task_id=obj.pk,
-                )
-                .only("last_tick_timestamp", "ticks_processed", "updated_at")
-                .order_by("-updated_at")
-                .first()
-            )
+            state = ExecutionState.objects.filter(
+                task_type=TaskType.BACKTEST.value,
+                task_id=obj.pk,
+                celery_task_id=obj.celery_task_id,
+            ).first()
 
             if not state:
                 logger.debug(f"[BacktestTaskSerializer] No ExecutionState found for task {obj.pk}")
@@ -180,24 +178,18 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
         if obj.status != TaskStatus.RUNNING:
             return 0
 
-        # Get the execution state to find the last processed tick timestamp
+        # Get the execution state for the current celery task only
         try:
-            # Force a fresh query by using .only() to bypass query cache
-            # and ensure we get the latest data from the database
-            from django.db import connection
+            # Filter by celery_task_id to get state for current execution only
+            if not obj.celery_task_id:
+                logger.debug(f"[BacktestTaskListSerializer] No celery_task_id for task {obj.pk}")
+                return 0
 
-            # Clear any stale connections to ensure fresh data
-            connection.close_if_unusable_or_obsolete()
-
-            state = (
-                ExecutionState.objects.filter(
-                    task_type=TaskType.BACKTEST.value,
-                    task_id=obj.pk,
-                )
-                .only("last_tick_timestamp", "ticks_processed", "updated_at")
-                .order_by("-updated_at")
-                .first()
-            )
+            state = ExecutionState.objects.filter(
+                task_type=TaskType.BACKTEST.value,
+                task_id=obj.pk,
+                celery_task_id=obj.celery_task_id,
+            ).first()
 
             if not state:
                 logger.debug(

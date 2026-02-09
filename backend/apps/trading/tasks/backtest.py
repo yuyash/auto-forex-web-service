@@ -53,12 +53,15 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
         )
 
         # Update status to RUNNING now that the task is actually executing
+        logger.info(
+            f"[CELERY:BACKTEST] [STATUS] Transitioning: {task.status} -> RUNNING - task_id={task_id}"
+        )
         task.status = TaskStatus.RUNNING
         task.started_at = dj_timezone.now()
         task.save(update_fields=["status", "started_at", "updated_at"])
 
         logger.info(
-            f"[CELERY:BACKTEST] Status updated to RUNNING - task_id={task_id}, "
+            f"[CELERY:BACKTEST] [STATUS] Current: RUNNING - task_id={task_id}, "
             f"started_at={task.started_at}"
         )
 
@@ -72,15 +75,40 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
         )
 
         # Execute the backtest
-        logger.info(f"[CELERY:BACKTEST] Calling execute_backtest - task_id={task_id}")
+        logger.info(
+            f"[CELERY:BACKTEST] ========== CALLING execute_backtest - task_id={task_id} =========="
+        )
         execute_backtest(task)
+        logger.info(
+            f"[CELERY:BACKTEST] ========== execute_backtest RETURNED - task_id={task_id} =========="
+        )
 
-        # Mark as completed
-        logger.info(f"[CELERY:BACKTEST] Execution completed, updating status - task_id={task_id}")
+        # Check if task was stopped during execution
+        logger.info(f"[CELERY:BACKTEST] Checking final status - task_id={task_id}")
         task.refresh_from_db()
+        logger.info(
+            f"[CELERY:BACKTEST] [STATUS] Current after execution: {task.status} - task_id={task_id}"
+        )
+
+        # If task is in STOPPING or STOPPED state, don't mark as completed
+        if task.status in [TaskStatus.STOPPED, TaskStatus.STOPPING]:
+            logger.info(
+                f"[CELERY:BACKTEST] [STATUS] Task was stopped during execution, not marking as completed - "
+                f"task_id={task_id}, status={task.status}"
+            )
+            return
+
+        # Mark as completed (only if not already stopped or stopping)
+        logger.info(
+            f"[CELERY:BACKTEST] [STATUS] Transitioning: {task.status} -> COMPLETED - task_id={task_id}"
+        )
         task.status = TaskStatus.COMPLETED
         task.completed_at = dj_timezone.now()
         task.save(update_fields=["status", "completed_at", "updated_at"])
+        logger.info(
+            f"[CELERY:BACKTEST] [STATUS] Current: COMPLETED - task_id={task_id}, "
+            f"completed_at={task.completed_at}"
+        )
 
         # Log task completion
         TaskLog.objects.create(
@@ -204,6 +232,19 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
             f"completed_at={task.completed_at}"
         )
 
+        # Update CeleryTaskStatus to maintain state consistency
+        from apps.trading.models.celery import CeleryTaskStatus
+
+        CeleryTaskStatus.objects.filter(
+            task_name="trading.tasks.run_backtest_task",
+            instance_key=str(task_id),
+        ).update(
+            status=CeleryTaskStatus.Status.FAILED,
+            status_message=f"Task failed: {type(error).__name__}: {error_message}",
+        )
+
+        logger.info(f"[CELERY:BACKTEST] CeleryTaskStatus updated to FAILED - task_id={task_id}")
+
         # Log error
         TaskLog.objects.create(
             task_type=TaskType.BACKTEST,
@@ -306,20 +347,96 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
     from apps.trading.enums import TaskStatus
 
     try:
+        logger.info(f"[STOP:BACKTEST] Stop task started - task_id={task_id}")
         task = BacktestTask.objects.get(pk=task_id)
+        logger.info(f"[STOP:BACKTEST] Task loaded - task_id={task_id}, status={task.status}")
 
-        # Only stop if task is in STOPPING state
+        # Handle STOPPING state (normal case)
         if task.status == TaskStatus.STOPPING:
-            # Revoke the Celery task if it exists
+            logger.info(
+                f"[STOP:BACKTEST] [STATUS] Current: STOPPING, proceeding with stop - task_id={task_id}"
+            )
+
+            # Stop the publisher task first
+            logger.info(f"[STOP:BACKTEST] Stopping publisher - task_id={task_id}")
+            from apps.market.signals.management import task_management_handler
+
+            task_management_handler.request_market_task_cancel(
+                task_name="market.tasks.publish_ticks_for_backtest",
+                instance_key=str(task_id),
+                reason="Backtest task stopped",
+            )
+            logger.info(f"[STOP:BACKTEST] Publisher stop signal sent - task_id={task_id}")
+
+            # Wait up to 5 seconds for graceful shutdown
+            import time
+
+            logger.info(f"[STOP:BACKTEST] Waiting for graceful shutdown - task_id={task_id}")
+            max_wait_seconds = 5
+            wait_interval = 0.5
+            elapsed = 0
+
+            while elapsed < max_wait_seconds:
+                time.sleep(wait_interval)
+                elapsed += wait_interval
+
+                # Check if task has stopped
+                task.refresh_from_db()
+                if task.status == TaskStatus.STOPPED:
+                    logger.info(
+                        f"[STOP:BACKTEST] Task stopped gracefully - task_id={task_id}, "
+                        f"elapsed={elapsed}s"
+                    )
+                    return
+
+            logger.warning(
+                f"[STOP:BACKTEST] Graceful shutdown timeout, forcing termination - task_id={task_id}"
+            )
+
+            # Force terminate publisher Celery task
+            from celery import current_app
+
+            from apps.trading.models import CeleryTaskStatus
+
+            publisher_celery_status = CeleryTaskStatus.objects.filter(
+                task_name="market.tasks.publish_ticks_for_backtest",
+                instance_key=str(task_id),
+            ).first()
+
+            if publisher_celery_status and publisher_celery_status.celery_task_id:
+                logger.info(
+                    f"[STOP:BACKTEST] Force revoking publisher Celery task - task_id={task_id}, "
+                    f"publisher_celery_task_id={publisher_celery_status.celery_task_id}"
+                )
+                current_app.control.revoke(
+                    publisher_celery_status.celery_task_id, terminate=True, signal="SIGKILL"
+                )
+                logger.info(
+                    f"[STOP:BACKTEST] Publisher Celery task force revoked - task_id={task_id}"
+                )
+            else:
+                logger.warning(
+                    f"[STOP:BACKTEST] No publisher Celery task found to revoke - task_id={task_id}"
+                )
+
+            # Force termination - Revoke the main Celery task
             if task.celery_task_id:
-                from celery import current_app
+                logger.info(
+                    f"[STOP:BACKTEST] Force revoking main Celery task - task_id={task_id}, "
+                    f"celery_task_id={task.celery_task_id}"
+                )
+                current_app.control.revoke(task.celery_task_id, terminate=True, signal="SIGKILL")
+                logger.info(f"[STOP:BACKTEST] Main Celery task force revoked - task_id={task_id}")
 
-                current_app.control.revoke(task.celery_task_id, terminate=True)
-
-            # Update task status to STOPPED
+            # Update task status to STOPPED (without completed_at since it didn't complete)
+            logger.info(
+                f"[STOP:BACKTEST] [STATUS] Transitioning: {task.status} -> STOPPED - task_id={task_id}"
+            )
+            task.refresh_from_db()
             task.status = TaskStatus.STOPPED
-            task.completed_at = dj_timezone.now()
+            task.completed_at = None
             task.save(update_fields=["status", "completed_at", "updated_at"])
+            logger.info(f"[STOP:BACKTEST] [STATUS] Current: STOPPED - task_id={task_id}")
 
             # Update CeleryTaskStatus
             from apps.trading.models import CeleryTaskStatus
@@ -333,9 +450,21 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
             )
 
             logger.info(f"Backtest task {task_id} stopped successfully")
+
+        # Handle COMPLETED state (race condition - task completed before stop task ran)
+        elif task.status == TaskStatus.COMPLETED:
+            logger.warning(
+                f"[STOP:BACKTEST] [STATUS] Race condition detected: COMPLETED -> STOPPED - task_id={task_id}"
+            )
+            # Change from COMPLETED to STOPPED since user requested stop
+            task.status = TaskStatus.STOPPED
+            task.completed_at = None  # Remove completed_at since it was stopped
+            task.save(update_fields=["status", "completed_at", "updated_at"])
+            logger.info(f"[STOP:BACKTEST] [STATUS] Current: STOPPED - task_id={task_id}")
+
         else:
             logger.warning(
-                f"Backtest task {task_id} not in STOPPING state (current: {task.status})"
+                f"[STOP:BACKTEST] [STATUS] Unexpected state: {task.status} - task_id={task_id}"
             )
     except BacktestTask.DoesNotExist:
         logger.error(f"Backtest task {task_id} not found")

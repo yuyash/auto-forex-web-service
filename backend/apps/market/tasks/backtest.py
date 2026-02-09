@@ -40,8 +40,17 @@ def publish_ticks_for_backtest(
         end: End time (ISO format)
         request_id: Unique request identifier
     """
+    logger.info(
+        f"[CELERY:PUBLISHER] Task started - request_id={request_id}, "
+        f"instrument={instrument}, start={start}, end={end}, "
+        f"celery_task_id={self.request.id}, worker={self.request.hostname}"
+    )
     runner = BacktestTickPublisherRunner()
     runner.run(instrument, start, end, request_id)
+    logger.info(
+        f"[CELERY:PUBLISHER] Task completed - request_id={request_id}, "
+        f"celery_task_id={self.request.id}"
+    )
 
 
 class BacktestTickPublisherRunner:
@@ -60,6 +69,11 @@ class BacktestTickPublisherRunner:
             end: End time (ISO format)
             request_id: Unique request identifier
         """
+        logger.info(
+            f"[PUBLISHER:RUN] Starting publisher runner - request_id={request_id}, "
+            f"instrument={instrument}, start={start}, end={end}"
+        )
+
         task_name = "market.tasks.publish_ticks_for_backtest"
         instance_key = str(request_id)
         self.task_service = CeleryTaskService(
@@ -68,6 +82,12 @@ class BacktestTickPublisherRunner:
             stop_check_interval_seconds=1.0,
             heartbeat_interval_seconds=5.0,
         )
+
+        logger.info(
+            f"[PUBLISHER:RUN] Starting task service - request_id={request_id}, "
+            f"task_name={task_name}, instance_key={instance_key}"
+        )
+
         self.task_service.start(
             celery_task_id=current_task_id(),
             worker=lock_value(),
@@ -81,30 +101,30 @@ class BacktestTickPublisherRunner:
         end_dt = parse_iso_datetime(end)
 
         logger.info(
-            "Starting backtest tick publisher "
-            "(instrument=%s, request_id=%s, channel=%s, batch_size=%s)",
-            instrument,
-            request_id,
-            channel,
-            batch_size,
+            f"[PUBLISHER:RUN] Configuration - request_id={request_id}, "
+            f"channel={channel}, batch_size={batch_size}, "
+            f"start_dt={start_dt}, end_dt={end_dt}"
         )
 
         client = redis_client()
         published = 0
 
         try:
+            logger.info(f"[PUBLISHER:RUN] Starting tick publishing - request_id={request_id}")
             published = self._publish_ticks(
                 client, channel, instrument, start_dt, end_dt, batch_size, request_id
             )
 
             # Send EOF marker
+            logger.info(
+                f"[PUBLISHER:RUN] Publishing completed, sending EOF - request_id={request_id}, "
+                f"published={published}"
+            )
             self._send_eof(client, channel, request_id, instrument, start, end, published)
 
             logger.info(
-                "Finished backtest tick publish (instrument=%s, request_id=%s, published=%s)",
-                instrument,
-                request_id,
-                published,
+                f"[PUBLISHER:RUN] Finished successfully - request_id={request_id}, "
+                f"published={published}"
             )
 
             assert self.task_service is not None
@@ -114,10 +134,8 @@ class BacktestTickPublisherRunner:
             )
         except Exception as exc:
             logger.exception(
-                "Backtest tick publisher failed (instrument=%s, request_id=%s): %s",
-                instrument,
-                request_id,
-                exc,
+                f"[PUBLISHER:RUN] FAILED - request_id={request_id}, "
+                f"published={published}, error={exc}"
             )
             self._send_error(client, channel, request_id, instrument, str(exc))
 
@@ -131,12 +149,13 @@ class BacktestTickPublisherRunner:
         finally:
             try:
                 client.close()
+                logger.info(f"[PUBLISHER:RUN] Redis client closed - request_id={request_id}")
             except Exception as exc:  # nosec B110
                 # Log cleanup failure but don't raise
-                import logging
-
-                logger_local = logging.getLogger(__name__)
-                logger_local.debug("Failed to close Athena client: %s", exc)
+                logger.debug(
+                    f"[PUBLISHER:RUN] Failed to close Redis client - request_id={request_id}, "
+                    f"error={exc}"
+                )
 
     def _publish_ticks(
         self,
@@ -151,6 +170,11 @@ class BacktestTickPublisherRunner:
         """Publish ticks from database to Redis."""
         assert self.task_service is not None
 
+        logger.info(
+            f"[PUBLISHER:PUBLISH] Starting tick query - request_id={request_id}, "
+            f"instrument={instrument}, start_dt={start_dt}, end_dt={end_dt}"
+        )
+
         published = 0
 
         qs = (
@@ -163,15 +187,28 @@ class BacktestTickPublisherRunner:
             .values("timestamp", "bid", "ask", "mid")
         )
 
+        logger.info(
+            f"[PUBLISHER:PUBLISH] Query created, starting iteration - request_id={request_id}"
+        )
+
         # iterator(chunk_size=...) fetches DB rows in bounded chunks.
+        tick_count = 0
         for row in qs.iterator(chunk_size=batch_size):
-            if self.task_service.should_stop():
+            # Check stop signal before every tick
+            should_stop = self._should_stop_publishing(request_id)
+            if should_stop:
+                logger.info(
+                    f"[PUBLISHER:PUBLISH] Stop signal received - request_id={request_id}, "
+                    f"instrument={instrument}, published={published}, tick_count={tick_count}"
+                )
                 self._send_stopped(client, channel, request_id, instrument, published)
                 self.task_service.mark_stopped(
                     status=CeleryTaskStatus.Status.STOPPED,
                     status_message=f"published={published}",
                 )
                 return published
+
+            tick_count += 1
 
             ts = row.get("timestamp")
             if not isinstance(ts, datetime):
@@ -195,17 +232,63 @@ class BacktestTickPublisherRunner:
 
             if published % max(batch_size, 1) == 0:
                 logger.info(
-                    "Published %s backtest ticks so far (instrument=%s, request_id=%s)",
-                    published,
-                    instrument,
-                    request_id,
+                    f"[PUBLISHER:PUBLISH] Progress update - request_id={request_id}, "
+                    f"published={published}"
                 )
                 self.task_service.heartbeat(
                     status_message=f"published={published}",
                     meta_update={"published": published},
                 )
 
+        logger.info(
+            f"[PUBLISHER:PUBLISH] Iteration complete - request_id={request_id}, "
+            f"total_published={published}"
+        )
         return published
+
+    def _should_stop_publishing(self, request_id: str) -> bool:
+        """Check if publishing should stop.
+
+        Checks both the publisher's own stop signal and the executor's status.
+
+        Args:
+            request_id: The backtest request ID (matches BacktestTask.id)
+
+        Returns:
+            True if publishing should stop, False otherwise
+        """
+        assert self.task_service is not None
+
+        # Force check to bypass throttling - we need immediate response
+        if self.task_service.should_stop(force=True):
+            logger.info(
+                f"[PUBLISHER:STOP_CHECK] Publisher stop signal detected - request_id={request_id}"
+            )
+            return True
+
+        # Check executor's status via BacktestTask
+        try:
+            from apps.trading.enums import TaskStatus
+            from apps.trading.models import BacktestTask
+
+            task_status = (
+                BacktestTask.objects.filter(id=request_id).values_list("status", flat=True).first()
+            )
+
+            if task_status in (TaskStatus.STOPPING, TaskStatus.STOPPED, TaskStatus.FAILED):
+                logger.info(
+                    f"[PUBLISHER:STOP_CHECK] Executor stop detected - request_id={request_id}, "
+                    f"task_status={task_status}"
+                )
+                return True
+
+        except Exception as exc:
+            logger.warning(
+                f"[PUBLISHER:STOP_CHECK] Failed to check executor status - request_id={request_id}, "
+                f"error={exc}"
+            )
+
+        return False
 
     def _send_eof(
         self,
@@ -218,6 +301,11 @@ class BacktestTickPublisherRunner:
         count: int,
     ) -> None:
         """Send EOF marker to channel."""
+        logger.info(
+            f"[PUBLISHER:EOF] Sending EOF marker - request_id={request_id}, "
+            f"channel={channel}, count={count}"
+        )
+
         eof_message = {
             "type": "eof",
             "request_id": str(request_id),
@@ -230,15 +318,19 @@ class BacktestTickPublisherRunner:
         subscribers = client.publish(channel, json.dumps(eof_message))
 
         logger.info(
-            f"Sent EOF to channel {channel} (request_id={request_id}, "
-            f"count={count}, subscribers={subscribers})"
+            f"[PUBLISHER:EOF] EOF sent - request_id={request_id}, "
+            f"channel={channel}, count={count}, subscribers={subscribers}"
         )
 
     def _send_stopped(
         self, client: Any, channel: str, request_id: str, instrument: str, count: int
     ) -> None:
         """Send stopped marker to channel."""
-        client.publish(
+        logger.info(
+            f"[PUBLISHER:STOPPED] Sending stopped marker - request_id={request_id}, "
+            f"channel={channel}, count={count}"
+        )
+        subscribers = client.publish(
             channel,
             json.dumps(
                 {
@@ -249,13 +341,21 @@ class BacktestTickPublisherRunner:
                 }
             ),
         )
+        logger.info(
+            f"[PUBLISHER:STOPPED] Stopped marker sent - request_id={request_id}, "
+            f"channel={channel}, count={count}, subscribers={subscribers}"
+        )
 
     def _send_error(
         self, client: Any, channel: str, request_id: str, instrument: str, message: str
     ) -> None:
         """Send error marker to channel."""
+        logger.info(
+            f"[PUBLISHER:ERROR] Sending error marker - request_id={request_id}, "
+            f"channel={channel}, message={message}"
+        )
         try:
-            client.publish(
+            subscribers = client.publish(
                 channel,
                 json.dumps(
                     {
@@ -266,9 +366,13 @@ class BacktestTickPublisherRunner:
                     }
                 ),
             )
+            logger.info(
+                f"[PUBLISHER:ERROR] Error marker sent - request_id={request_id}, "
+                f"channel={channel}, subscribers={subscribers}"
+            )
         except Exception as exc:  # nosec B110
             # Log publish failure but don't raise
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.warning("Failed to publish error message: %s", exc)
+            logger.warning(
+                f"[PUBLISHER:ERROR] Failed to publish error message - request_id={request_id}, "
+                f"error={exc}"
+            )

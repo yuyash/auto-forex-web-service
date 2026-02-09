@@ -206,7 +206,7 @@ export const BacktestTaskDetail: React.FC = () => {
             <Box sx={{ mt: 2, maxWidth: 600 }}>
               <TaskProgress
                 status={polledStatus?.status || task.status}
-                progress={task.progress || 0}
+                progress={polledStatus?.progress ?? task.progress ?? 0}
                 compact={false}
                 showPercentage={true}
               />

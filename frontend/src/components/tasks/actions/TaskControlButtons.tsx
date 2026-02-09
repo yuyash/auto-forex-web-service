@@ -264,7 +264,11 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       </Box>
 
       {/* Stop Dialog */}
-      <Dialog open={stopDialogOpen} onClose={() => setStopDialogOpen(false)}>
+      <Dialog
+        open={stopDialogOpen}
+        onClose={() => setStopDialogOpen(false)}
+        disableRestoreFocus
+      >
         <DialogTitle>Stop Task</DialogTitle>
         <DialogContent>
           <Typography gutterBottom>
@@ -313,6 +317,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       <Dialog
         open={restartDialogOpen}
         onClose={() => setRestartDialogOpen(false)}
+        disableRestoreFocus
       >
         <DialogTitle>Restart Task</DialogTitle>
         <DialogContent>

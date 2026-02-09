@@ -67,6 +67,33 @@ class TaskExecutor:
 
         self.event_handler = EventHandler(order_service, self.instrument)
 
+        # Add JSONLoggingHandler to existing module loggers
+        from apps.trading.logging import JSONLoggingHandler
+
+        # Add handler to executor logger
+        handler = JSONLoggingHandler(task)
+        handler.setLevel(logging.INFO)
+        logger.addHandler(handler)
+
+        # Add handler to engine logger
+        from apps.trading import engine as engine_module
+
+        engine_logger = logging.getLogger(engine_module.__name__)
+        engine_logger.addHandler(handler)
+
+        # Add handler to source logger
+        from apps.trading.tasks import source as source_module
+
+        source_logger = logging.getLogger(source_module.__name__)
+        source_logger.addHandler(handler)
+
+        logger.info(
+            "TaskExecutor initialized with JSONLoggingHandler: instrument=%s, pip_size=%s, initial_balance=%s",
+            self.instrument,
+            self.pip_size,
+            self.initial_balance,
+        )
+
     def _get_initial_balance(self) -> Decimal:
         """Get initial balance from task.
 
@@ -216,20 +243,24 @@ class TaskExecutor:
         """Execute the task."""
         try:
             # Start coordination
+            logger.info("Starting task execution")
             self.state_manager.start()
 
             # Load state
             state = self.load_state()
             logger.info(
-                f"Loaded state: balance={state.current_balance}, "
-                f"ticks_processed={state.ticks_processed}"
+                "State loaded: balance=%s, ticks_processed=%d",
+                state.current_balance,
+                state.ticks_processed,
             )
 
             # Call on_start
+            logger.info("Calling engine.on_start")
             result = self.engine.on_start(state=state)
             state = result.state
             self.save_events(result.events)
             self.save_state(state)
+            logger.info("Engine started, events_count=%d", len(result.events))
 
             # Process ticks
             batch_count = 0
@@ -237,11 +268,16 @@ class TaskExecutor:
             max_no_tick_batches = 60  # 60 empty batches = ~60 seconds without ticks
             stopped_early = False  # Track if we stopped before completion
 
+            logger.info("Starting tick processing loop")
+
             for tick_batch in self.data_source:
                 # Check for stop signal
                 control = self.state_manager.check_control()
                 if control.should_stop:
-                    logger.info("Stop signal received, stopping execution")
+                    logger.info(
+                        "Stop signal received - ticks_processed=%d",
+                        state.ticks_processed,
+                    )
                     stopped_early = True
                     break
 
@@ -259,8 +295,24 @@ class TaskExecutor:
                 # Reset no-tick counter when we receive ticks
                 no_tick_batches = 0
 
+                # Break out of batch loop if stopped during tick processing
+                if stopped_early:
+                    break
+
                 # Process each tick in batch
-                for tick in tick_batch:
+                for tick_idx, tick in enumerate(tick_batch):
+                    # Check for stop signal every 100 ticks within a batch
+                    if tick_idx % 100 == 0:
+                        control = self.state_manager.check_control()
+                        if control.should_stop:
+                            logger.info(
+                                f"[EXECUTOR] Stop signal received during batch processing - "
+                                f"task_id={self.task.pk}, task_type={self.task_type.value}, "
+                                f"ticks_processed={state.ticks_processed}, tick_idx={tick_idx}"
+                            )
+                            stopped_early = True
+                            break
+
                     result: StrategyResult = self.engine.on_tick(tick=tick, state=state)
                     state: ExecutionState = result.state
                     events: List[TradingEvent] = self.save_events(result.events)
@@ -276,45 +328,64 @@ class TaskExecutor:
                     # Log every 1000 ticks for debugging
                     if state.ticks_processed % 1000 == 0:
                         logger.info(
-                            f"[Executor] Processed {state.ticks_processed} ticks, "
-                            f"last_tick_timestamp={state.last_tick_timestamp}"
+                            "Processing progress: ticks_processed=%d, last_tick_timestamp=%s, current_balance=%s",
+                            state.ticks_processed,
+                            state.last_tick_timestamp,
+                            state.current_balance,
                         )
 
                 # Increment batch counter
                 batch_count += 1
 
                 # Save state after every batch for real-time progress updates
+                logger.debug(
+                    f"[EXECUTOR] Saving state after batch - task_id={self.task.pk}, "
+                    f"batch_count={batch_count}, ticks_processed={state.ticks_processed}"
+                )
                 self.save_state(state)
 
                 # Send heartbeat every 10 batches
                 if batch_count % 10 == 0:
+                    logger.debug(
+                        f"[EXECUTOR] Sending heartbeat - task_id={self.task.pk}, "
+                        f"batch_count={batch_count}, ticks_processed={state.ticks_processed}"
+                    )
                     self.state_manager.heartbeat(
                         status_message=f"Processed {state.ticks_processed} ticks"
                     )
 
+            logger.info(
+                f"[EXECUTOR] Exited tick processing loop - task_id={self.task.pk}, "
+                f"stopped_early={stopped_early}, ticks_processed={state.ticks_processed}"
+            )
+
             # Call on_stop
+            logger.info("Calling engine.on_stop")
             result = self.engine.on_stop(state=state)
             state = result.state
             self.save_events(result.events)
             self.save_state(state)
+            logger.info("Engine stopped, events_count=%d", len(result.events))
 
             # Mark as stopped with appropriate status
             if stopped_early:
-                self.state_manager.stop(status_message="Execution stopped by user")
                 logger.info(
-                    f"Execution stopped: ticks_processed={state.ticks_processed}, "
-                    f"final_balance={state.current_balance}"
+                    "Execution stopped by user - ticks_processed=%d, final_balance=%s",
+                    state.ticks_processed,
+                    state.current_balance,
                 )
+                self.state_manager.stop(status_message="Execution stopped by user")
             else:
+                logger.info(
+                    "Execution completed successfully - ticks_processed=%d, final_balance=%s",
+                    state.ticks_processed,
+                    state.current_balance,
+                )
                 self.state_manager.stop(
                     status_message="Execution completed successfully", completed=True
                 )
-                logger.info(
-                    f"Execution completed: ticks_processed={state.ticks_processed}, "
-                    f"final_balance={state.current_balance}"
-                )
         except Exception as e:
-            logger.error(f"Execution failed: {e}", exc_info=True)
+            logger.error("Execution failed: %s", e, exc_info=True)
             self.state_manager.stop(status_message=f"Execution failed: {e}", failed=True)
             raise
         finally:

@@ -118,16 +118,17 @@ class BacktestTaskSerializer(TaskSerializer):
         if obj.status != "running":
             return 0
 
-        # Get the latest execution state for this task
+        # Get the execution state for the current celery task
         try:
-            execution_state = (
-                ExecutionState.objects.filter(
-                    task_type="backtest",
-                    task_id=obj.pk,
-                )
-                .order_by("-updated_at")
-                .first()
-            )
+            # Filter by celery_task_id to get state for current execution only
+            if not obj.celery_task_id:
+                return 0
+
+            execution_state = ExecutionState.objects.filter(
+                task_type="backtest",
+                task_id=obj.pk,
+                celery_task_id=obj.celery_task_id,
+            ).first()
 
             if not execution_state or not execution_state.last_tick_timestamp:
                 return 0

@@ -218,15 +218,22 @@ class TaskService:
             # If already stopped/completed/failed, just return success
             if task.status in [TaskStatus.STOPPED, TaskStatus.COMPLETED, TaskStatus.FAILED]:
                 logger.info(
-                    f"[SERVICE:STOP] Task already in terminal state - task_id={task_id}, "
-                    f"status={task.status}"
+                    f"[SERVICE:STOP] [STATUS] Already in terminal state: {task.status} - task_id={task_id}"
                 )
                 return True
 
             # Update task status to STOPPING in database
-            logger.info(f"[SERVICE:STOP] Updating task status to STOPPING - task_id={task_id}")
+            task_type = "backtest" if is_backtest else "trading"
+            logger.info(
+                f"[SERVICE:STOP] [STATUS] Transitioning: {task.status} -> STOPPING - task_id={task_id}, "
+                f"task_type={task_type}"
+            )
             task.status = TaskStatus.STOPPING
             task.save(update_fields=["status", "updated_at"])
+            logger.info(
+                f"[SERVICE:STOP] [STATUS] Current: STOPPING - task_id={task_id}, "
+                f"task_type={task_type}"
+            )
 
             # Signal Redis to stop
             logger.info(f"[SERVICE:STOP] Signaling Redis coordinator - task_id={task_id}")

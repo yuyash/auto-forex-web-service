@@ -68,14 +68,12 @@ class Command(BaseCommand):
             # Reset stuck tasks
             backtest_count = stuck_backtests.update(
                 status=TaskStatus.FAILED,
-                completed_at=timezone.now(),
                 error_message=f"Task was stuck in {TaskStatus.STARTING}/{TaskStatus.RUNNING} "
                 f"status for more than {timeout_minutes} minutes",
             )
 
             trading_count = stuck_trading.update(
                 status=TaskStatus.FAILED,
-                completed_at=timezone.now(),
                 error_message=f"Task was stuck in {TaskStatus.STARTING}/{TaskStatus.RUNNING} "
                 f"status for more than {timeout_minutes} minutes",
             )
