@@ -230,7 +230,7 @@ class BacktestTickPublisherRunner:
             )
             published += 1
 
-            if published % max(batch_size, 1) == 0:
+            if published % max(batch_size * 10, 1) == 0:
                 logger.info(
                     f"[PUBLISHER:PUBLISH] Progress update - request_id={request_id}, "
                     f"published={published}"

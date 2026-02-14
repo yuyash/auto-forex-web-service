@@ -325,8 +325,8 @@ class TaskExecutor:
                     state.ticks_processed += 1
                     state.last_tick_timestamp = tick.timestamp
 
-                    # Log every 1000 ticks for debugging
-                    if state.ticks_processed % 1000 == 0:
+                    # Log every 10000 ticks for debugging
+                    if state.ticks_processed % 10000 == 0:
                         logger.info(
                             "Processing progress: ticks_processed=%d, last_tick_timestamp=%s, current_balance=%s",
                             state.ticks_processed,
