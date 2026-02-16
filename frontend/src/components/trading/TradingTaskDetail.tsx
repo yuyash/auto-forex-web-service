@@ -127,6 +127,15 @@ export const TradingTaskDetail: React.FC = () => {
     );
   }
 
+  const overviewSummary = {
+    realizedPnl: Number(task.latest_execution?.realized_pnl ?? 0),
+    unrealizedPnl: Number(task.latest_execution?.unrealized_pnl ?? 0),
+    totalTrades: Number(task.latest_execution?.total_trades ?? 0),
+  };
+  const pnlCurrency = task.instrument?.includes('_')
+    ? task.instrument.split('_')[1]
+    : 'N/A';
+
   return (
     <Container maxWidth={false} sx={{ py: 4 }}>
       {/* Breadcrumbs */}
@@ -312,6 +321,55 @@ export const TradingTaskDetail: React.FC = () => {
                 </Box>
               </Grid>
 
+              <Grid size={{ xs: 12 }}>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Results
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Realized PnL ({pnlCurrency})
+                    </Typography>
+                    <Typography
+                      variant="body1"
+                      color={
+                        overviewSummary.realizedPnl >= 0
+                          ? 'success.main'
+                          : 'error.main'
+                      }
+                    >
+                      {overviewSummary.realizedPnl >= 0 ? '+' : ''}
+                      {overviewSummary.realizedPnl.toFixed(2)} {pnlCurrency}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Unrealized PnL ({pnlCurrency})
+                    </Typography>
+                    <Typography
+                      variant="body1"
+                      color={
+                        overviewSummary.unrealizedPnl >= 0
+                          ? 'success.main'
+                          : 'error.main'
+                      }
+                    >
+                      {overviewSummary.unrealizedPnl >= 0 ? '+' : ''}
+                      {overviewSummary.unrealizedPnl.toFixed(2)} {pnlCurrency}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Total Trades (count)
+                    </Typography>
+                    <Typography variant="body1">
+                      {overviewSummary.totalTrades} trades
+                    </Typography>
+                  </Box>
+                </Box>
+              </Grid>
+
               {(task.started_at || task.completed_at) && (
                 <Grid size={{ xs: 12 }}>
                   <Divider sx={{ my: 2 }} />
@@ -377,6 +435,7 @@ export const TradingTaskDetail: React.FC = () => {
             taskId={taskId}
             taskType={TaskType.TRADING}
             instrument={task.instrument}
+            latestExecution={task.latest_execution}
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
           />
         </TabPanel>
