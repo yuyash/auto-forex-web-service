@@ -10,15 +10,16 @@ import { TradingService } from '../api/generated/services/TradingService';
 import { TaskType } from '../types/common';
 
 export interface TaskLog {
-  id: number;
+  id: string;
   timestamp: string;
   level: string;
+  component: string;
   message: string;
   details?: Record<string, unknown>;
 }
 
 interface UseTaskLogsOptions {
-  taskId: number;
+  taskId: string;
   taskType: TaskType;
   level?: string;
   limit?: number;
@@ -29,6 +30,9 @@ interface UseTaskLogsOptions {
 
 interface UseTaskLogsResult {
   logs: TaskLog[];
+  totalCount: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
   refetch: () => Promise<void>;
@@ -44,6 +48,9 @@ export const useTaskLogs = ({
   refreshInterval = 5000,
 }: UseTaskLogsOptions): UseTaskLogsResult => {
   const [logs, setLogs] = useState<TaskLog[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -68,6 +75,9 @@ export const useTaskLogs = ({
             );
 
       setLogs(response.results || []);
+      setTotalCount(response.count || 0);
+      setHasNext(Boolean(response.next));
+      setHasPrevious(Boolean(response.previous));
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to load logs';
@@ -93,6 +103,9 @@ export const useTaskLogs = ({
 
   return {
     logs,
+    totalCount,
+    hasNext,
+    hasPrevious,
     isLoading,
     error,
     refetch: fetchLogs,

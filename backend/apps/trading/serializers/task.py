@@ -182,6 +182,7 @@ class TaskLogSerializer(serializers.ModelSerializer):
             "celery_task_id",
             "timestamp",
             "level",
+            "component",
             "message",
             "details",
         ]

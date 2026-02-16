@@ -24,7 +24,7 @@ export const getStatusAriaLabel = (status: string): string => {
     failed: 'Task failed with errors',
   };
 
-  return statusLabels[status] || status;
+  return statusLabels|| status;
 };
 
 /**

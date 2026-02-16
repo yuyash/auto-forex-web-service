@@ -51,6 +51,12 @@ class TaskLog(models.Model):
         default=LogLevel.INFO,
         help_text="Log severity level",
     )
+    component = models.CharField(
+        max_length=255,
+        default="unknown",
+        db_index=True,
+        help_text="Component/logger name that emitted this log",
+    )
     message = models.TextField(
         help_text="Log message content",
     )
@@ -68,6 +74,7 @@ class TaskLog(models.Model):
         indexes = [
             models.Index(fields=["task_type", "task_id", "timestamp"]),
             models.Index(fields=["task_type", "task_id", "level"]),
+            models.Index(fields=["task_type", "task_id", "component"]),
             models.Index(fields=["celery_task_id"]),
         ]
 

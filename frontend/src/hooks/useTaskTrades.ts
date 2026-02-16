@@ -15,6 +15,8 @@ export interface TaskTrade {
   direction: 'buy' | 'sell';
   units: string;
   price: string;
+  layer_index?: number | null;
+  execution_method?: string;
   pnl?: string;
   commission?: string;
   details?: Record<string, unknown>;
@@ -62,7 +64,12 @@ export const useTaskTrades = ({
               direction
             );
 
-      setTrades(Array.isArray(response) ? response : []);
+      const nextTrades = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.results)
+          ? response.results
+          : [];
+      setTrades(nextTrades as TaskTrade[]);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to load trades';

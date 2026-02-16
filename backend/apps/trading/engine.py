@@ -92,7 +92,7 @@ class TradingEngine:
         Returns:
             Updated state and events
         """
-        if state.ticks_processed % 5000 == 0:
+        if state.ticks_processed % 10000 == 0:
             logger.debug(
                 "Processing tick: timestamp=%s, bid=%s, ask=%s",
                 tick.timestamp,

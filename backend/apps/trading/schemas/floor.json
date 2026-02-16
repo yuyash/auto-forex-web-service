@@ -41,7 +41,11 @@
     "volatility_lock_multiplier": {
       "type": "number",
       "title": "Volatility Lock Multiplier",
-      "description": "ATR multiplier threshold to trigger volatility lock."
+      "description": "ATR multiplier threshold to trigger volatility lock.",
+      "dependsOn": {
+        "field": "volatility_check_enabled",
+        "values": ["true"]
+      }
     },
     "retracement_trigger_progression": {
       "type": "string",
@@ -73,122 +77,144 @@
         "values": ["additive", "exponential"]
       }
     },
-    "entry_signal_lookback_ticks": {
-      "type": "integer",
-      "title": "Momentum Lookback Ticks",
-      "description": "Number of ticks to analyze when using momentum direction.",
-      "dependsOn": {
-        "field": "direction_method",
-        "values": ["momentum"],
-        "and": [{ "field": "momentum_lookback_source", "values": ["ticks"] }]
-      }
-    },
-    "momentum_lookback_source": {
-      "type": "string",
-      "title": "Momentum Lookback Source",
-      "enum": ["ticks", "candles"],
-      "default": "candles",
-      "description": "Use raw ticks or candle closes to decide momentum direction.",
-      "dependsOn": {
-        "field": "direction_method",
-        "values": ["momentum"]
-      }
-    },
     "entry_signal_lookback_candles": {
       "type": "integer",
       "title": "Momentum Lookback Candles",
       "default": 50,
-      "description": "Number of candles to analyze when using candle-based momentum.",
-      "dependsOn": {
-        "field": "direction_method",
-        "values": ["momentum"],
-        "and": [{ "field": "momentum_lookback_source", "values": ["candles"] }]
-      }
+      "description": "Number of candles to analyze for trend direction."
     },
     "entry_signal_candle_granularity_seconds": {
       "type": "integer",
       "title": "Momentum Candle Granularity (seconds)",
       "default": 60,
-      "description": "Candle size in seconds used for momentum lookback.",
+      "description": "Candle size in seconds used for trend lookback."
+    },
+    "lot_unit_size": {
+      "type": "number",
+      "title": "Lot Unit Size",
+      "default": 1000,
+      "description": "Units per 1 lot."
+    },
+    "allow_duplicate_units": {
+      "type": "boolean",
+      "title": "Allow Duplicate Units",
+      "default": false,
+      "description": "If false, duplicate position sizes are automatically avoided."
+    },
+    "hedging_enabled": {
+      "type": "boolean",
+      "title": "Hedging Enabled",
+      "default": false,
+      "description": "Whether account can hold opposite positions simultaneously."
+    },
+    "margin_rate": {
+      "type": "number",
+      "title": "Margin Rate",
+      "default": 0.04,
+      "description": "Margin requirement rate.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["momentum"],
-        "and": [{ "field": "momentum_lookback_source", "values": ["candles"] }]
+        "field": "margin_protection_enabled",
+        "values": ["true"]
       }
     },
-    "direction_method": {
-      "type": "string",
-      "title": "Direction Decision Method",
-      "enum": [
-        "momentum",
-        "sma_crossover",
-        "ema_crossover",
-        "price_vs_sma",
-        "rsi"
-      ],
-      "description": "Technical method used to decide long vs short."
-    },
-    "sma_fast_period": {
-      "type": "integer",
-      "title": "SMA Fast Period",
-      "description": "Fast SMA window size (in ticks).",
+    "margin_cut_start_ratio": {
+      "type": "number",
+      "title": "Margin Cut Start Ratio",
+      "default": 0.6,
+      "description": "Start forced reduction when margin ratio reaches this value.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["sma_crossover"]
+        "field": "margin_protection_enabled",
+        "values": ["true"]
       }
     },
-    "sma_slow_period": {
-      "type": "integer",
-      "title": "SMA Slow Period",
-      "description": "Slow SMA window size (in ticks).",
+    "margin_cut_target_ratio": {
+      "type": "number",
+      "title": "Margin Cut Target Ratio",
+      "default": 0.5,
+      "description": "Target ratio after forced reduction.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["sma_crossover", "price_vs_sma"]
+        "field": "margin_protection_enabled",
+        "values": ["true"]
       }
     },
-    "ema_fast_period": {
-      "type": "integer",
-      "title": "EMA Fast Period",
-      "description": "Fast EMA window size (in ticks).",
+    "margin_protection_enabled": {
+      "type": "boolean",
+      "title": "Margin Protection Enabled",
+      "default": true,
+      "description": "Enable forced closeout logic based on margin ratio thresholds."
+    },
+    "volatility_check_enabled": {
+      "type": "boolean",
+      "title": "Volatility Check Enabled",
+      "default": true,
+      "description": "Enable ATR-based volatility lock/unlock checks."
+    },
+    "volatility_unlock_multiplier": {
+      "type": "number",
+      "title": "Volatility Unlock Multiplier",
+      "default": 1.5,
+      "description": "ATR multiplier threshold to unlock strategy after lock.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["ema_crossover"]
+        "field": "volatility_check_enabled",
+        "values": ["true"]
       }
     },
-    "ema_slow_period": {
-      "type": "integer",
-      "title": "EMA Slow Period",
-      "description": "Slow EMA window size (in ticks).",
+    "dynamic_parameter_adjustment_enabled": {
+      "type": "boolean",
+      "title": "Dynamic Parameter Adjustment",
+      "default": false,
+      "description": "Adjust triggers/targets based on volatility.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["ema_crossover"]
+        "field": "volatility_check_enabled",
+        "values": ["true"]
       }
     },
-    "rsi_period": {
+    "atr_period": {
       "type": "integer",
-      "title": "RSI Period",
-      "description": "RSI window size (in ticks).",
+      "title": "ATR Period",
+      "default": 14,
+      "description": "ATR window for lock detection.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["rsi"]
+        "field": "volatility_check_enabled",
+        "values": ["true"],
+        "or": [
+          {
+            "field": "dynamic_parameter_adjustment_enabled",
+            "values": ["true"]
+          }
+        ]
       }
     },
-    "rsi_overbought": {
+    "atr_baseline_period": {
       "type": "integer",
-      "title": "RSI Overbought",
-      "description": "RSI threshold above which to short.",
+      "title": "ATR Baseline Period",
+      "default": 50,
+      "description": "Baseline ATR window used for ATR multiplier comparison.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["rsi"]
+        "field": "volatility_check_enabled",
+        "values": ["true"],
+        "or": [
+          {
+            "field": "dynamic_parameter_adjustment_enabled",
+            "values": ["true"]
+          }
+        ]
       }
     },
-    "rsi_oversold": {
-      "type": "integer",
-      "title": "RSI Oversold",
-      "description": "RSI threshold below which to long.",
+    "market_condition_override_enabled": {
+      "type": "boolean",
+      "title": "Market Condition Override",
+      "default": true,
+      "description": "Enable temporary rule override on bad market conditions."
+    },
+    "market_condition_spread_limit_pips": {
+      "type": "number",
+      "title": "Spread Limit (pips)",
+      "default": 3.0,
+      "description": "Skip new entries when spread exceeds this value.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["rsi"]
+        "field": "market_condition_override_enabled",
+        "values": ["true"]
       }
     }
   },

@@ -487,9 +487,6 @@ class OandaService:
         Returns:
             MarketOrder representing the closeout fill.
         """
-        assert self.api is not None, "API client not initialized"
-        assert self.account is not None, "Account not initialized"
-
         # Dry-run mode: simulate position close
         if self.dry_run:
             return self._simulate_position_close(position, units)
@@ -497,6 +494,8 @@ class OandaService:
         # Require account for live trading
         if self.account is None:
             raise OandaAPIError("Account required for live trading")
+        if self.api is None:
+            raise OandaAPIError("API client not initialized")
 
         try:
             if units is not None:
@@ -1648,16 +1647,18 @@ class OandaService:
         except Exception:
             close_price = Decimal("1.0000")
 
+        # Determine closed units even when the position is not tracked locally.
+        close_units = position.units if units is None else min(units, position.units)
+
         # Update dry-run position tracking
         position_key = f"{position.instrument}_{position.direction.value}"
         if position_key in self._dry_run_positions:
-            if units is None or units >= position.units:
+            if close_units >= position.units:
                 # Close entire position
                 del self._dry_run_positions[position_key]
-                close_units = position.units
             else:
                 # Partial close
-                remaining_units = position.units - units
+                remaining_units = position.units - close_units
                 self._dry_run_positions[position_key] = Position(
                     instrument=position.instrument,
                     direction=position.direction,
@@ -1667,7 +1668,6 @@ class OandaService:
                     trade_ids=position.trade_ids,
                     account_id=position.account_id,
                 )
-                close_units = units
 
         logger.info(
             "[DRY-RUN] Position close simulated: %s %s %s @ %s",

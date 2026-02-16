@@ -2,7 +2,7 @@
  * BacktestTaskDetail Component
  *
  * Main detail view for backtest tasks using task-based API endpoints.
- * Displays task info and tab navigation for Events, Logs, Trades, and Equity.
+ * Displays task info and tab navigation for Events, Logs, Trades, and Replay.
  *
  * Requirements: 11.5, 11.6
  */
@@ -31,7 +31,7 @@ import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
-import { TaskEquityChart } from '../tasks/detail/TaskEquityChart';
+import { TaskReplayPanel } from '../tasks/detail/TaskReplayPanel';
 import { TaskProgress } from '../tasks/TaskProgress';
 import { TaskStatus, TaskType } from '../../types/common';
 
@@ -81,9 +81,10 @@ export const BacktestTaskDetail: React.FC = () => {
     events: 1,
     logs: 2,
     trades: 3,
+    replay: 4,
     equity: 4,
   };
-  const tabNames = ['overview', 'events', 'logs', 'trades', 'equity'];
+  const tabNames = ['overview', 'events', 'logs', 'trades', 'replay'];
   const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
 
   const { data: task, isLoading, error, refetch } = useBacktestTask(taskId);
@@ -249,7 +250,7 @@ export const BacktestTaskDetail: React.FC = () => {
           <Tab label="Events" {...a11yProps(1)} />
           <Tab label="Logs" {...a11yProps(2)} />
           <Tab label="Trades" {...a11yProps(3)} />
-          <Tab label="Equity" {...a11yProps(4)} />
+          <Tab label="Replay" {...a11yProps(4)} />
         </Tabs>
 
         {/* Overview Tab */}
@@ -459,6 +460,7 @@ export const BacktestTaskDetail: React.FC = () => {
           <TaskLogsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
+            executionId={task.celery_task_id || undefined}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
@@ -476,9 +478,12 @@ export const BacktestTaskDetail: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={currentTabValue} index={4}>
-          <TaskEquityChart
+          <TaskReplayPanel
             taskId={taskId}
             taskType={TaskType.BACKTEST}
+            instrument={task.instrument}
+            startTime={task.start_time}
+            endTime={task.end_time}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }

@@ -159,12 +159,6 @@ class RedisTickDataSource(TickDataSource):
                 # Reset timeout counter when we receive a message
                 consecutive_timeouts = 0
 
-                messages_received += 1
-                if messages_received % 10000 == 0:
-                    logger.info(
-                        f"RedisTickDataSource received {messages_received} messages from {self.channel}"
-                    )
-
                 if message.get("type") != "message":
                     continue
 

@@ -307,25 +307,12 @@ TRADING_FLOOR_STRATEGY_DEFAULTS = {
     ),
     "lot_size_progression": os.getenv("TRADING_FLOOR_LOT_SIZE_PROGRESSION", "additive"),
     "lot_size_increment": float(os.getenv("TRADING_FLOOR_LOT_SIZE_INCREMENT", "0.5")),
-    "entry_signal_lookback_ticks": int(
-        os.getenv("TRADING_FLOOR_ENTRY_SIGNAL_LOOKBACK_TICKS", "10")
-    ),
-    # Momentum defaults: candle-based lookback by default.
-    "momentum_lookback_source": os.getenv("TRADING_FLOOR_MOMENTUM_LOOKBACK_SOURCE", "candles"),
     "entry_signal_lookback_candles": int(
         os.getenv("TRADING_FLOOR_ENTRY_SIGNAL_LOOKBACK_CANDLES", "50")
     ),
     "entry_signal_candle_granularity_seconds": int(
         os.getenv("TRADING_FLOOR_ENTRY_SIGNAL_CANDLE_GRANULARITY_SECONDS", "60")
     ),
-    "direction_method": os.getenv("TRADING_FLOOR_DIRECTION_METHOD", "momentum"),
-    "sma_fast_period": int(os.getenv("TRADING_FLOOR_SMA_FAST_PERIOD", "10")),
-    "sma_slow_period": int(os.getenv("TRADING_FLOOR_SMA_SLOW_PERIOD", "30")),
-    "ema_fast_period": int(os.getenv("TRADING_FLOOR_EMA_FAST_PERIOD", "12")),
-    "ema_slow_period": int(os.getenv("TRADING_FLOOR_EMA_SLOW_PERIOD", "26")),
-    "rsi_period": int(os.getenv("TRADING_FLOOR_RSI_PERIOD", "14")),
-    "rsi_overbought": int(os.getenv("TRADING_FLOOR_RSI_OVERBOUGHT", "70")),
-    "rsi_oversold": int(os.getenv("TRADING_FLOOR_RSI_OVERSOLD", "30")),
 }
 MARKET_BACKTEST_PUBLISH_BATCH_SIZE = int(os.getenv("MARKET_BACKTEST_PUBLISH_BATCH_SIZE", "1000"))
 

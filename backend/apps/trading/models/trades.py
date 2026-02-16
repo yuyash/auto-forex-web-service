@@ -28,6 +28,13 @@ class Trade(models.Model):
         db_index=True,
         help_text="UUID of the task this trade belongs to",
     )
+    celery_task_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Celery task ID for tracking execution run",
+    )
     timestamp = models.DateTimeField(
         db_index=True,
         help_text="When the trade was executed",
@@ -52,6 +59,12 @@ class Trade(models.Model):
         max_length=64,
         help_text="Event type that triggered trade (e.g., INITIAL_ENTRY, RETRACEMENT)",
     )
+    layer_index = models.IntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Layer index for Floor strategy-related trades",
+    )
     pnl = models.DecimalField(
         max_digits=20,
         decimal_places=10,
@@ -67,6 +80,7 @@ class Trade(models.Model):
         ordering = ["timestamp"]
         indexes = [
             models.Index(fields=["task_type", "task_id", "-timestamp"]),
+            models.Index(fields=["task_type", "task_id", "celery_task_id", "-timestamp"]),
             models.Index(fields=["task_type", "task_id", "instrument"]),
             models.Index(fields=["execution_method"]),
         ]

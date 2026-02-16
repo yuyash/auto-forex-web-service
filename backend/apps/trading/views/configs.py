@@ -1,5 +1,7 @@
 """Views for strategy configuration management."""
 
+from uuid import UUID
+
 from django.db import models
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -85,7 +87,7 @@ class StrategyConfigDetailView(APIView):
         description="Retrieve a specific strategy configuration",
         responses={200: StrategyConfigDetailSerializer, 404: dict},
     )
-    def get(self, request: Request, config_id: int) -> Response:
+    def get(self, request: Request, config_id: UUID) -> Response:
         from apps.trading.serializers import StrategyConfigDetailSerializer
 
         try:
@@ -102,7 +104,7 @@ class StrategyConfigDetailView(APIView):
         request=StrategyConfigCreateSerializer,
         responses={200: StrategyConfigDetailSerializer, 400: dict, 404: dict},
     )
-    def put(self, request: Request, config_id: int) -> Response:
+    def put(self, request: Request, config_id: UUID) -> Response:
         from apps.trading.serializers import (
             StrategyConfigCreateSerializer,
             StrategyConfigDetailSerializer,
@@ -129,7 +131,7 @@ class StrategyConfigDetailView(APIView):
         description="Delete a strategy configuration (fails if in use by active tasks)",
         responses={204: None, 400: dict, 404: dict},
     )
-    def delete(self, request: Request, config_id: int) -> Response:
+    def delete(self, request: Request, config_id: UUID) -> Response:
         try:
             config = StrategyConfiguration.objects.get(id=config_id, user=request.user.pk)
         except StrategyConfiguration.DoesNotExist:

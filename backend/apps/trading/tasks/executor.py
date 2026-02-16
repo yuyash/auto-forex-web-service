@@ -6,9 +6,8 @@ strategies, manages state, and handles lifecycle events.
 
 from __future__ import annotations
 
-import logging
 from decimal import Decimal
-from logging import Logger
+from logging import Logger, getLogger
 from typing import List
 
 from apps.trading.dataclasses import EventContext, StrategyResult
@@ -22,7 +21,7 @@ from apps.trading.order import OrderService, OrderServiceError
 from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
 
-logger: Logger = logging.getLogger(name=__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 class TaskExecutor:
@@ -67,28 +66,8 @@ class TaskExecutor:
 
         self.event_handler = EventHandler(order_service, self.instrument)
 
-        # Add JSONLoggingHandler to existing module loggers
-        from apps.trading.logging import JSONLoggingHandler
-
-        # Add handler to executor logger
-        handler = JSONLoggingHandler(task)
-        handler.setLevel(logging.INFO)
-        logger.addHandler(handler)
-
-        # Add handler to engine logger
-        from apps.trading import engine as engine_module
-
-        engine_logger = logging.getLogger(engine_module.__name__)
-        engine_logger.addHandler(handler)
-
-        # Add handler to source logger
-        from apps.trading.tasks import source as source_module
-
-        source_logger = logging.getLogger(source_module.__name__)
-        source_logger.addHandler(handler)
-
         logger.info(
-            "TaskExecutor initialized with JSONLoggingHandler: instrument=%s, pip_size=%s, initial_balance=%s",
+            "TaskExecutor initialized: instrument=%s, pip_size=%s, initial_balance=%s",
             self.instrument,
             self.pip_size,
             self.initial_balance,
@@ -121,15 +100,16 @@ class TaskExecutor:
             return TaskType.BACKTEST
         return TaskType.TRADING
 
-    def handle_events(self, events: List[TradingEvent]) -> None:
+    def handle_events(self, state: ExecutionState, events: List[TradingEvent]) -> None:
         """Handle events from strategy execution.
 
         Args:
             events: List of TradingEvent instances that were saved
         """
+        realized_delta_total = Decimal("0")
         for trading_event in events:
             try:
-                self.event_handler.handle_event(trading_event)
+                realized_delta_total += self.event_handler.handle_event(trading_event)
             except OrderServiceError as e:
                 logger.error(
                     "Order execution failed for trading event %s: %s",
@@ -137,6 +117,14 @@ class TaskExecutor:
                     e,
                     exc_info=True,
                 )
+
+        if realized_delta_total != Decimal("0"):
+            state.current_balance = Decimal(str(state.current_balance)) + realized_delta_total
+            logger.info(
+                "Applied realized pnl to balance: delta=%s, new_balance=%s",
+                realized_delta_total,
+                state.current_balance,
+            )
 
         logger.debug(
             "Processed %s events for trading task %s (open positions: %s)",
@@ -199,7 +187,7 @@ class TaskExecutor:
 
         # Log what we're saving
         logger.debug(
-            f"[Executor] Saving state: task_id={state.task_id}, "
+            f"Saving state: task_id={state.task_id}, "
             f"ticks_processed={state.ticks_processed}, "
             f"last_tick_timestamp={state.last_tick_timestamp}, "
             f"current_balance={state.current_balance}"
@@ -210,9 +198,7 @@ class TaskExecutor:
 
         # Verify it was saved
         state.refresh_from_db()
-        logger.debug(
-            f"[Executor] State saved and verified: ticks_processed={state.ticks_processed}"
-        )
+        logger.debug(f"State saved and verified: ticks_processed={state.ticks_processed}")
 
     def save_events(self, events: List[StrategyEvent]) -> List[TradingEvent]:
         """Save strategy events to database.
@@ -255,7 +241,7 @@ class TaskExecutor:
             )
 
             # Call on_start
-            logger.info("Calling engine.on_start")
+            logger.info("Starting trading engine...")
             result = self.engine.on_start(state=state)
             state = result.state
             self.save_events(result.events)
@@ -306,7 +292,7 @@ class TaskExecutor:
                         control = self.state_manager.check_control()
                         if control.should_stop:
                             logger.info(
-                                f"[EXECUTOR] Stop signal received during batch processing - "
+                                f"Stop signal received during batch processing - "
                                 f"task_id={self.task.pk}, task_type={self.task_type.value}, "
                                 f"ticks_processed={state.ticks_processed}, tick_idx={tick_idx}"
                             )
@@ -319,27 +305,18 @@ class TaskExecutor:
 
                     # Update metrics and trades from events
                     if events:
-                        self.handle_events(events)
+                        self.handle_events(state, events)
 
                     # Update tick count and timestamp
                     state.ticks_processed += 1
                     state.last_tick_timestamp = tick.timestamp
-
-                    # Log every 10000 ticks for debugging
-                    if state.ticks_processed % 10000 == 0:
-                        logger.info(
-                            "Processing progress: ticks_processed=%d, last_tick_timestamp=%s, current_balance=%s",
-                            state.ticks_processed,
-                            state.last_tick_timestamp,
-                            state.current_balance,
-                        )
 
                 # Increment batch counter
                 batch_count += 1
 
                 # Save state after every batch for real-time progress updates
                 logger.debug(
-                    f"[EXECUTOR] Saving state after batch - task_id={self.task.pk}, "
+                    f"Saving state after batch - task_id={self.task.pk}, "
                     f"batch_count={batch_count}, ticks_processed={state.ticks_processed}"
                 )
                 self.save_state(state)
@@ -347,7 +324,7 @@ class TaskExecutor:
                 # Send heartbeat every 10 batches
                 if batch_count % 10 == 0:
                     logger.debug(
-                        f"[EXECUTOR] Sending heartbeat - task_id={self.task.pk}, "
+                        f"Sending heartbeat - task_id={self.task.pk}, "
                         f"batch_count={batch_count}, ticks_processed={state.ticks_processed}"
                     )
                     self.state_manager.heartbeat(
@@ -355,7 +332,7 @@ class TaskExecutor:
                     )
 
             logger.info(
-                f"[EXECUTOR] Exited tick processing loop - task_id={self.task.pk}, "
+                f"Exited tick processing loop - task_id={self.task.pk}, "
                 f"stopped_early={stopped_early}, ticks_processed={state.ticks_processed}"
             )
 

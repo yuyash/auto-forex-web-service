@@ -100,12 +100,21 @@ class TaskLogAdmin(admin.ModelAdmin):
         "task_id",
         "timestamp",
         "level",
+        "component",
         "message",
     )
-    list_filter = ("task_type", "level", "timestamp")
-    search_fields = ("task_id", "message")
+    list_filter = ("task_type", "level", "component", "timestamp")
+    search_fields = ("task_id", "component", "message")
     ordering = ("-timestamp",)
-    readonly_fields = ("task_type", "task_id", "timestamp", "level", "message", "details")
+    readonly_fields = (
+        "task_type",
+        "task_id",
+        "timestamp",
+        "level",
+        "component",
+        "message",
+        "details",
+    )
 
 
 @admin.register(ExecutionState)

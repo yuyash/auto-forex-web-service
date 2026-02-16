@@ -2,7 +2,7 @@
  * TradingTaskDetail Component
  *
  * Main detail view for trading tasks using task-based API endpoints.
- * Displays task info and tab navigation for Events, Logs, Trades, and Equity.
+ * Displays task info and tab navigation for Events, Logs, Trades, and Replay.
  *
  * Requirements: 11.14, 11.15
  */
@@ -30,7 +30,7 @@ import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
-import { TaskEquityChart } from '../tasks/detail/TaskEquityChart';
+import { TaskReplayPanel } from '../tasks/detail/TaskReplayPanel';
 import { TaskStatus, TaskType } from '../../types/common';
 
 interface TabPanelProps {
@@ -79,9 +79,10 @@ export const TradingTaskDetail: React.FC = () => {
     events: 1,
     logs: 2,
     trades: 3,
+    replay: 4,
     equity: 4,
   };
-  const tabNames = ['overview', 'events', 'logs', 'trades', 'equity'];
+  const tabNames = ['overview', 'events', 'logs', 'trades', 'replay'];
   const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
@@ -187,7 +188,7 @@ export const TradingTaskDetail: React.FC = () => {
           <Tab label="Events" {...a11yProps(1)} />
           <Tab label="Logs" {...a11yProps(2)} />
           <Tab label="Trades" {...a11yProps(3)} />
-          <Tab label="Equity" {...a11yProps(4)} />
+          <Tab label="Replay" {...a11yProps(4)} />
         </Tabs>
 
         {/* Overview Tab */}
@@ -358,6 +359,7 @@ export const TradingTaskDetail: React.FC = () => {
           <TaskLogsTable
             taskId={taskId}
             taskType={TaskType.TRADING}
+            executionId={task.celery_task_id || undefined}
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
           />
         </TabPanel>
@@ -371,9 +373,10 @@ export const TradingTaskDetail: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={currentTabValue} index={4}>
-          <TaskEquityChart
+          <TaskReplayPanel
             taskId={taskId}
             taskType={TaskType.TRADING}
+            instrument={task.instrument}
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
           />
         </TabPanel>

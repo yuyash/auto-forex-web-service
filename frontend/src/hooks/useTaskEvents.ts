@@ -59,16 +59,27 @@ export const useTaskEvents = ({
               taskId,
               eventType,
               limit,
+              undefined,
+              undefined,
+              undefined,
               severity
             )
           : await TradingService.tradingTasksTradingEventsList(
               taskId,
               eventType,
               limit,
+              undefined,
+              undefined,
+              undefined,
               severity
             );
 
-      setEvents(Array.isArray(response) ? response : []);
+      const nextEvents = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.results)
+          ? response.results
+          : [];
+      setEvents(nextEvents as TaskEvent[]);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to load events';

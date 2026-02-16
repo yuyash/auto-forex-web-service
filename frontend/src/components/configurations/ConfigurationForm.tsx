@@ -53,40 +53,19 @@ interface ConfigurationFormProps {
 const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
   type: 'object',
   title: 'Floor Strategy Configuration',
-  description:
-    'Configuration for the Floor Strategy with dynamic retracement and ATR-based volatility lock.',
+  description: 'Configuration for Floor strategy.',
   properties: {
-    instrument: {
-      type: 'string',
-      title: 'Instrument',
-      description: 'Trading instrument (currency pair) to trade',
-      enum: [
-        'EUR_USD',
-        'GBP_USD',
-        'USD_JPY',
-        'USD_CHF',
-        'AUD_USD',
-        'USD_CAD',
-        'NZD_USD',
-        'EUR_GBP',
-        'EUR_JPY',
-        'GBP_JPY',
-      ],
-      default: 'USD_JPY',
-    },
     base_lot_size: {
       type: 'number',
       title: 'Base Lot Size',
-      description:
-        'Initial lot size for first entry. Actual units = base_lot_size × base_unit_size',
+      description: 'Initial lot size for the first entry.',
       default: 1.0,
       minimum: 0.01,
     },
-    base_unit_size: {
+    lot_unit_size: {
       type: 'integer',
-      title: 'Base Unit Size',
-      description:
-        'Multiplier to convert lot size to OANDA units. Default 1000 means 1 lot = 1000 units',
+      title: 'Lot Unit Size',
+      description: 'Units per 1 lot.',
       default: 1000,
       minimum: 1,
     },
@@ -129,33 +108,22 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
     max_retracements_per_layer: {
       type: 'integer',
       title: 'Max Retracements Per Layer',
-      description:
-        'Upper bound on how many retracement entries a layer can perform before it must reset or close.',
+      description: 'Max number of retracement entries allowed per layer.',
       default: 10,
-      minimum: 1,
-    },
-    volatility_lock_multiplier: {
-      type: 'number',
-      title: 'Volatility Lock Multiplier',
-      description:
-        'ATR multiplier to trigger volatility lock (e.g., 5.0 = 5x normal ATR)',
-      default: 5.0,
       minimum: 1,
     },
     retracement_trigger_progression: {
       type: 'string',
       title: 'Retracement Trigger Progression',
-      description: 'How retracement triggers progress across layers',
       enum: ['equal', 'additive', 'exponential', 'inverse'],
-      default: 'additive',
+      description: 'How retracement triggers progress across layers.',
+      default: 'equal',
     },
     retracement_trigger_increment: {
       type: 'number',
       title: 'Retracement Trigger Increment',
-      description:
-        'Value to add (additive) or multiply by (exponential). Not used for equal/inverse',
-      default: 5,
-      minimum: 0,
+      description: 'Used for additive/exponential progression.',
+      default: 1.0,
       dependsOn: {
         field: 'retracement_trigger_progression',
         values: ['additive', 'exponential'],
@@ -164,170 +132,172 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
     lot_size_progression: {
       type: 'string',
       title: 'Lot Size Progression',
-      description: 'How lot sizes progress across layers',
       enum: ['equal', 'additive', 'exponential', 'inverse'],
-      default: 'additive',
+      description: 'How base lot size changes across layers.',
+      default: 'equal',
     },
     lot_size_increment: {
       type: 'number',
       title: 'Lot Size Increment',
-      description:
-        'Value to add (additive) or multiply by (exponential). Not used for equal/inverse',
-      default: 0.5,
-      minimum: 0,
+      description: 'Used for additive/exponential progression.',
+      default: 1.0,
       dependsOn: {
         field: 'lot_size_progression',
         values: ['additive', 'exponential'],
       },
     },
-    direction_method: {
-      type: 'string',
-      title: 'Direction Decision Method',
+    entry_signal_lookback_candles: {
+      type: 'integer',
+      title: 'Momentum Lookback Candles',
+      default: 50,
+      description: 'Number of candles to analyze for trend direction.',
+      minimum: 1,
+    },
+    entry_signal_candle_granularity_seconds: {
+      type: 'integer',
+      title: 'Momentum Candle Granularity (seconds)',
+      default: 60,
+      description: 'Candle size in seconds used for trend lookback.',
+      minimum: 1,
+    },
+    allow_duplicate_units: {
+      type: 'boolean',
+      title: 'Allow Duplicate Units',
+      default: false,
       description:
-        'Technical analysis method to determine trade direction. Tick-based methods use raw tick data. OHLC methods aggregate ticks into candles for longer-term analysis.',
-      enum: [
-        'momentum',
-        'sma_crossover',
-        'ema_crossover',
-        'price_vs_sma',
-        'rsi',
-        'ohlc_sma_crossover',
-        'ohlc_ema_crossover',
-        'ohlc_price_vs_sma',
-      ],
-      default: 'momentum',
+        'If false, duplicate position sizes are automatically avoided.',
     },
-    entry_signal_lookback_ticks: {
-      type: 'integer',
-      title: 'Momentum Lookback Ticks',
+    hedging_enabled: {
+      type: 'boolean',
+      title: 'Hedging Enabled',
+      default: false,
       description:
-        'Number of ticks to analyze for determining entry direction based on price momentum.',
-      default: 10,
-      minimum: 5,
+        'Whether account can hold opposite positions simultaneously.',
+    },
+    margin_protection_enabled: {
+      type: 'boolean',
+      title: 'Margin Protection Enabled',
+      default: true,
+      description:
+        'Enable forced closeout logic based on margin ratio thresholds.',
+    },
+    margin_rate: {
+      type: 'number',
+      title: 'Margin Rate',
+      default: 0.04,
+      description: 'Margin requirement rate.',
       dependsOn: {
-        field: 'direction_method',
-        values: ['momentum'],
+        field: 'margin_protection_enabled',
+        values: ['true'],
       },
     },
-    sma_fast_period: {
-      type: 'integer',
-      title: 'SMA Fast Period',
-      description: 'Period for fast Simple Moving Average (in ticks).',
-      default: 10,
-      minimum: 2,
+    margin_cut_start_ratio: {
+      type: 'number',
+      title: 'Margin Cut Start Ratio',
+      default: 0.6,
+      description:
+        'Start forced reduction when margin ratio reaches this value.',
       dependsOn: {
-        field: 'direction_method',
-        values: ['sma_crossover'],
+        field: 'margin_protection_enabled',
+        values: ['true'],
       },
     },
-    sma_slow_period: {
-      type: 'integer',
-      title: 'SMA Slow Period',
-      description: 'Period for slow Simple Moving Average (in ticks).',
-      default: 30,
-      minimum: 5,
+    margin_cut_target_ratio: {
+      type: 'number',
+      title: 'Margin Cut Target Ratio',
+      default: 0.5,
+      description: 'Target ratio after forced reduction.',
       dependsOn: {
-        field: 'direction_method',
-        values: ['sma_crossover', 'price_vs_sma'],
+        field: 'margin_protection_enabled',
+        values: ['true'],
       },
     },
-    ema_fast_period: {
-      type: 'integer',
-      title: 'EMA Fast Period',
-      description: 'Period for fast Exponential Moving Average (in ticks).',
-      default: 12,
-      minimum: 2,
+    volatility_check_enabled: {
+      type: 'boolean',
+      title: 'Volatility Check Enabled',
+      default: true,
+      description: 'Enable ATR-based volatility lock/unlock checks.',
+    },
+    volatility_lock_multiplier: {
+      type: 'number',
+      title: 'Volatility Lock Multiplier',
+      description: 'ATR multiplier threshold to trigger volatility lock.',
+      default: 5.0,
+      minimum: 1,
       dependsOn: {
-        field: 'direction_method',
-        values: ['ema_crossover'],
+        field: 'volatility_check_enabled',
+        values: ['true'],
       },
     },
-    ema_slow_period: {
-      type: 'integer',
-      title: 'EMA Slow Period',
-      description: 'Period for slow Exponential Moving Average (in ticks).',
-      default: 26,
-      minimum: 5,
+    volatility_unlock_multiplier: {
+      type: 'number',
+      title: 'Volatility Unlock Multiplier',
+      default: 1.5,
+      description:
+        'ATR multiplier threshold to unlock strategy after lock.',
       dependsOn: {
-        field: 'direction_method',
-        values: ['ema_crossover'],
+        field: 'volatility_check_enabled',
+        values: ['true'],
       },
     },
-    rsi_period: {
+    dynamic_parameter_adjustment_enabled: {
+      type: 'boolean',
+      title: 'Dynamic Parameter Adjustment',
+      default: false,
+      description: 'Adjust triggers/targets based on volatility.',
+      dependsOn: {
+        field: 'volatility_check_enabled',
+        values: ['true'],
+      },
+    },
+    atr_period: {
       type: 'integer',
-      title: 'RSI Period',
-      description: 'Period for Relative Strength Index calculation (in ticks).',
+      title: 'ATR Period',
       default: 14,
-      minimum: 2,
+      description: 'ATR window for lock detection.',
       dependsOn: {
-        field: 'direction_method',
-        values: ['rsi'],
-      },
-    },
-    rsi_overbought: {
-      type: 'integer',
-      title: 'RSI Overbought Level',
-      description:
-        'RSI level above which market is overbought (triggers short).',
-      default: 70,
-      minimum: 50,
-      dependsOn: {
-        field: 'direction_method',
-        values: ['rsi'],
-      },
-    },
-    rsi_oversold: {
-      type: 'integer',
-      title: 'RSI Oversold Level',
-      description: 'RSI level below which market is oversold (triggers long).',
-      default: 30,
-      minimum: 0,
-      dependsOn: {
-        field: 'direction_method',
-        values: ['rsi'],
-      },
-    },
-    ohlc_granularity: {
-      type: 'integer',
-      title: 'OHLC Candle Granularity',
-      description:
-        'Candle period for OHLC methods. Values: 300=M5, 900=M15, 1800=M30, 3600=H1, 14400=H4, 86400=D1.',
-      enum: [300, 900, 1800, 3600, 7200, 14400, 28800, 43200, 86400, 604800],
-      default: 3600,
-      dependsOn: {
-        field: 'direction_method',
-        values: [
-          'ohlc_sma_crossover',
-          'ohlc_ema_crossover',
-          'ohlc_price_vs_sma',
+        field: 'volatility_check_enabled',
+        values: ['true'],
+        or: [
+          {
+            field: 'dynamic_parameter_adjustment_enabled',
+            values: ['true'],
+          },
         ],
       },
     },
-    ohlc_fast_period: {
+    atr_baseline_period: {
       type: 'integer',
-      title: 'OHLC Fast MA Period',
-      description:
-        'Number of candles for fast moving average in OHLC crossover methods.',
-      default: 10,
-      minimum: 2,
+      title: 'ATR Baseline Period',
+      default: 50,
+      description: 'Baseline ATR window used for ATR multiplier comparison.',
       dependsOn: {
-        field: 'direction_method',
-        values: ['ohlc_sma_crossover', 'ohlc_ema_crossover'],
+        field: 'volatility_check_enabled',
+        values: ['true'],
+        or: [
+          {
+            field: 'dynamic_parameter_adjustment_enabled',
+            values: ['true'],
+          },
+        ],
       },
     },
-    ohlc_slow_period: {
-      type: 'integer',
-      title: 'OHLC Slow MA Period',
-      description: 'Number of candles for slow moving average in OHLC methods.',
-      default: 20,
-      minimum: 5,
+    market_condition_override_enabled: {
+      type: 'boolean',
+      title: 'Market Condition Override',
+      default: true,
+      description:
+        'Enable temporary rule override on bad market conditions.',
+    },
+    market_condition_spread_limit_pips: {
+      type: 'number',
+      title: 'Spread Limit (pips)',
+      default: 3.0,
+      description:
+        'Skip new entries when spread exceeds this value.',
       dependsOn: {
-        field: 'direction_method',
-        values: [
-          'ohlc_sma_crossover',
-          'ohlc_ema_crossover',
-          'ohlc_price_vs_sma',
-        ],
+        field: 'market_condition_override_enabled',
+        values: ['true'],
       },
     },
   },
@@ -348,32 +318,34 @@ const STRATEGY_CONFIG_SCHEMAS: Record<string, ConfigSchema> = {
 // These should match the required parameters in the backend strategy schemas
 const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
   floor: {
-    instrument: 'USD_JPY',
     base_lot_size: 1.0,
-    base_unit_size: 1000,
+    lot_unit_size: 1000,
     retracement_lot_mode: 'additive',
     retracement_lot_amount: 1.0,
     retracement_pips: 30,
     take_profit_pips: 25,
     max_layers: 3,
     max_retracements_per_layer: 10,
+    retracement_trigger_progression: 'equal',
+    retracement_trigger_increment: 1.0,
+    lot_size_progression: 'equal',
+    lot_size_increment: 1.0,
+    entry_signal_lookback_candles: 50,
+    entry_signal_candle_granularity_seconds: 60,
+    allow_duplicate_units: false,
+    hedging_enabled: false,
+    margin_protection_enabled: true,
+    margin_rate: 0.04,
+    margin_cut_start_ratio: 0.6,
+    margin_cut_target_ratio: 0.5,
+    volatility_check_enabled: true,
     volatility_lock_multiplier: 5.0,
-    retracement_trigger_progression: 'additive',
-    retracement_trigger_increment: 5,
-    lot_size_progression: 'additive',
-    lot_size_increment: 0.5,
-    entry_signal_lookback_ticks: 10,
-    direction_method: 'momentum',
-    sma_fast_period: 10,
-    sma_slow_period: 30,
-    ema_fast_period: 12,
-    ema_slow_period: 26,
-    rsi_period: 14,
-    rsi_overbought: 70,
-    rsi_oversold: 30,
-    ohlc_granularity: 3600,
-    ohlc_fast_period: 10,
-    ohlc_slow_period: 20,
+    volatility_unlock_multiplier: 1.5,
+    dynamic_parameter_adjustment_enabled: false,
+    atr_period: 14,
+    atr_baseline_period: 50,
+    market_condition_override_enabled: true,
+    market_condition_spread_limit_pips: 3.0,
   },
   ma_crossover: {
     instrument: 'USD_JPY',
@@ -728,23 +700,33 @@ const ConfigurationForm = ({
     const fieldSchema = strategySchema.properties[key];
     if (!fieldSchema?.dependsOn) return true;
 
-    const dependentRaw = parameters[fieldSchema.dependsOn.field];
-    const dependentValue =
-      dependentRaw === undefined || dependentRaw === null
-        ? ''
-        : String(dependentRaw);
-    if (!fieldSchema.dependsOn.values.includes(dependentValue)) return false;
+    const matchesSingleCondition = (cond: {
+      field: string;
+      values: string[];
+      and?: Array<{ field: string; values: string[] }>;
+    }): boolean => {
+      const dependentRaw = parameters[cond.field];
+      const dependentValue =
+        dependentRaw === undefined || dependentRaw === null
+          ? ''
+          : String(dependentRaw);
+      if (!cond.values.includes(dependentValue)) return false;
+      if (!cond.and || cond.and.length === 0) return true;
+      return cond.and.every((andCond) => {
+        const rawCond = parameters[andCond.field];
+        const valueCond =
+          rawCond === undefined || rawCond === null ? '' : String(rawCond);
+        return andCond.values.includes(valueCond);
+      });
+    };
 
-    if (!fieldSchema.dependsOn.and || fieldSchema.dependsOn.and.length === 0) {
-      return true;
+    if (matchesSingleCondition(fieldSchema.dependsOn)) return true;
+    if (!fieldSchema.dependsOn.or || fieldSchema.dependsOn.or.length === 0) {
+      return false;
     }
-
-    return fieldSchema.dependsOn.and.every((cond) => {
-      const rawCond = parameters[cond.field];
-      const valueCond =
-        rawCond === undefined || rawCond === null ? '' : String(rawCond);
-      return cond.values.includes(valueCond);
-    });
+    return fieldSchema.dependsOn.or.some((orCond) =>
+      matchesSingleCondition(orCond)
+    );
   };
 
   const reviewParameters: Array<[string, unknown]> = strategySchema

@@ -5,7 +5,7 @@
  * Replaces execution-based LogsTable.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Chip,
@@ -15,30 +15,60 @@ import {
   Select,
   Typography,
   Alert,
+  TablePagination,
 } from '@mui/material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { useTaskLogs, type TaskLog } from '../../../hooks/useTaskLogs';
 import { TaskType } from '../../../types/common';
 
 interface TaskLogsTableProps {
-  taskId: number;
+  taskId: string;
   taskType: TaskType;
+  executionId?: string;
   enableRealTimeUpdates?: boolean;
 }
 
 export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   taskId,
   taskType,
+  executionId,
   enableRealTimeUpdates = false,
 }) => {
   const [levelFilter, setLevelFilter] = useState<string>('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(100);
 
-  const { logs, isLoading, error } = useTaskLogs({
+  const offset = page * rowsPerPage;
+
+  const { logs, totalCount, isLoading, error } = useTaskLogs({
     taskId,
     taskType,
     level: levelFilter || undefined,
+    limit: rowsPerPage,
+    offset,
     enableRealTimeUpdates,
   });
+
+  const handleLevelFilterChange = (value: string) => {
+    setLevelFilter(value);
+    setPage(0);
+  };
+
+  const handleChangePage = (_event: unknown, nextPage: number) => {
+    setPage(nextPage);
+  };
+
+  const handleChangeRowsPerPage = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const nextRowsPerPage = parseInt(event.target.value, 10);
+    setRowsPerPage(nextRowsPerPage);
+    setPage(0);
+  };
+
+  useEffect(() => {
+    setPage(0);
+  }, [executionId]);
 
   const formatTimestamp = (timestamp: string): string => {
     return new Date(timestamp).toLocaleString('en-US', {
@@ -98,6 +128,11 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
       ),
     },
     {
+      id: 'component',
+      label: 'Component',
+      minWidth: 220,
+    },
+    {
       id: 'message',
       label: 'Message',
       minWidth: 400,
@@ -121,7 +156,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
           <Select
             value={levelFilter}
             label="Level Filter"
-            onChange={(e) => setLevelFilter(e.target.value)}
+            onChange={(e) => handleLevelFilterChange(e.target.value)}
           >
             <MenuItem value="">All Levels</MenuItem>
             <MenuItem value="DEBUG">Debug</MenuItem>
@@ -136,8 +171,20 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
       <DataTable
         columns={columns}
         data={logs}
-        loading={isLoading}
+        isLoading={isLoading}
         emptyMessage="No logs available"
+        defaultRowsPerPage={rowsPerPage}
+        rowsPerPageOptions={[rowsPerPage]}
+      />
+
+      <TablePagination
+        component="div"
+        count={totalCount}
+        page={page}
+        onPageChange={handleChangePage}
+        rowsPerPage={rowsPerPage}
+        onRowsPerPageChange={handleChangeRowsPerPage}
+        rowsPerPageOptions={[50, 100, 200, 500]}
       />
     </Box>
   );

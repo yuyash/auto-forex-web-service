@@ -40,7 +40,7 @@ urlpatterns = [
         name="strategy_config_list_create",
     ),
     path(
-        "strategy-configs/<int:config_id>/",
+        "strategy-configs/<uuid:config_id>/",
         StrategyConfigDetailView.as_view(),
         name="strategy_config_detail",
     ),

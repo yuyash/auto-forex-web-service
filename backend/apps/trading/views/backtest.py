@@ -17,7 +17,6 @@ from apps.trading.enums import LogLevel, TaskStatus
 from apps.trading.models import BacktestTask
 from apps.trading.models.logs import TaskLog
 from apps.trading.serializers import (
-    EquityPointSerializer,
     TradeSerializer,
     TradingEventSerializer,
 )
@@ -43,7 +42,6 @@ class BacktestTaskViewSet(ModelViewSet):
     - logs: Retrieve task logs with pagination
     - events: Retrieve task events
     - trades: Retrieve trade history
-    - equity: Retrieve equity curve
     """
 
     permission_classes = [IsAuthenticated]
@@ -416,7 +414,7 @@ class BacktestTaskViewSet(ModelViewSet):
 
     @extend_schema(
         summary="Get task logs",
-        description="Retrieve task execution logs with pagination and filtering",
+        description="Retrieve task execution logs for the latest execution with pagination and filtering",
         parameters=[
             OpenApiParameter(
                 name="level",
@@ -436,6 +434,12 @@ class BacktestTaskViewSet(ModelViewSet):
                 location=OpenApiParameter.QUERY,
                 description="Number of logs to skip (default: 0)",
             ),
+            OpenApiParameter(
+                name="celery_task_id",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Optional explicit execution ID. If omitted, current task celery_task_id is used.",
+            ),
         ],
         responses={200: TaskLogSerializer(many=True)},
     )
@@ -448,20 +452,42 @@ class BacktestTaskViewSet(ModelViewSet):
         level = LogLevel[level_param.upper()] if level_param else None
         limit = int(request.query_params.get("limit", 100))
         offset = int(request.query_params.get("offset", 0))
+        celery_task_id = request.query_params.get("celery_task_id") or task.celery_task_id
+
+        # Guardrails for predictable paging
+        limit = max(1, min(limit, 1000))
+        offset = max(0, offset)
 
         try:
-            # Filter by current execution (celery_task_id)
             logs_queryset = TaskLog.objects.filter(
                 task_type="backtest",
                 task_id=task.pk,
             )
 
+            # Default to latest execution only (no historical logs)
+            if celery_task_id:
+                logs_queryset = logs_queryset.filter(celery_task_id=celery_task_id)
+            else:
+                logs_queryset = logs_queryset.none()
+
             if level:
                 logs_queryset = logs_queryset.filter(level=level)
 
+            total = logs_queryset.count()
             logs = logs_queryset.order_by("-timestamp")[offset : offset + limit]
             serializer = TaskLogSerializer(logs, many=True)
-            return Response({"results": serializer.data})
+
+            next_offset = offset + limit if (offset + limit) < total else None
+            prev_offset = max(0, offset - limit) if offset > 0 else None
+
+            return Response(
+                {
+                    "count": total,
+                    "next": next_offset,
+                    "previous": prev_offset,
+                    "results": serializer.data,
+                }
+            )
         except Exception as e:
             return Response(
                 {"error": f"Failed to retrieve logs: {str(e)}"},
@@ -534,16 +560,23 @@ class BacktestTaskViewSet(ModelViewSet):
                 location=OpenApiParameter.QUERY,
                 description="Filter by trade direction (buy/sell)",
             ),
+            OpenApiParameter(
+                name="celery_task_id",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Execution ID. Defaults to current task celery_task_id.",
+            ),
         ],
         responses={200: TradeSerializer(many=True)},
     )
     @action(detail=True, methods=["get"])
-    def trades(self, request: Request, pk: int | None = None) -> Response:
+    def trades(self, request: Request, pk: str | None = None) -> Response:
         """Get task trades from database."""
         from apps.trading.models.trades import Trade
 
         task = self.get_object()
-        direction = request.query_params.get("direction")
+        direction = (request.query_params.get("direction") or "").lower()
+        celery_task_id = request.query_params.get("celery_task_id") or task.celery_task_id
 
         # Query trades from database
         queryset = Trade.objects.filter(
@@ -551,9 +584,20 @@ class BacktestTaskViewSet(ModelViewSet):
             task_id=task.pk,
         ).order_by("timestamp")
 
+        # Default behavior: only show latest/current execution run.
+        if celery_task_id:
+            queryset = queryset.filter(celery_task_id=celery_task_id)
+        else:
+            queryset = queryset.none()
+
         # Filter by direction if specified
         if direction:
-            queryset = queryset.filter(direction=direction)
+            if direction == "buy":
+                queryset = queryset.filter(direction="long")
+            elif direction == "sell":
+                queryset = queryset.filter(direction="short")
+            else:
+                queryset = queryset.filter(direction=direction)
 
         trades = queryset.values(
             "direction",
@@ -561,49 +605,20 @@ class BacktestTaskViewSet(ModelViewSet):
             "instrument",
             "price",
             "execution_method",
+            "layer_index",
             "pnl",
             "timestamp",
         )
 
-        serializer = TradeSerializer(data=list(trades), many=True)
-        serializer.is_valid(raise_exception=True)
+        normalized_trades = []
+        for trade in trades:
+            side = str(trade["direction"]).lower()
+            trade["direction"] = "buy" if side == "long" else "sell" if side == "short" else side
+            normalized_trades.append(trade)
+
+        serializer = TradeSerializer(normalized_trades, many=True)
 
         # Return paginated format expected by frontend
         return Response(
             {"count": queryset.count(), "next": None, "previous": None, "results": serializer.data}
-        )
-
-    @extend_schema(
-        summary="Get task equity curve",
-        description="Retrieve equity curve data from task execution state",
-        responses={200: EquityPointSerializer(many=True)},
-    )
-    @action(detail=True, methods=["get"])
-    def equities(self, request: Request, pk: int | None = None) -> Response:
-        """Get task equity curve from database."""
-        from apps.trading.models.equities import Equity
-
-        task = self.get_object()
-
-        # Query equity points from database
-        equity_points = (
-            Equity.objects.filter(
-                task_type="backtest",
-                task_id=task.pk,
-            )
-            .order_by("timestamp")
-            .values("timestamp", "balance")
-        )
-
-        serializer = EquityPointSerializer(data=list(equity_points), many=True)
-        serializer.is_valid(raise_exception=True)
-
-        # Return paginated format expected by frontend
-        return Response(
-            {
-                "count": len(equity_points),
-                "next": None,
-                "previous": None,
-                "results": serializer.data,
-            }
         )

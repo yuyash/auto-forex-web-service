@@ -34,6 +34,14 @@ export interface ConfigProperty {
       field: string;
       values: string[];
     }>;
+    or?: Array<{
+      field: string;
+      values: string[];
+      and?: Array<{
+        field: string;
+        values: string[];
+      }>;
+    }>;
   };
 }
 

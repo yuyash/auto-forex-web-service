@@ -19,15 +19,22 @@ export const tradingTasksApi = {
   list: (params?: {
     ordering?: string;
     page?: number;
+    page_size?: number;
     search?: string;
     status?: string;
     config_id?: string;
     strategy_type?: string;
+    account_id?: string;
   }) => {
     return withRetry(() =>
       TradingService.tradingTasksTradingList(
+        params?.status,
+        params?.config_id,
+        params?.strategy_type,
+        params?.account_id,
         params?.ordering,
         params?.page,
+        params?.page_size,
         params?.search
       )
     );

@@ -12,6 +12,7 @@ from django.utils import timezone as dj_timezone
 
 from apps.trading.engine import TradingEngine
 from apps.trading.enums import LogLevel, TaskStatus, TaskType
+from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import CeleryTaskStatus, TaskLog, TradingTask
 from apps.trading.tasks.executor import TradingExecutor
 from apps.trading.tasks.source import LiveTickDataSource
@@ -35,21 +36,20 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
         task_id: UUID of the TradingTask to execute
     """
     task = None
+    logging_session: TaskLoggingSession | None = None
 
     try:
         logger.info(f"Starting a new celery trading task. Task ID: {task_id}.")
         task = TradingTask.objects.get(pk=task_id)
+        logging_session = TaskLoggingSession(task)
+        logging_session.start()
 
         # Update status to RUNNING now that the task is actually executing
-        logger.info(
-            f"[CELERY:TRADING] [STATUS] Transitioning: {task.status} -> RUNNING - task_id={task_id}"
-        )
+        logger.info(f"Transitioning: {task.status} -> RUNNING - task_id={task_id}")
         task.status = TaskStatus.RUNNING
         task.started_at = dj_timezone.now()
         task.save(update_fields=["status", "started_at", "updated_at"])
-        logger.info(
-            f"[CELERY:TRADING] [STATUS] Current: RUNNING - task_id={task_id}, started_at={task.started_at}"
-        )
+        logger.info(f"Current: RUNNING - task_id={task_id}, started_at={task.started_at}")
 
         # Log task start
         TaskLog.objects.create(
@@ -57,6 +57,7 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
             task_id=task.pk,
             celery_task_id=self.request.id,
             level=LogLevel.INFO,
+            component=__name__,
             message="Trading task execution started",
         )
 
@@ -64,25 +65,17 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
         execute_trading(task)
 
         # Mark as stopped (trading tasks run until stopped, only if not already stopped/stopping)
-        logger.info(
-            f"[CELERY:TRADING] Execution completed, checking final status - task_id={task_id}"
-        )
+        logger.info(f"Execution completed, checking final status - task_id={task_id}")
         task.refresh_from_db()
-        logger.info(
-            f"[CELERY:TRADING] [STATUS] Current after execution: {task.status} - task_id={task_id}"
-        )
+        logger.info(f"Current after execution: {task.status} - task_id={task_id}")
 
         if task.status not in [TaskStatus.STOPPED, TaskStatus.STOPPING]:
-            logger.info(
-                f"[CELERY:TRADING] [STATUS] Transitioning: {task.status} -> STOPPED - task_id={task_id}"
-            )
+            logger.info(f"Transitioning: {task.status} -> STOPPED - task_id={task_id}")
             task.status = TaskStatus.STOPPED
             task.save(update_fields=["status", "updated_at"])
-            logger.info(f"[CELERY:TRADING] [STATUS] Current: STOPPED - task_id={task_id}")
+            logger.info(f"Current: STOPPED - task_id={task_id}")
         else:
-            logger.info(
-                f"[CELERY:TRADING] [STATUS] Already in terminal state: {task.status} - task_id={task_id}"
-            )
+            logger.info(f"Already in terminal state: {task.status} - task_id={task_id}")
 
         # Log task completion
         TaskLog.objects.create(
@@ -90,6 +83,7 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
             task_id=task.pk,
             celery_task_id=task.celery_task_id,
             level=LogLevel.INFO,
+            component=__name__,
             message="Trading task stopped successfully",
         )
     except TradingTask.DoesNotExist:
@@ -98,6 +92,9 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
     except Exception as e:
         handle_exception(task_id, task, e)
         raise
+    finally:
+        if logging_session:
+            logging_session.stop()
 
 
 def execute_trading(task: TradingTask) -> None:
@@ -169,7 +166,7 @@ def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) 
             status_message=f"Task failed: {type(error).__name__}: {error_message}",
         )
 
-        logger.info(f"[CELERY:TRADING] CeleryTaskStatus updated to FAILED - task_id={task_id}")
+        logger.info(f"CeleryTaskStatus updated to FAILED - task_id={task_id}")
 
         # Log error
         TaskLog.objects.create(
@@ -177,6 +174,7 @@ def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) 
             task_id=task.pk,
             celery_task_id=task.celery_task_id,
             level=LogLevel.ERROR,
+            component=__name__,
             message=f"Trading task execution failed: {type(error).__name__}: {error_message}",
         )
 
@@ -194,36 +192,31 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
     from apps.trading.enums import TaskStatus
 
     try:
-        logger.info(f"[STOP:TRADING] Stop task started - task_id={task_id}, mode={mode}")
+        logger.info(f"Stop task started - task_id={task_id}, mode={mode}")
         task = TradingTask.objects.get(pk=task_id)
-        logger.info(f"[STOP:TRADING] Task loaded - task_id={task_id}, status={task.status}")
+        logger.info(f"Task loaded - task_id={task_id}, status={task.status}")
 
         # Handle STOPPING state (normal case)
         if task.status == TaskStatus.STOPPING:
-            logger.info(
-                f"[STOP:TRADING] [STATUS] Current: STOPPING, proceeding with stop - task_id={task_id}"
-            )
+            logger.info(f"Current: STOPPING, proceeding with stop - task_id={task_id}")
             # Revoke the Celery task if it exists
             if task.celery_task_id:
                 from celery import current_app
 
                 logger.info(
-                    f"[STOP:TRADING] Revoking Celery task - task_id={task_id}, "
+                    f"Revoking Celery task - task_id={task_id}, "
                     f"celery_task_id={task.celery_task_id}"
                 )
                 current_app.control.revoke(task.celery_task_id, terminate=True)
                 logger.info(
-                    f"[STOP:TRADING] Celery task revoked - task_id={task_id}, "
-                    f"celery_task_id={task.celery_task_id}"
+                    f"Celery task revoked - task_id={task_id}, celery_task_id={task.celery_task_id}"
                 )
 
             # Update task status to STOPPED (without completed_at since it didn't complete)
-            logger.info(
-                f"[STOP:TRADING] [STATUS] Transitioning: {task.status} -> STOPPED - task_id={task_id}"
-            )
+            logger.info(f"Transitioning: {task.status} -> STOPPED - task_id={task_id}")
             task.status = TaskStatus.STOPPED
             task.save(update_fields=["status", "updated_at"])
-            logger.info(f"[STOP:TRADING] [STATUS] Current: STOPPED - task_id={task_id}")
+            logger.info(f"Current: STOPPED - task_id={task_id}")
 
             # Update CeleryTaskStatus
             task_name = "trading.tasks.run_trading_task"
@@ -238,14 +231,10 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
 
         # Handle STOPPED state (race condition - task stopped before stop task ran)
         elif task.status == TaskStatus.STOPPED:
-            logger.info(
-                f"[STOP:TRADING] [STATUS] Already STOPPED - task_id={task_id}, nothing to do"
-            )
+            logger.info(f"Already STOPPED - task_id={task_id}, nothing to do")
 
         else:
-            logger.warning(
-                f"[STOP:TRADING] [STATUS] Unexpected state: {task.status} - task_id={task_id}"
-            )
+            logger.warning(f"Unexpected state: {task.status} - task_id={task_id}")
     except TradingTask.DoesNotExist:
         logger.error(f"Trading task {task_id} not found")
         raise

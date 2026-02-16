@@ -8,4 +8,4 @@
 export { TaskEventsTable } from './TaskEventsTable';
 export { TaskLogsTable } from './TaskLogsTable';
 export { TaskTradesTable } from './TaskTradesTable';
-export { TaskEquityChart } from './TaskEquityChart';
+export { TaskReplayPanel } from './TaskReplayPanel';

@@ -21,6 +21,7 @@ from apps.market.views import (
     PositionView,
     SupportedGranularitiesView,
     SupportedInstrumentsView,
+    TickDataView,
 )
 
 app_name = "market"
@@ -33,6 +34,7 @@ urlpatterns: List[URLPattern] = [
         name="oanda_account_detail",
     ),
     path(route="candles/", view=CandleDataView.as_view(), name="candle_data"),
+    path(route="ticks/", view=TickDataView.as_view(), name="tick_data"),
     path(
         route="candles/granularities/",
         view=SupportedGranularitiesView.as_view(),

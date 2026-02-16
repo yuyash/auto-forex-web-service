@@ -1,5 +1,9 @@
 """Unit tests for OANDA service."""
 
+from decimal import Decimal
+
+from apps.market.services.oanda import OandaService, OrderDirection, Position
+
 
 class TestOandaService:
     """Test OANDA service."""
@@ -24,3 +28,21 @@ class TestOandaService:
 
         # Should have service classes
         assert len(classes) > 0
+
+    def test_close_position_dry_run_without_account(self):
+        """Dry-run close_position should not require API client/account."""
+        service = OandaService(account=None, dry_run=True)
+        position = Position(
+            instrument="USD_JPY",
+            direction=OrderDirection.LONG,
+            units=Decimal("1000"),
+            average_price=Decimal("150.00"),
+            unrealized_pnl=Decimal("0"),
+            trade_ids=[],
+            account_id="DRY-RUN",
+        )
+
+        result = service.close_position(position)
+
+        assert result is not None
+        assert result.instrument == "USD_JPY"

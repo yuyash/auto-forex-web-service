@@ -796,6 +796,7 @@ class MarginProtectionEvent(StrategyEvent):
         current_margin: Current margin level (optional)
         threshold: Margin threshold (optional)
         positions_closed: Number of positions closed (optional)
+        units_to_close: Number of units to close (optional)
 
     Example:
         >>> event = MarginProtectionEvent(
@@ -812,6 +813,7 @@ class MarginProtectionEvent(StrategyEvent):
     current_margin: Decimal | None = None
     threshold: Decimal | None = None
     positions_closed: int | None = None
+    units_to_close: int | None = None
 
     def __post_init__(self):
         if not self.event_type:
@@ -831,7 +833,8 @@ class MarginProtectionEvent(StrategyEvent):
         logger = logging.getLogger(__name__)
         logger.info(
             f"Margin protection: reason={self.reason}, current={self.current_margin}, "
-            f"threshold={self.threshold}, closed={self.positions_closed}",
+            f"threshold={self.threshold}, closed={self.positions_closed}, "
+            f"units_to_close={self.units_to_close}",
             extra={
                 "task_id": str(context.task_id),
                 "task_type": context.task_type.value,
@@ -841,6 +844,7 @@ class MarginProtectionEvent(StrategyEvent):
                 "current_margin": str(self.current_margin) if self.current_margin else None,
                 "threshold": str(self.threshold) if self.threshold else None,
                 "positions_closed": self.positions_closed,
+                "units_to_close": self.units_to_close,
                 "timestamp": self.timestamp.isoformat() if self.timestamp else None,
             },
         )
@@ -854,6 +858,8 @@ class MarginProtectionEvent(StrategyEvent):
             result["threshold"] = str(self.threshold)
         if self.positions_closed is not None:
             result["positions_closed"] = self.positions_closed
+        if self.units_to_close is not None:
+            result["units_to_close"] = self.units_to_close
         return result
 
     @classmethod
@@ -884,6 +890,7 @@ class MarginProtectionEvent(StrategyEvent):
             current_margin=current_margin,
             threshold=threshold,
             positions_closed=event_dict.get("positions_closed"),
+            units_to_close=event_dict.get("units_to_close"),
         )
 
 

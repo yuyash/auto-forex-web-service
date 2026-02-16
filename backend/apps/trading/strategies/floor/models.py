@@ -3,110 +3,244 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from apps.trading.strategies.floor.enums import Progression, StrategyStatus
+from apps.trading.strategies.floor.enums import Direction, StrategyStatus
+
+
+def _to_decimal(value: Any, default: str) -> Decimal:
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal(default)
+
+
+def _to_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    return default
 
 
 @dataclass(frozen=True, slots=True)
 class FloorStrategyConfig:
-    """Configuration for Floor strategy.
+    """Normalized Floor strategy configuration."""
 
-    Attributes:
-        # Candle settings for trend detection
-        candle_granularity_seconds: Candle granularity in seconds
-        candle_lookback_count: Number of candles to analyze for trend
-
-        # Position sizing
-        initial_units: Initial position size in units
-        unit_progression: How units change with retracements
-        unit_increment: Increment value for unit progression
-
-        # Profit and retracement
-        profit_pips: Profit target in pips
-        initial_retracement_pips: Initial retracement trigger distance
-        retracement_progression: How retracement distance changes
-        retracement_increment: Increment value for retracement progression
-
-        # Layer limits
-        max_retracements_per_layer: Maximum retracements in one layer
-        max_layers: Maximum number of layers
-
-        # Margin protection
-        margin_closeout_threshold: Margin ratio threshold (e.g., 0.8 for 80%)
-
-        # Account settings
-        hedging_enabled: Whether hedging is enabled on account
-        leverage: Account leverage (e.g., 25 for 25x)
-        margin_rate: Margin rate (e.g., 0.04 for 4%)
-    """
-
-    # Candle settings
+    lot_unit_size: Decimal
+    base_lot_size: Decimal
+    take_profit_pips: Decimal
+    retracement_pips: Decimal
+    retracement_lot_mode: str
+    retracement_lot_amount: Decimal
+    max_layers: int
+    max_retracements_per_layer: int
     candle_granularity_seconds: int
     candle_lookback_count: int
-
-    # Position sizing
-    initial_units: Decimal
-    unit_progression: Progression
-    unit_increment: Decimal
-
-    # Profit and retracement
-    profit_pips: Decimal
-    initial_retracement_pips: Decimal
-    retracement_progression: Progression
-    retracement_increment: Decimal
-
-    # Layer limits
-    max_retracements_per_layer: int
-    max_layers: int
-
-    # Margin protection
-    margin_closeout_threshold: Decimal
-
-    # Account settings
     hedging_enabled: bool
+    allow_duplicate_units: bool
+    margin_closeout_threshold: Decimal
+    margin_cut_start_ratio: Decimal
+    margin_cut_target_ratio: Decimal
+    margin_protection_enabled: bool
     leverage: Decimal
     margin_rate: Decimal
+    volatility_check_enabled: bool
+    volatility_lock_multiplier: Decimal
+    volatility_unlock_multiplier: Decimal
+    atr_period: int
+    atr_baseline_period: int
+    market_condition_spread_limit_pips: Decimal
+    market_condition_override_enabled: bool
+    dynamic_parameter_adjustment_enabled: bool
+    floor_profiles: list[dict[str, Decimal]]
 
     @staticmethod
-    def from_dict(raw: dict[str, Any]) -> FloorStrategyConfig:
-        """Create config from dictionary."""
+    def from_dict(raw: dict[str, Any]) -> "FloorStrategyConfig":
+        """Create normalized config from raw/legacy parameters."""
+        lot_unit_size = _to_decimal(raw.get("lot_unit_size", "1000"), "1000")
+        legacy_initial_units = raw.get("initial_units")
+        if legacy_initial_units is not None:
+            base_lot_size = _to_decimal(legacy_initial_units, "1000") / lot_unit_size
+        else:
+            base_lot_size = _to_decimal(raw.get("base_lot_size", "1"), "1")
 
-        def _decimal(key: str, default: str = "0") -> Decimal:
-            val = raw.get(key, default)
-            return Decimal(str(val))
+        take_profit_pips = _to_decimal(
+            raw.get("take_profit_pips", raw.get("profit_pips", "25")), "25"
+        )
+        retracement_pips = _to_decimal(
+            raw.get("retracement_pips", raw.get("initial_retracement_pips", "30")), "30"
+        )
+        retracement_lot_mode = str(raw.get("retracement_lot_mode", "additive")).strip().lower()
+        if retracement_lot_mode not in {"additive", "multiplicative"}:
+            retracement_lot_mode = "additive"
 
-        def _int(key: str, default: int = 0) -> int:
-            return int(raw.get(key, default))
+        retracement_lot_amount = _to_decimal(
+            raw.get(
+                "retracement_lot_amount",
+                raw.get("unit_increment", "1"),
+            ),
+            "1",
+        )
 
-        def _bool(key: str, default: bool = False) -> bool:
-            return bool(raw.get(key, default))
+        max_retracements_per_layer = _to_int(
+            raw.get("max_retracements_per_layer", raw.get("max_additional_entries", 10)), 10
+        )
 
-        def _progression(key: str, default: Progression = Progression.CONSTANT) -> Progression:
-            val = raw.get(key, default.value)
-            try:
-                return Progression(val)
-            except ValueError:
-                return default
+        floor_profiles: list[dict[str, Decimal]] = []
+        raw_profiles = raw.get("floor_profiles")
+        if isinstance(raw_profiles, list):
+            for profile in raw_profiles:
+                if not isinstance(profile, dict):
+                    continue
+                floor_profiles.append(
+                    {
+                        "take_profit_pips": _to_decimal(
+                            profile.get("take_profit_pips", take_profit_pips), str(take_profit_pips)
+                        ),
+                        "retracement_pips": _to_decimal(
+                            profile.get("retracement_pips", retracement_pips), str(retracement_pips)
+                        ),
+                    }
+                )
+        else:
+            # Backward compatibility with array-based per-floor keys.
+            tp_values = raw.get("floor_take_profit_pips")
+            rt_values = raw.get("floor_retracement_pips")
+            if isinstance(tp_values, list) or isinstance(rt_values, list):
+                max_len = max(
+                    len(tp_values) if isinstance(tp_values, list) else 0,
+                    len(rt_values) if isinstance(rt_values, list) else 0,
+                )
+                for idx in range(max_len):
+                    tp_val = (
+                        tp_values[idx]
+                        if isinstance(tp_values, list) and idx < len(tp_values)
+                        else take_profit_pips
+                    )
+                    rt_val = (
+                        rt_values[idx]
+                        if isinstance(rt_values, list) and idx < len(rt_values)
+                        else retracement_pips
+                    )
+                    floor_profiles.append(
+                        {
+                            "take_profit_pips": _to_decimal(tp_val, str(take_profit_pips)),
+                            "retracement_pips": _to_decimal(rt_val, str(retracement_pips)),
+                        }
+                    )
 
         return FloorStrategyConfig(
-            candle_granularity_seconds=_int("candle_granularity_seconds", 60),
-            candle_lookback_count=_int("candle_lookback_count", 20),
-            initial_units=_decimal("initial_units", "1000"),
-            unit_progression=_progression("unit_progression", Progression.CONSTANT),
-            unit_increment=_decimal("unit_increment", "1000"),
-            profit_pips=_decimal("profit_pips", "10"),
-            initial_retracement_pips=_decimal("initial_retracement_pips", "5"),
-            retracement_progression=_progression("retracement_progression", Progression.CONSTANT),
-            retracement_increment=_decimal("retracement_increment", "5"),
-            max_retracements_per_layer=_int("max_retracements_per_layer", 5),
-            max_layers=_int("max_layers", 3),
-            margin_closeout_threshold=_decimal("margin_closeout_threshold", "0.8"),
-            hedging_enabled=_bool("hedging_enabled", False),
-            leverage=_decimal("leverage", "25"),
-            margin_rate=_decimal("margin_rate", "0.04"),
+            lot_unit_size=lot_unit_size,
+            base_lot_size=base_lot_size,
+            take_profit_pips=take_profit_pips,
+            retracement_pips=retracement_pips,
+            retracement_lot_mode=retracement_lot_mode,
+            retracement_lot_amount=retracement_lot_amount,
+            max_layers=_to_int(raw.get("max_layers", "3"), 3),
+            max_retracements_per_layer=max_retracements_per_layer,
+            candle_granularity_seconds=_to_int(
+                raw.get(
+                    "candle_granularity_seconds",
+                    raw.get("entry_signal_candle_granularity_seconds", "60"),
+                ),
+                60,
+            ),
+            candle_lookback_count=_to_int(
+                raw.get(
+                    "candle_lookback_count",
+                    raw.get("entry_signal_lookback_candles", "20"),
+                ),
+                20,
+            ),
+            hedging_enabled=_to_bool(raw.get("hedging_enabled", False), False),
+            allow_duplicate_units=_to_bool(raw.get("allow_duplicate_units", False), False),
+            margin_closeout_threshold=_to_decimal(raw.get("margin_closeout_threshold", "0.8"), "0.8"),
+            margin_cut_start_ratio=_to_decimal(raw.get("margin_cut_start_ratio", "0.6"), "0.6"),
+            margin_cut_target_ratio=_to_decimal(raw.get("margin_cut_target_ratio", "0.5"), "0.5"),
+            margin_protection_enabled=_to_bool(raw.get("margin_protection_enabled", True), True),
+            leverage=_to_decimal(raw.get("leverage", "25"), "25"),
+            margin_rate=_to_decimal(raw.get("margin_rate", "0.04"), "0.04"),
+            volatility_check_enabled=_to_bool(raw.get("volatility_check_enabled", True), True),
+            volatility_lock_multiplier=_to_decimal(
+                raw.get("volatility_lock_multiplier", "5.0"), "5.0"
+            ),
+            volatility_unlock_multiplier=_to_decimal(
+                raw.get("volatility_unlock_multiplier", "1.5"), "1.5"
+            ),
+            atr_period=_to_int(raw.get("atr_period", "14"), 14),
+            atr_baseline_period=_to_int(raw.get("atr_baseline_period", "50"), 50),
+            market_condition_spread_limit_pips=_to_decimal(
+                raw.get("market_condition_spread_limit_pips", "3.0"), "3.0"
+            ),
+            market_condition_override_enabled=_to_bool(
+                raw.get("market_condition_override_enabled", True), True
+            ),
+            dynamic_parameter_adjustment_enabled=_to_bool(
+                raw.get("dynamic_parameter_adjustment_enabled", False), False
+            ),
+            floor_profiles=floor_profiles,
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to normalized parameters for JSON column storage."""
+        return {
+            "lot_unit_size": str(self.lot_unit_size),
+            "base_lot_size": str(self.base_lot_size),
+            "take_profit_pips": str(self.take_profit_pips),
+            "retracement_pips": str(self.retracement_pips),
+            "retracement_lot_mode": self.retracement_lot_mode,
+            "retracement_lot_amount": str(self.retracement_lot_amount),
+            "max_layers": self.max_layers,
+            "max_retracements_per_layer": self.max_retracements_per_layer,
+            "candle_granularity_seconds": self.candle_granularity_seconds,
+            "candle_lookback_count": self.candle_lookback_count,
+            "hedging_enabled": self.hedging_enabled,
+            "allow_duplicate_units": self.allow_duplicate_units,
+            "margin_closeout_threshold": str(self.margin_closeout_threshold),
+            "margin_cut_start_ratio": str(self.margin_cut_start_ratio),
+            "margin_cut_target_ratio": str(self.margin_cut_target_ratio),
+            "margin_protection_enabled": self.margin_protection_enabled,
+            "leverage": str(self.leverage),
+            "margin_rate": str(self.margin_rate),
+            "volatility_check_enabled": self.volatility_check_enabled,
+            "volatility_lock_multiplier": str(self.volatility_lock_multiplier),
+            "volatility_unlock_multiplier": str(self.volatility_unlock_multiplier),
+            "atr_period": self.atr_period,
+            "atr_baseline_period": self.atr_baseline_period,
+            "market_condition_spread_limit_pips": str(self.market_condition_spread_limit_pips),
+            "market_condition_override_enabled": self.market_condition_override_enabled,
+            "dynamic_parameter_adjustment_enabled": self.dynamic_parameter_adjustment_enabled,
+            "floor_profiles": [
+                {
+                    "take_profit_pips": str(profile.get("take_profit_pips", self.take_profit_pips)),
+                    "retracement_pips": str(profile.get("retracement_pips", self.retracement_pips)),
+                }
+                for profile in self.floor_profiles
+            ],
+        }
+
+    def floor_take_profit_pips(self, floor_index: int) -> Decimal:
+        if 0 <= floor_index < len(self.floor_profiles):
+            return self.floor_profiles[floor_index].get("take_profit_pips", self.take_profit_pips)
+        return self.take_profit_pips
+
+    def floor_retracement_pips(self, floor_index: int) -> Decimal:
+        if 0 <= floor_index < len(self.floor_profiles):
+            return self.floor_profiles[floor_index].get("retracement_pips", self.retracement_pips)
+        return self.retracement_pips
 
 
 @dataclass
@@ -134,18 +268,7 @@ class CandleData:
 
 @dataclass
 class FloorStrategyState:
-    """State for Floor strategy.
-
-    Attributes:
-        status: Strategy status
-        candles: Historical candle data
-        current_candle_close: Current candle close price
-        last_mid: Last mid price
-        last_bid: Last bid price
-        last_ask: Last ask price
-        account_balance: Account balance for margin calculation
-        account_nav: Net asset value (balance + unrealized P/L)
-    """
+    """State for Floor strategy."""
 
     status: StrategyStatus = StrategyStatus.RUNNING
     candles: list[CandleData] = field(default_factory=list)
@@ -155,6 +278,16 @@ class FloorStrategyState:
     last_ask: Decimal | None = None
     account_balance: Decimal = Decimal("0")
     account_nav: Decimal = Decimal("0")
+    active_floor_index: int = 0
+    home_floor_index: int = 0
+    next_entry_id: int = 1
+    floor_retracement_counts: dict[int, int] = field(default_factory=dict)
+    floor_directions: dict[int, str] = field(default_factory=dict)
+    return_stack: list[int] = field(default_factory=list)
+    open_entries: list[dict[str, Any]] = field(default_factory=list)
+    volatility_locked: bool = False
+    lock_reason: str = ""
+    metrics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -169,14 +302,39 @@ class FloorStrategyState:
             "last_ask": str(self.last_ask) if self.last_ask else None,
             "account_balance": str(self.account_balance),
             "account_nav": str(self.account_nav),
+            "active_floor_index": self.active_floor_index,
+            "home_floor_index": self.home_floor_index,
+            "next_entry_id": self.next_entry_id,
+            "floor_retracement_counts": {str(k): v for k, v in self.floor_retracement_counts.items()},
+            "floor_directions": {str(k): v for k, v in self.floor_directions.items()},
+            "return_stack": list(self.return_stack),
+            "open_entries": list(self.open_entries),
+            "volatility_locked": self.volatility_locked,
+            "lock_reason": self.lock_reason,
+            "metrics": dict(self.metrics),
         }
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> FloorStrategyState:
         """Create from dictionary."""
-
         def _decimal_or_none(val: Any) -> Decimal | None:
-            return Decimal(str(val)) if val is not None else None
+            if val is None:
+                return None
+            return _to_decimal(val, "0")
+
+        floor_retracement_counts: dict[int, int] = {}
+        raw_floor_counts = data.get("floor_retracement_counts", {})
+        if isinstance(raw_floor_counts, dict):
+            for key, value in raw_floor_counts.items():
+                floor_retracement_counts[_to_int(key, 0)] = _to_int(value, 0)
+
+        floor_directions: dict[int, str] = {}
+        raw_floor_directions = data.get("floor_directions", {})
+        if isinstance(raw_floor_directions, dict):
+            for key, value in raw_floor_directions.items():
+                val = str(value).strip().lower()
+                if val in {Direction.LONG.value, Direction.SHORT.value}:
+                    floor_directions[_to_int(key, 0)] = val
 
         return FloorStrategyState(
             status=StrategyStatus(data.get("status", StrategyStatus.RUNNING.value)),
@@ -185,6 +343,28 @@ class FloorStrategyState:
             last_mid=_decimal_or_none(data.get("last_mid")),
             last_bid=_decimal_or_none(data.get("last_bid")),
             last_ask=_decimal_or_none(data.get("last_ask")),
-            account_balance=Decimal(str(data.get("account_balance", "0"))),
-            account_nav=Decimal(str(data.get("account_nav", "0"))),
+            account_balance=_to_decimal(data.get("account_balance", "0"), "0"),
+            account_nav=_to_decimal(data.get("account_nav", "0"), "0"),
+            active_floor_index=_to_int(data.get("active_floor_index", 0), 0),
+            home_floor_index=_to_int(data.get("home_floor_index", 0), 0),
+            next_entry_id=max(1, _to_int(data.get("next_entry_id", 1), 1)),
+            floor_retracement_counts=floor_retracement_counts,
+            floor_directions=floor_directions,
+            return_stack=[
+                _to_int(item, 0)
+                for item in (data.get("return_stack", []) if isinstance(data.get("return_stack"), list) else [])
+            ],
+            open_entries=list(data.get("open_entries", []))
+            if isinstance(data.get("open_entries"), list)
+            else [],
+            volatility_locked=_to_bool(data.get("volatility_locked", False), False),
+            lock_reason=str(data.get("lock_reason", "")),
+            metrics=dict(data.get("metrics", {})) if isinstance(data.get("metrics"), dict) else {},
         )
+
+    @classmethod
+    def from_strategy_state(cls, raw: Any) -> "FloorStrategyState":
+        """Deserialize from persisted strategy_state payload."""
+        if not isinstance(raw, dict):
+            return cls()
+        return cls.from_dict(raw)

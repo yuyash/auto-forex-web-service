@@ -161,23 +161,32 @@ export class TradingService {
    * - events: Retrieve task events
    * - trades: Retrieve trade history
    * - equity: Retrieve equity curve
+   * @param status
+   * @param configId
    * @param ordering Which field to use when ordering the results.
    * @param page A page number within the paginated result set.
+   * @param pageSize Number of results to return per page.
    * @param search A search term.
    * @returns PaginatedBacktestTaskList
    * @throws ApiError
    */
   public static tradingTasksBacktestList(
+    status?: string,
+    configId?: string,
     ordering?: string,
     page?: number,
+    pageSize?: number,
     search?: string
   ): CancelablePromise<PaginatedBacktestTaskList> {
     return __request(OpenAPI, {
       method: 'GET',
       url: '/api/trading/tasks/backtest/',
       query: {
+        status: status,
+        config_id: configId,
         ordering: ordering,
         page: page,
+        page_size: pageSize,
         search: search,
       },
     });
@@ -588,23 +597,38 @@ export class TradingService {
    * - events: Retrieve task events
    * - trades: Retrieve trade history
    * - equity: Retrieve equity curve
+   * @param status
+   * @param configId
+   * @param strategyType
+   * @param accountId
    * @param ordering Which field to use when ordering the results.
    * @param page A page number within the paginated result set.
+   * @param pageSize Number of results to return per page.
    * @param search A search term.
    * @returns PaginatedTradingTaskList
    * @throws ApiError
    */
   public static tradingTasksTradingList(
+    status?: string,
+    configId?: string,
+    strategyType?: string,
+    accountId?: string,
     ordering?: string,
     page?: number,
+    pageSize?: number,
     search?: string
   ): CancelablePromise<PaginatedTradingTaskList> {
     return __request(OpenAPI, {
       method: 'GET',
       url: '/api/trading/tasks/trading/',
       query: {
+        status: status,
+        config_id: configId,
+        strategy_type: strategyType,
+        account_id: accountId,
         ordering: ordering,
         page: page,
+        page_size: pageSize,
         search: search,
       },
     });

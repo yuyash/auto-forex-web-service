@@ -19,6 +19,7 @@ export const backtestTasksApi = {
   list: (params?: {
     ordering?: string;
     page?: number;
+    page_size?: number;
     search?: string;
     status?: string;
     config_id?: string;
@@ -26,8 +27,11 @@ export const backtestTasksApi = {
   }) => {
     return withRetry(() =>
       TradingService.tradingTasksBacktestList(
+        params?.status,
+        params?.config_id,
         params?.ordering,
         params?.page,
+        params?.page_size,
         params?.search
       )
     );

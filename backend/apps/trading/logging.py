@@ -9,12 +9,17 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Sequence
 
 from apps.trading.models.logs import TaskLog
 
 if TYPE_CHECKING:
     from apps.trading.models import BacktestTask, TradingTask
+
+
+DEFAULT_TASK_LOGGER_NAMES: tuple[str, ...] = (
+    "apps.trading",
+)
 
 
 class JSONLoggingHandler(logging.Handler):
@@ -96,6 +101,7 @@ class JSONLoggingHandler(logging.Handler):
                 task_id=self.task.pk,
                 celery_task_id=self.task.celery_task_id,
                 level=record.levelname,
+                component=record.name,
                 message=record.getMessage(),
                 details=log_entry,
             )
@@ -159,3 +165,65 @@ def get_task_logger(
         logger.addHandler(handler)
 
     return logger
+
+
+class TaskLoggingSession:
+    """Attach JSON task logging handlers for a single task execution.
+
+    This centralizes logger wiring so individual modules do not need to manage
+    handler registration directly.
+    """
+
+    def __init__(
+        self,
+        task: BacktestTask | TradingTask,
+        *,
+        level: int = logging.INFO,
+        logger_names: Sequence[str] | None = None,
+        extra_logger_names: Sequence[str] | None = None,
+    ) -> None:
+        self.task = task
+        self.level = level
+        self.logger_names = tuple(logger_names or DEFAULT_TASK_LOGGER_NAMES)
+        self.extra_logger_names = tuple(extra_logger_names or ())
+        self.handler = JSONLoggingHandler(task)
+        self.handler.setLevel(level)
+        self._attached_loggers: list[logging.Logger] = []
+
+    def start(self) -> None:
+        """Attach handler to configured loggers (idempotent)."""
+        all_logger_names = tuple(dict.fromkeys((*self.logger_names, *self.extra_logger_names)))
+
+        for name in all_logger_names:
+            logger_obj = logging.getLogger(name)
+
+            # Avoid duplicate writes for the same task logger pair.
+            has_same_task_handler = any(
+                isinstance(h, JSONLoggingHandler) and getattr(h, "task", None).pk == self.task.pk
+                for h in logger_obj.handlers
+            )
+            if has_same_task_handler:
+                continue
+
+            logger_obj.addHandler(self.handler)
+            self._attached_loggers.append(logger_obj)
+
+    def stop(self) -> None:
+        """Detach handler from loggers where it was attached."""
+        for logger_obj in self._attached_loggers:
+            if self.handler in logger_obj.handlers:
+                logger_obj.removeHandler(self.handler)
+        self._attached_loggers.clear()
+
+    def __enter__(self) -> TaskLoggingSession:
+        self.start()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: Any | None,
+    ) -> bool:
+        self.stop()
+        return False

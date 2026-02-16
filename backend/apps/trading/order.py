@@ -88,6 +88,9 @@ class OrderService:
         direction: Direction,
         take_profit: Decimal | None = None,
         stop_loss: Decimal | None = None,
+        *,
+        layer_index: int | None = None,
+        merge_with_existing: bool = True,
     ) -> Position:
         """
         Open a new position with specified direction.
@@ -98,6 +101,8 @@ class OrderService:
             direction: Position direction (Direction.LONG or Direction.SHORT)
             take_profit: Optional take profit price
             stop_loss: Optional stop loss price
+            layer_index: Optional layer index for Floor strategy
+            merge_with_existing: Whether to merge into existing same-direction position
 
         Returns:
             Position: Created or updated position
@@ -124,13 +129,15 @@ class OrderService:
             direction=direction,
             take_profit=take_profit,
             stop_loss=stop_loss,
+            layer_index=layer_index,
+            merge_with_existing=merge_with_existing,
         )
 
     def close_position(
         self,
         position: Position,
         units: int | None = None,
-    ) -> Position:
+    ) -> tuple[Position, Decimal]:
         """
         Close an existing position (full or partial).
 
@@ -143,7 +150,7 @@ class OrderService:
             units: Optional number of units to close (if None, closes all)
 
         Returns:
-            Position: Updated position (closed or partially closed)
+            tuple[Position, Decimal]: Updated position and realized pnl delta for this close
 
         Raises:
             OrderServiceError: If position close fails
@@ -197,11 +204,16 @@ class OrderService:
             # Update position
             if units is None or units >= abs(position.units):
                 # Full close
+                previous_realized = Decimal(str(position.realized_pnl or "0"))
+                original_units = abs(position.units)
                 exit_time_value = oanda_order.fill_time or timezone.now()
                 position.close(
                     exit_price=oanda_order.price or Decimal("0"),
                     exit_time=exit_time_value,  # type: ignore[arg-type]
                 )
+                # Preserve previously realized pnl from prior partial closes.
+                if previous_realized != Decimal("0"):
+                    position.realized_pnl = Decimal(str(position.realized_pnl or "0")) + previous_realized
                 position.save()
 
                 logger.info(
@@ -214,25 +226,39 @@ class OrderService:
                     order.id,
                     self.dry_run,
                 )
+                realized_delta = (oanda_order.price or Decimal("0")) - position.entry_price
+                if position.direction == Direction.SHORT:
+                    realized_delta = -realized_delta
+                realized_delta = realized_delta * Decimal(original_units)
             else:
                 # Partial close - reduce units
+                close_price = oanda_order.price or Decimal("0")
+                close_units_decimal = Decimal(units)
+                realized_delta = close_price - position.entry_price
+                if position.direction == Direction.SHORT:
+                    realized_delta = -realized_delta
+                realized_delta = realized_delta * close_units_decimal
+
                 if position.direction == Direction.LONG:
                     position.units = position.units - units
                 else:
                     position.units = position.units + units
+                position.realized_pnl = Decimal(str(position.realized_pnl or "0")) + realized_delta
                 position.save()
 
                 logger.info(
-                    "Position partially closed: %s units of %s %s position (remaining: %s, order=%s, dry_run=%s)",
+                    "Position partially closed: %s units of %s %s position (remaining: %s, "
+                    "realized_delta=%s, order=%s, dry_run=%s)",
                     units,
                     position.direction,
                     position.instrument,
                     abs(position.units),
+                    realized_delta,
                     order.id,
                     self.dry_run,
                 )
 
-            return position
+            return position, realized_delta
 
         except Exception as e:
             logger.error(
@@ -250,6 +276,9 @@ class OrderService:
         direction: Direction,
         take_profit: Decimal | None = None,
         stop_loss: Decimal | None = None,
+        *,
+        layer_index: int | None = None,
+        merge_with_existing: bool = True,
     ) -> Position:
         """
         Execute a market order and create/update position.
@@ -297,6 +326,8 @@ class OrderService:
                 units=abs(units),
                 entry_price=oanda_order.price or Decimal("0"),
                 entry_time=oanda_order.fill_time or timezone.now(),
+                layer_index=layer_index,
+                merge_with_existing=merge_with_existing,
             )
 
             logger.info(
@@ -360,40 +391,46 @@ class OrderService:
         units: int,
         entry_price: Decimal,
         entry_time: datetime,
+        *,
+        layer_index: int | None = None,
+        merge_with_existing: bool = True,
     ) -> Position:
         """Create new position or update existing one."""
-        # Check for existing open position
-        existing_position = (
-            Position.objects.filter(
-                task_type=self.task_type,
-                task_id=self.task.id,
-                instrument=instrument,
-                direction=direction,
-                is_open=True,
-            )
-            .order_by("-entry_time")
-            .first()
-        )
-
-        if existing_position:
-            # Update existing position (weighted average)
-            total_units = existing_position.units + units
-            new_avg_price = (
-                (existing_position.entry_price * existing_position.units) + (entry_price * units)
-            ) / total_units
-
-            existing_position.units = total_units
-            existing_position.entry_price = new_avg_price
-            existing_position.save()
-
-            logger.debug(
-                "Updated existing position %s: %s units @ %s",
-                existing_position.id,
-                total_units,
-                new_avg_price,
+        if merge_with_existing:
+            # Check for existing open position
+            existing_position = (
+                Position.objects.filter(
+                    task_type=self.task_type,
+                    task_id=self.task.id,
+                    instrument=instrument,
+                    direction=direction,
+                    is_open=True,
+                )
+                .order_by("-entry_time")
+                .first()
             )
 
-            return existing_position
+            if existing_position:
+                # Update existing position (weighted average)
+                total_units = existing_position.units + units
+                new_avg_price = (
+                    (existing_position.entry_price * existing_position.units) + (entry_price * units)
+                ) / total_units
+
+                existing_position.units = total_units
+                existing_position.entry_price = new_avg_price
+                if layer_index is not None:
+                    existing_position.layer_index = layer_index
+                existing_position.save()
+
+                logger.debug(
+                    "Updated existing position %s: %s units @ %s",
+                    existing_position.id,
+                    total_units,
+                    new_avg_price,
+                )
+
+                return existing_position
 
         # Create new position
         position = Position.objects.create(
@@ -405,6 +442,7 @@ class OrderService:
             entry_price=entry_price,
             entry_time=entry_time,
             is_open=True,
+            layer_index=layer_index,
         )
 
         logger.debug(

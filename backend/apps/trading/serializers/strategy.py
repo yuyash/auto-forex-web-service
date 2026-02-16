@@ -119,23 +119,11 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
 
     @staticmethod
     def _normalize_floor_parameters(parameters: dict) -> dict:
-        """Drop unused floor strategy fields based on progression choices."""
-        normalized = dict(parameters)
+        """Normalize floor strategy parameters through typed config model."""
+        from apps.trading.strategies.floor.models import FloorStrategyConfig
 
-        # Rename legacy scaling fields to retracement lot fields.
-
-        # retracement_trigger_base is deprecated; always derive from max retracements
-        normalized.pop("retracement_trigger_base", None)
-
-        retracement_progression = normalized.get("retracement_trigger_progression", "additive")
-        if retracement_progression not in {"additive", "exponential"}:
-            normalized.pop("retracement_trigger_increment", None)
-
-        lot_progression = normalized.get("lot_size_progression", "additive")
-        if lot_progression not in {"additive", "exponential"}:
-            normalized.pop("lot_size_increment", None)
-
-        return normalized
+        config = FloorStrategyConfig.from_dict(dict(parameters))
+        return config.to_dict()
 
     def create(self, validated_data: dict) -> StrategyConfiguration:
         """Create strategy configuration with user from context."""

@@ -36,14 +36,8 @@ class TradeSerializer(serializers.Serializer):
     instrument = serializers.CharField()
     price = serializers.DecimalField(max_digits=20, decimal_places=10)
     execution_method = serializers.CharField()
+    layer_index = serializers.IntegerField(required=False, allow_null=True)
     pnl = serializers.DecimalField(
         max_digits=20, decimal_places=10, required=False, allow_null=True
     )
     timestamp = serializers.DateTimeField()
-
-
-class EquityPointSerializer(serializers.Serializer):
-    """Serializer for equity curve data points from Equities model."""
-
-    timestamp = serializers.DateTimeField()
-    balance = serializers.DecimalField(max_digits=20, decimal_places=2)

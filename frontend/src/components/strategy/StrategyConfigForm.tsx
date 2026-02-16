@@ -52,17 +52,26 @@ const StrategyConfigForm = ({
     currentConfig: StrategyConfig,
     dependsOn: NonNullable<ConfigProperty['dependsOn']>
   ): boolean => {
-    const raw = currentConfig[dependsOn.field];
-    const value = raw === undefined || raw === null ? '' : String(raw);
-    if (!dependsOn.values.includes(value)) return false;
+    const matchesSingleCondition = (cond: {
+      field: string;
+      values: string[];
+      and?: Array<{ field: string; values: string[] }>;
+    }): boolean => {
+      const raw = currentConfig[cond.field];
+      const value = raw === undefined || raw === null ? '' : String(raw);
+      if (!cond.values.includes(value)) return false;
+      if (!cond.and || cond.and.length === 0) return true;
+      return cond.and.every((andCond) => {
+        const rawCond = currentConfig[andCond.field];
+        const valueCond =
+          rawCond === undefined || rawCond === null ? '' : String(rawCond);
+        return andCond.values.includes(valueCond);
+      });
+    };
 
-    if (!dependsOn.and || dependsOn.and.length === 0) return true;
-    return dependsOn.and.every((cond) => {
-      const rawCond = currentConfig[cond.field];
-      const valueCond =
-        rawCond === undefined || rawCond === null ? '' : String(rawCond);
-      return cond.values.includes(valueCond);
-    });
+    if (matchesSingleCondition(dependsOn)) return true;
+    if (!dependsOn.or || dependsOn.or.length === 0) return false;
+    return dependsOn.or.some((orCond) => matchesSingleCondition(orCond));
   };
 
   useEffect(() => {
