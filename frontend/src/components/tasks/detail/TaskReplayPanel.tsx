@@ -14,6 +14,7 @@ import {
   Typography,
 } from '@mui/material';
 import {
+  TickMarkType,
   LineSeries,
   createChart,
   createSeriesMarkers,
@@ -56,6 +57,48 @@ interface TaskReplayPanelProps {
 
 const toUtcTimestamp = (iso: string): UTCTimestamp =>
   Math.floor(new Date(iso).getTime() / 1000) as UTCTimestamp;
+
+const toDate = (time: Time): Date => {
+  if (typeof time === 'number') {
+    return new Date(time * 1000);
+  }
+  if (typeof time === 'string') {
+    return new Date(time);
+  }
+  return new Date(Date.UTC(time.year, time.month - 1, time.day));
+};
+
+const tickMarkFormatter = (time: Time, tickMarkType: TickMarkType, locale: string): string => {
+  const date = toDate(time);
+  if (Number.isNaN(date.getTime())) return '';
+
+  if (tickMarkType === TickMarkType.TimeWithSeconds) {
+    return new Intl.DateTimeFormat(locale, {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(date);
+  }
+
+  if (tickMarkType === TickMarkType.Time) {
+    return new Intl.DateTimeFormat(locale, {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(date);
+  }
+
+  return new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+};
 
 const toRfc3339Seconds = (value: string): string => {
   const date = new Date(value);
@@ -215,17 +258,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   }, [trades]);
 
   useEffect(() => {
+    if (isLoading) return;
     if (!chartContainerRef.current || chartRef.current) return;
     const container = chartContainerRef.current;
     const chart = createChart(container, {
       height: 420,
       layout: {
-        background: { color: '#0b1220' },
-        textColor: '#dbe1ee',
+        background: { color: '#ffffff' },
+        textColor: '#334155',
       },
       grid: {
-        vertLines: { color: '#1f2937' },
-        horzLines: { color: '#1f2937' },
+        vertLines: { color: '#e2e8f0' },
+        horzLines: { color: '#e2e8f0' },
       },
       handleScale: {
         axisPressedMouseMove: true,
@@ -238,11 +282,16 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         vertTouchDrag: true,
         horzTouchDrag: true,
       },
-      rightPriceScale: { borderColor: '#334155' },
-      timeScale: { borderColor: '#334155', timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: '#cbd5e1' },
+      timeScale: {
+        borderColor: '#cbd5e1',
+        timeVisible: true,
+        secondsVisible: false,
+        tickMarkFormatter,
+      },
     });
     const series = chart.addSeries(LineSeries, {
-      color: '#60a5fa',
+      color: '#ef4444',
       lineWidth: 2,
       crosshairMarkerVisible: false,
     });
@@ -279,7 +328,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       seriesRef.current = null;
       markersRef.current = null;
     };
-  }, []);
+  }, [isLoading]);
 
   useEffect(() => {
     if (!seriesRef.current || !markersRef.current) return;

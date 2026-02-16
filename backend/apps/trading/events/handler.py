@@ -235,7 +235,7 @@ class EventHandler:
             instrument=position.instrument,
             price=position.entry_price,
             execution_method=str(event.event_type.value),
-            timestamp=position.entry_time,
+            timestamp=event.timestamp,
             layer_index=event.layer_number,
         )
 
@@ -277,7 +277,7 @@ class EventHandler:
             instrument=position.instrument,
             price=position.entry_price,
             execution_method=str(event.event_type.value),
-            timestamp=position.entry_time,
+            timestamp=event.timestamp,
             layer_index=event.layer_number,
         )
 
