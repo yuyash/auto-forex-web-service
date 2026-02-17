@@ -68,7 +68,7 @@ const ConfigurationDeleteDialog = ({
 
   const handleDelete = async () => {
     try {
-      await deleteConfiguration(Number(configuration.id));
+      await deleteConfiguration(configuration.id);
       onClose();
     } catch (error) {
       console.error('Failed to delete configuration:', error);

@@ -11,7 +11,7 @@ export type TradingTask = {
   /**
    * Unique identifier for this record
    */
-  readonly id: string;
+  readonly id?: string;
   /**
    * Human-readable name for this trading task
    */
@@ -29,7 +29,7 @@ export type TradingTask = {
    * Returns:
    * str: "backtest" or "trading"
    */
-  readonly task_type: string;
+  readonly task_type?: string;
   /**
    * Current task status
    *
@@ -42,23 +42,23 @@ export type TradingTask = {
    * * `completed` - Completed
    * * `failed` - Failed
    */
-  readonly status: StatusEnum;
+  readonly status?: StatusEnum;
   /**
    * Timestamp when this record was created
    */
-  readonly created_at: string;
+  readonly created_at?: string;
   /**
    * Timestamp when this record was last updated
    */
-  readonly updated_at: string;
+  readonly updated_at?: string;
   /**
    * Timestamp when the task execution started
    */
-  readonly started_at: string | null;
+  readonly started_at?: string | null;
   /**
    * Timestamp when the task execution completed
    */
-  readonly completed_at: string | null;
+  readonly completed_at?: string | null;
   /**
    * Calculate task execution duration in seconds.
    *
@@ -69,31 +69,23 @@ export type TradingTask = {
    * float | None: Duration in seconds if both started_at and completed_at are set,
    * None otherwise
    */
-  readonly duration: number | null;
+  readonly duration?: number | null;
   /**
    * Celery task ID for tracking execution
    */
-  readonly celery_task_id: string | null;
-  /**
-   * Number of times this task has been retried
-   */
-  retry_count?: number;
-  /**
-   * Maximum number of retries allowed
-   */
-  max_retries?: number;
+  readonly celery_task_id?: string | null;
   /**
    * Error message if task failed
    */
-  readonly error_message: string | null;
+  readonly error_message?: string | null;
   /**
    * Full error traceback if task failed
    */
-  readonly error_traceback: string | null;
+  readonly error_traceback?: string | null;
   /**
    * User who created this trading task
    */
-  readonly user: number;
+  readonly user?: number;
   /**
    * Strategy configuration used by this task
    */
@@ -120,5 +112,5 @@ export type TradingTask = {
   /**
    * Strategy-specific state for persistence across restarts
    */
-  readonly strategy_state: any;
+  readonly strategy_state?: any;
 };

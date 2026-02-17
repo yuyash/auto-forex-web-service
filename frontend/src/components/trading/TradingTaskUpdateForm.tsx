@@ -25,7 +25,7 @@ const tradingTaskUpdateSchema = z.object({
 type TradingTaskUpdateData = z.infer<typeof tradingTaskUpdateSchema>;
 
 interface TradingTaskUpdateFormProps {
-  taskId: number | string;
+  taskId: string;
   taskName: string;
   taskDescription?: string;
   accountName: string;
@@ -77,13 +77,13 @@ export default function TradingTaskUpdateForm({
       navigate('/trading-tasks');
     } catch (error: unknown) {
       const err = error as {
-        data?: Record<string, string | string[]>;
+        details?: Record<string, string | string[]>;
         message?: string;
       };
 
       let errorMessage = 'Failed to update task';
-      if (err?.data) {
-        const backendErrors = err.data;
+      if (err?.details && typeof err.details === 'object') {
+        const backendErrors = err.details as Record<string, string | string[]>;
         const errorMessages: string[] = [];
 
         const fieldMapping: Record<string, string> = {

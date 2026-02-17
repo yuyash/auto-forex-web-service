@@ -5,7 +5,7 @@ from logging import Logger
 from typing import Any
 
 from django.db.models import Q, QuerySet
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -29,6 +29,31 @@ from apps.trading.tasks.service import TaskService
 logger: Logger = logging.getLogger(name=__name__)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="status", type=str, required=False, description="Filter by task status"
+            ),
+            OpenApiParameter(
+                name="config_id", type=str, required=False, description="Filter by configuration ID"
+            ),
+            OpenApiParameter(
+                name="search", type=str, required=False, description="Search in name or description"
+            ),
+            OpenApiParameter(
+                name="ordering",
+                type=str,
+                required=False,
+                description="Ordering field (e.g. -created_at)",
+            ),
+            OpenApiParameter(name="page", type=int, required=False, description="Page number"),
+            OpenApiParameter(
+                name="page_size", type=int, required=False, description="Number of results per page"
+            ),
+        ],
+    ),
+)
 class BacktestTaskViewSet(ModelViewSet):
     """
     ViewSet for BacktestTask operations with task-centric API.
@@ -47,6 +72,14 @@ class BacktestTaskViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = BacktestTaskSerializer
     lookup_field = "pk"
+
+    def get_serializer_class(self):
+        """Use BacktestTaskCreateSerializer for create/update actions."""
+        if self.action in ("create", "update", "partial_update"):
+            from apps.trading.serializers.backtest import BacktestTaskCreateSerializer
+
+            return BacktestTaskCreateSerializer
+        return BacktestTaskSerializer
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -82,7 +115,19 @@ class BacktestTaskViewSet(ModelViewSet):
 
     def perform_create(self, serializer: BacktestTaskSerializer) -> None:
         """Set the user when creating a task."""
-        serializer.save(user=self.request.user)
+        from django.db import IntegrityError
+        from rest_framework.exceptions import ValidationError
+
+        try:
+            serializer.save(user=self.request.user)
+        except IntegrityError as e:
+            logger.error(f"IntegrityError creating backtest task: {e}")
+            if "unique_user_backtest_task_name" in str(e):
+                raise ValidationError({"name": ["A backtest task with this name already exists."]})
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error creating backtest task: {type(e).__name__}: {e}")
+            raise
 
     @extend_schema(
         summary="Submit task for execution",

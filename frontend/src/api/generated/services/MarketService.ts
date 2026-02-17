@@ -103,4 +103,31 @@ export class MarketService {
       url: '/api/market/market/status/',
     });
   }
+  /**
+   * GET /api/market/ticks/
+   * Fetch historical tick data from local DB
+   * @param instrument Currency pair (e.g., USD_JPY)
+   * @param count Number of ticks to return (1-20000, default: 5000)
+   * @param fromTime Start time in RFC3339 format
+   * @param toTime End time in RFC3339 format
+   * @returns any
+   * @throws ApiError
+   */
+  public static getTickData(
+    instrument: string,
+    count?: number,
+    fromTime?: string,
+    toTime?: string
+  ): CancelablePromise<Record<string, any>> {
+    return __request(OpenAPI, {
+      method: 'GET',
+      url: '/api/market/ticks/',
+      query: {
+        count: count,
+        from_time: fromTime,
+        instrument: instrument,
+        to_time: toTime,
+      },
+    });
+  }
 }

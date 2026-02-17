@@ -184,7 +184,7 @@ interface UseBacktestTaskResult {
 /**
  * Hook to fetch a single backtest task
  */
-export function useBacktestTask(id?: number): UseBacktestTaskResult {
+export function useBacktestTask(id?: string): UseBacktestTaskResult {
   const [data, setData] = useState<BacktestTask | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -192,7 +192,7 @@ export function useBacktestTask(id?: number): UseBacktestTaskResult {
 
   const fetchData = useCallback(async () => {
     // Skip fetching if no valid ID
-    if (!id || id === 0) {
+    if (!id) {
       setIsLoading(false);
       return;
     }
@@ -242,7 +242,7 @@ export function useBacktestTask(id?: number): UseBacktestTaskResult {
  * Hook to poll backtest task status for running tasks
  */
 export function useBacktestTaskPolling(
-  id: number,
+  id: string,
   enabled: boolean = true,
   interval: number = 10000
 ): UseBacktestTaskResult {

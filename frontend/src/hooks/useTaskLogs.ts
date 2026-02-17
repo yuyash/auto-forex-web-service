@@ -63,12 +63,14 @@ export const useTaskLogs = ({
         taskType === TaskType.BACKTEST
           ? await TradingService.tradingTasksBacktestLogsList(
               taskId,
+              undefined, // celeryTaskId
               level,
               limit,
               offset
             )
           : await TradingService.tradingTasksTradingLogsList(
               taskId,
+              undefined, // celeryTaskId
               level,
               limit,
               offset

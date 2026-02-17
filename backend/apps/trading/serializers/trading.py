@@ -12,7 +12,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     """
 
     user_id = serializers.IntegerField(source="user.id", read_only=True)
-    config_id = serializers.IntegerField(source="config.id", read_only=True)
+    config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
     instrument = serializers.SerializerMethodField()
@@ -85,7 +85,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     """
 
     user_id = serializers.IntegerField(source="user.id", read_only=True)
-    config_id = serializers.IntegerField(source="config.id", read_only=True)
+    config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
     instrument = serializers.SerializerMethodField()

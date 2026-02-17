@@ -26,8 +26,8 @@ import type { TaskExecution } from '../../../types/execution';
 
 interface ExecutionComparisonViewProps {
   executions: TaskExecution[];
-  selectedExecutionIds: number[];
-  onSelectionChange: (executionIds: number[]) => void;
+  selectedExecutionIds: string[];
+  onSelectionChange: (executionIds: string[]) => void;
   onClose?: () => void;
 }
 
@@ -46,7 +46,7 @@ export function ExecutionComparisonView({
       .filter((exec) => exec.metrics); // Only include executions with metrics
   }, [executions, selectedExecutionIds]);
 
-  const handleToggleExecution = (executionId: number) => {
+  const handleToggleExecution = (executionId: string) => {
     if (selectedExecutionIds.includes(executionId)) {
       onSelectionChange(
         selectedExecutionIds.filter((id) => id !== executionId)

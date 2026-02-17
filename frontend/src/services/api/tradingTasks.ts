@@ -9,7 +9,7 @@ import { TradingService } from '../../api/generated/services/TradingService';
 import { withRetry } from '../../api/client';
 import type {
   TradingTaskRequest,
-  PatchedTradingTaskRequest,
+  PatchedTradingTaskCreateRequest,
 } from '../../api/generated';
 import type {
   TradingTask,
@@ -35,14 +35,13 @@ export const tradingTasksApi = {
   ): Promise<PaginatedResponse<TradingTask>> => {
     const result = await withRetry(() =>
       TradingService.tradingTasksTradingList(
-        params?.status,
+        params?.account_id ? Number(params.account_id) : undefined,
         params?.config_id,
-        params?.strategy_type,
-        params?.account_id,
         params?.ordering,
         params?.page,
         params?.page_size,
-        params?.search
+        params?.search,
+        params?.status
       )
     );
     return {
@@ -56,9 +55,9 @@ export const tradingTasksApi = {
   /**
    * Get a single trading task by ID
    */
-  get: async (id: number | string): Promise<TradingTask> => {
+  get: async (id: string): Promise<TradingTask> => {
     const result = await withRetry(() =>
-      TradingService.tradingTasksTradingRetrieve(String(id))
+      TradingService.tradingTasksTradingRetrieve(id)
     );
     return toLocal(result);
   },
@@ -77,11 +76,11 @@ export const tradingTasksApi = {
    * Update an existing trading task
    */
   update: async (
-    id: number | string,
+    id: string,
     data: TradingTaskRequest
   ): Promise<TradingTask> => {
     const result = await withRetry(() =>
-      TradingService.tradingTasksTradingUpdate(String(id), data)
+      TradingService.tradingTasksTradingUpdate(id, data)
     );
     return toLocal(result);
   },
@@ -90,11 +89,11 @@ export const tradingTasksApi = {
    * Partially update an existing trading task
    */
   partialUpdate: async (
-    id: number | string,
-    data: PatchedTradingTaskRequest
+    id: string,
+    data: PatchedTradingTaskCreateRequest
   ): Promise<TradingTask> => {
     const result = await withRetry(() =>
-      TradingService.tradingTasksTradingPartialUpdate(String(id), data)
+      TradingService.tradingTasksTradingPartialUpdate(id, data)
     );
     return toLocal(result);
   },
@@ -102,19 +101,17 @@ export const tradingTasksApi = {
   /**
    * Delete a trading task
    */
-  delete: async (id: number | string): Promise<void> => {
-    return withRetry(() =>
-      TradingService.tradingTasksTradingDestroy(String(id))
-    );
+  delete: async (id: string): Promise<void> => {
+    return withRetry(() => TradingService.tradingTasksTradingDestroy(id));
   },
 
   /**
    * Submit a trading task for execution
    */
-  start: async (id: number | string): Promise<TradingTask> => {
+  start: async (id: string): Promise<TradingTask> => {
     const result = await withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksTradingStartCreate(String(id), {} as any)
+      TradingService.tradingTasksTradingStartCreate(id, {} as any)
     );
     return toLocal(result);
   },
@@ -123,14 +120,14 @@ export const tradingTasksApi = {
    * Stop a running trading task
    */
   stop: async (
-    id: number | string,
+    id: string,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _mode?: 'immediate' | 'graceful' | 'graceful_close'
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<Record<string, any>> => {
     return withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksTradingStopCreate(String(id), {} as any)
+      TradingService.tradingTasksTradingStopCreate(id, {} as any)
     );
   },
 
@@ -139,7 +136,7 @@ export const tradingTasksApi = {
    */
   pause: (
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _id: number | string
+    _id: string
   ): Promise<TradingTask> => {
     throw new Error('Pause is not implemented for trading tasks');
   },
@@ -147,10 +144,10 @@ export const tradingTasksApi = {
   /**
    * Resume a cancelled trading task
    */
-  resume: async (id: number | string): Promise<TradingTask> => {
+  resume: async (id: string): Promise<TradingTask> => {
     const result = await withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksTradingResumeCreate(String(id), {} as any)
+      TradingService.tradingTasksTradingResumeCreate(id, {} as any)
     );
     return toLocal(result);
   },
@@ -159,13 +156,13 @@ export const tradingTasksApi = {
    * Restart a trading task with fresh state
    */
   restart: async (
-    id: number | string,
+    id: string,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _clearState?: boolean
   ): Promise<TradingTask> => {
     const result = await withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksTradingRestartCreate(String(id), {} as any)
+      TradingService.tradingTasksTradingRestartCreate(id, {} as any)
     );
     return toLocal(result);
   },
@@ -175,7 +172,7 @@ export const tradingTasksApi = {
    */
   getExecutions: async (
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _id: number | string,
+    _id: string,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _params?: { page?: number; page_size?: number; include_metrics?: boolean }
   ): Promise<PaginatedResponse<import('../../types').TaskExecution>> => {
@@ -187,13 +184,13 @@ export const tradingTasksApi = {
    * Copy a trading task
    */
   copy: async (
-    id: number | string,
+    id: string,
 
     _data: { new_name: string }
   ): Promise<TradingTask> => {
     // Copy is implemented as create with same config
     const original = await withRetry(() =>
-      TradingService.tradingTasksTradingRetrieve(String(id))
+      TradingService.tradingTasksTradingRetrieve(id)
     );
     const result = await withRetry(() =>
       TradingService.tradingTasksTradingCreate({
@@ -202,8 +199,6 @@ export const tradingTasksApi = {
         oanda_account: original.oanda_account,
         description: original.description,
         sell_on_stop: original.sell_on_stop,
-        instrument: original.instrument,
-        trading_mode: original.trading_mode,
       })
     );
     return toLocal(result);
@@ -213,11 +208,11 @@ export const tradingTasksApi = {
    * Get metrics checkpoint for a trading task
    */
   getMetricsCheckpoint: async (
-    id: number | string
+    id: string
   ): Promise<{ checkpoint: ExecutionMetricsCheckpoint | null }> => {
     // Stub: metrics checkpoint not yet available in generated API
     const task = await withRetry(() =>
-      TradingService.tradingTasksTradingRetrieve(String(id))
+      TradingService.tradingTasksTradingRetrieve(id)
     );
     const execution = (task as unknown as TradingTask).latest_execution;
     return {
@@ -239,7 +234,7 @@ export const tradingTasksApi = {
    */
   getEquityCurve: async (
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _id: number | string
+    _id: string
   ): Promise<{ equity_curve: EquityPoint[] }> => {
     // Stub: equity curve endpoint not yet available
     return { equity_curve: [] };
@@ -250,7 +245,7 @@ export const tradingTasksApi = {
    */
   getTradeLogs: async (
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _id: number | string
+    _id: string
   ): Promise<{ trade_logs: Trade[] }> => {
     // Stub: trade logs endpoint not yet available
     return { trade_logs: [] };
@@ -261,7 +256,7 @@ export const tradingTasksApi = {
    */
   getStrategyEvents: async (
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _id: number | string
+    _id: string
   ): Promise<{ strategy_events: BacktestStrategyEvent[] }> => {
     // Stub: strategy events endpoint not yet available
     return { strategy_events: [] };

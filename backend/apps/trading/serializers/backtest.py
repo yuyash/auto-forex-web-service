@@ -14,7 +14,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     """Serializer for BacktestTask full details."""
 
     user_id = serializers.IntegerField(source="user.id", read_only=True)
-    config_id = serializers.IntegerField(source="config.id", read_only=True)
+    config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
     progress = serializers.SerializerMethodField()
@@ -133,7 +133,7 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
     """Serializer for BacktestTask list view (summary only)."""
 
     user_id = serializers.IntegerField(source="user.id", read_only=True)
-    config_id = serializers.IntegerField(source="config.id", read_only=True)
+    config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
     progress = serializers.SerializerMethodField()

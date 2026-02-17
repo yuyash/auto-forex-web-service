@@ -9,8 +9,8 @@ export type StrategyConfigDetail = {
   /**
    * Unique identifier for this record
    */
-  readonly id: string;
-  readonly user_id: number;
+  readonly id?: string;
+  readonly user_id?: number;
   /**
    * Human-readable name for this configuration
    */
@@ -30,13 +30,13 @@ export type StrategyConfigDetail = {
   /**
    * Get whether configuration is in use by active tasks.
    */
-  readonly is_in_use: boolean;
+  readonly is_in_use?: boolean;
   /**
    * Timestamp when this record was created
    */
-  readonly created_at: string;
+  readonly created_at?: string;
   /**
    * Timestamp when this record was last updated
    */
-  readonly updated_at: string;
+  readonly updated_at?: string;
 };

@@ -23,7 +23,7 @@ interface UseTradingResultsReturn {
 }
 
 export function useTradingResults(
-  taskId: string | number,
+  taskId: string,
   status: string,
   options: UseTradingResultsOptions = {}
 ): UseTradingResultsReturn {

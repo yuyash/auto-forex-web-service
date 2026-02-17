@@ -66,10 +66,7 @@ export function useCreateTradingTask(options?: {
 export function useUpdateTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<
-  TradingTask,
-  { id: number | string; data: TradingTaskUpdateData }
-> {
+}): MutationResult<TradingTask, { id: string; data: TradingTaskUpdateData }> {
   const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
@@ -77,7 +74,7 @@ export function useUpdateTradingTask(options?: {
   });
 
   const mutate = useCallback(
-    async (variables: { id: number | string; data: TradingTaskUpdateData }) => {
+    async (variables: { id: string; data: TradingTaskUpdateData }) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.update(
@@ -112,7 +109,7 @@ export function useUpdateTradingTask(options?: {
 export function useDeleteTradingTask(options?: {
   onSuccess?: () => void;
   onError?: (error: Error) => void;
-}): MutationResult<void, number | string> {
+}): MutationResult<void, string> {
   const [state, setState] = useState<MutationState<void>>({
     data: null,
     isLoading: false,
@@ -120,7 +117,7 @@ export function useDeleteTradingTask(options?: {
   });
 
   const mutate = useCallback(
-    async (id: number | string) => {
+    async (id: string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         await tradingTasksApi.delete(id);
@@ -150,10 +147,7 @@ export function useDeleteTradingTask(options?: {
 export function useCopyTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<
-  TradingTask,
-  { id: number | string; data: TradingTaskCopyData }
-> {
+}): MutationResult<TradingTask, { id: string; data: TradingTaskCopyData }> {
   const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
@@ -161,7 +155,7 @@ export function useCopyTradingTask(options?: {
   });
 
   const mutate = useCallback(
-    async (variables: { id: number | string; data: TradingTaskCopyData }) => {
+    async (variables: { id: string; data: TradingTaskCopyData }) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.copy(variables.id, variables.data);
@@ -192,7 +186,7 @@ export function useCopyTradingTask(options?: {
 export function useStartTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, number | string> {
+}): MutationResult<TradingTask, string> {
   const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
@@ -200,7 +194,7 @@ export function useStartTradingTask(options?: {
   });
 
   const mutate = useCallback(
-    async (id: number | string) => {
+    async (id: string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.start(id);
@@ -236,10 +230,7 @@ export type StopMode = 'immediate' | 'graceful' | 'graceful_close';
 export function useStopTradingTask(options?: {
   onSuccess?: (data: Record<string, unknown>) => void;
   onError?: (error: Error) => void;
-}): MutationResult<
-  Record<string, unknown>,
-  { id: number | string; mode?: StopMode }
-> {
+}): MutationResult<Record<string, unknown>, { id: string; mode?: StopMode }> {
   const [state, setState] = useState<MutationState<Record<string, unknown>>>({
     data: null,
     isLoading: false,
@@ -247,7 +238,7 @@ export function useStopTradingTask(options?: {
   });
 
   const mutate = useCallback(
-    async (variables: { id: number | string; mode?: StopMode }) => {
+    async (variables: { id: string; mode?: StopMode }) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.stop(
@@ -281,7 +272,7 @@ export function useStopTradingTask(options?: {
 export function usePauseTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, number | string> {
+}): MutationResult<TradingTask, string> {
   const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
@@ -289,7 +280,7 @@ export function usePauseTradingTask(options?: {
   });
 
   const mutate = useCallback(
-    async (id: number | string) => {
+    async (id: string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.pause(id);
@@ -320,7 +311,7 @@ export function usePauseTradingTask(options?: {
 export function useResumeTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, number | string> {
+}): MutationResult<TradingTask, string> {
   const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
@@ -328,7 +319,7 @@ export function useResumeTradingTask(options?: {
   });
 
   const mutate = useCallback(
-    async (id: number | string) => {
+    async (id: string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.resume(id);
@@ -359,7 +350,7 @@ export function useResumeTradingTask(options?: {
 export function useRerunTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, number | string> {
+}): MutationResult<TradingTask, string> {
   const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
@@ -367,7 +358,7 @@ export function useRerunTradingTask(options?: {
   });
 
   const mutate = useCallback(
-    async (id: number | string) => {
+    async (id: string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.restart(id, true);
@@ -398,7 +389,7 @@ export function useRerunTradingTask(options?: {
 export function useRestartTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, { id: number | string; clearState?: boolean }> {
+}): MutationResult<TradingTask, { id: string; clearState?: boolean }> {
   const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
@@ -406,7 +397,7 @@ export function useRestartTradingTask(options?: {
   });
 
   const mutate = useCallback(
-    async (variables: { id: number | string; clearState?: boolean }) => {
+    async (variables: { id: string; clearState?: boolean }) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.restart(

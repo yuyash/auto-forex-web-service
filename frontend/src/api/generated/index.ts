@@ -1,7 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-
+/* eslint-disable */
 export { ApiError } from './core/ApiError';
 export { CancelablePromise, CancelError } from './core/CancelablePromise';
 export { OpenAPI } from './core/OpenAPI';
@@ -9,11 +9,12 @@ export type { OpenAPIConfig } from './core/OpenAPI';
 
 export { ApiTypeEnum } from './models/ApiTypeEnum';
 export type { BacktestTask } from './models/BacktestTask';
+export type { BacktestTaskCreate } from './models/BacktestTaskCreate';
+export type { BacktestTaskCreateRequest } from './models/BacktestTaskCreateRequest';
 export type { BacktestTaskRequest } from './models/BacktestTaskRequest';
 export { DataSourceEnum } from './models/DataSourceEnum';
-export { Direction530Enum } from './models/Direction530Enum';
+export { DirectionEnum } from './models/DirectionEnum';
 export type { EmailVerificationRequest } from './models/EmailVerificationRequest';
-export type { EquityPoint } from './models/EquityPoint';
 export { JurisdictionEnum } from './models/JurisdictionEnum';
 export { LanguageEnum } from './models/LanguageEnum';
 export { LevelEnum } from './models/LevelEnum';
@@ -23,14 +24,13 @@ export type { OandaApiHealthStatus } from './models/OandaApiHealthStatus';
 export type { OrderRequest } from './models/OrderRequest';
 export { OrderTypeEnum } from './models/OrderTypeEnum';
 export type { PaginatedBacktestTaskList } from './models/PaginatedBacktestTaskList';
-export type { PaginatedEquityPointList } from './models/PaginatedEquityPointList';
 export type { PaginatedStrategyConfigListList } from './models/PaginatedStrategyConfigListList';
 export type { PaginatedTaskLogList } from './models/PaginatedTaskLogList';
 export type { PaginatedTradeList } from './models/PaginatedTradeList';
 export type { PaginatedTradingEventList } from './models/PaginatedTradingEventList';
 export type { PaginatedTradingTaskList } from './models/PaginatedTradingTaskList';
-export type { PatchedBacktestTaskRequest } from './models/PatchedBacktestTaskRequest';
-export type { PatchedTradingTaskRequest } from './models/PatchedTradingTaskRequest';
+export type { PatchedBacktestTaskCreateRequest } from './models/PatchedBacktestTaskCreateRequest';
+export type { PatchedTradingTaskCreateRequest } from './models/PatchedTradingTaskCreateRequest';
 export type { PositionRequest } from './models/PositionRequest';
 export type { PublicAccountSettings } from './models/PublicAccountSettings';
 export type { ResendVerificationRequest } from './models/ResendVerificationRequest';
@@ -42,10 +42,11 @@ export type { StrategyList } from './models/StrategyList';
 export type { TaskLog } from './models/TaskLog';
 export { TaskTypeEnum } from './models/TaskTypeEnum';
 export type { Trade } from './models/Trade';
-export { TradeDirectionEnum } from './models/TradeDirectionEnum';
 export type { TradingEvent } from './models/TradingEvent';
 export { TradingModeEnum } from './models/TradingModeEnum';
 export type { TradingTask } from './models/TradingTask';
+export type { TradingTaskCreate } from './models/TradingTaskCreate';
+export type { TradingTaskCreateRequest } from './models/TradingTaskCreateRequest';
 export type { TradingTaskRequest } from './models/TradingTaskRequest';
 export type { UserLoginRequest } from './models/UserLoginRequest';
 export type { UserRegistrationRequest } from './models/UserRegistrationRequest';

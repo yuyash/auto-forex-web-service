@@ -10,7 +10,7 @@ import { TradingService } from '../api/generated/services/TradingService';
 import { TaskType } from '../types/common';
 
 export interface TaskEvent {
-  id: number;
+  id: string;
   event_type: string;
   severity: string;
   description: string;

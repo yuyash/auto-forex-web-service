@@ -18,7 +18,7 @@ interface LogEntry {
 
 export interface LogPanelProps {
   taskType: 'backtest' | 'trading';
-  taskId: number;
+  taskId: string;
   maxEntries?: number;
   autoScroll?: boolean;
   showTimestamp?: boolean;

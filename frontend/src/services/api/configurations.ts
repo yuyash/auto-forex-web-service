@@ -38,12 +38,12 @@ export const configurationsApi = {
   /**
    * Get a single strategy configuration by ID
    */
-  get: async (id: string | number): Promise<StrategyConfig> => {
+  get: async (id: string): Promise<StrategyConfig> => {
     if (!id) {
       return Promise.reject(new Error('Invalid configuration ID'));
     }
     const result = await withRetry(() =>
-      TradingService.tradingStrategyConfigsRetrieve(Number(id))
+      TradingService.tradingStrategyConfigsRetrieve(id)
     );
     return toLocal(result);
   },
@@ -62,7 +62,7 @@ export const configurationsApi = {
    * Update an existing strategy configuration
    */
   update: async (
-    id: string | number,
+    id: string,
     data: StrategyConfigUpdateData
   ): Promise<StrategyConfig> => {
     if (!id) {
@@ -70,7 +70,7 @@ export const configurationsApi = {
     }
     const result = await withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingStrategyConfigsUpdate(Number(id), data as any)
+      TradingService.tradingStrategyConfigsUpdate(id, data as any)
     );
     return toLocal(result);
   },
@@ -78,13 +78,11 @@ export const configurationsApi = {
   /**
    * Delete a strategy configuration
    */
-  delete: async (id: string | number): Promise<void> => {
+  delete: async (id: string): Promise<void> => {
     if (!id) {
       return Promise.reject(new Error('Invalid configuration ID'));
     }
-    return withRetry(() =>
-      TradingService.tradingStrategyConfigsDestroy(Number(id))
-    );
+    return withRetry(() => TradingService.tradingStrategyConfigsDestroy(id));
   },
 
   /**

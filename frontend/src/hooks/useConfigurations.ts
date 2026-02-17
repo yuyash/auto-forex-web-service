@@ -306,7 +306,7 @@ interface UseConfigurationTasksResult {
 /**
  * Hook to fetch tasks using a configuration
  */
-export function useConfigurationTasks(id: number): UseConfigurationTasksResult {
+export function useConfigurationTasks(id: string): UseConfigurationTasksResult {
   const [data, setData] = useState<ConfigurationTask[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);

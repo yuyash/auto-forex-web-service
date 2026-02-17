@@ -1,7 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-
+/* eslint-disable */
 import type { DataSourceEnum } from './DataSourceEnum';
 import type { StatusEnum } from './StatusEnum';
 import type { TradingModeEnum } from './TradingModeEnum';
@@ -12,7 +12,7 @@ export type BacktestTask = {
   /**
    * Unique identifier for this record
    */
-  readonly id: string;
+  readonly id?: string;
   /**
    * Human-readable name for this backtest task
    */
@@ -30,7 +30,7 @@ export type BacktestTask = {
    * Returns:
    * str: "backtest" or "trading"
    */
-  readonly task_type: string;
+  readonly task_type?: string;
   /**
    * Current task status
    *
@@ -43,23 +43,23 @@ export type BacktestTask = {
    * * `completed` - Completed
    * * `failed` - Failed
    */
-  readonly status: StatusEnum;
+  readonly status?: StatusEnum;
   /**
    * Timestamp when this record was created
    */
-  readonly created_at: string;
+  readonly created_at?: string;
   /**
    * Timestamp when this record was last updated
    */
-  readonly updated_at: string;
+  readonly updated_at?: string;
   /**
    * Timestamp when the task execution started
    */
-  readonly started_at: string | null;
+  readonly started_at?: string | null;
   /**
    * Timestamp when the task execution completed
    */
-  readonly completed_at: string | null;
+  readonly completed_at?: string | null;
   /**
    * Calculate task execution duration in seconds.
    *
@@ -70,31 +70,23 @@ export type BacktestTask = {
    * float | None: Duration in seconds if both started_at and completed_at are set,
    * None otherwise
    */
-  readonly duration: number | null;
+  readonly duration?: number | null;
   /**
    * Celery task ID for tracking execution
    */
-  readonly celery_task_id: string | null;
-  /**
-   * Number of times this task has been retried
-   */
-  retry_count?: number;
-  /**
-   * Maximum number of retries allowed
-   */
-  max_retries?: number;
+  readonly celery_task_id?: string | null;
   /**
    * Error message if task failed
    */
-  readonly error_message: string | null;
+  readonly error_message?: string | null;
   /**
    * Full error traceback if task failed
    */
-  readonly error_traceback: string | null;
+  readonly error_traceback?: string | null;
   /**
    * User who created this backtest task
    */
-  readonly user: number;
+  readonly user?: number;
   /**
    * Strategy configuration used by this task
    */
@@ -134,4 +126,17 @@ export type BacktestTask = {
    * * `hedging` - Hedging Mode
    */
   trading_mode?: TradingModeEnum;
+  /**
+   * Calculate backtest progress percentage based on current tick timestamp.
+   *
+   * Progress is calculated as:
+   * (current_tick_timestamp - start_time) / (end_time - start_time) * 100
+   *
+   * Args:
+   * obj: BacktestTask instance
+   *
+   * Returns:
+   * int: Progress percentage (0-100)
+   */
+  readonly progress?: number;
 };

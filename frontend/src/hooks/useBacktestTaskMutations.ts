@@ -8,7 +8,10 @@ import type {
   BacktestTaskUpdateData,
   BacktestTaskCopyData,
 } from '../types';
-import type { PatchedBacktestTaskRequest } from '../api/generated';
+import type { PatchedBacktestTaskCreateRequest } from '../api/generated';
+
+// Alias for backward compatibility after OpenAPI regeneration
+type PatchedBacktestTaskRequest = PatchedBacktestTaskCreateRequest;
 
 interface MutationState<T> {
   data: T | null;
@@ -60,10 +63,7 @@ export function useCreateBacktestTask(options?: {
 export function useUpdateBacktestTask(options?: {
   onSuccess?: (data: BacktestTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<
-  BacktestTask,
-  { id: number | string; data: BacktestTaskUpdateData }
-> {
+}): MutationResult<BacktestTask, { id: string; data: BacktestTaskUpdateData }> {
   const [state, setState] = useState<MutationState<BacktestTask>>({
     data: null,
     isLoading: false,
@@ -71,10 +71,7 @@ export function useUpdateBacktestTask(options?: {
   });
 
   const mutate = useCallback(
-    async (variables: {
-      id: number | string;
-      data: BacktestTaskUpdateData;
-    }) => {
+    async (variables: { id: string; data: BacktestTaskUpdateData }) => {
       try {
         setState({ data: null, isLoading: true, error: null });
 
@@ -105,7 +102,7 @@ export function useUpdateBacktestTask(options?: {
 export function useDeleteBacktestTask(options?: {
   onSuccess?: () => void;
   onError?: (error: Error) => void;
-}): MutationResult<void, number | string> {
+}): MutationResult<void, string> {
   const [state, setState] = useState<MutationState<void>>({
     data: null,
     isLoading: false,
@@ -113,7 +110,7 @@ export function useDeleteBacktestTask(options?: {
   });
 
   const mutate = useCallback(
-    async (id: number | string) => {
+    async (id: string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         await backtestTasksApi.delete(id);
@@ -139,10 +136,7 @@ export function useDeleteBacktestTask(options?: {
 export function useCopyBacktestTask(options?: {
   onSuccess?: (data: BacktestTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<
-  BacktestTask,
-  { id: number | string; data: BacktestTaskCopyData }
-> {
+}): MutationResult<BacktestTask, { id: string; data: BacktestTaskCopyData }> {
   const [state, setState] = useState<MutationState<BacktestTask>>({
     data: null,
     isLoading: false,
@@ -150,7 +144,7 @@ export function useCopyBacktestTask(options?: {
   });
 
   const mutate = useCallback(
-    async (variables: { id: number | string; data: BacktestTaskCopyData }) => {
+    async (variables: { id: string; data: BacktestTaskCopyData }) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await backtestTasksApi.copy(
@@ -180,7 +174,7 @@ export function useCopyBacktestTask(options?: {
 export function useStartBacktestTask(options?: {
   onSuccess?: (data: BacktestTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<BacktestTask, number | string> {
+}): MutationResult<BacktestTask, string> {
   const [state, setState] = useState<MutationState<BacktestTask>>({
     data: null,
     isLoading: false,
@@ -188,7 +182,7 @@ export function useStartBacktestTask(options?: {
   });
 
   const mutate = useCallback(
-    async (id: number | string) => {
+    async (id: string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await backtestTasksApi.start(id);
@@ -218,7 +212,7 @@ export function useStopBacktestTask(options?: {
   onSuccess?: (data: Record<string, any>) => void;
   onError?: (error: Error) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-}): MutationResult<Record<string, any>, number | string> {
+}): MutationResult<Record<string, any>, string> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [state, setState] = useState<MutationState<Record<string, any>>>({
     data: null,
@@ -227,7 +221,7 @@ export function useStopBacktestTask(options?: {
   });
 
   const mutate = useCallback(
-    async (id: number | string) => {
+    async (id: string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await backtestTasksApi.stop(id);
@@ -255,7 +249,7 @@ export function useStopBacktestTask(options?: {
 export function useRerunBacktestTask(options?: {
   onSuccess?: (data: BacktestTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<BacktestTask, number | string> {
+}): MutationResult<BacktestTask, string> {
   const [state, setState] = useState<MutationState<BacktestTask>>({
     data: null,
     isLoading: false,
@@ -263,7 +257,7 @@ export function useRerunBacktestTask(options?: {
   });
 
   const mutate = useCallback(
-    async (id: number | string) => {
+    async (id: string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await backtestTasksApi.start(id);

@@ -1042,6 +1042,46 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/market/ticks/:
+    get:
+      operationId: get_tick_data
+      description: Fetch historical tick data from local DB
+      summary: GET /api/market/ticks/
+      parameters:
+      - in: query
+        name: count
+        schema:
+          type: integer
+        description: 'Number of ticks to return (1-20000, default: 5000)'
+      - in: query
+        name: from_time
+        schema:
+          type: string
+        description: Start time in RFC3339 format
+      - in: query
+        name: instrument
+        schema:
+          type: string
+        description: Currency pair (e.g., USD_JPY)
+        required: true
+      - in: query
+        name: to_time
+        schema:
+          type: string
+        description: End time in RFC3339 format
+      tags:
+      - market
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/trading/strategies/:
     get:
       operationId: trading_strategies_retrieve
@@ -1158,7 +1198,9 @@ paths:
       - in: path
         name: config_id
         schema:
-          type: integer
+          type: string
+          format: uuid
+        description: Strategy configuration UUID
         required: true
       tags:
       - trading
@@ -1187,7 +1229,9 @@ paths:
       - in: path
         name: config_id
         schema:
-          type: integer
+          type: string
+          format: uuid
+        description: Strategy configuration UUID
         required: true
       tags:
       - trading
@@ -1229,7 +1273,9 @@ paths:
       - in: path
         name: config_id
         schema:
-          type: integer
+          type: string
+          format: uuid
+        description: Strategy configuration UUID
         required: true
       tags:
       - trading
@@ -1268,26 +1314,37 @@ paths:
         - logs: Retrieve task logs with pagination
         - events: Retrieve task events
         - trades: Retrieve trade history
-        - equity: Retrieve equity curve
       parameters:
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
+      - in: query
+        name: config_id
         schema:
           type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
+        description: Filter by configuration ID
+      - in: query
+        name: ordering
+        schema:
+          type: string
+        description: Ordering field (e.g. -created_at)
+      - in: query
+        name: page
         schema:
           type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
+        description: Page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Number of results per page
+      - in: query
+        name: search
         schema:
           type: string
+        description: Search in name or description
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Filter by task status
       tags:
       - trading
       security:
@@ -1314,14 +1371,13 @@ paths:
         - logs: Retrieve task logs with pagination
         - events: Retrieve task events
         - trades: Retrieve trade history
-        - equity: Retrieve equity curve
       tags:
       - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BacktestTaskRequest'
+              $ref: '#/components/schemas/BacktestTaskCreateRequest'
         required: true
       security:
       - jwtAuth: []
@@ -1331,7 +1387,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BacktestTask'
+                $ref: '#/components/schemas/BacktestTaskCreate'
           description: ''
   /api/trading/tasks/backtest/{id}/:
     get:
@@ -1348,7 +1404,6 @@ paths:
         - logs: Retrieve task logs with pagination
         - events: Retrieve task events
         - trades: Retrieve trade history
-        - equity: Retrieve equity curve
       parameters:
       - in: path
         name: id
@@ -1383,7 +1438,6 @@ paths:
         - logs: Retrieve task logs with pagination
         - events: Retrieve task events
         - trades: Retrieve trade history
-        - equity: Retrieve equity curve
       parameters:
       - in: path
         name: id
@@ -1398,7 +1452,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BacktestTaskRequest'
+              $ref: '#/components/schemas/BacktestTaskCreateRequest'
         required: true
       security:
       - jwtAuth: []
@@ -1408,7 +1462,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BacktestTask'
+                $ref: '#/components/schemas/BacktestTaskCreate'
           description: ''
     patch:
       operationId: trading_tasks_backtest_partial_update
@@ -1424,7 +1478,6 @@ paths:
         - logs: Retrieve task logs with pagination
         - events: Retrieve task events
         - trades: Retrieve trade history
-        - equity: Retrieve equity curve
       parameters:
       - in: path
         name: id
@@ -1439,7 +1492,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedBacktestTaskRequest'
+              $ref: '#/components/schemas/PatchedBacktestTaskCreateRequest'
       security:
       - jwtAuth: []
       - cookieAuth: []
@@ -1448,7 +1501,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BacktestTask'
+                $ref: '#/components/schemas/BacktestTaskCreate'
           description: ''
     delete:
       operationId: trading_tasks_backtest_destroy
@@ -1464,7 +1517,6 @@ paths:
         - logs: Retrieve task logs with pagination
         - events: Retrieve task events
         - trades: Retrieve trade history
-        - equity: Retrieve equity curve
       parameters:
       - in: path
         name: id
@@ -1481,49 +1533,6 @@ paths:
       responses:
         '204':
           description: No response body
-  /api/trading/tasks/backtest/{id}/equities/:
-    get:
-      operationId: trading_tasks_backtest_equities_list
-      description: Retrieve equity curve data from task execution state
-      summary: Get task equity curve
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-          description: Unique identifier for this record
-        required: true
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - trading
-      security:
-      - jwtAuth: []
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedEquityPointList'
-          description: ''
   /api/trading/tasks/backtest/{id}/events/:
     get:
       operationId: trading_tasks_backtest_events_list
@@ -1585,9 +1594,16 @@ paths:
   /api/trading/tasks/backtest/{id}/logs/:
     get:
       operationId: trading_tasks_backtest_logs_list
-      description: Retrieve task execution logs with pagination and filtering
+      description: Retrieve task execution logs for the latest execution with pagination
+        and filtering
       summary: Get task logs
       parameters:
+      - in: query
+        name: celery_task_id
+        schema:
+          type: string
+        description: Optional explicit execution ID. If omitted, current task celery_task_id
+          is used.
       - in: path
         name: id
         schema:
@@ -1888,6 +1904,11 @@ paths:
       summary: Get task trades
       parameters:
       - in: query
+        name: celery_task_id
+        schema:
+          type: string
+        description: Execution ID. Defaults to current task celery_task_id.
+      - in: query
         name: direction
         schema:
           type: string
@@ -1943,26 +1964,42 @@ paths:
         - logs: Retrieve task logs with pagination
         - events: Retrieve task events
         - trades: Retrieve trade history
-        - equity: Retrieve equity curve
       parameters:
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
+      - in: query
+        name: account_id
         schema:
           type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
+        description: Filter by OANDA account ID
+      - in: query
+        name: config_id
         schema:
           type: string
+        description: Filter by configuration ID
+      - in: query
+        name: ordering
+        schema:
+          type: string
+        description: Ordering field (e.g. -created_at)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Number of results per page
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search in name or description
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Filter by task status
       tags:
       - trading
       security:
@@ -1988,15 +2025,13 @@ paths:
         - logs: Retrieve task logs with pagination
         - events: Retrieve task events
         - trades: Retrieve trade history
-        - equity: Retrieve equity curve
       tags:
       - trading
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TradingTaskRequest'
-        required: true
+              $ref: '#/components/schemas/TradingTaskCreateRequest'
       security:
       - jwtAuth: []
       - cookieAuth: []
@@ -2005,7 +2040,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TradingTask'
+                $ref: '#/components/schemas/TradingTaskCreate'
           description: ''
   /api/trading/tasks/trading/{id}/:
     get:
@@ -2021,7 +2056,6 @@ paths:
         - logs: Retrieve task logs with pagination
         - events: Retrieve task events
         - trades: Retrieve trade history
-        - equity: Retrieve equity curve
       parameters:
       - in: path
         name: id
@@ -2055,7 +2089,6 @@ paths:
         - logs: Retrieve task logs with pagination
         - events: Retrieve task events
         - trades: Retrieve trade history
-        - equity: Retrieve equity curve
       parameters:
       - in: path
         name: id
@@ -2070,8 +2103,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TradingTaskRequest'
-        required: true
+              $ref: '#/components/schemas/TradingTaskCreateRequest'
       security:
       - jwtAuth: []
       - cookieAuth: []
@@ -2080,7 +2112,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TradingTask'
+                $ref: '#/components/schemas/TradingTaskCreate'
           description: ''
     patch:
       operationId: trading_tasks_trading_partial_update
@@ -2095,7 +2127,6 @@ paths:
         - logs: Retrieve task logs with pagination
         - events: Retrieve task events
         - trades: Retrieve trade history
-        - equity: Retrieve equity curve
       parameters:
       - in: path
         name: id
@@ -2110,7 +2141,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedTradingTaskRequest'
+              $ref: '#/components/schemas/PatchedTradingTaskCreateRequest'
       security:
       - jwtAuth: []
       - cookieAuth: []
@@ -2119,7 +2150,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TradingTask'
+                $ref: '#/components/schemas/TradingTaskCreate'
           description: ''
     delete:
       operationId: trading_tasks_trading_destroy
@@ -2134,7 +2165,6 @@ paths:
         - logs: Retrieve task logs with pagination
         - events: Retrieve task events
         - trades: Retrieve trade history
-        - equity: Retrieve equity curve
       parameters:
       - in: path
         name: id
@@ -2151,49 +2181,6 @@ paths:
       responses:
         '204':
           description: No response body
-  /api/trading/tasks/trading/{id}/equities/:
-    get:
-      operationId: trading_tasks_trading_equities_list
-      description: Retrieve equity curve data from task execution state
-      summary: Get task equity curve
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-          description: Unique identifier for this record
-        required: true
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - trading
-      security:
-      - jwtAuth: []
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedEquityPointList'
-          description: ''
   /api/trading/tasks/trading/{id}/events/:
     get:
       operationId: trading_tasks_trading_events_list
@@ -2255,9 +2242,16 @@ paths:
   /api/trading/tasks/trading/{id}/logs/:
     get:
       operationId: trading_tasks_trading_logs_list
-      description: Retrieve task execution logs with pagination and filtering
+      description: Retrieve task execution logs for the latest execution with pagination
+        and filtering
       summary: Get task logs
       parameters:
+      - in: query
+        name: celery_task_id
+        schema:
+          type: string
+        description: Optional explicit execution ID. If omitted, current task celery_task_id
+          is used.
       - in: path
         name: id
         schema:
@@ -2472,6 +2466,11 @@ paths:
       summary: Get task trades
       parameters:
       - in: query
+        name: celery_task_id
+        schema:
+          type: string
+        description: Execution ID. Defaults to current task celery_task_id.
+      - in: query
         name: direction
         schema:
           type: string
@@ -2606,16 +2605,6 @@ components:
           readOnly: true
           nullable: true
           description: Celery task ID for tracking execution
-        retry_count:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          description: Number of times this task has been retried
-        max_retries:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          description: Maximum number of retries allowed
         error_message:
           type: string
           readOnly: true
@@ -2673,11 +2662,153 @@ components:
 
             * `netting` - Netting Mode
             * `hedging` - Hedging Mode
+        progress:
+          type: integer
+          description: |-
+            Calculate backtest progress percentage based on current tick timestamp.
+
+            Progress is calculated as:
+            (current_tick_timestamp - start_time) / (end_time - start_time) * 100
+
+            Args:
+                obj: BacktestTask instance
+
+            Returns:
+                int: Progress percentage (0-100)
+          readOnly: true
       required:
       - config
       - end_time
       - name
       - start_time
+    BacktestTaskCreate:
+      type: object
+      description: Serializer for creating and updating BacktestTask.
+      properties:
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        name:
+          type: string
+          description: Human-readable name for this backtest task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this backtest task
+        data_source:
+          allOf:
+          - $ref: '#/components/schemas/DataSourceEnum'
+          description: |-
+            Data source for historical tick data
+
+            * `postgresql` - PostgreSQL
+            * `athena` - AWS Athena
+            * `s3` - AWS S3
+        start_time:
+          type: string
+          format: date-time
+          description: Start time for backtest period
+        end_time:
+          type: string
+          format: date-time
+          description: End time for backtest period
+        initial_balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Initial account balance for backtest
+        commission_per_trade:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Commission to apply per trade
+        pip_size:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
+          nullable: true
+          description: Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01
+            for USD_JPY). If not provided, will be fetched from OANDA account.
+        instrument:
+          type: string
+          description: Trading instrument (e.g., EUR_USD, USD_JPY)
+          maxLength: 20
+        trading_mode:
+          allOf:
+          - $ref: '#/components/schemas/TradingModeEnum'
+          description: |-
+            Trading mode: netting (aggregated positions) or hedging (independent trades)
+
+            * `netting` - Netting Mode
+            * `hedging` - Hedging Mode
+      required:
+      - config
+    BacktestTaskCreateRequest:
+      type: object
+      description: Serializer for creating and updating BacktestTask.
+      properties:
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable name for this backtest task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this backtest task
+        data_source:
+          allOf:
+          - $ref: '#/components/schemas/DataSourceEnum'
+          description: |-
+            Data source for historical tick data
+
+            * `postgresql` - PostgreSQL
+            * `athena` - AWS Athena
+            * `s3` - AWS S3
+        start_time:
+          type: string
+          format: date-time
+          description: Start time for backtest period
+        end_time:
+          type: string
+          format: date-time
+          description: End time for backtest period
+        initial_balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Initial account balance for backtest
+        commission_per_trade:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Commission to apply per trade
+        pip_size:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
+          nullable: true
+          description: Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01
+            for USD_JPY). If not provided, will be fetched from OANDA account.
+        instrument:
+          type: string
+          minLength: 1
+          description: Trading instrument (e.g., EUR_USD, USD_JPY)
+          maxLength: 20
+        trading_mode:
+          allOf:
+          - $ref: '#/components/schemas/TradingModeEnum'
+          description: |-
+            Trading mode: netting (aggregated positions) or hedging (independent trades)
+
+            * `netting` - Netting Mode
+            * `hedging` - Hedging Mode
+      required:
+      - config
     BacktestTaskRequest:
       type: object
       description: Serializer for BacktestTask with execution data.
@@ -2690,16 +2821,6 @@ components:
         description:
           type: string
           description: Optional description of this backtest task
-        retry_count:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          description: Number of times this task has been retried
-        max_retries:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          description: Maximum number of retries allowed
         config:
           type: string
           format: uuid
@@ -2777,20 +2898,6 @@ components:
           description: Email verification token
       required:
       - token
-    EquityPoint:
-      type: object
-      description: Serializer for equity curve data points from Equities model.
-      properties:
-        timestamp:
-          type: string
-          format: date-time
-        balance:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
-      required:
-      - balance
-      - timestamp
     JurisdictionEnum:
       enum:
       - US
@@ -3077,29 +3184,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BacktestTask'
-    PaginatedEquityPointList:
-      type: object
-      required:
-      - count
-      - results
-      properties:
-        count:
-          type: integer
-          example: 123
-        next:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/EquityPoint'
     PaginatedStrategyConfigListList:
       type: object
       required:
@@ -3215,10 +3299,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TradingTask'
-    PatchedBacktestTaskRequest:
+    PatchedBacktestTaskCreateRequest:
       type: object
-      description: Serializer for BacktestTask with execution data.
+      description: Serializer for creating and updating BacktestTask.
       properties:
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
         name:
           type: string
           minLength: 1
@@ -3227,20 +3315,6 @@ components:
         description:
           type: string
           description: Optional description of this backtest task
-        retry_count:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          description: Number of times this task has been retried
-        max_retries:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          description: Maximum number of retries allowed
-        config:
-          type: string
-          format: uuid
-          description: Strategy configuration used by this task
         data_source:
           allOf:
           - $ref: '#/components/schemas/DataSourceEnum'
@@ -3268,6 +3342,13 @@ components:
           format: decimal
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
           description: Commission to apply per trade
+        pip_size:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
+          nullable: true
+          description: Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01
+            for USD_JPY). If not provided, will be fetched from OANDA account.
         instrument:
           type: string
           minLength: 1
@@ -3281,10 +3362,20 @@ components:
 
             * `netting` - Netting Mode
             * `hedging` - Hedging Mode
-    PatchedTradingTaskRequest:
+    PatchedTradingTaskCreateRequest:
       type: object
-      description: Serializer for TradingTask with execution data.
+      description: |-
+        Serializer for creating and updating TradingTask.
+
+        Includes validation for account ownership and configuration.
       properties:
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        oanda_account:
+          type: integer
+          description: OANDA account used for trading
         name:
           type: string
           minLength: 1
@@ -3293,39 +3384,9 @@ components:
         description:
           type: string
           description: Optional description of this trading task
-        retry_count:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          description: Number of times this task has been retried
-        max_retries:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          description: Maximum number of retries allowed
-        config:
-          type: string
-          format: uuid
-          description: Strategy configuration used by this task
-        oanda_account:
-          type: integer
-          description: OANDA account used for trading
         sell_on_stop:
           type: boolean
           description: Close all positions when task is stopped
-        instrument:
-          type: string
-          minLength: 1
-          description: Trading instrument (e.g., EUR_USD, USD_JPY)
-          maxLength: 20
-        trading_mode:
-          allOf:
-          - $ref: '#/components/schemas/TradingModeEnum'
-          description: |-
-            Trading mode: netting (aggregated positions) or hedging (independent trades)
-
-            * `netting` - Netting Mode
-            * `hedging` - Hedging Mode
     PositionRequest:
       type: object
       description: Serializer for opening a position via a market order.
@@ -3572,6 +3633,10 @@ components:
             * `WARNING` - Warning
             * `ERROR` - Error
             * `CRITICAL` - Critical
+        component:
+          type: string
+          description: Component/logger name that emitted this log
+          maxLength: 255
         message:
           type: string
           description: Log message content
@@ -3605,6 +3670,9 @@ components:
           pattern: ^-?\d{0,10}(?:\.\d{0,10})?$
         execution_method:
           type: string
+        layer_index:
+          type: integer
+          nullable: true
         pnl:
           type: string
           format: decimal
@@ -3756,16 +3824,6 @@ components:
           readOnly: true
           nullable: true
           description: Celery task ID for tracking execution
-        retry_count:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          description: Number of times this task has been retried
-        max_retries:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          description: Maximum number of retries allowed
         error_message:
           type: string
           readOnly: true
@@ -3809,6 +3867,55 @@ components:
       - config
       - name
       - oanda_account
+    TradingTaskCreate:
+      type: object
+      description: |-
+        Serializer for creating and updating TradingTask.
+
+        Includes validation for account ownership and configuration.
+      properties:
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        oanda_account:
+          type: integer
+          description: OANDA account used for trading
+        name:
+          type: string
+          description: Human-readable name for this trading task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this trading task
+        sell_on_stop:
+          type: boolean
+          description: Close all positions when task is stopped
+    TradingTaskCreateRequest:
+      type: object
+      description: |-
+        Serializer for creating and updating TradingTask.
+
+        Includes validation for account ownership and configuration.
+      properties:
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        oanda_account:
+          type: integer
+          description: OANDA account used for trading
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable name for this trading task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this trading task
+        sell_on_stop:
+          type: boolean
+          description: Close all positions when task is stopped
     TradingTaskRequest:
       type: object
       description: Serializer for TradingTask with execution data.
@@ -3821,16 +3928,6 @@ components:
         description:
           type: string
           description: Optional description of this trading task
-        retry_count:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          description: Number of times this task has been retried
-        max_retries:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          description: Maximum number of retries allowed
         config:
           type: string
           format: uuid

@@ -34,9 +34,9 @@ export function useConfigurationsQuery(params?: StrategyConfigListParams) {
  * - Longer stale time (10 minutes) for detail views
  * - Automatic cache invalidation on updates
  */
-export function useConfigurationQuery(id: string | number) {
+export function useConfigurationQuery(id: string) {
   return useQuery<StrategyConfig>({
-    queryKey: queryKeys.configurations.detail(Number(id)),
+    queryKey: queryKeys.configurations.detail(id),
     queryFn: () => configurationsApi.get(id),
     staleTime: 10 * 60 * 1000, // 10 minutes
     enabled: !!id, // Only fetch if id is provided
@@ -46,9 +46,9 @@ export function useConfigurationQuery(id: string | number) {
 /**
  * Hook to fetch tasks using a configuration
  */
-export function useConfigurationTasksQuery(id: string | number) {
+export function useConfigurationTasksQuery(id: string) {
   return useQuery<ConfigurationTask[]>({
-    queryKey: queryKeys.configurations.tasks(Number(id)),
+    queryKey: queryKeys.configurations.tasks(id),
     queryFn: () => configurationsApi.getTasks(String(id)),
     staleTime: 2 * 60 * 1000, // 2 minutes
     enabled: !!id,
@@ -80,7 +80,7 @@ export function useUpdateConfigurationMutation() {
       id,
       data,
     }: {
-      id: number;
+      id: string;
       data: StrategyConfigUpdateData;
     }) => configurationsApi.update(id, data),
     onMutate: async ({ id, data }) => {
@@ -132,7 +132,7 @@ export function useDeleteConfigurationMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => configurationsApi.delete(id),
+    mutationFn: (id: string) => configurationsApi.delete(id),
     onSuccess: (_data, id) => {
       // Remove from cache
       queryClient.removeQueries({

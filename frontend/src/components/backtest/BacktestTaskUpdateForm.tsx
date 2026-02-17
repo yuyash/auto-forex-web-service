@@ -69,7 +69,7 @@ const backtestTaskUpdateSchema = z
 type BacktestTaskUpdateData = z.infer<typeof backtestTaskUpdateSchema>;
 
 interface BacktestTaskUpdateFormProps {
-  taskId: number | string;
+  taskId: string;
   taskName: string;
   taskDescription?: string;
   initialData: BacktestTaskUpdateData;
@@ -134,13 +134,13 @@ export default function BacktestTaskUpdateForm({
     } catch (error: unknown) {
       console.error('Failed to update task:', error);
       const err = error as {
-        data?: Record<string, string | string[]>;
+        details?: Record<string, string | string[]>;
         message?: string;
       };
 
       let errorMessage = 'Failed to update task';
-      if (err?.data) {
-        const backendErrors = err.data;
+      if (err?.details && typeof err.details === 'object') {
+        const backendErrors = err.details as Record<string, string | string[]>;
         const errorMessages: string[] = [];
 
         const fieldMapping: Record<string, string> = {

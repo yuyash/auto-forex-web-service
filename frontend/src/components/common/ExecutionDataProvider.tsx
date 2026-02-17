@@ -10,9 +10,9 @@ import { Box, CircularProgress, Alert, Typography } from '@mui/material';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
 
 export interface ExecutionDataProviderProps {
-  taskId: string | number;
+  taskId: string;
   taskType: 'backtest' | 'trading';
-  children: (executionId: number | null, isLoading: boolean) => React.ReactNode;
+  children: (executionId: string | null, isLoading: boolean) => React.ReactNode;
   fallback?: React.ReactNode;
   errorFallback?: (error: Error) => React.ReactNode;
 }

@@ -190,7 +190,7 @@ export class TaskPollingService {
         : await TradingService.tradingTasksTradingRetrieve(this.taskId);
 
     return {
-      task_id: task.id,
+      task_id: task.id ?? '',
       task_type: this.taskType,
       status: task.status as TaskStatus,
       progress:

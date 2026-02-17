@@ -8,9 +8,9 @@ export interface ExecutionLog {
 }
 
 export interface TaskExecution {
-  id: number;
+  id: string;
   task_type: TaskType;
-  task_id: number;
+  task_id: string;
   execution_number: number;
   status: TaskStatus;
   progress: number;
@@ -26,8 +26,8 @@ export interface TaskExecution {
 }
 
 export interface ExecutionMetrics {
-  id: number;
-  execution_id: number;
+  id: string;
+  execution_id: string;
   total_return: string;
   total_pnl: string;
   realized_pnl?: string;
@@ -117,7 +117,7 @@ export interface Trade {
 }
 
 export interface ExecutionSummary {
-  id: number;
+  id: string;
   execution_number: number;
   status: TaskStatus;
   progress: number;

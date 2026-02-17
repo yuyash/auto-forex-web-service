@@ -90,7 +90,7 @@ export const BacktestTaskDetail: React.FC = () => {
     isLoading,
     error,
     refetch,
-  } = useBacktestTask(taskId ? Number(taskId) : undefined);
+  } = useBacktestTask(taskId || undefined);
 
   // Use HTTP polling for task status updates
   const {

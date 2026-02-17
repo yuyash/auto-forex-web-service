@@ -26,7 +26,7 @@ import { backtestTasksApi, tradingTasksApi } from '../../../services/api';
 import { TaskType, TaskStatus } from '../../../types';
 
 interface TaskControlButtonsProps {
-  taskId: number;
+  taskId: string;
   taskType: TaskType;
   currentStatus: TaskStatus;
   onSuccess?: () => void;

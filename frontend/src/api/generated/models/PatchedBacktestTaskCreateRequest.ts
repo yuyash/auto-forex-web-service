@@ -1,13 +1,17 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-
+/* eslint-disable */
 import type { DataSourceEnum } from './DataSourceEnum';
 import type { TradingModeEnum } from './TradingModeEnum';
 /**
- * Serializer for BacktestTask with execution data.
+ * Serializer for creating and updating BacktestTask.
  */
-export type PatchedBacktestTaskRequest = {
+export type PatchedBacktestTaskCreateRequest = {
+  /**
+   * Strategy configuration used by this task
+   */
+  config?: string;
   /**
    * Human-readable name for this backtest task
    */
@@ -16,18 +20,6 @@ export type PatchedBacktestTaskRequest = {
    * Optional description of this backtest task
    */
   description?: string;
-  /**
-   * Number of times this task has been retried
-   */
-  retry_count?: number;
-  /**
-   * Maximum number of retries allowed
-   */
-  max_retries?: number;
-  /**
-   * Strategy configuration used by this task
-   */
-  config?: string;
   /**
    * Data source for historical tick data
    *
@@ -52,6 +44,10 @@ export type PatchedBacktestTaskRequest = {
    * Commission to apply per trade
    */
   commission_per_trade?: string;
+  /**
+   * Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account.
+   */
+  pip_size?: string | null;
   /**
    * Trading instrument (e.g., EUR_USD, USD_JPY)
    */

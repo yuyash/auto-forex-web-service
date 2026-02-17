@@ -1,7 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-
+/* eslint-disable */
 import type { TradingModeEnum } from './TradingModeEnum';
 /**
  * Serializer for TradingTask with execution data.
@@ -15,14 +15,6 @@ export type TradingTaskRequest = {
    * Optional description of this trading task
    */
   description?: string;
-  /**
-   * Number of times this task has been retried
-   */
-  retry_count?: number;
-  /**
-   * Maximum number of retries allowed
-   */
-  max_retries?: number;
   /**
    * Strategy configuration used by this task
    */

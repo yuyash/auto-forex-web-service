@@ -6,7 +6,7 @@
  * Serializer for TradingEvent model.
  */
 export type TradingEvent = {
-  readonly id: number;
+  readonly id?: number;
   event_type: string;
   severity?: string;
   description: string;
@@ -20,5 +20,5 @@ export type TradingEvent = {
    */
   celery_task_id?: string | null;
   details?: any;
-  readonly created_at: string;
+  readonly created_at?: string;
 };

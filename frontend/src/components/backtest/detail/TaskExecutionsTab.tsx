@@ -17,7 +17,7 @@ import { ExecutionComparisonView } from '../../tasks/display/ExecutionComparison
 import { TaskStatus, TaskType } from '../../../types/common';
 
 interface TaskExecutionsTabProps {
-  taskId: number | string;
+  taskId: string;
   taskType?: TaskType;
   taskStatus?: TaskStatus;
   task?: {
@@ -34,7 +34,7 @@ export function TaskExecutionsTab({
 }: TaskExecutionsTabProps) {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0); // 0 = History, 1 = Compare
-  const [selectedComparisonIds, setSelectedComparisonIds] = useState<number[]>(
+  const [selectedComparisonIds, setSelectedComparisonIds] = useState<string[]>(
     []
   );
 
@@ -65,7 +65,7 @@ export function TaskExecutionsTab({
     }
   }, [taskStatus, refetchExecutions]);
 
-  const handleExecutionClick = (executionId: number) => {
+  const handleExecutionClick = (executionId: string) => {
     navigate(`/executions/${executionId}/results`);
   };
 

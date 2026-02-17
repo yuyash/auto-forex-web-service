@@ -13,7 +13,7 @@ export type TaskLog = {
   /**
    * Unique identifier for this log entry
    */
-  readonly id: string;
+  readonly id?: string;
   /**
    * Type of task (backtest or trading)
    *
@@ -32,7 +32,7 @@ export type TaskLog = {
   /**
    * When this log entry was created
    */
-  readonly timestamp: string;
+  readonly timestamp?: string;
   /**
    * Log severity level
    *
@@ -43,6 +43,10 @@ export type TaskLog = {
    * * `CRITICAL` - Critical
    */
   level?: LevelEnum;
+  /**
+   * Component/logger name that emitted this log
+   */
+  component?: string;
   /**
    * Log message content
    */

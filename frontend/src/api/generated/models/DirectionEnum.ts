@@ -1,12 +1,12 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-
+/* eslint-disable */
 /**
- * * `long` - long
- * * `short` - short
+ * * `long` - Long
+ * * `short` - Short
  */
-export enum Direction530Enum {
+export enum DirectionEnum {
   LONG = 'long',
   SHORT = 'short',
 }

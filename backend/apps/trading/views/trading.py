@@ -5,7 +5,7 @@ from logging import Logger
 from typing import Any
 
 from django.db.models import Q, QuerySet
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -29,6 +29,37 @@ from apps.trading.tasks.service import TaskService
 logger: Logger = logging.getLogger(name=__name__)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="status", type=str, required=False, description="Filter by task status"
+            ),
+            OpenApiParameter(
+                name="config_id", type=str, required=False, description="Filter by configuration ID"
+            ),
+            OpenApiParameter(
+                name="account_id",
+                type=int,
+                required=False,
+                description="Filter by OANDA account ID",
+            ),
+            OpenApiParameter(
+                name="search", type=str, required=False, description="Search in name or description"
+            ),
+            OpenApiParameter(
+                name="ordering",
+                type=str,
+                required=False,
+                description="Ordering field (e.g. -created_at)",
+            ),
+            OpenApiParameter(name="page", type=int, required=False, description="Page number"),
+            OpenApiParameter(
+                name="page_size", type=int, required=False, description="Number of results per page"
+            ),
+        ],
+    ),
+)
 class TradingTaskViewSet(ModelViewSet):
     """
     ViewSet for TradingTask operations with task-centric API.
@@ -46,6 +77,14 @@ class TradingTaskViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = TradingTaskSerializer
     lookup_field = "pk"
+
+    def get_serializer_class(self):
+        """Use TradingTaskCreateSerializer for create/update actions."""
+        if self.action in ("create", "update", "partial_update"):
+            from apps.trading.serializers.trading import TradingTaskCreateSerializer
+
+            return TradingTaskCreateSerializer
+        return TradingTaskSerializer
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)

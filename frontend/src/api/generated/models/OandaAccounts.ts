@@ -1,14 +1,14 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-
+/* eslint-disable */
 import type { ApiTypeEnum } from './ApiTypeEnum';
 import type { JurisdictionEnum } from './JurisdictionEnum';
 /**
  * Serializer for OANDA account.
  */
 export type OandaAccounts = {
-  readonly id: number;
+  readonly id?: number;
   /**
    * OANDA account ID
    */
@@ -35,19 +35,19 @@ export type OandaAccounts = {
   /**
    * Current account balance
    */
-  readonly balance: string;
+  readonly balance?: string;
   /**
    * Margin currently used by open positions
    */
-  readonly margin_used: string;
+  readonly margin_used?: string;
   /**
    * Margin available for new positions
    */
-  readonly margin_available: string;
+  readonly margin_available?: string;
   /**
    * Unrealized profit/loss from open positions
    */
-  readonly unrealized_pnl: string;
+  readonly unrealized_pnl?: string;
   /**
    * Whether the account is active
    */
@@ -59,9 +59,9 @@ export type OandaAccounts = {
   /**
    * Timestamp when the account was added
    */
-  readonly created_at: string;
+  readonly created_at?: string;
   /**
    * Timestamp when the account was last updated
    */
-  readonly updated_at: string;
+  readonly updated_at?: string;
 };

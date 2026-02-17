@@ -1,7 +1,7 @@
 import type { TaskStatus, TaskType } from './common';
 
 export interface TaskResultsExecutionSummary {
-  id: number;
+  id: string;
   execution_number: number;
   status: TaskStatus;
   progress: number;
@@ -16,7 +16,7 @@ export interface TaskResultsExecutionSummary {
  * - `live` mirrors Redis live snapshot when present
  */
 export interface TaskResults {
-  task_id: number;
+  task_id: string;
   task_type: TaskType | 'trading' | 'backtest';
   status: TaskStatus;
   execution?: TaskResultsExecutionSummary | null;

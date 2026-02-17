@@ -3,20 +3,23 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { BacktestTask } from '../models/BacktestTask';
+import type { BacktestTaskCreate } from '../models/BacktestTaskCreate';
+import type { BacktestTaskCreateRequest } from '../models/BacktestTaskCreateRequest';
 import type { BacktestTaskRequest } from '../models/BacktestTaskRequest';
 import type { PaginatedBacktestTaskList } from '../models/PaginatedBacktestTaskList';
-import type { PaginatedEquityPointList } from '../models/PaginatedEquityPointList';
 import type { PaginatedStrategyConfigListList } from '../models/PaginatedStrategyConfigListList';
 import type { PaginatedTaskLogList } from '../models/PaginatedTaskLogList';
 import type { PaginatedTradeList } from '../models/PaginatedTradeList';
 import type { PaginatedTradingEventList } from '../models/PaginatedTradingEventList';
 import type { PaginatedTradingTaskList } from '../models/PaginatedTradingTaskList';
-import type { PatchedBacktestTaskRequest } from '../models/PatchedBacktestTaskRequest';
-import type { PatchedTradingTaskRequest } from '../models/PatchedTradingTaskRequest';
+import type { PatchedBacktestTaskCreateRequest } from '../models/PatchedBacktestTaskCreateRequest';
+import type { PatchedTradingTaskCreateRequest } from '../models/PatchedTradingTaskCreateRequest';
 import type { StrategyConfigCreateRequest } from '../models/StrategyConfigCreateRequest';
 import type { StrategyConfigDetail } from '../models/StrategyConfigDetail';
 import type { StrategyList } from '../models/StrategyList';
 import type { TradingTask } from '../models/TradingTask';
+import type { TradingTaskCreate } from '../models/TradingTaskCreate';
+import type { TradingTaskCreateRequest } from '../models/TradingTaskCreateRequest';
 import type { TradingTaskRequest } from '../models/TradingTaskRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
@@ -93,12 +96,12 @@ export class TradingService {
   /**
    * Get strategy configuration
    * Retrieve a specific strategy configuration
-   * @param configId
+   * @param configId Strategy configuration UUID
    * @returns StrategyConfigDetail
    * @throws ApiError
    */
   public static tradingStrategyConfigsRetrieve(
-    configId: number
+    configId: string
   ): CancelablePromise<StrategyConfigDetail> {
     return __request(OpenAPI, {
       method: 'GET',
@@ -111,13 +114,13 @@ export class TradingService {
   /**
    * Update strategy configuration
    * Update an existing strategy configuration
-   * @param configId
+   * @param configId Strategy configuration UUID
    * @param requestBody
    * @returns StrategyConfigDetail
    * @throws ApiError
    */
   public static tradingStrategyConfigsUpdate(
-    configId: number,
+    configId: string,
     requestBody: StrategyConfigCreateRequest
   ): CancelablePromise<StrategyConfigDetail> {
     return __request(OpenAPI, {
@@ -133,12 +136,12 @@ export class TradingService {
   /**
    * Delete strategy configuration
    * Delete a strategy configuration (fails if in use by active tasks)
-   * @param configId
+   * @param configId Strategy configuration UUID
    * @returns void
    * @throws ApiError
    */
   public static tradingStrategyConfigsDestroy(
-    configId: number
+    configId: string
   ): CancelablePromise<void> {
     return __request(OpenAPI, {
       method: 'DELETE',
@@ -160,34 +163,33 @@ export class TradingService {
    * - logs: Retrieve task logs with pagination
    * - events: Retrieve task events
    * - trades: Retrieve trade history
-   * - equity: Retrieve equity curve
-   * @param status
-   * @param configId
-   * @param ordering Which field to use when ordering the results.
-   * @param page A page number within the paginated result set.
-   * @param pageSize Number of results to return per page.
-   * @param search A search term.
+   * @param configId Filter by configuration ID
+   * @param ordering Ordering field (e.g. -created_at)
+   * @param page Page number
+   * @param pageSize Number of results per page
+   * @param search Search in name or description
+   * @param status Filter by task status
    * @returns PaginatedBacktestTaskList
    * @throws ApiError
    */
   public static tradingTasksBacktestList(
-    status?: string,
     configId?: string,
     ordering?: string,
     page?: number,
     pageSize?: number,
-    search?: string
+    search?: string,
+    status?: string
   ): CancelablePromise<PaginatedBacktestTaskList> {
     return __request(OpenAPI, {
       method: 'GET',
       url: '/api/trading/tasks/backtest/',
       query: {
-        status: status,
         config_id: configId,
         ordering: ordering,
         page: page,
         page_size: pageSize,
         search: search,
+        status: status,
       },
     });
   }
@@ -203,14 +205,13 @@ export class TradingService {
    * - logs: Retrieve task logs with pagination
    * - events: Retrieve task events
    * - trades: Retrieve trade history
-   * - equity: Retrieve equity curve
    * @param requestBody
-   * @returns BacktestTask
+   * @returns BacktestTaskCreate
    * @throws ApiError
    */
   public static tradingTasksBacktestCreate(
-    requestBody: BacktestTaskRequest
-  ): CancelablePromise<BacktestTask> {
+    requestBody: BacktestTaskCreateRequest
+  ): CancelablePromise<BacktestTaskCreate> {
     return __request(OpenAPI, {
       method: 'POST',
       url: '/api/trading/tasks/backtest/',
@@ -230,7 +231,6 @@ export class TradingService {
    * - logs: Retrieve task logs with pagination
    * - events: Retrieve task events
    * - trades: Retrieve trade history
-   * - equity: Retrieve equity curve
    * @param id
    * @returns BacktestTask
    * @throws ApiError
@@ -258,16 +258,15 @@ export class TradingService {
    * - logs: Retrieve task logs with pagination
    * - events: Retrieve task events
    * - trades: Retrieve trade history
-   * - equity: Retrieve equity curve
    * @param id
    * @param requestBody
-   * @returns BacktestTask
+   * @returns BacktestTaskCreate
    * @throws ApiError
    */
   public static tradingTasksBacktestUpdate(
     id: string,
-    requestBody: BacktestTaskRequest
-  ): CancelablePromise<BacktestTask> {
+    requestBody: BacktestTaskCreateRequest
+  ): CancelablePromise<BacktestTaskCreate> {
     return __request(OpenAPI, {
       method: 'PUT',
       url: '/api/trading/tasks/backtest/{id}/',
@@ -290,16 +289,15 @@ export class TradingService {
    * - logs: Retrieve task logs with pagination
    * - events: Retrieve task events
    * - trades: Retrieve trade history
-   * - equity: Retrieve equity curve
    * @param id
    * @param requestBody
-   * @returns BacktestTask
+   * @returns BacktestTaskCreate
    * @throws ApiError
    */
   public static tradingTasksBacktestPartialUpdate(
     id: string,
-    requestBody?: PatchedBacktestTaskRequest
-  ): CancelablePromise<BacktestTask> {
+    requestBody?: PatchedBacktestTaskCreateRequest
+  ): CancelablePromise<BacktestTaskCreate> {
     return __request(OpenAPI, {
       method: 'PATCH',
       url: '/api/trading/tasks/backtest/{id}/',
@@ -322,7 +320,6 @@ export class TradingService {
    * - logs: Retrieve task logs with pagination
    * - events: Retrieve task events
    * - trades: Retrieve trade history
-   * - equity: Retrieve equity curve
    * @param id
    * @returns void
    * @throws ApiError
@@ -335,35 +332,6 @@ export class TradingService {
       url: '/api/trading/tasks/backtest/{id}/',
       path: {
         id: id,
-      },
-    });
-  }
-  /**
-   * Get task equity curve
-   * Retrieve equity curve data from task execution state
-   * @param id
-   * @param ordering Which field to use when ordering the results.
-   * @param page A page number within the paginated result set.
-   * @param search A search term.
-   * @returns PaginatedEquityPointList
-   * @throws ApiError
-   */
-  public static tradingTasksBacktestEquitiesList(
-    id: string,
-    ordering?: string,
-    page?: number,
-    search?: string
-  ): CancelablePromise<PaginatedEquityPointList> {
-    return __request(OpenAPI, {
-      method: 'GET',
-      url: '/api/trading/tasks/backtest/{id}/equities/',
-      path: {
-        id: id,
-      },
-      query: {
-        ordering: ordering,
-        page: page,
-        search: search,
       },
     });
   }
@@ -407,8 +375,9 @@ export class TradingService {
   }
   /**
    * Get task logs
-   * Retrieve task execution logs with pagination and filtering
+   * Retrieve task execution logs for the latest execution with pagination and filtering
    * @param id
+   * @param celeryTaskId Optional explicit execution ID. If omitted, current task celery_task_id is used.
    * @param level Filter by log level (DEBUG, INFO, WARNING, ERROR)
    * @param limit Maximum number of logs to return (default: 100)
    * @param offset Number of logs to skip (default: 0)
@@ -420,6 +389,7 @@ export class TradingService {
    */
   public static tradingTasksBacktestLogsList(
     id: string,
+    celeryTaskId?: string,
     level?: string,
     limit?: number,
     offset?: number,
@@ -434,6 +404,7 @@ export class TradingService {
         id: id,
       },
       query: {
+        celery_task_id: celeryTaskId,
         level: level,
         limit: limit,
         offset: offset,
@@ -557,6 +528,7 @@ export class TradingService {
    * Get task trades
    * Retrieve trade history from task execution state
    * @param id
+   * @param celeryTaskId Execution ID. Defaults to current task celery_task_id.
    * @param direction Filter by trade direction (buy/sell)
    * @param ordering Which field to use when ordering the results.
    * @param page A page number within the paginated result set.
@@ -566,6 +538,7 @@ export class TradingService {
    */
   public static tradingTasksBacktestTradesList(
     id: string,
+    celeryTaskId?: string,
     direction?: string,
     ordering?: string,
     page?: number,
@@ -578,6 +551,7 @@ export class TradingService {
         id: id,
       },
       query: {
+        celery_task_id: celeryTaskId,
         direction: direction,
         ordering: ordering,
         page: page,
@@ -596,40 +570,36 @@ export class TradingService {
    * - logs: Retrieve task logs with pagination
    * - events: Retrieve task events
    * - trades: Retrieve trade history
-   * - equity: Retrieve equity curve
-   * @param status
-   * @param configId
-   * @param strategyType
-   * @param accountId
-   * @param ordering Which field to use when ordering the results.
-   * @param page A page number within the paginated result set.
-   * @param pageSize Number of results to return per page.
-   * @param search A search term.
+   * @param accountId Filter by OANDA account ID
+   * @param configId Filter by configuration ID
+   * @param ordering Ordering field (e.g. -created_at)
+   * @param page Page number
+   * @param pageSize Number of results per page
+   * @param search Search in name or description
+   * @param status Filter by task status
    * @returns PaginatedTradingTaskList
    * @throws ApiError
    */
   public static tradingTasksTradingList(
-    status?: string,
+    accountId?: number,
     configId?: string,
-    strategyType?: string,
-    accountId?: string,
     ordering?: string,
     page?: number,
     pageSize?: number,
-    search?: string
+    search?: string,
+    status?: string
   ): CancelablePromise<PaginatedTradingTaskList> {
     return __request(OpenAPI, {
       method: 'GET',
       url: '/api/trading/tasks/trading/',
       query: {
-        status: status,
-        config_id: configId,
-        strategy_type: strategyType,
         account_id: accountId,
+        config_id: configId,
         ordering: ordering,
         page: page,
         page_size: pageSize,
         search: search,
+        status: status,
       },
     });
   }
@@ -644,14 +614,13 @@ export class TradingService {
    * - logs: Retrieve task logs with pagination
    * - events: Retrieve task events
    * - trades: Retrieve trade history
-   * - equity: Retrieve equity curve
    * @param requestBody
-   * @returns TradingTask
+   * @returns TradingTaskCreate
    * @throws ApiError
    */
   public static tradingTasksTradingCreate(
-    requestBody: TradingTaskRequest
-  ): CancelablePromise<TradingTask> {
+    requestBody?: TradingTaskCreateRequest
+  ): CancelablePromise<TradingTaskCreate> {
     return __request(OpenAPI, {
       method: 'POST',
       url: '/api/trading/tasks/trading/',
@@ -670,7 +639,6 @@ export class TradingService {
    * - logs: Retrieve task logs with pagination
    * - events: Retrieve task events
    * - trades: Retrieve trade history
-   * - equity: Retrieve equity curve
    * @param id
    * @returns TradingTask
    * @throws ApiError
@@ -697,16 +665,15 @@ export class TradingService {
    * - logs: Retrieve task logs with pagination
    * - events: Retrieve task events
    * - trades: Retrieve trade history
-   * - equity: Retrieve equity curve
    * @param id
    * @param requestBody
-   * @returns TradingTask
+   * @returns TradingTaskCreate
    * @throws ApiError
    */
   public static tradingTasksTradingUpdate(
     id: string,
-    requestBody: TradingTaskRequest
-  ): CancelablePromise<TradingTask> {
+    requestBody?: TradingTaskCreateRequest
+  ): CancelablePromise<TradingTaskCreate> {
     return __request(OpenAPI, {
       method: 'PUT',
       url: '/api/trading/tasks/trading/{id}/',
@@ -728,16 +695,15 @@ export class TradingService {
    * - logs: Retrieve task logs with pagination
    * - events: Retrieve task events
    * - trades: Retrieve trade history
-   * - equity: Retrieve equity curve
    * @param id
    * @param requestBody
-   * @returns TradingTask
+   * @returns TradingTaskCreate
    * @throws ApiError
    */
   public static tradingTasksTradingPartialUpdate(
     id: string,
-    requestBody?: PatchedTradingTaskRequest
-  ): CancelablePromise<TradingTask> {
+    requestBody?: PatchedTradingTaskCreateRequest
+  ): CancelablePromise<TradingTaskCreate> {
     return __request(OpenAPI, {
       method: 'PATCH',
       url: '/api/trading/tasks/trading/{id}/',
@@ -759,7 +725,6 @@ export class TradingService {
    * - logs: Retrieve task logs with pagination
    * - events: Retrieve task events
    * - trades: Retrieve trade history
-   * - equity: Retrieve equity curve
    * @param id
    * @returns void
    * @throws ApiError
@@ -772,35 +737,6 @@ export class TradingService {
       url: '/api/trading/tasks/trading/{id}/',
       path: {
         id: id,
-      },
-    });
-  }
-  /**
-   * Get task equity curve
-   * Retrieve equity curve data from task execution state
-   * @param id
-   * @param ordering Which field to use when ordering the results.
-   * @param page A page number within the paginated result set.
-   * @param search A search term.
-   * @returns PaginatedEquityPointList
-   * @throws ApiError
-   */
-  public static tradingTasksTradingEquitiesList(
-    id: string,
-    ordering?: string,
-    page?: number,
-    search?: string
-  ): CancelablePromise<PaginatedEquityPointList> {
-    return __request(OpenAPI, {
-      method: 'GET',
-      url: '/api/trading/tasks/trading/{id}/equities/',
-      path: {
-        id: id,
-      },
-      query: {
-        ordering: ordering,
-        page: page,
-        search: search,
       },
     });
   }
@@ -844,8 +780,9 @@ export class TradingService {
   }
   /**
    * Get task logs
-   * Retrieve task execution logs with pagination and filtering
+   * Retrieve task execution logs for the latest execution with pagination and filtering
    * @param id
+   * @param celeryTaskId Optional explicit execution ID. If omitted, current task celery_task_id is used.
    * @param level Filter by log level (DEBUG, INFO, WARNING, ERROR)
    * @param limit Maximum number of logs to return (default: 100)
    * @param offset Number of logs to skip (default: 0)
@@ -857,6 +794,7 @@ export class TradingService {
    */
   public static tradingTasksTradingLogsList(
     id: string,
+    celeryTaskId?: string,
     level?: string,
     limit?: number,
     offset?: number,
@@ -871,6 +809,7 @@ export class TradingService {
         id: id,
       },
       query: {
+        celery_task_id: celeryTaskId,
         level: level,
         limit: limit,
         offset: offset,
@@ -972,6 +911,7 @@ export class TradingService {
    * Get task trades
    * Retrieve trade history from task execution state
    * @param id
+   * @param celeryTaskId Execution ID. Defaults to current task celery_task_id.
    * @param direction Filter by trade direction (buy/sell)
    * @param ordering Which field to use when ordering the results.
    * @param page A page number within the paginated result set.
@@ -981,6 +921,7 @@ export class TradingService {
    */
   public static tradingTasksTradingTradesList(
     id: string,
+    celeryTaskId?: string,
     direction?: string,
     ordering?: string,
     page?: number,
@@ -993,6 +934,7 @@ export class TradingService {
         id: id,
       },
       query: {
+        celery_task_id: celeryTaskId,
         direction: direction,
         ordering: ordering,
         page: page,

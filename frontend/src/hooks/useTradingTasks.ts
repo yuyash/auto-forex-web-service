@@ -190,7 +190,7 @@ interface UseTradingTaskResult {
  * Hook to fetch a single trading task
  */
 export function useTradingTask(
-  id?: number | string,
+  id?: string,
   options?: { enabled?: boolean }
 ): UseTradingTaskResult {
   const [data, setData] = useState<TradingTask | null>(null);
@@ -199,7 +199,7 @@ export function useTradingTask(
 
   const fetchData = useCallback(async () => {
     // Skip fetching if no valid ID or disabled
-    if (!id || id === 0 || options?.enabled === false) {
+    if (!id || options?.enabled === false) {
       setIsLoading(false);
       return;
     }
@@ -232,7 +232,7 @@ export function useTradingTask(
  * Hook to poll trading task status for running tasks
  */
 export function useTradingTaskPolling(
-  id: number,
+  id: string,
   enabled: boolean = true,
   interval: number = 5000
 ): UseTradingTaskResult {

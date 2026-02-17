@@ -118,7 +118,7 @@ export default function TradingTaskForm({
   const accounts = (
     Array.isArray(accountsData)
       ? accountsData
-      : (accountsData as { results?: Account[] })?.results || []
+      : (accountsData as unknown as { results?: Account[] })?.results || []
   ) as Account[];
 
   // For review step, use saved formData instead of watch

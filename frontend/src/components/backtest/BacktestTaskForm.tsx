@@ -60,7 +60,7 @@ const createDefaultDateRange = () => {
 };
 
 interface BacktestTaskFormProps {
-  taskId?: number;
+  taskId?: string;
   initialData?: Partial<BacktestTaskSchemaOutput>;
 }
 
@@ -386,14 +386,14 @@ export default function BacktestTaskForm({
       navigate('/backtest-tasks');
     } catch (error: unknown) {
       const err = error as {
-        data?: Record<string, string | string[]>;
+        details?: Record<string, string | string[]>;
         message?: string;
       };
 
       // Extract backend validation errors if available
       let errorMessage = 'Failed to create task';
-      if (err?.data) {
-        const backendErrors = err.data;
+      if (err?.details && typeof err.details === 'object') {
+        const backendErrors = err.details as Record<string, string | string[]>;
         const errorMessages: string[] = [];
 
         // Map backend field names to frontend field names

@@ -27,14 +27,14 @@ import type { TaskStatus } from '../../types/common';
 import { TaskStatus as TaskStatusEnum } from '../../types/common';
 
 export interface TaskControlButtonsProps {
-  taskId: string | number;
+  taskId: string;
   status: TaskStatus;
-  onStart?: (taskId: string | number) => void | Promise<void>;
-  onStop?: (taskId: string | number) => void | Promise<void>;
-  onPause?: (taskId: string | number) => void | Promise<void>;
-  onResume?: (taskId: string | number) => void | Promise<void>;
-  onRestart?: (taskId: string | number) => void | Promise<void>;
-  onDelete?: (taskId: string | number) => void | Promise<void>;
+  onStart?: (taskId: string) => void | Promise<void>;
+  onStop?: (taskId: string) => void | Promise<void>;
+  onPause?: (taskId: string) => void | Promise<void>;
+  onResume?: (taskId: string) => void | Promise<void>;
+  onRestart?: (taskId: string) => void | Promise<void>;
+  onDelete?: (taskId: string) => void | Promise<void>;
   isLoading?: boolean;
   disabled?: boolean;
   size?: 'small' | 'medium' | 'large';
@@ -115,7 +115,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   const canDelete = ![TaskStatusEnum.RUNNING].includes(status);
 
   const handleAction = async (
-    action?: (taskId: string | number) => void | Promise<void>
+    action?: (taskId: string) => void | Promise<void>
   ) => {
     if (action && !isLoading && !disabled) {
       await action(taskId);

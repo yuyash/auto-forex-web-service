@@ -83,9 +83,9 @@ const AccountManagement = () => {
         if (listedAccounts.length > 0) {
           void (async () => {
             const results = await Promise.allSettled(
-              listedAccounts.map((account: OandaAccounts) =>
-                accountsApi.get(account.id)
-              )
+              listedAccounts
+                .filter((account: OandaAccounts) => account.id !== undefined)
+                .map((account: OandaAccounts) => accountsApi.get(account.id!))
             );
 
             if (!isMountedRef.current) {
