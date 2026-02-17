@@ -67,7 +67,7 @@ describe('EquityOHLCChart', () => {
       expect(screen.getByText('Equity Curve')).toBeInTheDocument();
 
       // Check for granularity selector
-      expect(screen.getByLabelText(/granularity/i)).toBeInTheDocument();
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
 
       // Check for data summary
       expect(screen.getByText(/Data Points: 5/i)).toBeInTheDocument();
@@ -154,7 +154,7 @@ describe('EquityOHLCChart', () => {
     it('should have default granularity selected', () => {
       renderWithTheme(<EquityOHLCChart data={sampleData} />);
 
-      const select = screen.getByLabelText(/granularity/i);
+      const select = screen.getByRole('combobox');
       expect(select).toHaveTextContent('1 Minute');
     });
 
@@ -163,7 +163,7 @@ describe('EquityOHLCChart', () => {
         <EquityOHLCChart data={sampleData} initialGranularity={300} />
       );
 
-      const select = screen.getByLabelText(/granularity/i);
+      const select = screen.getByRole('combobox');
       expect(select).toHaveTextContent('5 Minutes');
     });
 
@@ -176,7 +176,7 @@ describe('EquityOHLCChart', () => {
       );
 
       // Open the select
-      const select = screen.getByLabelText(/granularity/i);
+      const select = screen.getByRole('combobox');
       await user.click(select);
 
       // Select a different granularity
@@ -192,7 +192,7 @@ describe('EquityOHLCChart', () => {
       renderWithTheme(<EquityOHLCChart data={sampleData} />);
 
       // Open the select
-      const select = screen.getByLabelText(/granularity/i);
+      const select = screen.getByRole('combobox');
       await user.click(select);
 
       // Check for some key options

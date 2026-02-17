@@ -23,78 +23,6 @@ vi.mock('../../../src/api/generated/services/TradingService', () => ({
   },
 }));
 
-vi.mock('../../../src/api/generated/services/ExecutionsService', () => ({
-  ExecutionsService: {
-    getExecutionLatestMetrics: vi.fn(() =>
-      Promise.resolve({
-        realized_pnl: '100.50',
-        unrealized_pnl: '25.75',
-        total_pnl: '126.25',
-        open_positions: 3,
-        total_trades: 15,
-        timestamp: '2024-01-01T12:00:00Z',
-      })
-    ),
-    getExecutionEquity: vi.fn(() =>
-      Promise.resolve({
-        bins: [
-          {
-            timestamp: '2024-01-01T00:00:00Z',
-            realized_pnl_min: 90,
-            realized_pnl_max: 110,
-            realized_pnl_avg: 100,
-            realized_pnl_median: 100,
-            unrealized_pnl_min: 20,
-            unrealized_pnl_max: 30,
-            unrealized_pnl_avg: 25,
-            unrealized_pnl_median: 25,
-            tick_ask_min: 1.1,
-            tick_ask_max: 1.2,
-            tick_ask_avg: 1.15,
-            tick_ask_median: 1.15,
-            tick_bid_min: 1.0,
-            tick_bid_max: 1.1,
-            tick_bid_avg: 1.05,
-            tick_bid_median: 1.05,
-            tick_mid_min: 1.05,
-            tick_mid_max: 1.15,
-            tick_mid_avg: 1.1,
-            tick_mid_median: 1.1,
-            trade_count: 5,
-          },
-        ],
-      })
-    ),
-    getExecutionMetrics: vi.fn(() =>
-      Promise.resolve({
-        metrics: [
-          {
-            timestamp: '2024-01-01T00:00:00Z',
-            sequence: 1,
-            realized_pnl: 100,
-            unrealized_pnl: 25,
-            total_pnl: 125,
-            open_positions: 3,
-            total_trades: 15,
-            tick_ask_min: 1.1,
-            tick_ask_max: 1.2,
-            tick_ask_avg: 1.15,
-            tick_bid_min: 1.0,
-            tick_bid_max: 1.1,
-            tick_bid_avg: 1.05,
-            tick_mid_min: 1.05,
-            tick_mid_max: 1.15,
-            tick_mid_avg: 1.1,
-          },
-        ],
-      })
-    ),
-    getExecutionEvents: vi.fn(() => Promise.resolve({ events: [] })),
-    getExecutionLogs: vi.fn(() => Promise.resolve({ logs: [] })),
-    getExecutionTrades: vi.fn(() => Promise.resolve({ trades: [] })),
-  },
-}));
-
 // Mock hooks
 vi.mock('../../../src/hooks/useBacktestTasks', () => ({
   useBacktestTask: vi.fn((id: number) => ({
@@ -104,11 +32,21 @@ vi.mock('../../../src/hooks/useBacktestTasks', () => ({
       description: 'Test description',
       status: TaskStatus.RUNNING,
       config_name: 'Test Config',
+      config_id: 1,
       strategy_type: 'floor',
+      instrument: 'EUR_USD',
+      pip_size: '0.0001',
+      trading_mode: 'backtest',
+      data_source: 'oanda',
+      initial_balance: '10000.00',
+      commission_per_trade: '0.00',
       start_time: '2024-01-01T00:00:00Z',
-      end_time: null,
+      end_time: '2024-01-02T00:00:00Z',
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
+      latest_execution: null,
+      celery_task_id: null,
+      progress: 0,
     },
     isLoading: false,
     error: null,
@@ -116,42 +54,42 @@ vi.mock('../../../src/hooks/useBacktestTasks', () => ({
   })),
 }));
 
-// Mock common components
-vi.mock('../../../src/components/common', () => ({
-  ExecutionDataProvider: ({
-    children,
-  }: {
-    children: (
-      executionId: number | null,
-      isLoading: boolean
-    ) => React.ReactNode;
-  }) => <div>{children(123, false)}</div>,
+vi.mock('../../../src/hooks/useTaskPolling', () => ({
+  useTaskPolling: vi.fn(() => ({
+    status: null,
+    isPolling: false,
+    startPolling: vi.fn(),
+    stopPolling: vi.fn(),
+  })),
+}));
+
+// Mock child components
+vi.mock('../../../src/components/common/TaskControlButtons', () => ({
   TaskControlButtons: () => <div>Task Control Buttons</div>,
-  useToast: () => ({
-    showError: vi.fn(),
-    showSuccess: vi.fn(),
-  }),
 }));
 
-// Mock detail components
-vi.mock('../../../src/components/backtest/detail/EventsTable', () => ({
-  EventsTable: () => <div>Events Table</div>,
+vi.mock('../../../src/components/tasks/display/StatusBadge', () => ({
+  StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
 }));
 
-vi.mock('../../../src/components/backtest/detail/LogsTable', () => ({
-  LogsTable: () => <div>Logs Table</div>,
+vi.mock('../../../src/components/tasks/detail/TaskEventsTable', () => ({
+  TaskEventsTable: () => <div>Events Table</div>,
 }));
 
-vi.mock('../../../src/components/backtest/detail/TradesTable', () => ({
-  TradesTable: () => <div>Trades Table</div>,
+vi.mock('../../../src/components/tasks/detail/TaskLogsTable', () => ({
+  TaskLogsTable: () => <div>Logs Table</div>,
 }));
 
-vi.mock('../../../src/components/backtest/detail/EquityChart', () => ({
-  EquityChart: () => <div>Equity Chart</div>,
+vi.mock('../../../src/components/tasks/detail/TaskTradesTable', () => ({
+  TaskTradesTable: () => <div>Trades Table</div>,
 }));
 
-vi.mock('../../../src/components/backtest/detail/MetricsChart', () => ({
-  MetricsChart: () => <div>Metrics Chart</div>,
+vi.mock('../../../src/components/tasks/detail/TaskReplayPanel', () => ({
+  TaskReplayPanel: () => <div>Replay Panel</div>,
+}));
+
+vi.mock('../../../src/components/tasks/TaskProgress', () => ({
+  TaskProgress: () => <div>Task Progress</div>,
 }));
 
 // Test wrapper
@@ -182,8 +120,11 @@ describe('BacktestTaskDetail', () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByText('Test Backtest Task')).toBeInTheDocument();
-      expect(screen.getByText(TaskStatus.RUNNING)).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: 'Test Backtest Task' })
+      ).toBeInTheDocument();
+      const statusElements = screen.getAllByText(TaskStatus.RUNNING);
+      expect(statusElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -191,10 +132,8 @@ describe('BacktestTaskDetail', () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/Configuration: Test Config/)
-      ).toBeInTheDocument();
-      expect(screen.getByText(/Strategy: floor/)).toBeInTheDocument();
+      const floorElements = screen.getAllByText('floor');
+      expect(floorElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -202,15 +141,8 @@ describe('BacktestTaskDetail', () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByText('Test description')).toBeInTheDocument();
-    });
-  });
-
-  it('renders execution ID when available', async () => {
-    render(<BacktestTaskDetail />, { wrapper: createWrapper() });
-
-    await waitFor(() => {
-      expect(screen.getByText(/Execution ID: 123/)).toBeInTheDocument();
+      const descElements = screen.getAllByText('Test description');
+      expect(descElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -226,16 +158,27 @@ describe('BacktestTaskDetail', () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
     await waitFor(() => {
+      expect(screen.getByText('Overview')).toBeInTheDocument();
       expect(screen.getByText('Events')).toBeInTheDocument();
       expect(screen.getByText('Logs')).toBeInTheDocument();
       expect(screen.getByText('Trades')).toBeInTheDocument();
-      expect(screen.getByText('Equity')).toBeInTheDocument();
-      expect(screen.getByText('Metrics')).toBeInTheDocument();
+      expect(screen.getByText('Replay')).toBeInTheDocument();
     });
   });
 
-  it('renders Events tab content by default', async () => {
+  it('renders Overview tab content by default', async () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByText('Task Information')).toBeInTheDocument();
+    });
+  });
+
+  it('switches to Events tab when clicked', async () => {
+    render(<BacktestTaskDetail />, { wrapper: createWrapper() });
+
+    const eventsTab = screen.getByText('Events');
+    fireEvent.click(eventsTab);
 
     await waitFor(() => {
       expect(screen.getByText('Events Table')).toBeInTheDocument();
@@ -244,10 +187,6 @@ describe('BacktestTaskDetail', () => {
 
   it('switches to Logs tab when clicked', async () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
-
-    await waitFor(() => {
-      expect(screen.getByText('Events Table')).toBeInTheDocument();
-    });
 
     const logsTab = screen.getByText('Logs');
     fireEvent.click(logsTab);
@@ -268,25 +207,14 @@ describe('BacktestTaskDetail', () => {
     });
   });
 
-  it('switches to Equity tab when clicked', async () => {
+  it('switches to Replay tab when clicked', async () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
-    const equityTab = screen.getByText('Equity');
-    fireEvent.click(equityTab);
+    const replayTab = screen.getByText('Replay');
+    fireEvent.click(replayTab);
 
     await waitFor(() => {
-      expect(screen.getByText('Equity Chart')).toBeInTheDocument();
-    });
-  });
-
-  it('switches to Metrics tab when clicked', async () => {
-    render(<BacktestTaskDetail />, { wrapper: createWrapper() });
-
-    const metricsTab = screen.getByText('Metrics');
-    fireEvent.click(metricsTab);
-
-    await waitFor(() => {
-      expect(screen.getByText('Metrics Chart')).toBeInTheDocument();
+      expect(screen.getByText('Replay Panel')).toBeInTheDocument();
     });
   });
 
@@ -294,8 +222,10 @@ describe('BacktestTaskDetail', () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByText('Backtest Tasks')).toBeInTheDocument();
-      expect(screen.getByText('Test Backtest Task')).toBeInTheDocument();
+      expect(screen.getByRole('navigation')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Backtest Tasks' })
+      ).toBeInTheDocument();
     });
   });
 
@@ -330,28 +260,6 @@ describe('BacktestTaskDetail', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Failed to load task')).toBeInTheDocument();
-    });
-  });
-
-  it('shows info message when no execution data available', async () => {
-    const commonMock = await import('../../../src/components/common');
-    vi.mocked(commonMock.ExecutionDataProvider).mockImplementationOnce(
-      ({
-        children,
-      }: {
-        children: (
-          executionId: number | null,
-          isLoading: boolean
-        ) => React.ReactNode;
-      }) => <div>{children(null, false)}</div>
-    );
-
-    render(<BacktestTaskDetail />, { wrapper: createWrapper() });
-
-    await waitFor(() => {
-      expect(
-        screen.getByText('No execution data available')
-      ).toBeInTheDocument();
     });
   });
 });

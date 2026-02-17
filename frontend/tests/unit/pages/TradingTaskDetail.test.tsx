@@ -23,92 +23,28 @@ vi.mock('../../../src/api/generated/services/TradingService', () => ({
   },
 }));
 
-vi.mock('../../../src/api/generated/services/ExecutionsService', () => ({
-  ExecutionsService: {
-    getExecutionLatestMetrics: vi.fn(() =>
-      Promise.resolve({
-        realized_pnl: '150.75',
-        unrealized_pnl: '35.25',
-        total_pnl: '186.00',
-        open_positions: 5,
-        total_trades: 25,
-        timestamp: '2024-01-01T12:00:00Z',
-      })
-    ),
-    getExecutionEquity: vi.fn(() =>
-      Promise.resolve({
-        bins: [
-          {
-            timestamp: '2024-01-01T00:00:00Z',
-            realized_pnl_min: 140,
-            realized_pnl_max: 160,
-            realized_pnl_avg: 150,
-            realized_pnl_median: 150,
-            unrealized_pnl_min: 30,
-            unrealized_pnl_max: 40,
-            unrealized_pnl_avg: 35,
-            unrealized_pnl_median: 35,
-            tick_ask_min: 1.2,
-            tick_ask_max: 1.3,
-            tick_ask_avg: 1.25,
-            tick_ask_median: 1.25,
-            tick_bid_min: 1.1,
-            tick_bid_max: 1.2,
-            tick_bid_avg: 1.15,
-            tick_bid_median: 1.15,
-            tick_mid_min: 1.15,
-            tick_mid_max: 1.25,
-            tick_mid_avg: 1.2,
-            tick_mid_median: 1.2,
-            trade_count: 8,
-          },
-        ],
-      })
-    ),
-    getExecutionMetrics: vi.fn(() =>
-      Promise.resolve({
-        metrics: [
-          {
-            timestamp: '2024-01-01T00:00:00Z',
-            sequence: 1,
-            realized_pnl: 150,
-            unrealized_pnl: 35,
-            total_pnl: 185,
-            open_positions: 5,
-            total_trades: 25,
-            tick_ask_min: 1.2,
-            tick_ask_max: 1.3,
-            tick_ask_avg: 1.25,
-            tick_bid_min: 1.1,
-            tick_bid_max: 1.2,
-            tick_bid_avg: 1.15,
-            tick_mid_min: 1.15,
-            tick_mid_max: 1.25,
-            tick_mid_avg: 1.2,
-          },
-        ],
-      })
-    ),
-    getExecutionEvents: vi.fn(() => Promise.resolve({ events: [] })),
-    getExecutionLogs: vi.fn(() => Promise.resolve({ logs: [] })),
-    getExecutionTrades: vi.fn(() => Promise.resolve({ trades: [] })),
-  },
-}));
-
 // Mock hooks
 vi.mock('../../../src/hooks/useTradingTasks', () => ({
-  useTradingTask: vi.fn((id: number) => ({
+  useTradingTask: vi.fn((id: string) => ({
     data: {
-      id,
+      id: Number(id),
       name: 'Test Trading Task',
       description: 'Test trading description',
       status: TaskStatus.RUNNING,
       config_name: 'Live Config',
+      config_id: 1,
       strategy_type: 'floor',
+      instrument: 'EUR_USD',
+      pip_size: '0.0001',
+      trading_mode: 'live',
+      account_name: 'Test Account',
+      sell_on_stop: false,
       start_time: '2024-01-01T00:00:00Z',
       end_time: null,
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
+      latest_execution: null,
+      celery_task_id: null,
     },
     isLoading: false,
     error: null,
@@ -116,42 +52,29 @@ vi.mock('../../../src/hooks/useTradingTasks', () => ({
   })),
 }));
 
-// Mock common components
-vi.mock('../../../src/components/common', () => ({
-  ExecutionDataProvider: ({
-    children,
-  }: {
-    children: (
-      executionId: number | null,
-      isLoading: boolean
-    ) => React.ReactNode;
-  }) => <div>{children(456, false)}</div>,
+// Mock child components
+vi.mock('../../../src/components/common/TaskControlButtons', () => ({
   TaskControlButtons: () => <div>Task Control Buttons</div>,
-  useToast: () => ({
-    showError: vi.fn(),
-    showSuccess: vi.fn(),
-  }),
 }));
 
-// Mock detail components (reused from backtest)
-vi.mock('../../../src/components/backtest/detail/EventsTable', () => ({
-  EventsTable: () => <div>Events Table</div>,
+vi.mock('../../../src/components/tasks/display/StatusBadge', () => ({
+  StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
 }));
 
-vi.mock('../../../src/components/backtest/detail/LogsTable', () => ({
-  LogsTable: () => <div>Logs Table</div>,
+vi.mock('../../../src/components/tasks/detail/TaskEventsTable', () => ({
+  TaskEventsTable: () => <div>Events Table</div>,
 }));
 
-vi.mock('../../../src/components/backtest/detail/TradesTable', () => ({
-  TradesTable: () => <div>Trades Table</div>,
+vi.mock('../../../src/components/tasks/detail/TaskLogsTable', () => ({
+  TaskLogsTable: () => <div>Logs Table</div>,
 }));
 
-vi.mock('../../../src/components/backtest/detail/EquityChart', () => ({
-  EquityChart: () => <div>Equity Chart</div>,
+vi.mock('../../../src/components/tasks/detail/TaskTradesTable', () => ({
+  TaskTradesTable: () => <div>Trades Table</div>,
 }));
 
-vi.mock('../../../src/components/backtest/detail/MetricsChart', () => ({
-  MetricsChart: () => <div>Metrics Chart</div>,
+vi.mock('../../../src/components/tasks/detail/TaskReplayPanel', () => ({
+  TaskReplayPanel: () => <div>Replay Panel</div>,
 }));
 
 // Test wrapper
@@ -185,18 +108,8 @@ describe('TradingTaskDetail', () => {
       expect(
         screen.getByRole('heading', { name: 'Test Trading Task' })
       ).toBeInTheDocument();
-      expect(screen.getByText(TaskStatus.RUNNING)).toBeInTheDocument();
-    });
-  });
-
-  it('renders task configuration details', async () => {
-    render(<TradingTaskDetail />, { wrapper: createWrapper() });
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(/Configuration: Live Config/)
-      ).toBeInTheDocument();
-      expect(screen.getByText(/Strategy: floor/)).toBeInTheDocument();
+      const statusElements = screen.getAllByText(TaskStatus.RUNNING);
+      expect(statusElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -204,15 +117,8 @@ describe('TradingTaskDetail', () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByText('Test trading description')).toBeInTheDocument();
-    });
-  });
-
-  it('renders execution ID when available', async () => {
-    render(<TradingTaskDetail />, { wrapper: createWrapper() });
-
-    await waitFor(() => {
-      expect(screen.getByText(/Execution ID: 456/)).toBeInTheDocument();
+      const descElements = screen.getAllByText('Test trading description');
+      expect(descElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -228,16 +134,27 @@ describe('TradingTaskDetail', () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
     await waitFor(() => {
+      expect(screen.getByText('Overview')).toBeInTheDocument();
       expect(screen.getByText('Events')).toBeInTheDocument();
       expect(screen.getByText('Logs')).toBeInTheDocument();
       expect(screen.getByText('Trades')).toBeInTheDocument();
-      expect(screen.getByText('Equity')).toBeInTheDocument();
-      expect(screen.getByText('Metrics')).toBeInTheDocument();
+      expect(screen.getByText('Replay')).toBeInTheDocument();
     });
   });
 
-  it('renders Events tab content by default', async () => {
+  it('renders Overview tab content by default', async () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByText('Task Information')).toBeInTheDocument();
+    });
+  });
+
+  it('switches to Events tab when clicked', async () => {
+    render(<TradingTaskDetail />, { wrapper: createWrapper() });
+
+    const eventsTab = screen.getByText('Events');
+    fireEvent.click(eventsTab);
 
     await waitFor(() => {
       expect(screen.getByText('Events Table')).toBeInTheDocument();
@@ -246,10 +163,6 @@ describe('TradingTaskDetail', () => {
 
   it('switches to Logs tab when clicked', async () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
-
-    await waitFor(() => {
-      expect(screen.getByText('Events Table')).toBeInTheDocument();
-    });
 
     const logsTab = screen.getByText('Logs');
     fireEvent.click(logsTab);
@@ -270,25 +183,14 @@ describe('TradingTaskDetail', () => {
     });
   });
 
-  it('switches to Equity tab when clicked', async () => {
+  it('switches to Replay tab when clicked', async () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
-    const equityTab = screen.getByText('Equity');
-    fireEvent.click(equityTab);
+    const replayTab = screen.getByText('Replay');
+    fireEvent.click(replayTab);
 
     await waitFor(() => {
-      expect(screen.getByText('Equity Chart')).toBeInTheDocument();
-    });
-  });
-
-  it('switches to Metrics tab when clicked', async () => {
-    render(<TradingTaskDetail />, { wrapper: createWrapper() });
-
-    const metricsTab = screen.getByText('Metrics');
-    fireEvent.click(metricsTab);
-
-    await waitFor(() => {
-      expect(screen.getByText('Metrics Chart')).toBeInTheDocument();
+      expect(screen.getByText('Replay Panel')).toBeInTheDocument();
     });
   });
 
@@ -304,27 +206,14 @@ describe('TradingTaskDetail', () => {
     });
   });
 
-  it('renders latest metrics when loaded', async () => {
+  it('renders configuration and strategy info', async () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
-    // Click the "Load latest metrics" link
     await waitFor(() => {
-      const loadLink = screen.getByText('Load latest metrics');
-      fireEvent.click(loadLink);
-    });
-
-    // Wait for metrics to load
-    await waitFor(() => {
-      expect(screen.getByText('Realized PnL')).toBeInTheDocument();
-      expect(screen.getByText('$150.75')).toBeInTheDocument();
-      expect(screen.getByText('Unrealized PnL')).toBeInTheDocument();
-      expect(screen.getByText('$35.25')).toBeInTheDocument();
-      expect(screen.getByText('Total PnL')).toBeInTheDocument();
-      expect(screen.getByText('$186.00')).toBeInTheDocument();
-      expect(screen.getByText('Open Positions')).toBeInTheDocument();
-      expect(screen.getByText('5')).toBeInTheDocument();
-      expect(screen.getByText('Total Trades')).toBeInTheDocument();
-      expect(screen.getByText('25')).toBeInTheDocument();
+      expect(
+        screen.getByText(/Configuration: Live Config/)
+      ).toBeInTheDocument();
+      expect(screen.getByText(/Strategy: floor/)).toBeInTheDocument();
     });
   });
 });

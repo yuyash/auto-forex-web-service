@@ -94,11 +94,19 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   orientation = 'horizontal',
 }) => {
   // Determine which buttons should be enabled based on status
-  const canStart = [TaskStatusEnum.CREATED].includes(status);
+  const canStart = [
+    TaskStatusEnum.CREATED,
+    'idle' as TaskStatus,
+    TaskStatusEnum.STOPPED,
+    TaskStatusEnum.COMPLETED,
+    TaskStatusEnum.FAILED,
+  ].includes(status);
 
   const canStop = [TaskStatusEnum.RUNNING].includes(status);
   const canPause = status === TaskStatusEnum.RUNNING;
-  const canResume = [TaskStatusEnum.STOPPED].includes(status);
+  const canResume = [TaskStatusEnum.PAUSED, TaskStatusEnum.STOPPED].includes(
+    status
+  );
   const canRestart = [
     TaskStatusEnum.STOPPED,
     TaskStatusEnum.COMPLETED,

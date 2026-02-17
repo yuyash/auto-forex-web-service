@@ -23,3 +23,5 @@ export { ChartContainer } from './ChartContainer';
 export type { ChartContainerProps, GranularityOption } from './ChartContainer';
 export { TaskControlButtons } from './TaskControlButtons';
 export type { TaskControlButtonsProps } from './TaskControlButtons';
+export { ExecutionDataProvider } from './ExecutionDataProvider';
+export type { ExecutionDataProviderProps } from './ExecutionDataProvider';

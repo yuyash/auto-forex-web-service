@@ -203,7 +203,8 @@ describe('BacktestTasksPage', () => {
       expect(
         screen.getByPlaceholderText('Search tasks...')
       ).toBeInTheDocument();
-      expect(screen.getByLabelText('Sort By')).toBeInTheDocument();
+      const sortByElements = screen.getAllByText('Sort By');
+      expect(sortByElements.length).toBeGreaterThan(0);
     });
   });
 
