@@ -79,17 +79,38 @@ class TestBacktestTickPublisherRunnerIntegration:
 
     def test_should_stop_publishing_checks_executor_status(self) -> None:
         """Test that _should_stop_publishing checks executor status."""
-        from apps.trading.models import BacktestTask
+        from django.contrib.auth import get_user_model
+
+        from apps.trading.models import BacktestTask, StrategyConfiguration
+
+        User = get_user_model()
+
+        # Create required related objects
+        test_user = User.objects.create_user(  # type: ignore[attr-defined]
+            email="backtest@example.com",
+            password="testpass123",
+            username="backtestuser",
+        )
+        config = StrategyConfiguration.objects.create(
+            user=test_user,
+            name="Test Config",
+            strategy_type="floor",
+            parameters={"instrument": "EUR_USD"},
+        )
 
         # Create a backtest task
         task = BacktestTask.objects.create(
-            task_id="test-request-789",
+            name="Test Backtest",
+            user=test_user,
+            config=config,
             instrument="EUR_USD",
             start_time=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
             end_time=datetime(2024, 1, 2, 0, 0, 0, tzinfo=UTC),
             initial_balance=Decimal("10000.00"),
             status=TaskStatus.RUNNING,
         )
+
+        request_id = str(task.id)
 
         # Create runner and mock task service
         runner = BacktestTickPublisherRunner()
@@ -98,28 +119,28 @@ class TestBacktestTickPublisherRunnerIntegration:
         runner.task_service = mock_service
 
         # Should not stop when task is running
-        assert not runner._should_stop_publishing("test-request-789")
+        assert not runner._should_stop_publishing(request_id)
 
         # Update task to stopping
         task.status = TaskStatus.STOPPING
         task.save()
 
         # Should stop when task is stopping
-        assert runner._should_stop_publishing("test-request-789")
+        assert runner._should_stop_publishing(request_id)
 
         # Update task to stopped
         task.status = TaskStatus.STOPPED
         task.save()
 
         # Should stop when task is stopped
-        assert runner._should_stop_publishing("test-request-789")
+        assert runner._should_stop_publishing(request_id)
 
         # Update task to failed
         task.status = TaskStatus.FAILED
         task.save()
 
         # Should stop when task is failed
-        assert runner._should_stop_publishing("test-request-789")
+        assert runner._should_stop_publishing(request_id)
 
     def test_should_stop_publishing_checks_own_stop_signal(self) -> None:
         """Test that _should_stop_publishing checks its own stop signal."""

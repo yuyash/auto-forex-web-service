@@ -94,10 +94,9 @@ class TickDataView(APIView):
                     to_dt = timezone.make_aware(to_dt)
                 queryset = queryset.filter(timestamp__lte=to_dt)
 
-            ticks = (
-                queryset.order_by("-timestamp")
-                .values("instrument", "timestamp", "bid", "ask", "mid")[:count]
-            )
+            ticks = queryset.order_by("-timestamp").values(
+                "instrument", "timestamp", "bid", "ask", "mid"
+            )[:count]
             tick_rows = list(reversed(list(ticks)))
 
             results = [
@@ -129,4 +128,3 @@ class TickDataView(APIView):
                 {"error": f"Failed to fetch ticks: {str(exc)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-

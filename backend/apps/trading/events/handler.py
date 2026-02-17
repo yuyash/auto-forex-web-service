@@ -317,9 +317,13 @@ class EventHandler:
         # Close position (full or partial based on units)
         units_to_close = event.units if event.units > 0 else None
         closed_units = units_to_close if units_to_close is not None else abs(position.units)
+        # Pass event exit_price so dry-run uses the strategy's price instead of
+        # a potentially stale tick from the database.
+        override_price = event.exit_price if event.exit_price else None
         closed_position, realized_delta = self.order_service.close_position(
             position=position,
             units=units_to_close,
+            override_price=override_price,
         )
         close_direction = (
             Direction.SHORT if position.direction == Direction.LONG else Direction.LONG
@@ -381,7 +385,9 @@ class EventHandler:
                 continue
             try:
                 if hedge_mode:
-                    opposite = Direction.SHORT if position.direction == Direction.LONG else Direction.LONG
+                    opposite = (
+                        Direction.SHORT if position.direction == Direction.LONG else Direction.LONG
+                    )
                     hedged = self.order_service.open_position(
                         instrument=position.instrument,
                         units=abs(position.units),
@@ -403,9 +409,7 @@ class EventHandler:
                     self._prune_closed_position(position.layer_index or 0, closed)
                     realized_delta_total += realized_delta
                     close_direction = (
-                        Direction.SHORT
-                        if position.direction == Direction.LONG
-                        else Direction.LONG
+                        Direction.SHORT if position.direction == Direction.LONG else Direction.LONG
                     )
                     self._record_trade(
                         direction=close_direction,
@@ -462,9 +466,15 @@ class EventHandler:
         )
 
         remaining_units = (
-            int(event.units_to_close) if event.units_to_close and int(event.units_to_close) > 0 else None
+            int(event.units_to_close)
+            if event.units_to_close and int(event.units_to_close) > 0
+            else None
         )
-        limit = event.positions_closed if event.positions_closed and event.positions_closed > 0 else None
+        limit = (
+            event.positions_closed
+            if event.positions_closed and event.positions_closed > 0
+            else None
+        )
         touched_positions = 0
         for position in self._ordered_positions_for_margin_close():
             if remaining_units is not None and remaining_units <= 0:

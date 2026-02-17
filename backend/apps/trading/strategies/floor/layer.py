@@ -6,7 +6,6 @@ from logging import Logger, getLogger
 from typing import Dict
 
 from apps.trading.models import Layer, Position
-from apps.trading.strategies.floor.calculators import ProgressionCalculator
 from apps.trading.strategies.floor.models import FloorStrategyConfig
 
 logger: Logger = getLogger(name=__name__)
@@ -32,7 +31,6 @@ class LayerManager:
             config: Strategy configuration
         """
         self.config = config
-        self.progression_calc = ProgressionCalculator()
         self.layers: Dict[int, Layer] = {}
 
     def get_layer_count(self) -> int:
@@ -187,14 +185,9 @@ class LayerManager:
         if not layer:
             return None
 
-        return self.progression_calc.calculate(
-            base=self.config.initial_retracement_pips,
-            index=layer.retracement_count,
-            mode=self.config.retracement_progression,
-            increment=self.config.retracement_increment,
-        )
+        return self.config.floor_retracement_pips(layer.index)
 
-    def _calculate_units(self, layer_index: int, retracement_index: int) -> Decimal:
+    def _calculate_units(self, layer_index: int, retracement_index: int) -> int:
         """Calculate units for position.
 
         Args:
@@ -204,15 +197,17 @@ class LayerManager:
         Returns:
             Units
         """
-        # Consider both layer and retracement indices
-        total_index = layer_index + retracement_index
-
-        return self.progression_calc.calculate(
-            base=self.config.initial_units,
-            index=total_index,
-            mode=self.config.unit_progression,
-            increment=self.config.unit_increment,
-        )
+        if retracement_index <= 0:
+            lots = self.config.base_lot_size
+        elif self.config.retracement_lot_mode == "additive":
+            lots = self.config.base_lot_size + (
+                self.config.retracement_lot_amount * Decimal(retracement_index)
+            )
+        else:
+            lots = self.config.base_lot_size * (
+                self.config.retracement_lot_amount**retracement_index
+            )
+        return int(lots * self.config.lot_unit_size)
 
     def _position_to_info(self, position: Position) -> PositionInfo:
         """Convert Position model to PositionInfo dataclass.

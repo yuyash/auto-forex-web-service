@@ -473,7 +473,12 @@ class OandaService:
             )
             raise OandaAPIError(f"Error closing trade: {str(e)}") from e
 
-    def close_position(self, position: Position, units: Decimal | None = None) -> MarketOrder:
+    def close_position(
+        self,
+        position: Position,
+        units: Decimal | None = None,
+        override_price: Decimal | None = None,
+    ) -> MarketOrder:
         """
         Close an open position for an instrument.
 
@@ -483,13 +488,14 @@ class OandaService:
         Args:
             position: A Position returned by get_open_positions().
             units: Optional number of units to close (positive Decimal). If omitted, closes ALL.
+            override_price: Optional price to use for dry-run close instead of latest tick data.
 
         Returns:
             MarketOrder representing the closeout fill.
         """
         # Dry-run mode: simulate position close
         if self.dry_run:
-            return self._simulate_position_close(position, units)
+            return self._simulate_position_close(position, units, override_price=override_price)
 
         # Require account for live trading
         if self.account is None:
@@ -1620,7 +1626,12 @@ class OandaService:
             fill_time=now,
         )
 
-    def _simulate_position_close(self, position: Position, units: Decimal | None) -> MarketOrder:
+    def _simulate_position_close(
+        self,
+        position: Position,
+        units: Decimal | None,
+        override_price: Decimal | None = None,
+    ) -> MarketOrder:
         """Simulate position close for dry-run mode."""
         from apps.market.models import TickData as TickDataModel
 
@@ -1628,24 +1639,28 @@ class OandaService:
         order_id = f"DRY-CLOSE-{self._dry_run_order_counter}"
         now = datetime.now(UTC)
 
-        # Get latest tick data for close price
-        try:
-            latest_tick = (
-                TickDataModel.objects.filter(instrument=position.instrument)
-                .order_by("-timestamp")
-                .first()
-            )
-            if latest_tick:
-                # Use opposite side for closing: bid for long close, ask for short close
-                close_price = (
-                    latest_tick.bid
-                    if position.direction == OrderDirection.LONG
-                    else latest_tick.ask
+        # Use override price if provided (e.g. from strategy event exit_price)
+        if override_price is not None:
+            close_price = override_price
+        else:
+            # Get latest tick data for close price
+            try:
+                latest_tick = (
+                    TickDataModel.objects.filter(instrument=position.instrument)
+                    .order_by("-timestamp")
+                    .first()
                 )
-            else:
+                if latest_tick:
+                    # Use opposite side for closing: bid for long close, ask for short close
+                    close_price = (
+                        latest_tick.bid
+                        if position.direction == OrderDirection.LONG
+                        else latest_tick.ask
+                    )
+                else:
+                    close_price = Decimal("1.0000")
+            except Exception:
                 close_price = Decimal("1.0000")
-        except Exception:
-            close_price = Decimal("1.0000")
 
         # Determine closed units even when the position is not tracked locally.
         close_units = position.units if units is None else min(units, position.units)

@@ -155,9 +155,8 @@ class ComplianceService:
             return False
 
         existing_positions = position_model.objects.filter(
-            account=self.account,
             instrument=instrument,
-            closed_at__isnull=True,
+            is_open=True,
         )
 
         if not existing_positions.exists():
@@ -183,10 +182,9 @@ class ComplianceService:
         opposite_direction = "short" if order_direction == "long" else "long"
 
         opposite_positions = position_model.objects.filter(
-            account=self.account,
             instrument=instrument,
             direction=opposite_direction,
-            closed_at__isnull=True,
+            is_open=True,
         )
 
         total_opposite_units = sum(abs(pos.units) for pos in opposite_positions)
@@ -205,10 +203,9 @@ class ComplianceService:
             return None
 
         positions = position_model.objects.filter(
-            account=self.account,
             instrument=instrument,
-            closed_at__isnull=True,
-        ).order_by("opened_at")
+            is_open=True,
+        ).order_by("entry_time")
 
         first_position = positions.first()
         return first_position if first_position is not None else None

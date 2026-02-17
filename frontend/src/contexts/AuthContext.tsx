@@ -1,4 +1,4 @@
-import {
+import React, {
   createContext,
   useContext,
   useState,
@@ -10,7 +10,23 @@ import type { User, SystemSettings, AuthContextType } from '../types/auth';
 import { AUTH_LOGOUT_EVENT, type AuthLogoutDetail } from '../utils/authEvents';
 import { setAuthToken, clearAuthToken } from '../api';
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Persist context across HMR to prevent "useAuth must be used within AuthProvider" errors
+// during Vite hot module replacement
+const AUTH_CONTEXT_KEY = '__AUTH_CONTEXT__';
+const globalWindow =
+  typeof window !== 'undefined'
+    ? (window as Record<string, unknown>)
+    : ({} as Record<string, unknown>);
+
+if (!globalWindow[AUTH_CONTEXT_KEY]) {
+  globalWindow[AUTH_CONTEXT_KEY] = createContext<AuthContextType | undefined>(
+    undefined
+  );
+}
+
+const AuthContext = globalWindow[AUTH_CONTEXT_KEY] as React.Context<
+  AuthContextType | undefined
+>;
 
 const getInitialAuthState = (): { token: string | null; user: User | null } => {
   try {

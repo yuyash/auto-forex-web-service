@@ -137,6 +137,7 @@ class OrderService:
         self,
         position: Position,
         units: int | None = None,
+        override_price: Decimal | None = None,
     ) -> tuple[Position, Decimal]:
         """
         Close an existing position (full or partial).
@@ -148,6 +149,7 @@ class OrderService:
         Args:
             position: Position to close
             units: Optional number of units to close (if None, closes all)
+            override_price: Optional price to use for dry-run close instead of latest tick data.
 
         Returns:
             tuple[Position, Decimal]: Updated position and realized pnl delta for this close
@@ -184,6 +186,7 @@ class OrderService:
             oanda_order = self.oanda_service.close_position(
                 position=oanda_position,
                 units=close_units,
+                override_price=override_price,
             )
 
             # Create order record for the closing trade
@@ -213,7 +216,9 @@ class OrderService:
                 )
                 # Preserve previously realized pnl from prior partial closes.
                 if previous_realized != Decimal("0"):
-                    position.realized_pnl = Decimal(str(position.realized_pnl or "0")) + previous_realized
+                    position.realized_pnl = (
+                        Decimal(str(position.realized_pnl or "0")) + previous_realized
+                    )
                 position.save()
 
                 logger.info(
@@ -414,7 +419,8 @@ class OrderService:
                 # Update existing position (weighted average)
                 total_units = existing_position.units + units
                 new_avg_price = (
-                    (existing_position.entry_price * existing_position.units) + (entry_price * units)
+                    (existing_position.entry_price * existing_position.units)
+                    + (entry_price * units)
                 ) / total_units
 
                 existing_position.units = total_units

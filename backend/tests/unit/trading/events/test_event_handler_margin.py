@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
 
-from apps.trading.enums import EventType
+from apps.trading.enums import EventType, TaskType
 from apps.trading.events import MarginProtectionEvent
 from apps.trading.events.handler import EventHandler
 
@@ -20,6 +21,8 @@ def _position(units: int, layer_index: int = 0):
         direction="long",
         instrument="USD_JPY",
         realized_pnl=0,
+        entry_price=Decimal("150.000"),
+        exit_price=None,
     )
 
 
@@ -28,8 +31,8 @@ class TestEventHandlerMarginPartialClose:
 
     def test_close_position_receives_units_in_fifo_order(self) -> None:
         order_service = MagicMock()
-        order_service.task = SimpleNamespace(id=uuid4())
-        order_service.task_type = "trading"
+        order_service.task = SimpleNamespace(id=uuid4(), celery_task_id="test-celery-id")
+        order_service.task_type = TaskType.TRADING
 
         handler = EventHandler(order_service=order_service, instrument="USD_JPY")
         p1 = _position(units=1000, layer_index=0)
@@ -37,6 +40,7 @@ class TestEventHandlerMarginPartialClose:
         ordered = [p1, p2]
         handler._ordered_positions_for_margin_close = MagicMock(return_value=ordered)  # type: ignore[method-assign]
         handler._prune_closed_position = MagicMock()  # type: ignore[method-assign]
+        handler._record_trade = MagicMock()  # type: ignore[method-assign]
 
         close_calls: list[int | None] = []
 
@@ -45,7 +49,7 @@ class TestEventHandlerMarginPartialClose:
             remaining = abs(position.units) - (units or abs(position.units))
             position.is_open = remaining > 0
             position.units = remaining if remaining > 0 else position.units
-            return position
+            return position, Decimal("0")
 
         order_service.close_position.side_effect = _close
 

@@ -167,7 +167,9 @@ class FloorStrategyConfig:
             ),
             hedging_enabled=_to_bool(raw.get("hedging_enabled", False), False),
             allow_duplicate_units=_to_bool(raw.get("allow_duplicate_units", False), False),
-            margin_closeout_threshold=_to_decimal(raw.get("margin_closeout_threshold", "0.8"), "0.8"),
+            margin_closeout_threshold=_to_decimal(
+                raw.get("margin_closeout_threshold", "0.8"), "0.8"
+            ),
             margin_cut_start_ratio=_to_decimal(raw.get("margin_cut_start_ratio", "0.6"), "0.6"),
             margin_cut_target_ratio=_to_decimal(raw.get("margin_cut_target_ratio", "0.5"), "0.5"),
             margin_protection_enabled=_to_bool(raw.get("margin_protection_enabled", True), True),
@@ -305,7 +307,9 @@ class FloorStrategyState:
             "active_floor_index": self.active_floor_index,
             "home_floor_index": self.home_floor_index,
             "next_entry_id": self.next_entry_id,
-            "floor_retracement_counts": {str(k): v for k, v in self.floor_retracement_counts.items()},
+            "floor_retracement_counts": {
+                str(k): v for k, v in self.floor_retracement_counts.items()
+            },
             "floor_directions": {str(k): v for k, v in self.floor_directions.items()},
             "return_stack": list(self.return_stack),
             "open_entries": list(self.open_entries),
@@ -317,6 +321,7 @@ class FloorStrategyState:
     @staticmethod
     def from_dict(data: dict[str, Any]) -> FloorStrategyState:
         """Create from dictionary."""
+
         def _decimal_or_none(val: Any) -> Decimal | None:
             if val is None:
                 return None
@@ -352,7 +357,11 @@ class FloorStrategyState:
             floor_directions=floor_directions,
             return_stack=[
                 _to_int(item, 0)
-                for item in (data.get("return_stack", []) if isinstance(data.get("return_stack"), list) else [])
+                for item in (
+                    data.get("return_stack", [])
+                    if isinstance(data.get("return_stack"), list)
+                    else []
+                )
             ],
             open_entries=list(data.get("open_entries", []))
             if isinstance(data.get("open_entries"), list)

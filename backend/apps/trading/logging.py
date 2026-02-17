@@ -17,9 +17,7 @@ if TYPE_CHECKING:
     from apps.trading.models import BacktestTask, TradingTask
 
 
-DEFAULT_TASK_LOGGER_NAMES: tuple[str, ...] = (
-    "apps.trading",
-)
+DEFAULT_TASK_LOGGER_NAMES: tuple[str, ...] = ("apps.trading",)
 
 
 class JSONLoggingHandler(logging.Handler):
@@ -199,7 +197,9 @@ class TaskLoggingSession:
 
             # Avoid duplicate writes for the same task logger pair.
             has_same_task_handler = any(
-                isinstance(h, JSONLoggingHandler) and getattr(h, "task", None).pk == self.task.pk
+                isinstance(h, JSONLoggingHandler)
+                and (task := getattr(h, "task", None)) is not None
+                and task.pk == self.task.pk
                 for h in logger_obj.handlers
             )
             if has_same_task_handler:
