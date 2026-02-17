@@ -5,7 +5,7 @@
  * Replaces execution-based LogsTable.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Chip,
@@ -66,9 +66,14 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     setPage(0);
   };
 
-  useEffect(() => {
-    setPage(0);
-  }, [executionId]);
+  // Reset page when executionId changes (state-based, avoids useEffect + setState)
+  const [prevExecutionId, setPrevExecutionId] = useState(executionId);
+  if (prevExecutionId !== executionId) {
+    setPrevExecutionId(executionId);
+    if (page !== 0) {
+      setPage(0);
+    }
+  }
 
   const formatTimestamp = (timestamp: string): string => {
     return new Date(timestamp).toLocaleString('en-US', {

@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
   Box,
@@ -19,7 +25,6 @@ import {
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import {
-  TickMarkType,
   CandlestickSeries,
   createChart,
   createSeriesMarkers,
@@ -35,6 +40,14 @@ import { getAuthToken } from '../../../api/client';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
 import { TaskType } from '../../../types/common';
 import { handleAuthErrorStatus } from '../../../utils/authEvents';
+import { detectMarketGaps } from '../../../utils/marketClosedMarkers';
+import { MarketClosedHighlight } from '../../../utils/MarketClosedHighlight';
+import {
+  AdaptiveTimeScale,
+  createSuppressedTickMarkFormatter,
+  createTooltipTimeFormatter,
+} from '../../../utils/adaptiveTimeScalePlugin';
+import { useAuth } from '../../../contexts/AuthContext';
 
 type CandlePoint = CandlestickData<Time>;
 
@@ -129,76 +142,6 @@ const parseUtcTimestamp = (value: unknown): UTCTimestamp | null => {
   return null;
 };
 
-const toDate = (time: Time): Date => {
-  if (typeof time === 'number') return new Date(time * 1000);
-  if (typeof time === 'string') return new Date(time);
-  return new Date(Date.UTC(time.year, time.month - 1, time.day));
-};
-
-const normalizeAxisLabel = (label: string): string =>
-  label.replace(/,\s*/g, ' ').replace(/\s+/g, ' ').trim();
-
-const tickMarkFormatterWithRange =
-  (visibleRangeSpanSecRef: React.MutableRefObject<number | null>) =>
-  (time: Time, tickMarkType: TickMarkType, locale: string): string => {
-  const date = toDate(time);
-  if (Number.isNaN(date.getTime())) return '';
-  const spanSec = visibleRangeSpanSecRef.current ?? 0;
-  const spanDays = spanSec / 86400;
-
-  // Long range: date only.
-  if (spanDays >= 45) {
-    return normalizeAxisLabel(
-      new Intl.DateTimeFormat(locale, {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(date)
-    );
-  }
-
-  // Medium range: date + time mixed formatting.
-  if (spanDays >= 2) {
-    if (tickMarkType === TickMarkType.Year || tickMarkType === TickMarkType.Month) {
-      return normalizeAxisLabel(
-        new Intl.DateTimeFormat(locale, {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-        }).format(date)
-      );
-    }
-    return normalizeAxisLabel(
-      new Intl.DateTimeFormat(locale, {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      }).format(date)
-    );
-  }
-
-  // Short range: time only.
-  if (tickMarkType === TickMarkType.TimeWithSeconds) {
-    return normalizeAxisLabel(
-      new Intl.DateTimeFormat(locale, {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      }).format(date)
-    );
-  }
-  return normalizeAxisLabel(
-    new Intl.DateTimeFormat(locale, {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(date)
-  );
-};
-
 const toRfc3339Seconds = (value: string): string => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -214,7 +157,8 @@ const recommendGranularity = (
 
   const fromMs = new Date(fromIso).getTime();
   const toMs = new Date(toIso).getTime();
-  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) return 'H1';
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs)
+    return 'H1';
 
   const rangeMinutes = (toMs - fromMs) / (1000 * 60);
   let best = available[0] ?? 'H1';
@@ -268,7 +212,10 @@ const fetchCandles = async (
     context: 'task_replay_candles',
   });
 
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  const body = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
   if (!response.ok) {
     const errorMessage =
       typeof body.error === 'string'
@@ -295,8 +242,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick', Time> | null>(null);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const highlightRef = useRef<MarketClosedHighlight | null>(null);
+  const adaptiveRef = useRef<AdaptiveTimeScale | null>(null);
   const tradesRef = useRef<ReplayTrade[]>([]);
-  const visibleRangeSpanSecRef = useRef<number | null>(null);
+  const { user } = useAuth();
+  const timezone = user?.timezone || 'UTC';
 
   const [candles, setCandles] = useState<CandlePoint[]>([]);
   const [trades, setTrades] = useState<ReplayTrade[]>([]);
@@ -318,7 +268,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   }, [granularityOptions, startTime, endTime]);
 
   const [granularity, setGranularity] = useState<string>('H1');
-  const pnlCurrency = instrument?.includes('_') ? instrument.split('_')[1] : 'N/A';
+  const pnlCurrency = instrument?.includes('_')
+    ? instrument.split('_')[1]
+    : 'N/A';
 
   const replaySummary = useMemo(() => {
     const pnlFromTrades = trades.reduce((sum, trade) => {
@@ -355,8 +307,15 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       setIsLoading(true);
       setError(null);
 
-      const candleResponse = await fetchCandles(instrument, granularity, startTime, endTime);
-      const rawCandles = Array.isArray(candleResponse?.candles) ? candleResponse.candles : [];
+      const candleResponse = await fetchCandles(
+        instrument,
+        granularity,
+        startTime,
+        endTime
+      );
+      const rawCandles = Array.isArray(candleResponse?.candles)
+        ? candleResponse.candles
+        : [];
       const candleByTime = new Map<number, CandlePoint>();
       rawCandles
         .map((c: Record<string, unknown>) => {
@@ -382,9 +341,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         .filter((v: CandlePoint | null): v is CandlePoint => v !== null)
         .forEach((c) => candleByTime.set(Number(c.time), c));
 
-      const candlePoints: CandlePoint[] = Array.from(candleByTime.values()).sort(
-        (a, b) => Number(a.time) - Number(b.time)
-      );
+      const candlePoints: CandlePoint[] = Array.from(
+        candleByTime.values()
+      ).sort((a, b) => Number(a.time) - Number(b.time));
       setCandles(candlePoints);
 
       const tradeResponse =
@@ -421,12 +380,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             price: String(t.price ?? ''),
             execution_method: String(t.execution_method || ''),
             layer_index:
-              t.layer_index === null || t.layer_index === undefined ? null : Number(t.layer_index),
-            pnl: t.pnl === null || t.pnl === undefined ? undefined : String(t.pnl),
+              t.layer_index === null || t.layer_index === undefined
+                ? null
+                : Number(t.layer_index),
+            pnl:
+              t.pnl === null || t.pnl === undefined ? undefined : String(t.pnl),
           };
         })
         .filter((v: ReplayTrade | null): v is ReplayTrade => v !== null)
-        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        .sort(
+          (a, b) =>
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
 
       setTrades(tradeRows);
     } catch (e) {
@@ -462,7 +427,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         textColor: '#334155',
       },
       grid: {
-        vertLines: { color: '#e2e8f0' },
+        vertLines: { visible: false },
         horzLines: { color: '#e2e8f0' },
       },
       handleScale: {
@@ -481,7 +446,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         borderColor: '#cbd5e1',
         timeVisible: true,
         secondsVisible: false,
-        tickMarkFormatter: tickMarkFormatterWithRange(visibleRangeSpanSecRef),
+        tickMarkFormatter: createSuppressedTickMarkFormatter(),
+      },
+      localization: {
+        timeFormatter: createTooltipTimeFormatter({ timezone }),
       },
     });
 
@@ -499,14 +467,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     seriesRef.current = series;
     markersRef.current = markers;
 
-    chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
-      if (!range) return;
-      const from = Number(range.from);
-      const to = Number(range.to);
-      if (Number.isFinite(from) && Number.isFinite(to) && to > from) {
-        visibleRangeSpanSecRef.current = to - from;
-      }
-    });
+    const highlight = new MarketClosedHighlight();
+    series.attachPrimitive(highlight);
+    highlightRef.current = highlight;
+
+    const adaptive = new AdaptiveTimeScale({ timezone });
+    series.attachPrimitive(adaptive);
+    adaptiveRef.current = adaptive;
 
     chart.subscribeClick((param) => {
       if (!param.time || tradesRef.current.length === 0) return;
@@ -534,8 +501,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       chartRef.current = null;
       seriesRef.current = null;
       markersRef.current = null;
+      highlightRef.current = null;
+      adaptiveRef.current = null;
     };
-  }, [isLoading]);
+  }, [isLoading, timezone]);
 
   useEffect(() => {
     if (!seriesRef.current || !markersRef.current) return;
@@ -568,12 +537,22 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         time: t.timeSec,
         position: t.direction === 'buy' ? 'belowBar' : 'aboveBar',
         shape: t.direction === 'buy' ? 'arrowUp' : 'arrowDown',
-        color: selected ? '#f59e0b' : t.direction === 'buy' ? '#16a34a' : '#ef4444',
+        color: selected
+          ? '#f59e0b'
+          : t.direction === 'buy'
+            ? '#16a34a'
+            : '#ef4444',
         text: `${actionLabel} ${sideLabel}${lotLabel}`,
       };
     });
 
+    const times = candles.map((c) => Number(c.time));
+
     markersRef.current.setMarkers(tradeMarkers);
+
+    if (highlightRef.current) {
+      highlightRef.current.setGaps(detectMarketGaps(times));
+    }
 
     if (candles.length > 0) {
       chartRef.current?.timeScale().fitContent();
@@ -634,7 +613,8 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       </Stack>
 
       <Typography variant="caption" color="text.secondary">
-        Candles are fetched from OANDA (default account). Trade markers show LONG/SHORT and lot size.
+        Candles are fetched from OANDA (default account). Trade markers show
+        LONG/SHORT and lot size.
       </Typography>
 
       <Box sx={{ mt: 2, mb: 2 }}>
@@ -645,7 +625,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             </Typography>
             <Typography
               variant="h6"
-              color={replaySummary.realizedPnl >= 0 ? 'success.main' : 'error.main'}
+              color={
+                replaySummary.realizedPnl >= 0 ? 'success.main' : 'error.main'
+              }
             >
               {replaySummary.realizedPnl >= 0 ? '+' : ''}
               {replaySummary.realizedPnl.toFixed(2)} {pnlCurrency}
@@ -657,7 +639,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             </Typography>
             <Typography
               variant="h6"
-              color={replaySummary.unrealizedPnl >= 0 ? 'success.main' : 'error.main'}
+              color={
+                replaySummary.unrealizedPnl >= 0 ? 'success.main' : 'error.main'
+              }
             >
               {replaySummary.unrealizedPnl >= 0 ? '+' : ''}
               {replaySummary.unrealizedPnl.toFixed(2)} {pnlCurrency}
@@ -667,7 +651,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             <Typography variant="caption" color="text.secondary">
               Total Trades (count)
             </Typography>
-            <Typography variant="h6">{replaySummary.totalTrades} trades</Typography>
+            <Typography variant="h6">
+              {replaySummary.totalTrades} trades
+            </Typography>
           </Paper>
         </Stack>
       </Box>
@@ -680,7 +666,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         Layer Trade Timeline
       </Typography>
 
-      <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 320 }}>
+      <TableContainer
+        component={Paper}
+        variant="outlined"
+        sx={{ maxHeight: 320 }}
+      >
         <Table stickyHeader size="small">
           <TableHead>
             <TableRow>
@@ -706,7 +696,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                   sx={{ cursor: 'pointer' }}
                 >
                   <TableCell>{row.sequence}</TableCell>
-                  <TableCell>{new Date(row.timestamp).toLocaleString()}</TableCell>
+                  <TableCell>
+                    {new Date(row.timestamp).toLocaleString()}
+                  </TableCell>
                   <TableCell>{row.direction.toUpperCase()}</TableCell>
                   <TableCell>{row.layer_index ?? '-'}</TableCell>
                   <TableCell align="right">{row.units}</TableCell>

@@ -22,6 +22,7 @@ import { Breadcrumbs } from '../components/common';
 import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
 import RecentBacktestsWidget from '../components/dashboard/RecentBacktestsWidget';
 import QuickActionsWidget from '../components/dashboard/QuickActionsWidget';
+import MarketChart from '../components/dashboard/MarketChart';
 
 const DashboardPage = () => {
   const { t } = useTranslation('dashboard');
@@ -230,30 +231,14 @@ const DashboardPage = () => {
               </Typography>
             </Box>
           ) : (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: 500,
-              }}
-            >
-              <Typography variant="body1" color="text.secondary">
-                Market chart will be available soon (migrating to MUI X Charts)
-              </Typography>
-            </Box>
-            // TODO: Implement DashboardChart with MUI X Charts
-            // <DashboardChart
-            //   key={chartResetTrigger}
-            //   instrument={instrument}
-            //   granularity={granularity}
-            //   height={500}
-            //   timezone={timezone}
-            //   autoRefresh={autoRefreshEnabled}
-            //   refreshInterval={refreshInterval * 1000}
-            //   onResetView={handleChartResetView}
-            //   onUpdateView={handleChartUpdateView}
-            // />
+            <MarketChart
+              instrument={preferences.instrument}
+              granularity={preferences.granularity}
+              accountId={oandaAccountId}
+              height={500}
+              autoRefresh={autoRefreshEnabled}
+              refreshInterval={refreshInterval}
+            />
           )}
         </Box>
       </Paper>
