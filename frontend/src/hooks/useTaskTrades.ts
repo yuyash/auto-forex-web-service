@@ -23,7 +23,7 @@ export interface TaskTrade {
 }
 
 interface UseTaskTradesOptions {
-  taskId: number;
+  taskId: string | number;
   taskType: TaskType;
   direction?: 'buy' | 'sell';
   enableRealTimeUpdates?: boolean;
@@ -56,11 +56,11 @@ export const useTaskTrades = ({
       const response =
         taskType === TaskType.BACKTEST
           ? await TradingService.tradingTasksBacktestTradesList(
-              taskId,
+              String(taskId),
               direction
             )
           : await TradingService.tradingTasksTradingTradesList(
-              taskId,
+              String(taskId),
               direction
             );
 

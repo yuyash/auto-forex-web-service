@@ -1,7 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-/* eslint-disable */
+
 import type { TradeDirectionEnum } from './TradeDirectionEnum';
 /**
  * Serializer for trade data from Trades model.

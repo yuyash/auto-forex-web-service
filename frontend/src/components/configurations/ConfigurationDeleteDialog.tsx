@@ -68,7 +68,7 @@ const ConfigurationDeleteDialog = ({
 
   const handleDelete = async () => {
     try {
-      await deleteConfiguration(configuration.id);
+      await deleteConfiguration(Number(configuration.id));
       onClose();
     } catch (error) {
       console.error('Failed to delete configuration:', error);
@@ -77,7 +77,7 @@ const ConfigurationDeleteDialog = ({
 
   const activeTasks = tasks.filter(
     (task) =>
-      task.status === TaskStatus.RUNNING || task.status === TaskStatus.PENDING
+      task.status === TaskStatus.RUNNING || task.status === TaskStatus.STARTING
   );
   const hasActiveTasks = activeTasks.length > 0;
 
@@ -159,10 +159,9 @@ const ConfigurationDeleteDialog = ({
                           sx={{ fontSize: '0.7rem' }}
                         />
                         <StatusBadge
-                          status={task.status}
+                          status={task.status as TaskStatus}
                           size="small"
                           showIcon={false}
-                          sx={{ fontSize: '0.7rem' }}
                         />
                       </Box>
                     }

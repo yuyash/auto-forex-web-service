@@ -1,7 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-/* eslint-disable */
+
 import type { EquityPoint } from './EquityPoint';
 export type PaginatedEquityPointList = {
   count: number;

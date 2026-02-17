@@ -74,7 +74,7 @@ export const useTaskLogs = ({
               offset
             );
 
-      setLogs(response.results || []);
+      setLogs((response.results || []) as unknown as TaskLog[]);
       setTotalCount(response.count || 0);
       setHasNext(Boolean(response.next));
       setHasPrevious(Boolean(response.previous));

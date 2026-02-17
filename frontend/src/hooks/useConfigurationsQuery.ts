@@ -34,9 +34,9 @@ export function useConfigurationsQuery(params?: StrategyConfigListParams) {
  * - Longer stale time (10 minutes) for detail views
  * - Automatic cache invalidation on updates
  */
-export function useConfigurationQuery(id: number) {
+export function useConfigurationQuery(id: string | number) {
   return useQuery<StrategyConfig>({
-    queryKey: queryKeys.configurations.detail(id),
+    queryKey: queryKeys.configurations.detail(Number(id)),
     queryFn: () => configurationsApi.get(id),
     staleTime: 10 * 60 * 1000, // 10 minutes
     enabled: !!id, // Only fetch if id is provided
@@ -46,10 +46,10 @@ export function useConfigurationQuery(id: number) {
 /**
  * Hook to fetch tasks using a configuration
  */
-export function useConfigurationTasksQuery(id: number) {
+export function useConfigurationTasksQuery(id: string | number) {
   return useQuery<ConfigurationTask[]>({
-    queryKey: queryKeys.configurations.tasks(id),
-    queryFn: () => configurationsApi.getTasks(id),
+    queryKey: queryKeys.configurations.tasks(Number(id)),
+    queryFn: () => configurationsApi.getTasks(String(id)),
     staleTime: 2 * 60 * 1000, // 2 minutes
     enabled: !!id,
   });

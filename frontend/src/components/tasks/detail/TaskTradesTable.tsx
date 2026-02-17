@@ -20,7 +20,7 @@ import { useTaskTrades, type TaskTrade } from '../../../hooks/useTaskTrades';
 import { TaskType } from '../../../types/common';
 
 interface TaskTradesTableProps {
-  taskId: number;
+  taskId: string | number;
   taskType: TaskType;
   enableRealTimeUpdates?: boolean;
 }
@@ -62,7 +62,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       id: 'timestamp',
       label: 'Timestamp',
       minWidth: 180,
-      format: (value) => formatTimestamp(value as string),
+      render: (row) => formatTimestamp(row.timestamp as string),
     },
     {
       id: 'instrument',
@@ -73,10 +73,10 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       id: 'direction',
       label: 'Direction',
       minWidth: 80,
-      format: (value) => (
+      render: (row) => (
         <Chip
-          label={value as string}
-          color={(value as string) === 'buy' ? 'success' : 'error'}
+          label={row.direction as string}
+          color={(row.direction as string) === 'buy' ? 'success' : 'error'}
           size="small"
         />
       ),
@@ -98,8 +98,8 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       label: 'PnL',
       minWidth: 100,
       align: 'right',
-      format: (value) =>
-        value ? `$${parseFloat(value as string).toFixed(2)}` : '-',
+      render: (row: TaskTrade) =>
+        row.pnl ? `$${parseFloat(row.pnl).toFixed(2)}` : '-',
     },
   ];
 
@@ -134,7 +134,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       <DataTable
         columns={columns}
         data={trades}
-        loading={isLoading}
+        isLoading={isLoading}
         emptyMessage="No trades available"
       />
     </Box>

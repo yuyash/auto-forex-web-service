@@ -31,8 +31,7 @@ import {
 } from '../../hooks/useStrategies';
 import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
 import { TradingService } from '../../api/generated/services/TradingService';
-
-import type { StopMode } from '../../hooks/useTradingTaskMutations';
+import type { TradingTaskRequest } from '../../api/generated/models/TradingTaskRequest';
 
 interface TradingTaskCardProps {
   task: TradingTask;
@@ -162,10 +161,13 @@ export default function TradingTaskCard({
     navigate(`/trading-tasks/${task.id}`);
   };
 
-  const handleStart = async (taskId: number) => {
+  const handleStart = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingTradingTasksStartCreate(taskId);
+      await TradingService.tradingTasksTradingStartCreate(
+        String(taskId),
+        {} as TradingTaskRequest
+      );
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess('Trading task started successfully');
       onRefresh?.();
@@ -183,10 +185,13 @@ export default function TradingTaskCard({
     }
   };
 
-  const handleStop = async (taskId: number, mode: StopMode = 'graceful') => {
+  const handleStop = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingTradingTasksStopCreate(taskId, { mode });
+      await TradingService.tradingTasksTradingStopCreate(
+        String(taskId),
+        {} as TradingTaskRequest
+      );
       setOptimisticStatus(TaskStatus.STOPPED);
       showSuccess('Trading task stopped successfully');
       onRefresh?.();
@@ -201,10 +206,13 @@ export default function TradingTaskCard({
     }
   };
 
-  const handleResume = async (taskId: number) => {
+  const handleResume = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingTradingTasksResumeCreate(taskId);
+      await TradingService.tradingTasksTradingResumeCreate(
+        String(taskId),
+        {} as TradingTaskRequest
+      );
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess('Trading task resumed successfully');
       onRefresh?.();
@@ -222,10 +230,13 @@ export default function TradingTaskCard({
     }
   };
 
-  const handleRestart = async (taskId: number) => {
+  const handleRestart = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingTradingTasksRestartCreate(taskId);
+      await TradingService.tradingTasksTradingRestartCreate(
+        String(taskId),
+        {} as TradingTaskRequest
+      );
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess('Trading task restarted successfully');
       onRefresh?.();
@@ -243,10 +254,10 @@ export default function TradingTaskCard({
     }
   };
 
-  const handleDelete = async (taskId: number) => {
+  const handleDelete = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingTradingTasksDestroy(taskId);
+      await TradingService.tradingTasksTradingDestroy(String(taskId));
       showSuccess('Trading task deleted successfully');
       onRefresh?.();
     } catch (error) {
@@ -392,7 +403,6 @@ export default function TradingTaskCard({
             isLoading={isLoading}
             size="small"
             showLabels={true}
-            taskType="trading"
           />
         </Box>
 

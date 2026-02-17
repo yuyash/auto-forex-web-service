@@ -37,7 +37,8 @@ export function useCreateTradingTask(options?: {
     async (variables: TradingTaskCreateData) => {
       try {
         setState({ data: null, isLoading: true, error: null });
-        const result = await tradingTasksApi.create(variables);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result = await tradingTasksApi.create(variables as any);
         setState({ data: result, isLoading: false, error: null });
         invalidateTradingTasksCache();
         options?.onSuccess?.(result);
@@ -65,7 +66,10 @@ export function useCreateTradingTask(options?: {
 export function useUpdateTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, { id: number; data: TradingTaskUpdateData }> {
+}): MutationResult<
+  TradingTask,
+  { id: number | string; data: TradingTaskUpdateData }
+> {
   const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
@@ -73,12 +77,13 @@ export function useUpdateTradingTask(options?: {
   });
 
   const mutate = useCallback(
-    async (variables: { id: number; data: TradingTaskUpdateData }) => {
+    async (variables: { id: number | string; data: TradingTaskUpdateData }) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.update(
           variables.id,
-          variables.data
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          variables.data as any
         );
         setState({ data: result, isLoading: false, error: null });
         invalidateTradingTasksCache();
@@ -107,7 +112,7 @@ export function useUpdateTradingTask(options?: {
 export function useDeleteTradingTask(options?: {
   onSuccess?: () => void;
   onError?: (error: Error) => void;
-}): MutationResult<void, number> {
+}): MutationResult<void, number | string> {
   const [state, setState] = useState<MutationState<void>>({
     data: null,
     isLoading: false,
@@ -115,7 +120,7 @@ export function useDeleteTradingTask(options?: {
   });
 
   const mutate = useCallback(
-    async (id: number) => {
+    async (id: number | string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         await tradingTasksApi.delete(id);
@@ -145,7 +150,10 @@ export function useDeleteTradingTask(options?: {
 export function useCopyTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, { id: number; data: TradingTaskCopyData }> {
+}): MutationResult<
+  TradingTask,
+  { id: number | string; data: TradingTaskCopyData }
+> {
   const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
@@ -153,7 +161,7 @@ export function useCopyTradingTask(options?: {
   });
 
   const mutate = useCallback(
-    async (variables: { id: number; data: TradingTaskCopyData }) => {
+    async (variables: { id: number | string; data: TradingTaskCopyData }) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.copy(variables.id, variables.data);
@@ -182,24 +190,21 @@ export function useCopyTradingTask(options?: {
  * Hook to start a trading task
  */
 export function useStartTradingTask(options?: {
-  onSuccess?: (data: { message: string; task_id: number }) => void;
+  onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<{ message: string; task_id: number }, number> {
-  const [state, setState] = useState<
-    MutationState<{ message: string; task_id: number }>
-  >({
+}): MutationResult<TradingTask, number | string> {
+  const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
     error: null,
   });
 
   const mutate = useCallback(
-    async (id: number) => {
+    async (id: number | string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.start(id);
         setState({ data: result, isLoading: false, error: null });
-        // Invalidate cache to force refetch
         invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;
@@ -229,26 +234,20 @@ export type StopMode = 'immediate' | 'graceful' | 'graceful_close';
  * Hook to stop a trading task
  */
 export function useStopTradingTask(options?: {
-  onSuccess?: (data: {
-    message: string;
-    task_id: number;
-    stop_mode: string;
-  }) => void;
+  onSuccess?: (data: Record<string, unknown>) => void;
   onError?: (error: Error) => void;
 }): MutationResult<
-  { message: string; task_id: number; stop_mode: string },
-  { id: number; mode?: StopMode }
+  Record<string, unknown>,
+  { id: number | string; mode?: StopMode }
 > {
-  const [state, setState] = useState<
-    MutationState<{ message: string; task_id: number; stop_mode: string }>
-  >({
+  const [state, setState] = useState<MutationState<Record<string, unknown>>>({
     data: null,
     isLoading: false,
     error: null,
   });
 
   const mutate = useCallback(
-    async (variables: { id: number; mode?: StopMode }) => {
+    async (variables: { id: number | string; mode?: StopMode }) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.stop(
@@ -256,7 +255,6 @@ export function useStopTradingTask(options?: {
           variables.mode || 'graceful'
         );
         setState({ data: result, isLoading: false, error: null });
-        // Invalidate cache to force refetch
         invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;
@@ -281,22 +279,21 @@ export function useStopTradingTask(options?: {
  * Hook to pause a trading task
  */
 export function usePauseTradingTask(options?: {
-  onSuccess?: (data: { message: string }) => void;
+  onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<{ message: string }, number> {
-  const [state, setState] = useState<MutationState<{ message: string }>>({
+}): MutationResult<TradingTask, number | string> {
+  const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
     error: null,
   });
 
   const mutate = useCallback(
-    async (id: number) => {
+    async (id: number | string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.pause(id);
         setState({ data: result, isLoading: false, error: null });
-        // Invalidate cache to force refetch
         invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;
@@ -321,22 +318,21 @@ export function usePauseTradingTask(options?: {
  * Hook to resume a trading task
  */
 export function useResumeTradingTask(options?: {
-  onSuccess?: (data: { message: string }) => void;
+  onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<{ message: string }, number> {
-  const [state, setState] = useState<MutationState<{ message: string }>>({
+}): MutationResult<TradingTask, number | string> {
+  const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
     error: null,
   });
 
   const mutate = useCallback(
-    async (id: number) => {
+    async (id: number | string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.resume(id);
         setState({ data: result, isLoading: false, error: null });
-        // Invalidate cache to force refetch
         invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;
@@ -361,32 +357,21 @@ export function useResumeTradingTask(options?: {
  * Hook to rerun a trading task
  */
 export function useRerunTradingTask(options?: {
-  onSuccess?: (data: {
-    message: string;
-    task_id: number;
-    state_cleared: boolean;
-  }) => void;
+  onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<
-  { message: string; task_id: number; state_cleared: boolean },
-  number
-> {
-  const [state, setState] = useState<
-    MutationState<{ message: string; task_id: number; state_cleared: boolean }>
-  >({
+}): MutationResult<TradingTask, number | string> {
+  const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
     error: null,
   });
 
   const mutate = useCallback(
-    async (id: number) => {
+    async (id: number | string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
-        // "Rerun" maps to restarting with fresh strategy state
         const result = await tradingTasksApi.restart(id, true);
         setState({ data: result, isLoading: false, error: null });
-        // Invalidate cache to force refetch
         invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;
@@ -411,26 +396,17 @@ export function useRerunTradingTask(options?: {
  * Hook to restart a trading task with fresh state
  */
 export function useRestartTradingTask(options?: {
-  onSuccess?: (data: {
-    message: string;
-    task_id: number;
-    state_cleared: boolean;
-  }) => void;
+  onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<
-  { message: string; task_id: number; state_cleared: boolean },
-  { id: number; clearState?: boolean }
-> {
-  const [state, setState] = useState<
-    MutationState<{ message: string; task_id: number; state_cleared: boolean }>
-  >({
+}): MutationResult<TradingTask, { id: number | string; clearState?: boolean }> {
+  const [state, setState] = useState<MutationState<TradingTask>>({
     data: null,
     isLoading: false,
     error: null,
   });
 
   const mutate = useCallback(
-    async (variables: { id: number; clearState?: boolean }) => {
+    async (variables: { id: number | string; clearState?: boolean }) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await tradingTasksApi.restart(
@@ -438,7 +414,6 @@ export function useRestartTradingTask(options?: {
           variables.clearState ?? true
         );
         setState({ data: result, isLoading: false, error: null });
-        // Invalidate cache to force refetch
         invalidateTradingTasksCache();
         options?.onSuccess?.(result);
         return result;

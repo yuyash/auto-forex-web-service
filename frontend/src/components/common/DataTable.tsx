@@ -65,7 +65,7 @@ type Order = 'asc' | 'desc';
  * @param onRefresh - Callback to refresh data
  * @param ariaLabel - Accessibility label for the table
  */
-function DataTable<T extends Record<string, unknown>>({
+function DataTable<T extends object>({
   columns,
   data,
   rowsPerPageOptions = [10, 25, 50, 100],
@@ -111,11 +111,11 @@ function DataTable<T extends Record<string, unknown>>({
     () =>
       (obj: T, path: string): unknown => {
         return path.split('.').reduce((acc: unknown, part: string) => {
-          if (acc && typeof acc === 'object' && part in acc) {
+          if (acc && typeof acc === 'object' && part in (acc as object)) {
             return (acc as Record<string, unknown>)[part];
           }
           return undefined;
-        }, obj);
+        }, obj as unknown);
       },
     []
   );

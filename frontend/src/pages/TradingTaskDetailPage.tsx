@@ -150,7 +150,8 @@ export default function TradingTaskDetailPage() {
     if (!task) return;
 
     const isNonTerminalStatus = (status: TaskStatus) =>
-      status === TaskStatus.PENDING ||
+      status === TaskStatus.CREATED ||
+      status === TaskStatus.STARTING ||
       status === TaskStatus.RUNNING ||
       status === TaskStatus.PAUSED ||
       status === TaskStatus.STOPPING;

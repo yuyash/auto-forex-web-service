@@ -113,9 +113,16 @@ export const EquityOHLCChart: React.FC<EquityOHLCChartProps> = ({
     }));
   }, [data]);
 
-  // Calculate candlestick colors (green for up, red for down)
+  const formatTimestamp = (value: Date | number): string => {
+    const date = value instanceof Date ? value : new Date(value);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
 
-  // Show loading state
   if (loading) {
     return (
       <Paper sx={{ p: 3, height }}>
@@ -227,9 +234,11 @@ export const EquityOHLCChart: React.FC<EquityOHLCChartProps> = ({
           grid={{ vertical: true, horizontal: true }}
           slotProps={{
             legend: {
-              direction: 'row',
-              position: { vertical: 'bottom', horizontal: 'middle' },
-              padding: 0,
+              direction: 'horizontal' as const,
+              position: {
+                vertical: 'bottom' as const,
+                horizontal: 'center' as const,
+              },
             },
           }}
           aria-label={`${title} showing equity curve with OHLC data`}

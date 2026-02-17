@@ -315,7 +315,7 @@ export function useConfigurationTasks(id: number): UseConfigurationTasksResult {
     try {
       setIsLoading(true);
       setError(null);
-      const result = await configurationsApi.getTasks(id);
+      const result = await configurationsApi.getTasks(String(id));
       setData(result);
     } catch (err) {
       setError(err as Error);

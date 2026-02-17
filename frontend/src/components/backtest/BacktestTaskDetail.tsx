@@ -25,8 +25,7 @@ import {
 } from '@mui/material';
 import { useBacktestTask } from '../../hooks/useBacktestTasks';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
-import { useToast } from '../common';
-import { TaskControlButtons } from '../tasks/actions/TaskControlButtons';
+import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
@@ -72,7 +71,6 @@ export const BacktestTaskDetail: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const taskId = id || '';
-  const { showError } = useToast();
 
   // Get tab from URL, default to 'overview'
   const tabParam = searchParams.get('tab') || 'overview';
@@ -87,7 +85,12 @@ export const BacktestTaskDetail: React.FC = () => {
   const tabNames = ['overview', 'events', 'logs', 'trades', 'replay'];
   const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
 
-  const { data: task, isLoading, error, refetch } = useBacktestTask(taskId);
+  const {
+    data: task,
+    isLoading,
+    error,
+    refetch,
+  } = useBacktestTask(taskId ? Number(taskId) : undefined);
 
   // Use HTTP polling for task status updates
   const {
@@ -226,14 +229,14 @@ export const BacktestTaskDetail: React.FC = () => {
           <Box sx={{ display: 'flex', gap: 1 }}>
             <TaskControlButtons
               taskId={taskId}
-              taskType={TaskType.BACKTEST}
-              currentStatus={polledStatus?.status || task.status}
-              onSuccess={() => {
+              status={polledStatus?.status || task.status}
+              onStart={async (id) => {
+                const { backtestTasksApi } = await import('../../services/api');
+                await backtestTasksApi.start(id);
                 console.log(
                   '[BacktestTaskDetail] Task action success, refetching'
                 );
                 refetch();
-                // Restart polling when task is restarted/resumed
                 if (!isPolling) {
                   console.log(
                     '[BacktestTaskDetail] Restarting polling after task action'
@@ -241,7 +244,34 @@ export const BacktestTaskDetail: React.FC = () => {
                   startPolling();
                 }
               }}
-              onError={(error) => showError(error.message)}
+              onStop={async (id) => {
+                const { backtestTasksApi } = await import('../../services/api');
+                await backtestTasksApi.stop(id);
+                refetch();
+              }}
+              onRestart={async (id) => {
+                const { backtestTasksApi } = await import('../../services/api');
+                await backtestTasksApi.restart(id);
+                refetch();
+                if (!isPolling) {
+                  startPolling();
+                }
+              }}
+              onResume={async (id) => {
+                const { backtestTasksApi } = await import('../../services/api');
+                await backtestTasksApi.resume(id);
+                refetch();
+                if (!isPolling) {
+                  startPolling();
+                }
+              }}
+              onDelete={async (id) => {
+                const { TradingService } = await import(
+                  '../../api/generated/services/TradingService'
+                );
+                await TradingService.tradingTasksBacktestDestroy(String(id));
+                navigate('/backtest-tasks');
+              }}
             />
           </Box>
         </Box>

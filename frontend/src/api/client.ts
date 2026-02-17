@@ -70,8 +70,10 @@ export function configureApiClient(config: ApiClientConfig): void {
   };
 
   // Set up response interceptor for 401 errors
-  const originalRequest = OpenAPI.request;
-  OpenAPI.request = async (options: unknown) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const originalRequest = (OpenAPI as any).request;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (OpenAPI as any).request = async (options: unknown) => {
     const requestOptions = options as Record<string, unknown>;
     const requestId = Math.random().toString(36).substring(7);
     const timestamp = new Date().toISOString();

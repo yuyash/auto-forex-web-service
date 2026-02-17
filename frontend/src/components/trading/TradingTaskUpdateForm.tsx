@@ -25,7 +25,7 @@ const tradingTaskUpdateSchema = z.object({
 type TradingTaskUpdateData = z.infer<typeof tradingTaskUpdateSchema>;
 
 interface TradingTaskUpdateFormProps {
-  taskId: number;
+  taskId: number | string;
   taskName: string;
   taskDescription?: string;
   accountName: string;

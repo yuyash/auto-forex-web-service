@@ -1,7 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-/* eslint-disable */
+
 import type { Direction530Enum } from './Direction530Enum';
 import type { OrderTypeEnum } from './OrderTypeEnum';
 /**

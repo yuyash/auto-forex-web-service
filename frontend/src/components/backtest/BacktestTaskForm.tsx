@@ -444,7 +444,7 @@ export default function BacktestTaskForm({
                   render={({ field }) => (
                     <ConfigurationSelector
                       configurations={configurations}
-                      value={field.value as number | string | undefined}
+                      value={field.value as string | undefined}
                       onChange={field.onChange}
                       error={errors.config_id?.message}
                       helperText={errors.config_id?.message}

@@ -69,7 +69,7 @@ export default function TradingTasksPage() {
   const [tabValue, setTabValue] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('-created_at');
-  const [configFilter, setConfigFilter] = useState<number | ''>('');
+  const [configFilter, setConfigFilter] = useState<string | ''>('');
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
@@ -156,7 +156,7 @@ export default function TradingTasksPage() {
   };
 
   const handleConfigFilterChange = (event: {
-    target: { value: number | '' };
+    target: { value: string | '' };
   }) => {
     setConfigFilter(event.target.value);
     setPage(1);

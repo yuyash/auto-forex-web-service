@@ -233,8 +233,7 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
       type: 'number',
       title: 'Volatility Unlock Multiplier',
       default: 1.5,
-      description:
-        'ATR multiplier threshold to unlock strategy after lock.',
+      description: 'ATR multiplier threshold to unlock strategy after lock.',
       dependsOn: {
         field: 'volatility_check_enabled',
         values: ['true'],
@@ -286,15 +285,13 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
       type: 'boolean',
       title: 'Market Condition Override',
       default: true,
-      description:
-        'Enable temporary rule override on bad market conditions.',
+      description: 'Enable temporary rule override on bad market conditions.',
     },
     market_condition_spread_limit_pips: {
       type: 'number',
       title: 'Spread Limit (pips)',
       default: 3.0,
-      description:
-        'Skip new entries when spread exceeds this value.',
+      description: 'Skip new entries when spread exceeds this value.',
       dependsOn: {
         field: 'market_condition_override_enabled',
         values: ['true'],

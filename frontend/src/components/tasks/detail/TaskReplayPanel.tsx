@@ -202,7 +202,9 @@ const fetchCandles = async (
     credentials: 'include',
     headers: (() => {
       const token = getAuthToken();
-      return token ? { Authorization: `Bearer ${token}` } : {};
+      return token
+        ? { Authorization: `Bearer ${token}` }
+        : ({} as Record<string, string>);
     })(),
   });
 
@@ -358,7 +360,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           : [];
 
       const tradeRows: ReplayTrade[] = rawTrades
-        .map((t: Record<string, unknown>, idx: number) => {
+        .map((t: Record<string, unknown>, idx: number): ReplayTrade | null => {
           const timestamp = String(t.timestamp || '');
           const parsedTime = parseUtcTimestamp(timestamp);
           const direction = String(t.direction || '').toLowerCase();
@@ -387,7 +389,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               t.pnl === null || t.pnl === undefined ? undefined : String(t.pnl),
           };
         })
-        .filter((v: ReplayTrade | null): v is ReplayTrade => v !== null)
+        .filter((v): v is ReplayTrade => v !== null)
         .sort(
           (a, b) =>
             new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
@@ -535,8 +537,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
       return {
         time: t.timeSec,
-        position: t.direction === 'buy' ? 'belowBar' : 'aboveBar',
-        shape: t.direction === 'buy' ? 'arrowUp' : 'arrowDown',
+        position:
+          t.direction === 'buy' ? ('belowBar' as const) : ('aboveBar' as const),
+        shape:
+          t.direction === 'buy' ? ('arrowUp' as const) : ('arrowDown' as const),
         color: selected
           ? '#f59e0b'
           : t.direction === 'buy'

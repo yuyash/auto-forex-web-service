@@ -11,67 +11,84 @@ import type {
   PaginatedResponse,
 } from '../../types';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const toLocal = (config: any): StrategyConfig => ({
+  ...config,
+  parameters: config.parameters ?? {},
+});
+
 export const configurationsApi = {
   /**
    * List all strategy configurations for the current user
    */
-  list: (
+  list: async (
     params?: StrategyConfigListParams
   ): Promise<PaginatedResponse<StrategyConfig>> => {
-    return withRetry(() =>
+    const result = await withRetry(() =>
       TradingService.tradingStrategyConfigsList(params?.page, params?.page_size)
     );
+    return {
+      count: result.count,
+      next: result.next ?? null,
+      previous: result.previous ?? null,
+      results: result.results.map(toLocal),
+    };
   },
 
   /**
    * Get a single strategy configuration by ID
    */
-  get: (id: string): Promise<StrategyConfig> => {
-    // Validate ID before making API call
-    if (!id || typeof id !== 'string' || id.trim() === '') {
+  get: async (id: string | number): Promise<StrategyConfig> => {
+    if (!id) {
       return Promise.reject(new Error('Invalid configuration ID'));
     }
-    return withRetry(() => TradingService.tradingStrategyConfigsRetrieve(id));
+    const result = await withRetry(() =>
+      TradingService.tradingStrategyConfigsRetrieve(Number(id))
+    );
+    return toLocal(result);
   },
 
   /**
    * Create a new strategy configuration
    */
-  create: (data: StrategyConfigCreateData): Promise<StrategyConfig> => {
-    return withRetry(() => TradingService.tradingStrategyConfigsCreate(data));
+  create: async (data: StrategyConfigCreateData): Promise<StrategyConfig> => {
+    const result = await withRetry(() =>
+      TradingService.tradingStrategyConfigsCreate(data)
+    );
+    return toLocal(result);
   },
 
   /**
    * Update an existing strategy configuration
    */
-  update: (
-    id: string,
+  update: async (
+    id: string | number,
     data: StrategyConfigUpdateData
   ): Promise<StrategyConfig> => {
-    // Validate ID before making API call
-    if (!id || typeof id !== 'string' || id.trim() === '') {
+    if (!id) {
       return Promise.reject(new Error('Invalid configuration ID'));
     }
-    return withRetry(() =>
-      TradingService.tradingStrategyConfigsUpdate(id, data)
+    const result = await withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      TradingService.tradingStrategyConfigsUpdate(Number(id), data as any)
     );
+    return toLocal(result);
   },
 
   /**
    * Delete a strategy configuration
-   * Note: Will fail if configuration is in use by active tasks
    */
-  delete: (id: string): Promise<void> => {
-    // Validate ID before making API call
-    if (!id || typeof id !== 'string' || id.trim() === '') {
+  delete: async (id: string | number): Promise<void> => {
+    if (!id) {
       return Promise.reject(new Error('Invalid configuration ID'));
     }
-    return withRetry(() => TradingService.tradingStrategyConfigsDestroy(id));
+    return withRetry(() =>
+      TradingService.tradingStrategyConfigsDestroy(Number(id))
+    );
   },
 
   /**
    * List tasks using a strategy configuration.
-   * This is implemented by filtering both trading and backtest task lists.
    */
   getTasks: async (
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -102,7 +119,6 @@ export const configurationsApi = {
       })
     );
 
-    // TODO: Filter by config_id on client side once we have the data
     return [...trading, ...backtest];
   },
 };

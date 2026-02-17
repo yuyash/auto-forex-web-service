@@ -1,8 +1,5 @@
 /**
  * Backtest Task API service using generated OpenAPI client
- *
- * This module provides a wrapper around the generated TradingService
- * for backtest task operations with consistent error handling.
  */
 
 import { TradingService } from '../../api/generated/services/TradingService';
@@ -11,21 +8,20 @@ import type {
   BacktestTaskRequest,
   PatchedBacktestTaskRequest,
 } from '../../api/generated';
+import type {
+  BacktestTask,
+  BacktestTaskListParams,
+  PaginatedResponse,
+} from '../../types';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const toLocal = (task: any): BacktestTask => task as BacktestTask;
 
 export const backtestTasksApi = {
-  /**
-   * List all backtest tasks for the current user
-   */
-  list: (params?: {
-    ordering?: string;
-    page?: number;
-    page_size?: number;
-    search?: string;
-    status?: string;
-    config_id?: string;
-    strategy_type?: string;
-  }) => {
-    return withRetry(() =>
+  list: async (
+    params?: BacktestTaskListParams
+  ): Promise<PaginatedResponse<BacktestTask>> => {
+    const result = await withRetry(() =>
       TradingService.tradingTasksBacktestList(
         params?.status,
         params?.config_id,
@@ -35,92 +31,133 @@ export const backtestTasksApi = {
         params?.search
       )
     );
+    return {
+      count: result.count,
+      next: result.next ?? null,
+      previous: result.previous ?? null,
+      results: result.results.map(toLocal),
+    };
   },
 
-  /**
-   * Get a single backtest task by ID
-   */
-  get: (id: string) => {
-    return withRetry(() => TradingService.tradingTasksBacktestRetrieve(id));
+  get: async (id: number | string): Promise<BacktestTask> => {
+    const result = await withRetry(() =>
+      TradingService.tradingTasksBacktestRetrieve(String(id))
+    );
+    return toLocal(result);
   },
 
-  /**
-   * Create a new backtest task
-   */
-  create: (data: BacktestTaskRequest) => {
-    return withRetry(() => TradingService.tradingTasksBacktestCreate(data));
+  create: async (data: BacktestTaskRequest): Promise<BacktestTask> => {
+    const result = await withRetry(() =>
+      TradingService.tradingTasksBacktestCreate(data)
+    );
+    return toLocal(result);
   },
 
-  /**
-   * Update an existing backtest task
-   */
-  update: (id: string, data: BacktestTaskRequest) => {
-    return withRetry(() => TradingService.tradingTasksBacktestUpdate(id, data));
+  update: async (
+    id: number | string,
+    data: BacktestTaskRequest
+  ): Promise<BacktestTask> => {
+    const result = await withRetry(() =>
+      TradingService.tradingTasksBacktestUpdate(String(id), data)
+    );
+    return toLocal(result);
   },
 
-  /**
-   * Partially update an existing backtest task
-   */
-  partialUpdate: (id: string, data: PatchedBacktestTaskRequest) => {
+  partialUpdate: async (
+    id: number | string,
+    data: PatchedBacktestTaskRequest
+  ): Promise<BacktestTask> => {
+    const result = await withRetry(() =>
+      TradingService.tradingTasksBacktestPartialUpdate(String(id), data)
+    );
+    return toLocal(result);
+  },
+
+  delete: async (id: number | string): Promise<void> => {
     return withRetry(() =>
-      TradingService.tradingTasksBacktestPartialUpdate(id, data)
+      TradingService.tradingTasksBacktestDestroy(String(id))
     );
   },
 
-  /**
-   * Delete a backtest task
-   */
-  delete: (id: string) => {
-    return withRetry(() => TradingService.tradingTasksBacktestDestroy(id));
+  start: async (id: number | string): Promise<BacktestTask> => {
+    const result = await withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      TradingService.tradingTasksBacktestStartCreate(String(id), {} as any)
+    );
+    return toLocal(result);
   },
 
-  /**
-   * Submit a backtest task for execution (new task-based API)
-   */
-  start: (id: string) => {
+  stop: async (
+    id: number | string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<Record<string, any>> => {
     return withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksBacktestStartCreate(id, {} as any)
+      TradingService.tradingTasksBacktestStopCreate(String(id), {} as any)
     );
   },
 
-  /**
-   * Stop a running backtest task (new task-based API)
-   */
-  stop: (id: string) => {
-    return withRetry(() =>
+  pause: async (id: number | string): Promise<BacktestTask> => {
+    const result = await withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksBacktestStopCreate(id, {} as any)
+      TradingService.tradingTasksBacktestPauseCreate(String(id), {} as any)
     );
+    return toLocal(result);
   },
 
-  /**
-   * Pause a running backtest task (new task-based API)
-   */
-  pause: (id: string) => {
-    return withRetry(() =>
+  resume: async (id: number | string): Promise<BacktestTask> => {
+    const result = await withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksBacktestPauseCreate(id, {} as any)
+      TradingService.tradingTasksBacktestResumeCreate(String(id), {} as any)
     );
+    return toLocal(result);
   },
 
-  /**
-   * Resume a paused backtest task (new task-based API)
-   */
-  resume: (id: string) => {
-    return withRetry(() =>
+  restart: async (
+    id: number | string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _clearState?: boolean
+  ): Promise<BacktestTask> => {
+    const result = await withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksBacktestResumeCreate(id, {} as any)
+      TradingService.tradingTasksBacktestRestartCreate(String(id), {} as any)
     );
+    return toLocal(result);
   },
 
-  /**
-   * Restart a backtest task with fresh state (new task-based API)
-   */
-  restart: (id: string) => {
-    return withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksBacktestRestartCreate(id, {} as any)
+  copy: async (
+    id: number | string,
+
+    _data: { new_name: string }
+  ): Promise<BacktestTask> => {
+    const original = await withRetry(() =>
+      TradingService.tradingTasksBacktestRetrieve(String(id))
     );
+    const result = await withRetry(() =>
+      TradingService.tradingTasksBacktestCreate({
+        name: _data.new_name,
+        config: original.config,
+        start_time: original.start_time,
+        end_time: original.end_time,
+        description: original.description,
+        data_source: original.data_source,
+        initial_balance: original.initial_balance,
+        commission_per_trade: original.commission_per_trade,
+        instrument: original.instrument,
+        trading_mode: original.trading_mode,
+      })
+    );
+    return toLocal(result);
+  },
+
+  getExecutions: async (
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _id: number | string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _params?: { page?: number; page_size?: number; include_metrics?: boolean }
+  ): Promise<PaginatedResponse<import('../../types').TaskExecution>> => {
+    // Executions are not yet supported in the generated API
+    // Return empty paginated response
+    return { count: 0, next: null, previous: null, results: [] };
   },
 };

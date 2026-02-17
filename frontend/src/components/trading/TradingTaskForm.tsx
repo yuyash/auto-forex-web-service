@@ -27,6 +27,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { type TradingTaskCreateData } from '../../types/tradingTask';
+import type { Account } from '../../types/strategy';
 import {
   useCreateTradingTask,
   useUpdateTradingTask,
@@ -114,7 +115,11 @@ export default function TradingTaskForm({
 
   // Fetch accounts
   const { data: accountsData } = useAccounts({ page_size: 100 });
-  const accounts = accountsData?.results || [];
+  const accounts = (
+    Array.isArray(accountsData)
+      ? accountsData
+      : (accountsData as { results?: Account[] })?.results || []
+  ) as Account[];
 
   // For review step, use saved formData instead of watch
   // This ensures values persist across step changes
@@ -124,7 +129,7 @@ export default function TradingTaskForm({
       : selectedAccountId;
 
   const selectedAccount = accounts.find(
-    (account) => account.id === effectiveAccountId
+    (account) => String(account.id) === effectiveAccountId
   );
 
   // Fetch all configurations and strategies
@@ -460,7 +465,7 @@ export default function TradingTaskForm({
                           {selectedAccount.account_id} (
                           {selectedAccount.api_type})
                         </>
-                      ) : selectedAccountId > 0 ? (
+                      ) : selectedAccountId ? (
                         'Loading account...'
                       ) : (
                         'No account selected'

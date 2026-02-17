@@ -33,7 +33,7 @@ import { TaskStatus, TaskType } from '../../../types/common';
 import type { TaskExecution } from '../../../types/execution';
 
 interface ExecutionHistoryTableProps {
-  taskId: number;
+  taskId: number | string;
   taskType: TaskType;
   onExecutionClick?: (executionId: number) => void;
 }

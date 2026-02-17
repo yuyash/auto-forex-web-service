@@ -107,7 +107,7 @@ export default function BacktestTaskCard({
     navigate(`/backtest-tasks/${task.id}`);
   };
 
-  const handleStart = async (taskId: string) => {
+  const handleStart = async (taskId: string | number) => {
     setIsLoading(true);
     try {
       await backtestTasksApi.start(taskId);
@@ -128,7 +128,7 @@ export default function BacktestTaskCard({
     }
   };
 
-  const handleStop = async (taskId: string) => {
+  const handleStop = async (taskId: string | number) => {
     setIsLoading(true);
     try {
       await backtestTasksApi.stop(taskId);
@@ -146,7 +146,7 @@ export default function BacktestTaskCard({
     }
   };
 
-  const handleResume = async (taskId: string) => {
+  const handleResume = async (taskId: string | number) => {
     setIsLoading(true);
     try {
       await backtestTasksApi.resume(taskId);
@@ -167,7 +167,7 @@ export default function BacktestTaskCard({
     }
   };
 
-  const handleRestart = async (taskId: string) => {
+  const handleRestart = async (taskId: string | number) => {
     setIsLoading(true);
     try {
       await backtestTasksApi.restart(taskId);
@@ -188,10 +188,10 @@ export default function BacktestTaskCard({
     }
   };
 
-  const handleDelete = async (taskId: string) => {
+  const handleDelete = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingTasksBacktestDestroy(taskId);
+      await TradingService.tradingTasksBacktestDestroy(String(taskId));
       showSuccess('Backtest task deleted successfully');
       onRefresh?.();
     } catch (error) {

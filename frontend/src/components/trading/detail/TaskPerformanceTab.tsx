@@ -25,7 +25,9 @@ import type {
   BacktestStrategyEvent,
   EquityPoint,
   Trade,
+  ExecutionMetricsCheckpoint,
 } from '../../../types/execution';
+import { useTradingResults } from '../../../hooks/useTradingResults';
 import {
   TrendingUp as TrendingUpIcon,
   ShowChart as ShowChartIcon,

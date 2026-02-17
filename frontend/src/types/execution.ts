@@ -21,6 +21,8 @@ export interface TaskExecution {
   logs?: ExecutionLog[];
   duration?: string;
   created_at: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  metrics?: Record<string, any>;
 }
 
 export interface ExecutionMetrics {
@@ -137,4 +139,19 @@ export interface ExecutionListParams {
   page_size?: number;
   status?: TaskStatus;
   ordering?: string;
+}
+
+export interface ExecutionMetricsCheckpoint {
+  total_return?: string;
+  total_pnl?: string;
+  total_trades?: number;
+  winning_trades?: number;
+  losing_trades?: number;
+  win_rate?: string;
+  max_drawdown?: string;
+  sharpe_ratio?: string;
+  profit_factor?: string;
+  average_win?: string;
+  average_loss?: string;
+  timestamp?: string;
 }

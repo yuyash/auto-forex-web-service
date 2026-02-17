@@ -8,8 +8,6 @@ export { LogPanel } from './LogPanel';
 export type { LogPanelProps } from './LogPanel';
 export { ExecutionTimeline } from './ExecutionTimeline';
 export { ErrorDisplay } from './ErrorDisplay';
-export { ExecutionStatusCard } from './ExecutionStatusCard';
-export { EventFeed } from './EventFeed';
 export { ExecutionSummaryCard } from './ExecutionSummaryCard';
 export { TradeHistoryTable } from './TradeHistoryTable';
 export { EventTimeline } from './EventTimeline';

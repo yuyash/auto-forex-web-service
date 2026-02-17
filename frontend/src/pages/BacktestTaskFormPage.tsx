@@ -7,7 +7,7 @@ import { LoadingSpinner, Breadcrumbs } from '../components/common';
 
 export default function BacktestTaskFormPage() {
   const { id } = useParams<{ id: string }>();
-  const taskId = id || undefined;
+  const taskId = id ? Number(id) : undefined;
 
   const { data: task, isLoading } = useBacktestTask(taskId);
 
@@ -40,7 +40,7 @@ export default function BacktestTaskFormPage() {
         <Paper sx={{ p: 4, mt: 3 }}>
           {taskId && task ? (
             <BacktestTaskUpdateForm
-              taskId={taskId}
+              taskId={String(taskId)}
               taskName={task.name}
               taskDescription={task.description}
               initialData={{

@@ -17,7 +17,7 @@ import { ExecutionComparisonView } from '../../tasks/display/ExecutionComparison
 import { TaskStatus, TaskType } from '../../../types/common';
 
 interface TaskExecutionsTabProps {
-  taskId: number;
+  taskId: number | string;
   taskType?: TaskType;
   taskStatus?: TaskStatus;
   task?: {

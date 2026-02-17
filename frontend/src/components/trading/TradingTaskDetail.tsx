@@ -24,8 +24,7 @@ import {
   Divider,
 } from '@mui/material';
 import { useTradingTask } from '../../hooks/useTradingTasks';
-import { useToast } from '../common';
-import { TaskControlButtons } from '../tasks/actions/TaskControlButtons';
+import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
@@ -70,7 +69,6 @@ export const TradingTaskDetail: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const taskId = id || '';
-  const { showError } = useToast();
 
   // Get tab from URL, default to 'overview'
   const tabParam = searchParams.get('tab') || 'overview';
@@ -176,10 +174,42 @@ export const TradingTaskDetail: React.FC = () => {
           <Box sx={{ display: 'flex', gap: 1 }}>
             <TaskControlButtons
               taskId={taskId}
-              taskType={TaskType.TRADING}
-              currentStatus={task.status}
-              onSuccess={refetch}
-              onError={(error) => showError(error.message)}
+              status={task.status}
+              onStart={async (id) => {
+                const { tradingTasksApi } = await import(
+                  '../../services/api/tradingTasks'
+                );
+                await tradingTasksApi.start(id);
+                refetch();
+              }}
+              onStop={async (id) => {
+                const { tradingTasksApi } = await import(
+                  '../../services/api/tradingTasks'
+                );
+                await tradingTasksApi.stop(id);
+                refetch();
+              }}
+              onRestart={async (id) => {
+                const { tradingTasksApi } = await import(
+                  '../../services/api/tradingTasks'
+                );
+                await tradingTasksApi.restart(id);
+                refetch();
+              }}
+              onResume={async (id) => {
+                const { tradingTasksApi } = await import(
+                  '../../services/api/tradingTasks'
+                );
+                await tradingTasksApi.resume(id);
+                refetch();
+              }}
+              onDelete={async (id) => {
+                const { tradingTasksApi } = await import(
+                  '../../services/api/tradingTasks'
+                );
+                await tradingTasksApi.delete(id);
+                navigate('/trading-tasks');
+              }}
             />
           </Box>
         </Box>
@@ -306,7 +336,7 @@ export const TradingTaskDetail: React.FC = () => {
                       OANDA Account
                     </Typography>
                     <Typography variant="body1">
-                      {task.oanda_account_name || 'N/A'}
+                      {task.account_name || 'N/A'}
                     </Typography>
                   </Box>
 

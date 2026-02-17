@@ -1,7 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-/* eslint-disable */
+
 import type { TradingModeEnum } from './TradingModeEnum';
 /**
  * Serializer for TradingTask with execution data.

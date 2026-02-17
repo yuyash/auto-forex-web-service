@@ -11,7 +11,7 @@
  * Requirements: 11.8, 11.9, 11.17, 11.18, 12.7, 12.8, 12.9
  */
 
-import React, { ReactNode, useState } from 'react';
+import React, { type ReactNode, useState } from 'react';
 import {
   Box,
   Paper,

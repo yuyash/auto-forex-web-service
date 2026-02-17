@@ -193,7 +193,10 @@ export class TaskPollingService {
       task_id: task.id,
       task_type: this.taskType,
       status: task.status as TaskStatus,
-      progress: task.progress || 0, // Use progress from backend
+      progress:
+        ('progress' in task
+          ? (task as { progress?: number }).progress
+          : undefined) || 0,
       started_at: task.started_at || null,
       completed_at: task.completed_at || null,
       error_message: task.error_message || null,
@@ -210,7 +213,7 @@ export class TaskPollingService {
         : await TradingService.tradingTasksTradingRetrieve(this.taskId);
 
     return {
-      task: task as BacktestTask | TradingTask,
+      task: task as unknown as BacktestTask | TradingTask,
       current_execution: null,
     };
   }
@@ -243,17 +246,6 @@ export class TaskPollingService {
     console.warn(
       `Polling error (retry ${this.state.retryCount}/${this.options.maxRetries}). ` +
         `Next attempt in ${this.state.currentInterval}ms`
-    );
-  }
-
-  /**
-   * Check if status is terminal (completed, failed, stopped)
-   */
-  private isTerminalStatus(status: TaskStatus): boolean {
-    return (
-      status === TaskStatus.COMPLETED ||
-      status === TaskStatus.FAILED ||
-      status === TaskStatus.STOPPED
     );
   }
 

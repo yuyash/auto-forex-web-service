@@ -190,7 +190,7 @@ interface UseTradingTaskResult {
  * Hook to fetch a single trading task
  */
 export function useTradingTask(
-  id?: number,
+  id?: number | string,
   options?: { enabled?: boolean }
 ): UseTradingTaskResult {
   const [data, setData] = useState<TradingTask | null>(null);

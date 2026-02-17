@@ -70,7 +70,7 @@ export function useUpdateConfiguration(options?: {
   onError?: (error: Error) => void;
 }): MutationResult<
   StrategyConfig,
-  { id: number; data: StrategyConfigUpdateData }
+  { id: number | string; data: StrategyConfigUpdateData }
 > {
   const [state, setState] = useState<MutationState<StrategyConfig>>({
     data: null,
@@ -79,7 +79,10 @@ export function useUpdateConfiguration(options?: {
   });
 
   const mutate = useCallback(
-    async (variables: { id: number; data: StrategyConfigUpdateData }) => {
+    async (variables: {
+      id: number | string;
+      data: StrategyConfigUpdateData;
+    }) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await configurationsApi.update(

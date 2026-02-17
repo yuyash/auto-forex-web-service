@@ -34,6 +34,7 @@ import { useToast } from '../common/useToast';
 import ConfirmDialog from '../common/ConfirmDialog';
 import type { Account } from '../../types/strategy';
 import { accountsApi } from '../../services/api/accounts';
+import type { OandaAccounts, OandaAccountsRequest } from '../../api/generated';
 
 interface AccountFormData {
   account_id: string;
@@ -74,15 +75,17 @@ const AccountManagement = () => {
         }
         const data = await accountsApi.list();
 
-        const listedAccounts = Array.isArray(data.results) ? data.results : [];
-        setAccounts(listedAccounts);
+        const listedAccounts = Array.isArray(data) ? data : [];
+        setAccounts(listedAccounts as Account[]);
 
         // Hydrate each account with live data (balance/margins/etc) from the detail endpoint.
         // Do this after the list loads so the UI renders quickly.
         if (listedAccounts.length > 0) {
           void (async () => {
             const results = await Promise.allSettled(
-              listedAccounts.map((account) => accountsApi.get(account.id))
+              listedAccounts.map((account: OandaAccounts) =>
+                accountsApi.get(account.id)
+              )
             );
 
             if (!isMountedRef.current) {
@@ -91,10 +94,12 @@ const AccountManagement = () => {
 
             const hydratedAccounts = results
               .filter(
-                (result): result is PromiseFulfilledResult<Account> =>
+                (result): result is PromiseFulfilledResult<OandaAccounts> =>
                   result.status === 'fulfilled'
               )
-              .map((result) => result.value);
+              .map(
+                (result: PromiseFulfilledResult<OandaAccounts>) => result.value
+              );
 
             if (hydratedAccounts.length === 0) {
               return;
@@ -102,10 +107,10 @@ const AccountManagement = () => {
 
             setAccounts((previousAccounts) =>
               previousAccounts.map(
-                (account) =>
-                  hydratedAccounts.find(
+                (account: Account) =>
+                  (hydratedAccounts.find(
                     (hydrated) => hydrated.id === account.id
-                  ) ?? account
+                  ) as Account | undefined) ?? account
               )
             );
           })();
@@ -215,16 +220,12 @@ const AccountManagement = () => {
       }
 
       if (editingAccount) {
-        await accountsApi.update(editingAccount.id, payload);
-      } else {
-        await accountsApi.create(
-          payload as {
-            account_id: string;
-            api_token: string;
-            api_type?: 'practice' | 'live';
-            is_default?: boolean;
-          }
+        await accountsApi.update(
+          editingAccount.id,
+          payload as OandaAccountsRequest
         );
+      } else {
+        await accountsApi.create(payload as OandaAccountsRequest);
       }
 
       // Close immediately; refresh balances in the background.

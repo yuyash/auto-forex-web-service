@@ -19,7 +19,7 @@ export interface TaskEvent {
 }
 
 interface UseTaskEventsOptions {
-  taskId: number;
+  taskId: string | number;
   taskType: TaskType;
   eventType?: string;
   severity?: string;
@@ -56,7 +56,7 @@ export const useTaskEvents = ({
       const response =
         taskType === TaskType.BACKTEST
           ? await TradingService.tradingTasksBacktestEventsList(
-              taskId,
+              String(taskId),
               eventType,
               limit,
               undefined,
@@ -65,7 +65,7 @@ export const useTaskEvents = ({
               severity
             )
           : await TradingService.tradingTasksTradingEventsList(
-              taskId,
+              String(taskId),
               eventType,
               limit,
               undefined,

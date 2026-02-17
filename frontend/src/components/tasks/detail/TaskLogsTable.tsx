@@ -118,16 +118,16 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
       id: 'timestamp',
       label: 'Timestamp',
       minWidth: 200,
-      format: (value) => formatTimestamp(value as string),
+      render: (row) => formatTimestamp(row.timestamp as string),
     },
     {
       id: 'level',
       label: 'Level',
       minWidth: 100,
-      format: (value) => (
+      render: (row) => (
         <Chip
-          label={value as string}
-          color={getLevelColor(value as string)}
+          label={row.level as string}
+          color={getLevelColor(row.level as string)}
           size="small"
         />
       ),

@@ -20,7 +20,7 @@ import { useTaskEvents, type TaskEvent } from '../../../hooks/useTaskEvents';
 import { TaskType } from '../../../types/common';
 
 interface TaskEventsTableProps {
-  taskId: number;
+  taskId: string | number;
   taskType: TaskType;
   enableRealTimeUpdates?: boolean;
 }
@@ -79,7 +79,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
       id: 'created_at',
       label: 'Timestamp',
       minWidth: 180,
-      format: (value) => formatTimestamp(value as string),
+      render: (row) => formatTimestamp(row.created_at as string),
     },
     {
       id: 'event_type',
@@ -90,10 +90,10 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
       id: 'severity',
       label: 'Severity',
       minWidth: 100,
-      format: (value) => (
+      render: (row) => (
         <Chip
-          label={value as string}
-          color={getSeverityColor(value as string)}
+          label={row.severity as string}
+          color={getSeverityColor(row.severity as string)}
           size="small"
         />
       ),
@@ -136,7 +136,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
       <DataTable
         columns={columns}
         data={events}
-        loading={isLoading}
+        isLoading={isLoading}
         emptyMessage="No events available"
       />
     </Box>

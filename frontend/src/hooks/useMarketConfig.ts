@@ -69,7 +69,7 @@ export const useSupportedGranularities = () => {
         const response = await MarketService.listSupportedGranularities();
         // Filter out second-based granularities (S5, S10, S15, S30)
         const filteredGranularities = (response.granularities || []).filter(
-          (g) => !g.value.startsWith('S')
+          (g: { value: string }) => !g.value.startsWith('S')
         );
         setGranularities(filteredGranularities);
         setError(null);

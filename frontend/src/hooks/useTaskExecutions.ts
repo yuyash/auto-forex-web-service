@@ -6,8 +6,14 @@ import type { TaskExecution, PaginatedResponse } from '../types';
 
 // Query key factories for cache invalidation
 export const executionQueryKeys = {
-  backtestExecutions: (taskId: number) => ['backtest-task-executions', taskId],
-  tradingExecutions: (taskId: number) => ['trading-task-executions', taskId],
+  backtestExecutions: (taskId: number | string) => [
+    'backtest-task-executions',
+    taskId,
+  ],
+  tradingExecutions: (taskId: number | string) => [
+    'trading-task-executions',
+    taskId,
+  ],
 };
 
 interface UseTaskExecutionsResult {
@@ -28,7 +34,7 @@ interface UseTaskExecutionsResult {
  * @param options.pollingInterval - Polling interval in ms (default: 3000 for running, disabled otherwise)
  */
 export function useTaskExecutions(
-  taskId: number,
+  taskId: number | string,
   taskType: TaskType,
   params?: { page?: number; page_size?: number; include_metrics?: boolean },
   options?: { enablePolling?: boolean; pollingInterval?: number }
@@ -93,7 +99,7 @@ interface UseTaskExecutionResult {
  * Hook to fetch a specific execution
  */
 export function useTaskExecution(
-  taskId: number,
+  taskId: number | string,
   executionId: number,
   taskType: TaskType
 ): UseTaskExecutionResult {
@@ -140,12 +146,12 @@ export function useInvalidateExecutions() {
   const queryClient = useQueryClient();
 
   return {
-    invalidateBacktestExecutions: (taskId: number) => {
+    invalidateBacktestExecutions: (taskId: number | string) => {
       queryClient.invalidateQueries({
         queryKey: executionQueryKeys.backtestExecutions(taskId),
       });
     },
-    invalidateTradingExecutions: (taskId: number) => {
+    invalidateTradingExecutions: (taskId: number | string) => {
       queryClient.invalidateQueries({
         queryKey: executionQueryKeys.tradingExecutions(taskId),
       });

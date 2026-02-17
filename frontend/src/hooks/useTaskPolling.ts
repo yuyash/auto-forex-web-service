@@ -6,7 +6,6 @@ import {
   type TaskType,
   type TaskStatusResponse,
   type TaskDetailsResponse,
-  type TaskLogsResponse,
   type PollingOptions,
 } from '../services/polling/TaskPollingService';
 
@@ -15,6 +14,11 @@ export interface UseTaskPollingOptions extends PollingOptions {
   pollStatus?: boolean; // Poll for status updates (default: true)
   pollDetails?: boolean; // Poll for details updates (default: false)
   pollLogs?: boolean; // Poll for logs updates (default: false)
+}
+
+// Local type for logs response (not exported from TaskPollingService)
+interface TaskLogsResponse {
+  logs: Array<{ timestamp: string; level: string; message: string }>;
 }
 
 export interface UseTaskPollingResult {

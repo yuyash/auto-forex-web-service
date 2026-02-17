@@ -94,9 +94,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   orientation = 'horizontal',
 }) => {
   // Determine which buttons should be enabled based on status
-  const canStart = [TaskStatusEnum.CREATED, TaskStatusEnum.PENDING].includes(
-    status
-  );
+  const canStart = [TaskStatusEnum.CREATED].includes(status);
 
   const canStop = [TaskStatusEnum.RUNNING].includes(status);
   const canPause = status === TaskStatusEnum.RUNNING;
@@ -109,7 +107,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   const canDelete = ![TaskStatusEnum.RUNNING].includes(status);
 
   const handleAction = async (
-    action?: (taskId: number) => void | Promise<void>
+    action?: (taskId: string | number) => void | Promise<void>
   ) => {
     if (action && !isLoading && !disabled) {
       await action(taskId);

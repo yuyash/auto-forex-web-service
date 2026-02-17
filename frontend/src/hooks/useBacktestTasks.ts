@@ -234,7 +234,7 @@ export function useBacktestTask(id?: number): UseBacktestTaskResult {
     data,
     isLoading,
     error,
-    refetch: () => fetchData(true),
+    refetch: () => fetchData(),
   };
 }
 
