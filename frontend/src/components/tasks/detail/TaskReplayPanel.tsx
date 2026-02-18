@@ -20,7 +20,9 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
+  TableSortLabel,
   Typography,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material/Select';
@@ -102,15 +104,21 @@ interface TaskReplayPanelProps {
   };
 }
 
-const FALLBACK_GRANULARITIES = [
+const ALLOWED_GRANULARITIES = [
   { value: 'M1', label: '1 Minute' },
   { value: 'M5', label: '5 Minutes' },
   { value: 'M15', label: '15 Minutes' },
   { value: 'M30', label: '30 Minutes' },
   { value: 'H1', label: '1 Hour' },
   { value: 'H4', label: '4 Hours' },
+  { value: 'H8', label: '8 Hours' },
+  { value: 'H12', label: '12 Hours' },
   { value: 'D', label: 'Daily' },
+  { value: 'W', label: 'Weekly' },
+  { value: 'M', label: 'Monthly' },
 ];
+
+const ALLOWED_VALUES = new Set(ALLOWED_GRANULARITIES.map((g) => g.value));
 
 const parseUtcTimestamp = (value: unknown): UTCTimestamp | null => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -254,13 +262,87 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const [trades, setTrades] = useState<ReplayTrade[]>([]);
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { granularities } = useSupportedGranularities();
 
-  const granularityOptions = useMemo(
-    () => (granularities.length > 0 ? granularities : FALLBACK_GRANULARITIES),
-    [granularities]
+  type SortableKey =
+    | 'sequence'
+    | 'timestamp'
+    | 'direction'
+    | 'layer_index'
+    | 'units'
+    | 'price'
+    | 'pnl'
+    | 'execution_method';
+  const [orderBy, setOrderBy] = useState<SortableKey>('timestamp');
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  const handleSort = (column: SortableKey) => {
+    if (orderBy === column) {
+      setOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setOrderBy(column);
+      setOrder('asc');
+    }
+  };
+
+  const sortedTrades = useMemo(() => {
+    const sorted = [...trades].sort((a, b) => {
+      let cmp = 0;
+      switch (orderBy) {
+        case 'sequence':
+          cmp = a.sequence - b.sequence;
+          break;
+        case 'timestamp':
+          cmp =
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+          break;
+        case 'direction':
+          cmp = a.direction.localeCompare(b.direction);
+          break;
+        case 'layer_index':
+          cmp = (a.layer_index ?? -1) - (b.layer_index ?? -1);
+          break;
+        case 'units':
+          cmp = Number(a.units) - Number(b.units);
+          break;
+        case 'price':
+          cmp = Number(a.price) - Number(b.price);
+          break;
+        case 'pnl':
+          cmp = (Number(a.pnl) || 0) - (Number(b.pnl) || 0);
+          break;
+        case 'execution_method':
+          cmp = (a.execution_method || '').localeCompare(
+            b.execution_method || ''
+          );
+          break;
+      }
+      return order === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [trades, orderBy, order]);
+
+  const paginatedTrades = useMemo(
+    () =>
+      sortedTrades.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+    [sortedTrades, page, rowsPerPage]
   );
+
+  // Reset to first page when sort or data changes
+  useEffect(() => {
+    setPage(0);
+  }, [orderBy, order, trades]);
+
+  const granularityOptions = useMemo(() => {
+    if (granularities.length > 0) {
+      return granularities.filter((g) => ALLOWED_VALUES.has(g.value));
+    }
+    return ALLOWED_GRANULARITIES;
+  }, [granularities]);
 
   const recommendedGranularity = useMemo(() => {
     const availableValues = granularityOptions
@@ -304,9 +386,16 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     setGranularity(recommendedGranularity);
   }, [recommendedGranularity, instrument, startTime, endTime]);
 
+  const hasLoadedOnce = useRef(false);
+
   const fetchReplayData = useCallback(async () => {
+    const isInitialLoad = !hasLoadedOnce.current;
     try {
-      setIsLoading(true);
+      if (isInitialLoad) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
       setError(null);
 
       const candleResponse = await fetchCandles(
@@ -399,7 +488,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load replay data');
     } finally {
+      hasLoadedOnce.current = true;
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   }, [instrument, granularity, startTime, endTime, taskType, taskId]);
 
@@ -418,7 +509,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   }, [trades]);
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || candles.length === 0) return;
     if (!chartContainerRef.current || chartRef.current) return;
 
     const container = chartContainerRef.current;
@@ -506,12 +597,28 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       highlightRef.current = null;
       adaptiveRef.current = null;
     };
-  }, [isLoading, timezone]);
+  }, [isLoading, candles.length, timezone]);
 
+  // Update candle data, market gaps, and fit chart when data changes
   useEffect(() => {
     if (!seriesRef.current || !markersRef.current) return;
 
     seriesRef.current.setData(candles);
+
+    const times = candles.map((c) => Number(c.time));
+
+    if (highlightRef.current) {
+      highlightRef.current.setGaps(detectMarketGaps(times));
+    }
+
+    if (candles.length > 0) {
+      chartRef.current?.timeScale().fitContent();
+    }
+  }, [candles]);
+
+  // Update trade markers when trades or selection changes (without resetting the view)
+  useEffect(() => {
+    if (!seriesRef.current || !markersRef.current) return;
 
     const tradeMarkers = trades.map((t) => {
       const selected = t.id === selectedTradeId;
@@ -550,18 +657,8 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       };
     });
 
-    const times = candles.map((c) => Number(c.time));
-
     markersRef.current.setMarkers(tradeMarkers);
-
-    if (highlightRef.current) {
-      highlightRef.current.setGaps(detectMarketGaps(times));
-    }
-
-    if (candles.length > 0) {
-      chartRef.current?.timeScale().fitContent();
-    }
-  }, [candles, trades, selectedTradeId]);
+  }, [trades, selectedTradeId]);
 
   const handleGranularityChange = (e: SelectChangeEvent) => {
     setGranularity(String(e.target.value));
@@ -569,11 +666,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   const onRowSelect = (row: ReplayTrade) => {
     setSelectedTradeId(row.id);
-    const center = Number(row.timeSec);
-    chartRef.current?.timeScale().setVisibleRange({
-      from: (center - 1800) as Time,
-      to: (center + 1800) as Time,
-    });
+    const ts = chartRef.current?.timeScale();
+    if (!ts) return;
+
+    const range = ts.getVisibleRange();
+    if (range) {
+      const half = (Number(range.to) - Number(range.from)) / 2;
+      const center = Number(row.timeSec);
+      ts.setVisibleRange({
+        from: (center - half) as Time,
+        to: (center + half) as Time,
+      });
+    }
   };
 
   if (isLoading) {
@@ -596,6 +700,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     <Box sx={{ p: 2 }}>
       <Stack direction="row" spacing={2} sx={{ mb: 1 }} alignItems="center">
         <Typography variant="h6">Candle Replay</Typography>
+        {isRefreshing && <CircularProgress size={16} thickness={5} />}
         <FormControl size="small" sx={{ minWidth: 200 }}>
           <InputLabel id="replay-granularity-label">Granularity</InputLabel>
           <Select
@@ -611,9 +716,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             ))}
           </Select>
         </FormControl>
-        <Typography variant="caption" color="text.secondary">
-          Auto recommendation: {recommendedGranularity}
-        </Typography>
       </Stack>
 
       <Typography variant="caption" color="text.secondary">
@@ -678,18 +780,99 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         <Table stickyHeader size="small">
           <TableHead>
             <TableRow>
-              <TableCell>#</TableCell>
-              <TableCell>Time</TableCell>
-              <TableCell>Side</TableCell>
-              <TableCell>Layer</TableCell>
-              <TableCell align="right">Units</TableCell>
-              <TableCell align="right">Price</TableCell>
-              <TableCell align="right">PnL</TableCell>
-              <TableCell>Event</TableCell>
+              <TableCell sortDirection={orderBy === 'sequence' ? order : false}>
+                <TableSortLabel
+                  active={orderBy === 'sequence'}
+                  direction={orderBy === 'sequence' ? order : 'asc'}
+                  onClick={() => handleSort('sequence')}
+                >
+                  #
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                sortDirection={orderBy === 'timestamp' ? order : false}
+              >
+                <TableSortLabel
+                  active={orderBy === 'timestamp'}
+                  direction={orderBy === 'timestamp' ? order : 'asc'}
+                  onClick={() => handleSort('timestamp')}
+                >
+                  Time
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                sortDirection={orderBy === 'direction' ? order : false}
+              >
+                <TableSortLabel
+                  active={orderBy === 'direction'}
+                  direction={orderBy === 'direction' ? order : 'asc'}
+                  onClick={() => handleSort('direction')}
+                >
+                  Side
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                sortDirection={orderBy === 'layer_index' ? order : false}
+              >
+                <TableSortLabel
+                  active={orderBy === 'layer_index'}
+                  direction={orderBy === 'layer_index' ? order : 'asc'}
+                  onClick={() => handleSort('layer_index')}
+                >
+                  Layer
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                align="right"
+                sortDirection={orderBy === 'units' ? order : false}
+              >
+                <TableSortLabel
+                  active={orderBy === 'units'}
+                  direction={orderBy === 'units' ? order : 'asc'}
+                  onClick={() => handleSort('units')}
+                >
+                  Units
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                align="right"
+                sortDirection={orderBy === 'price' ? order : false}
+              >
+                <TableSortLabel
+                  active={orderBy === 'price'}
+                  direction={orderBy === 'price' ? order : 'asc'}
+                  onClick={() => handleSort('price')}
+                >
+                  Price
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                align="right"
+                sortDirection={orderBy === 'pnl' ? order : false}
+              >
+                <TableSortLabel
+                  active={orderBy === 'pnl'}
+                  direction={orderBy === 'pnl' ? order : 'asc'}
+                  onClick={() => handleSort('pnl')}
+                >
+                  PnL
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                sortDirection={orderBy === 'execution_method' ? order : false}
+              >
+                <TableSortLabel
+                  active={orderBy === 'execution_method'}
+                  direction={orderBy === 'execution_method' ? order : 'asc'}
+                  onClick={() => handleSort('execution_method')}
+                >
+                  Event
+                </TableSortLabel>
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {trades.map((row) => {
+            {paginatedTrades.map((row) => {
               const selected = row.id === selectedTradeId;
               return (
                 <TableRow
@@ -715,6 +898,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           </TableBody>
         </Table>
       </TableContainer>
+      <TablePagination
+        component="div"
+        count={sortedTrades.length}
+        page={page}
+        onPageChange={(_e, newPage) => setPage(newPage)}
+        rowsPerPage={rowsPerPage}
+        onRowsPerPageChange={(e) => {
+          setRowsPerPage(parseInt(e.target.value, 10));
+          setPage(0);
+        }}
+        rowsPerPageOptions={[10, 25, 50, 100]}
+      />
     </Box>
   );
 };
