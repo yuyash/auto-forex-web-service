@@ -15,7 +15,7 @@ import { setAuthToken, clearAuthToken } from '../api';
 const AUTH_CONTEXT_KEY = '__AUTH_CONTEXT__';
 const globalWindow =
   typeof window !== 'undefined'
-    ? (window as Record<string, unknown>)
+    ? (window as unknown as Record<string, unknown>)
     : ({} as Record<string, unknown>);
 
 if (!globalWindow[AUTH_CONTEXT_KEY]) {
