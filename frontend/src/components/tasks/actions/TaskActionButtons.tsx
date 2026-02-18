@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Button, Tooltip } from '@mui/material';
 import {
   PlayArrow,
+  PlayCircleOutline,
   Stop,
   Refresh,
   Delete,
@@ -102,7 +103,7 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
           <Button
             variant="contained"
             color="primary"
-            startIcon={<PlayArrow />}
+            startIcon={<PlayCircleOutline />}
             onClick={onResume}
             disabled={actionDisabled}
             size="small"

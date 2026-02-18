@@ -18,7 +18,7 @@ import {
   PlayArrow as StartIcon,
   Stop as StopIcon,
   Pause as PauseIcon,
-  PlayCircle as ResumeIcon,
+  PlayCircleOutline as ResumeIcon,
   Refresh as RestartIcon,
 } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';

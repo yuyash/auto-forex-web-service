@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import {
   PlayArrow as StartIcon,
+  PlayCircleOutline as ResumeIcon,
   Stop as StopIcon,
   Pause as PauseIcon,
   Replay as RestartIcon,
@@ -201,7 +202,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       {/* Resume Button */}
       {onResume &&
         renderButton(
-          <StartIcon />,
+          <ResumeIcon />,
           'Resume',
           () => handleAction(onResume),
           canResume,
