@@ -36,8 +36,8 @@ class TestUserNotificationListViewIntegration:
         response = self.client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 1
-        assert response.data[0]["title"] == "Test Notification"
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["title"] == "Test Notification"
 
     def test_list_notifications_with_limit(self) -> None:
         """Test listing notifications with limit parameter."""
@@ -52,10 +52,10 @@ class TestUserNotificationListViewIntegration:
 
         self.client.force_authenticate(user=self.user)
         url = reverse("accounts:notifications")
-        response = self.client.get(url, {"limit": 3})
+        response = self.client.get(url, {"page_size": 3})
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 3
+        assert len(response.data["results"]) == 3
 
     def test_list_notifications_unread_only(self) -> None:
         """Test listing only unread notifications."""
@@ -81,8 +81,8 @@ class TestUserNotificationListViewIntegration:
         response = self.client.get(url, {"unread_only": "true"})
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 1
-        assert response.data[0]["title"] == "Unread"
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["title"] == "Unread"
 
 
 @pytest.mark.django_db

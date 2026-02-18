@@ -22,6 +22,7 @@ def _position(units: int, layer_index: int = 0):
         instrument="USD_JPY",
         realized_pnl=0,
         entry_price=Decimal("150.000"),
+        entry_time=None,
         exit_price=None,
     )
 

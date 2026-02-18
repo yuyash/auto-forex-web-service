@@ -13,8 +13,8 @@ describe('TaskControlButtons', () => {
     const handleStart = vi.fn();
     render(
       <TaskControlButtons
-        taskId={1}
-        status="idle"
+        taskId="1"
+        status="created"
         onStart={handleStart}
         showLabels={true}
       />
@@ -29,22 +29,22 @@ describe('TaskControlButtons', () => {
     const handleStart = vi.fn();
     render(
       <TaskControlButtons
-        taskId={1}
-        status="idle"
+        taskId="1"
+        status="created"
         onStart={handleStart}
         showLabels={true}
       />
     );
 
     fireEvent.click(screen.getByRole('button', { name: /start/i }));
-    expect(handleStart).toHaveBeenCalledWith(1);
+    expect(handleStart).toHaveBeenCalledWith('1');
   });
 
   it('should enable stop button when status is running', () => {
     const handleStop = vi.fn();
     render(
       <TaskControlButtons
-        taskId={1}
+        taskId="1"
         status="running"
         onStop={handleStop}
         showLabels={true}
@@ -60,7 +60,7 @@ describe('TaskControlButtons', () => {
     const handleStop = vi.fn();
     render(
       <TaskControlButtons
-        taskId={1}
+        taskId="1"
         status="running"
         onStop={handleStop}
         showLabels={true}
@@ -68,14 +68,14 @@ describe('TaskControlButtons', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /stop/i }));
-    expect(handleStop).toHaveBeenCalledWith(1);
+    expect(handleStop).toHaveBeenCalledWith('1');
   });
 
   it('should enable resume button when status is paused', () => {
     const handleResume = vi.fn();
     render(
       <TaskControlButtons
-        taskId={1}
+        taskId="1"
         status="paused"
         onResume={handleResume}
         showLabels={true}
@@ -91,7 +91,7 @@ describe('TaskControlButtons', () => {
     const handleResume = vi.fn();
     render(
       <TaskControlButtons
-        taskId={1}
+        taskId="1"
         status="paused"
         onResume={handleResume}
         showLabels={true}
@@ -99,14 +99,14 @@ describe('TaskControlButtons', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /resume/i }));
-    expect(handleResume).toHaveBeenCalledWith(1);
+    expect(handleResume).toHaveBeenCalledWith('1');
   });
 
   it('should enable restart button when status is stopped', () => {
     const handleRestart = vi.fn();
     render(
       <TaskControlButtons
-        taskId={1}
+        taskId="1"
         status="stopped"
         onRestart={handleRestart}
         showLabels={true}
@@ -122,7 +122,7 @@ describe('TaskControlButtons', () => {
     const handleRestart = vi.fn();
     render(
       <TaskControlButtons
-        taskId={1}
+        taskId="1"
         status="stopped"
         onRestart={handleRestart}
         showLabels={true}
@@ -130,14 +130,14 @@ describe('TaskControlButtons', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /restart/i }));
-    expect(handleRestart).toHaveBeenCalledWith(1);
+    expect(handleRestart).toHaveBeenCalledWith('1');
   });
 
   it('should enable delete button when status is not running or paused', () => {
     const handleDelete = vi.fn();
     render(
       <TaskControlButtons
-        taskId={1}
+        taskId="1"
         status="stopped"
         onDelete={handleDelete}
         showLabels={true}
@@ -153,7 +153,7 @@ describe('TaskControlButtons', () => {
     const handleDelete = vi.fn();
     render(
       <TaskControlButtons
-        taskId={1}
+        taskId="1"
         status="stopped"
         onDelete={handleDelete}
         showLabels={true}
@@ -161,14 +161,14 @@ describe('TaskControlButtons', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
-    expect(handleDelete).toHaveBeenCalledWith(1);
+    expect(handleDelete).toHaveBeenCalledWith('1');
   });
 
   it('should disable start button when status is running', () => {
     const handleStart = vi.fn();
     render(
       <TaskControlButtons
-        taskId={1}
+        taskId="1"
         status="running"
         onStart={handleStart}
         showLabels={true}
@@ -183,7 +183,7 @@ describe('TaskControlButtons', () => {
     const handleDelete = vi.fn();
     render(
       <TaskControlButtons
-        taskId={1}
+        taskId="1"
         status="running"
         onDelete={handleDelete}
         showLabels={true}
@@ -197,8 +197,8 @@ describe('TaskControlButtons', () => {
   it('should show loading spinner when isLoading is true', () => {
     render(
       <TaskControlButtons
-        taskId={1}
-        status="idle"
+        taskId="1"
+        status="created"
         onStart={vi.fn()}
         isLoading={true}
       />
@@ -210,8 +210,8 @@ describe('TaskControlButtons', () => {
   it('should disable all buttons when disabled prop is true', () => {
     render(
       <TaskControlButtons
-        taskId={1}
-        status="idle"
+        taskId="1"
+        status="created"
         onStart={vi.fn()}
         onStop={vi.fn()}
         onDelete={vi.fn()}
@@ -229,8 +229,8 @@ describe('TaskControlButtons', () => {
   it('should render icon-only buttons when showLabels is false', () => {
     render(
       <TaskControlButtons
-        taskId={1}
-        status="idle"
+        taskId="1"
+        status="created"
         onStart={vi.fn()}
         showLabels={false}
       />
@@ -245,8 +245,8 @@ describe('TaskControlButtons', () => {
   it('should render buttons with labels when showLabels is true', () => {
     render(
       <TaskControlButtons
-        taskId={1}
-        status="idle"
+        taskId="1"
+        status="created"
         onStart={vi.fn()}
         showLabels={true}
       />
@@ -259,22 +259,22 @@ describe('TaskControlButtons', () => {
     const handleStart = vi.fn().mockResolvedValue(undefined);
     render(
       <TaskControlButtons
-        taskId={1}
-        status="idle"
+        taskId="1"
+        status="created"
         onStart={handleStart}
         showLabels={true}
       />
     );
 
     fireEvent.click(screen.getByRole('button', { name: /start/i }));
-    expect(handleStart).toHaveBeenCalledWith(1);
+    expect(handleStart).toHaveBeenCalledWith('1');
   });
 
   it('should not render buttons for callbacks that are not provided', () => {
     render(
       <TaskControlButtons
-        taskId={1}
-        status="idle"
+        taskId="1"
+        status="created"
         onStart={vi.fn()}
         showLabels={true}
       />
