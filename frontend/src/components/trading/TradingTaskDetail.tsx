@@ -24,6 +24,7 @@ import {
   Divider,
 } from '@mui/material';
 import { useTradingTask } from '../../hooks/useTradingTasks';
+import { useOverviewPnl } from '../../hooks/useOverviewPnl';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
@@ -85,6 +86,12 @@ export const TradingTaskDetail: React.FC = () => {
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
 
+  const overviewSummary = useOverviewPnl(
+    taskId,
+    TaskType.TRADING,
+    task?.latest_execution
+  );
+
   // Derive tab value from URL parameter (use this for rendering)
   const currentTabValue =
     tabMap[tabParam] !== undefined ? tabMap[tabParam] : tabValue;
@@ -125,11 +132,6 @@ export const TradingTaskDetail: React.FC = () => {
     );
   }
 
-  const overviewSummary = {
-    realizedPnl: Number(task.latest_execution?.realized_pnl ?? 0),
-    unrealizedPnl: Number(task.latest_execution?.unrealized_pnl ?? 0),
-    totalTrades: Number(task.latest_execution?.total_trades ?? 0),
-  };
   const pnlCurrency = task.instrument?.includes('_')
     ? task.instrument.split('_')[1]
     : 'N/A';

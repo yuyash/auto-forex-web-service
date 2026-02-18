@@ -32,6 +32,7 @@ import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
 import { TaskReplayPanel } from '../tasks/detail/TaskReplayPanel';
 import { TaskProgress } from '../tasks/TaskProgress';
+import { useOverviewPnl } from '../../hooks/useOverviewPnl';
 import { TaskStatus, TaskType } from '../../types/common';
 
 interface TabPanelProps {
@@ -91,6 +92,12 @@ export const BacktestTaskDetail: React.FC = () => {
     error,
     refetch,
   } = useBacktestTask(taskId || undefined);
+
+  const overviewSummary = useOverviewPnl(
+    taskId,
+    TaskType.BACKTEST,
+    task?.latest_execution
+  );
 
   // Use HTTP polling for task status updates
   const {
@@ -170,11 +177,6 @@ export const BacktestTaskDetail: React.FC = () => {
     );
   }
 
-  const overviewSummary = {
-    realizedPnl: Number(task.latest_execution?.realized_pnl ?? 0),
-    unrealizedPnl: Number(task.latest_execution?.unrealized_pnl ?? 0),
-    totalTrades: Number(task.latest_execution?.total_trades ?? 0),
-  };
   const pnlCurrency = task.instrument?.includes('_')
     ? task.instrument.split('_')[1]
     : 'N/A';
