@@ -22,6 +22,7 @@ from apps.market.services.oanda import (
     Order,
     StopOrderRequest,
 )
+from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
 
@@ -47,6 +48,7 @@ class OrderView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardPagination
 
     @extend_schema(
         summary="GET /api/market/orders/",
@@ -77,12 +79,18 @@ class OrderView(APIView):
                 default="all",
             ),
             OpenApiParameter(
-                name="count",
+                name="page",
                 type=int,
                 location=OpenApiParameter.QUERY,
                 required=False,
-                description="Number of orders to return",
-                default=50,
+                description="Page number",
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Number of results per page (default: 50, max: 200)",
             ),
         ],
         responses={200: dict},
@@ -100,7 +108,6 @@ class OrderView(APIView):
         account_id = request.query_params.get("account_id")
         instrument = request.query_params.get("instrument")
         order_status = request.query_params.get("status", "all").lower()
-        count = int(request.query_params.get("count", "50"))
 
         # If no account_id specified, get orders from all user accounts
         if account_id:
@@ -115,7 +122,7 @@ class OrderView(APIView):
             accounts = list(OandaAccounts.objects.filter(user=request.user.pk, is_active=True))
 
         if not accounts:
-            return Response({"results": [], "count": 0})
+            return Response({"count": 0, "next": None, "previous": None, "results": []})
 
         all_orders = []
 
@@ -163,7 +170,7 @@ class OrderView(APIView):
                     # Get order history (includes all states)
                     for order in client.get_order_history(
                         instrument=instrument,
-                        count=count,
+                        count=500,
                         state="ALL",
                     ):
                         all_orders.append(
@@ -201,15 +208,10 @@ class OrderView(APIView):
         # Sort by create_time (newest first)
         all_orders.sort(key=lambda x: str(x.get("create_time") or ""), reverse=True)
 
-        # Limit total results
-        all_orders = all_orders[:count]
-
-        return Response(
-            {
-                "results": all_orders,
-                "count": len(all_orders),
-            }
-        )
+        # Paginate in-memory list
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(all_orders, request)
+        return paginator.get_paginated_response(page)
 
     @extend_schema(
         summary="POST /api/market/orders/",

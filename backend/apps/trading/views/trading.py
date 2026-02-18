@@ -13,18 +13,11 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.trading.enums import LogLevel, TaskStatus
+from apps.trading.enums import TaskStatus
 from apps.trading.models import TradingTask
-from apps.trading.models.logs import TaskLog
-from apps.trading.serializers import (
-    TradeSerializer,
-    TradingEventSerializer,
-)
-from apps.trading.serializers.task import (
-    TaskLogSerializer,
-    TradingTaskSerializer,
-)
+from apps.trading.serializers.task import TradingTaskSerializer
 from apps.trading.tasks.service import TaskService
+from apps.trading.views.mixins import TaskSubResourceMixin
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -60,7 +53,7 @@ logger: Logger = logging.getLogger(name=__name__)
         ],
     ),
 )
-class TradingTaskViewSet(ModelViewSet):
+class TradingTaskViewSet(TaskSubResourceMixin, ModelViewSet):
     """
     ViewSet for TradingTask operations with task-centric API.
 
@@ -77,6 +70,7 @@ class TradingTaskViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = TradingTaskSerializer
     lookup_field = "pk"
+    task_type_label = "trading"
 
     def get_serializer_class(self):
         """Use TradingTaskCreateSerializer for create/update actions."""
@@ -279,214 +273,3 @@ class TradingTaskViewSet(ModelViewSet):
                 {"error": f"Failed to resume task: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-    @extend_schema(
-        summary="Get task logs",
-        description="Retrieve task execution logs for the latest execution with pagination and filtering",
-        parameters=[
-            OpenApiParameter(
-                name="level",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                description="Filter by log level (DEBUG, INFO, WARNING, ERROR)",
-            ),
-            OpenApiParameter(
-                name="limit",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                description="Maximum number of logs to return (default: 100)",
-            ),
-            OpenApiParameter(
-                name="offset",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                description="Number of logs to skip (default: 0)",
-            ),
-            OpenApiParameter(
-                name="celery_task_id",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                description="Optional explicit execution ID. If omitted, current task celery_task_id is used.",
-            ),
-        ],
-        responses={200: TaskLogSerializer(many=True)},
-    )
-    @action(detail=True, methods=["get"])
-    def logs(self, request: Request, pk: int | None = None) -> Response:
-        """Get task logs with pagination and filtering."""
-        task = self.get_object()
-
-        level_param = request.query_params.get("level")
-        level = LogLevel[level_param.upper()] if level_param else None
-        limit = int(request.query_params.get("limit", 100))
-        offset = int(request.query_params.get("offset", 0))
-        celery_task_id = request.query_params.get("celery_task_id") or task.celery_task_id
-
-        # Guardrails for predictable paging
-        limit = max(1, min(limit, 1000))
-        offset = max(0, offset)
-
-        try:
-            logs_queryset = TaskLog.objects.filter(
-                task_type="trading",
-                task_id=task.pk,
-            )
-
-            # Default to latest execution only (no historical logs)
-            if celery_task_id:
-                logs_queryset = logs_queryset.filter(celery_task_id=celery_task_id)
-            else:
-                logs_queryset = logs_queryset.none()
-
-            if level:
-                logs_queryset = logs_queryset.filter(level=level)
-
-            total = logs_queryset.count()
-            logs = logs_queryset.order_by("-timestamp")[offset : offset + limit]
-            serializer = TaskLogSerializer(logs, many=True)
-
-            next_offset = offset + limit if (offset + limit) < total else None
-            prev_offset = max(0, offset - limit) if offset > 0 else None
-
-            return Response(
-                {
-                    "count": total,
-                    "next": next_offset,
-                    "previous": prev_offset,
-                    "results": serializer.data,
-                }
-            )
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to retrieve logs: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    @extend_schema(
-        summary="Get task events",
-        description="Retrieve task events with filtering",
-        parameters=[
-            OpenApiParameter(
-                name="event_type",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                description="Filter by event type",
-            ),
-            OpenApiParameter(
-                name="severity",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                description="Filter by severity (info, warning, error)",
-            ),
-            OpenApiParameter(
-                name="limit",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                description="Maximum number of events to return (default: 100)",
-            ),
-        ],
-        responses={200: TradingEventSerializer(many=True)},
-    )
-    @action(detail=True, methods=["get"])
-    def events(self, request: Request, pk: int | None = None) -> Response:
-        """Get task events with filtering."""
-        from apps.trading.models import TradingEvent
-
-        task = self.get_object()
-
-        event_type = request.query_params.get("event_type")
-        severity = request.query_params.get("severity")
-        celery_task_id = request.query_params.get("celery_task_id")
-        limit = int(request.query_params.get("limit", 100))
-
-        queryset = TradingEvent.objects.filter(task_type="trading", task_id=task.pk).order_by(
-            "-created_at"
-        )
-
-        if event_type:
-            queryset = queryset.filter(event_type=event_type)
-        if severity:
-            queryset = queryset.filter(severity=severity)
-        if celery_task_id:
-            queryset = queryset.filter(celery_task_id=celery_task_id)
-
-        events = queryset[:limit]
-        serializer = TradingEventSerializer(events, many=True)
-
-        # Return paginated format expected by frontend
-        return Response(
-            {"count": queryset.count(), "next": None, "previous": None, "results": serializer.data}
-        )
-
-    @extend_schema(
-        summary="Get task trades",
-        description="Retrieve trade history from task execution state",
-        parameters=[
-            OpenApiParameter(
-                name="direction",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                description="Filter by trade direction (buy/sell)",
-            ),
-            OpenApiParameter(
-                name="celery_task_id",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                description="Execution ID. Defaults to current task celery_task_id.",
-            ),
-        ],
-        responses={200: TradeSerializer(many=True)},
-    )
-    @action(detail=True, methods=["get"])
-    def trades(self, request: Request, pk: str | None = None) -> Response:
-        """Get task trades from database."""
-        from apps.trading.models.trades import Trade
-
-        task = self.get_object()
-        direction = (request.query_params.get("direction") or "").lower()
-        celery_task_id = request.query_params.get("celery_task_id") or task.celery_task_id
-
-        # Query trades from database
-        queryset = Trade.objects.filter(
-            task_type="trading",
-            task_id=task.pk,
-        ).order_by("timestamp")
-
-        # Default behavior: only show latest/current execution run.
-        if celery_task_id:
-            queryset = queryset.filter(celery_task_id=celery_task_id)
-        else:
-            queryset = queryset.none()
-
-        # Filter by direction if specified
-        if direction:
-            if direction == "buy":
-                queryset = queryset.filter(direction="long")
-            elif direction == "sell":
-                queryset = queryset.filter(direction="short")
-            else:
-                queryset = queryset.filter(direction=direction)
-
-        trades = queryset.values(
-            "direction",
-            "units",
-            "instrument",
-            "price",
-            "execution_method",
-            "layer_index",
-            "pnl",
-            "timestamp",
-        )
-
-        normalized_trades = []
-        for trade in trades:
-            side = str(trade["direction"]).lower()
-            trade["direction"] = "buy" if side == "long" else "sell" if side == "short" else side
-            normalized_trades.append(trade)
-
-        serializer = TradeSerializer(normalized_trades, many=True)
-
-        # Return paginated format expected by frontend
-        return Response(
-            {"count": queryset.count(), "next": None, "previous": None, "results": serializer.data}
-        )

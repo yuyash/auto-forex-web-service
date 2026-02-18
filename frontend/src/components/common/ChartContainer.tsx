@@ -8,7 +8,6 @@
  * - Responsive sizing
  * - MUI X Charts integration
  *
- * Requirements: 11.8, 11.9, 11.17, 11.18, 12.7, 12.8, 12.9
  */
 
 import React, { type ReactNode, useState } from 'react';

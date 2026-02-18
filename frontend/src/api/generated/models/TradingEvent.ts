@@ -2,12 +2,17 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { EventTypeEnum } from './EventTypeEnum';
 /**
  * Serializer for TradingEvent model.
  */
 export type TradingEvent = {
   readonly id?: number;
-  event_type: string;
+  event_type: EventTypeEnum;
+  /**
+   * Human-readable display name for the event type.
+   */
+  readonly event_type_display?: string;
   severity?: string;
   description: string;
   user?: number | null;

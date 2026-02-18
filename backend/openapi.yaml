@@ -214,14 +214,19 @@ paths:
     get:
       operationId: accounts_notifications_retrieve
       description: Retrieve list of notifications for the authenticated user. Supports
-        filtering by read status and limiting results.
+        filtering by read status and pagination.
       summary: GET /api/accounts/notifications
       parameters:
       - in: query
-        name: limit
+        name: page
         schema:
           type: integer
-        description: 'Maximum number of notifications to return (1-200, default: 50)'
+        description: Page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 'Number of results per page (default: 50, max: 200)'
       - in: query
         name: unread_only
         schema:
@@ -234,36 +239,7 @@ paths:
       - cookieAuth: []
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: integer
-                    title:
-                      type: string
-                    message:
-                      type: string
-                    severity:
-                      type: string
-                      enum:
-                      - info
-                      - warning
-                      - error
-                      - critical
-                    timestamp:
-                      type: string
-                      format: date-time
-                    read:
-                      type: boolean
-                    notification_type:
-                      type: string
-                    extra_data:
-                      type: object
-          description: Notifications retrieved successfully
+          description: Paginated notifications list
         '401':
           description: Authentication required
         '500':
@@ -809,16 +785,20 @@ paths:
           type: integer
         description: Filter by OANDA account ID
       - in: query
-        name: count
-        schema:
-          type: integer
-          default: 50
-        description: Number of orders to return
-      - in: query
         name: instrument
         schema:
           type: string
         description: Filter by currency pair
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 'Number of results per page (default: 50, max: 200)'
       - in: query
         name: status
         schema:
@@ -1536,9 +1516,14 @@ paths:
   /api/trading/tasks/backtest/{id}/events/:
     get:
       operationId: trading_tasks_backtest_events_list
-      description: Retrieve task events with filtering
+      description: Get task events with pagination and filtering.
       summary: Get task events
       parameters:
+      - in: query
+        name: celery_task_id
+        schema:
+          type: string
+        description: Filter by celery task ID
       - in: query
         name: event_type
         schema:
@@ -1551,23 +1536,22 @@ paths:
           format: uuid
           description: Unique identifier for this record
         required: true
-      - in: query
-        name: limit
-        schema:
-          type: integer
-        description: 'Maximum number of events to return (default: 100)'
       - name: ordering
         required: false
         in: query
         description: Which field to use when ordering the results.
         schema:
           type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
+      - in: query
+        name: page
         schema:
           type: integer
+        description: Page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 'Number of results per page (default: 100, max: 1000)'
       - name: search
         required: false
         in: query
@@ -1578,7 +1562,7 @@ paths:
         name: severity
         schema:
           type: string
-        description: Filter by severity (info, warning, error)
+        description: Filter by severity
       tags:
       - trading
       security:
@@ -1594,16 +1578,14 @@ paths:
   /api/trading/tasks/backtest/{id}/logs/:
     get:
       operationId: trading_tasks_backtest_logs_list
-      description: Retrieve task execution logs for the latest execution with pagination
-        and filtering
+      description: Get task logs with pagination and filtering.
       summary: Get task logs
       parameters:
       - in: query
         name: celery_task_id
         schema:
           type: string
-        description: Optional explicit execution ID. If omitted, current task celery_task_id
-          is used.
+        description: Filter by celery task ID
       - in: path
         name: id
         schema:
@@ -1615,29 +1597,23 @@ paths:
         name: level
         schema:
           type: string
-        description: Filter by log level (DEBUG, INFO, WARNING, ERROR)
-      - in: query
-        name: limit
-        schema:
-          type: integer
-        description: 'Maximum number of logs to return (default: 100)'
-      - in: query
-        name: offset
-        schema:
-          type: integer
-        description: 'Number of logs to skip (default: 0)'
+        description: Filter by log level
       - name: ordering
         required: false
         in: query
         description: Which field to use when ordering the results.
         schema:
           type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
+      - in: query
+        name: page
         schema:
           type: integer
+        description: Page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 'Number of results per page (default: 100, max: 1000)'
       - name: search
         required: false
         in: query
@@ -1900,19 +1876,19 @@ paths:
   /api/trading/tasks/backtest/{id}/trades/:
     get:
       operationId: trading_tasks_backtest_trades_list
-      description: Retrieve trade history from task execution state
+      description: Get task trades with pagination.
       summary: Get task trades
       parameters:
       - in: query
         name: celery_task_id
         schema:
           type: string
-        description: Execution ID. Defaults to current task celery_task_id.
+        description: Filter by celery task ID
       - in: query
         name: direction
         schema:
           type: string
-        description: Filter by trade direction (buy/sell)
+        description: Filter by direction (buy/sell)
       - in: path
         name: id
         schema:
@@ -1926,12 +1902,16 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
+      - in: query
+        name: page
         schema:
           type: integer
+        description: Page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 'Number of results per page (default: 100, max: 1000)'
       - name: search
         required: false
         in: query
@@ -2184,9 +2164,14 @@ paths:
   /api/trading/tasks/trading/{id}/events/:
     get:
       operationId: trading_tasks_trading_events_list
-      description: Retrieve task events with filtering
+      description: Get task events with pagination and filtering.
       summary: Get task events
       parameters:
+      - in: query
+        name: celery_task_id
+        schema:
+          type: string
+        description: Filter by celery task ID
       - in: query
         name: event_type
         schema:
@@ -2199,23 +2184,22 @@ paths:
           format: uuid
           description: Unique identifier for this record
         required: true
-      - in: query
-        name: limit
-        schema:
-          type: integer
-        description: 'Maximum number of events to return (default: 100)'
       - name: ordering
         required: false
         in: query
         description: Which field to use when ordering the results.
         schema:
           type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
+      - in: query
+        name: page
         schema:
           type: integer
+        description: Page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 'Number of results per page (default: 100, max: 1000)'
       - name: search
         required: false
         in: query
@@ -2226,7 +2210,7 @@ paths:
         name: severity
         schema:
           type: string
-        description: Filter by severity (info, warning, error)
+        description: Filter by severity
       tags:
       - trading
       security:
@@ -2242,16 +2226,14 @@ paths:
   /api/trading/tasks/trading/{id}/logs/:
     get:
       operationId: trading_tasks_trading_logs_list
-      description: Retrieve task execution logs for the latest execution with pagination
-        and filtering
+      description: Get task logs with pagination and filtering.
       summary: Get task logs
       parameters:
       - in: query
         name: celery_task_id
         schema:
           type: string
-        description: Optional explicit execution ID. If omitted, current task celery_task_id
-          is used.
+        description: Filter by celery task ID
       - in: path
         name: id
         schema:
@@ -2263,29 +2245,23 @@ paths:
         name: level
         schema:
           type: string
-        description: Filter by log level (DEBUG, INFO, WARNING, ERROR)
-      - in: query
-        name: limit
-        schema:
-          type: integer
-        description: 'Maximum number of logs to return (default: 100)'
-      - in: query
-        name: offset
-        schema:
-          type: integer
-        description: 'Number of logs to skip (default: 0)'
+        description: Filter by log level
       - name: ordering
         required: false
         in: query
         description: Which field to use when ordering the results.
         schema:
           type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
+      - in: query
+        name: page
         schema:
           type: integer
+        description: Page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 'Number of results per page (default: 100, max: 1000)'
       - name: search
         required: false
         in: query
@@ -2462,19 +2438,19 @@ paths:
   /api/trading/tasks/trading/{id}/trades/:
     get:
       operationId: trading_tasks_trading_trades_list
-      description: Retrieve trade history from task execution state
+      description: Get task trades with pagination.
       summary: Get task trades
       parameters:
       - in: query
         name: celery_task_id
         schema:
           type: string
-        description: Execution ID. Defaults to current task celery_task_id.
+        description: Filter by celery task ID
       - in: query
         name: direction
         schema:
           type: string
-        description: Filter by trade direction (buy/sell)
+        description: Filter by direction (buy/sell)
       - in: path
         name: id
         schema:
@@ -2488,12 +2464,16 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
+      - in: query
+        name: page
         schema:
           type: integer
+        description: Page number
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 'Number of results per page (default: 100, max: 1000)'
       - name: search
         required: false
         in: query
@@ -2898,6 +2878,78 @@ components:
           description: Email verification token
       required:
       - token
+    EventTypeEnum:
+      enum:
+      - tick_received
+      - strategy_signal
+      - trade_executed
+      - status_changed
+      - error_occurred
+      - initial_entry
+      - retracement
+      - take_profit
+      - add_layer
+      - remove_layer
+      - volatility_lock
+      - margin_protection
+      - strategy_started
+      - strategy_paused
+      - strategy_resumed
+      - strategy_stopped
+      type: string
+      description: |-
+        * `tick_received` - Tick Received
+        * `strategy_signal` - Strategy Signal
+        * `trade_executed` - Trade Executed
+        * `status_changed` - Status Changed
+        * `error_occurred` - Error Occurred
+        * `initial_entry` - Initial Entry
+        * `retracement` - Retracement
+        * `take_profit` - Take Profit
+        * `add_layer` - Add Layer
+        * `remove_layer` - Remove Layer
+        * `volatility_lock` - Volatility Lock
+        * `margin_protection` - Margin Protection
+        * `strategy_started` - Strategy Started
+        * `strategy_paused` - Strategy Paused
+        * `strategy_resumed` - Strategy Resumed
+        * `strategy_stopped` - Strategy Stopped
+    ExecutionMethodEnum:
+      enum:
+      - tick_received
+      - strategy_signal
+      - trade_executed
+      - status_changed
+      - error_occurred
+      - initial_entry
+      - retracement
+      - take_profit
+      - add_layer
+      - remove_layer
+      - volatility_lock
+      - margin_protection
+      - strategy_started
+      - strategy_paused
+      - strategy_resumed
+      - strategy_stopped
+      type: string
+      description: |-
+        * `tick_received` - Tick Received
+        * `strategy_signal` - Strategy Signal
+        * `trade_executed` - Trade Executed
+        * `status_changed` - Status Changed
+        * `error_occurred` - Error Occurred
+        * `initial_entry` - Initial Entry
+        * `retracement` - Retracement
+        * `take_profit` - Take Profit
+        * `add_layer` - Add Layer
+        * `remove_layer` - Remove Layer
+        * `volatility_lock` - Volatility Lock
+        * `margin_protection` - Margin Protection
+        * `strategy_started` - Strategy Started
+        * `strategy_paused` - Strategy Paused
+        * `strategy_resumed` - Strategy Resumed
+        * `strategy_stopped` - Strategy Stopped
     JurisdictionEnum:
       enum:
       - US
@@ -3669,7 +3721,11 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,10})?$
         execution_method:
+          $ref: '#/components/schemas/ExecutionMethodEnum'
+        execution_method_display:
           type: string
+          description: Human-readable display name for the execution method.
+          readOnly: true
         layer_index:
           type: integer
           nullable: true
@@ -3681,6 +3737,24 @@ components:
         timestamp:
           type: string
           format: date-time
+        open_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,10})?$
+          nullable: true
+        open_timestamp:
+          type: string
+          format: date-time
+          nullable: true
+        close_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,10})?$
+          nullable: true
+        close_timestamp:
+          type: string
+          format: date-time
+          nullable: true
       required:
       - direction
       - execution_method
@@ -3696,8 +3770,11 @@ components:
           type: integer
           readOnly: true
         event_type:
+          $ref: '#/components/schemas/EventTypeEnum'
+        event_type_display:
           type: string
-          maxLength: 64
+          description: Human-readable display name for the event type.
+          readOnly: true
         severity:
           type: string
           maxLength: 16

@@ -3,10 +3,12 @@
  *
  * Uses the same calculation logic as TaskReplayPanel to ensure
  * consistent PnL values between Overview and Replay tabs.
+ *
+ * Fetches all trade pages to compute accurate totals.
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { TradingService } from '../api/generated/services/TradingService';
+import { fetchAllTrades } from '../utils/fetchAllTrades';
 import type { ExecutionSummary } from '../types/execution';
 import { TaskType } from '../types/common';
 
@@ -30,38 +32,22 @@ export function useOverviewPnl(
 
     let cancelled = false;
 
-    const fetchTrades = async () => {
+    const load = async () => {
       try {
-        const response =
-          taskType === TaskType.BACKTEST
-            ? await TradingService.tradingTasksBacktestTradesList(taskId)
-            : await TradingService.tradingTasksTradingTradesList(taskId);
-
-        if (cancelled) return;
-
-        const results = Array.isArray(
-          (response as { results?: unknown[] })?.results
-        )
-          ? (response as { results: Array<{ pnl?: string | number | null }> })
-              .results
-          : Array.isArray(response)
-            ? (response as Array<{ pnl?: string | number | null }>)
-            : [];
-
-        setTrades(results);
+        const allTrades = await fetchAllTrades(taskId, taskType);
+        if (!cancelled) setTrades(allTrades);
       } catch {
         // If trades fetch fails, leave empty — latestExecution fallback will apply
       }
     };
 
-    fetchTrades();
+    load();
     return () => {
       cancelled = true;
     };
   }, [taskId, taskType]);
 
   return useMemo(() => {
-    // Same logic as TaskReplayPanel.replaySummary
     const pnlFromTrades = trades.reduce((sum, trade) => {
       const pnl = Number(trade.pnl);
       return Number.isFinite(pnl) ? sum + pnl : sum;

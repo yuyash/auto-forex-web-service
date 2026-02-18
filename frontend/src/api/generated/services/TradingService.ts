@@ -337,23 +337,25 @@ export class TradingService {
   }
   /**
    * Get task events
-   * Retrieve task events with filtering
+   * Get task events with pagination and filtering.
    * @param id
+   * @param celeryTaskId Filter by celery task ID
    * @param eventType Filter by event type
-   * @param limit Maximum number of events to return (default: 100)
    * @param ordering Which field to use when ordering the results.
-   * @param page A page number within the paginated result set.
+   * @param page Page number
+   * @param pageSize Number of results per page (default: 100, max: 1000)
    * @param search A search term.
-   * @param severity Filter by severity (info, warning, error)
+   * @param severity Filter by severity
    * @returns PaginatedTradingEventList
    * @throws ApiError
    */
   public static tradingTasksBacktestEventsList(
     id: string,
+    celeryTaskId?: string,
     eventType?: string,
-    limit?: number,
     ordering?: string,
     page?: number,
+    pageSize?: number,
     search?: string,
     severity?: string
   ): CancelablePromise<PaginatedTradingEventList> {
@@ -364,10 +366,11 @@ export class TradingService {
         id: id,
       },
       query: {
+        celery_task_id: celeryTaskId,
         event_type: eventType,
-        limit: limit,
         ordering: ordering,
         page: page,
+        page_size: pageSize,
         search: search,
         severity: severity,
       },
@@ -375,14 +378,13 @@ export class TradingService {
   }
   /**
    * Get task logs
-   * Retrieve task execution logs for the latest execution with pagination and filtering
+   * Get task logs with pagination and filtering.
    * @param id
-   * @param celeryTaskId Optional explicit execution ID. If omitted, current task celery_task_id is used.
-   * @param level Filter by log level (DEBUG, INFO, WARNING, ERROR)
-   * @param limit Maximum number of logs to return (default: 100)
-   * @param offset Number of logs to skip (default: 0)
+   * @param celeryTaskId Filter by celery task ID
+   * @param level Filter by log level
    * @param ordering Which field to use when ordering the results.
-   * @param page A page number within the paginated result set.
+   * @param page Page number
+   * @param pageSize Number of results per page (default: 100, max: 1000)
    * @param search A search term.
    * @returns PaginatedTaskLogList
    * @throws ApiError
@@ -391,10 +393,9 @@ export class TradingService {
     id: string,
     celeryTaskId?: string,
     level?: string,
-    limit?: number,
-    offset?: number,
     ordering?: string,
     page?: number,
+    pageSize?: number,
     search?: string
   ): CancelablePromise<PaginatedTaskLogList> {
     return __request(OpenAPI, {
@@ -406,10 +407,9 @@ export class TradingService {
       query: {
         celery_task_id: celeryTaskId,
         level: level,
-        limit: limit,
-        offset: offset,
         ordering: ordering,
         page: page,
+        page_size: pageSize,
         search: search,
       },
     });
@@ -526,12 +526,13 @@ export class TradingService {
   }
   /**
    * Get task trades
-   * Retrieve trade history from task execution state
+   * Get task trades with pagination.
    * @param id
-   * @param celeryTaskId Execution ID. Defaults to current task celery_task_id.
-   * @param direction Filter by trade direction (buy/sell)
+   * @param celeryTaskId Filter by celery task ID
+   * @param direction Filter by direction (buy/sell)
    * @param ordering Which field to use when ordering the results.
-   * @param page A page number within the paginated result set.
+   * @param page Page number
+   * @param pageSize Number of results per page (default: 100, max: 1000)
    * @param search A search term.
    * @returns PaginatedTradeList
    * @throws ApiError
@@ -542,6 +543,7 @@ export class TradingService {
     direction?: string,
     ordering?: string,
     page?: number,
+    pageSize?: number,
     search?: string
   ): CancelablePromise<PaginatedTradeList> {
     return __request(OpenAPI, {
@@ -555,6 +557,7 @@ export class TradingService {
         direction: direction,
         ordering: ordering,
         page: page,
+        page_size: pageSize,
         search: search,
       },
     });
@@ -742,23 +745,25 @@ export class TradingService {
   }
   /**
    * Get task events
-   * Retrieve task events with filtering
+   * Get task events with pagination and filtering.
    * @param id
+   * @param celeryTaskId Filter by celery task ID
    * @param eventType Filter by event type
-   * @param limit Maximum number of events to return (default: 100)
    * @param ordering Which field to use when ordering the results.
-   * @param page A page number within the paginated result set.
+   * @param page Page number
+   * @param pageSize Number of results per page (default: 100, max: 1000)
    * @param search A search term.
-   * @param severity Filter by severity (info, warning, error)
+   * @param severity Filter by severity
    * @returns PaginatedTradingEventList
    * @throws ApiError
    */
   public static tradingTasksTradingEventsList(
     id: string,
+    celeryTaskId?: string,
     eventType?: string,
-    limit?: number,
     ordering?: string,
     page?: number,
+    pageSize?: number,
     search?: string,
     severity?: string
   ): CancelablePromise<PaginatedTradingEventList> {
@@ -769,10 +774,11 @@ export class TradingService {
         id: id,
       },
       query: {
+        celery_task_id: celeryTaskId,
         event_type: eventType,
-        limit: limit,
         ordering: ordering,
         page: page,
+        page_size: pageSize,
         search: search,
         severity: severity,
       },
@@ -780,14 +786,13 @@ export class TradingService {
   }
   /**
    * Get task logs
-   * Retrieve task execution logs for the latest execution with pagination and filtering
+   * Get task logs with pagination and filtering.
    * @param id
-   * @param celeryTaskId Optional explicit execution ID. If omitted, current task celery_task_id is used.
-   * @param level Filter by log level (DEBUG, INFO, WARNING, ERROR)
-   * @param limit Maximum number of logs to return (default: 100)
-   * @param offset Number of logs to skip (default: 0)
+   * @param celeryTaskId Filter by celery task ID
+   * @param level Filter by log level
    * @param ordering Which field to use when ordering the results.
-   * @param page A page number within the paginated result set.
+   * @param page Page number
+   * @param pageSize Number of results per page (default: 100, max: 1000)
    * @param search A search term.
    * @returns PaginatedTaskLogList
    * @throws ApiError
@@ -796,10 +801,9 @@ export class TradingService {
     id: string,
     celeryTaskId?: string,
     level?: string,
-    limit?: number,
-    offset?: number,
     ordering?: string,
     page?: number,
+    pageSize?: number,
     search?: string
   ): CancelablePromise<PaginatedTaskLogList> {
     return __request(OpenAPI, {
@@ -811,10 +815,9 @@ export class TradingService {
       query: {
         celery_task_id: celeryTaskId,
         level: level,
-        limit: limit,
-        offset: offset,
         ordering: ordering,
         page: page,
+        page_size: pageSize,
         search: search,
       },
     });
@@ -909,12 +912,13 @@ export class TradingService {
   }
   /**
    * Get task trades
-   * Retrieve trade history from task execution state
+   * Get task trades with pagination.
    * @param id
-   * @param celeryTaskId Execution ID. Defaults to current task celery_task_id.
-   * @param direction Filter by trade direction (buy/sell)
+   * @param celeryTaskId Filter by celery task ID
+   * @param direction Filter by direction (buy/sell)
    * @param ordering Which field to use when ordering the results.
-   * @param page A page number within the paginated result set.
+   * @param page Page number
+   * @param pageSize Number of results per page (default: 100, max: 1000)
    * @param search A search term.
    * @returns PaginatedTradeList
    * @throws ApiError
@@ -925,6 +929,7 @@ export class TradingService {
     direction?: string,
     ordering?: string,
     page?: number,
+    pageSize?: number,
     search?: string
   ): CancelablePromise<PaginatedTradeList> {
     return __request(OpenAPI, {
@@ -938,6 +943,7 @@ export class TradingService {
         direction: direction,
         ordering: ordering,
         page: page,
+        page_size: pageSize,
         search: search,
       },
     });

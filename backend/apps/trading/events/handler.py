@@ -164,6 +164,10 @@ class EventHandler:
         timestamp,
         layer_index: int | None = None,
         pnl: Decimal | None = None,
+        open_price: Decimal | None = None,
+        open_timestamp=None,
+        close_price: Decimal | None = None,
+        close_timestamp=None,
     ) -> None:
         Trade.objects.create(
             task_type=self.order_service.task_type.value,
@@ -177,6 +181,10 @@ class EventHandler:
             execution_method=execution_method,
             layer_index=layer_index,
             pnl=pnl,
+            open_price=open_price,
+            open_timestamp=open_timestamp,
+            close_price=close_price,
+            close_timestamp=close_timestamp,
         )
 
     def handle_event(self, trading_event: TradingEvent) -> Decimal:
@@ -237,6 +245,8 @@ class EventHandler:
             execution_method=str(event.event_type.value),
             timestamp=event.timestamp,
             layer_index=event.layer_number,
+            open_price=position.entry_price,
+            open_timestamp=event.timestamp,
         )
 
         logger.info(
@@ -279,6 +289,8 @@ class EventHandler:
             execution_method=str(event.event_type.value),
             timestamp=event.timestamp,
             layer_index=event.layer_number,
+            open_price=position.entry_price,
+            open_timestamp=event.timestamp,
         )
 
         logger.info(
@@ -337,6 +349,10 @@ class EventHandler:
             timestamp=event.timestamp,
             layer_index=event.layer_number,
             pnl=realized_delta,
+            open_price=position.entry_price,
+            open_timestamp=position.entry_time,
+            close_price=Decimal(str(closed_position.exit_price or position.entry_price)),
+            close_timestamp=event.timestamp,
         )
 
         self._prune_closed_position(event.layer_number, closed_position)
@@ -420,6 +436,10 @@ class EventHandler:
                         timestamp=event.timestamp,
                         layer_index=position.layer_index,
                         pnl=realized_delta,
+                        open_price=position.entry_price,
+                        open_timestamp=position.entry_time,
+                        close_price=Decimal(str(closed.exit_price or position.entry_price)),
+                        close_timestamp=event.timestamp,
                     )
                     logger.info(
                         "Closed position due to volatility: layer=%s, position_id=%s, pnl=%s",
@@ -505,6 +525,10 @@ class EventHandler:
                     timestamp=event.timestamp,
                     layer_index=position.layer_index,
                     pnl=realized_delta,
+                    open_price=position.entry_price,
+                    open_timestamp=position.entry_time,
+                    close_price=Decimal(str(closed.exit_price or position.entry_price)),
+                    close_timestamp=event.timestamp,
                 )
                 touched_positions += 1
                 if remaining_units is not None:

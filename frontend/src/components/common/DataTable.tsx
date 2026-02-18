@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   Table,
   TableBody,
@@ -25,6 +25,7 @@ export interface Column<T> {
   render?: (row: T) => React.ReactNode;
   align?: 'left' | 'center' | 'right';
   minWidth?: number;
+  width?: number;
 }
 
 interface DataTableProps<T> {
@@ -40,6 +41,11 @@ interface DataTableProps<T> {
   enableRealTimeUpdates?: boolean;
   onRefresh?: () => void;
   ariaLabel?: string;
+  resizableColumns?: boolean;
+  /** Unique key for persisting column widths to localStorage */
+  storageKey?: string;
+  /** Max height for the table container. Defaults to viewport-based calc. */
+  tableMaxHeight?: number | string;
 }
 
 type Order = 'asc' | 'desc';
@@ -48,22 +54,8 @@ type Order = 'asc' | 'desc';
  * DataTable Component
  *
  * Reusable table with sorting, filtering, pagination, loading states,
- * and real-time update support.
+ * column resizing, and real-time update support.
  *
- * Requirements: 11.7, 11.15
- *
- * @param columns - Column definitions
- * @param data - Table data
- * @param rowsPerPageOptions - Options for rows per page
- * @param defaultRowsPerPage - Default rows per page
- * @param onRowClick - Callback when row is clicked
- * @param emptyMessage - Message to show when no data
- * @param stickyHeader - Enable sticky header
- * @param isLoading - Loading state
- * @param error - Error object if data failed to load
- * @param enableRealTimeUpdates - Enable real-time updates
- * @param onRefresh - Callback to refresh data
- * @param ariaLabel - Accessibility label for the table
  */
 function DataTable<T extends object>({
   columns,
@@ -78,12 +70,93 @@ function DataTable<T extends object>({
   enableRealTimeUpdates = false,
   onRefresh,
   ariaLabel,
+  resizableColumns = true,
+  storageKey,
+  tableMaxHeight,
 }: DataTableProps<T>): React.ReactElement {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage);
   const [orderBy, setOrderBy] = useState<keyof T | string>('');
   const [order, setOrder] = useState<Order>('asc');
   const [filters, setFilters] = useState<Record<string, string>>({});
+
+  // Column widths state for resizing
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(
+    () => {
+      // Restore from localStorage if storageKey is provided
+      if (storageKey) {
+        try {
+          const saved = localStorage.getItem(`datatable-widths-${storageKey}`);
+          if (saved) return JSON.parse(saved) as Record<string, number>;
+        } catch {
+          // ignore parse errors
+        }
+      }
+      const widths: Record<string, number> = {};
+      columns.forEach((col) => {
+        if (col.width) {
+          widths[String(col.id)] = col.width;
+        }
+      });
+      return widths;
+    }
+  );
+
+  const resizingRef = useRef<{
+    columnId: string;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent, columnId: string, currentWidth: number) => {
+      e.preventDefault();
+      e.stopPropagation();
+      resizingRef.current = {
+        columnId,
+        startX: e.clientX,
+        startWidth: currentWidth,
+      };
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        if (!resizingRef.current) return;
+        const diff = moveEvent.clientX - resizingRef.current.startX;
+        const newWidth = Math.max(40, resizingRef.current.startWidth + diff);
+        setColumnWidths((prev) => ({
+          ...prev,
+          [resizingRef.current!.columnId]: newWidth,
+        }));
+      };
+
+      const handleMouseUp = () => {
+        resizingRef.current = null;
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        // Persist widths to localStorage
+        if (storageKey) {
+          setColumnWidths((current) => {
+            try {
+              localStorage.setItem(
+                `datatable-widths-${storageKey}`,
+                JSON.stringify(current)
+              );
+            } catch {
+              // ignore quota errors
+            }
+            return current;
+          });
+        }
+      };
+
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    },
+    [storageKey]
+  );
 
   const handleRequestSort = (property: keyof T | string) => {
     const isAsc = orderBy === property && order === 'asc';
@@ -163,25 +236,64 @@ function DataTable<T extends object>({
     if (enableRealTimeUpdates && onRefresh) {
       const interval = setInterval(() => {
         onRefresh();
-      }, 5000); // Refresh every 5 seconds
+      }, 5000);
 
       return () => clearInterval(interval);
     }
   }, [enableRealTimeUpdates, onRefresh]);
 
+  const getColumnStyle = (column: Column<T>): React.CSSProperties => {
+    const colId = String(column.id);
+    const w = columnWidths[colId] ?? column.width;
+    return {
+      width: w ? `${w}px` : undefined,
+      minWidth: column.minWidth ?? 40,
+      maxWidth: w ? `${w}px` : undefined,
+      position: 'relative',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+    };
+  };
+
+  const resizeHandle = (columnId: string, column: Column<T>) => {
+    if (!resizableColumns) return null;
+    const w = columnWidths[columnId] ?? column.width ?? column.minWidth ?? 100;
+    return (
+      <Box
+        onMouseDown={(e) => handleResizeStart(e, columnId, w)}
+        sx={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
+          cursor: 'col-resize',
+          '&:hover': { backgroundColor: 'primary.main', opacity: 0.4 },
+        }}
+      />
+    );
+  };
+
   // Render loading skeleton
   if (isLoading && data.length === 0) {
     return (
       <Paper sx={{ width: '100%', overflow: 'hidden' }}>
-        <TableContainer sx={{ maxHeight: 600 }}>
-          <Table stickyHeader={stickyHeader}>
+        <TableContainer
+          sx={{ maxHeight: tableMaxHeight ?? 'calc(100vh - 640px)' }}
+        >
+          <Table
+            size="small"
+            stickyHeader={stickyHeader}
+            sx={{ tableLayout: 'fixed' }}
+          >
             <TableHead>
               <TableRow>
                 {columns.map((column) => (
                   <TableCell
                     key={String(column.id)}
                     align={column.align || 'left'}
-                    style={{ minWidth: column.minWidth }}
+                    style={getColumnStyle(column)}
                   >
                     {column.label}
                   </TableCell>
@@ -224,51 +336,64 @@ function DataTable<T extends object>({
       role="region"
       aria-label={ariaLabel || 'Data table'}
     >
-      <TableContainer sx={{ maxHeight: 600 }}>
-        <Table stickyHeader={stickyHeader}>
+      <TableContainer
+        sx={{ maxHeight: tableMaxHeight ?? 'calc(100vh - 640px)' }}
+      >
+        <Table
+          size="small"
+          stickyHeader={stickyHeader}
+          sx={{ tableLayout: 'fixed' }}
+        >
           <TableHead>
             <TableRow>
-              {columns.map((column) => (
-                <TableCell
-                  key={String(column.id)}
-                  align={column.align || 'left'}
-                  style={{ minWidth: column.minWidth }}
-                >
-                  {column.sortable ? (
-                    <TableSortLabel
-                      active={orderBy === column.id}
-                      direction={orderBy === column.id ? order : 'asc'}
-                      onClick={() => handleRequestSort(column.id)}
-                    >
-                      {column.label}
-                    </TableSortLabel>
-                  ) : (
-                    column.label
-                  )}
-                </TableCell>
-              ))}
+              {columns.map((column) => {
+                const colId = String(column.id);
+                return (
+                  <TableCell
+                    key={colId}
+                    align={column.align || 'left'}
+                    style={getColumnStyle(column)}
+                    sx={{ position: 'relative' }}
+                  >
+                    {column.sortable !== false ? (
+                      <TableSortLabel
+                        active={orderBy === column.id}
+                        direction={orderBy === column.id ? order : 'asc'}
+                        onClick={() => handleRequestSort(column.id)}
+                      >
+                        {column.label}
+                      </TableSortLabel>
+                    ) : (
+                      column.label
+                    )}
+                    {resizeHandle(colId, column)}
+                  </TableCell>
+                );
+              })}
             </TableRow>
-            <TableRow>
-              {columns.map((column) => (
-                <TableCell
-                  key={`filter-${String(column.id)}`}
-                  align={column.align || 'left'}
-                >
-                  {column.filterable && (
-                    <TextField
-                      size="small"
-                      placeholder={`Filter ${column.label}`}
-                      value={filters[String(column.id)] || ''}
-                      onChange={(e) =>
-                        handleFilterChange(String(column.id), e.target.value)
-                      }
-                      fullWidth
-                      variant="outlined"
-                    />
-                  )}
-                </TableCell>
-              ))}
-            </TableRow>
+            {columns.some((col) => col.filterable) && (
+              <TableRow>
+                {columns.map((column) => (
+                  <TableCell
+                    key={`filter-${String(column.id)}`}
+                    align={column.align || 'left'}
+                  >
+                    {column.filterable && (
+                      <TextField
+                        size="small"
+                        placeholder={`Filter ${column.label}`}
+                        value={filters[String(column.id)] || ''}
+                        onChange={(e) =>
+                          handleFilterChange(String(column.id), e.target.value)
+                        }
+                        fullWidth
+                        variant="outlined"
+                      />
+                    )}
+                  </TableCell>
+                ))}
+              </TableRow>
+            )}
           </TableHead>
           <TableBody>
             {paginatedData.length === 0 ? (
@@ -293,6 +418,7 @@ function DataTable<T extends object>({
                     <TableCell
                       key={String(column.id)}
                       align={column.align || 'left'}
+                      style={getColumnStyle(column)}
                     >
                       {column.render
                         ? column.render(row)

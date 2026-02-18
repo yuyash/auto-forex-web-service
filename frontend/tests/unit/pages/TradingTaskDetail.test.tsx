@@ -2,7 +2,6 @@
  * Unit tests for TradingTaskDetail
  *
  * Tests component rendering, tab navigation, and data fetching.
- * Requirements: 11.14, 11.15, 11.16, 11.17, 11.18
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';

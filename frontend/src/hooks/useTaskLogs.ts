@@ -1,8 +1,7 @@
 /**
  * useTaskLogs Hook
  *
- * Fetches logs directly from task-based API endpoints.
- * Replaces execution-based log fetching.
+ * Fetches logs from task-based API endpoints with DRF pagination.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -22,8 +21,8 @@ interface UseTaskLogsOptions {
   taskId: string;
   taskType: TaskType;
   level?: string;
-  limit?: number;
-  offset?: number;
+  page?: number;
+  pageSize?: number;
   enableRealTimeUpdates?: boolean;
   refreshInterval?: number;
 }
@@ -42,8 +41,8 @@ export const useTaskLogs = ({
   taskId,
   taskType,
   level,
-  limit = 100,
-  offset = 0,
+  page = 1,
+  pageSize = 100,
   enableRealTimeUpdates = false,
   refreshInterval = 5000,
 }: UseTaskLogsOptions): UseTaskLogsResult => {
@@ -65,19 +64,21 @@ export const useTaskLogs = ({
               taskId,
               undefined, // celeryTaskId
               level,
-              limit,
-              offset
+              undefined, // ordering
+              page,
+              pageSize
             )
           : await TradingService.tradingTasksTradingLogsList(
               taskId,
               undefined, // celeryTaskId
               level,
-              limit,
-              offset
+              undefined, // ordering
+              page,
+              pageSize
             );
 
       setLogs((response.results || []) as unknown as TaskLog[]);
-      setTotalCount(response.count || 0);
+      setTotalCount(response.count ?? 0);
       setHasNext(Boolean(response.next));
       setHasPrevious(Boolean(response.previous));
     } catch (err) {
@@ -87,7 +88,7 @@ export const useTaskLogs = ({
     } finally {
       setIsLoading(false);
     }
-  }, [taskId, taskType, level, limit, offset]);
+  }, [taskId, taskType, level, page, pageSize]);
 
   useEffect(() => {
     fetchLogs();
@@ -95,11 +96,7 @@ export const useTaskLogs = ({
 
   useEffect(() => {
     if (!enableRealTimeUpdates) return;
-
-    const interval = setInterval(() => {
-      fetchLogs();
-    }, refreshInterval);
-
+    const interval = setInterval(fetchLogs, refreshInterval);
     return () => clearInterval(interval);
   }, [enableRealTimeUpdates, refreshInterval, fetchLogs]);
 

@@ -2,7 +2,6 @@
  * Unit tests for BacktestTasksPage (BacktestTaskList)
  *
  * Tests component rendering, button state logic, and control actions.
- * Requirements: 11.1, 11.2, 11.3, 11.4
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';

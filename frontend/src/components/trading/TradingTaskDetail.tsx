@@ -4,7 +4,6 @@
  * Main detail view for trading tasks using task-based API endpoints.
  * Displays task info and tab navigation for Events, Logs, Trades, and Replay.
  *
- * Requirements: 11.14, 11.15
  */
 
 import React, { useState } from 'react';

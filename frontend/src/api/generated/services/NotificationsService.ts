@@ -8,32 +8,24 @@ import { request as __request } from '../core/request';
 export class NotificationsService {
   /**
    * GET /api/accounts/notifications
-   * Retrieve list of notifications for the authenticated user. Supports filtering by read status and limiting results.
-   * @param limit Maximum number of notifications to return (1-200, default: 50)
+   * Retrieve list of notifications for the authenticated user. Supports filtering by read status and pagination.
+   * @param page Page number
+   * @param pageSize Number of results per page (default: 50, max: 200)
    * @param unreadOnly Filter to show only unread notifications
-   * @returns any Notifications retrieved successfully
+   * @returns any Paginated notifications list
    * @throws ApiError
    */
   public static accountsNotificationsRetrieve(
-    limit?: number,
+    page?: number,
+    pageSize?: number,
     unreadOnly?: boolean
-  ): CancelablePromise<
-    Array<{
-      id?: number;
-      title?: string;
-      message?: string;
-      severity?: 'info' | 'warning' | 'error' | 'critical';
-      timestamp?: string;
-      read?: boolean;
-      notification_type?: string;
-      extra_data?: Record<string, any>;
-    }>
-  > {
+  ): CancelablePromise<any> {
     return __request(OpenAPI, {
       method: 'GET',
       url: '/api/accounts/notifications',
       query: {
-        limit: limit,
+        page: page,
+        page_size: pageSize,
         unread_only: unreadOnly,
       },
       errors: {

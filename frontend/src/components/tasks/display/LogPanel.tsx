@@ -38,7 +38,6 @@ export interface LogPanelProps {
  * - Allow scrolling through historical logs
  * - Filter logs by task_id to show only relevant logs
  *
- * Requirements: 6.7, 6.8, 6.9, 6.10
  */
 export const LogPanel: React.FC<LogPanelProps> = ({
   maxEntries = 1000,

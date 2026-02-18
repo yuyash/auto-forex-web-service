@@ -37,8 +37,8 @@ import {
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { TradingService } from '../../../api/generated/services/TradingService';
 import { getAuthToken } from '../../../api/client';
+import { fetchAllTrades } from '../../../utils/fetchAllTrades';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
 import { TaskType } from '../../../types/common';
 import { handleAuthErrorStatus } from '../../../utils/authEvents';
@@ -86,6 +86,7 @@ type ReplayTrade = {
   units: string;
   price: string;
   execution_method?: string;
+  execution_method_display?: string;
   layer_index?: number | null;
   pnl?: string;
 };
@@ -248,6 +249,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   enableRealTimeUpdates = false,
   latestExecution,
 }) => {
+  const panelRootRef = useRef<HTMLDivElement | null>(null);
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick', Time> | null>(null);
@@ -279,6 +281,75 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // Column resize state
+  const defaultReplayWidths: Record<string, number> = {
+    sequence: 50,
+    timestamp: 170,
+    direction: 70,
+    layer_index: 60,
+    units: 80,
+    price: 100,
+    pnl: 100,
+    execution_method: 110,
+  };
+  const [replayColWidths, setReplayColWidths] = useState(defaultReplayWidths);
+  const replayResizeRef = useRef<{
+    col: string;
+    startX: number;
+    startW: number;
+  } | null>(null);
+
+  const handleColResizeStart = useCallback(
+    (e: React.MouseEvent, col: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      replayResizeRef.current = {
+        col,
+        startX: e.clientX,
+        startW: replayColWidths[col] ?? 100,
+      };
+      const onMove = (ev: MouseEvent) => {
+        if (!replayResizeRef.current) return;
+        const diff = ev.clientX - replayResizeRef.current.startX;
+        const w = Math.max(40, replayResizeRef.current.startW + diff);
+        setReplayColWidths((prev) => ({
+          ...prev,
+          [replayResizeRef.current!.col]: w,
+        }));
+      };
+      const onUp = () => {
+        replayResizeRef.current = null;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    },
+    [replayColWidths]
+  );
+
+  const resizeHandle = useCallback(
+    (col: string) => (
+      <Box
+        onMouseDown={(e) => handleColResizeStart(e, col)}
+        sx={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
+          cursor: 'col-resize',
+          '&:hover': { backgroundColor: 'primary.main', opacity: 0.4 },
+        }}
+      />
+    ),
+    [handleColResizeStart]
+  );
 
   const handleSort = (column: SortableKey) => {
     if (orderBy === column) {
@@ -437,16 +508,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       ).sort((a, b) => Number(a.time) - Number(b.time));
       setCandles(candlePoints);
 
-      const tradeResponse =
-        taskType === TaskType.BACKTEST
-          ? await TradingService.tradingTasksBacktestTradesList(String(taskId))
-          : await TradingService.tradingTasksTradingTradesList(String(taskId));
-
-      const rawTrades = Array.isArray(tradeResponse?.results)
-        ? tradeResponse.results
-        : Array.isArray(tradeResponse)
-          ? tradeResponse
-          : [];
+      const rawTrades = await fetchAllTrades(String(taskId), taskType);
 
       const tradeRows: ReplayTrade[] = rawTrades
         .map((t: Record<string, unknown>, idx: number): ReplayTrade | null => {
@@ -470,6 +532,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             units: String(t.units ?? ''),
             price: String(t.price ?? ''),
             execution_method: String(t.execution_method || ''),
+            execution_method_display: t.execution_method_display
+              ? String(t.execution_method_display)
+              : undefined,
             layer_index:
               t.layer_index === null || t.layer_index === undefined
                 ? null
@@ -508,13 +573,52 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     tradesRef.current = trades;
   }, [trades]);
 
+  const rowsPerPageRef = useRef(rowsPerPage);
+  useEffect(() => {
+    rowsPerPageRef.current = rowsPerPage;
+  }, [rowsPerPage]);
+
+  const computeChartHeight = useCallback(() => {
+    // Fixed chrome: browser chrome + nav bar + breadcrumb + task header + tab bar + panel padding
+    const chromeHeight = 230;
+    // Summary cards row
+    const summaryHeight = 85;
+    // Granularity selector + caption
+    const controlsHeight = 60;
+    // Table: header(40) + rows(37 each) + pagination(56) + subtitle(36) + spacing(24)
+    const tableRowHeight = 37;
+    const currentRowsPerPage = rowsPerPageRef.current;
+    const currentTradesCount = tradesRef.current.length;
+    const visibleRows = Math.min(
+      currentRowsPerPage,
+      currentTradesCount || currentRowsPerPage
+    );
+    const tableHeight = 40 + tableRowHeight * visibleRows + 56 + 36 + 24 + 100;
+    // Chart border/margin
+    const chartChrome = 28;
+
+    const usedHeight =
+      chromeHeight + summaryHeight + controlsHeight + tableHeight + chartChrome;
+    const available = window.innerHeight - usedHeight;
+    return Math.max(360, Math.round(available));
+  }, []);
+
+  // Recalculate chart height when rowsPerPage changes
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const newHeight = computeChartHeight();
+    chartRef.current.applyOptions({ height: newHeight });
+  }, [rowsPerPage, computeChartHeight]);
+
   useEffect(() => {
     if (isLoading || candles.length === 0) return;
     if (!chartContainerRef.current || chartRef.current) return;
 
     const container = chartContainerRef.current;
+
+    const dynamicHeight = computeChartHeight();
     const chart = createChart(container, {
-      height: 420,
+      height: dynamicHeight,
       layout: {
         background: { color: '#ffffff' },
         textColor: '#334155',
@@ -588,7 +692,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     observer.observe(container);
     chart.applyOptions({ width: container.clientWidth });
 
+    const handleWindowResize = () => {
+      const newHeight = computeChartHeight();
+      chart.applyOptions({ height: newHeight });
+    };
+    window.addEventListener('resize', handleWindowResize);
+
     return () => {
+      window.removeEventListener('resize', handleWindowResize);
       observer.disconnect();
       chart.remove();
       chartRef.current = null;
@@ -597,7 +708,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       highlightRef.current = null;
       adaptiveRef.current = null;
     };
-  }, [isLoading, candles.length, timezone]);
+  }, [isLoading, candles.length, timezone, computeChartHeight]);
 
   // Update candle data, market gaps, and fit chart when data changes
   useEffect(() => {
@@ -697,11 +808,19 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   }
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Stack direction="row" spacing={2} sx={{ mb: 1 }} alignItems="center">
-        <Typography variant="h6">Candle Replay</Typography>
+    <Box ref={panelRootRef} sx={{ p: 2 }}>
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={{ mb: 1 }}
+        alignItems="center"
+        flexWrap="wrap"
+      >
+        <Typography variant="h6" sx={{ whiteSpace: 'nowrap' }}>
+          Candle Replay
+        </Typography>
         {isRefreshing && <CircularProgress size={16} thickness={5} />}
-        <FormControl size="small" sx={{ minWidth: 200 }}>
+        <FormControl size="small" sx={{ minWidth: 160 }}>
           <InputLabel id="replay-granularity-label">Granularity</InputLabel>
           <Select
             labelId="replay-granularity-label"
@@ -716,6 +835,44 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             ))}
           </Select>
         </FormControl>
+        <Paper variant="outlined" sx={{ p: 1, px: 2, minWidth: 140 }}>
+          <Typography variant="caption" color="text.secondary">
+            Realized PnL ({pnlCurrency})
+          </Typography>
+          <Typography
+            variant="body1"
+            fontWeight="bold"
+            color={
+              replaySummary.realizedPnl >= 0 ? 'success.main' : 'error.main'
+            }
+          >
+            {replaySummary.realizedPnl >= 0 ? '+' : ''}
+            {replaySummary.realizedPnl.toFixed(2)} {pnlCurrency}
+          </Typography>
+        </Paper>
+        <Paper variant="outlined" sx={{ p: 1, px: 2, minWidth: 140 }}>
+          <Typography variant="caption" color="text.secondary">
+            Unrealized PnL ({pnlCurrency})
+          </Typography>
+          <Typography
+            variant="body1"
+            fontWeight="bold"
+            color={
+              replaySummary.unrealizedPnl >= 0 ? 'success.main' : 'error.main'
+            }
+          >
+            {replaySummary.unrealizedPnl >= 0 ? '+' : ''}
+            {replaySummary.unrealizedPnl.toFixed(2)} {pnlCurrency}
+          </Typography>
+        </Paper>
+        <Paper variant="outlined" sx={{ p: 1, px: 2, minWidth: 120 }}>
+          <Typography variant="caption" color="text.secondary">
+            Total Trades (count)
+          </Typography>
+          <Typography variant="body1" fontWeight="bold">
+            {replaySummary.totalTrades} trades
+          </Typography>
+        </Paper>
       </Stack>
 
       <Typography variant="caption" color="text.secondary">
@@ -723,64 +880,22 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         LONG/SHORT and lot size.
       </Typography>
 
-      <Box sx={{ mt: 2, mb: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-          <Paper variant="outlined" sx={{ p: 1.5, minWidth: 180 }}>
-            <Typography variant="caption" color="text.secondary">
-              Realized PnL ({pnlCurrency})
-            </Typography>
-            <Typography
-              variant="h6"
-              color={
-                replaySummary.realizedPnl >= 0 ? 'success.main' : 'error.main'
-              }
-            >
-              {replaySummary.realizedPnl >= 0 ? '+' : ''}
-              {replaySummary.realizedPnl.toFixed(2)} {pnlCurrency}
-            </Typography>
-          </Paper>
-          <Paper variant="outlined" sx={{ p: 1.5, minWidth: 180 }}>
-            <Typography variant="caption" color="text.secondary">
-              Unrealized PnL ({pnlCurrency})
-            </Typography>
-            <Typography
-              variant="h6"
-              color={
-                replaySummary.unrealizedPnl >= 0 ? 'success.main' : 'error.main'
-              }
-            >
-              {replaySummary.unrealizedPnl >= 0 ? '+' : ''}
-              {replaySummary.unrealizedPnl.toFixed(2)} {pnlCurrency}
-            </Typography>
-          </Paper>
-          <Paper variant="outlined" sx={{ p: 1.5, minWidth: 180 }}>
-            <Typography variant="caption" color="text.secondary">
-              Total Trades (count)
-            </Typography>
-            <Typography variant="h6">
-              {replaySummary.totalTrades} trades
-            </Typography>
-          </Paper>
-        </Stack>
-      </Box>
-
       <Paper variant="outlined" sx={{ mt: 1, mb: 2 }}>
-        <Box ref={chartContainerRef} sx={{ width: '100%', minHeight: 420 }} />
+        <Box ref={chartContainerRef} sx={{ width: '100%', minHeight: 360 }} />
       </Paper>
 
       <Typography variant="subtitle1" gutterBottom>
         Layer Trade Timeline
       </Typography>
 
-      <TableContainer
-        component={Paper}
-        variant="outlined"
-        sx={{ maxHeight: 320 }}
-      >
-        <Table stickyHeader size="small">
+      <TableContainer component={Paper} variant="outlined">
+        <Table stickyHeader size="small" sx={{ tableLayout: 'fixed' }}>
           <TableHead>
             <TableRow>
-              <TableCell sortDirection={orderBy === 'sequence' ? order : false}>
+              <TableCell
+                sortDirection={orderBy === 'sequence' ? order : false}
+                sx={{ position: 'relative', width: replayColWidths.sequence }}
+              >
                 <TableSortLabel
                   active={orderBy === 'sequence'}
                   direction={orderBy === 'sequence' ? order : 'asc'}
@@ -788,9 +903,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                 >
                   #
                 </TableSortLabel>
+                {resizeHandle('sequence')}
               </TableCell>
               <TableCell
                 sortDirection={orderBy === 'timestamp' ? order : false}
+                sx={{ position: 'relative', width: replayColWidths.timestamp }}
               >
                 <TableSortLabel
                   active={orderBy === 'timestamp'}
@@ -799,9 +916,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                 >
                   Time
                 </TableSortLabel>
+                {resizeHandle('timestamp')}
               </TableCell>
               <TableCell
                 sortDirection={orderBy === 'direction' ? order : false}
+                sx={{ position: 'relative', width: replayColWidths.direction }}
               >
                 <TableSortLabel
                   active={orderBy === 'direction'}
@@ -810,9 +929,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                 >
                   Side
                 </TableSortLabel>
+                {resizeHandle('direction')}
               </TableCell>
               <TableCell
                 sortDirection={orderBy === 'layer_index' ? order : false}
+                sx={{
+                  position: 'relative',
+                  width: replayColWidths.layer_index,
+                }}
               >
                 <TableSortLabel
                   active={orderBy === 'layer_index'}
@@ -821,10 +945,12 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                 >
                   Layer
                 </TableSortLabel>
+                {resizeHandle('layer_index')}
               </TableCell>
               <TableCell
                 align="right"
                 sortDirection={orderBy === 'units' ? order : false}
+                sx={{ position: 'relative', width: replayColWidths.units }}
               >
                 <TableSortLabel
                   active={orderBy === 'units'}
@@ -833,10 +959,12 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                 >
                   Units
                 </TableSortLabel>
+                {resizeHandle('units')}
               </TableCell>
               <TableCell
                 align="right"
                 sortDirection={orderBy === 'price' ? order : false}
+                sx={{ position: 'relative', width: replayColWidths.price }}
               >
                 <TableSortLabel
                   active={orderBy === 'price'}
@@ -845,10 +973,12 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                 >
                   Price
                 </TableSortLabel>
+                {resizeHandle('price')}
               </TableCell>
               <TableCell
                 align="right"
                 sortDirection={orderBy === 'pnl' ? order : false}
+                sx={{ position: 'relative', width: replayColWidths.pnl }}
               >
                 <TableSortLabel
                   active={orderBy === 'pnl'}
@@ -857,9 +987,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                 >
                   PnL
                 </TableSortLabel>
+                {resizeHandle('pnl')}
               </TableCell>
               <TableCell
                 sortDirection={orderBy === 'execution_method' ? order : false}
+                sx={{
+                  position: 'relative',
+                  width: replayColWidths.execution_method,
+                }}
               >
                 <TableSortLabel
                   active={orderBy === 'execution_method'}
@@ -868,6 +1003,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                 >
                   Event
                 </TableSortLabel>
+                {resizeHandle('execution_method')}
               </TableCell>
             </TableRow>
           </TableHead>
@@ -882,16 +1018,83 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                   selected={selected}
                   sx={{ cursor: 'pointer' }}
                 >
-                  <TableCell>{row.sequence}</TableCell>
-                  <TableCell>
+                  <TableCell
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {row.sequence}
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
                     {new Date(row.timestamp).toLocaleString()}
                   </TableCell>
-                  <TableCell>{row.direction.toUpperCase()}</TableCell>
-                  <TableCell>{row.layer_index ?? '-'}</TableCell>
-                  <TableCell align="right">{row.units}</TableCell>
-                  <TableCell align="right">{row.price}</TableCell>
-                  <TableCell align="right">{row.pnl ?? '-'}</TableCell>
-                  <TableCell>{row.execution_method || '-'}</TableCell>
+                  <TableCell
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {row.direction.toUpperCase()}
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {row.layer_index ?? '-'}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {row.units}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {row.price ? `¥${parseFloat(row.price).toFixed(3)}` : '-'}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {row.pnl ? `¥${parseFloat(row.pnl).toFixed(3)}` : '-'}
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {row.execution_method_display ||
+                      row.execution_method ||
+                      '-'}
+                  </TableCell>
                 </TableRow>
               );
             })}

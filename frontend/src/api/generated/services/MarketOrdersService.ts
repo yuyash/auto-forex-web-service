@@ -11,16 +11,18 @@ export class MarketOrdersService {
    * GET /api/market/orders/
    * List user's orders directly from OANDA API
    * @param accountId Filter by OANDA account ID
-   * @param count Number of orders to return
    * @param instrument Filter by currency pair
+   * @param page Page number
+   * @param pageSize Number of results per page (default: 50, max: 200)
    * @param status Filter by order status (pending/all)
    * @returns any
    * @throws ApiError
    */
   public static listOrders(
     accountId?: number,
-    count: number = 50,
     instrument?: string,
+    page?: number,
+    pageSize?: number,
     status: string = 'all'
   ): CancelablePromise<Record<string, any>> {
     return __request(OpenAPI, {
@@ -28,8 +30,9 @@ export class MarketOrdersService {
       url: '/api/market/orders/',
       query: {
         account_id: accountId,
-        count: count,
         instrument: instrument,
+        page: page,
+        page_size: pageSize,
         status: status,
       },
     });

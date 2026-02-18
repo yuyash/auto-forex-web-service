@@ -4,7 +4,6 @@
  * Main detail view for backtest tasks using task-based API endpoints.
  * Displays task info and tab navigation for Events, Logs, Trades, and Replay.
  *
- * Requirements: 11.5, 11.6
  */
 
 import React, { useState, useEffect, useRef } from 'react';

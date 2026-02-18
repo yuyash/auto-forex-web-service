@@ -2,7 +2,6 @@
  * Unit tests for BacktestTaskDetail
  *
  * Tests component rendering, tab navigation, and data fetching.
- * Requirements: 11.5, 11.6, 11.7, 11.8, 11.9
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';

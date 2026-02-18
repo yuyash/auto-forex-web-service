@@ -2,7 +2,6 @@
  * Unit tests for TradingTasksPage (TradingTaskList)
  *
  * Tests component rendering, button state logic, and control actions.
- * Requirements: 11.10, 11.11, 11.12, 11.13
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';

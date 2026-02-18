@@ -1,7 +1,7 @@
 /**
  * TaskEventsTable Component
  *
- * Displays task events using task-based API endpoints.
+ * Displays task events with server-side pagination.
  */
 
 import React, { useState } from 'react';
@@ -14,6 +14,7 @@ import {
   Select,
   Typography,
   Alert,
+  TablePagination,
 } from '@mui/material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { useTaskEvents, type TaskEvent } from '../../../hooks/useTaskEvents';
@@ -31,13 +32,22 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
   enableRealTimeUpdates = false,
 }) => {
   const [severityFilter, setSeverityFilter] = useState<string>('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(100);
 
-  const { events, isLoading, error } = useTaskEvents({
+  const { events, totalCount, isLoading, error } = useTaskEvents({
     taskId,
     taskType,
     severity: severityFilter || undefined,
+    page: page + 1,
+    pageSize: rowsPerPage,
     enableRealTimeUpdates,
   });
+
+  const handleSeverityChange = (value: string) => {
+    setSeverityFilter(value);
+    setPage(0);
+  };
 
   const formatTimestamp = (timestamp: string): string => {
     return new Date(timestamp).toLocaleString('en-US', {
@@ -78,18 +88,22 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
     {
       id: 'created_at',
       label: 'Timestamp',
-      minWidth: 180,
+      width: 240,
+      minWidth: 200,
       render: (row) => formatTimestamp(row.created_at as string),
     },
     {
       id: 'event_type',
       label: 'Event Type',
-      minWidth: 150,
+      width: 140,
+      minWidth: 100,
+      render: (row) => row.event_type_display ?? row.event_type,
     },
     {
       id: 'severity',
       label: 'Severity',
-      minWidth: 100,
+      width: 100,
+      minWidth: 80,
       render: (row) => (
         <Chip
           label={row.severity as string}
@@ -101,7 +115,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
     {
       id: 'description',
       label: 'Description',
-      minWidth: 400,
+      minWidth: 200,
     },
   ];
 
@@ -122,7 +136,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
           <Select
             value={severityFilter}
             label="Severity Filter"
-            onChange={(e) => setSeverityFilter(e.target.value)}
+            onChange={(e) => handleSeverityChange(e.target.value)}
           >
             <MenuItem value="">All Severities</MenuItem>
             <MenuItem value="info">Info</MenuItem>
@@ -138,6 +152,22 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
         data={events}
         isLoading={isLoading}
         emptyMessage="No events available"
+        defaultRowsPerPage={rowsPerPage}
+        rowsPerPageOptions={[rowsPerPage]}
+        storageKey="task-events"
+      />
+
+      <TablePagination
+        component="div"
+        count={totalCount}
+        page={page}
+        onPageChange={(_e, newPage) => setPage(newPage)}
+        rowsPerPage={rowsPerPage}
+        onRowsPerPageChange={(e) => {
+          setRowsPerPage(parseInt(e.target.value, 10));
+          setPage(0);
+        }}
+        rowsPerPageOptions={[50, 100, 200, 500]}
       />
     </Box>
   );

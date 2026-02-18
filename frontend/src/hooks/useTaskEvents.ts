@@ -1,8 +1,7 @@
 /**
  * useTaskEvents Hook
  *
- * Fetches events directly from task-based API endpoints.
- * Replaces execution-based event fetching.
+ * Fetches events from task-based API endpoints with DRF pagination.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -12,6 +11,7 @@ import { TaskType } from '../types/common';
 export interface TaskEvent {
   id: string;
   event_type: string;
+  event_type_display?: string;
   severity: string;
   description: string;
   details?: Record<string, unknown>;
@@ -23,13 +23,17 @@ interface UseTaskEventsOptions {
   taskType: TaskType;
   eventType?: string;
   severity?: string;
-  limit?: number;
+  page?: number;
+  pageSize?: number;
   enableRealTimeUpdates?: boolean;
   refreshInterval?: number;
 }
 
 interface UseTaskEventsResult {
   events: TaskEvent[];
+  totalCount: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
   refetch: () => Promise<void>;
@@ -40,11 +44,15 @@ export const useTaskEvents = ({
   taskType,
   eventType,
   severity,
-  limit = 100,
+  page = 1,
+  pageSize = 100,
   enableRealTimeUpdates = false,
   refreshInterval = 5000,
 }: UseTaskEventsOptions): UseTaskEventsResult => {
   const [events, setEvents] = useState<TaskEvent[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -57,29 +65,29 @@ export const useTaskEvents = ({
         taskType === TaskType.BACKTEST
           ? await TradingService.tradingTasksBacktestEventsList(
               String(taskId),
+              undefined, // celeryTaskId
               eventType,
-              limit,
-              undefined,
-              undefined,
-              undefined,
+              undefined, // ordering
+              page,
+              pageSize,
+              undefined, // search
               severity
             )
           : await TradingService.tradingTasksTradingEventsList(
               String(taskId),
+              undefined, // celeryTaskId
               eventType,
-              limit,
-              undefined,
-              undefined,
-              undefined,
+              undefined, // ordering
+              page,
+              pageSize,
+              undefined, // search
               severity
             );
 
-      const nextEvents = Array.isArray(response)
-        ? response
-        : Array.isArray(response?.results)
-          ? response.results
-          : [];
-      setEvents(nextEvents as TaskEvent[]);
+      setEvents((response.results || []) as unknown as TaskEvent[]);
+      setTotalCount(response.count ?? 0);
+      setHasNext(Boolean(response.next));
+      setHasPrevious(Boolean(response.previous));
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to load events';
@@ -87,7 +95,7 @@ export const useTaskEvents = ({
     } finally {
       setIsLoading(false);
     }
-  }, [taskId, taskType, eventType, severity, limit]);
+  }, [taskId, taskType, eventType, severity, page, pageSize]);
 
   useEffect(() => {
     fetchEvents();
@@ -95,16 +103,15 @@ export const useTaskEvents = ({
 
   useEffect(() => {
     if (!enableRealTimeUpdates) return;
-
-    const interval = setInterval(() => {
-      fetchEvents();
-    }, refreshInterval);
-
+    const interval = setInterval(fetchEvents, refreshInterval);
     return () => clearInterval(interval);
   }, [enableRealTimeUpdates, refreshInterval, fetchEvents]);
 
   return {
     events,
+    totalCount,
+    hasNext,
+    hasPrevious,
     isLoading,
     error,
     refetch: fetchEvents,

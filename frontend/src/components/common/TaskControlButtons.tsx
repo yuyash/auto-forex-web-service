@@ -4,7 +4,6 @@
  * Button group with state-based enable/disable logic for task control actions.
  * Handles start, stop, pause, resume, restart, and delete actions.
  *
- * Requirements: 11.3, 11.4, 11.11, 11.12
  */
 
 import React from 'react';
@@ -94,25 +93,34 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   orientation = 'horizontal',
 }) => {
   // Determine which buttons should be enabled based on status
-  const canStart = [
-    TaskStatusEnum.CREATED,
-    'idle' as TaskStatus,
-    TaskStatusEnum.STOPPED,
-    TaskStatusEnum.COMPLETED,
-    TaskStatusEnum.FAILED,
-  ].includes(status);
+  // CREATED: Start only
+  // STARTING: Stop only
+  // RUNNING: Stop, Pause
+  // PAUSED: Stop, Resume
+  // STOPPING: (none)
+  // STOPPED: Restart, Delete
+  // COMPLETED: Restart, Delete
+  // FAILED: Restart, Delete
+  const canStart = status === TaskStatusEnum.CREATED;
 
-  const canStop = [TaskStatusEnum.RUNNING].includes(status);
+  const canStop = [
+    TaskStatusEnum.STARTING,
+    TaskStatusEnum.RUNNING,
+    TaskStatusEnum.PAUSED,
+  ].includes(status);
   const canPause = status === TaskStatusEnum.RUNNING;
-  const canResume = [TaskStatusEnum.PAUSED, TaskStatusEnum.STOPPED].includes(
-    status
-  );
+  const canResume = status === TaskStatusEnum.PAUSED;
   const canRestart = [
     TaskStatusEnum.STOPPED,
     TaskStatusEnum.COMPLETED,
     TaskStatusEnum.FAILED,
   ].includes(status);
-  const canDelete = ![TaskStatusEnum.RUNNING].includes(status);
+  const canDelete = [
+    TaskStatusEnum.CREATED,
+    TaskStatusEnum.STOPPED,
+    TaskStatusEnum.COMPLETED,
+    TaskStatusEnum.FAILED,
+  ].includes(status);
 
   const handleAction = async (
     action?: (taskId: string) => void | Promise<void>

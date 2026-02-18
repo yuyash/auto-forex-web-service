@@ -16,14 +16,14 @@ from apps.trading.serializers import (
     StrategyConfigDetailSerializer,
     StrategyConfigListSerializer,
 )
-from apps.trading.views.pagination import TaskExecutionPagination
+from apps.trading.views.pagination import StandardPagination
 
 
 class StrategyConfigView(APIView):
     """List and create strategy configurations."""
 
     permission_classes = [IsAuthenticated]
-    pagination_class = TaskExecutionPagination
+    pagination_class = StandardPagination
     serializer_class = StrategyConfigListSerializer
 
     @extend_schema(

@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import UserNotification
+from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
 
@@ -22,17 +23,25 @@ class UserNotificationListView(APIView):
     """List notifications for the authenticated user."""
 
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardPagination
 
     @extend_schema(
         summary="GET /api/accounts/notifications",
         description="Retrieve list of notifications for the authenticated user. "
-        "Supports filtering by read status and limiting results.",
+        "Supports filtering by read status and pagination.",
         parameters=[
             OpenApiParameter(
-                name="limit",
+                name="page",
                 type=int,
                 location=OpenApiParameter.QUERY,
-                description="Maximum number of notifications to return (1-200, default: 50)",
+                description="Page number",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Number of results per page (default: 50, max: 200)",
                 required=False,
             ),
             OpenApiParameter(
@@ -44,28 +53,7 @@ class UserNotificationListView(APIView):
             ),
         ],
         responses={
-            200: OpenApiResponse(
-                description="Notifications retrieved successfully",
-                response={
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "id": {"type": "integer"},
-                            "title": {"type": "string"},
-                            "message": {"type": "string"},
-                            "severity": {
-                                "type": "string",
-                                "enum": ["info", "warning", "error", "critical"],
-                            },
-                            "timestamp": {"type": "string", "format": "date-time"},
-                            "read": {"type": "boolean"},
-                            "notification_type": {"type": "string"},
-                            "extra_data": {"type": "object"},
-                        },
-                    },
-                },
-            ),
+            200: OpenApiResponse(description="Paginated notifications list"),
             401: OpenApiResponse(description="Authentication required"),
             500: OpenApiResponse(description="Failed to retrieve notifications"),
         },
@@ -81,14 +69,6 @@ class UserNotificationListView(APIView):
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
 
-            limit_raw = request.query_params.get("limit")
-            limit = 50
-            if limit_raw:
-                try:
-                    limit = max(1, min(int(limit_raw), 200))
-                except ValueError:
-                    limit = 50
-
             unread_only = request.query_params.get("unread_only")
             unread_only_bool = str(unread_only).lower() in {"1", "true", "yes"}
 
@@ -96,7 +76,8 @@ class UserNotificationListView(APIView):
             if unread_only_bool:
                 queryset = queryset.filter(is_read=False)
 
-            notifications = list(queryset[:limit])
+            paginator = self.pagination_class()
+            page = paginator.paginate_queryset(queryset, request)
 
             data = [
                 {
@@ -109,9 +90,9 @@ class UserNotificationListView(APIView):
                     "notification_type": n.notification_type,
                     "extra_data": n.extra_data,
                 }
-                for n in notifications
+                for n in page
             ]
-            return Response(data, status=status.HTTP_200_OK)
+            return paginator.get_paginated_response(data)
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Failed to list user notifications: %s", exc, exc_info=True)

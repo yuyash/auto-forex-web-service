@@ -15,6 +15,8 @@ export type { BacktestTaskRequest } from './models/BacktestTaskRequest';
 export { DataSourceEnum } from './models/DataSourceEnum';
 export { DirectionEnum } from './models/DirectionEnum';
 export type { EmailVerificationRequest } from './models/EmailVerificationRequest';
+export { EventTypeEnum } from './models/EventTypeEnum';
+export { ExecutionMethodEnum } from './models/ExecutionMethodEnum';
 export { JurisdictionEnum } from './models/JurisdictionEnum';
 export { LanguageEnum } from './models/LanguageEnum';
 export { LevelEnum } from './models/LevelEnum';

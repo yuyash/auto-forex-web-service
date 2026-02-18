@@ -1,8 +1,7 @@
 /**
  * TaskLogsTable Component
  *
- * Displays task logs using task-based API endpoints.
- * Replaces execution-based LogsTable.
+ * Displays task logs with server-side pagination.
  */
 
 import React, { useState } from 'react';
@@ -35,17 +34,15 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   enableRealTimeUpdates = false,
 }) => {
   const [levelFilter, setLevelFilter] = useState<string>('');
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(0); // 0-indexed for MUI TablePagination
   const [rowsPerPage, setRowsPerPage] = useState(100);
-
-  const offset = page * rowsPerPage;
 
   const { logs, totalCount, isLoading, error } = useTaskLogs({
     taskId,
     taskType,
     level: levelFilter || undefined,
-    limit: rowsPerPage,
-    offset,
+    page: page + 1, // DRF uses 1-indexed pages
+    pageSize: rowsPerPage,
     enableRealTimeUpdates,
   });
 
@@ -54,25 +51,11 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     setPage(0);
   };
 
-  const handleChangePage = (_event: unknown, nextPage: number) => {
-    setPage(nextPage);
-  };
-
-  const handleChangeRowsPerPage = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const nextRowsPerPage = parseInt(event.target.value, 10);
-    setRowsPerPage(nextRowsPerPage);
-    setPage(0);
-  };
-
-  // Reset page when executionId changes (state-based, avoids useEffect + setState)
+  // Reset page when executionId changes
   const [prevExecutionId, setPrevExecutionId] = useState(executionId);
   if (prevExecutionId !== executionId) {
     setPrevExecutionId(executionId);
-    if (page !== 0) {
-      setPage(0);
-    }
+    if (page !== 0) setPage(0);
   }
 
   const formatTimestamp = (timestamp: string): string => {
@@ -117,13 +100,15 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     {
       id: 'timestamp',
       label: 'Timestamp',
+      width: 260,
       minWidth: 200,
       render: (row) => formatTimestamp(row.timestamp as string),
     },
     {
       id: 'level',
       label: 'Level',
-      minWidth: 100,
+      width: 120,
+      minWidth: 90,
       render: (row) => (
         <Chip
           label={row.level as string}
@@ -135,12 +120,13 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     {
       id: 'component',
       label: 'Component',
-      minWidth: 220,
+      width: 220,
+      minWidth: 150,
     },
     {
       id: 'message',
       label: 'Message',
-      minWidth: 400,
+      minWidth: 200,
     },
   ];
 
@@ -180,15 +166,19 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
         emptyMessage="No logs available"
         defaultRowsPerPage={rowsPerPage}
         rowsPerPageOptions={[rowsPerPage]}
+        storageKey="task-logs"
       />
 
       <TablePagination
         component="div"
         count={totalCount}
         page={page}
-        onPageChange={handleChangePage}
+        onPageChange={(_e, newPage) => setPage(newPage)}
         rowsPerPage={rowsPerPage}
-        onRowsPerPageChange={handleChangeRowsPerPage}
+        onRowsPerPageChange={(e) => {
+          setRowsPerPage(parseInt(e.target.value, 10));
+          setPage(0);
+        }}
         rowsPerPageOptions={[50, 100, 200, 500]}
       />
     </Box>

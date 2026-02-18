@@ -1,79 +1,24 @@
-"""Helper functions for trading views.
+"""Pagination classes for trading views.
 
-This module contains shared utility functions used across multiple view modules.
+Provides reusable DRF pagination classes for all list endpoints.
+All paginated endpoints use page/page_size query parameters and return
+the standard DRF envelope: {count, next, previous, results}.
 """
 
-from logging import Logger, getLogger
-from typing import Any
-
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.request import Request
-
-logger: Logger = getLogger(name=__name__)
 
 
-class TaskExecutionPagination(PageNumberPagination):
-    """Pagination for task execution history endpoints."""
+class StandardPagination(PageNumberPagination):
+    """Default pagination for most list endpoints (page_size=50, max=200)."""
 
-    page_size = 20
+    page_size = 50
     page_size_query_param = "page_size"
-    max_page_size = 100
+    max_page_size = 200
 
 
-def _paginate_list_by_page(
-    *,
-    request: Request,
-    items: list,
-    base_url: str,
-    page_param: str = "page",
-    page_size_param: str = "page_size",
-    default_page_size: int = 100,
-    max_page_size: int = 1000,
-    extra_query: dict[str, str | None] | None = None,
-) -> dict[str, Any]:
-    """Paginate an in-memory list using page/page_size.
+class TaskSubResourcePagination(PageNumberPagination):
+    """Pagination for task sub-resources: logs, events, trades (page_size=100, max=1000)."""
 
-    Returns a dict with keys: count, next, previous, results.
-    """
-
-    def _to_int(value: str | None, default: int) -> int:
-        if value is None or value == "":
-            return default
-        return int(value)
-
-    raw_page = request.query_params.get(page_param)
-    raw_page_size = request.query_params.get(page_size_param)
-
-    page = _to_int(raw_page, 1)
-    page_size = _to_int(raw_page_size, default_page_size)
-
-    if page < 1:
-        page = 1
-    if page_size < 1:
-        page_size = default_page_size
-    page_size = min(page_size, max_page_size)
-
-    count = len(items)
-    start = (page - 1) * page_size
-    end = start + page_size
-    results = items[start:end]
-
-    extra_query = extra_query or {}
-    query_parts = [f"{page_size_param}={page_size}"] + [
-        f"{k}={v}" for k, v in extra_query.items() if v is not None
-    ]
-
-    next_url = None
-    if end < count:
-        next_url = f"{base_url}?{page_param}={page + 1}&" + "&".join(query_parts)
-
-    previous_url = None
-    if page > 1:
-        previous_url = f"{base_url}?{page_param}={page - 1}&" + "&".join(query_parts)
-
-    return {
-        "count": count,
-        "next": next_url,
-        "previous": previous_url,
-        "results": results,
-    }
+    page_size = 100
+    page_size_query_param = "page_size"
+    max_page_size = 1000
