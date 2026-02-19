@@ -57,6 +57,7 @@ class TradeSerializer(serializers.Serializer):
         help_text="Human-readable display name for the execution method.",
     )
     layer_index = serializers.IntegerField(required=False, allow_null=True)
+    retracement_count = serializers.IntegerField(required=False, allow_null=True)
     pnl = serializers.DecimalField(
         max_digits=20, decimal_places=10, required=False, allow_null=True
     )

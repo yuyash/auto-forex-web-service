@@ -10,13 +10,17 @@
     "retracement_lot_mode": {
       "type": "string",
       "title": "Retracement Lot Mode",
-      "enum": ["additive", "multiplicative"],
+      "enum": ["additive", "multiplicative", "inverse"],
       "description": "How lot size changes on each retracement entry."
     },
     "retracement_lot_amount": {
       "type": "number",
       "title": "Retracement Lot Amount",
-      "description": "Amount to add/multiply by on each retracement entry."
+      "description": "Amount to add/multiply by on each retracement entry.",
+      "dependsOn": {
+        "field": "retracement_lot_mode",
+        "values": ["additive", "multiplicative"]
+      }
     },
     "retracement_pips": {
       "type": "number",

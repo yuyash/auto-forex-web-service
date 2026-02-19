@@ -158,6 +158,35 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         row.close_price ? `¥${parseFloat(row.close_price).toFixed(3)}` : '-',
     },
     {
+      id: 'pips',
+      label: 'Pips',
+      width: 90,
+      minWidth: 70,
+      align: 'right',
+      render: (row: TaskTrade) => {
+        if (!row.pnl || !pipSize) return '-';
+        const pnlVal = parseFloat(row.pnl);
+        const units = Math.abs(
+          typeof row.units === 'string'
+            ? parseFloat(row.units)
+            : (row.units ?? 0)
+        );
+        if (!Number.isFinite(pnlVal) || !units) return '-';
+        const pips = pnlVal / units / pipSize;
+        if (!Number.isFinite(pips)) return '-';
+        return (
+          <Typography
+            variant="body2"
+            color={pips >= 0 ? 'success.main' : 'error.main'}
+            fontWeight="bold"
+          >
+            {pips >= 0 ? '+' : ''}
+            {pips.toFixed(1)}
+          </Typography>
+        );
+      },
+    },
+    {
       id: 'pnl',
       label: 'Realized PnL',
       width: 120,
@@ -319,6 +348,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         defaultRowsPerPage={rowsPerPage}
         rowsPerPageOptions={[rowsPerPage]}
         tableMaxHeight="none"
+        hidePagination
       />
 
       <TablePagination
@@ -363,6 +393,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         defaultRowsPerPage={openRowsPerPage}
         rowsPerPageOptions={[openRowsPerPage]}
         tableMaxHeight="none"
+        hidePagination
       />
 
       <TablePagination

@@ -96,7 +96,11 @@ type ReplayTrade = {
   execution_method?: string;
   execution_method_display?: string;
   layer_index?: number | null;
+  retracement_count?: number | null;
   pnl?: string;
+  open_price?: string | null;
+  close_timestamp?: string | null;
+  close_price?: string | null;
 };
 
 interface TaskReplayPanelProps {
@@ -112,6 +116,7 @@ interface TaskReplayPanelProps {
     unrealized_pnl?: string;
     total_trades?: number;
   };
+  pipSize?: number | null;
 }
 
 const ALLOWED_GRANULARITIES = [
@@ -258,6 +263,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   enableRealTimeUpdates = false,
   currentTick,
   latestExecution,
+  pipSize,
 }) => {
   const panelRootRef = useRef<HTMLDivElement | null>(null);
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
@@ -296,9 +302,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     | 'timestamp'
     | 'direction'
     | 'layer_index'
+    | 'retracement_count'
     | 'units'
     | 'price'
     | 'pnl'
+    | 'pips'
     | 'execution_method';
   const [orderBy, setOrderBy] = useState<SortableKey>('timestamp');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
@@ -308,15 +316,76 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   // Row selection for copy
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
 
+  // Chart height state for draggable separator
+  const MIN_CHART_HEIGHT = 200;
+  const CHART_HEIGHT_STORAGE_KEY = 'replay-chart-height';
+  const [chartHeight, setChartHeight] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CHART_HEIGHT_STORAGE_KEY);
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (Number.isFinite(parsed) && parsed >= MIN_CHART_HEIGHT)
+          return parsed;
+      }
+    } catch {
+      /* ignore */
+    }
+    return 400;
+  });
+  const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
+
+  const handleSeparatorMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragRef.current = { startY: e.clientY, startHeight: chartHeight };
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!dragRef.current) return;
+        const diff = ev.clientY - dragRef.current.startY;
+        const maxHeight = window.innerHeight;
+        const newHeight = Math.min(
+          maxHeight,
+          Math.max(MIN_CHART_HEIGHT, dragRef.current.startHeight + diff)
+        );
+        setChartHeight(newHeight);
+      };
+
+      const onMouseUp = () => {
+        dragRef.current = null;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        // Persist final height
+        setChartHeight((h) => {
+          try {
+            localStorage.setItem(CHART_HEIGHT_STORAGE_KEY, String(h));
+          } catch {
+            /* ignore */
+          }
+          return h;
+        });
+      };
+
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    },
+    [chartHeight]
+  );
+
   // Column resize state
   const defaultReplayWidths: Record<string, number> = {
     sequence: 40,
     timestamp: 150,
     direction: 55,
     layer_index: 50,
+    retracement_count: 35,
     units: 65,
     price: 85,
     pnl: 85,
+    pips: 65,
     execution_method: 95,
   };
   const [replayColWidths, setReplayColWidths] = useState(defaultReplayWidths);
@@ -403,6 +472,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         case 'layer_index':
           cmp = (a.layer_index ?? -1) - (b.layer_index ?? -1);
           break;
+        case 'retracement_count':
+          cmp = (a.retracement_count ?? -1) - (b.retracement_count ?? -1);
+          break;
         case 'units':
           cmp = Number(a.units) - Number(b.units);
           break;
@@ -412,6 +484,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         case 'pnl':
           cmp = (Number(a.pnl) || 0) - (Number(b.pnl) || 0);
           break;
+        case 'pips': {
+          const aPips =
+            a.pnl && pipSize
+              ? parseFloat(a.pnl) / Math.abs(Number(a.units)) / pipSize
+              : 0;
+          const bPips =
+            b.pnl && pipSize
+              ? parseFloat(b.pnl) / Math.abs(Number(b.units)) / pipSize
+              : 0;
+          cmp = aPips - bPips;
+          break;
+        }
         case 'execution_method':
           cmp = (a.execution_method || '').localeCompare(
             b.execution_method || ''
@@ -461,9 +545,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       'Time',
       'Direction',
       'Layer',
+      'Ret',
       'Units',
       'Price',
       'PnL',
+      'Pips',
       'Event',
     ].join('\t');
     const rows = sortedTrades
@@ -474,9 +560,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           new Date(r.timestamp).toLocaleString(),
           r.direction.toUpperCase(),
           r.layer_index ?? '-',
+          r.retracement_count ?? '-',
           r.units,
           r.price ? `¥${parseFloat(r.price).toFixed(3)}` : '-',
           r.pnl ? `¥${parseFloat(r.pnl).toFixed(3)}` : '-',
+          (() => {
+            if (!r.pnl || !pipSize) return '-';
+            const pnlVal = parseFloat(r.pnl);
+            const units = Math.abs(Number(r.units));
+            if (!Number.isFinite(pnlVal) || !units) return '-';
+            const p = pnlVal / units / pipSize;
+            return Number.isFinite(p) ? p.toFixed(1) : '-';
+          })(),
           r.execution_method_display || r.execution_method || '-',
         ].join('\t')
       );
@@ -523,12 +618,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     const tickPrice =
       currentTick?.price != null ? parseFloat(currentTick.price) : null;
     const unrealizedFromTrades = trades.reduce((sum, trade) => {
-      const raw = trade as unknown as Record<string, unknown>;
-      const isOpen = raw.close_timestamp == null;
+      const isOpen = trade.close_timestamp == null;
       if (!isOpen) return sum;
       if (tickPrice == null) return sum;
       const openPrice =
-        raw.open_price != null ? parseFloat(String(raw.open_price)) : NaN;
+        trade.open_price != null ? parseFloat(String(trade.open_price)) : NaN;
       if (!Number.isFinite(openPrice)) return sum;
       const units = Math.abs(Number(trade.units));
       if (!Number.isFinite(units)) return sum;
@@ -553,8 +647,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         : trades.length;
 
     const openTradesCount = trades.filter((t) => {
-      const raw = t as unknown as Record<string, unknown>;
-      return raw.close_timestamp == null;
+      return t.close_timestamp == null;
     }).length;
 
     return {
@@ -657,8 +750,24 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               t.layer_index === null || t.layer_index === undefined
                 ? null
                 : Number(t.layer_index),
+            retracement_count:
+              t.retracement_count === null || t.retracement_count === undefined
+                ? null
+                : Number(t.retracement_count),
             pnl:
               t.pnl === null || t.pnl === undefined ? undefined : String(t.pnl),
+            open_price:
+              t.open_price === null || t.open_price === undefined
+                ? null
+                : String(t.open_price),
+            close_timestamp:
+              t.close_timestamp === null || t.close_timestamp === undefined
+                ? null
+                : String(t.close_timestamp),
+            close_price:
+              t.close_price === null || t.close_price === undefined
+                ? null
+                : String(t.close_price),
           };
         })
         .filter((v): v is ReplayTrade => v !== null)
@@ -691,30 +800,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     tradesRef.current = trades;
   }, [trades]);
 
-  const rowsPerPageRef = useRef(rowsPerPage);
-  useEffect(() => {
-    rowsPerPageRef.current = rowsPerPage;
-  }, [rowsPerPage]);
-
-  const computeChartHeight = useCallback(() => {
-    const container = chartContainerRef.current;
-    if (!container) return 360;
-    // Measure how much space the chart container actually has
-    // by reading the flex-computed height of its wrapper
-    const wrapper = container.parentElement;
-    if (wrapper && wrapper.clientHeight > 0) {
-      return Math.max(200, wrapper.clientHeight);
-    }
-    // Fallback: calculate from panel position
-    const panelTop = panelRootRef.current?.getBoundingClientRect().top ?? 230;
-    const tableRowHeight = 37;
-    const currentRowsPerPage = rowsPerPageRef.current;
-    const tableMinHeight = 40 + tableRowHeight * currentRowsPerPage;
-    const fixedContent = 16 + 85 + 60 + tableMinHeight + 56 + 36 + 24 + 28;
-    const available = window.innerHeight - panelTop - fixedContent;
-    return Math.max(200, Math.round(available));
-  }, []);
-
   // Chart height is managed by flex layout + ResizeObserver
 
   useEffect(() => {
@@ -723,7 +808,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
     const container = chartContainerRef.current;
 
-    const dynamicHeight = computeChartHeight();
+    const dynamicHeight = chartHeight;
     const chart = createChart(container, {
       height: dynamicHeight,
       layout: {
@@ -833,7 +918,8 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       sequenceLineRef.current = null;
       hasInitialFit.current = false;
     };
-  }, [isLoading, candles.length, timezone, computeChartHeight]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chartHeight is read once for initial creation; ResizeObserver handles subsequent resizes
+  }, [isLoading, candles.length, timezone]);
 
   // Track whether this is the first candle load (for initial fitContent)
   const hasInitialFit = useRef(false);
@@ -842,7 +928,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   useEffect(() => {
     if (!seriesRef.current || !markersRef.current) return;
 
-    seriesRef.current.setData(candles);
+    // Guard setData so the resulting visible-range change doesn't disable auto-follow
+    programmaticScrollRef.current = true;
+    try {
+      seriesRef.current.setData(candles);
+    } catch (e) {
+      console.warn('Failed to set candle data:', e);
+      programmaticScrollRef.current = false;
+      return;
+    }
+    requestAnimationFrame(() => {
+      programmaticScrollRef.current = false;
+    });
 
     const times = candles.map((c) => Number(c.time));
 
@@ -853,7 +950,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     // Only fit content on the very first load — preserve user's zoom/pan on updates
     if (candles.length > 0 && !hasInitialFit.current) {
       programmaticScrollRef.current = true;
-      chartRef.current?.timeScale().fitContent();
+      try {
+        chartRef.current?.timeScale().fitContent();
+      } catch (e) {
+        console.warn('Failed to fit chart content:', e);
+      }
       hasInitialFit.current = true;
       requestAnimationFrame(() => {
         programmaticScrollRef.current = false;
@@ -888,10 +989,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           const candleMin = GRANULARITY_MINUTES[granularity] ?? 60;
           const halfSec = (AUTO_FOLLOW_CANDLES / 2) * candleMin * 60;
           programmaticScrollRef.current = true;
-          ts.setVisibleRange({
-            from: (centerSec - halfSec) as Time,
-            to: (centerSec + halfSec) as Time,
-          });
+          try {
+            ts.setVisibleRange({
+              from: (centerSec - halfSec) as Time,
+              to: (centerSec + halfSec) as Time,
+            });
+          } catch (e) {
+            console.warn('Failed to set visible range during auto-follow:', e);
+          }
           // Reset guard after the subscription fires (next microtask)
           requestAnimationFrame(() => {
             programmaticScrollRef.current = false;
@@ -954,7 +1059,16 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       };
     });
 
-    markersRef.current.setMarkers(tradeMarkers);
+    try {
+      programmaticScrollRef.current = true;
+      markersRef.current.setMarkers(tradeMarkers);
+      requestAnimationFrame(() => {
+        programmaticScrollRef.current = false;
+      });
+    } catch (e) {
+      programmaticScrollRef.current = false;
+      console.warn('Failed to set trade markers:', e);
+    }
   }, [trades, selectedTradeId]);
 
   const handleGranularityChange = (e: SelectChangeEvent) => {
@@ -981,10 +1095,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     const span = to - from;
     const half = span / 2;
     programmaticScrollRef.current = true;
-    ts.setVisibleRange({
-      from: (target - half) as Time,
-      to: (target + half) as Time,
-    });
+    try {
+      ts.setVisibleRange({
+        from: (target - half) as Time,
+        to: (target + half) as Time,
+      });
+    } catch (e) {
+      console.warn('Failed to set visible range on row select:', e);
+    }
     requestAnimationFrame(() => {
       programmaticScrollRef.current = false;
     });
@@ -1015,12 +1133,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       sx={{
         p: 2,
         pt: 0,
-        pb: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        flex: 1,
-        minHeight: 0,
-        overflow: 'hidden',
+        pb: 2,
         boxSizing: 'border-box',
       }}
     >
@@ -1149,12 +1262,41 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
       <Paper
         variant="outlined"
-        sx={{ mt: 1, mb: 1, flex: 1, minHeight: 200, display: 'flex' }}
+        sx={{
+          mt: 1,
+          mb: 0,
+          height: chartHeight,
+          minHeight: MIN_CHART_HEIGHT,
+          display: 'flex',
+        }}
       >
         <Box ref={chartContainerRef} sx={{ width: '100%', flex: 1 }} />
       </Paper>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+      {/* Draggable separator */}
+      <Box
+        onMouseDown={handleSeparatorMouseDown}
+        sx={{
+          height: 8,
+          cursor: 'row-resize',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          '&:hover': { '& > div': { backgroundColor: 'primary.main' } },
+        }}
+      >
+        <Box
+          sx={{
+            width: 40,
+            height: 3,
+            borderRadius: 1.5,
+            backgroundColor: 'divider',
+            transition: 'background-color 0.15s',
+          }}
+        />
+      </Box>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
         <Typography variant="subtitle1">Layer Trade Timeline</Typography>
         {selectedRowIds.size > 0 && (
           <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
@@ -1200,11 +1342,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         </Tooltip>
       </Box>
 
-      <TableContainer
-        component={Paper}
-        variant="outlined"
-        sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}
-      >
+      <TableContainer component={Paper} variant="outlined">
         <Table stickyHeader size="small" sx={{ tableLayout: 'fixed' }}>
           <TableHead>
             <TableRow>
@@ -1286,6 +1424,23 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               </TableCell>
               <TableCell
                 align="right"
+                sortDirection={orderBy === 'retracement_count' ? order : false}
+                sx={{
+                  position: 'relative',
+                  width: replayColWidths.retracement_count,
+                }}
+              >
+                <TableSortLabel
+                  active={orderBy === 'retracement_count'}
+                  direction={orderBy === 'retracement_count' ? order : 'asc'}
+                  onClick={() => handleSort('retracement_count')}
+                >
+                  Ret
+                </TableSortLabel>
+                {resizeHandle('retracement_count')}
+              </TableCell>
+              <TableCell
+                align="right"
                 sortDirection={orderBy === 'units' ? order : false}
                 sx={{ position: 'relative', width: replayColWidths.units }}
               >
@@ -1325,6 +1480,20 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                   PnL
                 </TableSortLabel>
                 {resizeHandle('pnl')}
+              </TableCell>
+              <TableCell
+                align="right"
+                sortDirection={orderBy === 'pips' ? order : false}
+                sx={{ position: 'relative', width: replayColWidths.pips }}
+              >
+                <TableSortLabel
+                  active={orderBy === 'pips'}
+                  direction={orderBy === 'pips' ? order : 'asc'}
+                  onClick={() => handleSort('pips')}
+                >
+                  Pips
+                </TableSortLabel>
+                {resizeHandle('pips')}
               </TableCell>
               <TableCell
                 sortDirection={orderBy === 'execution_method' ? order : false}
@@ -1408,6 +1577,16 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                       whiteSpace: 'nowrap',
                     }}
                   >
+                    {row.retracement_count ?? '-'}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
                     {row.units}
                   </TableCell>
                   <TableCell
@@ -1429,6 +1608,34 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     }}
                   >
                     {row.pnl ? `¥${parseFloat(row.pnl).toFixed(3)}` : '-'}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {(() => {
+                      if (!row.pnl || !pipSize) return '-';
+                      const pnlVal = parseFloat(row.pnl);
+                      const units = Math.abs(Number(row.units));
+                      if (!Number.isFinite(pnlVal) || !units) return '-';
+                      const pips = pnlVal / units / pipSize;
+                      if (!Number.isFinite(pips)) return '-';
+                      return (
+                        <Typography
+                          component="span"
+                          variant="body2"
+                          color={pips >= 0 ? 'success.main' : 'error.main'}
+                          fontWeight="bold"
+                        >
+                          {pips >= 0 ? '+' : ''}
+                          {pips.toFixed(1)}
+                        </Typography>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell
                     sx={{

@@ -260,6 +260,7 @@ const StrategyDefaults = () => {
           >
             <MenuItem value="additive">Additive</MenuItem>
             <MenuItem value="multiplicative">Multiplicative</MenuItem>
+            <MenuItem value="inverse">Inverse</MenuItem>
           </Select>
         </FormControl>
 

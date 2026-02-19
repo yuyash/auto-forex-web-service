@@ -18,6 +18,7 @@ export type Trade = {
    */
   readonly execution_method_display?: string;
   layer_index?: number | null;
+  retracement_count?: number | null;
   pnl?: string | null;
   timestamp: string;
   open_price?: string | null;

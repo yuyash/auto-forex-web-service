@@ -180,7 +180,7 @@ class TaskSubResourceMixin:
         if status == "open":
             queryset = queryset.filter(close_timestamp__isnull=True)
         elif status == "closed":
-            queryset = queryset.filter(close_timestamp__isnull=False)
+            queryset = queryset.filter(close_timestamp__isnull=False, pnl__isnull=False)
         if direction:
             if direction == "buy":
                 queryset = queryset.filter(direction="long")
@@ -195,6 +195,7 @@ class TaskSubResourceMixin:
             "price",
             "execution_method",
             "layer_index",
+            "retracement_count",
             "pnl",
             "timestamp",
             "open_price",

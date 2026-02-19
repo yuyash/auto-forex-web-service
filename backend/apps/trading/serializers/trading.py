@@ -43,6 +43,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "sell_on_stop",
+            "pip_size",
             "status",
             # State management fields
             "has_strategy_state",
@@ -62,6 +63,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "account_name",
             "account_type",
             "status",
+            "pip_size",
             "has_strategy_state",
             "can_resume",
             "current_tick",
@@ -144,6 +146,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "sell_on_stop",
+            "pip_size",
             "status",
             "created_at",
             "updated_at",
@@ -219,8 +222,20 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict) -> TradingTask:
         """Create trading task with user from context."""
+        from apps.trading.utils import pip_size_for_instrument
+
         user = self.context["request"].user
         validated_data["user"] = user
+
+        # Set instrument and pip_size from config if not explicitly provided
+        config = validated_data.get("config")
+        if config and config.parameters:
+            instrument = config.parameters.get("instrument")
+            if instrument:
+                validated_data.setdefault("instrument", instrument)
+                # Derive pip_size from instrument (JPY pairs use 0.01, others use 0.0001)
+                validated_data.setdefault("pip_size", pip_size_for_instrument(instrument))
+
         return TradingTask.objects.create(**validated_data)
 
     def update(self, instance: TradingTask, validated_data: dict) -> TradingTask:

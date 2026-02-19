@@ -43,17 +43,16 @@ interface TabPanelProps {
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
 
-  if (value !== index) {
-    return null;
-  }
+  const isActive = value === index;
 
   return (
     <div
       role="tabpanel"
+      hidden={!isActive}
       id={`task-tabpanel-${index}`}
       aria-labelledby={`task-tab-${index}`}
       style={{
-        display: 'flex',
+        display: isActive ? 'flex' : 'none',
         flexDirection: 'column',
         flex: 1,
         minHeight: 0,
@@ -597,6 +596,7 @@ export const BacktestTaskDetail: React.FC = () => {
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
+            pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
           />
         </TabPanel>
 

@@ -292,6 +292,10 @@ class FloorStrategy(Strategy):
             return self.config.base_lot_size + (
                 self.config.retracement_lot_amount * Decimal(retracement_index + 1)
             )
+        if self.config.retracement_lot_mode == "inverse":
+            divisor = Decimal(2 ** (retracement_index + 1))
+            result = self.config.base_lot_size / divisor
+            return max(result, Decimal("0.01"))
         return self.config.base_lot_size * (
             self.config.retracement_lot_amount ** (retracement_index + 1)
         )
@@ -544,8 +548,9 @@ class FloorStrategy(Strategy):
             closed_any = True
 
         if closed_any:
-            # If any profit was taken in a floor, reset the floor entry count.
-            floor_state.floor_retracement_counts[active_floor] = 0
+            # Recompute retracement count from remaining entries instead of
+            # resetting to zero – only the closed entries should be subtracted.
+            self._recompute_floor_retracements(floor_state)
             remaining_active = self._active_floor_entries(floor_state, active_floor)
             if not remaining_active and active_floor != floor_state.home_floor_index:
                 events.append(
@@ -562,37 +567,12 @@ class FloorStrategy(Strategy):
                     floor_state.active_floor_index = floor_state.home_floor_index
                 active_floor = floor_state.active_floor_index
 
-        active_entries = self._active_floor_entries(floor_state, active_floor)
-        if not active_entries:
-            if self._is_bad_market_condition(tick):
-                events.append(
-                    GenericStrategyEvent(
-                        event_type=EventType.STRATEGY_SIGNAL,
-                        timestamp=tick.timestamp,
-                        data={
-                            "kind": "reentry_skipped",
-                            "reason": "market_condition_override",
-                            "spread_pips": str(self._spread_pips(tick)),
-                        },
-                    )
-                )
-                state.strategy_state = floor_state.to_dict()
-                return StrategyResult(state=state, events=events)
-            direction = self._choose_direction(floor_state)
-            units = self._entry_units(floor_state, active_floor, self.config.base_lot_size)
-            events.append(
-                self._open_entry(
-                    floor_state,
-                    tick,
-                    floor_index=active_floor,
-                    direction=direction,
-                    units=units,
-                    take_profit_pips=self._effective_take_profit(floor_state, active_floor),
-                    is_initial=True,
-                )
-            )
+            # After taking profit, do NOT open new entries on the same tick.
+            # Wait for the next tick to re-evaluate market conditions.
             state.strategy_state = floor_state.to_dict()
             return StrategyResult(state=state, events=events)
+
+        active_entries = self._active_floor_entries(floor_state, active_floor)
 
         # 2) Additional entry when adverse move hits trigger.
         latest_entry = max(

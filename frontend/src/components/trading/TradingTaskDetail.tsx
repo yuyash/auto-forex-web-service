@@ -44,18 +44,34 @@ interface TabPanelProps {
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
 
-  if (value !== index) {
-    return null;
-  }
+  const isActive = value === index;
 
   return (
     <div
       role="tabpanel"
+      hidden={!isActive}
       id={`task-tabpanel-${index}`}
       aria-labelledby={`task-tab-${index}`}
+      style={{
+        display: isActive ? 'flex' : 'none',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        overflow: 'auto',
+      }}
       {...other}
     >
-      <Box sx={{ pt: 1 }}>{children}</Box>
+      <Box
+        sx={{
+          pt: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
+        {children}
+      </Box>
     </div>
   );
 }
@@ -478,6 +494,7 @@ export const TradingTaskDetail: React.FC = () => {
             latestExecution={task.latest_execution}
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
             currentTick={currentTick}
+            pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
           />
         </TabPanel>
 

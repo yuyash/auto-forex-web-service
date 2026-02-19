@@ -203,6 +203,9 @@ class LayerManager:
             lots = self.config.base_lot_size + (
                 self.config.retracement_lot_amount * Decimal(retracement_index)
             )
+        elif self.config.retracement_lot_mode == "inverse":
+            divisor = Decimal(2**retracement_index)
+            lots = max(self.config.base_lot_size / divisor, Decimal("0.01"))
         else:
             lots = self.config.base_lot_size * (
                 self.config.retracement_lot_amount**retracement_index

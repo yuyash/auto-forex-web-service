@@ -42,6 +42,7 @@ class TestEventHandlerMarginPartialClose:
         handler._ordered_positions_for_margin_close = MagicMock(return_value=ordered)  # type: ignore[method-assign]
         handler._prune_closed_position = MagicMock()  # type: ignore[method-assign]
         handler._record_trade = MagicMock()  # type: ignore[method-assign]
+        handler._close_entry_trades = MagicMock()  # type: ignore[method-assign]
 
         close_calls: list[int | None] = []
 

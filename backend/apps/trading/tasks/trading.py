@@ -16,6 +16,7 @@ from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import CeleryTaskStatus, TaskLog, TradingTask
 from apps.trading.tasks.executor import TradingExecutor
 from apps.trading.tasks.source import LiveTickDataSource
+from apps.trading.utils import pip_size_for_instrument
 
 logger: Logger = getLogger(name=__name__)
 
@@ -104,12 +105,20 @@ def execute_trading(task: TradingTask) -> None:
         task: Trading task to execute
     """
 
+    # Resolve pip_size: use task value, or derive from instrument
+    resolved_pip_size = task.pip_size or pip_size_for_instrument(task.instrument)
+
     # Create trading engine
     engine = TradingEngine(
         instrument=task.instrument,
-        pip_size=task.pip_size or task.config.get_pip_size(),
+        pip_size=resolved_pip_size,
         strategy_config=task.config,
     )
+
+    # Persist pip_size back to task if it was null
+    if not task.pip_size:
+        task.pip_size = resolved_pip_size
+        task.save(update_fields=["pip_size", "updated_at"])
 
     # Create data source for live ticks
     channel = f"live:{task.oanda_account.account_id}:{task.instrument}"

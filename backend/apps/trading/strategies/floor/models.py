@@ -84,7 +84,7 @@ class FloorStrategyConfig:
             raw.get("retracement_pips", raw.get("initial_retracement_pips", "30")), "30"
         )
         retracement_lot_mode = str(raw.get("retracement_lot_mode", "additive")).strip().lower()
-        if retracement_lot_mode not in {"additive", "multiplicative"}:
+        if retracement_lot_mode not in {"additive", "multiplicative", "inverse"}:
             retracement_lot_mode = "additive"
 
         retracement_lot_amount = _to_decimal(

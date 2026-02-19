@@ -46,6 +46,8 @@ interface DataTableProps<T> {
   storageKey?: string;
   /** Max height for the table container. Defaults to viewport-based calc. */
   tableMaxHeight?: number | string;
+  /** Hide the built-in pagination footer (useful when pagination is managed externally) */
+  hidePagination?: boolean;
 }
 
 type Order = 'asc' | 'desc';
@@ -73,6 +75,7 @@ function DataTable<T extends object>({
   resizableColumns = true,
   storageKey,
   tableMaxHeight,
+  hidePagination = false,
 }: DataTableProps<T>): React.ReactElement {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage);
@@ -227,9 +230,10 @@ function DataTable<T extends object>({
   }, [filteredData, orderBy, order, getNestedValue]);
 
   const paginatedData = useMemo(() => {
+    if (hidePagination) return sortedData;
     const startIndex = page * rowsPerPage;
     return sortedData.slice(startIndex, startIndex + rowsPerPage);
-  }, [sortedData, page, rowsPerPage]);
+  }, [sortedData, page, rowsPerPage, hidePagination]);
 
   // Real-time updates effect
   React.useEffect(() => {
@@ -431,31 +435,33 @@ function DataTable<T extends object>({
           </TableBody>
         </Table>
       </TableContainer>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <TablePagination
-          rowsPerPageOptions={rowsPerPageOptions}
-          component="div"
-          count={sortedData.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-        />
-        {isLoading && (
-          <Box sx={{ display: 'flex', alignItems: 'center', pr: 2 }}>
-            <CircularProgress size={20} sx={{ mr: 1 }} />
-            <Typography variant="caption" color="text.secondary">
-              Updating...
-            </Typography>
-          </Box>
-        )}
-      </Box>
+      {!hidePagination && (
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <TablePagination
+            rowsPerPageOptions={rowsPerPageOptions}
+            component="div"
+            count={sortedData.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+          />
+          {isLoading && (
+            <Box sx={{ display: 'flex', alignItems: 'center', pr: 2 }}>
+              <CircularProgress size={20} sx={{ mr: 1 }} />
+              <Typography variant="caption" color="text.secondary">
+                Updating...
+              </Typography>
+            </Box>
+          )}
+        </Box>
+      )}
     </Paper>
   );
 }

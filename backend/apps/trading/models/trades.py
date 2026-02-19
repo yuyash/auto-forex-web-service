@@ -89,6 +89,11 @@ class Trade(models.Model):
         blank=True,
         help_text="When the position was closed (populated on close trades)",
     )
+    retracement_count = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of retracements in the layer at the time of this trade",
+    )
     pnl = models.DecimalField(
         max_digits=20,
         decimal_places=10,

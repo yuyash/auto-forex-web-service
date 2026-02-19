@@ -368,10 +368,16 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict) -> BacktestTask:
         """Create backtest task with user from context."""
-        logger.error(f"Creating backtest task with data: {validated_data}")
+        from apps.trading.utils import pip_size_for_instrument
 
         user = self.context["request"].user
         validated_data["user"] = user
+
+        # Auto-populate pip_size from instrument when not explicitly provided
+        instrument = validated_data.get("instrument")
+        if instrument and not validated_data.get("pip_size"):
+            validated_data["pip_size"] = pip_size_for_instrument(instrument)
+
         return BacktestTask.objects.create(**validated_data)
 
     def update(self, instance: BacktestTask, validated_data: dict) -> BacktestTask:

@@ -73,7 +73,7 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
       type: 'string',
       title: 'Retracement Mode',
       description: 'How position size changes on each retracement entry',
-      enum: ['additive', 'multiplicative'],
+      enum: ['additive', 'multiplicative', 'inverse'],
       default: 'additive',
     },
     retracement_lot_amount: {
@@ -83,6 +83,10 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
         'Amount to add (additive) or multiply by (multiplicative) on each retracement entry',
       default: 1.0,
       minimum: 0.01,
+      dependsOn: {
+        field: 'retracement_lot_mode',
+        values: ['additive', 'multiplicative'],
+      },
     },
     retracement_pips: {
       type: 'number',

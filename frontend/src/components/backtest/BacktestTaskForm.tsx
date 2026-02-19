@@ -198,7 +198,7 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
         <Typography variant="body1">
           {pip_size !== undefined && pip_size !== null
             ? pip_size
-            : 'Auto (from OANDA account)'}
+            : 'Auto (derived from instrument)'}
         </Typography>
       </Grid>
 
@@ -237,7 +237,7 @@ export default function BacktestTaskForm({
       end_time: defaultDateRange.end_time,
       initial_balance: 10000,
       commission_per_trade: 0,
-      pip_size: 0.01,
+      pip_size: undefined,
       instrument: 'USD_JPY',
       trading_mode: 'netting' as const,
       sell_at_completion: false,
@@ -368,7 +368,7 @@ export default function BacktestTaskForm({
       end_time: completeData.end_time,
       initial_balance: completeData.initial_balance,
       commission_per_trade: completeData.commission_per_trade,
-      pip_size: completeData.pip_size,
+      ...(completeData.pip_size != null && { pip_size: completeData.pip_size }),
       instrument: completeData.instrument,
       sell_at_completion: completeData.sell_at_completion,
     };
@@ -610,6 +610,11 @@ export default function BacktestTaskForm({
                   render={({ field }) => (
                     <TextField
                       {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : Number(val));
+                      }}
                       fullWidth
                       label="Pip Size (Optional)"
                       type="number"
@@ -617,7 +622,7 @@ export default function BacktestTaskForm({
                       error={!!errors.pip_size}
                       helperText={
                         errors.pip_size?.message ||
-                        'Leave empty to auto-fetch from OANDA account. Common values: 0.0001 (EUR_USD), 0.01 (USD_JPY)'
+                        'Leave empty to auto-derive from instrument. Common values: 0.0001 (EUR_USD), 0.01 (USD_JPY)'
                       }
                     />
                   )}

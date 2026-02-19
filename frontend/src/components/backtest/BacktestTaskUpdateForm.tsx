@@ -97,7 +97,8 @@ export default function BacktestTaskUpdateForm({
   });
 
   // Fetch all configurations and strategies
-  const { data: configurationsData } = useConfigurations({ page_size: 100 });
+  const { data: configurationsData, isLoading: configurationsLoading } =
+    useConfigurations({ page_size: 100 });
   const configurations = configurationsData?.results || [];
   const { strategies } = useStrategies();
 
@@ -216,6 +217,7 @@ export default function BacktestTaskUpdateForm({
               render={({ field }) => (
                 <ConfigurationSelector
                   configurations={configurations}
+                  isLoading={configurationsLoading}
                   value={field.value}
                   onChange={field.onChange}
                   error={errors.config_id?.message}
