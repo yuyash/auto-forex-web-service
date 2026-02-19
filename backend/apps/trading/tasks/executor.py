@@ -310,6 +310,7 @@ class TaskExecutor:
                     # Update tick count and timestamp
                     state.ticks_processed += 1
                     state.last_tick_timestamp = tick.timestamp
+                    state.last_tick_price = tick.mid
 
                 # Increment batch counter
                 batch_count += 1

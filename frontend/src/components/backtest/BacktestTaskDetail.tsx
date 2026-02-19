@@ -52,9 +52,26 @@ function TabPanel(props: TabPanelProps) {
       role="tabpanel"
       id={`task-tabpanel-${index}`}
       aria-labelledby={`task-tab-${index}`}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        overflow: 'auto',
+      }}
       {...other}
     >
-      <Box sx={{ py: 3 }}>{children}</Box>
+      <Box
+        sx={{
+          pt: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
+        {children}
+      </Box>
     </div>
   );
 }
@@ -76,13 +93,13 @@ export const BacktestTaskDetail: React.FC = () => {
   const tabParam = searchParams.get('tab') || 'overview';
   const tabMap: Record<string, number> = {
     overview: 0,
-    events: 1,
-    logs: 2,
-    trades: 3,
-    replay: 4,
-    equity: 4,
+    trades: 1,
+    replay: 2,
+    events: 3,
+    logs: 4,
+    equity: 2,
   };
-  const tabNames = ['overview', 'events', 'logs', 'trades', 'replay'];
+  const tabNames = ['overview', 'trades', 'replay', 'events', 'logs'];
   const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
 
   const {
@@ -113,28 +130,13 @@ export const BacktestTaskDetail: React.FC = () => {
   const prevStatusRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (polledStatus) {
-      console.log('[BacktestTaskDetail] Polled status update:', polledStatus);
-
-      // Always update if status changed
+      // Refetch when status changes
       if (polledStatus.status !== prevStatusRef.current) {
-        console.log(
-          `[BacktestTaskDetail] Status changed: ${prevStatusRef.current} -> ${polledStatus.status}, refetching`
-        );
         refetch();
       }
       prevStatusRef.current = polledStatus.status;
     }
   }, [polledStatus, refetch]);
-
-  // Log status for debugging
-  useEffect(() => {
-    if (task) {
-      console.log('[BacktestTaskDetail] Status:', {
-        taskStatus: task.status,
-        polledStatus: polledStatus?.status,
-      });
-    }
-  }, [task, polledStatus?.status]);
 
   // Derive tab value from URL parameter (use this for rendering)
   const currentTabValue =
@@ -181,7 +183,17 @@ export const BacktestTaskDetail: React.FC = () => {
     : 'N/A';
 
   return (
-    <Container maxWidth={false} sx={{ py: 4 }}>
+    <Container
+      maxWidth={false}
+      sx={{
+        py: 4,
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        overflow: 'hidden',
+      }}
+    >
       {/* Breadcrumbs */}
       <Breadcrumbs sx={{ mb: 2 }}>
         <Link
@@ -196,10 +208,18 @@ export const BacktestTaskDetail: React.FC = () => {
       </Breadcrumbs>
 
       {/* Header */}
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Paper sx={{ p: 2, pb: 1, mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
           <Box sx={{ flex: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                p: '4px',
+                mb: '4px',
+              }}
+            >
               <Typography variant="h4" component="h1">
                 {task.name}
               </Typography>
@@ -279,18 +299,27 @@ export const BacktestTaskDetail: React.FC = () => {
       </Paper>
 
       {/* Tabs */}
-      <Paper sx={{ mb: 3 }}>
+      <Paper
+        sx={{
+          mb: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+        }}
+      >
         <Tabs
           value={currentTabValue}
           onChange={handleTabChange}
           aria-label="task detail tabs"
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
+          sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
         >
           <Tab label="Overview" {...a11yProps(0)} />
-          <Tab label="Events" {...a11yProps(1)} />
-          <Tab label="Logs" {...a11yProps(2)} />
-          <Tab label="Trades" {...a11yProps(3)} />
-          <Tab label="Replay" {...a11yProps(4)} />
+          <Tab label="Trades" {...a11yProps(1)} />
+          <Tab label="Replay" {...a11yProps(2)} />
+          <Tab label="Raw Events" {...a11yProps(3)} />
+          <Tab label="Raw Logs" {...a11yProps(4)} />
         </Tabs>
 
         {/* Overview Tab */}
@@ -534,8 +563,45 @@ export const BacktestTaskDetail: React.FC = () => {
           </Box>
         </TabPanel>
 
-        {/* Task-based tab content */}
+        {/* Trades Tab */}
         <TabPanel value={currentTabValue} index={1}>
+          <TaskTradesTable
+            taskId={taskId}
+            taskType={TaskType.BACKTEST}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
+            currentPrice={
+              polledStatus?.current_tick?.price != null
+                ? parseFloat(polledStatus.current_tick.price)
+                : task.current_tick?.price != null
+                  ? parseFloat(task.current_tick.price)
+                  : null
+            }
+            pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
+          />
+        </TabPanel>
+
+        {/* Replay Tab */}
+        <TabPanel value={currentTabValue} index={2}>
+          <TaskReplayPanel
+            taskId={taskId}
+            taskType={TaskType.BACKTEST}
+            instrument={task.instrument}
+            startTime={task.start_time}
+            endTime={task.end_time}
+            latestExecution={task.latest_execution}
+            currentTick={
+              polledStatus?.current_tick ?? task.current_tick ?? null
+            }
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
+          />
+        </TabPanel>
+
+        {/* Raw Events Tab */}
+        <TabPanel value={currentTabValue} index={3}>
           <TaskEventsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
@@ -545,35 +611,12 @@ export const BacktestTaskDetail: React.FC = () => {
           />
         </TabPanel>
 
-        <TabPanel value={currentTabValue} index={2}>
+        {/* Raw Logs Tab */}
+        <TabPanel value={currentTabValue} index={4}>
           <TaskLogsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
             executionId={task.celery_task_id || undefined}
-            enableRealTimeUpdates={
-              (polledStatus?.status || task.status) === TaskStatus.RUNNING
-            }
-          />
-        </TabPanel>
-
-        <TabPanel value={currentTabValue} index={3}>
-          <TaskTradesTable
-            taskId={taskId}
-            taskType={TaskType.BACKTEST}
-            enableRealTimeUpdates={
-              (polledStatus?.status || task.status) === TaskStatus.RUNNING
-            }
-          />
-        </TabPanel>
-
-        <TabPanel value={currentTabValue} index={4}>
-          <TaskReplayPanel
-            taskId={taskId}
-            taskType={TaskType.BACKTEST}
-            instrument={task.instrument}
-            startTime={task.start_time}
-            endTime={task.end_time}
-            latestExecution={task.latest_execution}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }

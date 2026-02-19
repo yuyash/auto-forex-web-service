@@ -113,4 +113,11 @@ export type TradingTask = {
    * Strategy-specific state for persistence across restarts
    */
   readonly strategy_state?: any;
+  /**
+   * Current tick position and price (only present for running tasks)
+   */
+  readonly current_tick?: {
+    timestamp: string;
+    price: string | null;
+  } | null;
 };

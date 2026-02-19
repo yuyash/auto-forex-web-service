@@ -116,7 +116,7 @@ class TaskSubResourceMixin:
         task = self.get_object()  # type: ignore[attr-defined]
         event_type = request.query_params.get("event_type")
         severity = request.query_params.get("severity")
-        celery_task_id = request.query_params.get("celery_task_id")
+        celery_task_id = request.query_params.get("celery_task_id") or task.celery_task_id
         queryset = TradingEvent.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
@@ -127,6 +127,8 @@ class TaskSubResourceMixin:
             queryset = queryset.filter(severity=severity)
         if celery_task_id:
             queryset = queryset.filter(celery_task_id=celery_task_id)
+        else:
+            queryset = queryset.none()
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = TradingEventSerializer(page, many=True)
@@ -141,6 +143,12 @@ class TaskSubResourceMixin:
                 type=str,
                 required=False,
                 description="Filter by direction (buy/sell)",
+            ),
+            OpenApiParameter(
+                name="trade_status",
+                type=str,
+                required=False,
+                description="Filter by status (open/closed). open = no close_timestamp, closed = has close_timestamp.",
             ),
             OpenApiParameter(
                 name="celery_task_id",
@@ -159,6 +167,7 @@ class TaskSubResourceMixin:
 
         task = self.get_object()  # type: ignore[attr-defined]
         direction = (request.query_params.get("direction") or "").lower()
+        status = (request.query_params.get("trade_status") or "").lower()
         celery_task_id = request.query_params.get("celery_task_id") or task.celery_task_id
         queryset = Trade.objects.filter(
             task_type=self.task_type_label,
@@ -168,6 +177,10 @@ class TaskSubResourceMixin:
             queryset = queryset.filter(celery_task_id=celery_task_id)
         else:
             queryset = queryset.none()
+        if status == "open":
+            queryset = queryset.filter(close_timestamp__isnull=True)
+        elif status == "closed":
+            queryset = queryset.filter(close_timestamp__isnull=False)
         if direction:
             if direction == "buy":
                 queryset = queryset.filter(direction="long")

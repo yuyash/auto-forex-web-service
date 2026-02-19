@@ -139,4 +139,8 @@ export type BacktestTask = {
    * int: Progress percentage (0-100)
    */
   readonly progress?: number;
+  readonly current_tick?: {
+    timestamp: string;
+    price: string | null;
+  } | null;
 };

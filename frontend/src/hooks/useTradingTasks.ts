@@ -205,7 +205,10 @@ export function useTradingTask(
     }
 
     try {
-      setIsLoading(true);
+      // Only show loading spinner on initial fetch (no data yet)
+      if (!data) {
+        setIsLoading(true);
+      }
       setError(null);
       const result = await tradingTasksApi.get(id);
       setData(result);
@@ -214,7 +217,7 @@ export function useTradingTask(
     } finally {
       setIsLoading(false);
     }
-  }, [id, options?.enabled]);
+  }, [id, options?.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchData();

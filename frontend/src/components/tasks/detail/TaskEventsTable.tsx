@@ -4,7 +4,7 @@
  * Displays task events with server-side pagination.
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Chip,
@@ -119,6 +119,36 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
     },
   ];
 
+  // Measure available height so the table fills the viewport
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [tableMaxHeight, setTableMaxHeight] = useState<string>(
+    'calc(100vh - 640px)'
+  );
+
+  const measure = useCallback(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    // title/filter bar (44) + DataTable internal pagination (52)
+    // + external TablePagination (52) + padding/margin (24)
+    const reserved = 44 + 52 + 52 + 24 + 68;
+    const available = window.innerHeight - top - reserved;
+    setTableMaxHeight(`${Math.max(200, Math.round(available))}px`);
+  }, []);
+
+  useEffect(() => {
+    // Double rAF to wait for layout to settle
+    let raf: number;
+    raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(measure);
+    });
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', measure);
+    };
+  }, [measure]);
+
   if (error) {
     return (
       <Box sx={{ p: 3 }}>
@@ -128,8 +158,28 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ mb: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
+    <Box
+      ref={rootRef}
+      sx={{
+        px: 3,
+        pt: 1,
+        pb: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        overflow: 'hidden',
+      }}
+    >
+      <Box
+        sx={{
+          mb: 1,
+          display: 'flex',
+          gap: 2,
+          alignItems: 'center',
+          flexShrink: 0,
+        }}
+      >
         <Typography variant="h6">Task Events</Typography>
         <FormControl size="small" sx={{ minWidth: 150 }}>
           <InputLabel>Severity Filter</InputLabel>
@@ -155,6 +205,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
         defaultRowsPerPage={rowsPerPage}
         rowsPerPageOptions={[rowsPerPage]}
         storageKey="task-events"
+        tableMaxHeight={tableMaxHeight}
       />
 
       <TablePagination
@@ -168,6 +219,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
           setPage(0);
         }}
         rowsPerPageOptions={[50, 100, 200, 500]}
+        sx={{ flexShrink: 0 }}
       />
     </Box>
   );

@@ -91,6 +91,7 @@ class OrderService:
         *,
         layer_index: int | None = None,
         merge_with_existing: bool = True,
+        override_price: Decimal | None = None,
     ) -> Position:
         """
         Open a new position with specified direction.
@@ -103,6 +104,7 @@ class OrderService:
             stop_loss: Optional stop loss price
             layer_index: Optional layer index for Floor strategy
             merge_with_existing: Whether to merge into existing same-direction position
+            override_price: Optional price to use for dry-run open instead of latest tick data.
 
         Returns:
             Position: Created or updated position
@@ -131,6 +133,7 @@ class OrderService:
             stop_loss=stop_loss,
             layer_index=layer_index,
             merge_with_existing=merge_with_existing,
+            override_price=override_price,
         )
 
     def close_position(
@@ -284,6 +287,7 @@ class OrderService:
         *,
         layer_index: int | None = None,
         merge_with_existing: bool = True,
+        override_price: Decimal | None = None,
     ) -> Position:
         """
         Execute a market order and create/update position.
@@ -311,7 +315,9 @@ class OrderService:
             )
 
             # Execute via OANDA service
-            oanda_order = self.oanda_service.create_market_order(request)
+            oanda_order = self.oanda_service.create_market_order(
+                request, override_price=override_price
+            )
 
             # Create order record
             order = self._create_order_record(

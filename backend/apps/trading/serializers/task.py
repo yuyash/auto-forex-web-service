@@ -82,6 +82,7 @@ class BacktestTaskSerializer(TaskSerializer):
     """Serializer for BacktestTask with execution data."""
 
     progress = serializers.SerializerMethodField()
+    current_tick = serializers.SerializerMethodField()
 
     class Meta(TaskSerializer.Meta):
         model = BacktestTask
@@ -96,6 +97,7 @@ class BacktestTaskSerializer(TaskSerializer):
             "instrument",
             "trading_mode",
             "progress",
+            "current_tick",
         ]
         read_only_fields = TaskSerializer.Meta.read_only_fields + ["user"]
 
@@ -148,9 +150,40 @@ class BacktestTaskSerializer(TaskSerializer):
             # If anything goes wrong, return 0
             return 0
 
+    def get_current_tick(self, obj: BacktestTask) -> dict | None:
+        """Return the current tick position and price for running tasks.
+
+        Returns:
+            dict with 'timestamp' (ISO string) and 'price' (string), or None
+        """
+        from apps.trading.enums import TaskStatus
+        from apps.trading.models.state import ExecutionState
+
+        if obj.status != TaskStatus.RUNNING or not obj.celery_task_id:
+            return None
+
+        try:
+            state = ExecutionState.objects.filter(
+                task_type="backtest",
+                task_id=obj.pk,
+                celery_task_id=obj.celery_task_id,
+            ).first()
+
+            if not state or not state.last_tick_timestamp:
+                return None
+
+            return {
+                "timestamp": state.last_tick_timestamp.isoformat(),
+                "price": str(state.last_tick_price) if state.last_tick_price is not None else None,
+            }
+        except Exception:
+            return None
+
 
 class TradingTaskSerializer(TaskSerializer):
     """Serializer for TradingTask with execution data."""
+
+    current_tick = serializers.SerializerMethodField()
 
     class Meta(TaskSerializer.Meta):
         model = TradingTask
@@ -162,8 +195,38 @@ class TradingTaskSerializer(TaskSerializer):
             "instrument",
             "trading_mode",
             "strategy_state",
+            "current_tick",
         ]
         read_only_fields = TaskSerializer.Meta.read_only_fields + ["user", "strategy_state"]
+
+    def get_current_tick(self, obj: TradingTask) -> dict | None:
+        """Return the current tick position and price for running tasks.
+
+        Returns:
+            dict with 'timestamp' (ISO string) and 'price' (string), or None
+        """
+        from apps.trading.enums import TaskStatus
+        from apps.trading.models.state import ExecutionState
+
+        if obj.status != TaskStatus.RUNNING or not obj.celery_task_id:
+            return None
+
+        try:
+            state = ExecutionState.objects.filter(
+                task_type="trading",
+                task_id=obj.pk,
+                celery_task_id=obj.celery_task_id,
+            ).first()
+
+            if not state or not state.last_tick_timestamp:
+                return None
+
+            return {
+                "timestamp": state.last_tick_timestamp.isoformat(),
+                "price": str(state.last_tick_price) if state.last_tick_price is not None else None,
+            }
+        except Exception:
+            return None
 
 
 class TaskLogSerializer(serializers.ModelSerializer):

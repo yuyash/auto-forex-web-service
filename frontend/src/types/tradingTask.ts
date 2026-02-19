@@ -28,6 +28,7 @@ export interface TradingTask {
   error_message?: string;
   trading_mode?: string;
   pip_size?: string;
+  current_tick?: { timestamp: string; price: string | null } | null;
   created_at: string;
   updated_at: string;
 }

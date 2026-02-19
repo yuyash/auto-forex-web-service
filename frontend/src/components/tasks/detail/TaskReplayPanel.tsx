@@ -8,13 +8,15 @@ import React, {
 import {
   Alert,
   Box,
+  Button,
+  Checkbox,
   CircularProgress,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Paper,
   Select,
-  Stack,
   Table,
   TableBody,
   TableCell,
@@ -23,8 +25,13 @@ import {
   TablePagination,
   TableRow,
   TableSortLabel,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import SelectAllIcon from '@mui/icons-material/SelectAll';
+import DeselectIcon from '@mui/icons-material/Deselect';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   CandlestickSeries,
@@ -50,6 +57,7 @@ import {
   createTooltipTimeFormatter,
 } from '../../../utils/adaptiveTimeScalePlugin';
 import { useAuth } from '../../../contexts/AuthContext';
+import { SequencePositionLine } from '../../../utils/SequencePositionLine';
 
 type CandlePoint = CandlestickData<Time>;
 
@@ -82,7 +90,7 @@ type ReplayTrade = {
   timestamp: string;
   timeSec: UTCTimestamp;
   instrument: string;
-  direction: 'buy' | 'sell';
+  direction: 'long' | 'short';
   units: string;
   price: string;
   execution_method?: string;
@@ -98,6 +106,7 @@ interface TaskReplayPanelProps {
   startTime?: string;
   endTime?: string;
   enableRealTimeUpdates?: boolean;
+  currentTick?: { timestamp: string; price: string | null } | null;
   latestExecution?: {
     realized_pnl?: string;
     unrealized_pnl?: string;
@@ -247,6 +256,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   startTime,
   endTime,
   enableRealTimeUpdates = false,
+  currentTick,
   latestExecution,
 }) => {
   const panelRootRef = useRef<HTMLDivElement | null>(null);
@@ -256,6 +266,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const highlightRef = useRef<MarketClosedHighlight | null>(null);
   const adaptiveRef = useRef<AdaptiveTimeScale | null>(null);
+  const sequenceLineRef = useRef<SequencePositionLine | null>(null);
   const tradesRef = useRef<ReplayTrade[]>([]);
   const { user } = useAuth();
   const timezone = user?.timezone || 'UTC';
@@ -267,6 +278,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { granularities } = useSupportedGranularities();
+
+  // Auto-follow: track whether the chart should auto-scroll to the position line
+  const [autoFollow, setAutoFollow] = useState(true);
+  // Guard flag so our own setVisibleRange calls don't disable auto-follow
+  const programmaticScrollRef = useRef(false);
+
+  // Re-enable auto-follow when real-time updates are turned on (task started)
+  useEffect(() => {
+    if (enableRealTimeUpdates) {
+      setAutoFollow(true);
+    }
+  }, [enableRealTimeUpdates]);
 
   type SortableKey =
     | 'sequence'
@@ -282,16 +305,19 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
+  // Row selection for copy
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
+
   // Column resize state
   const defaultReplayWidths: Record<string, number> = {
-    sequence: 50,
-    timestamp: 170,
-    direction: 70,
-    layer_index: 60,
-    units: 80,
-    price: 100,
-    pnl: 100,
-    execution_method: 110,
+    sequence: 40,
+    timestamp: 150,
+    direction: 55,
+    layer_index: 50,
+    units: 65,
+    price: 85,
+    pnl: 85,
+    execution_method: 95,
   };
   const [replayColWidths, setReplayColWidths] = useState(defaultReplayWidths);
   const replayResizeRef = useRef<{
@@ -403,10 +429,64 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     [sortedTrades, page, rowsPerPage]
   );
 
-  // Reset to first page when sort or data changes
+  // Row selection helpers
+  const isAllPageSelected =
+    paginatedTrades.length > 0 &&
+    paginatedTrades.every((r) => selectedRowIds.has(r.id));
+
+  const toggleRowSelection = useCallback((id: string) => {
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAllOnPage = useCallback(() => {
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev);
+      for (const row of paginatedTrades) next.add(row.id);
+      return next;
+    });
+  }, [paginatedTrades]);
+
+  const resetSelection = useCallback(() => {
+    setSelectedRowIds(new Set());
+  }, []);
+
+  const copySelectedRows = useCallback(() => {
+    const header = [
+      '#',
+      'Time',
+      'Direction',
+      'Layer',
+      'Units',
+      'Price',
+      'PnL',
+      'Event',
+    ].join('\t');
+    const rows = sortedTrades
+      .filter((r) => selectedRowIds.has(r.id))
+      .map((r) =>
+        [
+          r.sequence,
+          new Date(r.timestamp).toLocaleString(),
+          r.direction.toUpperCase(),
+          r.layer_index ?? '-',
+          r.units,
+          r.price ? `¥${parseFloat(r.price).toFixed(3)}` : '-',
+          r.pnl ? `¥${parseFloat(r.pnl).toFixed(3)}` : '-',
+          r.execution_method_display || r.execution_method || '-',
+        ].join('\t')
+      );
+    navigator.clipboard.writeText([header, ...rows].join('\n'));
+  }, [selectedRowIds, sortedTrades]);
+
+  // Reset to first page when sort changes (not on data refresh)
   useEffect(() => {
     setPage(0);
-  }, [orderBy, order, trades]);
+  }, [orderBy, order]);
 
   const granularityOptions = useMemo(() => {
     if (granularities.length > 0) {
@@ -437,21 +517,53 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       latestExecution?.realized_pnl !== undefined
         ? Number(latestExecution.realized_pnl)
         : pnlFromTrades;
+
+    // Compute unrealized PnL from open trades using current tick price.
+    // Use close_timestamp (not pnl) to detect open trades — matches backend logic.
+    const tickPrice =
+      currentTick?.price != null ? parseFloat(currentTick.price) : null;
+    const unrealizedFromTrades = trades.reduce((sum, trade) => {
+      const raw = trade as unknown as Record<string, unknown>;
+      const isOpen = raw.close_timestamp == null;
+      if (!isOpen) return sum;
+      if (tickPrice == null) return sum;
+      const openPrice =
+        raw.open_price != null ? parseFloat(String(raw.open_price)) : NaN;
+      if (!Number.isFinite(openPrice)) return sum;
+      const units = Math.abs(Number(trade.units));
+      if (!Number.isFinite(units)) return sum;
+      const dir = trade.direction;
+      const pnl =
+        dir === 'long'
+          ? (tickPrice - openPrice) * units
+          : (openPrice - tickPrice) * units;
+      return sum + pnl;
+    }, 0);
+
     const unrealizedRaw =
-      latestExecution?.unrealized_pnl !== undefined
-        ? Number(latestExecution.unrealized_pnl)
-        : 0;
+      tickPrice != null
+        ? unrealizedFromTrades
+        : latestExecution?.unrealized_pnl !== undefined
+          ? Number(latestExecution.unrealized_pnl)
+          : 0;
+
     const totalTradesRaw =
       typeof latestExecution?.total_trades === 'number'
         ? latestExecution.total_trades
         : trades.length;
 
+    const openTradesCount = trades.filter((t) => {
+      const raw = t as unknown as Record<string, unknown>;
+      return raw.close_timestamp == null;
+    }).length;
+
     return {
       realizedPnl: Number.isFinite(realizedRaw) ? realizedRaw : 0,
       unrealizedPnl: Number.isFinite(unrealizedRaw) ? unrealizedRaw : 0,
       totalTrades: totalTradesRaw,
+      openTrades: openTradesCount,
     };
-  }, [latestExecution, trades]);
+  }, [latestExecution, trades, currentTick?.price]);
 
   useEffect(() => {
     setGranularity(recommendedGranularity);
@@ -515,10 +627,16 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           const timestamp = String(t.timestamp || '');
           const parsedTime = parseUtcTimestamp(timestamp);
           const direction = String(t.direction || '').toLowerCase();
+          const mappedDirection =
+            direction === 'buy'
+              ? 'long'
+              : direction === 'sell'
+                ? 'short'
+                : direction;
           if (
             !timestamp ||
             parsedTime === null ||
-            (direction !== 'buy' && direction !== 'sell')
+            (mappedDirection !== 'long' && mappedDirection !== 'short')
           ) {
             return null;
           }
@@ -528,7 +646,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             timestamp,
             timeSec: parsedTime,
             instrument: String(t.instrument || instrument),
-            direction: direction as 'buy' | 'sell',
+            direction: mappedDirection as 'long' | 'short',
             units: String(t.units ?? ''),
             price: String(t.price ?? ''),
             execution_method: String(t.execution_method || ''),
@@ -579,36 +697,25 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   }, [rowsPerPage]);
 
   const computeChartHeight = useCallback(() => {
-    // Fixed chrome: browser chrome + nav bar + breadcrumb + task header + tab bar + panel padding
-    const chromeHeight = 230;
-    // Summary cards row
-    const summaryHeight = 85;
-    // Granularity selector + caption
-    const controlsHeight = 60;
-    // Table: header(40) + rows(37 each) + pagination(56) + subtitle(36) + spacing(24)
+    const container = chartContainerRef.current;
+    if (!container) return 360;
+    // Measure how much space the chart container actually has
+    // by reading the flex-computed height of its wrapper
+    const wrapper = container.parentElement;
+    if (wrapper && wrapper.clientHeight > 0) {
+      return Math.max(200, wrapper.clientHeight);
+    }
+    // Fallback: calculate from panel position
+    const panelTop = panelRootRef.current?.getBoundingClientRect().top ?? 230;
     const tableRowHeight = 37;
     const currentRowsPerPage = rowsPerPageRef.current;
-    const currentTradesCount = tradesRef.current.length;
-    const visibleRows = Math.min(
-      currentRowsPerPage,
-      currentTradesCount || currentRowsPerPage
-    );
-    const tableHeight = 40 + tableRowHeight * visibleRows + 56 + 36 + 24 + 100;
-    // Chart border/margin
-    const chartChrome = 28;
-
-    const usedHeight =
-      chromeHeight + summaryHeight + controlsHeight + tableHeight + chartChrome;
-    const available = window.innerHeight - usedHeight;
-    return Math.max(360, Math.round(available));
+    const tableMinHeight = 40 + tableRowHeight * currentRowsPerPage;
+    const fixedContent = 16 + 85 + 60 + tableMinHeight + 56 + 36 + 24 + 28;
+    const available = window.innerHeight - panelTop - fixedContent;
+    return Math.max(200, Math.round(available));
   }, []);
 
-  // Recalculate chart height when rowsPerPage changes
-  useEffect(() => {
-    if (!chartRef.current) return;
-    const newHeight = computeChartHeight();
-    chartRef.current.applyOptions({ height: newHeight });
-  }, [rowsPerPage, computeChartHeight]);
+  // Chart height is managed by flex layout + ResizeObserver
 
   useEffect(() => {
     if (isLoading || candles.length === 0) return;
@@ -672,6 +779,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     series.attachPrimitive(adaptive);
     adaptiveRef.current = adaptive;
 
+    const sequenceLine = new SequencePositionLine();
+    series.attachPrimitive(sequenceLine);
+    sequenceLineRef.current = sequenceLine;
+
     chart.subscribeClick((param) => {
       if (!param.time || tradesRef.current.length === 0) return;
       const t = Number(param.time);
@@ -683,23 +794,35 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       setSelectedTradeId(nearest.id);
     });
 
+    // Detect user-initiated scroll/zoom and disable auto-follow
+    chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+      if (programmaticScrollRef.current) return;
+      setAutoFollow(false);
+    });
+
     const observer = new ResizeObserver(() => {
       const width = container.clientWidth;
+      const height = container.clientHeight;
+      programmaticScrollRef.current = true;
       if (width > 0) {
         chart.applyOptions({ width });
       }
+      if (height > 0) {
+        chart.applyOptions({ height });
+      }
+      requestAnimationFrame(() => {
+        programmaticScrollRef.current = false;
+      });
     });
     observer.observe(container);
+    // Guard initial layout so it doesn't disable auto-follow
+    programmaticScrollRef.current = true;
     chart.applyOptions({ width: container.clientWidth });
-
-    const handleWindowResize = () => {
-      const newHeight = computeChartHeight();
-      chart.applyOptions({ height: newHeight });
-    };
-    window.addEventListener('resize', handleWindowResize);
+    requestAnimationFrame(() => {
+      programmaticScrollRef.current = false;
+    });
 
     return () => {
-      window.removeEventListener('resize', handleWindowResize);
       observer.disconnect();
       chart.remove();
       chartRef.current = null;
@@ -707,8 +830,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       markersRef.current = null;
       highlightRef.current = null;
       adaptiveRef.current = null;
+      sequenceLineRef.current = null;
+      hasInitialFit.current = false;
     };
   }, [isLoading, candles.length, timezone, computeChartHeight]);
+
+  // Track whether this is the first candle load (for initial fitContent)
+  const hasInitialFit = useRef(false);
 
   // Update candle data, market gaps, and fit chart when data changes
   useEffect(() => {
@@ -722,10 +850,64 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       highlightRef.current.setGaps(detectMarketGaps(times));
     }
 
-    if (candles.length > 0) {
+    // Only fit content on the very first load — preserve user's zoom/pan on updates
+    if (candles.length > 0 && !hasInitialFit.current) {
+      programmaticScrollRef.current = true;
       chartRef.current?.timeScale().fitContent();
+      hasInitialFit.current = true;
+      requestAnimationFrame(() => {
+        programmaticScrollRef.current = false;
+      });
     }
   }, [candles]);
+
+  // Auto-follow: show ~40 candles worth of data with the position line centred.
+  // The visible half-width adapts to the selected granularity so the zoom
+  // level always feels natural regardless of candle size.
+  const AUTO_FOLLOW_CANDLES = 500;
+
+  // Update sequence position line when current tick changes
+  useEffect(() => {
+    if (!sequenceLineRef.current) return;
+    if (!enableRealTimeUpdates || !currentTick?.timestamp) {
+      sequenceLineRef.current.clear();
+      return;
+    }
+    const price =
+      currentTick.price != null ? parseFloat(currentTick.price) : null;
+    sequenceLineRef.current.setPosition(currentTick.timestamp, price);
+
+    // Auto-scroll: centre the chart on the current tick (only when auto-follow is on)
+    if (autoFollow) {
+      const ts = chartRef.current?.timeScale();
+      if (ts) {
+        const centerSec = Math.floor(
+          new Date(currentTick.timestamp).getTime() / 1000
+        );
+        if (Number.isFinite(centerSec)) {
+          const candleMin = GRANULARITY_MINUTES[granularity] ?? 60;
+          const halfSec = (AUTO_FOLLOW_CANDLES / 2) * candleMin * 60;
+          programmaticScrollRef.current = true;
+          ts.setVisibleRange({
+            from: (centerSec - halfSec) as Time,
+            to: (centerSec + halfSec) as Time,
+          });
+          // Reset guard after the subscription fires (next microtask)
+          requestAnimationFrame(() => {
+            programmaticScrollRef.current = false;
+          });
+        }
+      }
+    }
+    // Re-run when candles load so the ref is available after chart creation
+  }, [
+    currentTick?.timestamp,
+    currentTick?.price,
+    enableRealTimeUpdates,
+    candles.length,
+    granularity,
+    autoFollow,
+  ]);
 
   // Update trade markers when trades or selection changes (without resetting the view)
   useEffect(() => {
@@ -747,8 +929,8 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         executionMethod === 'volatility_lock';
       const isClose = hasNumericPnl || isCloseByMethod;
 
-      const openSide = t.direction === 'buy' ? 'LONG' : 'SHORT';
-      const closeSide = t.direction === 'buy' ? 'SHORT' : 'LONG';
+      const openSide = t.direction === 'long' ? 'LONG' : 'SHORT';
+      const closeSide = t.direction === 'long' ? 'SHORT' : 'LONG';
       const sideLabel = isClose ? closeSide : openSide;
       const actionLabel = isClose ? 'CLOSE' : 'OPEN';
       const lotLabel = lots === null ? '' : ` ${Math.round(lots)}L`;
@@ -756,12 +938,16 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       return {
         time: t.timeSec,
         position:
-          t.direction === 'buy' ? ('belowBar' as const) : ('aboveBar' as const),
+          t.direction === 'long'
+            ? ('belowBar' as const)
+            : ('aboveBar' as const),
         shape:
-          t.direction === 'buy' ? ('arrowUp' as const) : ('arrowDown' as const),
+          t.direction === 'long'
+            ? ('arrowUp' as const)
+            : ('arrowDown' as const),
         color: selected
           ? '#f59e0b'
-          : t.direction === 'buy'
+          : t.direction === 'long'
             ? '#16a34a'
             : '#ef4444',
         text: `${actionLabel} ${sideLabel}${lotLabel}`,
@@ -777,23 +963,39 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   const onRowSelect = (row: ReplayTrade) => {
     setSelectedTradeId(row.id);
+    setAutoFollow(false);
     const ts = chartRef.current?.timeScale();
     if (!ts) return;
 
     const range = ts.getVisibleRange();
-    if (range) {
-      const half = (Number(range.to) - Number(range.from)) / 2;
-      const center = Number(row.timeSec);
-      ts.setVisibleRange({
-        from: (center - half) as Time,
-        to: (center + half) as Time,
-      });
-    }
+    if (!range) return;
+
+    const from = Number(range.from);
+    const to = Number(range.to);
+    const target = Number(row.timeSec);
+
+    // Already visible → just highlight, no scroll
+    if (target >= from && target <= to) return;
+
+    // Scroll so the target appears at the centre, keeping the same span
+    const span = to - from;
+    const half = span / 2;
+    programmaticScrollRef.current = true;
+    ts.setVisibleRange({
+      from: (target - half) as Time,
+      to: (target + half) as Time,
+    });
+    requestAnimationFrame(() => {
+      programmaticScrollRef.current = false;
+    });
   };
 
   if (isLoading) {
     return (
-      <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
+      <Box
+        ref={panelRootRef}
+        sx={{ p: 4, display: 'flex', justifyContent: 'center' }}
+      >
         <CircularProgress />
       </Box>
     );
@@ -801,47 +1003,45 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   if (error) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box ref={panelRootRef} sx={{ p: 3 }}>
         <Alert severity="error">{error}</Alert>
       </Box>
     );
   }
 
   return (
-    <Box ref={panelRootRef} sx={{ p: 2 }}>
-      <Stack
-        direction="row"
-        spacing={2}
-        sx={{ mb: 1 }}
-        alignItems="center"
-        flexWrap="wrap"
+    <Box
+      ref={panelRootRef}
+      sx={{
+        p: 2,
+        pt: 0,
+        pb: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        overflow: 'hidden',
+        boxSizing: 'border-box',
+      }}
+    >
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          mb: 1,
+          height: 48,
+          minHeight: 48,
+        }}
       >
-        <Typography variant="h6" sx={{ whiteSpace: 'nowrap' }}>
-          Candle Replay
-        </Typography>
-        {isRefreshing && <CircularProgress size={16} thickness={5} />}
-        <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel id="replay-granularity-label">Granularity</InputLabel>
-          <Select
-            labelId="replay-granularity-label"
-            value={granularity}
-            label="Granularity"
-            onChange={handleGranularityChange}
-          >
-            {granularityOptions.map((g) => (
-              <MenuItem key={g.value} value={g.value}>
-                {g.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <Paper variant="outlined" sx={{ p: 1, px: 2, minWidth: 140 }}>
-          <Typography variant="caption" color="text.secondary">
+        <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
+          <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
             Realized PnL ({pnlCurrency})
           </Typography>
           <Typography
-            variant="body1"
+            variant="body2"
             fontWeight="bold"
+            lineHeight={1.4}
             color={
               replaySummary.realizedPnl >= 0 ? 'success.main' : 'error.main'
             }
@@ -849,14 +1049,16 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             {replaySummary.realizedPnl >= 0 ? '+' : ''}
             {replaySummary.realizedPnl.toFixed(2)} {pnlCurrency}
           </Typography>
-        </Paper>
-        <Paper variant="outlined" sx={{ p: 1, px: 2, minWidth: 140 }}>
-          <Typography variant="caption" color="text.secondary">
+        </Box>
+
+        <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
+          <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
             Unrealized PnL ({pnlCurrency})
           </Typography>
           <Typography
-            variant="body1"
+            variant="body2"
             fontWeight="bold"
+            lineHeight={1.4}
             color={
               replaySummary.unrealizedPnl >= 0 ? 'success.main' : 'error.main'
             }
@@ -864,34 +1066,169 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             {replaySummary.unrealizedPnl >= 0 ? '+' : ''}
             {replaySummary.unrealizedPnl.toFixed(2)} {pnlCurrency}
           </Typography>
-        </Paper>
-        <Paper variant="outlined" sx={{ p: 1, px: 2, minWidth: 120 }}>
-          <Typography variant="caption" color="text.secondary">
+        </Box>
+
+        <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
+          <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
             Total Trades (count)
           </Typography>
-          <Typography variant="body1" fontWeight="bold">
+          <Typography variant="body2" fontWeight="bold" lineHeight={1.4}>
             {replaySummary.totalTrades} trades
           </Typography>
-        </Paper>
-      </Stack>
+        </Box>
 
-      <Typography variant="caption" color="text.secondary">
-        Candles are fetched from OANDA (default account). Trade markers show
-        LONG/SHORT and lot size.
-      </Typography>
+        <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
+          <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
+            Open Trades (count)
+          </Typography>
+          <Typography variant="body2" fontWeight="bold" lineHeight={1.4}>
+            {replaySummary.openTrades} trades
+          </Typography>
+        </Box>
 
-      <Paper variant="outlined" sx={{ mt: 1, mb: 2 }}>
-        <Box ref={chartContainerRef} sx={{ width: '100%', minHeight: 360 }} />
+        <Box sx={{ flex: 1 }} />
+
+        <Box
+          sx={{
+            width: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {isRefreshing && <CircularProgress size={16} thickness={5} />}
+        </Box>
+
+        <FormControl
+          size="small"
+          sx={{ minWidth: 110, '& .MuiInputBase-root': { height: 32 } }}
+        >
+          <InputLabel
+            id="replay-granularity-label"
+            sx={{ fontSize: '0.75rem' }}
+          >
+            Granularity
+          </InputLabel>
+          <Select
+            labelId="replay-granularity-label"
+            value={granularity}
+            label="Granularity"
+            onChange={handleGranularityChange}
+            sx={{ fontSize: '0.75rem' }}
+          >
+            {granularityOptions.map((g) => (
+              <MenuItem
+                key={g.value}
+                value={g.value}
+                sx={{ fontSize: '0.75rem' }}
+              >
+                {g.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        {enableRealTimeUpdates && (
+          <Button
+            size="small"
+            variant={autoFollow ? 'contained' : 'outlined'}
+            onClick={() => setAutoFollow(true)}
+            disabled={autoFollow}
+            sx={{
+              fontSize: '0.75rem',
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+              px: 1.5,
+              height: 32,
+            }}
+          >
+            Follow
+          </Button>
+        )}
+      </Box>
+
+      <Paper
+        variant="outlined"
+        sx={{ mt: 1, mb: 1, flex: 1, minHeight: 200, display: 'flex' }}
+      >
+        <Box ref={chartContainerRef} sx={{ width: '100%', flex: 1 }} />
       </Paper>
 
-      <Typography variant="subtitle1" gutterBottom>
-        Layer Trade Timeline
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+        <Typography variant="subtitle1">Layer Trade Timeline</Typography>
+        {selectedRowIds.size > 0 && (
+          <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+            ({selectedRowIds.size} selected)
+          </Typography>
+        )}
+        <Box sx={{ flex: 1 }} />
+        <Tooltip title="Copy selected rows">
+          <span>
+            <IconButton
+              size="small"
+              onClick={copySelectedRows}
+              disabled={selectedRowIds.size === 0}
+            >
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Select all on page">
+          <IconButton size="small" onClick={selectAllOnPage}>
+            <SelectAllIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Reset selection">
+          <span>
+            <IconButton
+              size="small"
+              onClick={resetSelection}
+              disabled={selectedRowIds.size === 0}
+            >
+              <DeselectIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Reload data">
+          <IconButton
+            size="small"
+            onClick={fetchReplayData}
+            disabled={isRefreshing}
+          >
+            <RefreshIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
 
-      <TableContainer component={Paper} variant="outlined">
+      <TableContainer
+        component={Paper}
+        variant="outlined"
+        sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}
+      >
         <Table stickyHeader size="small" sx={{ tableLayout: 'fixed' }}>
           <TableHead>
             <TableRow>
+              <TableCell padding="checkbox" sx={{ width: 42 }}>
+                <Checkbox
+                  size="small"
+                  checked={isAllPageSelected}
+                  indeterminate={
+                    !isAllPageSelected &&
+                    paginatedTrades.some((r) => selectedRowIds.has(r.id))
+                  }
+                  onChange={() => {
+                    if (isAllPageSelected) {
+                      setSelectedRowIds((prev) => {
+                        const next = new Set(prev);
+                        for (const row of paginatedTrades) next.delete(row.id);
+                        return next;
+                      });
+                    } else {
+                      selectAllOnPage();
+                    }
+                  }}
+                />
+              </TableCell>
               <TableCell
                 sortDirection={orderBy === 'sequence' ? order : false}
                 sx={{ position: 'relative', width: replayColWidths.sequence }}
@@ -927,7 +1264,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                   direction={orderBy === 'direction' ? order : 'asc'}
                   onClick={() => handleSort('direction')}
                 >
-                  Side
+                  Direction
                 </TableSortLabel>
                 {resizeHandle('direction')}
               </TableCell>
@@ -1010,6 +1347,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           <TableBody>
             {paginatedTrades.map((row) => {
               const selected = row.id === selectedTradeId;
+              const checked = selectedRowIds.has(row.id);
               return (
                 <TableRow
                   key={row.id}
@@ -1018,6 +1356,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                   selected={selected}
                   sx={{ cursor: 'pointer' }}
                 >
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      size="small"
+                      checked={checked}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => toggleRowSelection(row.id)}
+                    />
+                  </TableCell>
                   <TableCell
                     sx={{
                       overflow: 'hidden',

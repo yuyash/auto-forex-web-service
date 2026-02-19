@@ -12,6 +12,10 @@ export interface TaskStatusResponse {
   task_type: TaskType;
   status: TaskStatus;
   progress: number;
+  current_tick?: {
+    timestamp: string;
+    price: string | null;
+  } | null;
   started_at: string | null;
   completed_at: string | null;
   error_message: string | null;
@@ -197,6 +201,17 @@ export class TaskPollingService {
         ('progress' in task
           ? (task as { progress?: number }).progress
           : undefined) || 0,
+      current_tick:
+        'current_tick' in task
+          ? ((
+              task as {
+                current_tick?: {
+                  timestamp: string;
+                  price: string | null;
+                } | null;
+              }
+            ).current_tick ?? null)
+          : null,
       started_at: task.started_at || null,
       completed_at: task.completed_at || null,
       error_message: task.error_message || null,

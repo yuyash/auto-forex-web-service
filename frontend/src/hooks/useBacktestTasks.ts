@@ -203,7 +203,10 @@ export function useBacktestTask(id?: string): UseBacktestTaskResult {
     }
 
     try {
-      setIsLoading(true);
+      // Only show loading spinner on initial fetch (no data yet)
+      if (!data) {
+        setIsLoading(true);
+      }
       setError(null);
       abortControllerRef.current = new AbortController();
 
@@ -218,7 +221,7 @@ export function useBacktestTask(id?: string): UseBacktestTaskResult {
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [id]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchData();

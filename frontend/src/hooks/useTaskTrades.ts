@@ -12,7 +12,7 @@ export interface TaskTrade {
   sequence: number;
   timestamp: string;
   instrument: string;
-  direction: 'buy' | 'sell';
+  direction: 'long' | 'short';
   units: string;
   price: string;
   layer_index?: number | null;
@@ -29,7 +29,8 @@ export interface TaskTrade {
 interface UseTaskTradesOptions {
   taskId: string | number;
   taskType: TaskType;
-  direction?: 'buy' | 'sell';
+  direction?: 'long' | 'short';
+  status?: 'open' | 'closed';
   page?: number;
   pageSize?: number;
   enableRealTimeUpdates?: boolean;
@@ -50,6 +51,7 @@ export const useTaskTrades = ({
   taskId,
   taskType,
   direction,
+  status,
   page = 1,
   pageSize = 100,
   enableRealTimeUpdates = false,
@@ -67,26 +69,49 @@ export const useTaskTrades = ({
       setIsLoading(true);
       setError(null);
 
+      // Map long/short back to buy/sell for the API
+      const apiDirection =
+        direction === 'long'
+          ? 'buy'
+          : direction === 'short'
+            ? 'sell'
+            : undefined;
+
       const response =
         taskType === TaskType.BACKTEST
           ? await TradingService.tradingTasksBacktestTradesList(
               String(taskId),
               undefined, // celeryTaskId
-              direction,
+              apiDirection,
               undefined, // ordering
               page,
-              pageSize
+              pageSize,
+              undefined, // search
+              status
             )
           : await TradingService.tradingTasksTradingTradesList(
               String(taskId),
               undefined, // celeryTaskId
-              direction,
+              apiDirection,
               undefined, // ordering
               page,
-              pageSize
+              pageSize,
+              undefined, // search
+              status
             );
 
-      setTrades((response.results || []) as unknown as TaskTrade[]);
+      // Map buy/sell from API response to long/short
+      const rawResults = (response.results || []) as Array<
+        Record<string, unknown>
+      >;
+      const mapped = rawResults.map((t) => {
+        const dir = String(t.direction || '').toLowerCase();
+        return {
+          ...t,
+          direction: dir === 'buy' ? 'long' : dir === 'sell' ? 'short' : dir,
+        };
+      });
+      setTrades(mapped as unknown as TaskTrade[]);
       setTotalCount(response.count ?? 0);
       setHasNext(Boolean(response.next));
       setHasPrevious(Boolean(response.previous));
@@ -97,7 +122,7 @@ export const useTaskTrades = ({
     } finally {
       setIsLoading(false);
     }
-  }, [taskId, taskType, direction, page, pageSize]);
+  }, [taskId, taskType, direction, status, page, pageSize]);
 
   useEffect(() => {
     fetchTrades();

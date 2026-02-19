@@ -22,7 +22,10 @@ import {
   Grid,
   Divider,
 } from '@mui/material';
-import { useTradingTask } from '../../hooks/useTradingTasks';
+import {
+  useTradingTask,
+  useTradingTaskPolling,
+} from '../../hooks/useTradingTasks';
 import { useOverviewPnl } from '../../hooks/useOverviewPnl';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
@@ -52,7 +55,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`task-tab-${index}`}
       {...other}
     >
-      <Box sx={{ py: 3 }}>{children}</Box>
+      <Box sx={{ pt: 1 }}>{children}</Box>
     </div>
   );
 }
@@ -74,16 +77,26 @@ export const TradingTaskDetail: React.FC = () => {
   const tabParam = searchParams.get('tab') || 'overview';
   const tabMap: Record<string, number> = {
     overview: 0,
-    events: 1,
-    logs: 2,
-    trades: 3,
-    replay: 4,
-    equity: 4,
+    trades: 1,
+    replay: 2,
+    events: 3,
+    logs: 4,
+    equity: 2,
   };
-  const tabNames = ['overview', 'events', 'logs', 'trades', 'replay'];
+  const tabNames = ['overview', 'trades', 'replay', 'events', 'logs'];
   const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
+
+  // Poll for current_tick updates while task is running
+  const { data: polledTask } = useTradingTaskPolling(
+    taskId,
+    task?.status === TaskStatus.RUNNING,
+    3000
+  );
+
+  // Use polled current_tick when available (fresher data for running tasks)
+  const currentTick = polledTask?.current_tick ?? task?.current_tick;
 
   const overviewSummary = useOverviewPnl(
     taskId,
@@ -151,10 +164,18 @@ export const TradingTaskDetail: React.FC = () => {
       </Breadcrumbs>
 
       {/* Header */}
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Paper sx={{ p: 2, pb: 1, mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
           <Box sx={{ flex: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                p: '8px',
+                mb: '8px',
+              }}
+            >
               <Typography variant="h4" component="h1">
                 {task.name}
               </Typography>
@@ -217,7 +238,7 @@ export const TradingTaskDetail: React.FC = () => {
       </Paper>
 
       {/* Tabs */}
-      <Paper sx={{ mb: 3 }}>
+      <Paper sx={{ mb: 0 }}>
         <Tabs
           value={currentTabValue}
           onChange={handleTabChange}
@@ -225,10 +246,10 @@ export const TradingTaskDetail: React.FC = () => {
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab label="Overview" {...a11yProps(0)} />
-          <Tab label="Events" {...a11yProps(1)} />
-          <Tab label="Logs" {...a11yProps(2)} />
-          <Tab label="Trades" {...a11yProps(3)} />
-          <Tab label="Replay" {...a11yProps(4)} />
+          <Tab label="Trades" {...a11yProps(1)} />
+          <Tab label="Replay" {...a11yProps(2)} />
+          <Tab label="Raw Events" {...a11yProps(3)} />
+          <Tab label="Raw Logs" {...a11yProps(4)} />
         </Tabs>
 
         {/* Overview Tab */}
@@ -435,8 +456,33 @@ export const TradingTaskDetail: React.FC = () => {
           </Box>
         </TabPanel>
 
-        {/* Task-based tab content */}
+        {/* Trades Tab */}
         <TabPanel value={currentTabValue} index={1}>
+          <TaskTradesTable
+            taskId={taskId}
+            taskType={TaskType.TRADING}
+            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
+            currentPrice={
+              currentTick?.price != null ? parseFloat(currentTick.price) : null
+            }
+            pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
+          />
+        </TabPanel>
+
+        {/* Replay Tab */}
+        <TabPanel value={currentTabValue} index={2}>
+          <TaskReplayPanel
+            taskId={taskId}
+            taskType={TaskType.TRADING}
+            instrument={task.instrument}
+            latestExecution={task.latest_execution}
+            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
+            currentTick={currentTick}
+          />
+        </TabPanel>
+
+        {/* Raw Events Tab */}
+        <TabPanel value={currentTabValue} index={3}>
           <TaskEventsTable
             taskId={taskId}
             taskType={TaskType.TRADING}
@@ -444,29 +490,12 @@ export const TradingTaskDetail: React.FC = () => {
           />
         </TabPanel>
 
-        <TabPanel value={currentTabValue} index={2}>
+        {/* Raw Logs Tab */}
+        <TabPanel value={currentTabValue} index={4}>
           <TaskLogsTable
             taskId={taskId}
             taskType={TaskType.TRADING}
             executionId={task.celery_task_id || undefined}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-          />
-        </TabPanel>
-
-        <TabPanel value={currentTabValue} index={3}>
-          <TaskTradesTable
-            taskId={taskId}
-            taskType={TaskType.TRADING}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-          />
-        </TabPanel>
-
-        <TabPanel value={currentTabValue} index={4}>
-          <TaskReplayPanel
-            taskId={taskId}
-            taskType={TaskType.TRADING}
-            instrument={task.instrument}
-            latestExecution={task.latest_execution}
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
           />
         </TabPanel>

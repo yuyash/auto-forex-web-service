@@ -20,6 +20,10 @@ export interface BacktestTask {
   trading_mode?: 'netting' | 'hedging';
   status: TaskStatus;
   progress?: number; // Progress percentage (0-100) for running tasks
+  current_tick?: {
+    timestamp: string;
+    price: string | null;
+  } | null;
   sell_at_completion: boolean;
   latest_execution?: ExecutionSummary;
   started_at?: string;

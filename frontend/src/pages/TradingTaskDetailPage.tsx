@@ -71,9 +71,26 @@ function TabPanel(props: TabPanelProps) {
       role="tabpanel"
       id={`task-tabpanel-${index}`}
       aria-labelledby={`task-tab-${index}`}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        overflow: 'auto',
+      }}
       {...other}
     >
-      <Box sx={{ py: 3 }}>{children}</Box>
+      <Box
+        sx={{
+          py: 3,
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
+        {children}
+      </Box>
     </div>
   );
 }
@@ -434,7 +451,17 @@ export default function TradingTaskDetailPage() {
     currentStatus !== TaskStatus.RUNNING && currentStatus !== TaskStatus.PAUSED;
 
   return (
-    <Container maxWidth={false} sx={{ py: 4 }}>
+    <Container
+      maxWidth={false}
+      sx={{
+        py: 4,
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        overflow: 'hidden',
+      }}
+    >
       {/* Breadcrumbs */}
       <Breadcrumbs sx={{ mb: 2 }}>
         <Link
@@ -457,14 +484,22 @@ export default function TradingTaskDetailPage() {
       )}
 
       {/* Header */}
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Paper sx={{ p: 2, pb: 1, mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
           <IconButton onClick={handleBack} sx={{ mt: -1 }}>
             <ArrowBackIcon />
           </IconButton>
 
           <Box sx={{ flex: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                p: '8px',
+                mb: '8px',
+              }}
+            >
               <Typography variant="h4" component="h1">
                 {task.name}
               </Typography>
@@ -603,12 +638,21 @@ export default function TradingTaskDetailPage() {
       </Paper>
 
       {/* Tabs */}
-      <Paper sx={{ mb: 3 }}>
+      <Paper
+        sx={{
+          mb: 3,
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+        }}
+      >
         <Tabs
           value={tabValue}
           onChange={handleTabChange}
           aria-label="task detail tabs"
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
+          sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
         >
           <Tab label="Live" {...a11yProps(0)} />
           <Tab label="Performance" {...a11yProps(1)} />

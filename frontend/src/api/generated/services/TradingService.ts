@@ -534,6 +534,7 @@ export class TradingService {
    * @param page Page number
    * @param pageSize Number of results per page (default: 100, max: 1000)
    * @param search A search term.
+   * @param status Filter by status (open/closed)
    * @returns PaginatedTradeList
    * @throws ApiError
    */
@@ -544,7 +545,8 @@ export class TradingService {
     ordering?: string,
     page?: number,
     pageSize?: number,
-    search?: string
+    search?: string,
+    status?: string
   ): CancelablePromise<PaginatedTradeList> {
     return __request(OpenAPI, {
       method: 'GET',
@@ -559,6 +561,7 @@ export class TradingService {
         page: page,
         page_size: pageSize,
         search: search,
+        trade_status: status,
       },
     });
   }
@@ -920,6 +923,7 @@ export class TradingService {
    * @param page Page number
    * @param pageSize Number of results per page (default: 100, max: 1000)
    * @param search A search term.
+   * @param status Filter by status (open/closed)
    * @returns PaginatedTradeList
    * @throws ApiError
    */
@@ -930,7 +934,8 @@ export class TradingService {
     ordering?: string,
     page?: number,
     pageSize?: number,
-    search?: string
+    search?: string,
+    status?: string
   ): CancelablePromise<PaginatedTradeList> {
     return __request(OpenAPI, {
       method: 'GET',
@@ -945,6 +950,7 @@ export class TradingService {
         page: page,
         page_size: pageSize,
         search: search,
+        trade_status: status,
       },
     });
   }

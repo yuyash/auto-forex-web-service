@@ -642,13 +642,19 @@ class OandaService:
             create_time=created_time,
         )
 
-    def create_market_order(self, request: MarketOrderRequest) -> MarketOrder:
+    def create_market_order(
+        self,
+        request: MarketOrderRequest,
+        override_price: Decimal | None = None,
+    ) -> MarketOrder:
         direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
         abs_units = abs(request.units)
 
         # Dry-run mode: simulate order execution
         if self.dry_run:
-            return self._simulate_market_order(request, direction, abs_units)
+            return self._simulate_market_order(
+                request, direction, abs_units, override_price=override_price
+            )
 
         # Require account for live trading
         if self.account is None:
@@ -1547,7 +1553,11 @@ class OandaService:
             raise ComplianceViolationError(error_message)
 
     def _simulate_market_order(
-        self, request: MarketOrderRequest, direction: OrderDirection, abs_units: Decimal
+        self,
+        request: MarketOrderRequest,
+        direction: OrderDirection,
+        abs_units: Decimal,
+        override_price: Decimal | None = None,
     ) -> MarketOrder:
         """Simulate market order execution for dry-run mode."""
         from apps.market.models import TickData as TickDataModel
@@ -1556,23 +1566,27 @@ class OandaService:
         order_id = f"DRY-{self._dry_run_order_counter}"
         now = datetime.now(UTC)
 
-        # Get latest tick data for the instrument to simulate fill price
-        try:
-            latest_tick = (
-                TickDataModel.objects.filter(instrument=request.instrument)
-                .order_by("-timestamp")
-                .first()
-            )
-            if latest_tick:
-                # Use bid for sells, ask for buys
-                fill_price = (
-                    latest_tick.ask if direction == OrderDirection.LONG else latest_tick.bid
+        # Use override price if provided (e.g. from strategy event entry_price)
+        if override_price is not None:
+            fill_price = override_price
+        else:
+            # Get latest tick data for the instrument to simulate fill price
+            try:
+                latest_tick = (
+                    TickDataModel.objects.filter(instrument=request.instrument)
+                    .order_by("-timestamp")
+                    .first()
                 )
-            else:
-                # Fallback to a reasonable default if no tick data
+                if latest_tick:
+                    # Use bid for sells, ask for buys
+                    fill_price = (
+                        latest_tick.ask if direction == OrderDirection.LONG else latest_tick.bid
+                    )
+                else:
+                    # Fallback to a reasonable default if no tick data
+                    fill_price = Decimal("1.0000")
+            except Exception:
                 fill_price = Decimal("1.0000")
-        except Exception:
-            fill_price = Decimal("1.0000")
 
         # Update dry-run position tracking
         position_key = f"{request.instrument}_{direction.value}"

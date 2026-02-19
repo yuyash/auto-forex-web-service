@@ -64,6 +64,13 @@ class ExecutionState(UUIDModel):
         blank=True,
         help_text="Timestamp of the last processed tick",
     )
+    last_tick_price = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        null=True,
+        blank=True,
+        help_text="Mid price of the last processed tick",
+    )
 
     class Meta:
         db_table = "execution_state"

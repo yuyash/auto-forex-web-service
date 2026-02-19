@@ -18,6 +18,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
     progress = serializers.SerializerMethodField()
+    current_tick = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask
@@ -39,6 +40,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "trading_mode",
             "status",
             "progress",
+            "current_tick",
             "started_at",
             "completed_at",
             "error_message",
@@ -53,6 +55,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "strategy_type",
             "status",
             "progress",
+            "current_tick",
             "started_at",
             "completed_at",
             "error_message",
@@ -127,6 +130,39 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
                 exc_info=True,
             )
             return 0
+
+    def get_current_tick(self, obj: BacktestTask) -> dict | None:
+        """Return the current tick position and price for running tasks.
+
+        Returns:
+            dict with 'timestamp' (ISO string) and 'price' (string), or None
+        """
+        from apps.trading.enums import TaskStatus, TaskType
+        from apps.trading.models.state import ExecutionState
+
+        if obj.status != TaskStatus.RUNNING or not obj.celery_task_id:
+            return None
+
+        try:
+            state = ExecutionState.objects.filter(
+                task_type=TaskType.BACKTEST.value,
+                task_id=obj.pk,
+                celery_task_id=obj.celery_task_id,
+            ).first()
+
+            if not state or not state.last_tick_timestamp:
+                return None
+
+            return {
+                "timestamp": state.last_tick_timestamp.isoformat(),
+                "price": str(state.last_tick_price) if state.last_tick_price is not None else None,
+            }
+        except Exception as e:
+            logger.error(
+                f"[BacktestTaskSerializer] Error getting current_tick for task {obj.pk}: {e}",
+                exc_info=True,
+            )
+            return None
 
 
 class BacktestTaskListSerializer(serializers.ModelSerializer):

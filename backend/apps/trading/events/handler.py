@@ -234,6 +234,7 @@ class EventHandler:
             direction=direction,
             layer_index=event.layer_number,
             merge_with_existing=False,
+            override_price=event.price if event.price else None,
         )
 
         self._cache_position(event.layer_number, position)
@@ -278,6 +279,7 @@ class EventHandler:
             direction=direction,
             layer_index=event.layer_number,
             merge_with_existing=False,
+            override_price=event.price if event.price else None,
         )
 
         self._cache_position(event.layer_number, position)
