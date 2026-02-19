@@ -40,6 +40,7 @@ const ConfigurationDeleteDialog = ({
   const [confirmed, setConfirmed] = useState(false);
   const [tasks, setTasks] = useState<ConfigurationTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const { deleteConfiguration, isDeleting } = useConfigurationMutations();
 
   // Fetch tasks using this configuration when dialog opens
@@ -60,6 +61,7 @@ const ConfigurationDeleteDialog = ({
         // Reset state when dialog closes
         setConfirmed(false);
         setTasks([]);
+        setDeleteError(null);
       }
     };
 
@@ -68,10 +70,17 @@ const ConfigurationDeleteDialog = ({
 
   const handleDelete = async () => {
     try {
+      setDeleteError(null);
       await deleteConfiguration(configuration.id);
       onClose();
     } catch (error) {
-      console.error('Failed to delete configuration:', error);
+      // Extract error message from API response
+      const err = error as { body?: { error?: string; detail?: string } };
+      const message =
+        err?.body?.error ||
+        err?.body?.detail ||
+        'Failed to delete configuration. It may be in use by existing tasks.';
+      setDeleteError(message);
     }
   };
 
@@ -198,6 +207,13 @@ const ConfigurationDeleteDialog = ({
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
             This action cannot be undone.
           </Typography>
+        )}
+
+        {/* Show API error from delete attempt */}
+        {deleteError && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {deleteError}
+          </Alert>
         )}
       </DialogContent>
 

@@ -505,7 +505,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       return order === 'asc' ? cmp : -cmp;
     });
     return sorted;
-  }, [trades, orderBy, order]);
+  }, [trades, orderBy, order, pipSize]);
 
   const paginatedTrades = useMemo(
     () =>
@@ -576,7 +576,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         ].join('\t')
       );
     navigator.clipboard.writeText([header, ...rows].join('\n'));
-  }, [selectedRowIds, sortedTrades]);
+  }, [selectedRowIds, sortedTrades, pipSize]);
 
   // Reset to first page when sort changes (not on data refresh)
   useEffect(() => {
@@ -978,26 +978,49 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       currentTick.price != null ? parseFloat(currentTick.price) : null;
     sequenceLineRef.current.setPosition(currentTick.timestamp, price);
 
-    // Auto-scroll: centre the chart on the current tick (only when auto-follow is on)
+    // Auto-scroll: keep the sequence line at the horizontal centre of the
+    // viewport.  We use logical-index based positioning so that market gaps
+    // don't shift the line away from the visual centre.
     if (autoFollow) {
       const ts = chartRef.current?.timeScale();
-      if (ts) {
+      const series = seriesRef.current;
+      if (ts && series) {
         const centerSec = Math.floor(
           new Date(currentTick.timestamp).getTime() / 1000
         );
         if (Number.isFinite(centerSec)) {
-          const candleMin = GRANULARITY_MINUTES[granularity] ?? 60;
-          const halfSec = (AUTO_FOLLOW_CANDLES / 2) * candleMin * 60;
+          // Find the logical index of the candle closest to the current tick
+          const data = series.data();
+          let logicalCenter = data.length - 1; // default: latest candle
+          if (data.length > 0) {
+            // Binary search for the nearest candle
+            let lo = 0;
+            let hi = data.length - 1;
+            while (lo < hi) {
+              const mid = (lo + hi) >>> 1;
+              const midSec =
+                typeof data[mid].time === 'number'
+                  ? (data[mid].time as number)
+                  : new Date(data[mid].time as string).getTime() / 1000;
+              if (midSec < centerSec) {
+                lo = mid + 1;
+              } else {
+                hi = mid;
+              }
+            }
+            logicalCenter = lo;
+          }
+
+          const halfCandles = AUTO_FOLLOW_CANDLES / 2;
           programmaticScrollRef.current = true;
           try {
-            ts.setVisibleRange({
-              from: (centerSec - halfSec) as Time,
-              to: (centerSec + halfSec) as Time,
+            ts.setVisibleLogicalRange({
+              from: logicalCenter - halfCandles,
+              to: logicalCenter + halfCandles,
             });
           } catch (e) {
             console.warn('Failed to set visible range during auto-follow:', e);
           }
-          // Reset guard after the subscription fires (next microtask)
           requestAnimationFrame(() => {
             programmaticScrollRef.current = false;
           });

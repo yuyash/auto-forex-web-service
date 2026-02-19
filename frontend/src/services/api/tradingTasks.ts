@@ -109,9 +109,10 @@ export const tradingTasksApi = {
    * Submit a trading task for execution
    */
   start: async (id: string): Promise<TradingTask> => {
-    const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksTradingStartCreate(id, {} as any)
+    // Do NOT use withRetry — start is not idempotent (dispatches a Celery task).
+    const result = await TradingService.tradingTasksTradingStartCreate(
+      id,
+      {} as Record<string, unknown>
     );
     return toLocal(result);
   },
@@ -123,11 +124,11 @@ export const tradingTasksApi = {
     id: string,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _mode?: 'immediate' | 'graceful' | 'graceful_close'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Promise<Record<string, any>> => {
-    return withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksTradingStopCreate(id, {} as any)
+  ): Promise<Record<string, unknown>> => {
+    // Do NOT use withRetry — stop dispatches a Celery task.
+    return TradingService.tradingTasksTradingStopCreate(
+      id,
+      {} as Record<string, unknown>
     );
   },
 
@@ -145,9 +146,10 @@ export const tradingTasksApi = {
    * Resume a cancelled trading task
    */
   resume: async (id: string): Promise<TradingTask> => {
-    const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksTradingResumeCreate(id, {} as any)
+    // Do NOT use withRetry — resume dispatches a Celery task.
+    const result = await TradingService.tradingTasksTradingResumeCreate(
+      id,
+      {} as Record<string, unknown>
     );
     return toLocal(result);
   },
@@ -160,9 +162,10 @@ export const tradingTasksApi = {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _clearState?: boolean
   ): Promise<TradingTask> => {
-    const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksTradingRestartCreate(id, {} as any)
+    // Do NOT use withRetry — restart is not idempotent (dispatches a Celery task).
+    const result = await TradingService.tradingTasksTradingRestartCreate(
+      id,
+      {} as Record<string, unknown>
     );
     return toLocal(result);
   },

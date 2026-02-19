@@ -24,11 +24,6 @@ logger: Logger = getLogger(name=__name__)
 @shared_task(
     bind=True,
     name="trading.tasks.run_trading_task",
-    autoretry_for=(Exception,),
-    retry_kwargs={"max_retries": 3, "countdown": 60},
-    retry_backoff=True,
-    retry_backoff_max=600,
-    retry_jitter=True,
 )
 def run_trading_task(self: Any, task_id: UUID) -> None:
     """Celery task wrapper for running trading tasks.
@@ -45,11 +40,36 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
         logging_session = TaskLoggingSession(task)
         logging_session.start()
 
-        # Update status to RUNNING now that the task is actually executing
-        logger.info(f"Transitioning: {task.status} -> RUNNING - task_id={task_id}")
-        task.status = TaskStatus.RUNNING
-        task.started_at = dj_timezone.now()
-        task.save(update_fields=["status", "started_at", "updated_at"])
+        # Guard: only allow execution from STARTING status.
+        # This prevents duplicate Celery dispatches or retries from
+        # re-running a task that has already completed/failed/stopped.
+        if task.status not in [TaskStatus.STARTING, TaskStatus.CREATED]:
+            logger.warning(
+                f"SKIPPING execution - task_id={task_id}, status={task.status} "
+                f"is not STARTING/CREATED. Another worker may have already processed this task."
+            )
+            return
+
+        # Atomically transition to RUNNING only if still in STARTING/CREATED.
+        now = dj_timezone.now()
+        rows_updated = TradingTask.objects.filter(
+            pk=task_id,
+            status__in=[TaskStatus.STARTING, TaskStatus.CREATED],
+        ).update(
+            status=TaskStatus.RUNNING,
+            started_at=now,
+        )
+
+        if rows_updated == 0:
+            task.refresh_from_db()
+            logger.warning(
+                f"SKIPPING execution (lost race) - task_id={task_id}, "
+                f"current_status={task.status}. Another worker won the transition."
+            )
+            return
+
+        task.refresh_from_db()
+        logger.info(f"Transitioning: STARTING -> RUNNING - task_id={task_id}")
         logger.info(f"Current: RUNNING - task_id={task_id}, started_at={task.started_at}")
 
         # Log task start
@@ -71,10 +91,22 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
         logger.info(f"Current after execution: {task.status} - task_id={task_id}")
 
         if task.status not in [TaskStatus.STOPPED, TaskStatus.STOPPING]:
+            # Atomically transition RUNNING -> STOPPED
             logger.info(f"Transitioning: {task.status} -> STOPPED - task_id={task_id}")
-            task.status = TaskStatus.STOPPED
-            task.save(update_fields=["status", "updated_at"])
-            logger.info(f"Current: STOPPED - task_id={task_id}")
+            rows_updated = TradingTask.objects.filter(
+                pk=task_id,
+                status=TaskStatus.RUNNING,
+            ).update(
+                status=TaskStatus.STOPPED,
+            )
+            if rows_updated == 0:
+                task.refresh_from_db()
+                logger.warning(
+                    f"STOPPED transition failed - task_id={task_id}, current_status={task.status}."
+                )
+                return
+            task.refresh_from_db()
+            logger.info(f"Current: {task.status} - task_id={task_id}")
         else:
             logger.info(f"Already in terminal state: {task.status} - task_id={task_id}")
 
@@ -113,6 +145,7 @@ def execute_trading(task: TradingTask) -> None:
         instrument=task.instrument,
         pip_size=resolved_pip_size,
         strategy_config=task.config,
+        trading_mode=getattr(task, "trading_mode", "hedging"),
     )
 
     # Persist pip_size back to task if it was null

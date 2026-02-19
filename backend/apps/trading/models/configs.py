@@ -131,10 +131,25 @@ class StrategyConfiguration(UUIDModel):
         return self.parameters or {}
 
     def is_in_use(self) -> bool:
-        """Check if configuration is currently in use by any running tasks.
+        """Check if configuration is referenced by any tasks.
 
         Returns:
-            True if configuration is in use, False otherwise
+            True if any trading or backtest tasks reference this configuration,
+            False otherwise.
+        """
+        from apps.trading.models import BacktestTask, TradingTask
+
+        return (
+            TradingTask.objects.filter(config=self).exists()
+            or BacktestTask.objects.filter(config=self).exists()
+        )
+
+    def has_active_tasks(self) -> bool:
+        """Check if configuration is used by any currently running tasks.
+
+        Returns:
+            True if any running tasks reference this configuration,
+            False otherwise.
         """
         from apps.trading.enums import TaskStatus
         from apps.trading.models import BacktestTask, TradingTask

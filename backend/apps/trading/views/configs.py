@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from django.db import models
+from django.db.models import ProtectedError
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -151,13 +152,23 @@ class StrategyConfigDetailView(APIView):
         if config.is_in_use():
             return Response(
                 {
-                    "error": "Cannot delete configuration that is in use by active tasks",
-                    "detail": "Stop or delete all tasks using this configuration first",
+                    "error": "Cannot delete configuration that is in use by tasks",
+                    "detail": "Delete all tasks using this configuration first",
                 },
-                status=status.HTTP_409_CONFLICT,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        config.delete()
+        try:
+            config.delete()
+        except ProtectedError:
+            return Response(
+                {
+                    "error": "Cannot delete configuration that is in use by tasks",
+                    "detail": "Delete all tasks using this configuration first",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         return Response(
             {"message": "Configuration deleted successfully"}, status=status.HTTP_204_NO_CONTENT
         )

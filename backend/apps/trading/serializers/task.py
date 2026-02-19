@@ -83,12 +83,18 @@ class BacktestTaskSerializer(TaskSerializer):
 
     progress = serializers.SerializerMethodField()
     current_tick = serializers.SerializerMethodField()
+    config_id = serializers.UUIDField(source="config.id", read_only=True)
+    config_name = serializers.CharField(source="config.name", read_only=True)
+    strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
 
     class Meta(TaskSerializer.Meta):
         model = BacktestTask
         fields = TaskSerializer.Meta.fields + [
             "user",
             "config",
+            "config_id",
+            "config_name",
+            "strategy_type",
             "data_source",
             "start_time",
             "end_time",
@@ -184,13 +190,23 @@ class TradingTaskSerializer(TaskSerializer):
     """Serializer for TradingTask with execution data."""
 
     current_tick = serializers.SerializerMethodField()
+    config_id = serializers.UUIDField(source="config.id", read_only=True)
+    config_name = serializers.CharField(source="config.name", read_only=True)
+    strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
+    account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
+    account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
 
     class Meta(TaskSerializer.Meta):
         model = TradingTask
         fields = TaskSerializer.Meta.fields + [
             "user",
             "config",
+            "config_id",
+            "config_name",
+            "strategy_type",
             "oanda_account",
+            "account_name",
+            "account_type",
             "sell_on_stop",
             "instrument",
             "trading_mode",

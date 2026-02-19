@@ -300,13 +300,19 @@ TRADING_FLOOR_STRATEGY_DEFAULTS = {
         os.getenv("TRADING_FLOOR_VOLATILITY_LOCK_MULTIPLIER", "5.0")
     ),
     "retracement_trigger_progression": os.getenv(
-        "TRADING_FLOOR_RETRACEMENT_TRIGGER_PROGRESSION", "additive"
+        "TRADING_FLOOR_RETRACEMENT_TRIGGER_PROGRESSION", "constant"
     ),
     "retracement_trigger_increment": float(
         os.getenv("TRADING_FLOOR_RETRACEMENT_TRIGGER_INCREMENT", "5")
     ),
-    "lot_size_progression": os.getenv("TRADING_FLOOR_LOT_SIZE_PROGRESSION", "additive"),
-    "lot_size_increment": float(os.getenv("TRADING_FLOOR_LOT_SIZE_INCREMENT", "0.5")),
+    "take_profit_trigger_progression": os.getenv(
+        "TRADING_FLOOR_TAKE_PROFIT_TRIGGER_PROGRESSION", "constant"
+    ),
+    "take_profit_trigger_increment": float(
+        os.getenv("TRADING_FLOOR_TAKE_PROFIT_TRIGGER_INCREMENT", "5")
+    ),
+    "take_profit_pips_mode": os.getenv("TRADING_FLOOR_TAKE_PROFIT_PIPS_MODE", "constant"),
+    "take_profit_pips_amount": float(os.getenv("TRADING_FLOOR_TAKE_PROFIT_PIPS_AMOUNT", "5")),
     "entry_signal_lookback_candles": int(
         os.getenv("TRADING_FLOOR_ENTRY_SIGNAL_LOOKBACK_CANDLES", "50")
     ),

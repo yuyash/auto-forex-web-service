@@ -199,17 +199,24 @@ class LayerManager:
         """
         if retracement_index <= 0:
             lots = self.config.base_lot_size
+        elif self.config.retracement_lot_mode == "constant":
+            lots = self.config.base_lot_size
         elif self.config.retracement_lot_mode == "additive":
             lots = self.config.base_lot_size + (
                 self.config.retracement_lot_amount * Decimal(retracement_index)
             )
-        elif self.config.retracement_lot_mode == "inverse":
+        elif self.config.retracement_lot_mode == "subtractive":
+            lots = self.config.base_lot_size - (
+                self.config.retracement_lot_amount * Decimal(retracement_index)
+            )
+            lots = max(lots, Decimal("0.01"))
+        elif self.config.retracement_lot_mode == "divisive":
             divisor = Decimal(2**retracement_index)
             lots = max(self.config.base_lot_size / divisor, Decimal("0.01"))
         else:
-            lots = self.config.base_lot_size * (
-                self.config.retracement_lot_amount**retracement_index
-            )
+            # multiplicative
+            multiplier = Decimal(2**retracement_index)
+            lots = self.config.base_lot_size * multiplier
         return int(lots * self.config.lot_unit_size)
 
     def _position_to_info(self, position: Position) -> PositionInfo:

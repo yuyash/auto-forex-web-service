@@ -317,8 +317,8 @@ export const BacktestTaskDetail: React.FC = () => {
           <Tab label="Overview" {...a11yProps(0)} />
           <Tab label="Trades" {...a11yProps(1)} />
           <Tab label="Replay" {...a11yProps(2)} />
-          <Tab label="Raw Events" {...a11yProps(3)} />
-          <Tab label="Raw Logs" {...a11yProps(4)} />
+          <Tab label="Events" {...a11yProps(3)} />
+          <Tab label="Logs" {...a11yProps(4)} />
         </Tabs>
 
         {/* Overview Tab */}
@@ -404,7 +404,7 @@ export const BacktestTaskDetail: React.FC = () => {
                       onClick={() =>
                         navigate(`/configurations/${task.config_id}`)
                       }
-                      sx={{ textAlign: 'left' }}
+                      sx={{ textAlign: 'left', display: 'block' }}
                     >
                       {task.config_name}
                     </Link>
@@ -600,7 +600,7 @@ export const BacktestTaskDetail: React.FC = () => {
           />
         </TabPanel>
 
-        {/* Raw Events Tab */}
+        {/* Events Tab */}
         <TabPanel value={currentTabValue} index={3}>
           <TaskEventsTable
             taskId={taskId}
@@ -611,7 +611,7 @@ export const BacktestTaskDetail: React.FC = () => {
           />
         </TabPanel>
 
-        {/* Raw Logs Tab */}
+        {/* Logs Tab */}
         <TabPanel value={currentTabValue} index={4}>
           <TaskLogsTable
             taskId={taskId}

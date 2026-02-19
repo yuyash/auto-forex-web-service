@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from apps.trading.strategies.floor.calculators import ProgressionCalculator
 from apps.trading.strategies.floor.enums import Direction, StrategyStatus
 
 
@@ -43,19 +44,33 @@ class FloorStrategyConfig:
     base_lot_size: Decimal
     take_profit_pips: Decimal
     retracement_pips: Decimal
+    # --- Intra-layer retracement lot sizing ---
+    # Controls how lot size changes on each retracement entry *within* a single layer.
     retracement_lot_mode: str
     retracement_lot_amount: Decimal
+    # --- Cross-layer retracement trigger progression ---
+    # Controls how the *starting* retracement trigger pips change when a new layer opens.
+    # Layer 0 uses retracement_pips as-is; Layer N applies the progression formula.
+    retracement_trigger_progression: str
+    retracement_trigger_increment: Decimal
+    # --- Cross-layer take-profit trigger progression ---
+    # Controls how the *starting* take-profit pips change when a new layer opens.
+    # Layer 0 uses take_profit_pips as-is; Layer N applies the progression formula.
+    take_profit_trigger_progression: str
+    take_profit_trigger_increment: Decimal
+    # --- Intra-layer take-profit pips adjustment ---
+    # Controls how take-profit pips change on each retracement entry *within* a layer.
+    take_profit_pips_mode: str
+    take_profit_pips_amount: Decimal
     max_layers: int
     max_retracements_per_layer: int
     candle_granularity_seconds: int
     candle_lookback_count: int
     hedging_enabled: bool
     allow_duplicate_units: bool
-    margin_closeout_threshold: Decimal
     margin_cut_start_ratio: Decimal
     margin_cut_target_ratio: Decimal
     margin_protection_enabled: bool
-    leverage: Decimal
     margin_rate: Decimal
     volatility_check_enabled: bool
     volatility_lock_multiplier: Decimal
@@ -84,7 +99,16 @@ class FloorStrategyConfig:
             raw.get("retracement_pips", raw.get("initial_retracement_pips", "30")), "30"
         )
         retracement_lot_mode = str(raw.get("retracement_lot_mode", "additive")).strip().lower()
-        if retracement_lot_mode not in {"additive", "multiplicative", "inverse"}:
+        # Migrate legacy "inverse" → "divisive"
+        if retracement_lot_mode == "inverse":
+            retracement_lot_mode = "divisive"
+        if retracement_lot_mode not in {
+            "constant",
+            "additive",
+            "subtractive",
+            "multiplicative",
+            "divisive",
+        }:
             retracement_lot_mode = "additive"
 
         retracement_lot_amount = _to_decimal(
@@ -94,6 +118,50 @@ class FloorStrategyConfig:
             ),
             "1",
         )
+
+        # Cross-layer retracement trigger progression
+        retracement_trigger_progression = (
+            str(raw.get("retracement_trigger_progression", "constant")).strip().lower()
+        )
+        if retracement_trigger_progression not in {
+            "constant",
+            "additive",
+            "subtractive",
+            "multiplicative",
+            "divisive",
+        }:
+            retracement_trigger_progression = "constant"
+        retracement_trigger_increment = _to_decimal(
+            raw.get("retracement_trigger_increment", "5"), "5"
+        )
+
+        # Cross-layer take-profit trigger progression
+        take_profit_trigger_progression = (
+            str(raw.get("take_profit_trigger_progression", "constant")).strip().lower()
+        )
+        if take_profit_trigger_progression not in {
+            "constant",
+            "additive",
+            "subtractive",
+            "multiplicative",
+            "divisive",
+        }:
+            take_profit_trigger_progression = "constant"
+        take_profit_trigger_increment = _to_decimal(
+            raw.get("take_profit_trigger_increment", "5"), "5"
+        )
+
+        # Intra-layer take-profit pips adjustment
+        take_profit_pips_mode = str(raw.get("take_profit_pips_mode", "constant")).strip().lower()
+        if take_profit_pips_mode not in {
+            "constant",
+            "additive",
+            "subtractive",
+            "multiplicative",
+            "divisive",
+        }:
+            take_profit_pips_mode = "constant"
+        take_profit_pips_amount = _to_decimal(raw.get("take_profit_pips_amount", "5"), "5")
 
         max_retracements_per_layer = _to_int(
             raw.get("max_retracements_per_layer", raw.get("max_additional_entries", 10)), 10
@@ -149,6 +217,12 @@ class FloorStrategyConfig:
             retracement_pips=retracement_pips,
             retracement_lot_mode=retracement_lot_mode,
             retracement_lot_amount=retracement_lot_amount,
+            retracement_trigger_progression=retracement_trigger_progression,
+            retracement_trigger_increment=retracement_trigger_increment,
+            take_profit_trigger_progression=take_profit_trigger_progression,
+            take_profit_trigger_increment=take_profit_trigger_increment,
+            take_profit_pips_mode=take_profit_pips_mode,
+            take_profit_pips_amount=take_profit_pips_amount,
             max_layers=_to_int(raw.get("max_layers", "3"), 3),
             max_retracements_per_layer=max_retracements_per_layer,
             candle_granularity_seconds=_to_int(
@@ -167,13 +241,9 @@ class FloorStrategyConfig:
             ),
             hedging_enabled=_to_bool(raw.get("hedging_enabled", False), False),
             allow_duplicate_units=_to_bool(raw.get("allow_duplicate_units", False), False),
-            margin_closeout_threshold=_to_decimal(
-                raw.get("margin_closeout_threshold", "0.8"), "0.8"
-            ),
             margin_cut_start_ratio=_to_decimal(raw.get("margin_cut_start_ratio", "0.6"), "0.6"),
             margin_cut_target_ratio=_to_decimal(raw.get("margin_cut_target_ratio", "0.5"), "0.5"),
             margin_protection_enabled=_to_bool(raw.get("margin_protection_enabled", True), True),
-            leverage=_to_decimal(raw.get("leverage", "25"), "25"),
             margin_rate=_to_decimal(raw.get("margin_rate", "0.04"), "0.04"),
             volatility_check_enabled=_to_bool(raw.get("volatility_check_enabled", True), True),
             volatility_lock_multiplier=_to_decimal(
@@ -205,17 +275,21 @@ class FloorStrategyConfig:
             "retracement_pips": str(self.retracement_pips),
             "retracement_lot_mode": self.retracement_lot_mode,
             "retracement_lot_amount": str(self.retracement_lot_amount),
+            "retracement_trigger_progression": self.retracement_trigger_progression,
+            "retracement_trigger_increment": str(self.retracement_trigger_increment),
+            "take_profit_trigger_progression": self.take_profit_trigger_progression,
+            "take_profit_trigger_increment": str(self.take_profit_trigger_increment),
+            "take_profit_pips_mode": self.take_profit_pips_mode,
+            "take_profit_pips_amount": str(self.take_profit_pips_amount),
             "max_layers": self.max_layers,
             "max_retracements_per_layer": self.max_retracements_per_layer,
             "candle_granularity_seconds": self.candle_granularity_seconds,
             "candle_lookback_count": self.candle_lookback_count,
             "hedging_enabled": self.hedging_enabled,
             "allow_duplicate_units": self.allow_duplicate_units,
-            "margin_closeout_threshold": str(self.margin_closeout_threshold),
             "margin_cut_start_ratio": str(self.margin_cut_start_ratio),
             "margin_cut_target_ratio": str(self.margin_cut_target_ratio),
             "margin_protection_enabled": self.margin_protection_enabled,
-            "leverage": str(self.leverage),
             "margin_rate": str(self.margin_rate),
             "volatility_check_enabled": self.volatility_check_enabled,
             "volatility_lock_multiplier": str(self.volatility_lock_multiplier),
@@ -235,14 +309,57 @@ class FloorStrategyConfig:
         }
 
     def floor_take_profit_pips(self, floor_index: int) -> Decimal:
+        """Return the base take-profit pips for the given layer.
+
+        If a floor_profile override exists for this index, use it.
+        Otherwise apply cross-layer progression to the global take_profit_pips.
+        """
         if 0 <= floor_index < len(self.floor_profiles):
             return self.floor_profiles[floor_index].get("take_profit_pips", self.take_profit_pips)
-        return self.take_profit_pips
+        from apps.trading.strategies.floor.enums import Progression
+
+        mode = Progression(self.take_profit_trigger_progression)
+        return ProgressionCalculator.calculate(
+            base=self.take_profit_pips,
+            index=floor_index,
+            mode=mode,
+            increment=self.take_profit_trigger_increment,
+        )
 
     def floor_retracement_pips(self, floor_index: int) -> Decimal:
+        """Return the base retracement trigger pips for the given layer.
+
+        If a floor_profile override exists for this index, use it.
+        Otherwise apply cross-layer progression to the global retracement_pips.
+        """
         if 0 <= floor_index < len(self.floor_profiles):
             return self.floor_profiles[floor_index].get("retracement_pips", self.retracement_pips)
-        return self.retracement_pips
+        from apps.trading.strategies.floor.enums import Progression
+
+        mode = Progression(self.retracement_trigger_progression)
+        return ProgressionCalculator.calculate(
+            base=self.retracement_pips,
+            index=floor_index,
+            mode=mode,
+            increment=self.retracement_trigger_increment,
+        )
+
+    def intra_layer_take_profit_pips(self, floor_index: int, retracement_index: int) -> Decimal:
+        """Return take-profit pips adjusted for the Nth retracement within a layer.
+
+        The base value comes from floor_take_profit_pips (cross-layer),
+        then intra-layer progression is applied based on retracement_index.
+        """
+        base_tp = self.floor_take_profit_pips(floor_index)
+        from apps.trading.strategies.floor.enums import Progression
+
+        mode = Progression(self.take_profit_pips_mode)
+        return ProgressionCalculator.calculate(
+            base=base_tp,
+            index=retracement_index,
+            mode=mode,
+            increment=self.take_profit_pips_amount,
+        )
 
 
 @dataclass

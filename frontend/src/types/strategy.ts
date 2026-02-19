@@ -26,6 +26,8 @@ export interface ConfigProperty {
   items?: {
     type: string;
   };
+  /** Logical group for UI section grouping */
+  group?: string;
   // Conditional visibility: show this field only when another field has specific values
   dependsOn?: {
     field: string;

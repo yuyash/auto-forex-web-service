@@ -81,35 +81,35 @@ export const backtestTasksApi = {
   },
 
   start: async (id: string): Promise<BacktestTask> => {
-    const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksBacktestStartCreate(id, {} as any)
+    // Do NOT use withRetry — start is not idempotent (dispatches a Celery task).
+    const result = await TradingService.tradingTasksBacktestStartCreate(
+      id,
+      {} as Record<string, unknown>
     );
     return toLocal(result);
   },
 
-  stop: async (
-    id: string
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Promise<Record<string, any>> => {
-    return withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksBacktestStopCreate(id, {} as any)
+  stop: async (id: string): Promise<Record<string, unknown>> => {
+    // Do NOT use withRetry — stop dispatches a Celery task.
+    return TradingService.tradingTasksBacktestStopCreate(
+      id,
+      {} as Record<string, unknown>
     );
   },
 
   pause: async (id: string): Promise<BacktestTask> => {
-    const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksBacktestPauseCreate(id, {} as any)
+    const result = await TradingService.tradingTasksBacktestPauseCreate(
+      id,
+      {} as Record<string, unknown>
     );
     return toLocal(result);
   },
 
   resume: async (id: string): Promise<BacktestTask> => {
-    const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksBacktestResumeCreate(id, {} as any)
+    // Do NOT use withRetry — resume dispatches a Celery task.
+    const result = await TradingService.tradingTasksBacktestResumeCreate(
+      id,
+      {} as Record<string, unknown>
     );
     return toLocal(result);
   },
@@ -119,9 +119,11 @@ export const backtestTasksApi = {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _clearState?: boolean
   ): Promise<BacktestTask> => {
-    const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingTasksBacktestRestartCreate(id, {} as any)
+    // Do NOT use withRetry for restart — it is not idempotent.
+    // Retrying a restart dispatches duplicate Celery tasks.
+    const result = await TradingService.tradingTasksBacktestRestartCreate(
+      id,
+      {} as Record<string, unknown>
     );
     return toLocal(result);
   },

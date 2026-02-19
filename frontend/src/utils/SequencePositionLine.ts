@@ -139,23 +139,49 @@ class LinePaneView implements IPrimitivePaneView {
     // Try direct coordinate lookup
     let x = timeScale.timeToCoordinate(timestamp as unknown as Time);
 
-    // Fallback: interpolate using two known data-point coordinates so the
-    // line stays anchored to the correct time position even when the user
-    // scrolls / zooms and the exact timestamp has no matching data point.
+    // Fallback: interpolate using the two data points closest to the target
+    // timestamp so the line stays anchored to the correct time position even
+    // when the user scrolls / zooms and the exact timestamp has no matching
+    // data point.  Using nearest neighbours instead of visible-range endpoints
+    // avoids drift caused by market gaps (non-linear time axis).
     if (x === null) {
       const series = param.series;
       const data = series.data();
       if (!data || data.length === 0) return null;
 
-      const logicalRange = timeScale.getVisibleLogicalRange();
-      if (!logicalRange) return null;
+      // Binary search for the closest data point index
+      let lo = 0;
+      let hi = data.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        const midSec =
+          typeof data[mid].time === 'number'
+            ? (data[mid].time as number)
+            : new Date(data[mid].time as string).getTime() / 1000;
+        if (midSec < timestamp) {
+          lo = mid + 1;
+        } else {
+          hi = mid;
+        }
+      }
 
-      const si = Math.max(0, Math.floor(logicalRange.from));
-      const ei = Math.min(data.length - 1, Math.ceil(logicalRange.to));
-      if (si >= ei) return null;
+      // Pick the two bracketing points (or clamp to edges)
+      let idxA: number;
+      let idxB: number;
+      if (lo === 0) {
+        idxA = 0;
+        idxB = Math.min(1, data.length - 1);
+      } else if (lo >= data.length) {
+        idxA = data.length - 2;
+        idxB = data.length - 1;
+      } else {
+        idxA = lo - 1;
+        idxB = lo;
+      }
+      if (idxA === idxB) return null;
 
-      const ptA = data[si];
-      const ptB = data[ei];
+      const ptA = data[idxA];
+      const ptB = data[idxB];
       const xA = timeScale.timeToCoordinate(ptA.time);
       const xB = timeScale.timeToCoordinate(ptB.time);
       if (xA === null || xB === null) return null;
@@ -205,6 +231,7 @@ export class SequencePositionLine implements ISeriesPrimitive<Time> {
   private _param: SeriesAttachedParameter<Time> | null = null;
   private _deferredUpdateId: ReturnType<typeof requestAnimationFrame> | null =
     null;
+  private _rangeChangeHandler: (() => void) | null = null;
 
   constructor() {
     this._paneViews = [new LinePaneView(this)];
@@ -212,10 +239,27 @@ export class SequencePositionLine implements ISeriesPrimitive<Time> {
 
   attached(param: SeriesAttachedParameter<Time>): void {
     this._param = param;
+
+    // Auto-correct: re-render the line whenever the user scrolls or zooms
+    // so the position stays accurate after any chart interaction.
+    this._rangeChangeHandler = () => {
+      if (this._timestamp !== null) {
+        this._param?.requestUpdate();
+      }
+    };
+    param.chart
+      .timeScale()
+      .subscribeVisibleLogicalRangeChange(this._rangeChangeHandler);
   }
 
   detached(): void {
     this._cancelDeferredUpdate();
+    if (this._rangeChangeHandler && this._param) {
+      this._param.chart
+        .timeScale()
+        .unsubscribeVisibleLogicalRangeChange(this._rangeChangeHandler);
+      this._rangeChangeHandler = null;
+    }
     this._param = null;
   }
 

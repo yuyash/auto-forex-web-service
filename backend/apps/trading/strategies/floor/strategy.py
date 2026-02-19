@@ -48,25 +48,36 @@ class FloorStrategy(Strategy):
     - Processes ticks and generates events
     """
 
-    def __init__(self, instrument: str, pip_size: Decimal, config: FloorStrategyConfig) -> None:
+    def __init__(
+        self,
+        instrument: str,
+        pip_size: Decimal,
+        config: FloorStrategyConfig,
+        trading_mode: str = "hedging",
+    ) -> None:
         """Initialize trading engine.
 
         Args:
             instrument: Trading instrument (e.g., "USD_JPY")
             pip_size: Pip size for instrument
             config: Strategy configuration
+            trading_mode: "netting" enforces FIFO close order (US regulation),
+                          "hedging" allows LIFO / independent closes (JP, etc.)
         """
         super().__init__(instrument, pip_size, config)
+
+        self.trading_mode = trading_mode
 
         # Components
         self.candle_manager = CandleManager(config)
         self.trend_detector = TrendDetector()
 
         logger.info(
-            "Initialized Floor trading engine: instrument=%s, pip_size=%s, hedging=%s",
+            "Initialized Floor trading engine: instrument=%s, pip_size=%s, hedging=%s, trading_mode=%s",
             instrument,
             pip_size,
             config.hedging_enabled,
+            trading_mode,
         )
 
     @staticmethod
@@ -250,8 +261,17 @@ class FloorStrategy(Strategy):
             return False
         return self._spread_pips(tick) >= self.config.market_condition_spread_limit_pips
 
-    def _effective_take_profit(self, floor_state: FloorStrategyState, floor_index: int) -> Decimal:
-        base_take_profit = self.config.floor_take_profit_pips(floor_index)
+    def _effective_take_profit(
+        self, floor_state: FloorStrategyState, floor_index: int, retracement_index: int = 0
+    ) -> Decimal:
+        """Return take-profit pips with intra-layer and optional ATR adjustment.
+
+        Args:
+            floor_state: Current strategy state
+            floor_index: Active layer index (cross-layer progression)
+            retracement_index: Retracement count within the layer (intra-layer progression)
+        """
+        base_take_profit = self.config.intra_layer_take_profit_pips(floor_index, retracement_index)
         if not self.config.dynamic_parameter_adjustment_enabled:
             return base_take_profit
         current_atr = self._estimate_atr_pips(floor_state, self.config.atr_period)
@@ -285,20 +305,35 @@ class FloorStrategy(Strategy):
         return base_retracement
 
     def _retracement_lots(self, retracement_index: int) -> Decimal:
-        """Return lot size for Nth additional entry (0-based)."""
+        """Return lot size for Nth additional entry (0-based).
+
+        Uses the same 5-mode Progression logic as cross-layer parameters:
+        constant / additive / subtractive / multiplicative / divisive.
+        """
         if retracement_index < 0:
             return self.config.base_lot_size
-        if self.config.retracement_lot_mode == "additive":
-            return self.config.base_lot_size + (
-                self.config.retracement_lot_amount * Decimal(retracement_index + 1)
-            )
-        if self.config.retracement_lot_mode == "inverse":
-            divisor = Decimal(2 ** (retracement_index + 1))
-            result = self.config.base_lot_size / divisor
+
+        idx = retracement_index + 1
+        mode = self.config.retracement_lot_mode
+
+        if mode == "constant":
+            return self.config.base_lot_size
+
+        if mode == "additive":
+            return self.config.base_lot_size + (self.config.retracement_lot_amount * Decimal(idx))
+
+        if mode == "subtractive":
+            result = self.config.base_lot_size - (self.config.retracement_lot_amount * Decimal(idx))
             return max(result, Decimal("0.01"))
-        return self.config.base_lot_size * (
-            self.config.retracement_lot_amount ** (retracement_index + 1)
-        )
+
+        if mode == "multiplicative":
+            multiplier = Decimal(2**idx)
+            return self.config.base_lot_size * multiplier
+
+        # divisive (formerly "inverse")
+        divisor = Decimal(2**idx)
+        result = self.config.base_lot_size / divisor
+        return max(result, Decimal("0.01"))
 
     def _recompute_floor_retracements(self, floor_state: FloorStrategyState) -> None:
         grouped: dict[int, list[dict[str, Any]]] = {}
@@ -494,10 +529,12 @@ class FloorStrategy(Strategy):
             state.strategy_state = floor_state.to_dict()
             return StrategyResult(state=state, events=events)
 
-        # 1) Take profit from newest entry first (LIFO).
+        # 1) Take profit: LIFO (newest first) in hedging mode,
+        #    FIFO (oldest first) in netting mode (US FIFO regulation).
+        fifo_mode = self.trading_mode == "netting"
         closed_any = False
         for entry in sorted(
-            active_entries, key=lambda item: int(item.get("entry_id", 0)), reverse=True
+            active_entries, key=lambda item: int(item.get("entry_id", 0)), reverse=not fifo_mode
         ):
             direction = self._normalize_direction(str(entry.get("direction", "long")))
             entry_price = Decimal(str(entry.get("entry_price", "0")))
@@ -600,7 +637,9 @@ class FloorStrategy(Strategy):
                     floor_index=active_floor,
                     direction=direction,
                     units=units,
-                    take_profit_pips=self._effective_take_profit(floor_state, active_floor),
+                    take_profit_pips=self._effective_take_profit(
+                        floor_state, active_floor, current_retracements + 1
+                    ),
                     is_initial=False,
                 )
             )

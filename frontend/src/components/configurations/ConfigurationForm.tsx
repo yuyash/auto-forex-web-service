@@ -25,6 +25,7 @@ import { useStrategies } from '../../hooks/useStrategies';
 import { strategiesApi } from '../../services/api';
 import type { StrategyConfigCreateData } from '../../types/configuration';
 import type { StrategyConfig, ConfigSchema } from '../../types/strategy';
+import { STRATEGY_CONFIG_SCHEMAS } from './strategyConfigSchemas';
 
 // Validation schema
 const configurationSchema = z.object({
@@ -50,271 +51,6 @@ interface ConfigurationFormProps {
   isLoading?: boolean;
 }
 
-const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
-  type: 'object',
-  title: 'Floor Strategy Configuration',
-  description: 'Configuration for Floor strategy.',
-  properties: {
-    base_lot_size: {
-      type: 'number',
-      title: 'Base Lot Size',
-      description: 'Initial lot size for the first entry.',
-      default: 1.0,
-      minimum: 0.01,
-    },
-    lot_unit_size: {
-      type: 'integer',
-      title: 'Lot Unit Size',
-      description: 'Units per 1 lot.',
-      default: 1000,
-      minimum: 1,
-    },
-    retracement_lot_mode: {
-      type: 'string',
-      title: 'Retracement Mode',
-      description: 'How position size changes on each retracement entry',
-      enum: ['additive', 'multiplicative', 'inverse'],
-      default: 'additive',
-    },
-    retracement_lot_amount: {
-      type: 'number',
-      title: 'Retracement Amount',
-      description:
-        'Amount to add (additive) or multiply by (multiplicative) on each retracement entry',
-      default: 1.0,
-      minimum: 0.01,
-      dependsOn: {
-        field: 'retracement_lot_mode',
-        values: ['additive', 'multiplicative'],
-      },
-    },
-    retracement_pips: {
-      type: 'number',
-      title: 'Retracement Pips',
-      description: 'Number of pips retracement required to trigger retracement',
-      default: 30,
-      minimum: 1,
-    },
-    take_profit_pips: {
-      type: 'number',
-      title: 'Take Profit Pips',
-      description: 'Number of pips profit to trigger position close',
-      default: 25,
-      minimum: 1,
-    },
-    max_layers: {
-      type: 'integer',
-      title: 'Maximum Layers',
-      description: 'Maximum number of concurrent layers',
-      default: 3,
-      minimum: 1,
-    },
-    max_retracements_per_layer: {
-      type: 'integer',
-      title: 'Max Retracements Per Layer',
-      description: 'Max number of retracement entries allowed per layer.',
-      default: 10,
-      minimum: 1,
-    },
-    retracement_trigger_progression: {
-      type: 'string',
-      title: 'Retracement Trigger Progression',
-      enum: ['equal', 'additive', 'exponential', 'inverse'],
-      description: 'How retracement triggers progress across layers.',
-      default: 'equal',
-    },
-    retracement_trigger_increment: {
-      type: 'number',
-      title: 'Retracement Trigger Increment',
-      description: 'Used for additive/exponential progression.',
-      default: 1.0,
-      dependsOn: {
-        field: 'retracement_trigger_progression',
-        values: ['additive', 'exponential'],
-      },
-    },
-    lot_size_progression: {
-      type: 'string',
-      title: 'Lot Size Progression',
-      enum: ['equal', 'additive', 'exponential', 'inverse'],
-      description: 'How base lot size changes across layers.',
-      default: 'equal',
-    },
-    lot_size_increment: {
-      type: 'number',
-      title: 'Lot Size Increment',
-      description: 'Used for additive/exponential progression.',
-      default: 1.0,
-      dependsOn: {
-        field: 'lot_size_progression',
-        values: ['additive', 'exponential'],
-      },
-    },
-    entry_signal_lookback_candles: {
-      type: 'integer',
-      title: 'Momentum Lookback Candles',
-      default: 50,
-      description: 'Number of candles to analyze for trend direction.',
-      minimum: 1,
-    },
-    entry_signal_candle_granularity_seconds: {
-      type: 'integer',
-      title: 'Momentum Candle Granularity (seconds)',
-      default: 60,
-      description: 'Candle size in seconds used for trend lookback.',
-      minimum: 1,
-    },
-    allow_duplicate_units: {
-      type: 'boolean',
-      title: 'Allow Duplicate Units',
-      default: false,
-      description:
-        'If false, duplicate position sizes are automatically avoided.',
-    },
-    hedging_enabled: {
-      type: 'boolean',
-      title: 'Hedging Enabled',
-      default: false,
-      description:
-        'Whether account can hold opposite positions simultaneously.',
-    },
-    margin_protection_enabled: {
-      type: 'boolean',
-      title: 'Margin Protection Enabled',
-      default: true,
-      description:
-        'Enable forced closeout logic based on margin ratio thresholds.',
-    },
-    margin_rate: {
-      type: 'number',
-      title: 'Margin Rate',
-      default: 0.04,
-      description: 'Margin requirement rate.',
-      dependsOn: {
-        field: 'margin_protection_enabled',
-        values: ['true'],
-      },
-    },
-    margin_cut_start_ratio: {
-      type: 'number',
-      title: 'Margin Cut Start Ratio',
-      default: 0.6,
-      description:
-        'Start forced reduction when margin ratio reaches this value.',
-      dependsOn: {
-        field: 'margin_protection_enabled',
-        values: ['true'],
-      },
-    },
-    margin_cut_target_ratio: {
-      type: 'number',
-      title: 'Margin Cut Target Ratio',
-      default: 0.5,
-      description: 'Target ratio after forced reduction.',
-      dependsOn: {
-        field: 'margin_protection_enabled',
-        values: ['true'],
-      },
-    },
-    volatility_check_enabled: {
-      type: 'boolean',
-      title: 'Volatility Check Enabled',
-      default: true,
-      description: 'Enable ATR-based volatility lock/unlock checks.',
-    },
-    volatility_lock_multiplier: {
-      type: 'number',
-      title: 'Volatility Lock Multiplier',
-      description: 'ATR multiplier threshold to trigger volatility lock.',
-      default: 5.0,
-      minimum: 1,
-      dependsOn: {
-        field: 'volatility_check_enabled',
-        values: ['true'],
-      },
-    },
-    volatility_unlock_multiplier: {
-      type: 'number',
-      title: 'Volatility Unlock Multiplier',
-      default: 1.5,
-      description: 'ATR multiplier threshold to unlock strategy after lock.',
-      dependsOn: {
-        field: 'volatility_check_enabled',
-        values: ['true'],
-      },
-    },
-    dynamic_parameter_adjustment_enabled: {
-      type: 'boolean',
-      title: 'Dynamic Parameter Adjustment',
-      default: false,
-      description: 'Adjust triggers/targets based on volatility.',
-      dependsOn: {
-        field: 'volatility_check_enabled',
-        values: ['true'],
-      },
-    },
-    atr_period: {
-      type: 'integer',
-      title: 'ATR Period',
-      default: 14,
-      description: 'ATR window for lock detection.',
-      dependsOn: {
-        field: 'volatility_check_enabled',
-        values: ['true'],
-        or: [
-          {
-            field: 'dynamic_parameter_adjustment_enabled',
-            values: ['true'],
-          },
-        ],
-      },
-    },
-    atr_baseline_period: {
-      type: 'integer',
-      title: 'ATR Baseline Period',
-      default: 50,
-      description: 'Baseline ATR window used for ATR multiplier comparison.',
-      dependsOn: {
-        field: 'volatility_check_enabled',
-        values: ['true'],
-        or: [
-          {
-            field: 'dynamic_parameter_adjustment_enabled',
-            values: ['true'],
-          },
-        ],
-      },
-    },
-    market_condition_override_enabled: {
-      type: 'boolean',
-      title: 'Market Condition Override',
-      default: true,
-      description: 'Enable temporary rule override on bad market conditions.',
-    },
-    market_condition_spread_limit_pips: {
-      type: 'number',
-      title: 'Spread Limit (pips)',
-      default: 3.0,
-      description: 'Skip new entries when spread exceeds this value.',
-      dependsOn: {
-        field: 'market_condition_override_enabled',
-        values: ['true'],
-      },
-    },
-  },
-  required: [
-    'base_lot_size',
-    'retracement_lot_mode',
-    'retracement_lot_amount',
-    'retracement_pips',
-    'take_profit_pips',
-  ],
-};
-
-const STRATEGY_CONFIG_SCHEMAS: Record<string, ConfigSchema> = {
-  floor: FLOOR_STRATEGY_SCHEMA,
-};
-
 // Default parameters for each strategy type
 // These should match the required parameters in the backend strategy schemas
 const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
@@ -327,10 +63,12 @@ const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
     take_profit_pips: 25,
     max_layers: 3,
     max_retracements_per_layer: 10,
-    retracement_trigger_progression: 'equal',
-    retracement_trigger_increment: 1.0,
-    lot_size_progression: 'equal',
-    lot_size_increment: 1.0,
+    retracement_trigger_progression: 'constant',
+    retracement_trigger_increment: 5.0,
+    take_profit_trigger_progression: 'constant',
+    take_profit_trigger_increment: 5.0,
+    take_profit_pips_mode: 'constant',
+    take_profit_pips_amount: 5.0,
     entry_signal_lookback_candles: 50,
     entry_signal_candle_granularity_seconds: 60,
     allow_duplicate_units: false,
@@ -445,6 +183,12 @@ const ConfigurationForm = ({
   const initialStrategyType = initialData?.strategy_type || '';
   const initialStrategySchema = useMemo<ConfigSchema | undefined>(() => {
     if (!initialStrategyType) return undefined;
+
+    // Prefer the frontend-defined schema (which includes group metadata)
+    // over the API-returned one.
+    const frontendSchema = STRATEGY_CONFIG_SCHEMAS[initialStrategyType];
+    if (frontendSchema) return frontendSchema;
+
     const fromApi = strategies.find((s) => s.id === initialStrategyType)
       ?.config_schema as unknown;
 
@@ -457,7 +201,7 @@ const ConfigurationForm = ({
       return fromApi as ConfigSchema;
     }
 
-    return STRATEGY_CONFIG_SCHEMAS[initialStrategyType];
+    return undefined;
   }, [initialStrategyType, strategies]);
 
   const initialParameters = useMemo<StrategyConfig>(() => {
@@ -511,6 +255,11 @@ const ConfigurationForm = ({
   const strategySchema = useMemo<ConfigSchema | undefined>(() => {
     if (!selectedStrategyType) return undefined;
 
+    // Prefer the frontend-defined schema (which includes group metadata)
+    // over the API-returned one.
+    const frontendSchema = STRATEGY_CONFIG_SCHEMAS[selectedStrategyType];
+    if (frontendSchema) return frontendSchema;
+
     const fromApi = selectedStrategy?.config_schema as unknown;
     if (
       fromApi &&
@@ -521,7 +270,7 @@ const ConfigurationForm = ({
       return fromApi as ConfigSchema;
     }
 
-    return STRATEGY_CONFIG_SCHEMAS[selectedStrategyType];
+    return undefined;
   }, [selectedStrategy, selectedStrategyType]);
 
   const previousStrategyTypeRef = useRef<string>(initialStrategyType || '');

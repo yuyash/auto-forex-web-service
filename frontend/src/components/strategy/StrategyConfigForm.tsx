@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   TextField,
@@ -299,12 +299,14 @@ const StrategyConfigForm = ({
       return (
         <FormControl
           fullWidth
+          size="small"
           key={fieldName}
           error={!!error}
           disabled={disabled}
         >
           <InputLabel required={isRequired}>{labelNode}</InputLabel>
           <Select
+            size="small"
             value={isNumericEnum ? Number(value) : String(value)}
             label={label}
             onChange={(e) => {
@@ -354,6 +356,7 @@ const StrategyConfigForm = ({
           key={fieldName}
           control={
             <Checkbox
+              size="small"
               checked={Boolean(value)}
               onChange={(e) => handleFieldChange(fieldName, e.target.checked)}
               disabled={disabled}
@@ -361,7 +364,7 @@ const StrategyConfigForm = ({
           }
           label={
             <Box>
-              <Typography variant="body1">
+              <Typography variant="body2">
                 {renderLabel(label, fieldSchema.description)}
                 {isRequired && (
                   <Typography component="span" color="error">
@@ -382,6 +385,7 @@ const StrategyConfigForm = ({
         <TextField
           key={fieldName}
           fullWidth
+          size="small"
           label={labelNode}
           type="number"
           value={value}
@@ -412,6 +416,7 @@ const StrategyConfigForm = ({
         <TextField
           key={fieldName}
           fullWidth
+          size="small"
           label={labelNode}
           value={arrayValue}
           onChange={(e) => {
@@ -436,6 +441,7 @@ const StrategyConfigForm = ({
       <TextField
         key={fieldName}
         fullWidth
+        size="small"
         label={labelNode}
         value={value}
         onChange={(e) => handleFieldChange(fieldName, e.target.value)}
@@ -466,11 +472,13 @@ const StrategyConfigForm = ({
   // Get description for progression modes
   const getProgressionDescription = (mode: string): string => {
     const descriptions: Record<string, string> = {
-      equal: 'All layers use the same value',
-      additive: 'Each layer adds the increment (e.g., 10, 15, 20)',
-      exponential:
-        'Each layer multiplies by increment (e.g., 10, 20, 40 with 2x)',
-      inverse: 'Each layer divides (e.g., 10, 5, 3.33)',
+      constant: 'Same value for every layer / retracement',
+      additive: 'Increases by a fixed amount each time (e.g. 10 → 15 → 20)',
+      subtractive:
+        'Decreases by a fixed amount each time (e.g. 30 → 25 → 20, min 0)',
+      multiplicative: 'Doubles each time (e.g. 10 → 20 → 40)',
+      divisive: 'Halves each time (e.g. 40 → 20 → 10)',
+      inverse: 'Halves each time (e.g. 1.0 → 0.5 → 0.25)',
     };
     return descriptions[mode] || '';
   };
@@ -502,6 +510,33 @@ const StrategyConfigForm = ({
   // Check if there are any validation errors
   const hasErrors = Object.keys(validationErrors).length > 0;
 
+  // Build ordered groups from schema properties
+  // NOTE: This hook must be called before the early return below to satisfy
+  // the Rules of Hooks (hooks must be called in the same order every render).
+  const groupedFields = useMemo(() => {
+    const groups: Array<{ name: string; fields: [string, ConfigProperty][] }> =
+      [];
+    const groupMap = new Map<string, [string, ConfigProperty][]>();
+    const seenGroups: string[] = [];
+
+    Object.entries(configSchema.properties || {}).forEach(
+      ([fieldName, fieldSchema]) => {
+        const groupName = fieldSchema.group || '';
+        if (!groupMap.has(groupName)) {
+          groupMap.set(groupName, []);
+          seenGroups.push(groupName);
+        }
+        groupMap.get(groupName)!.push([fieldName, fieldSchema]);
+      }
+    );
+
+    seenGroups.forEach((name) => {
+      groups.push({ name, fields: groupMap.get(name)! });
+    });
+
+    return groups;
+  }, [configSchema.properties]);
+
   if (
     !configSchema.properties ||
     Object.keys(configSchema.properties).length === 0
@@ -525,27 +560,29 @@ const StrategyConfigForm = ({
         </Alert>
       )}
 
-      <Typography variant="subtitle1" gutterBottom>
-        {t('strategyParameters', { defaultValue: 'Strategy Parameters' })}
-      </Typography>
+      {groupedFields.map(({ name: groupName, fields }, groupIdx) => {
+        const visibleFields = fields.filter(([, fieldSchema]) => {
+          if (!fieldSchema.dependsOn) return true;
+          return matchesDependsOn(config, fieldSchema.dependsOn);
+        });
+        if (visibleFields.length === 0) return null;
 
-      <Divider sx={{ mb: 2 }} />
-
-      <Stack spacing={2}>
-        {Object.entries(configSchema.properties).map(
-          ([fieldName, fieldSchema]) => {
-            // Check conditional visibility
-            if (fieldSchema.dependsOn) {
-              if (!matchesDependsOn(config, fieldSchema.dependsOn)) {
-                return null; // Hide field if condition not met
-              }
-            }
-            return (
-              <Box key={fieldName}>{renderField(fieldName, fieldSchema)}</Box>
-            );
-          }
-        )}
-      </Stack>
+        return (
+          <Box key={groupName || '__ungrouped'} sx={{ mb: 3 }}>
+            {groupIdx > 0 && <Divider sx={{ mb: 2 }} />}
+            {groupName && (
+              <Typography variant="subtitle1" gutterBottom>
+                {groupName}
+              </Typography>
+            )}
+            <Stack spacing={2}>
+              {visibleFields.map(([fieldName, fieldSchema]) => (
+                <Box key={fieldName}>{renderField(fieldName, fieldSchema)}</Box>
+              ))}
+            </Stack>
+          </Box>
+        );
+      })}
 
       {configSchema.required && configSchema.required.length > 0 && (
         <Typography

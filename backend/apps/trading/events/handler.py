@@ -33,15 +33,17 @@ class EventHandler:
         position_map: Maps layer numbers to Position instances
     """
 
-    def __init__(self, order_service: OrderService, instrument: str):
+    def __init__(self, order_service: OrderService, instrument: str, trading_mode: str = "hedging"):
         """Initialize event handler.
 
         Args:
             order_service: OrderService instance for executing trades
             instrument: Trading instrument (e.g., 'EUR_USD')
+            trading_mode: "netting" (FIFO) or "hedging" (LIFO for TP)
         """
         self.order_service = order_service
         self.instrument = instrument
+        self.trading_mode = trading_mode
         self.position_map: dict[int, Position] = {}  # layer_number -> Position
         self.layer_position_ids: dict[int, list[str]] = defaultdict(list)
         self._position_cache: dict[str, Position] = {}
@@ -98,14 +100,26 @@ class EventHandler:
         layer_number = event.layer_number
         self._rehydrate_layer_positions(layer_number)
         stack = self.layer_position_ids.get(layer_number, [])
-        while stack:
-            candidate_id = stack[-1]  # LIFO for TP (newest first)
-            candidate = self._get_open_position_by_id(candidate_id)
-            if candidate:
-                return candidate
-            stack.pop()
+
+        if self.trading_mode == "netting":
+            # FIFO: oldest first (front of list)
+            while stack:
+                candidate_id = stack[0]
+                candidate = self._get_open_position_by_id(candidate_id)
+                if candidate:
+                    return candidate
+                stack.pop(0)
+        else:
+            # LIFO: newest first (back of list)
+            while stack:
+                candidate_id = stack[-1]
+                candidate = self._get_open_position_by_id(candidate_id)
+                if candidate:
+                    return candidate
+                stack.pop()
 
         direction = Direction(event.direction)
+        order_dir = "entry_time" if self.trading_mode == "netting" else "-entry_time"
         fallback = (
             Position.objects.filter(
                 task_type=self.order_service.task_type,
@@ -115,7 +129,7 @@ class EventHandler:
                 is_open=True,
                 layer_index=layer_number,
             )
-            .order_by("-entry_time")
+            .order_by(order_dir)
             .first()
         )
         return fallback

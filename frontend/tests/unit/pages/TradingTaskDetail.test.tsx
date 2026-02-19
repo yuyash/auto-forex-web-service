@@ -145,8 +145,8 @@ describe('TradingTaskDetail', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Overview')).toBeInTheDocument();
-      expect(screen.getByText('Raw Events')).toBeInTheDocument();
-      expect(screen.getByText('Raw Logs')).toBeInTheDocument();
+      expect(screen.getByText('Events')).toBeInTheDocument();
+      expect(screen.getByText('Logs')).toBeInTheDocument();
       expect(screen.getByText('Trades')).toBeInTheDocument();
       expect(screen.getByText('Replay')).toBeInTheDocument();
     });
@@ -163,7 +163,7 @@ describe('TradingTaskDetail', () => {
   it('switches to Events tab when clicked', async () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
-    const eventsTab = screen.getByText('Raw Events');
+    const eventsTab = screen.getByText('Events');
     fireEvent.click(eventsTab);
 
     await waitFor(() => {
@@ -174,7 +174,7 @@ describe('TradingTaskDetail', () => {
   it('switches to Logs tab when clicked', async () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
-    const logsTab = screen.getByText('Raw Logs');
+    const logsTab = screen.getByText('Logs');
     fireEvent.click(logsTab);
 
     await waitFor(() => {

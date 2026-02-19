@@ -16,10 +16,13 @@ class StrategyStatus(str, Enum):
 
 
 class Progression(str, Enum):
-    """Progression mode for lot size and retracement triggers."""
+    """Progression mode for cross-layer parameter changes.
 
-    CONSTANT = "constant"  # 一定
-    ADDITIVE = "additive"  # 加算
-    SUBTRACTIVE = "subtractive"  # 減算
-    MULTIPLICATIVE = "multiplicative"  # 乗算（2の累乗）
-    DIVISIVE = "divisive"  # 除算（2の累乗で割る）
+    Controls how a base value changes as the layer index increases (Layer 0 → 1 → 2 …).
+    """
+
+    CONSTANT = "constant"  # 一定 — 全レイヤーで同じ値
+    ADDITIVE = "additive"  # 加算 — base + increment × layer_index
+    SUBTRACTIVE = "subtractive"  # 減算 — base − increment × layer_index (最小 0)
+    MULTIPLICATIVE = "multiplicative"  # 乗算 — base × (2 ^ layer_index)
+    DIVISIVE = "divisive"  # 除算 — base / (2 ^ layer_index)

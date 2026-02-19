@@ -258,9 +258,11 @@ const StrategyDefaults = () => {
             )}
             onChange={(e) => handleRetracementLotModeChange(e.target.value)}
           >
+            <MenuItem value="constant">Constant</MenuItem>
             <MenuItem value="additive">Additive</MenuItem>
+            <MenuItem value="subtractive">Subtractive</MenuItem>
             <MenuItem value="multiplicative">Multiplicative</MenuItem>
-            <MenuItem value="inverse">Inverse</MenuItem>
+            <MenuItem value="divisive">Divisive</MenuItem>
           </Select>
         </FormControl>
 

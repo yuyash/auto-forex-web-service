@@ -9,28 +9,34 @@
     },
     "retracement_lot_mode": {
       "type": "string",
-      "title": "Retracement Lot Mode",
-      "enum": ["additive", "multiplicative", "inverse"],
-      "description": "How lot size changes on each retracement entry."
+      "title": "Intra-Layer Retracement Lot Mode",
+      "enum": [
+        "constant",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive"
+      ],
+      "description": "Controls how lot size changes on each retracement entry within a single layer. 'constant' keeps the same lot size, 'additive' adds a fixed amount per retracement, 'subtractive' subtracts a fixed amount (min 0.01), 'multiplicative' doubles each time (base × 2^N), 'divisive' halves each time (base / 2^N)."
     },
     "retracement_lot_amount": {
       "type": "number",
-      "title": "Retracement Lot Amount",
-      "description": "Amount to add/multiply by on each retracement entry.",
+      "title": "Intra-Layer Retracement Lot Amount",
+      "description": "The increment value used for intra-layer lot sizing. For 'additive' mode this is added per retracement; for 'subtractive' it is subtracted per retracement.",
       "dependsOn": {
         "field": "retracement_lot_mode",
-        "values": ["additive", "multiplicative"]
+        "values": ["additive", "subtractive"]
       }
     },
     "retracement_pips": {
       "type": "number",
-      "title": "Retracement Pips",
-      "description": "Adverse movement in pips required to trigger a retracement entry."
+      "title": "Retracement Trigger Pips (Base)",
+      "description": "Base adverse movement in pips required to trigger a retracement entry. This is the starting value for Layer 0; cross-layer progression may modify it for subsequent layers."
     },
     "take_profit_pips": {
       "type": "number",
-      "title": "Take Profit Pips",
-      "description": "Profit in pips required to close the position."
+      "title": "Take Profit Pips (Base)",
+      "description": "Base profit in pips required to close a position. This is the starting value for Layer 0; cross-layer and intra-layer progression may modify it."
     },
     "max_layers": {
       "type": "integer",
@@ -53,32 +59,65 @@
     },
     "retracement_trigger_progression": {
       "type": "string",
-      "title": "Retracement Trigger Progression",
-      "enum": ["equal", "additive", "exponential", "inverse"],
-      "description": "How retracement triggers progress across layers."
+      "title": "Cross-Layer Retracement Trigger Progression",
+      "enum": [
+        "constant",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive"
+      ],
+      "description": "Controls how the starting retracement trigger pips change when a new layer opens. Layer 0 uses the base Retracement Pips; subsequent layers apply this progression formula."
     },
     "retracement_trigger_increment": {
       "type": "number",
-      "title": "Retracement Trigger Increment",
-      "description": "Used for additive/exponential progression.",
+      "title": "Cross-Layer Retracement Trigger Increment",
+      "description": "Increment value for cross-layer retracement trigger progression. Used with 'additive' and 'subtractive' modes.",
       "dependsOn": {
         "field": "retracement_trigger_progression",
-        "values": ["additive", "exponential"]
+        "values": ["additive", "subtractive"]
       }
     },
-    "lot_size_progression": {
+    "take_profit_trigger_progression": {
       "type": "string",
-      "title": "Lot Size Progression",
-      "enum": ["equal", "additive", "exponential", "inverse"],
-      "description": "How base lot size changes across layers."
+      "title": "Cross-Layer Take Profit Progression",
+      "enum": [
+        "constant",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive"
+      ],
+      "description": "Controls how the starting take-profit pips change when a new layer opens. Layer 0 uses the base Take Profit Pips; subsequent layers apply this progression formula."
     },
-    "lot_size_increment": {
+    "take_profit_trigger_increment": {
       "type": "number",
-      "title": "Lot Size Increment",
-      "description": "Used for additive/exponential progression.",
+      "title": "Cross-Layer Take Profit Increment",
+      "description": "Increment value for cross-layer take-profit progression. Used with 'additive' and 'subtractive' modes.",
       "dependsOn": {
-        "field": "lot_size_progression",
-        "values": ["additive", "exponential"]
+        "field": "take_profit_trigger_progression",
+        "values": ["additive", "subtractive"]
+      }
+    },
+    "take_profit_pips_mode": {
+      "type": "string",
+      "title": "Intra-Layer Take Profit Pips Mode",
+      "enum": [
+        "constant",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive"
+      ],
+      "description": "Controls how take-profit pips change on each retracement entry within a single layer. 'constant' keeps the same TP for all entries, 'additive' increases TP per retracement, etc."
+    },
+    "take_profit_pips_amount": {
+      "type": "number",
+      "title": "Intra-Layer Take Profit Pips Amount",
+      "description": "Increment value for intra-layer take-profit pips adjustment. Used with 'additive' and 'subtractive' modes.",
+      "dependsOn": {
+        "field": "take_profit_pips_mode",
+        "values": ["additive", "subtractive"]
       }
     },
     "entry_signal_lookback_candles": {
@@ -207,7 +246,7 @@
     },
     "market_condition_override_enabled": {
       "type": "boolean",
-      "title": "Market Condition Override",
+      "title": "Spread Breaker",
       "default": true,
       "description": "Enable temporary rule override on bad market conditions."
     },

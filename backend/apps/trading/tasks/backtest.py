@@ -25,11 +25,6 @@ logger: Logger = getLogger(name=__name__)
 @shared_task(
     bind=True,
     name="trading.tasks.run_backtest_task",
-    autoretry_for=(Exception,),
-    retry_kwargs={"max_retries": 3, "countdown": 60},
-    retry_backoff=True,
-    retry_backoff_max=600,
-    retry_jitter=True,
     time_limit=7200,  # Hard limit: 2 hours
     soft_time_limit=7000,  # Soft limit: ~1 hour 56 minutes (gives 4 minutes for cleanup)
 )
@@ -57,11 +52,38 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             f"start_time={task.start_time}, end_time={task.end_time}"
         )
 
-        # Update status to RUNNING now that the task is actually executing
-        logger.info(f"Transitioning: {task.status} -> RUNNING - task_id={task_id}")
-        task.status = TaskStatus.RUNNING
-        task.started_at = dj_timezone.now()
-        task.save(update_fields=["status", "started_at", "updated_at"])
+        # Guard: only allow execution from STARTING status.
+        # This prevents duplicate Celery dispatches or retries from
+        # re-running a task that has already completed/failed/stopped.
+        if task.status not in [TaskStatus.STARTING, TaskStatus.CREATED]:
+            logger.warning(
+                f"SKIPPING execution - task_id={task_id}, status={task.status} "
+                f"is not STARTING/CREATED. Another worker may have already processed this task."
+            )
+            return
+
+        # Atomically transition to RUNNING only if still in STARTING/CREATED.
+        # This acts as a distributed lock — only one worker can win.
+        now = dj_timezone.now()
+        rows_updated = BacktestTask.objects.filter(
+            pk=task_id,
+            status__in=[TaskStatus.STARTING, TaskStatus.CREATED],
+        ).update(
+            status=TaskStatus.RUNNING,
+            started_at=now,
+        )
+
+        if rows_updated == 0:
+            # Another worker already transitioned this task
+            task.refresh_from_db()
+            logger.warning(
+                f"SKIPPING execution (lost race) - task_id={task_id}, "
+                f"current_status={task.status}. Another worker won the transition."
+            )
+            return
+
+        task.refresh_from_db()
+        logger.info(f"Transitioning: STARTING -> RUNNING - task_id={task_id}")
 
         logger.info(f"Current: RUNNING - task_id={task_id}, started_at={task.started_at}")
 
@@ -93,12 +115,28 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             )
             return
 
-        # Mark as completed (only if not already stopped or stopping)
+        # Mark as completed — atomically transition RUNNING -> COMPLETED.
+        # Only allow completion from RUNNING to prevent stale state overwrites.
+        completed_at = dj_timezone.now()
         logger.info(f"Transitioning: {task.status} -> COMPLETED - task_id={task_id}")
-        task.status = TaskStatus.COMPLETED
-        task.completed_at = dj_timezone.now()
-        task.save(update_fields=["status", "completed_at", "updated_at"])
-        logger.info(f"Current: COMPLETED - task_id={task_id}, completed_at={task.completed_at}")
+        rows_updated = BacktestTask.objects.filter(
+            pk=task_id,
+            status=TaskStatus.RUNNING,
+        ).update(
+            status=TaskStatus.COMPLETED,
+            completed_at=completed_at,
+        )
+
+        if rows_updated == 0:
+            task.refresh_from_db()
+            logger.warning(
+                f"COMPLETED transition failed - task_id={task_id}, "
+                f"current_status={task.status}. Task may have been stopped or failed concurrently."
+            )
+            return
+
+        task.refresh_from_db()
+        logger.info(f"Current: {task.status} - task_id={task_id}, completed_at={task.completed_at}")
 
         # Log task completion
         TaskLog.objects.create(
@@ -169,6 +207,7 @@ def execute_backtest(task: BacktestTask) -> None:
         instrument=task.instrument,
         pip_size=resolved_pip_size,
         strategy_config=task.config,
+        trading_mode=getattr(task, "trading_mode", "hedging"),
     )
 
     # Persist pip_size back to task if it was null
