@@ -49,6 +49,17 @@ vi.mock('../../../src/hooks/useTradingTasks', () => ({
     error: null,
     refetch: vi.fn(),
   })),
+  useTradingTaskPolling: vi.fn(() => ({
+    data: null,
+  })),
+}));
+
+vi.mock('../../../src/hooks/useOverviewPnl', () => ({
+  useOverviewPnl: vi.fn(() => ({
+    realizedPnl: 0,
+    unrealizedPnl: 0,
+    totalTrades: 0,
+  })),
 }));
 
 // Mock child components
@@ -134,8 +145,8 @@ describe('TradingTaskDetail', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Overview')).toBeInTheDocument();
-      expect(screen.getByText('Events')).toBeInTheDocument();
-      expect(screen.getByText('Logs')).toBeInTheDocument();
+      expect(screen.getByText('Raw Events')).toBeInTheDocument();
+      expect(screen.getByText('Raw Logs')).toBeInTheDocument();
       expect(screen.getByText('Trades')).toBeInTheDocument();
       expect(screen.getByText('Replay')).toBeInTheDocument();
     });
@@ -152,7 +163,7 @@ describe('TradingTaskDetail', () => {
   it('switches to Events tab when clicked', async () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
-    const eventsTab = screen.getByText('Events');
+    const eventsTab = screen.getByText('Raw Events');
     fireEvent.click(eventsTab);
 
     await waitFor(() => {
@@ -163,7 +174,7 @@ describe('TradingTaskDetail', () => {
   it('switches to Logs tab when clicked', async () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
-    const logsTab = screen.getByText('Logs');
+    const logsTab = screen.getByText('Raw Logs');
     fireEvent.click(logsTab);
 
     await waitFor(() => {

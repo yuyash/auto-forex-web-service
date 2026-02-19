@@ -158,8 +158,8 @@ describe('BacktestTaskDetail', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Overview')).toBeInTheDocument();
-      expect(screen.getByText('Events')).toBeInTheDocument();
-      expect(screen.getByText('Logs')).toBeInTheDocument();
+      expect(screen.getByText('Raw Events')).toBeInTheDocument();
+      expect(screen.getByText('Raw Logs')).toBeInTheDocument();
       expect(screen.getByText('Trades')).toBeInTheDocument();
       expect(screen.getByText('Replay')).toBeInTheDocument();
     });
@@ -176,7 +176,7 @@ describe('BacktestTaskDetail', () => {
   it('switches to Events tab when clicked', async () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
-    const eventsTab = screen.getByText('Events');
+    const eventsTab = screen.getByText('Raw Events');
     fireEvent.click(eventsTab);
 
     await waitFor(() => {
@@ -187,7 +187,7 @@ describe('BacktestTaskDetail', () => {
   it('switches to Logs tab when clicked', async () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
-    const logsTab = screen.getByText('Logs');
+    const logsTab = screen.getByText('Raw Logs');
     fireEvent.click(logsTab);
 
     await waitFor(() => {
