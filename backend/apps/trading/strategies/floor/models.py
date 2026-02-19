@@ -406,6 +406,8 @@ class FloorStrategyState:
     open_entries: list[dict[str, Any]] = field(default_factory=list)
     volatility_locked: bool = False
     lock_reason: str = ""
+    hedge_neutralized: bool = False
+    hedge_entry_ids: list[int] = field(default_factory=list)
     metrics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -432,6 +434,8 @@ class FloorStrategyState:
             "open_entries": list(self.open_entries),
             "volatility_locked": self.volatility_locked,
             "lock_reason": self.lock_reason,
+            "hedge_neutralized": self.hedge_neutralized,
+            "hedge_entry_ids": list(self.hedge_entry_ids),
             "metrics": dict(self.metrics),
         }
 
@@ -485,6 +489,15 @@ class FloorStrategyState:
             else [],
             volatility_locked=_to_bool(data.get("volatility_locked", False), False),
             lock_reason=str(data.get("lock_reason", "")),
+            hedge_neutralized=_to_bool(data.get("hedge_neutralized", False), False),
+            hedge_entry_ids=[
+                _to_int(item, 0)
+                for item in (
+                    data.get("hedge_entry_ids", [])
+                    if isinstance(data.get("hedge_entry_ids"), list)
+                    else []
+                )
+            ],
             metrics=dict(data.get("metrics", {})) if isinstance(data.get("metrics"), dict) else {},
         )
 

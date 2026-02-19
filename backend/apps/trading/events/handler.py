@@ -13,6 +13,7 @@ from apps.trading.events import (
     RetracementEvent,
     StrategyEvent,
     TakeProfitEvent,
+    VolatilityHedgeNeutralizeEvent,
     VolatilityLockEvent,
 )
 from apps.trading.models import Position, Trade, TradingEvent
@@ -269,6 +270,8 @@ class EventHandler:
             return self.handle_take_profit(strategy_event)
         if isinstance(strategy_event, VolatilityLockEvent):
             return self.handle_volatility_lock(strategy_event)
+        if isinstance(strategy_event, VolatilityHedgeNeutralizeEvent):
+            return self.handle_volatility_hedge_neutralize(strategy_event)
         if isinstance(strategy_event, MarginProtectionEvent):
             return self.handle_margin_protection(strategy_event)
         # ADD_LAYER and REMOVE_LAYER are informational only, no pnl impact.
@@ -466,63 +469,42 @@ class EventHandler:
             len(self.position_map),
         )
 
-        hedge_mode = "[HEDGE]" in str(event.reason or "").upper()
         for position in self._ordered_positions_for_margin_close():
             if not position.is_open:
                 continue
             try:
-                if hedge_mode:
-                    opposite = (
-                        Direction.SHORT if position.direction == Direction.LONG else Direction.LONG
-                    )
-                    hedged = self.order_service.open_position(
-                        instrument=position.instrument,
-                        units=abs(position.units),
-                        direction=opposite,
-                        layer_index=position.layer_index,
-                        merge_with_existing=False,
-                    )
-                    self._cache_position(position.layer_index or 0, hedged)
-                    closed_positions.append(hedged)
-                    logger.info(
-                        "Hedged position due to volatility: layer=%s, source=%s, hedge=%s",
-                        position.layer_index,
-                        position.id,
-                        hedged.id,
-                    )
-                else:
-                    closed, realized_delta = self.order_service.close_position(position)
-                    closed_positions.append(closed)
-                    self._prune_closed_position(position.layer_index or 0, closed)
-                    realized_delta_total += realized_delta
-                    close_direction = (
-                        Direction.SHORT if position.direction == Direction.LONG else Direction.LONG
-                    )
-                    self._record_trade(
-                        direction=close_direction,
-                        units=abs(position.units),
-                        instrument=position.instrument,
-                        price=Decimal(str(closed.exit_price or position.entry_price)),
-                        execution_method=str(event.event_type.value),
-                        timestamp=event.timestamp,
-                        layer_index=position.layer_index,
-                        pnl=realized_delta,
-                        open_price=position.entry_price,
-                        open_timestamp=position.entry_time,
-                        close_price=Decimal(str(closed.exit_price or position.entry_price)),
-                        close_timestamp=event.timestamp,
-                    )
-                    self._close_entry_trades(
-                        position=position,
-                        close_price=Decimal(str(closed.exit_price or position.entry_price)),
-                        close_timestamp=event.timestamp,
-                    )
-                    logger.info(
-                        "Closed position due to volatility: layer=%s, position_id=%s, pnl=%s",
-                        position.layer_index,
-                        closed.id,
-                        closed.realized_pnl,
-                    )
+                closed, realized_delta = self.order_service.close_position(position)
+                closed_positions.append(closed)
+                self._prune_closed_position(position.layer_index or 0, closed)
+                realized_delta_total += realized_delta
+                close_direction = (
+                    Direction.SHORT if position.direction == Direction.LONG else Direction.LONG
+                )
+                self._record_trade(
+                    direction=close_direction,
+                    units=abs(position.units),
+                    instrument=position.instrument,
+                    price=Decimal(str(closed.exit_price or position.entry_price)),
+                    execution_method=str(event.event_type.value),
+                    timestamp=event.timestamp,
+                    layer_index=position.layer_index,
+                    pnl=realized_delta,
+                    open_price=position.entry_price,
+                    open_timestamp=position.entry_time,
+                    close_price=Decimal(str(closed.exit_price or position.entry_price)),
+                    close_timestamp=event.timestamp,
+                )
+                self._close_entry_trades(
+                    position=position,
+                    close_price=Decimal(str(closed.exit_price or position.entry_price)),
+                    close_timestamp=event.timestamp,
+                )
+                logger.info(
+                    "Closed position due to volatility: layer=%s, position_id=%s, pnl=%s",
+                    position.layer_index,
+                    closed.id,
+                    closed.realized_pnl,
+                )
             except OrderServiceError as e:
                 logger.error(
                     "Failed to process position %s during volatility lock: %s",
@@ -531,14 +513,70 @@ class EventHandler:
                 )
                 # Continue processing other positions
 
-        if not hedge_mode:
-            self.position_map.clear()
-            self.layer_position_ids.clear()
-            self._position_cache.clear()
+        self.position_map.clear()
+        self.layer_position_ids.clear()
+        self._position_cache.clear()
 
         logger.info("Volatility lock complete: closed %s positions", len(closed_positions))
 
         return realized_delta_total
+
+    def handle_volatility_hedge_neutralize(self, event: VolatilityHedgeNeutralizeEvent) -> Decimal:
+        """Open hedge positions to neutralize net exposure during volatility spike.
+
+        For each instruction in the event, opens an opposite-direction position
+        that mirrors an existing open position.  No positions are closed, so
+        realized PnL is always zero.
+
+        Args:
+            event: Hedge neutralize event with instructions.
+
+        Returns:
+            Decimal: Always ``Decimal("0")`` — no realized PnL.
+        """
+        logger.warning(
+            "Volatility hedge neutralize triggered: %s (hedging %d positions)",
+            event.reason,
+            len(event.hedge_instructions),
+        )
+
+        for instr in event.hedge_instructions:
+            direction_str = str(instr.get("direction", "long")).upper()
+            direction = Direction.LONG if direction_str == "LONG" else Direction.SHORT
+            units = abs(int(instr.get("units", 0)))
+            layer_index = int(instr.get("layer_index", 0))
+            if units <= 0:
+                continue
+            try:
+                hedged = self.order_service.open_position(
+                    instrument=self.instrument,
+                    units=units,
+                    direction=direction,
+                    layer_index=layer_index,
+                    merge_with_existing=False,
+                )
+                self._cache_position(layer_index, hedged)
+                logger.info(
+                    "Opened hedge-neutralize position: layer=%s, direction=%s, "
+                    "units=%s, hedge_id=%s, source_entry=%s",
+                    layer_index,
+                    direction_str,
+                    units,
+                    hedged.id,
+                    instr.get("source_entry_id"),
+                )
+            except OrderServiceError as e:
+                logger.error(
+                    "Failed to open hedge-neutralize position for source_entry %s: %s",
+                    instr.get("source_entry_id"),
+                    e,
+                )
+
+        logger.info(
+            "Volatility hedge neutralize complete: %d hedge positions opened",
+            len(event.hedge_instructions),
+        )
+        return Decimal("0")
 
     def handle_margin_protection(self, event: MarginProtectionEvent) -> Decimal:
         """Close all open positions due to margin protection.

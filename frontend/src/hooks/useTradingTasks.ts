@@ -25,7 +25,12 @@ const inflightRequests = new Map<string, Promise<unknown>>();
 export function invalidateTradingTasksCache(): void {
   cache.clear();
   errorCache.clear();
+  // Notify all active subscribers to refetch
+  tradingCacheListeners.forEach((cb) => cb());
 }
+
+// Listeners that get called when cache is invalidated
+const tradingCacheListeners = new Set<() => void>();
 
 function getCachedData<T>(key: string): T | null {
   const cached = cache.get(key);
@@ -168,6 +173,15 @@ export function useTradingTasks(
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+    };
+  }, [fetchData]);
+
+  // Subscribe to cache invalidation events
+  useEffect(() => {
+    const listener = () => fetchData();
+    tradingCacheListeners.add(listener);
+    return () => {
+      tradingCacheListeners.delete(listener);
     };
   }, [fetchData]);
 

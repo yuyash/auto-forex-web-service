@@ -23,6 +23,7 @@ import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
 import RecentBacktestsWidget from '../components/dashboard/RecentBacktestsWidget';
 import QuickActionsWidget from '../components/dashboard/QuickActionsWidget';
 import MarketChart from '../components/dashboard/MarketChart';
+import type { Granularity } from '../types/chart';
 
 const DashboardPage = () => {
   const { t } = useTranslation('dashboard');
@@ -78,17 +79,28 @@ const DashboardPage = () => {
   };
 
   // Handle instrument change
-  // const handleInstrumentChange = (newInstrument: string) => {
-  //   updatePreference('instrument', newInstrument);
-  // };
+  const handleInstrumentChange = (event: SelectChangeEvent<string>) => {
+    updatePreference('instrument', event.target.value);
+  };
 
   // Handle granularity change
-  // const handleGranularityChange = (newGranularity: Granularity) => {
-  //   updatePreference('granularity', newGranularity);
-  // };
+  const handleGranularityChange = (event: SelectChangeEvent<string>) => {
+    updatePreference('granularity', event.target.value as Granularity);
+  };
 
   return (
-    <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+    <Container
+      maxWidth={false}
+      sx={{
+        mt: 4,
+        mb: 4,
+        px: 3,
+        display: 'flex',
+        flexDirection: 'column',
+        height: 'calc(100vh - 64px)',
+        overflow: 'hidden',
+      }}
+    >
       <Breadcrumbs />
 
       {error && (
@@ -98,7 +110,7 @@ const DashboardPage = () => {
       )}
 
       {/* Task Widgets */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Grid container spacing={3} sx={{ mb: 3, flexShrink: 0 }}>
         <Grid size={{ xs: 12, md: 4 }}>
           <ActiveTasksWidget />
         </Grid>
@@ -111,107 +123,153 @@ const DashboardPage = () => {
       </Grid>
 
       {/* Chart Section */}
-      <Paper elevation={2} sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', sm: 'row' },
-            justifyContent: 'space-between',
-            alignItems: { xs: 'flex-start', sm: 'center' },
-            gap: 2,
-            mb: 2,
-          }}
-        >
-          <Box>
-            <Typography variant="h6">Market Chart</Typography>
-          </Box>
-
-          {/* Auto-refresh controls */}
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: { xs: 'column', sm: 'row' },
-              gap: 2,
-              alignItems: { xs: 'stretch', sm: 'center' },
-              width: { xs: '100%', sm: 'auto' },
-            }}
-          >
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={autoRefreshEnabled}
-                  onChange={handleAutoRefreshToggle}
-                  size="small"
-                />
-              }
-              label="Auto-refresh"
-              sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
-            />
-
-            <FormControl
-              size="small"
-              sx={{
-                minWidth: { xs: '100%', sm: 120 },
-                '& .MuiInputLabel-root': { fontSize: '0.875rem' },
-                '& .MuiSelect-select': { fontSize: '0.875rem' },
-              }}
-            >
-              <InputLabel id="refresh-interval-label">Interval</InputLabel>
-              <Select
-                labelId="refresh-interval-label"
-                id="refresh-interval-select"
-                value={refreshInterval}
-                label="Interval"
-                onChange={handleRefreshIntervalChange}
-                disabled={!autoRefreshEnabled}
-              >
-                <MenuItem value={10} sx={{ fontSize: '0.875rem' }}>
-                  10 seconds
-                </MenuItem>
-                <MenuItem value={30} sx={{ fontSize: '0.875rem' }}>
-                  30 seconds
-                </MenuItem>
-                <MenuItem value={60} sx={{ fontSize: '0.875rem' }}>
-                  1 minute
-                </MenuItem>
-                <MenuItem value={120} sx={{ fontSize: '0.875rem' }}>
-                  2 minutes
-                </MenuItem>
-                <MenuItem value={300} sx={{ fontSize: '0.875rem' }}>
-                  5 minutes
-                </MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
-        </Box>
-
+      <Paper
+        elevation={2}
+        sx={{
+          p: { xs: 1.5, sm: 2 },
+          mb: 3,
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          overflow: 'hidden',
+        }}
+      >
         <Box
           sx={{
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 2,
+            gap: 1.5,
             flexWrap: 'wrap',
-            mb: 1.25,
+            mb: 1,
+            flexShrink: 0,
           }}
         >
-          {/* TODO: Implement ChartControls with new chart components */}
-          {/* <ChartControls
-            instrument={instrument}
-            granularity={granularity}
-            onInstrumentChange={handleInstrumentChange}
-            onGranularityChange={handleGranularityChange}
-            onResetView={handleChartResetView}
-            onUpdateView={handleChartUpdateView}
-            showResetButton={hasOandaAccount}
-            showUpdateButton={hasOandaAccount}
-          /> */}
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, mr: 'auto' }}>
+            Market Chart
+          </Typography>
+
+          <FormControl
+            size="small"
+            sx={{
+              minWidth: 110,
+              '& .MuiInputLabel-root': { fontSize: '0.8rem' },
+              '& .MuiSelect-select': { fontSize: '0.8rem', py: 0.5 },
+            }}
+          >
+            <InputLabel id="instrument-label">Instrument</InputLabel>
+            <Select
+              labelId="instrument-label"
+              value={preferences.instrument}
+              label="Instrument"
+              onChange={handleInstrumentChange}
+            >
+              {[
+                'USD_JPY',
+                'EUR_USD',
+                'GBP_USD',
+                'AUD_USD',
+                'EUR_JPY',
+                'GBP_JPY',
+              ].map((v) => (
+                <MenuItem key={v} value={v} sx={{ fontSize: '0.8rem' }}>
+                  {v.replace('_', '/')}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl
+            size="small"
+            sx={{
+              minWidth: 100,
+              '& .MuiInputLabel-root': { fontSize: '0.8rem' },
+              '& .MuiSelect-select': { fontSize: '0.8rem', py: 0.5 },
+            }}
+          >
+            <InputLabel id="granularity-label">Granularity</InputLabel>
+            <Select
+              labelId="granularity-label"
+              value={preferences.granularity}
+              label="Granularity"
+              onChange={handleGranularityChange}
+            >
+              {(
+                [
+                  'M1',
+                  'M5',
+                  'M15',
+                  'M30',
+                  'H1',
+                  'H4',
+                  'D',
+                  'W',
+                ] as Granularity[]
+              ).map((v) => (
+                <MenuItem key={v} value={v} sx={{ fontSize: '0.8rem' }}>
+                  {v}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControlLabel
+            control={
+              <Switch
+                checked={autoRefreshEnabled}
+                onChange={handleAutoRefreshToggle}
+                size="small"
+              />
+            }
+            label="Auto-refresh"
+            sx={{
+              ml: 0.5,
+              '& .MuiFormControlLabel-label': { fontSize: '0.8rem' },
+            }}
+          />
+
+          <FormControl
+            size="small"
+            sx={{
+              minWidth: 100,
+              '& .MuiInputLabel-root': { fontSize: '0.8rem' },
+              '& .MuiSelect-select': { fontSize: '0.8rem', py: 0.5 },
+            }}
+          >
+            <InputLabel id="refresh-interval-label">Interval</InputLabel>
+            <Select
+              labelId="refresh-interval-label"
+              value={refreshInterval}
+              label="Interval"
+              onChange={handleRefreshIntervalChange}
+              disabled={!autoRefreshEnabled}
+            >
+              <MenuItem value={10} sx={{ fontSize: '0.8rem' }}>
+                10s
+              </MenuItem>
+              <MenuItem value={30} sx={{ fontSize: '0.8rem' }}>
+                30s
+              </MenuItem>
+              <MenuItem value={60} sx={{ fontSize: '0.8rem' }}>
+                1min
+              </MenuItem>
+              <MenuItem value={120} sx={{ fontSize: '0.8rem' }}>
+                2min
+              </MenuItem>
+              <MenuItem value={300} sx={{ fontSize: '0.8rem' }}>
+                5min
+              </MenuItem>
+            </Select>
+          </FormControl>
         </Box>
 
         <Box
           sx={{
             width: '100%',
             position: 'relative',
+            flex: 1,
+            minHeight: 0,
           }}
         >
           {!hasOandaAccount ? (
@@ -235,7 +293,7 @@ const DashboardPage = () => {
               instrument={preferences.instrument}
               granularity={preferences.granularity}
               accountId={oandaAccountId}
-              height={500}
+              fillHeight
               autoRefresh={autoRefreshEnabled}
               refreshInterval={refreshInterval}
             />

@@ -26,7 +26,10 @@ interface MarketChartProps {
   instrument: string;
   granularity: Granularity;
   accountId?: string;
+  /** Fixed height in px. Ignored when `fillHeight` is true. */
   height?: number;
+  /** When true the chart stretches to fill its container's height. */
+  fillHeight?: boolean;
   autoRefresh?: boolean;
   refreshInterval?: number; // in seconds
 }
@@ -75,6 +78,7 @@ export default function MarketChart({
   granularity,
   accountId,
   height = 500,
+  fillHeight = false,
   autoRefresh = false,
   refreshInterval = 60,
 }: MarketChartProps) {
@@ -121,8 +125,11 @@ export default function MarketChart({
     if (!containerRef.current) return;
 
     const container = containerRef.current;
+    const initialHeight = fillHeight
+      ? container.clientHeight || height
+      : height;
     const chart = createChart(container, {
-      height,
+      height: initialHeight,
       layout: {
         background: { color: '#ffffff' },
         textColor: '#334155',
@@ -167,9 +174,17 @@ export default function MarketChart({
     const observer = new ResizeObserver(() => {
       const width = container.clientWidth;
       if (width > 0) chart.applyOptions({ width });
+      if (fillHeight) {
+        const h = container.clientHeight;
+        if (h > 0) chart.applyOptions({ height: h });
+      }
     });
     observer.observe(container);
     chart.applyOptions({ width: container.clientWidth });
+    if (fillHeight) {
+      const h = container.clientHeight;
+      if (h > 0) chart.applyOptions({ height: h });
+    }
 
     return () => {
       observer.disconnect();
@@ -179,7 +194,7 @@ export default function MarketChart({
       highlightRef.current = null;
       adaptiveRef.current = null;
     };
-  }, [height, granularity, timezone]);
+  }, [height, fillHeight, granularity, timezone]);
 
   // Fetch data when instrument/granularity changes
   useEffect(() => {
@@ -201,7 +216,7 @@ export default function MarketChart({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          height,
+          height: fillHeight ? '100%' : height,
         }}
       >
         <Typography color="error">{error}</Typography>
@@ -210,7 +225,13 @@ export default function MarketChart({
   }
 
   return (
-    <Box sx={{ position: 'relative', width: '100%' }}>
+    <Box
+      sx={{
+        position: 'relative',
+        width: '100%',
+        ...(fillHeight && { height: '100%' }),
+      }}
+    >
       {isLoading && (
         <Box
           sx={{
@@ -229,7 +250,10 @@ export default function MarketChart({
           <CircularProgress size={32} />
         </Box>
       )}
-      <div ref={containerRef} style={{ width: '100%' }} />
+      <div
+        ref={containerRef}
+        style={{ width: '100%', ...(fillHeight ? { height: '100%' } : {}) }}
+      />
     </Box>
   );
 }

@@ -41,6 +41,7 @@ export function useCreateBacktestTask(options?: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result = await backtestTasksApi.create(variables as any);
         setState({ data: result, isLoading: false, error: null });
+        invalidateBacktestTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {
@@ -80,6 +81,7 @@ export function useUpdateBacktestTask(options?: {
           variables.data as PatchedBacktestTaskRequest
         );
         setState({ data: result, isLoading: false, error: null });
+        invalidateBacktestTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {
@@ -115,6 +117,7 @@ export function useDeleteBacktestTask(options?: {
         setState({ data: null, isLoading: true, error: null });
         await backtestTasksApi.delete(id);
         setState({ data: undefined, isLoading: false, error: null });
+        invalidateBacktestTasksCache();
         options?.onSuccess?.();
       } catch (err) {
         const error = err as Error;
@@ -152,6 +155,7 @@ export function useCopyBacktestTask(options?: {
           variables.data
         );
         setState({ data: result, isLoading: false, error: null });
+        invalidateBacktestTasksCache();
         options?.onSuccess?.(result);
         return result;
       } catch (err) {

@@ -81,6 +81,7 @@ class EventType(models.TextChoices):
     ADD_LAYER = "add_layer", "Add Layer"
     REMOVE_LAYER = "remove_layer", "Remove Layer"
     VOLATILITY_LOCK = "volatility_lock", "Volatility Lock"
+    VOLATILITY_HEDGE_NEUTRALIZE = "volatility_hedge_neutralize", "Volatility Hedge Neutralize"
     MARGIN_PROTECTION = "margin_protection", "Margin Protection"
 
     # Lifecycle events

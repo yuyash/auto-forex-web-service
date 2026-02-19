@@ -49,7 +49,12 @@ function setCachedError(key: string, error: Error): void {
 export function invalidateBacktestTasksCache(): void {
   cache.clear();
   errorCache.clear();
+  // Notify all active subscribers to refetch
+  backtestCacheListeners.forEach((cb) => cb());
 }
+
+// Listeners that get called when cache is invalidated
+const backtestCacheListeners = new Set<() => void>();
 
 function getInflightRequest<T>(key: string): Promise<T> | null {
   return inflightRequests.get(key) as Promise<T> | null;
@@ -163,6 +168,15 @@ export function useBacktestTasks(
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+    };
+  }, [fetchData]);
+
+  // Subscribe to cache invalidation events
+  useEffect(() => {
+    const listener = () => fetchData();
+    backtestCacheListeners.add(listener);
+    return () => {
+      backtestCacheListeners.delete(listener);
     };
   }, [fetchData]);
 

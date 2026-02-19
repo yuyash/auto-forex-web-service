@@ -92,6 +92,8 @@ class StrategyEvent(ABC):
             return RemoveLayerEvent.from_dict(event_dict)
         elif event_type == EventType.VOLATILITY_LOCK:
             return VolatilityLockEvent.from_dict(event_dict)
+        elif event_type == EventType.VOLATILITY_HEDGE_NEUTRALIZE:
+            return VolatilityHedgeNeutralizeEvent.from_dict(event_dict)
         elif event_type == EventType.MARGIN_PROTECTION:
             return MarginProtectionEvent.from_dict(event_dict)
         else:
@@ -784,6 +786,86 @@ class VolatilityLockEvent(StrategyEvent):
             reason=str(event_dict.get("reason", "")),
             atr_value=atr_value,
             threshold=threshold,
+        )
+
+
+@dataclass
+class VolatilityHedgeNeutralizeEvent(StrategyEvent):
+    """Event emitted when hedging-mode volatility lock neutralizes positions.
+
+    Instead of closing all positions, this event instructs the handler to open
+    opposite hedge positions for each existing open position so that the net
+    exposure becomes zero.  The strategy then pauses until volatility subsides.
+
+    Attributes:
+        reason: Human-readable description of why the neutralization was triggered.
+        atr_value: Current ATR value that triggered the event.
+        threshold: ATR threshold that was exceeded.
+        hedge_instructions: List of dicts describing each hedge to open.
+            Each dict contains: ``direction``, ``units``, ``layer_index``,
+            ``source_entry_id``.
+    """
+
+    reason: str = ""
+    atr_value: Decimal | None = None
+    threshold: Decimal | None = None
+    hedge_instructions: list[dict[str, Any]] = field(default_factory=list)
+
+    def __post_init__(self):
+        if not self.event_type:
+            self.event_type = EventType.VOLATILITY_HEDGE_NEUTRALIZE
+
+    def activate(self, context: "EventContext") -> None:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "Volatility hedge neutralize: reason=%s, hedges=%d",
+            self.reason,
+            len(self.hedge_instructions),
+            extra={
+                "task_id": str(context.task_id),
+                "task_type": context.task_type.value,
+                "instrument": context.instrument,
+                "event_type": self.event_type.value,
+            },
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        result = super().to_dict()
+        result["reason"] = self.reason
+        if self.atr_value is not None:
+            result["atr_value"] = str(self.atr_value)
+        if self.threshold is not None:
+            result["threshold"] = str(self.threshold)
+        result["hedge_instructions"] = self.hedge_instructions
+        return result
+
+    @classmethod
+    def from_dict(cls, event_dict: dict[str, Any]) -> "VolatilityHedgeNeutralizeEvent":
+        from decimal import Decimal as D
+
+        atr_value_raw = event_dict.get("atr_value")
+        atr_value = D(str(atr_value_raw)) if atr_value_raw else None
+        threshold_raw = event_dict.get("threshold")
+        threshold = D(str(threshold_raw)) if threshold_raw else None
+        timestamp_raw = event_dict.get("timestamp")
+        timestamp = None
+        if timestamp_raw:
+            if isinstance(timestamp_raw, datetime):
+                timestamp = timestamp_raw
+            else:
+                try:
+                    timestamp = datetime.fromisoformat(str(timestamp_raw))
+                except (ValueError, TypeError):
+                    pass
+        return cls(
+            event_type=EventType.VOLATILITY_HEDGE_NEUTRALIZE,
+            timestamp=timestamp,
+            reason=str(event_dict.get("reason", "")),
+            atr_value=atr_value,
+            threshold=threshold,
+            hedge_instructions=list(event_dict.get("hedge_instructions", [])),
         )
 
 

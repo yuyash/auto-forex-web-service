@@ -18,12 +18,14 @@ from apps.trading.events import (
     RemoveLayerEvent,
     RetracementEvent,
     TakeProfitEvent,
+    VolatilityHedgeNeutralizeEvent,
     VolatilityLockEvent,
 )
 from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.floor.calculators import TrendDetector
 from apps.trading.strategies.floor.candle import CandleManager
 from apps.trading.strategies.floor.enums import StrategyStatus
+from apps.trading.strategies.floor.hedge_neutralizer import HedgeNeutralizer
 from apps.trading.strategies.floor.models import (
     FloorStrategyConfig,
     FloorStrategyState,
@@ -444,23 +446,105 @@ class FloorStrategy(Strategy):
                 ):
                     floor_state.volatility_locked = True
                     floor_state.status = StrategyStatus.PAUSED
-                    hedge_tag = "[HEDGE]" if self.config.hedging_enabled else "[CLOSE]"
-                    floor_state.lock_reason = (
-                        f"{hedge_tag} atr={current_atr:.2f} >= threshold={lock_threshold:.2f}"
-                    )
-                    events.append(
-                        VolatilityLockEvent(
-                            event_type=EventType.VOLATILITY_LOCK,
-                            timestamp=tick.timestamp,
-                            reason=floor_state.lock_reason,
-                            atr_value=current_atr,
-                            threshold=lock_threshold,
+
+                    if self.config.hedging_enabled:
+                        # Hedge-neutralize: open mirror positions to zero-out
+                        # net exposure without realizing losses.
+                        instructions = HedgeNeutralizer.compute_hedge_instructions(
+                            floor_state.open_entries,
                         )
-                    )
+                        floor_state.hedge_neutralized = True
+                        floor_state.lock_reason = (
+                            f"[HEDGE_NEUTRALIZE] atr={current_atr:.2f}"
+                            f" >= threshold={lock_threshold:.2f}"
+                        )
+                        # Record hedge entry ids so we can unwind them on unlock.
+                        hedge_ids: list[int] = []
+                        for instr in instructions:
+                            eid = floor_state.next_entry_id
+                            floor_state.next_entry_id += 1
+                            hedge_ids.append(eid)
+                            floor_state.open_entries.append(
+                                {
+                                    "entry_id": eid,
+                                    "floor_index": instr.layer_index,
+                                    "direction": instr.direction,
+                                    "entry_price": str(tick.mid),
+                                    "units": instr.units,
+                                    "take_profit_pips": "0",
+                                    "opened_at": tick.timestamp.isoformat(),
+                                    "is_initial": False,
+                                    "is_hedge": True,
+                                    "source_entry_id": instr.source_entry_id,
+                                }
+                            )
+                        floor_state.hedge_entry_ids = hedge_ids
+                        events.append(
+                            VolatilityHedgeNeutralizeEvent(
+                                event_type=EventType.VOLATILITY_HEDGE_NEUTRALIZE,
+                                timestamp=tick.timestamp,
+                                reason=floor_state.lock_reason,
+                                atr_value=current_atr,
+                                threshold=lock_threshold,
+                                hedge_instructions=[i.to_dict() for i in instructions],
+                            )
+                        )
+                    else:
+                        # Non-hedging: close all positions outright.
+                        floor_state.lock_reason = (
+                            f"[CLOSE] atr={current_atr:.2f} >= threshold={lock_threshold:.2f}"
+                        )
+                        events.append(
+                            VolatilityLockEvent(
+                                event_type=EventType.VOLATILITY_LOCK,
+                                timestamp=tick.timestamp,
+                                reason=floor_state.lock_reason,
+                                atr_value=current_atr,
+                                threshold=lock_threshold,
+                            )
+                        )
                 elif floor_state.volatility_locked and current_atr <= unlock_threshold:
+                    was_hedge_neutralized = floor_state.hedge_neutralized
                     floor_state.volatility_locked = False
                     floor_state.status = StrategyStatus.RUNNING
                     floor_state.lock_reason = ""
+
+                    if was_hedge_neutralized:
+                        # Unwind: remove all hedge entries and their source
+                        # originals from open_entries so the strategy restarts
+                        # with a clean slate on the next tick.
+                        hedge_ids_set = set(floor_state.hedge_entry_ids)
+                        # Find source entry ids that were hedged.
+                        source_ids: set[int] = set()
+                        for entry in floor_state.open_entries:
+                            if int(entry.get("entry_id", 0)) in hedge_ids_set:
+                                source_ids.add(int(entry.get("source_entry_id", 0)))
+                        # Emit a VolatilityLockEvent with [CLOSE] to close
+                        # all remaining positions via the event handler.
+                        floor_state.open_entries = [
+                            e
+                            for e in floor_state.open_entries
+                            if int(e.get("entry_id", 0)) not in hedge_ids_set
+                            and int(e.get("entry_id", 0)) not in source_ids
+                        ]
+                        floor_state.hedge_neutralized = False
+                        floor_state.hedge_entry_ids = []
+                        events.append(
+                            VolatilityLockEvent(
+                                event_type=EventType.VOLATILITY_LOCK,
+                                timestamp=tick.timestamp,
+                                reason="[CLOSE] unwind hedge-neutralized positions",
+                                atr_value=current_atr,
+                                threshold=unlock_threshold,
+                            )
+                        )
+                        # Reset layer state so strategy re-enters fresh.
+                        floor_state.floor_retracement_counts = {}
+                        floor_state.floor_directions = {}
+                        floor_state.return_stack = []
+                        floor_state.active_floor_index = 0
+                        floor_state.home_floor_index = 0
+
                     events.append(
                         GenericStrategyEvent(
                             event_type=EventType.STATUS_CHANGED,
@@ -469,6 +553,7 @@ class FloorStrategy(Strategy):
                                 "kind": "volatility_unlock",
                                 "atr": str(current_atr),
                                 "threshold": str(unlock_threshold),
+                                "was_hedge_neutralized": was_hedge_neutralized,
                             },
                         )
                     )
