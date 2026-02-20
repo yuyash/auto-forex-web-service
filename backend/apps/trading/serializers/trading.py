@@ -88,11 +88,16 @@ class TradingTaskSerializer(serializers.ModelSerializer):
         return obj.can_resume()
 
     def get_current_tick(self, obj: TradingTask) -> dict | None:
-        """Return the current tick position and price for running tasks."""
-        from apps.trading.enums import TaskStatus, TaskType
+        """Return the current tick position and price.
+
+        For running tasks this returns the live tick from ExecutionState.
+        For stopped/completed tasks it returns the last recorded tick so
+        that Unrealized PnL can still be displayed.
+        """
+        from apps.trading.enums import TaskType
         from apps.trading.models.state import ExecutionState
 
-        if obj.status != TaskStatus.RUNNING or not obj.celery_task_id:
+        if not obj.celery_task_id:
             return None
 
         try:

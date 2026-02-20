@@ -60,6 +60,17 @@ class TaskSubResourceMixin:
                 required=False,
                 description="Filter by celery task ID",
             ),
+            OpenApiParameter(
+                name="max_points",
+                type=int,
+                required=False,
+                description=(
+                    "Maximum number of data points to return. "
+                    "When the raw row count exceeds this value the data is "
+                    "down-sampled by uniform stride so the response stays small "
+                    "enough for the browser to handle. Default: 10000."
+                ),
+            ),
         ],
         responses={200: dict},
     )
@@ -71,20 +82,65 @@ class TaskSubResourceMixin:
         celery_task_id = request.query_params.get("celery_task_id") or getattr(
             task, "celery_task_id", None
         )
+
+        max_points_raw = request.query_params.get("max_points")
+        max_points = 10_000  # sensible default
+        if max_points_raw is not None:
+            try:
+                max_points = max(100, min(int(max_points_raw), 100_000))
+            except (ValueError, TypeError):
+                pass
+
         queryset = MetricSnapshot.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
         ).order_by("timestamp")
         if celery_task_id:
             queryset = queryset.filter(celery_task_id=celery_task_id)
-        else:
-            queryset = queryset.none()
 
-        rows = list(
-            queryset.values_list(
-                "timestamp", "margin_ratio", "current_atr", "baseline_atr", "volatility_threshold"
+        total_count = queryset.count()
+
+        if total_count <= max_points:
+            # Small enough — return everything
+            rows = list(
+                queryset.values_list(
+                    "timestamp",
+                    "margin_ratio",
+                    "current_atr",
+                    "baseline_atr",
+                    "volatility_threshold",
+                )
             )
-        )
+        else:
+            # Down-sample: fetch only every Nth row using a window function.
+            # We use raw SQL with ROW_NUMBER for efficient server-side stride.
+            from django.db import connection
+
+            stride = total_count // max_points
+
+            # Build the filtered WHERE clause
+            params: list = [self.task_type_label, str(task.pk)]
+            celery_filter = ""
+            if celery_task_id:
+                celery_filter = " AND celery_task_id = %s"
+                params.append(celery_task_id)
+
+            sql = (
+                "SELECT timestamp, margin_ratio, current_atr, baseline_atr, volatility_threshold "  # nosec B608
+                "FROM ("
+                "  SELECT timestamp, margin_ratio, current_atr, baseline_atr, volatility_threshold, "
+                "         ROW_NUMBER() OVER (ORDER BY timestamp) AS rn "
+                "  FROM metric_snapshots "
+                "  WHERE task_type = %s AND task_id = %s" + celery_filter + ") sub "
+                "WHERE rn %% %s = 1 "
+                "ORDER BY timestamp"
+            )
+            params.append(stride)
+
+            with connection.cursor() as cursor:
+                cursor.execute(sql, params)
+                rows = cursor.fetchall()
+
         data = [
             {
                 "t": int(ts.timestamp()),
@@ -95,7 +151,7 @@ class TaskSubResourceMixin:
             }
             for ts, mr, atr, base, vt in rows
         ]
-        return Response({"snapshots": data})
+        return Response({"snapshots": data, "total": total_count, "returned": len(data)})
 
     @extend_schema(
         summary="Get task logs",

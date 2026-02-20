@@ -21,23 +21,29 @@ export interface MetricSnapshotPoint {
 
 export async function fetchMetricSnapshots(
   taskId: string,
-  taskType: TaskType
+  taskType: TaskType,
+  maxPoints?: number
 ): Promise<MetricSnapshotPoint[]> {
   const prefix =
     taskType === TaskType.BACKTEST
       ? '/api/trading/tasks/backtest'
       : '/api/trading/tasks/trading';
 
-  const response = await fetch(`${prefix}/${taskId}/metric_snapshots/`, {
-    method: 'GET',
-    credentials: 'include',
-    headers: (() => {
-      const token = getAuthToken();
-      return token
-        ? { Authorization: `Bearer ${token}` }
-        : ({} as Record<string, string>);
-    })(),
-  });
+  const params = maxPoints ? `?max_points=${maxPoints}` : '';
+
+  const response = await fetch(
+    `${prefix}/${taskId}/metric_snapshots/${params}`,
+    {
+      method: 'GET',
+      credentials: 'include',
+      headers: (() => {
+        const token = getAuthToken();
+        return token
+          ? { Authorization: `Bearer ${token}` }
+          : ({} as Record<string, string>);
+      })(),
+    }
+  );
 
   handleAuthErrorStatus(response.status, {
     source: 'http',

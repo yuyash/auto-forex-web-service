@@ -47,6 +47,7 @@ import {
 import { getAuthToken } from '../../../api/client';
 import { fetchAllTrades } from '../../../utils/fetchAllTrades';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
+import { useTaskTrades } from '../../../hooks/useTaskTrades';
 import { TaskType } from '../../../types/common';
 import { handleAuthErrorStatus } from '../../../utils/authEvents';
 import { detectMarketGaps } from '../../../utils/marketClosedMarkers';
@@ -58,7 +59,7 @@ import {
 } from '../../../utils/adaptiveTimeScalePlugin';
 import { useAuth } from '../../../contexts/AuthContext';
 import { SequencePositionLine } from '../../../utils/SequencePositionLine';
-import { MetricsOverlayChart } from './MetricsOverlayChart';
+import { useMetricsOverlay } from './MetricsOverlayChart';
 
 type CandlePoint = CandlestickData<Time>;
 
@@ -283,10 +284,29 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const [candles, setCandles] = useState<CandlePoint[]>([]);
   const [trades, setTrades] = useState<ReplayTrade[]>([]);
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
+  // State-based chart reference so hooks can react to chart creation
+  const [chartInstance, setChartInstance] = useState<IChartApi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { granularities } = useSupportedGranularities();
+
+  // Fetch open/closed trades via the same hook as TaskTradesTable so that
+  // Realized PnL and Unrealized PnL are computed identically.
+  const { trades: pnlClosedTrades } = useTaskTrades({
+    taskId,
+    taskType,
+    status: 'closed',
+    pageSize: 1000,
+    enableRealTimeUpdates,
+  });
+  const { trades: pnlOpenTrades } = useTaskTrades({
+    taskId,
+    taskType,
+    status: 'open',
+    pageSize: 1000,
+    enableRealTimeUpdates,
+  });
 
   // Auto-follow: track whether the chart should auto-scroll to the position line
   const [autoFollow, setAutoFollow] = useState(true);
@@ -299,16 +319,21 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const PROGRAMMATIC_SCROLL_GUARD_MS = 400;
   // Keep the old ref name around as a thin wrapper so every call-site still
   // compiles – but now it just sets / reads the timestamp.
-  const programmaticScrollRef = {
-    get current() {
-      return Date.now() < programmaticScrollUntilRef.current;
-    },
-    set current(v: boolean) {
-      programmaticScrollUntilRef.current = v
-        ? Date.now() + PROGRAMMATIC_SCROLL_GUARD_MS
-        : 0;
-    },
-  };
+  // Wrapped in useMemo so the object identity is stable across renders,
+  // which satisfies the react-hooks/exhaustive-deps rule.
+  const programmaticScrollRef = useMemo(
+    () => ({
+      get current() {
+        return Date.now() < programmaticScrollUntilRef.current;
+      },
+      set current(v: boolean) {
+        programmaticScrollUntilRef.current = v
+          ? Date.now() + PROGRAMMATIC_SCROLL_GUARD_MS
+          : 0;
+      },
+    }),
+    [PROGRAMMATIC_SCROLL_GUARD_MS]
+  );
 
   // Re-enable auto-follow when real-time updates are turned on (task started)
   useEffect(() => {
@@ -622,67 +647,68 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     ? instrument.split('_')[1]
     : 'N/A';
 
-  // Stable reference for candle timestamps passed to MetricsOverlayChart
+  // Stable reference for candle timestamps passed to useMetricsOverlay
   const candleTimestampsMemo = useMemo(
     () => candles.map((c) => Number(c.time)),
     [candles]
   );
 
+  // Attach metric overlay series (Margin Ratio, ATR, thresholds) to the
+  // candlestick chart so they share the exact same X-axis.
+  useMetricsOverlay({
+    taskId: String(taskId),
+    taskType,
+    configId,
+    enableRealTimeUpdates,
+    chart: chartInstance,
+    candleTimestamps: candleTimestampsMemo,
+    currentTickTimestamp: enableRealTimeUpdates ? currentTick?.timestamp : null,
+  });
+
+  const currentPrice =
+    currentTick?.price != null ? parseFloat(currentTick.price) : null;
+
   const replaySummary = useMemo(() => {
-    const pnlFromTrades = trades.reduce((sum, trade) => {
-      const pnl = Number(trade.pnl);
-      return Number.isFinite(pnl) ? sum + pnl : sum;
-    }, 0);
+    // Realized PnL — same logic as TaskTradesTable
+    const realizedPnl = pnlClosedTrades.reduce(
+      (sum, t) => sum + (t.pnl ? parseFloat(t.pnl) : 0),
+      0
+    );
 
-    const realizedRaw =
-      latestExecution?.realized_pnl !== undefined
-        ? Number(latestExecution.realized_pnl)
-        : pnlFromTrades;
-
-    // Compute unrealized PnL from open trades using current tick price.
-    // Use close_timestamp (not pnl) to detect open trades — matches backend logic.
-    const tickPrice =
-      currentTick?.price != null ? parseFloat(currentTick.price) : null;
-    const unrealizedFromTrades = trades.reduce((sum, trade) => {
-      const isOpen = trade.close_timestamp == null;
-      if (!isOpen) return sum;
-      if (tickPrice == null) return sum;
-      const openPrice =
-        trade.open_price != null ? parseFloat(String(trade.open_price)) : NaN;
-      if (!Number.isFinite(openPrice)) return sum;
-      const units = Math.abs(Number(trade.units));
-      if (!Number.isFinite(units)) return sum;
-      const dir = trade.direction;
+    // Unrealized PnL — same logic as TaskTradesTable
+    const unrealizedPnl = pnlOpenTrades.reduce((sum, t) => {
+      if (currentPrice == null || !t.open_price) return sum;
+      const openP = parseFloat(t.open_price);
+      const units =
+        typeof t.units === 'string' ? parseFloat(t.units) : (t.units ?? 0);
+      const dir = String(t.direction).toLowerCase();
       const pnl =
-        dir === 'long'
-          ? (tickPrice - openPrice) * units
-          : (openPrice - tickPrice) * units;
+        dir === 'long' || dir === 'buy'
+          ? (currentPrice - openP) * units
+          : (openP - currentPrice) * units;
       return sum + pnl;
     }, 0);
-
-    const unrealizedRaw =
-      tickPrice != null
-        ? unrealizedFromTrades
-        : latestExecution?.unrealized_pnl !== undefined
-          ? Number(latestExecution.unrealized_pnl)
-          : 0;
 
     const totalTradesRaw =
       typeof latestExecution?.total_trades === 'number'
         ? latestExecution.total_trades
         : trades.length;
 
-    const openTradesCount = trades.filter((t) => {
-      return t.close_timestamp == null;
-    }).length;
+    const openTradesCount = pnlOpenTrades.length;
 
     return {
-      realizedPnl: Number.isFinite(realizedRaw) ? realizedRaw : 0,
-      unrealizedPnl: Number.isFinite(unrealizedRaw) ? unrealizedRaw : 0,
+      realizedPnl: Number.isFinite(realizedPnl) ? realizedPnl : 0,
+      unrealizedPnl: Number.isFinite(unrealizedPnl) ? unrealizedPnl : 0,
       totalTrades: totalTradesRaw,
       openTrades: openTradesCount,
     };
-  }, [latestExecution, trades, currentTick?.price]);
+  }, [
+    pnlClosedTrades,
+    pnlOpenTrades,
+    currentPrice,
+    latestExecution,
+    trades.length,
+  ]);
 
   useEffect(() => {
     setGranularity(recommendedGranularity);
@@ -737,7 +763,12 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       const candlePoints: CandlePoint[] = Array.from(
         candleByTime.values()
       ).sort((a, b) => Number(a.time) - Number(b.time));
-      setCandles(candlePoints);
+      // Only update candles state when we receive non-empty data so that a
+      // transient empty response (e.g. market API hiccup during polling)
+      // does not wipe out previously loaded candles and destroy the chart.
+      if (candlePoints.length > 0) {
+        setCandles(candlePoints);
+      }
 
       const rawTrades = await fetchAllTrades(String(taskId), taskType);
 
@@ -828,8 +859,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   // Chart height is managed by flex layout + ResizeObserver
 
+  // Derived boolean: true once we have candle data.  Used as a dependency
+  // for the chart-creation effect so it only fires on the false→true
+  // transition, not on every candle-count change.
+  const hasCandles = candles.length > 0;
+
   useEffect(() => {
-    if (isLoading || candles.length === 0) return;
+    if (isLoading || !hasCandles) return;
     if (!chartContainerRef.current || chartRef.current) return;
 
     const container = chartContainerRef.current;
@@ -856,7 +892,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         vertTouchDrag: true,
         horzTouchDrag: true,
       },
-      rightPriceScale: { borderColor: '#cbd5e1' },
+      rightPriceScale: {
+        borderColor: '#cbd5e1',
+        minimumWidth: 80,
+        scaleMargins: { top: 0.02, bottom: 0.45 },
+      },
       leftPriceScale: {
         borderColor: 'transparent',
         visible: true,
@@ -885,6 +925,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     const markers = createSeriesMarkers(series, []);
 
     chartRef.current = chart;
+    setChartInstance(chart);
     seriesRef.current = series;
     markersRef.current = markers;
 
@@ -937,6 +978,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       observer.disconnect();
       chart.remove();
       chartRef.current = null;
+      setChartInstance(null);
       seriesRef.current = null;
       markersRef.current = null;
       highlightRef.current = null;
@@ -944,8 +986,8 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       sequenceLineRef.current = null;
       hasInitialFit.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chartHeight is read once for initial creation; ResizeObserver handles subsequent resizes
-  }, [isLoading, candles.length, timezone]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chartHeight is read once for initial creation; ResizeObserver handles subsequent resizes.  We derive `hasCandles` (boolean) so the effect only re-runs on the false→true transition and never on candle-count changes that would needlessly destroy and recreate the chart.
+  }, [isLoading, hasCandles, timezone]);
 
   // Track whether this is the first candle load (for initial fitContent)
   const hasInitialFit = useRef(false);
@@ -964,21 +1006,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     }
 
     const times = candles.map((c) => Number(c.time));
-
-    // ── DEBUG: log candlestick chart data info ──
-    console.group('[TaskReplayPanel] Candlestick data debug');
-    console.log('candles count:', candles.length);
-    if (candles.length > 0) {
-      console.log(
-        'candle first:',
-        new Date(Number(candles[0].time) * 1000).toISOString()
-      );
-      console.log(
-        'candle last:',
-        new Date(Number(candles[candles.length - 1].time) * 1000).toISOString()
-      );
-    }
-    console.groupEnd();
 
     if (highlightRef.current) {
       highlightRef.current.setGaps(detectMarketGaps(times));
@@ -1004,7 +1031,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   // Update sequence position line when current tick changes
   useEffect(() => {
     if (!sequenceLineRef.current) return;
-    if (!enableRealTimeUpdates || !currentTick?.timestamp) {
+    if (!currentTick?.timestamp) {
       sequenceLineRef.current.clear();
       return;
     }
@@ -1015,7 +1042,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     // Auto-scroll: keep the sequence line at the horizontal centre of the
     // viewport.  We use logical-index based positioning so that market gaps
     // don't shift the line away from the visual centre.
-    if (autoFollow) {
+    if (autoFollow && enableRealTimeUpdates) {
       const ts = chartRef.current?.timeScale();
       const series = seriesRef.current;
       if (ts && series) {
@@ -1308,17 +1335,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         )}
       </Box>
 
-      {/* Metrics overlay chart (margin ratio + volatility) — above candlestick */}
-      <MetricsOverlayChart
-        taskId={String(taskId)}
-        taskType={taskType}
-        timezone={timezone}
-        configId={configId}
-        enableRealTimeUpdates={enableRealTimeUpdates}
-        parentChart={chartRef.current}
-        currentTick={currentTick}
-        candleTimestamps={candleTimestampsMemo}
-      />
+      {/* Metric overlay labels */}
+      <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+        Margin Ratio (%) &amp; Volatility — Current ATR / Lock Threshold (pips)
+      </Typography>
 
       <Paper
         variant="outlined"

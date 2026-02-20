@@ -194,7 +194,7 @@ export const BacktestTaskDetail: React.FC = () => {
         flexDirection: 'column',
         flex: 1,
         minHeight: 0,
-        overflow: 'hidden',
+        overflow: 'auto',
       }}
     >
       {/* Breadcrumbs */}

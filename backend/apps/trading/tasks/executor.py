@@ -24,6 +24,23 @@ from apps.trading.tasks.state import StateManager
 logger: Logger = getLogger(name=__name__)
 
 
+def is_forex_market_closed() -> bool:
+    """Check if the forex market is currently closed (weekend).
+
+    Forex market closes Friday 21:00 UTC and reopens Sunday 21:00 UTC.
+    """
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC)
+    weekday = now.weekday()  # 0=Monday, 6=Sunday
+    hour = now.hour
+    return (
+        (weekday == 4 and hour >= 21)  # Friday after 21:00
+        or weekday == 5  # Saturday
+        or (weekday == 6 and hour < 21)  # Sunday before 21:00
+    )
+
+
 class TaskExecutor:
     """Abstract base class for task execution.
 
@@ -211,6 +228,10 @@ class TaskExecutor:
 
         from apps.trading.models.metric_snapshots import MetricSnapshot
 
+        buffer_size = len(self._metric_buffer)
+        first_ts = self._metric_buffer[0].get("timestamp")
+        last_ts = self._metric_buffer[-1].get("timestamp")
+
         objs = [
             MetricSnapshot(
                 task_type=self.task_type.value,
@@ -224,7 +245,16 @@ class TaskExecutor:
             )
             for m in self._metric_buffer
         ]
-        MetricSnapshot.objects.bulk_create(objs, ignore_conflicts=True)
+        created = MetricSnapshot.objects.bulk_create(objs, ignore_conflicts=True)
+        logger.info(
+            "Flushed metric snapshots - task_id=%s, buffered=%d, created=%d, "
+            "first_ts=%s, last_ts=%s",
+            self.task.pk,
+            buffer_size,
+            len(created),
+            first_ts,
+            last_ts,
+        )
         self._metric_buffer.clear()
 
     def save_events(self, events: List[StrategyEvent]) -> List[TradingEvent]:
@@ -296,13 +326,20 @@ class TaskExecutor:
 
                 # Check if we received an empty batch
                 if not tick_batch:
-                    no_tick_batches += 1
-                    if no_tick_batches >= max_no_tick_batches:
-                        logger.warning(
-                            f"No ticks received for {no_tick_batches} consecutive batches. "
-                            f"Data source may have ended without EOF signal."
-                        )
-                        break
+                    # During market close, empty batches are expected for live
+                    # trading — don't count them toward the timeout.
+                    if self.task_type == TaskType.TRADING and is_forex_market_closed():
+                        if no_tick_batches == 0:
+                            logger.info("Market is closed, tolerating empty batches")
+                        no_tick_batches = 0
+                    else:
+                        no_tick_batches += 1
+                        if no_tick_batches >= max_no_tick_batches:
+                            logger.warning(
+                                f"No ticks received for {no_tick_batches} consecutive batches. "
+                                f"Data source may have ended without EOF signal."
+                            )
+                            break
                     continue
 
                 # Reset no-tick counter when we receive ticks
@@ -361,6 +398,12 @@ class TaskExecutor:
                                 "volatility_threshold": metrics.get("volatility_threshold"),
                             }
                         )
+                    else:
+                        logger.debug(
+                            "No metrics in strategy_state at tick %s (ticks_processed=%d)",
+                            tick.timestamp,
+                            state.ticks_processed,
+                        )
 
                 # Increment batch counter
                 batch_count += 1
@@ -372,6 +415,18 @@ class TaskExecutor:
                 )
                 self.save_state(state)
                 self._flush_metric_snapshots(state)
+
+                if batch_count % 50 == 0:
+                    logger.info(
+                        "Metric snapshot progress - task_id=%s, batch=%d, "
+                        "ticks_processed=%d, metric_buffer_size=%d, "
+                        "last_tick_ts=%s",
+                        self.task.pk,
+                        batch_count,
+                        state.ticks_processed,
+                        len(self._metric_buffer),
+                        state.last_tick_timestamp,
+                    )
 
                 # Send heartbeat every 10 batches
                 if batch_count % 10 == 0:

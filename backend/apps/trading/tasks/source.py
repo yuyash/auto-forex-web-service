@@ -310,10 +310,19 @@ class LiveTickDataSource(TickDataSource):
         self.pubsub.subscribe(self.channel)
 
         try:
+            idle_seconds = 0
             while True:
                 message = self.pubsub.get_message(timeout=1.0)
                 if not message:
+                    idle_seconds += 1
+                    # Yield empty batch every 5 seconds so the executor can
+                    # check stop signals and send heartbeats during market close
+                    if idle_seconds >= 5:
+                        idle_seconds = 0
+                        yield []
                     continue
+
+                idle_seconds = 0
 
                 if message.get("type") != "message":
                     continue

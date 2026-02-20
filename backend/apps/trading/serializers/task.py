@@ -157,15 +157,18 @@ class BacktestTaskSerializer(TaskSerializer):
             return 0
 
     def get_current_tick(self, obj: BacktestTask) -> dict | None:
-        """Return the current tick position and price for running tasks.
+        """Return the current tick position and price.
+
+        For running tasks this returns the live tick from ExecutionState.
+        For stopped/completed tasks it returns the last recorded tick so
+        that Unrealized PnL can still be displayed.
 
         Returns:
             dict with 'timestamp' (ISO string) and 'price' (string), or None
         """
-        from apps.trading.enums import TaskStatus
         from apps.trading.models.state import ExecutionState
 
-        if obj.status != TaskStatus.RUNNING or not obj.celery_task_id:
+        if not obj.celery_task_id:
             return None
 
         try:
@@ -216,15 +219,18 @@ class TradingTaskSerializer(TaskSerializer):
         read_only_fields = TaskSerializer.Meta.read_only_fields + ["user", "strategy_state"]
 
     def get_current_tick(self, obj: TradingTask) -> dict | None:
-        """Return the current tick position and price for running tasks.
+        """Return the current tick position and price.
+
+        For running tasks this returns the live tick from ExecutionState.
+        For stopped/completed tasks it returns the last recorded tick so
+        that Unrealized PnL can still be displayed.
 
         Returns:
             dict with 'timestamp' (ISO string) and 'price' (string), or None
         """
-        from apps.trading.enums import TaskStatus
         from apps.trading.models.state import ExecutionState
 
-        if obj.status != TaskStatus.RUNNING or not obj.celery_task_id:
+        if not obj.celery_task_id:
             return None
 
         try:

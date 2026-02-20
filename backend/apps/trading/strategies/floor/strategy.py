@@ -590,11 +590,19 @@ class FloorStrategy(Strategy):
                 events.extend(margin_events)
                 # After margin protection fires, bail out like take-profit
                 # to avoid immediately re-entering on the same tick.
+                logger.debug(
+                    "on_tick early return: margin_protection fired at %s",
+                    tick.timestamp,
+                )
                 state.strategy_state = floor_state.to_dict()
                 return StrategyResult(state=state, events=events)
 
         # Locked state: only monitoring
         if floor_state.volatility_locked:
+            logger.debug(
+                "on_tick early return: volatility_locked at %s",
+                tick.timestamp,
+            )
             state.strategy_state = floor_state.to_dict()
             return StrategyResult(state=state, events=events)
 
@@ -754,6 +762,10 @@ class FloorStrategy(Strategy):
 
             # After taking profit, do NOT open new entries on the same tick.
             # Wait for the next tick to re-evaluate market conditions.
+            logger.debug(
+                "on_tick early return: take_profit at %s",
+                tick.timestamp,
+            )
             state.strategy_state = floor_state.to_dict()
             return StrategyResult(state=state, events=events)
 
