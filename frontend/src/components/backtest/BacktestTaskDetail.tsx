@@ -22,10 +22,7 @@ import {
   Grid,
   Divider,
 } from '@mui/material';
-import {
-  useBacktestTask,
-  invalidateBacktestTasksCache,
-} from '../../hooks/useBacktestTasks';
+import { useBacktestTask } from '../../hooks/useBacktestTasks';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
@@ -36,6 +33,8 @@ import { TaskReplayPanel } from '../tasks/detail/TaskReplayPanel';
 import { TaskProgress } from '../tasks/TaskProgress';
 import { useOverviewPnl } from '../../hooks/useOverviewPnl';
 import { TaskStatus, TaskType } from '../../types/common';
+import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
+import { useDeleteBacktestTask } from '../../hooks/useBacktestTaskMutations';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -90,6 +89,8 @@ export const BacktestTaskDetail: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const taskId = id || '';
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const deleteTask = useDeleteBacktestTask();
 
   // Get tab from URL, default to 'overview'
   const tabParam = searchParams.get('tab') || 'overview';
@@ -288,13 +289,8 @@ export const BacktestTaskDetail: React.FC = () => {
                   startPolling();
                 }
               }}
-              onDelete={async (id) => {
-                const { TradingService } = await import(
-                  '../../api/generated/services/TradingService'
-                );
-                await TradingService.tradingTasksBacktestDestroy(String(id));
-                invalidateBacktestTasksCache();
-                navigate('/backtest-tasks', { state: { deleted: true } });
+              onDelete={() => {
+                setDeleteDialogOpen(true);
               }}
             />
           </Box>
@@ -628,6 +624,24 @@ export const BacktestTaskDetail: React.FC = () => {
           />
         </TabPanel>
       </Paper>
+
+      <DeleteTaskDialog
+        open={deleteDialogOpen}
+        taskName={task.name}
+        taskStatus={task.status}
+        onCancel={() => setDeleteDialogOpen(false)}
+        onConfirm={async () => {
+          try {
+            await deleteTask.mutate(taskId);
+            setDeleteDialogOpen(false);
+            navigate('/backtest-tasks', { state: { deleted: true } });
+          } catch {
+            // Error handled by mutation hook
+          }
+        }}
+        isLoading={deleteTask.isLoading}
+        hasExecutionHistory={true}
+      />
     </Container>
   );
 };

@@ -34,6 +34,9 @@ import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
 import { TaskReplayPanel } from '../tasks/detail/TaskReplayPanel';
 import { TaskStatus, TaskType } from '../../types/common';
+import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
+import { useDeleteTradingTask } from '../../hooks/useTradingTaskMutations';
+import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -88,6 +91,8 @@ export const TradingTaskDetail: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const taskId = id || '';
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const deleteTask = useDeleteTradingTask();
 
   // Get tab from URL, default to 'overview'
   const tabParam = searchParams.get('tab') || 'overview';
@@ -241,12 +246,8 @@ export const TradingTaskDetail: React.FC = () => {
                 await tradingTasksApi.resume(id);
                 refetch();
               }}
-              onDelete={async (id) => {
-                const { tradingTasksApi } = await import(
-                  '../../services/api/tradingTasks'
-                );
-                await tradingTasksApi.delete(id);
-                navigate('/trading-tasks');
+              onDelete={() => {
+                setDeleteDialogOpen(true);
               }}
             />
           </Box>
@@ -518,6 +519,25 @@ export const TradingTaskDetail: React.FC = () => {
           />
         </TabPanel>
       </Paper>
+
+      <DeleteTaskDialog
+        open={deleteDialogOpen}
+        taskName={task.name}
+        taskStatus={task.status}
+        onCancel={() => setDeleteDialogOpen(false)}
+        onConfirm={async () => {
+          try {
+            await deleteTask.mutate(taskId);
+            setDeleteDialogOpen(false);
+            invalidateTradingTasksCache();
+            navigate('/trading-tasks', { state: { deleted: true } });
+          } catch {
+            // Error handled by mutation hook
+          }
+        }}
+        isLoading={deleteTask.isLoading}
+        hasExecutionHistory={true}
+      />
     </Container>
   );
 };

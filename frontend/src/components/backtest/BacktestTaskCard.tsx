@@ -22,6 +22,7 @@ import { TaskProgress } from '../tasks/TaskProgress';
 import { StatCard } from '../tasks/display/StatCard';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import BacktestTaskActions from './BacktestTaskActions';
+import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
 import {
   useStrategies,
@@ -48,6 +49,8 @@ export default function BacktestTaskCard({
     null
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fetch strategies for display names
   const { strategies } = useStrategies();
@@ -188,12 +191,17 @@ export default function BacktestTaskCard({
     }
   };
 
-  const handleDelete = async (taskId: string) => {
-    setIsLoading(true);
+  const handleDelete = async () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    setIsDeleting(true);
     try {
-      await TradingService.tradingTasksBacktestDestroy(String(taskId));
+      await TradingService.tradingTasksBacktestDestroy(String(task.id));
       invalidateBacktestTasksCache();
       showSuccess('Backtest task deleted successfully');
+      setDeleteDialogOpen(false);
       onRefresh?.();
     } catch (error) {
       console.error('Failed to delete task:', error);
@@ -201,7 +209,7 @@ export default function BacktestTaskCard({
         error instanceof Error ? error.message : 'Failed to delete task';
       showError(errorMessage);
     } finally {
-      setIsLoading(false);
+      setIsDeleting(false);
     }
   };
 
@@ -413,6 +421,16 @@ export default function BacktestTaskCard({
         anchorEl={anchorEl}
         onClose={handleActionsClose}
         onRefresh={onRefresh}
+      />
+
+      <DeleteTaskDialog
+        open={deleteDialogOpen}
+        taskName={task.name}
+        taskStatus={task.status}
+        onCancel={() => setDeleteDialogOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        isLoading={isDeleting}
+        hasExecutionHistory={true}
       />
     </Card>
   );

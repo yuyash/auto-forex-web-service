@@ -23,6 +23,7 @@ import { StatusBadge } from '../tasks/display/StatusBadge';
 import { StatCard } from '../tasks/display/StatCard';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import TradingTaskActions from './TradingTaskActions';
+import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
 import { useToast } from '../common';
 import {
@@ -48,6 +49,8 @@ export default function TradingTaskCard({
     null
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const prevTaskRef = useRef<TradingTask>(task);
 
   const { showError, showSuccess, showWarning, showInfo } = useToast();
@@ -254,12 +257,17 @@ export default function TradingTaskCard({
     }
   };
 
-  const handleDelete = async (taskId: string | number) => {
-    setIsLoading(true);
+  const handleDelete = async () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    setIsDeleting(true);
     try {
-      await TradingService.tradingTasksTradingDestroy(String(taskId));
+      await TradingService.tradingTasksTradingDestroy(String(task.id));
       invalidateTradingTasksCache();
       showSuccess('Trading task deleted successfully');
+      setDeleteDialogOpen(false);
       onRefresh?.();
     } catch (error) {
       console.error('Failed to delete task:', error);
@@ -267,7 +275,7 @@ export default function TradingTaskCard({
         error instanceof Error ? error.message : 'Failed to delete task';
       showError(errorMessage);
     } finally {
-      setIsLoading(false);
+      setIsDeleting(false);
     }
   };
 
@@ -524,6 +532,16 @@ export default function TradingTaskCard({
         anchorEl={anchorEl}
         onClose={handleActionsClose}
         onRefresh={onRefresh}
+      />
+
+      <DeleteTaskDialog
+        open={deleteDialogOpen}
+        taskName={task.name}
+        taskStatus={task.status}
+        onCancel={() => setDeleteDialogOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        isLoading={isDeleting}
+        hasExecutionHistory={true}
       />
     </Card>
   );
