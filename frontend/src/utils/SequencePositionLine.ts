@@ -198,7 +198,8 @@ class LinePaneView implements IPrimitivePaneView {
 
       const fraction = (timestamp - secA) / (secB - secA);
       // Allow rendering slightly outside visible area for smooth transitions
-      if (fraction < -0.1 || fraction > 1.1) return null;
+      const maxExt = this._source.getMaxExtrapolation();
+      if (fraction < -maxExt || fraction > 1 + maxExt) return null;
 
       x = (xA + fraction * (xB - xA)) as unknown as ReturnType<
         typeof timeScale.timeToCoordinate
@@ -223,6 +224,17 @@ class LinePaneView implements IPrimitivePaneView {
 
 // ── Primitive ───────────────────────────────────────────────────────
 
+export interface SequencePositionLineOptions {
+  /**
+   * Maximum allowed extrapolation fraction beyond the two nearest data
+   * points.  Default is 0.1 (10%).  Set to a large number (e.g. Infinity)
+   * to allow the line to render even when the timestamp is far outside the
+   * data range — useful for overlay charts whose data density is lower than
+   * the main candlestick chart.
+   */
+  maxExtrapolation?: number;
+}
+
 export class SequencePositionLine implements ISeriesPrimitive<Time> {
   private _timestamp: number | null = null;
   private _price: number | null = null;
@@ -232,8 +244,10 @@ export class SequencePositionLine implements ISeriesPrimitive<Time> {
   private _deferredUpdateId: ReturnType<typeof requestAnimationFrame> | null =
     null;
   private _rangeChangeHandler: (() => void) | null = null;
+  private _maxExtrapolation: number;
 
-  constructor() {
+  constructor(options?: SequencePositionLineOptions) {
+    this._maxExtrapolation = options?.maxExtrapolation ?? 0.1;
     this._paneViews = [new LinePaneView(this)];
   }
 
@@ -277,6 +291,10 @@ export class SequencePositionLine implements ISeriesPrimitive<Time> {
 
   getPriceLabel(): string {
     return this._priceLabel;
+  }
+
+  getMaxExtrapolation(): number {
+    return this._maxExtrapolation;
   }
 
   /**

@@ -26,8 +26,11 @@ import {
   Settings as SettingsIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import { useTradingTasks } from '../hooks/useTradingTasks';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  useTradingTasks,
+  invalidateTradingTasksCache,
+} from '../hooks/useTradingTasks';
 import { useConfigurations } from '../hooks/useConfigurations';
 import { TaskStatus } from '../types/common';
 import TradingTaskCard from '../components/trading/TradingTaskCard';
@@ -66,12 +69,22 @@ function a11yProps(index: number) {
 
 export default function TradingTasksPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [tabValue, setTabValue] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('-created_at');
   const [configFilter, setConfigFilter] = useState<string | ''>('');
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
+  // Force refetch when navigating back after a deletion
+  useEffect(() => {
+    if (location.state?.deleted) {
+      invalidateTradingTasksCache();
+      // Clear the state so it doesn't re-trigger on subsequent renders
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state?.deleted, navigate, location.pathname]);
 
   // Determine status filter based on active tab
   const getStatusFilter = (): TaskStatus | undefined => {

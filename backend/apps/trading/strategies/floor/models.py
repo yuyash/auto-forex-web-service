@@ -368,20 +368,31 @@ class CandleData:
 
     bucket_start_epoch: int
     close_price: Decimal
+    high_price: Decimal | None = None
+    low_price: Decimal | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
-        return {
+        result: dict[str, Any] = {
             "bucket_start_epoch": self.bucket_start_epoch,
             "close_price": str(self.close_price),
         }
+        if self.high_price is not None:
+            result["high_price"] = str(self.high_price)
+        if self.low_price is not None:
+            result["low_price"] = str(self.low_price)
+        return result
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> CandleData:
         """Create from dictionary."""
+        high_raw = data.get("high_price")
+        low_raw = data.get("low_price")
         return CandleData(
             bucket_start_epoch=data["bucket_start_epoch"],
             close_price=Decimal(str(data["close_price"])),
+            high_price=Decimal(str(high_raw)) if high_raw is not None else None,
+            low_price=Decimal(str(low_raw)) if low_raw is not None else None,
         )
 
 
@@ -392,6 +403,8 @@ class FloorStrategyState:
     status: StrategyStatus = StrategyStatus.RUNNING
     candles: list[CandleData] = field(default_factory=list)
     current_candle_close: Decimal | None = None
+    current_candle_high: Decimal | None = None
+    current_candle_low: Decimal | None = None
     last_mid: Decimal | None = None
     last_bid: Decimal | None = None
     last_ask: Decimal | None = None
@@ -418,6 +431,10 @@ class FloorStrategyState:
             "current_candle_close": str(self.current_candle_close)
             if self.current_candle_close
             else None,
+            "current_candle_high": str(self.current_candle_high)
+            if self.current_candle_high
+            else None,
+            "current_candle_low": str(self.current_candle_low) if self.current_candle_low else None,
             "last_mid": str(self.last_mid) if self.last_mid else None,
             "last_bid": str(self.last_bid) if self.last_bid else None,
             "last_ask": str(self.last_ask) if self.last_ask else None,
@@ -466,6 +483,8 @@ class FloorStrategyState:
             status=StrategyStatus(data.get("status", StrategyStatus.RUNNING.value)),
             candles=[CandleData.from_dict(c) for c in data.get("candles", [])],
             current_candle_close=_decimal_or_none(data.get("current_candle_close")),
+            current_candle_high=_decimal_or_none(data.get("current_candle_high")),
+            current_candle_low=_decimal_or_none(data.get("current_candle_low")),
             last_mid=_decimal_or_none(data.get("last_mid")),
             last_bid=_decimal_or_none(data.get("last_bid")),
             last_ask=_decimal_or_none(data.get("last_ask")),

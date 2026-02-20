@@ -68,6 +68,8 @@ class TaskExecutor:
             order_service, self.instrument, trading_mode=getattr(task, "trading_mode", "hedging")
         )
 
+        self._metric_buffer: list[dict] = []
+
         logger.info(
             "TaskExecutor initialized: instrument=%s, pip_size=%s, initial_balance=%s",
             self.instrument,
@@ -202,6 +204,29 @@ class TaskExecutor:
         state.refresh_from_db()
         logger.debug(f"State saved and verified: ticks_processed={state.ticks_processed}")
 
+    def _flush_metric_snapshots(self, state: ExecutionState) -> None:
+        """Bulk-create buffered metric snapshots and clear the buffer."""
+        if not self._metric_buffer:
+            return
+
+        from apps.trading.models.metric_snapshots import MetricSnapshot
+
+        objs = [
+            MetricSnapshot(
+                task_type=self.task_type.value,
+                task_id=self.task.pk,
+                celery_task_id=self.task.celery_task_id,
+                timestamp=m["timestamp"],
+                margin_ratio=m.get("margin_ratio"),
+                current_atr=m.get("current_atr"),
+                baseline_atr=m.get("baseline_atr"),
+                volatility_threshold=m.get("volatility_threshold"),
+            )
+            for m in self._metric_buffer
+        ]
+        MetricSnapshot.objects.bulk_create(objs, ignore_conflicts=True)
+        self._metric_buffer.clear()
+
     def save_events(self, events: List[StrategyEvent]) -> List[TradingEvent]:
         """Save strategy events to database.
 
@@ -309,10 +334,33 @@ class TaskExecutor:
                     if events:
                         self.handle_events(state, events)
 
+                    # Strategy requested task stop (e.g. margin blow-out)
+                    if result.should_stop:
+                        logger.warning(
+                            "Strategy requested stop: %s — ticks_processed=%d",
+                            result.stop_reason,
+                            state.ticks_processed,
+                        )
+                        stopped_early = True
+                        break
+
                     # Update tick count and timestamp
                     state.ticks_processed += 1
                     state.last_tick_timestamp = tick.timestamp
                     state.last_tick_price = tick.mid
+
+                    # Buffer metric snapshot from strategy state
+                    metrics = (state.strategy_state or {}).get("metrics", {})
+                    if metrics:
+                        self._metric_buffer.append(
+                            {
+                                "timestamp": tick.timestamp,
+                                "margin_ratio": metrics.get("margin_ratio"),
+                                "current_atr": metrics.get("current_atr"),
+                                "baseline_atr": metrics.get("baseline_atr"),
+                                "volatility_threshold": metrics.get("volatility_threshold"),
+                            }
+                        )
 
                 # Increment batch counter
                 batch_count += 1
@@ -323,6 +371,7 @@ class TaskExecutor:
                     f"batch_count={batch_count}, ticks_processed={state.ticks_processed}"
                 )
                 self.save_state(state)
+                self._flush_metric_snapshots(state)
 
                 # Send heartbeat every 10 batches
                 if batch_count % 10 == 0:

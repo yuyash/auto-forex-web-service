@@ -192,6 +192,7 @@ export default function BacktestTaskCard({
     setIsLoading(true);
     try {
       await TradingService.tradingTasksBacktestDestroy(String(taskId));
+      invalidateBacktestTasksCache();
       showSuccess('Backtest task deleted successfully');
       onRefresh?.();
     } catch (error) {

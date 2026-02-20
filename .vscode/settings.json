@@ -97,7 +97,7 @@
   "editor.wordWrap": "on",
   "explorer.excludeGitIgnore": true,
   "kiroAgent.enableTabAutocomplete": true,
-  "kiroAgent.modelSelection": "claude-opus-4.6-1m",
+  "kiroAgent.modelSelection": "claude-opus-4.6",
   "kiroAgent.trustedCommands": [
     "cat *",
     "cd *",

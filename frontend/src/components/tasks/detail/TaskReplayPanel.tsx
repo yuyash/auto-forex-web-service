@@ -58,6 +58,7 @@ import {
 } from '../../../utils/adaptiveTimeScalePlugin';
 import { useAuth } from '../../../contexts/AuthContext';
 import { SequencePositionLine } from '../../../utils/SequencePositionLine';
+import { MetricsOverlayChart } from './MetricsOverlayChart';
 
 type CandlePoint = CandlestickData<Time>;
 
@@ -117,6 +118,7 @@ interface TaskReplayPanelProps {
     total_trades?: number;
   };
   pipSize?: number | null;
+  configId?: string;
 }
 
 const ALLOWED_GRANULARITIES = [
@@ -264,6 +266,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   currentTick,
   latestExecution,
   pipSize,
+  configId,
 }) => {
   const panelRootRef = useRef<HTMLDivElement | null>(null);
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
@@ -287,8 +290,25 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   // Auto-follow: track whether the chart should auto-scroll to the position line
   const [autoFollow, setAutoFollow] = useState(true);
-  // Guard flag so our own setVisibleRange calls don't disable auto-follow
-  const programmaticScrollRef = useRef(false);
+  // Timestamp-based guard: any visibleLogicalRangeChange that fires within
+  // this window (ms) after a programmatic scroll is treated as our own and
+  // will NOT disable auto-follow.  This is far more reliable than the old
+  // boolean flag + requestAnimationFrame approach because the chart library
+  // can fire the change callback with unpredictable async delays.
+  const programmaticScrollUntilRef = useRef(0);
+  const PROGRAMMATIC_SCROLL_GUARD_MS = 400;
+  // Keep the old ref name around as a thin wrapper so every call-site still
+  // compiles – but now it just sets / reads the timestamp.
+  const programmaticScrollRef = {
+    get current() {
+      return Date.now() < programmaticScrollUntilRef.current;
+    },
+    set current(v: boolean) {
+      programmaticScrollUntilRef.current = v
+        ? Date.now() + PROGRAMMATIC_SCROLL_GUARD_MS
+        : 0;
+    },
+  };
 
   // Re-enable auto-follow when real-time updates are turned on (task started)
   useEffect(() => {
@@ -602,6 +622,12 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     ? instrument.split('_')[1]
     : 'N/A';
 
+  // Stable reference for candle timestamps passed to MetricsOverlayChart
+  const candleTimestampsMemo = useMemo(
+    () => candles.map((c) => Number(c.time)),
+    [candles]
+  );
+
   const replaySummary = useMemo(() => {
     const pnlFromTrades = trades.reduce((sum, trade) => {
       const pnl = Number(trade.pnl);
@@ -831,6 +857,12 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         horzTouchDrag: true,
       },
       rightPriceScale: { borderColor: '#cbd5e1' },
+      leftPriceScale: {
+        borderColor: 'transparent',
+        visible: true,
+        minimumWidth: 80,
+        ticksVisible: false,
+      },
       timeScale: {
         borderColor: '#cbd5e1',
         timeVisible: true,
@@ -895,17 +927,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       if (height > 0) {
         chart.applyOptions({ height });
       }
-      requestAnimationFrame(() => {
-        programmaticScrollRef.current = false;
-      });
     });
     observer.observe(container);
     // Guard initial layout so it doesn't disable auto-follow
     programmaticScrollRef.current = true;
     chart.applyOptions({ width: container.clientWidth });
-    requestAnimationFrame(() => {
-      programmaticScrollRef.current = false;
-    });
 
     return () => {
       observer.disconnect();
@@ -934,14 +960,25 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       seriesRef.current.setData(candles);
     } catch (e) {
       console.warn('Failed to set candle data:', e);
-      programmaticScrollRef.current = false;
       return;
     }
-    requestAnimationFrame(() => {
-      programmaticScrollRef.current = false;
-    });
 
     const times = candles.map((c) => Number(c.time));
+
+    // ── DEBUG: log candlestick chart data info ──
+    console.group('[TaskReplayPanel] Candlestick data debug');
+    console.log('candles count:', candles.length);
+    if (candles.length > 0) {
+      console.log(
+        'candle first:',
+        new Date(Number(candles[0].time) * 1000).toISOString()
+      );
+      console.log(
+        'candle last:',
+        new Date(Number(candles[candles.length - 1].time) * 1000).toISOString()
+      );
+    }
+    console.groupEnd();
 
     if (highlightRef.current) {
       highlightRef.current.setGaps(detectMarketGaps(times));
@@ -956,11 +993,8 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         console.warn('Failed to fit chart content:', e);
       }
       hasInitialFit.current = true;
-      requestAnimationFrame(() => {
-        programmaticScrollRef.current = false;
-      });
     }
-  }, [candles]);
+  }, [candles, programmaticScrollRef]);
 
   // Auto-follow: show ~40 candles worth of data with the position line centred.
   // The visible half-width adapts to the selected granularity so the zoom
@@ -1021,9 +1055,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           } catch (e) {
             console.warn('Failed to set visible range during auto-follow:', e);
           }
-          requestAnimationFrame(() => {
-            programmaticScrollRef.current = false;
-          });
         }
       }
     }
@@ -1035,6 +1066,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     candles.length,
     granularity,
     autoFollow,
+    programmaticScrollRef,
   ]);
 
   // Update trade markers when trades or selection changes (without resetting the view)
@@ -1085,14 +1117,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     try {
       programmaticScrollRef.current = true;
       markersRef.current.setMarkers(tradeMarkers);
-      requestAnimationFrame(() => {
-        programmaticScrollRef.current = false;
-      });
     } catch (e) {
-      programmaticScrollRef.current = false;
       console.warn('Failed to set trade markers:', e);
     }
-  }, [trades, selectedTradeId]);
+  }, [trades, selectedTradeId, programmaticScrollRef]);
 
   const handleGranularityChange = (e: SelectChangeEvent) => {
     setGranularity(String(e.target.value));
@@ -1126,9 +1154,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     } catch (e) {
       console.warn('Failed to set visible range on row select:', e);
     }
-    requestAnimationFrame(() => {
-      programmaticScrollRef.current = false;
-    });
   };
 
   if (isLoading) {
@@ -1283,10 +1308,22 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         )}
       </Box>
 
+      {/* Metrics overlay chart (margin ratio + volatility) — above candlestick */}
+      <MetricsOverlayChart
+        taskId={String(taskId)}
+        taskType={taskType}
+        timezone={timezone}
+        configId={configId}
+        enableRealTimeUpdates={enableRealTimeUpdates}
+        parentChart={chartRef.current}
+        currentTick={currentTick}
+        candleTimestamps={candleTimestampsMemo}
+      />
+
       <Paper
         variant="outlined"
         sx={{
-          mt: 1,
+          mt: 0,
           mb: 0,
           height: chartHeight,
           minHeight: MIN_CHART_HEIGHT,

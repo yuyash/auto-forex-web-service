@@ -237,7 +237,7 @@ export default function BacktestTaskForm({
       end_time: defaultDateRange.end_time,
       initial_balance: 10000,
       commission_per_trade: 0,
-      pip_size: undefined,
+      pip_size: 0.01,
       instrument: 'USD_JPY',
       trading_mode: 'netting' as const,
       sell_at_completion: false,

@@ -371,7 +371,12 @@ class EventHandler:
         return position
 
     def handle_take_profit(self, event: TakeProfitEvent) -> Decimal:
-        """Close position for take profit.
+        """Close position(s) for take profit.
+
+        When the requested units exceed a single position's size, this
+        method iterates through multiple positions in the same layer
+        (respecting the trading_mode order) until the full amount is
+        closed or no more open positions remain.
 
         Args:
             event: Take profit event with close details
@@ -382,71 +387,100 @@ class EventHandler:
         Raises:
             OrderServiceError: If order execution fails
         """
-        position = self._find_take_profit_target(event)
-
-        if not position:
-            logger.error(
-                "Cannot close position: no open position found for layer %s, direction %s",
-                event.layer_number,
-                event.direction,
-            )
-            return Decimal("0")
-
-        # Close position (full or partial based on units)
-        units_to_close = event.units if event.units > 0 else None
-        closed_units = units_to_close if units_to_close is not None else abs(position.units)
-        # Pass event exit_price so dry-run uses the strategy's price instead of
-        # a potentially stale tick from the database.
         override_price = event.exit_price if event.exit_price else None
-        closed_position, realized_delta = self.order_service.close_position(
-            position=position,
-            units=units_to_close,
-            override_price=override_price,
-        )
-        close_direction = (
-            Direction.SHORT if position.direction == Direction.LONG else Direction.LONG
-        )
-        self._record_trade(
-            direction=close_direction,
-            units=closed_units,
-            instrument=position.instrument,
-            price=Decimal(str(closed_position.exit_price or position.entry_price)),
-            execution_method=str(event.event_type.value),
-            timestamp=event.timestamp,
-            layer_index=event.layer_number,
-            retracement_count=event.retracement_count,
-            pnl=realized_delta,
-            open_price=position.entry_price,
-            open_timestamp=position.entry_time,
-            close_price=Decimal(str(closed_position.exit_price or position.entry_price)),
-            close_timestamp=event.timestamp,
-        )
+        total_requested = event.units if event.units > 0 else None
+        remaining = total_requested
+        realized_delta_total = Decimal("0")
 
-        self._close_entry_trades(
-            position=position,
-            close_price=Decimal(str(closed_position.exit_price or position.entry_price)),
-            close_timestamp=event.timestamp,
-            units_closed=units_to_close,
-        )
+        while True:
+            position = self._find_take_profit_target(event)
+            if not position:
+                if realized_delta_total == Decimal("0"):
+                    logger.error(
+                        "Cannot close position: no open position found for layer %s, direction %s",
+                        event.layer_number,
+                        event.direction,
+                    )
+                else:
+                    logger.warning(
+                        "Take profit: exhausted open positions for layer %s before fully "
+                        "closing requested %s units (%s remaining)",
+                        event.layer_number,
+                        total_requested,
+                        remaining,
+                    )
+                break
 
-        self._prune_closed_position(event.layer_number, closed_position)
-        if not closed_position.is_open:
-            logger.info(
-                "Take profit executed (full close): layer=%s, pnl=%s, position_id=%s",
-                event.layer_number,
-                closed_position.realized_pnl,
-                closed_position.id,
+            pos_units = abs(position.units)
+
+            if remaining is None:
+                # Full close of this single position
+                units_to_close = None
+                closed_units = pos_units
+            else:
+                units_to_close = min(remaining, pos_units)
+                closed_units = units_to_close
+
+            closed_position, realized_delta = self.order_service.close_position(
+                position=position,
+                units=units_to_close,
+                override_price=override_price,
             )
-        else:
-            logger.info(
-                "Take profit executed (partial close): layer=%s, units_closed=%s, remaining=%s, position_id=%s",
-                event.layer_number,
-                units_to_close,
-                abs(closed_position.units),
-                closed_position.id,
+            realized_delta_total += realized_delta
+
+            close_direction = (
+                Direction.SHORT if position.direction == Direction.LONG else Direction.LONG
+            )
+            self._record_trade(
+                direction=close_direction,
+                units=closed_units,
+                instrument=position.instrument,
+                price=Decimal(str(closed_position.exit_price or position.entry_price)),
+                execution_method=str(event.event_type.value),
+                timestamp=event.timestamp,
+                layer_index=event.layer_number,
+                retracement_count=event.retracement_count,
+                pnl=realized_delta,
+                open_price=position.entry_price,
+                open_timestamp=position.entry_time,
+                close_price=Decimal(str(closed_position.exit_price or position.entry_price)),
+                close_timestamp=event.timestamp,
             )
 
-        return realized_delta
+            self._close_entry_trades(
+                position=position,
+                close_price=Decimal(str(closed_position.exit_price or position.entry_price)),
+                close_timestamp=event.timestamp,
+                units_closed=units_to_close,
+            )
+
+            self._prune_closed_position(event.layer_number, closed_position)
+
+            if not closed_position.is_open:
+                logger.info(
+                    "Take profit executed (full close): layer=%s, pnl=%s, position_id=%s",
+                    event.layer_number,
+                    closed_position.realized_pnl,
+                    closed_position.id,
+                )
+            else:
+                logger.info(
+                    "Take profit executed (partial close): layer=%s, units_closed=%s, remaining=%s, position_id=%s",
+                    event.layer_number,
+                    units_to_close,
+                    abs(closed_position.units),
+                    closed_position.id,
+                )
+
+            # If no specific amount was requested, we only close one position
+            if remaining is None:
+                break
+
+            remaining -= closed_units
+            if remaining <= 0:
+                break
+
+        return realized_delta_total
 
     def handle_volatility_lock(self, event: VolatilityLockEvent) -> Decimal:
         """Close all open positions due to volatility.

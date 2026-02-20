@@ -495,6 +495,7 @@ export const TradingTaskDetail: React.FC = () => {
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
             currentTick={currentTick}
             pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
+            configId={task.config_id}
           />
         </TabPanel>
 

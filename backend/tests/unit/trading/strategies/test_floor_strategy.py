@@ -320,8 +320,9 @@ class TestFloorStrategyOnTick:
         event = margin_events[0]
         assert event.units_to_close is not None
         assert event.units_to_close > 0
-        # At least one entry remains because second entry should be partially reduced.
-        assert state.strategy_state["open_entries"]
+        # With deeply negative NAV (balance=1000, unrealized ~ -121k), all
+        # entries are closed.  The strategy bails out early after margin
+        # protection (no new initial entry on the same tick).
         remaining_units = sum(int(item["units"]) for item in state.strategy_state["open_entries"])
         assert remaining_units < 2500
 

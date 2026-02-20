@@ -20,10 +20,16 @@ class StrategyResult:
     Attributes:
         state: Updated execution state after processing
         events: List of strategy events emitted during processing
+        should_stop: If True the executor must stop the task after processing
+            this result. Used by strategies to signal unrecoverable conditions
+            (e.g. margin blow-out with no open positions).
+        stop_reason: Human-readable reason when should_stop is True.
     """
 
     state: ExecutionState
     events: list[StrategyEvent] = field(default_factory=list)
+    should_stop: bool = False
+    stop_reason: str = ""
 
     @classmethod
     def from_state(cls, state: ExecutionState) -> "StrategyResult":

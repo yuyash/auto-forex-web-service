@@ -51,6 +51,53 @@ class TaskSubResourceMixin:
     task_type_label: str
 
     @extend_schema(
+        summary="Get metric snapshots",
+        description="Get time-series metric snapshots (margin ratio, volatility) for replay charts.",
+        parameters=[
+            OpenApiParameter(
+                name="celery_task_id",
+                type=str,
+                required=False,
+                description="Filter by celery task ID",
+            ),
+        ],
+        responses={200: dict},
+    )
+    @action(detail=True, methods=["get"])
+    def metric_snapshots(self, request: Request, pk: int | None = None) -> Response:
+        from apps.trading.models.metric_snapshots import MetricSnapshot
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        celery_task_id = request.query_params.get("celery_task_id") or getattr(
+            task, "celery_task_id", None
+        )
+        queryset = MetricSnapshot.objects.filter(
+            task_type=self.task_type_label,
+            task_id=task.pk,
+        ).order_by("timestamp")
+        if celery_task_id:
+            queryset = queryset.filter(celery_task_id=celery_task_id)
+        else:
+            queryset = queryset.none()
+
+        rows = list(
+            queryset.values_list(
+                "timestamp", "margin_ratio", "current_atr", "baseline_atr", "volatility_threshold"
+            )
+        )
+        data = [
+            {
+                "t": int(ts.timestamp()),
+                "mr": float(mr) if mr is not None else None,
+                "atr": float(atr) if atr is not None else None,
+                "base": float(base) if base is not None else None,
+                "vt": float(vt) if vt is not None else None,
+            }
+            for ts, mr, atr, base, vt in rows
+        ]
+        return Response({"snapshots": data})
+
+    @extend_schema(
         summary="Get task logs",
         description="Get task logs with pagination and filtering.",
         parameters=[

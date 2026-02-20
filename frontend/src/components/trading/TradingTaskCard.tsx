@@ -258,6 +258,7 @@ export default function TradingTaskCard({
     setIsLoading(true);
     try {
       await TradingService.tradingTasksTradingDestroy(String(taskId));
+      invalidateTradingTasksCache();
       showSuccess('Trading task deleted successfully');
       onRefresh?.();
     } catch (error) {

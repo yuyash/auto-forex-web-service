@@ -99,15 +99,19 @@ class JSONLoggingHandler(logging.Handler):
                 task_id=self.task.pk,
                 celery_task_id=self.task.celery_task_id,
                 level=record.levelname,
-                component=record.name,
+                component=record.name or "unknown",
                 message=record.getMessage(),
                 details=log_entry,
             )
 
         except Exception:
-            # Prevent logging errors from breaking the application
-            # Use handleError to report the issue through the logging system
-            self.handleError(record)
+            # Prevent logging errors from breaking the application.
+            # Use a bare try/except around handleError as well, because
+            # handleError itself can raise when sys.stderr is unavailable.
+            try:
+                self.handleError(record)
+            except Exception:
+                pass  # nosec B110 — last-resort: nothing left to do if handleError also fails
 
 
 def get_task_logger(

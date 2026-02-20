@@ -357,7 +357,9 @@ export default function TradingTaskDetailPage() {
     try {
       setIsTransitioning(true);
       await deleteTask.mutate(taskId);
-      navigate('/trading-tasks');
+      // Cache is invalidated inside the mutation hook.
+      // Navigate with state so the list page knows to refetch.
+      navigate('/trading-tasks', { state: { deleted: true } });
     } catch {
       // Error handled by mutation hook
     } finally {

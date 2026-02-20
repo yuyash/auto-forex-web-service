@@ -22,7 +22,10 @@ import {
   Grid,
   Divider,
 } from '@mui/material';
-import { useBacktestTask } from '../../hooks/useBacktestTasks';
+import {
+  useBacktestTask,
+  invalidateBacktestTasksCache,
+} from '../../hooks/useBacktestTasks';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
@@ -290,7 +293,8 @@ export const BacktestTaskDetail: React.FC = () => {
                   '../../api/generated/services/TradingService'
                 );
                 await TradingService.tradingTasksBacktestDestroy(String(id));
-                navigate('/backtest-tasks');
+                invalidateBacktestTasksCache();
+                navigate('/backtest-tasks', { state: { deleted: true } });
               }}
             />
           </Box>
@@ -597,6 +601,7 @@ export const BacktestTaskDetail: React.FC = () => {
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
             pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
+            configId={task.config_id}
           />
         </TabPanel>
 

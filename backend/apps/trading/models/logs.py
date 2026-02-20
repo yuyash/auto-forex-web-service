@@ -53,6 +53,8 @@ class TaskLog(models.Model):
     )
     component = models.CharField(
         max_length=255,
+        null=True,
+        blank=True,
         default="unknown",
         db_index=True,
         help_text="Component/logger name that emitted this log",

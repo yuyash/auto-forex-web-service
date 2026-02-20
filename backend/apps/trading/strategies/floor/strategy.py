@@ -249,11 +249,24 @@ class FloorStrategy(Strategy):
         return required / nav
 
     def _estimate_atr_pips(self, floor_state: FloorStrategyState, period: int) -> Decimal:
-        closes = self.candle_manager.get_candle_closes(floor_state)
-        if len(closes) < 2:
+        candles = self.candle_manager.get_candles(floor_state)
+        if len(candles) < 2:
             return Decimal("0")
-        diffs = [abs(closes[i] - closes[i - 1]) / self.pip_size for i in range(1, len(closes))]
-        window = diffs[-max(1, period) :]
+
+        true_ranges: list[Decimal] = []
+        for i in range(1, len(candles)):
+            cur = candles[i]
+            prev_close = candles[i - 1].close_price
+            high = cur.high_price if cur.high_price is not None else cur.close_price
+            low = cur.low_price if cur.low_price is not None else cur.close_price
+            tr = max(
+                high - low,
+                abs(high - prev_close),
+                abs(low - prev_close),
+            )
+            true_ranges.append(tr / self.pip_size)
+
+        window = true_ranges[-max(1, period) :]
         if not window:
             return Decimal("0")
         return sum(window, Decimal("0")) / Decimal(len(window))
@@ -572,7 +585,13 @@ class FloorStrategy(Strategy):
 
         # 1) Margin protection (closeout from 60% down to 50% equivalent).
         if self.config.margin_protection_enabled:
-            events.extend(self._apply_margin_protection(state, floor_state, tick))
+            margin_events = self._apply_margin_protection(state, floor_state, tick)
+            if margin_events:
+                events.extend(margin_events)
+                # After margin protection fires, bail out like take-profit
+                # to avoid immediately re-entering on the same tick.
+                state.strategy_state = floor_state.to_dict()
+                return StrategyResult(state=state, events=events)
 
         # Locked state: only monitoring
         if floor_state.volatility_locked:
@@ -581,6 +600,50 @@ class FloorStrategy(Strategy):
 
         active_floor = floor_state.active_floor_index
         floor_state.floor_retracement_counts.setdefault(active_floor, 0)
+
+        # If no positions remain and margin ratio is still blown (balance
+        # is too low to support even the minimum position), stop the task
+        # to prevent an infinite open-then-close loop.
+        all_entries = floor_state.open_entries
+        if not all_entries:
+            margin_ratio = self._margin_ratio(state, floor_state, tick)
+            # _margin_ratio returns 0 when there are no positions, so we
+            # check the *would-be* margin for a single base-lot entry.
+            min_units = int(self.config.base_lot_size)
+            nav = max(Decimal("1"), floor_state.account_nav)
+            hypothetical_margin = (
+                tick.mid * Decimal(str(min_units)) * self.config.margin_rate
+            ) / nav
+            if hypothetical_margin >= self.config.margin_cut_target_ratio:
+                logger.warning(
+                    "Margin blow-out: no open positions and hypothetical margin "
+                    "ratio %.4f >= target %.4f — requesting task stop",
+                    hypothetical_margin,
+                    self.config.margin_cut_target_ratio,
+                )
+                events.append(
+                    GenericStrategyEvent(
+                        event_type=EventType.STRATEGY_STOPPED,
+                        timestamp=tick.timestamp,
+                        data={
+                            "kind": "margin_blowout_stop",
+                            "hypothetical_margin_ratio": str(hypothetical_margin),
+                            "margin_cut_target_ratio": str(self.config.margin_cut_target_ratio),
+                            "nav": str(nav),
+                        },
+                    )
+                )
+                state.strategy_state = floor_state.to_dict()
+                return StrategyResult(
+                    state=state,
+                    events=events,
+                    should_stop=True,
+                    stop_reason=(
+                        f"Margin blow-out: hypothetical margin ratio "
+                        f"{hypothetical_margin:.4f} >= target "
+                        f"{self.config.margin_cut_target_ratio:.4f} with no open positions"
+                    ),
+                )
 
         active_entries = self._active_floor_entries(floor_state, active_floor)
         if not active_entries:
@@ -773,6 +836,20 @@ class FloorStrategy(Strategy):
                     is_initial=True,
                 )
             )
+
+        # Record per-tick metrics for replay visualization.
+        margin_ratio = self._margin_ratio(state, floor_state, tick)
+        current_atr = self._estimate_atr_pips(floor_state, self.config.atr_period)
+        baseline_atr = self._estimate_atr_pips(floor_state, self.config.atr_baseline_period)
+        vol_threshold = (
+            baseline_atr * self.config.volatility_lock_multiplier
+            if baseline_atr > 0
+            else Decimal("0")
+        )
+        floor_state.metrics["margin_ratio"] = str(margin_ratio)
+        floor_state.metrics["current_atr"] = str(current_atr)
+        floor_state.metrics["baseline_atr"] = str(baseline_atr)
+        floor_state.metrics["volatility_threshold"] = str(vol_threshold)
 
         state.strategy_state = floor_state.to_dict()
         return StrategyResult(state=state, events=events)

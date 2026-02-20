@@ -113,7 +113,20 @@ class TaskService:
             )
 
             try:
-                # Submit to Celery
+                # IMPORTANT: Update DB status to STARTING *before* submitting to Celery.
+                # This prevents a race where the worker picks up the task and reads
+                # a stale status (CREATED or even FAILED from a previous run) because
+                # the save() hadn't committed yet.
+                task.celery_task_id = celery_task_id
+                task.status = TaskStatus.STARTING
+                task.save(update_fields=["celery_task_id", "status", "updated_at"])
+
+                logger.info(
+                    f"[SERVICE:START] Status set to STARTING - task_id={task.pk}, "
+                    f"celery_task_id={celery_task_id}"
+                )
+
+                # Now submit to Celery — the worker will see STARTING when it loads the task
                 logger.info(
                     f"[SERVICE:START] Submitting to Celery - task_id={task.pk}, "
                     f"celery_task_id={celery_task_id}"
@@ -123,15 +136,9 @@ class TaskService:
                     task_id=celery_task_id,
                 )
 
-                # Update task with Celery task ID and status to STARTING
-                # The Celery task will update to RUNNING when it actually starts
-                task.celery_task_id = result.id
-                task.status = TaskStatus.STARTING
-                task.save(update_fields=["celery_task_id", "status", "updated_at"])
-
                 logger.info(
                     f"[SERVICE:START] Task submitted to Celery - task_id={task.pk}, "
-                    f"celery_task_id={result.id}, new_status={task.status}"
+                    f"celery_task_id={celery_task_id}, new_status={task.status}"
                 )
 
                 # Check if worker is responsive
@@ -154,11 +161,17 @@ class TaskService:
                 return task
 
             except Exception as e:
+                # Celery submission failed — roll back DB status so the task
+                # doesn't get stuck in STARTING with no worker processing it.
                 logger.error(
                     f"[SERVICE:START] CELERY_SUBMISSION_FAILED - task_id={task.pk}, "
                     f"celery_task_id={celery_task_id}, error={str(e)}",
                     exc_info=True,
                 )
+                task.status = TaskStatus.CREATED
+                task.celery_task_id = None
+                task.save(update_fields=["status", "celery_task_id", "updated_at"])
+                logger.info(f"[SERVICE:START] Rolled back status to CREATED - task_id={task.pk}")
                 raise RuntimeError(f"Failed to submit task to Celery: {str(e)}") from e
 
         except (ValueError, RuntimeError):
@@ -531,20 +544,36 @@ class TaskService:
 
             ExecutionState.objects.filter(task_type=task_type, task_id=task.pk).delete()
 
-            # Clear all execution data
+            # Clear all execution data using QuerySet.update() for an atomic,
+            # single-statement reset.  This avoids the race where a full-model
+            # save() might silently fail to commit before the Celery worker
+            # reads the row.
             logger.info(f"[SERVICE:RESTART] Clearing execution data - task_id={task_id}")
-            task.celery_task_id = None
-            task.status = TaskStatus.CREATED
-            task.started_at = None
-            task.completed_at = None
-            task.error_message = None
-            task.error_traceback = None
-            task.save()
+            model_class = type(task)
+            rows = model_class.objects.filter(pk=task.pk).update(
+                celery_task_id=None,
+                status=TaskStatus.CREATED,
+                started_at=None,
+                completed_at=None,
+                error_message=None,
+                error_traceback=None,
+            )
+            logger.info(
+                f"[SERVICE:RESTART] DB update result - task_id={task_id}, rows_updated={rows}"
+            )
+
+            # Reload the object so the in-memory state matches the DB
+            task.refresh_from_db()
 
             logger.info(
                 f"[SERVICE:RESTART] Task reset to CREATED - task_id={task_id}, "
                 f"new_status={task.status}"
             )
+
+            if task.status != TaskStatus.CREATED:
+                raise RuntimeError(
+                    f"Failed to reset task status: expected CREATED, got {task.status}"
+                )
 
             # Resubmit the task
             logger.info(f"[SERVICE:RESTART] Resubmitting task - task_id={task_id}")
