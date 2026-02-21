@@ -1,4 +1,4 @@
-// Task Execution and Metrics types
+// Task Execution types
 import { TaskStatus, TaskType } from './common';
 
 export interface ExecutionLog {
@@ -8,9 +8,9 @@ export interface ExecutionLog {
 }
 
 export interface TaskExecution {
-  id: number;
+  id: string;
   task_type: TaskType;
-  task_id: number;
+  task_id: string;
   execution_number: number;
   status: TaskStatus;
   progress: number;
@@ -20,13 +20,14 @@ export interface TaskExecution {
   error_traceback?: string;
   logs?: ExecutionLog[];
   duration?: string;
-  metrics?: ExecutionMetrics;
   created_at: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  metrics?: Record<string, any>;
 }
 
 export interface ExecutionMetrics {
-  id: number;
-  execution_id: number;
+  id: string;
+  execution_id: string;
   total_return: string;
   total_pnl: string;
   realized_pnl?: string;
@@ -43,27 +44,6 @@ export interface ExecutionMetrics {
   equity_curve?: EquityPoint[];
   trade_log?: Trade[];
   strategy_events?: BacktestStrategyEvent[];
-  created_at: string;
-}
-
-// Periodic, append-only metrics snapshots during execution (best-effort)
-export interface ExecutionMetricsCheckpoint {
-  id: number;
-  execution_id: number;
-  processed?: number | null;
-  total_return: string;
-  total_pnl: string;
-  realized_pnl?: string;
-  unrealized_pnl?: string;
-  total_trades: number;
-  winning_trades: number;
-  losing_trades: number;
-  win_rate: string;
-  max_drawdown: string;
-  sharpe_ratio?: string | null;
-  profit_factor?: string | null;
-  average_win?: string;
-  average_loss?: string;
   created_at: string;
 }
 
@@ -137,7 +117,7 @@ export interface Trade {
 }
 
 export interface ExecutionSummary {
-  id: number;
+  id: string;
   execution_number: number;
   status: TaskStatus;
   progress: number;
@@ -146,8 +126,6 @@ export interface ExecutionSummary {
   error_message?: string;
   total_return?: string;
   total_pnl?: string;
-  realized_pnl?: string;
-  unrealized_pnl?: string;
   total_trades?: number;
   winning_trades?: number;
   losing_trades?: number;
@@ -159,4 +137,19 @@ export interface ExecutionListParams {
   page_size?: number;
   status?: TaskStatus;
   ordering?: string;
+}
+
+export interface ExecutionMetricsCheckpoint {
+  total_return?: string;
+  total_pnl?: string;
+  total_trades?: number;
+  winning_trades?: number;
+  losing_trades?: number;
+  win_rate?: string;
+  max_drawdown?: string;
+  sharpe_ratio?: string;
+  profit_factor?: string;
+  average_win?: string;
+  average_loss?: string;
+  timestamp?: string;
 }

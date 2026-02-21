@@ -11,7 +11,7 @@ interface ChartPreferences {
 const DEFAULT_PREFERENCES: ChartPreferences = {
   instrument: 'USD_JPY',
   granularity: 'H1',
-  autoRefreshEnabled: false,
+  autoRefreshEnabled: true,
   refreshInterval: 60,
 };
 

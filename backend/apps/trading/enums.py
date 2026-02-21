@@ -26,7 +26,10 @@ class TaskStatus(models.TextChoices):
     """
 
     CREATED = "created", "Created"
+    STARTING = "starting", "Starting"
     RUNNING = "running", "Running"
+    PAUSED = "paused", "Paused"
+    STOPPING = "stopping", "Stopping"
     STOPPED = "stopped", "Stopped"
     COMPLETED = "completed", "Completed"
     FAILED = "failed", "Failed"
@@ -78,6 +81,7 @@ class EventType(models.TextChoices):
     ADD_LAYER = "add_layer", "Add Layer"
     REMOVE_LAYER = "remove_layer", "Remove Layer"
     VOLATILITY_LOCK = "volatility_lock", "Volatility Lock"
+    VOLATILITY_HEDGE_NEUTRALIZE = "volatility_hedge_neutralize", "Volatility Hedge Neutralize"
     MARGIN_PROTECTION = "margin_protection", "Margin Protection"
 
     # Lifecycle events
@@ -123,3 +127,19 @@ class TradingMode(models.TextChoices):
 
     NETTING = "netting", "Netting Mode"
     HEDGING = "hedging", "Hedging Mode"
+
+
+class Direction(models.TextChoices):
+    """
+    Trading direction for positions and orders.
+
+    - LONG: Long positions (buy)
+    - SHORT: Short positions (sell)
+    """
+
+    LONG = "long", "Long"
+    SHORT = "short", "Short"
+
+
+# Deprecated: Use Direction instead
+FloorSide = Direction  # Backward compatibility alias

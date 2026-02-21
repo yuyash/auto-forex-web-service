@@ -9,40 +9,30 @@ import {
   IconButton,
   Tooltip,
   Alert,
-  Button,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import {
-  PlayArrow as PlayIcon,
-  Stop as StopIcon,
   Visibility as ViewIcon,
   MoreVert as MoreVertIcon,
   Warning as WarningIcon,
-  TrendingFlat as KeepPositionsIcon,
-  ExitToApp as ClosePositionsIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import type { TradingTask } from '../../types/tradingTask';
 import { TaskStatus } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
-import { MetricCard } from '../tasks/display/MetricCard';
+import { StatCard } from '../tasks/display/StatCard';
+import { TaskControlButtons } from '../common/TaskControlButtons';
 import TradingTaskActions from './TradingTaskActions';
-import {
-  useStartTradingTask,
-  useStopTradingTask,
-} from '../../hooks/useTradingTaskMutations';
+import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
 import { useToast } from '../common';
 import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
-
-import type { StopMode } from '../../hooks/useTradingTaskMutations';
+import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
+import { TradingService } from '../../api/generated/services/TradingService';
+import type { TradingTaskRequest } from '../../api/generated/models/TradingTaskRequest';
 
 interface TradingTaskCardProps {
   task: TradingTask;
@@ -55,17 +45,15 @@ export default function TradingTaskCard({
 }: TradingTaskCardProps) {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [stopMenuAnchor, setStopMenuAnchor] = useState<null | HTMLElement>(
-    null
-  );
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
   );
-  const toast = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const prevTaskRef = useRef<TradingTask>(task);
 
-  const startTask = useStartTradingTask();
-  const stopTask = useStopTradingTask();
+  const { showError, showSuccess, showWarning, showInfo } = useToast();
 
   // Fetch strategies for display names
   const { strategies } = useStrategies();
@@ -105,8 +93,11 @@ export default function TradingTaskCard({
         polledStatus: polledStatus.status,
       });
       // Clear optimistic status since we have real status now
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOptimisticStatus(null);
+
+      // Invalidate cache to force fresh data fetch
+      invalidateTradingTasksCache();
+
       // Notify parent to refetch task list
       onRefresh?.();
     }
@@ -120,16 +111,16 @@ export default function TradingTaskCard({
     if (prevTask.status !== displayStatus) {
       switch (displayStatus) {
         case TaskStatus.RUNNING:
-          toast.showSuccess(`Task "${currentTask.name}" is now running`);
+          showSuccess(`Task "${currentTask.name}" is now running`);
           break;
         case TaskStatus.PAUSED:
-          toast.showWarning(`Task "${currentTask.name}" has been paused`);
+          showWarning(`Task "${currentTask.name}" has been paused`);
           break;
         case TaskStatus.STOPPED:
-          toast.showInfo(`Task "${currentTask.name}" has been stopped`);
+          showInfo(`Task "${currentTask.name}" has been stopped`);
           break;
         case TaskStatus.FAILED:
-          toast.showError(`Task "${currentTask.name}" has failed`);
+          showError(`Task "${currentTask.name}" has failed`);
           break;
       }
       // Update prevTask status to reflect the new status
@@ -146,13 +137,20 @@ export default function TradingTaskCard({
       const newTrades =
         currentTask.latest_execution.total_trades -
         prevTask.latest_execution.total_trades;
-      toast.showInfo(
+      showInfo(
         `${newTrades} new trade${newTrades > 1 ? 's' : ''} executed on "${currentTask.name}"`
       );
     }
 
     prevTaskRef.current = currentTask;
-  }, [currentTask, displayStatus, toast]);
+  }, [
+    currentTask,
+    displayStatus,
+    showSuccess,
+    showWarning,
+    showInfo,
+    showError,
+  ]);
 
   const handleActionsClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -166,55 +164,118 @@ export default function TradingTaskCard({
     navigate(`/trading-tasks/${task.id}`);
   };
 
-  const handleStart = async () => {
+  const handleStart = async (taskId: string | number) => {
+    setIsLoading(true);
     try {
-      // Wait for API response before updating status
-      await startTask.mutate(task.id);
-      // Only update status after successful response
+      await TradingService.tradingTasksTradingStartCreate(
+        String(taskId),
+        {} as TradingTaskRequest
+      );
       setOptimisticStatus(TaskStatus.RUNNING);
-      // Trigger refresh after successful start
+      showSuccess('Trading task started successfully');
       onRefresh?.();
     } catch (error) {
       console.error('Failed to start task:', error);
-      // Clear any optimistic update on error
       setOptimisticStatus(null);
-
-      // Show error notification with retry option
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to start task';
-      toast.showError(errorMessage, undefined, {
+      showError(errorMessage, 8000, {
         label: 'Retry',
-        onClick: handleStart,
+        onClick: () => handleStart(taskId),
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleStopMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setStopMenuAnchor(event.currentTarget);
-  };
-
-  const handleStopMenuClose = () => {
-    setStopMenuAnchor(null);
-  };
-
-  const handleStop = async (mode: StopMode = 'graceful') => {
-    handleStopMenuClose();
+  const handleStop = async (taskId: string | number) => {
+    setIsLoading(true);
     try {
-      // Wait for API response before updating status
-      await stopTask.mutate({ id: task.id, mode });
-      // Only update status after successful response
+      await TradingService.tradingTasksTradingStopCreate(
+        String(taskId),
+        {} as TradingTaskRequest
+      );
       setOptimisticStatus(TaskStatus.STOPPED);
-      // Trigger refresh after successful stop
+      showSuccess('Trading task stopped successfully');
       onRefresh?.();
     } catch (error) {
       console.error('Failed to stop task:', error);
-      // Clear any optimistic update on error
       setOptimisticStatus(null);
-
-      // Show error notification
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to stop task';
-      toast.showError(errorMessage);
+      showError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResume = async (taskId: string | number) => {
+    setIsLoading(true);
+    try {
+      await TradingService.tradingTasksTradingResumeCreate(
+        String(taskId),
+        {} as TradingTaskRequest
+      );
+      setOptimisticStatus(TaskStatus.RUNNING);
+      showSuccess('Trading task resumed successfully');
+      onRefresh?.();
+    } catch (error) {
+      console.error('Failed to resume task:', error);
+      setOptimisticStatus(null);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to resume task';
+      showError(errorMessage, 8000, {
+        label: 'Retry',
+        onClick: () => handleResume(taskId),
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRestart = async (taskId: string | number) => {
+    setIsLoading(true);
+    try {
+      await TradingService.tradingTasksTradingRestartCreate(
+        String(taskId),
+        {} as TradingTaskRequest
+      );
+      setOptimisticStatus(TaskStatus.RUNNING);
+      showSuccess('Trading task restarted successfully');
+      onRefresh?.();
+    } catch (error) {
+      console.error('Failed to restart task:', error);
+      setOptimisticStatus(null);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to restart task';
+      showError(errorMessage, 8000, {
+        label: 'Retry',
+        onClick: () => handleRestart(taskId),
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    setIsDeleting(true);
+    try {
+      await TradingService.tradingTasksTradingDestroy(String(task.id));
+      invalidateTradingTasksCache();
+      showSuccess('Trading task deleted successfully');
+      setDeleteDialogOpen(false);
+      onRefresh?.();
+    } catch (error) {
+      console.error('Failed to delete task:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to delete task';
+      showError(errorMessage);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -338,57 +399,42 @@ export default function TradingTaskCard({
           </Box>
         </Box>
 
-        {/* Action buttons - Trading tasks have different button logic */}
-        <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
-          {(displayStatus === TaskStatus.CREATED ||
-            displayStatus === TaskStatus.STOPPED ||
-            displayStatus === TaskStatus.PAUSED) && (
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<PlayIcon />}
-              onClick={handleStart}
-              disabled={startTask.isLoading || stopTask.isLoading}
-              size="small"
-            >
-              {startTask.isLoading ? 'Starting...' : 'Start'}
-            </Button>
-          )}
-          {(displayStatus === TaskStatus.RUNNING ||
-            displayStatus === TaskStatus.PAUSED) && (
-            <Button
-              variant="contained"
-              color="error"
-              startIcon={<StopIcon />}
-              onClick={handleStopMenuOpen}
-              disabled={stopTask.isLoading || startTask.isLoading}
-              size="small"
-            >
-              {stopTask.isLoading ? 'Stopping...' : 'Stop'}
-            </Button>
-          )}
+        {/* Action buttons using TaskControlButtons component */}
+        <Box sx={{ mb: 2 }}>
+          <TaskControlButtons
+            taskId={task.id}
+            status={displayStatus}
+            onStart={handleStart}
+            onStop={handleStop}
+            onResume={handleResume}
+            onRestart={handleRestart}
+            onDelete={handleDelete}
+            isLoading={isLoading}
+            size="small"
+            showLabels={true}
+          />
         </Box>
 
-        {/* Live Metrics for Running/Paused Tasks */}
+        {/* Live Stats for Running/Paused Tasks */}
         {(displayStatus === TaskStatus.RUNNING ||
           displayStatus === TaskStatus.PAUSED) && (
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid size={{ xs: 6, sm: 4 }}>
-              <MetricCard
+              <StatCard
                 title="Live P&L"
                 value={`$${currentPnL.toFixed(2)}`}
                 color={currentPnL >= 0 ? 'success' : 'error'}
               />
             </Grid>
             <Grid size={{ xs: 6, sm: 4 }}>
-              <MetricCard
+              <StatCard
                 title="Open Positions"
                 value={openPositions.toString()}
               />
             </Grid>
             {currentTask.latest_execution?.total_trades !== undefined && (
               <Grid size={{ xs: 6, sm: 4 }}>
-                <MetricCard
+                <StatCard
                   title="Total Trades"
                   value={currentTask.latest_execution.total_trades.toString()}
                 />
@@ -397,14 +443,14 @@ export default function TradingTaskCard({
           </Grid>
         )}
 
-        {/* Performance Metrics for Stopped/Completed Tasks */}
+        {/* Performance Stats for Stopped/Completed Tasks */}
         {(displayStatus === TaskStatus.STOPPED ||
           displayStatus === TaskStatus.COMPLETED) &&
           currentTask.latest_execution && (
             <Grid container spacing={2} sx={{ mt: 1 }}>
               {currentTask.latest_execution.total_return && (
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <MetricCard
+                  <StatCard
                     title="Total Return"
                     value={`${currentTask.latest_execution.total_return}%`}
                     color={
@@ -417,7 +463,7 @@ export default function TradingTaskCard({
               )}
               {currentTask.latest_execution.win_rate && (
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <MetricCard
+                  <StatCard
                     title="Win Rate"
                     value={`${currentTask.latest_execution.win_rate}%`}
                   />
@@ -425,7 +471,7 @@ export default function TradingTaskCard({
               )}
               {currentTask.latest_execution.total_trades !== undefined && (
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <MetricCard
+                  <StatCard
                     title="Total Trades"
                     value={currentTask.latest_execution.total_trades.toString()}
                   />
@@ -481,37 +527,21 @@ export default function TradingTaskCard({
         </Box>
       </CardContent>
 
-      {/* Stop Mode Menu */}
-      <Menu
-        anchorEl={stopMenuAnchor}
-        open={Boolean(stopMenuAnchor)}
-        onClose={handleStopMenuClose}
-      >
-        <MenuItem onClick={() => handleStop('graceful')}>
-          <ListItemIcon>
-            <KeepPositionsIcon fontSize="small" color="primary" />
-          </ListItemIcon>
-          <ListItemText
-            primary="Stop (Keep Positions)"
-            secondary="Stop trading but keep all open positions"
-          />
-        </MenuItem>
-        <MenuItem onClick={() => handleStop('graceful_close')}>
-          <ListItemIcon>
-            <ClosePositionsIcon fontSize="small" color="error" />
-          </ListItemIcon>
-          <ListItemText
-            primary="Stop (Close All Positions)"
-            secondary="Stop trading and close all positions at market price"
-          />
-        </MenuItem>
-      </Menu>
-
       <TradingTaskActions
         task={currentTask}
         anchorEl={anchorEl}
         onClose={handleActionsClose}
         onRefresh={onRefresh}
+      />
+
+      <DeleteTaskDialog
+        open={deleteDialogOpen}
+        taskName={task.name}
+        taskStatus={task.status}
+        onCancel={() => setDeleteDialogOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        isLoading={isDeleting}
+        hasExecutionHistory={true}
       />
     </Card>
   );

@@ -1,64 +1,31 @@
 // OANDA Accounts API service (Market app)
-import { apiClient } from './client';
-import type { Account } from '../../types/strategy';
-
-export interface AccountListParams {
-  page?: number;
-  page_size?: number;
-  [key: string]: unknown;
-}
-
-export interface AccountListResponse {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: Account[];
-}
+import { MarketAccountsService } from '../../api/generated/services/MarketAccountsService';
+import { withRetry } from '../../api/client';
+import type { OandaAccountsRequest } from '../../api/generated';
 
 export const accountsApi = {
   // List all accounts for the authenticated user
-  list: async (params?: AccountListParams): Promise<AccountListResponse> => {
-    const response = await apiClient.get<AccountListResponse>(
-      '/market/accounts/',
-      params
-    );
-    return response;
+  list: async () => {
+    return withRetry(() => MarketAccountsService.listOandaAccounts());
   },
 
   // Get a single account by ID
-  get: async (id: number): Promise<Account> => {
-    const response = await apiClient.get<Account>(`/market/accounts/${id}/`);
-    return response;
+  get: async (id: number) => {
+    return withRetry(() => MarketAccountsService.getOandaAccountDetail(id));
   },
 
   // Create a new account
-  create: async (data: {
-    account_id: string;
-    api_token: string;
-    api_type?: 'practice' | 'live';
-    jurisdiction?: string;
-    is_default?: boolean;
-  }): Promise<Account> => {
-    return apiClient.post<Account>('/market/accounts/', data);
+  create: async (data: OandaAccountsRequest) => {
+    return withRetry(() => MarketAccountsService.createOandaAccount(data));
   },
 
-  // Update an existing account (partial)
-  update: async (
-    id: number,
-    data: Partial<{
-      account_id: string;
-      api_token: string;
-      api_type: 'practice' | 'live';
-      jurisdiction: string;
-      is_default: boolean;
-      is_active: boolean;
-    }>
-  ): Promise<Account> => {
-    return apiClient.put<Account>(`/market/accounts/${id}/`, data);
+  // Update an existing account
+  update: async (id: number, data: OandaAccountsRequest) => {
+    return withRetry(() => MarketAccountsService.updateOandaAccount(id, data));
   },
 
   // Delete an account
-  delete: async (id: number): Promise<void> => {
-    return apiClient.delete<void>(`/market/accounts/${id}/`);
+  delete: async (id: number) => {
+    return withRetry(() => MarketAccountsService.deleteOandaAccount(id));
   },
 };

@@ -7,7 +7,7 @@ import { LoadingSpinner, Breadcrumbs } from '../components/common';
 
 export default function BacktestTaskFormPage() {
   const { id } = useParams<{ id: string }>();
-  const taskId = id ? parseInt(id, 10) : undefined;
+  const taskId = id || undefined;
 
   const { data: task, isLoading } = useBacktestTask(taskId);
 

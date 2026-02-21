@@ -25,7 +25,12 @@ const inflightRequests = new Map<string, Promise<unknown>>();
 export function invalidateTradingTasksCache(): void {
   cache.clear();
   errorCache.clear();
+  // Notify all active subscribers to refetch
+  tradingCacheListeners.forEach((cb) => cb());
 }
+
+// Listeners that get called when cache is invalidated
+const tradingCacheListeners = new Set<() => void>();
 
 function getCachedData<T>(key: string): T | null {
   const cached = cache.get(key);
@@ -171,6 +176,15 @@ export function useTradingTasks(
     };
   }, [fetchData]);
 
+  // Subscribe to cache invalidation events
+  useEffect(() => {
+    const listener = () => fetchData();
+    tradingCacheListeners.add(listener);
+    return () => {
+      tradingCacheListeners.delete(listener);
+    };
+  }, [fetchData]);
+
   return {
     data,
     isLoading,
@@ -190,7 +204,7 @@ interface UseTradingTaskResult {
  * Hook to fetch a single trading task
  */
 export function useTradingTask(
-  id?: number,
+  id?: string,
   options?: { enabled?: boolean }
 ): UseTradingTaskResult {
   const [data, setData] = useState<TradingTask | null>(null);
@@ -199,13 +213,16 @@ export function useTradingTask(
 
   const fetchData = useCallback(async () => {
     // Skip fetching if no valid ID or disabled
-    if (!id || id === 0 || options?.enabled === false) {
+    if (!id || options?.enabled === false) {
       setIsLoading(false);
       return;
     }
 
     try {
-      setIsLoading(true);
+      // Only show loading spinner on initial fetch (no data yet)
+      if (!data) {
+        setIsLoading(true);
+      }
       setError(null);
       const result = await tradingTasksApi.get(id);
       setData(result);
@@ -214,7 +231,7 @@ export function useTradingTask(
     } finally {
       setIsLoading(false);
     }
-  }, [id, options?.enabled]);
+  }, [id, options?.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchData();
@@ -232,7 +249,7 @@ export function useTradingTask(
  * Hook to poll trading task status for running tasks
  */
 export function useTradingTaskPolling(
-  id: number,
+  id: string,
   enabled: boolean = true,
   interval: number = 5000
 ): UseTradingTaskResult {

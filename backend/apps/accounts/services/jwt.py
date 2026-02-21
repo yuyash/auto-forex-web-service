@@ -8,12 +8,13 @@ This module exposes a class-based API (instantiate where used).
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import jwt
 from django.conf import settings
 
-from apps.accounts.models import User
+if TYPE_CHECKING:
+    pass
 
 
 class JWTService:
@@ -69,6 +70,8 @@ class JWTService:
 
     def get_user_from_token(self, token: str) -> Any | None:
         """Return user from token if valid."""
+        from apps.accounts.models import User
+
         payload = self.decode_token(token)
         if not payload:
             return None

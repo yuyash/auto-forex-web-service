@@ -6,7 +6,6 @@ import {
   type TaskType,
   type TaskStatusResponse,
   type TaskDetailsResponse,
-  type TaskLogsResponse,
   type PollingOptions,
 } from '../services/polling/TaskPollingService';
 
@@ -15,6 +14,11 @@ export interface UseTaskPollingOptions extends PollingOptions {
   pollStatus?: boolean; // Poll for status updates (default: true)
   pollDetails?: boolean; // Poll for details updates (default: false)
   pollLogs?: boolean; // Poll for logs updates (default: false)
+}
+
+// Local type for logs response (not exported from TaskPollingService)
+interface TaskLogsResponse {
+  logs: Array<{ timestamp: string; level: string; message: string }>;
 }
 
 export interface UseTaskPollingResult {
@@ -48,7 +52,7 @@ export interface UseTaskPollingResult {
  * ```
  */
 export function useTaskPolling(
-  taskId: number | undefined,
+  taskId: string | undefined,
   taskType: TaskType,
   options: UseTaskPollingOptions = {}
 ): UseTaskPollingResult {
@@ -128,6 +132,9 @@ export function useTaskPolling(
    * Start polling
    */
   const startPolling = useCallback(() => {
+    console.log(
+      `[useTaskPolling:START] Starting polling - taskId=${taskId}, taskType=${taskType}`
+    );
     if (!pollingServiceRef.current) {
       pollingServiceRef.current = initializeService();
     }
@@ -137,29 +144,35 @@ export function useTaskPolling(
       setIsPolling(true);
       setError(null);
     }
-  }, [initializeService]);
+  }, [initializeService, taskId, taskType]);
 
   /**
    * Stop polling
    */
   const stopPolling = useCallback(() => {
+    console.log(
+      `[useTaskPolling:STOP] Stopping polling - taskId=${taskId}, taskType=${taskType}`
+    );
     if (pollingServiceRef.current) {
       pollingServiceRef.current.stopPolling();
       setIsPolling(false);
     }
-  }, []);
+  }, [taskId, taskType]);
 
   /**
    * Manually trigger a refetch
    */
   const refetch = useCallback(() => {
+    console.log(
+      `[useTaskPolling:REFETCH] Manual refetch - taskId=${taskId}, taskType=${taskType}`
+    );
     if (pollingServiceRef.current) {
       // Stop and restart to trigger immediate fetch
       pollingServiceRef.current.stopPolling();
       pollingServiceRef.current.startPolling();
       setIsPolling(true);
     }
-  }, []);
+  }, [taskId, taskType]);
 
   /**
    * Effect: Initialize and start polling when enabled

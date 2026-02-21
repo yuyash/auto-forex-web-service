@@ -19,20 +19,19 @@ import type { BacktestTask } from '../../types/backtestTask';
 import { TaskStatus } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskProgress } from '../tasks/TaskProgress';
-import { MetricCard } from '../tasks/display/MetricCard';
-import { TaskActionButtons } from '../tasks/actions/TaskActionButtons';
+import { StatCard } from '../tasks/display/StatCard';
+import { TaskControlButtons } from '../common/TaskControlButtons';
 import BacktestTaskActions from './BacktestTaskActions';
-import {
-  useStartBacktestTask,
-  useStopBacktestTask,
-  useRerunBacktestTask,
-} from '../../hooks/useBacktestTaskMutations';
+import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
 import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 import { useToast } from '../common';
+import { backtestTasksApi } from '../../services/api';
+import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
+import { TradingService } from '../../api/generated/services/TradingService';
 
 interface BacktestTaskCardProps {
   task: BacktestTask;
@@ -44,15 +43,14 @@ export default function BacktestTaskCard({
   onRefresh,
 }: BacktestTaskCardProps) {
   const navigate = useNavigate();
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
   );
-
-  const startTask = useStartBacktestTask();
-  const stopTask = useStopBacktestTask();
-  const rerunTask = useRerunBacktestTask();
+  const [isLoading, setIsLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fetch strategies for display names
   const { strategies } = useStrategies();
@@ -87,8 +85,11 @@ export default function BacktestTaskCard({
         polledStatus: polledStatus.status,
       });
       // Clear optimistic status since we have real status now
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOptimisticStatus(null);
+
+      // Invalidate cache to force fresh data fetch
+      invalidateBacktestTasksCache();
+
       // Notify parent to refetch task list
       onRefresh?.();
     }
@@ -109,69 +110,106 @@ export default function BacktestTaskCard({
     navigate(`/backtest-tasks/${task.id}`);
   };
 
-  const handleStart = async () => {
+  const handleStart = async (taskId: string) => {
+    setIsLoading(true);
     try {
-      // Wait for API response before updating status
-      await startTask.mutate(task.id);
-      // Only update status after successful response
+      await backtestTasksApi.start(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
-      // Trigger refresh after successful start
+      showSuccess('Backtest task started successfully');
       onRefresh?.();
     } catch (error) {
       console.error('Failed to start task:', error);
-      // Clear any optimistic update on error
       setOptimisticStatus(null);
-
-      // Show error notification with retry option
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to start task';
       showError(errorMessage, 8000, {
         label: 'Retry',
-        onClick: handleStart,
+        onClick: () => handleStart(taskId),
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleStop = async () => {
+  const handleStop = async (taskId: string) => {
+    setIsLoading(true);
     try {
-      // Wait for API response before updating status
-      await stopTask.mutate(task.id);
-      // Only update status after successful response
+      await backtestTasksApi.stop(taskId);
       setOptimisticStatus(TaskStatus.STOPPED);
-      // Trigger refresh after successful stop
+      showSuccess('Backtest task stopped successfully');
       onRefresh?.();
     } catch (error) {
       console.error('Failed to stop task:', error);
-      // Clear any optimistic update on error
       setOptimisticStatus(null);
-
-      // Show error notification
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to stop task';
       showError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleRerun = async () => {
+  const handleResume = async (taskId: string) => {
+    setIsLoading(true);
     try {
-      // Wait for API response before updating status
-      await rerunTask.mutate(task.id);
-      // Only update status after successful response
+      await backtestTasksApi.resume(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
-      // Trigger refresh after successful rerun
+      showSuccess('Backtest task resumed successfully');
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to rerun task:', error);
-      // Clear any optimistic update on error
+      console.error('Failed to resume task:', error);
       setOptimisticStatus(null);
-
-      // Show error notification with retry option
       const errorMessage =
-        error instanceof Error ? error.message : 'Failed to rerun task';
+        error instanceof Error ? error.message : 'Failed to resume task';
       showError(errorMessage, 8000, {
         label: 'Retry',
-        onClick: handleRerun,
+        onClick: () => handleResume(taskId),
       });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRestart = async (taskId: string) => {
+    setIsLoading(true);
+    try {
+      await backtestTasksApi.restart(taskId);
+      setOptimisticStatus(TaskStatus.RUNNING);
+      showSuccess('Backtest task restarted successfully');
+      onRefresh?.();
+    } catch (error) {
+      console.error('Failed to restart task:', error);
+      setOptimisticStatus(null);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to restart task';
+      showError(errorMessage, 8000, {
+        label: 'Retry',
+        onClick: () => handleRestart(taskId),
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    setIsDeleting(true);
+    try {
+      await TradingService.tradingTasksBacktestDestroy(String(task.id));
+      invalidateBacktestTasksCache();
+      showSuccess('Backtest task deleted successfully');
+      setDeleteDialogOpen(false);
+      onRefresh?.();
+    } catch (error) {
+      console.error('Failed to delete task:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to delete task';
+      showError(errorMessage);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -195,10 +233,6 @@ export default function BacktestTaskCard({
 
   // Get progress from polled status for running tasks
   const progress = polledStatus?.progress || 0;
-
-  // Determine if action buttons are loading
-  const isLoading =
-    startTask.isLoading || stopTask.isLoading || rerunTask.isLoading;
 
   return (
     <Card
@@ -227,20 +261,27 @@ export default function BacktestTaskCard({
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
               <StatusBadge status={displayStatus} />
-              <Chip
-                label={getStrategyDisplayName(
-                  strategies,
-                  currentTask.strategy_type
-                )}
-                size="small"
-                variant="outlined"
-              />
-              <Chip
-                label={currentTask.config_name}
-                size="small"
-                variant="outlined"
-                color="primary"
-              />
+              {getStrategyDisplayName(
+                strategies,
+                currentTask.strategy_type
+              ) && (
+                <Chip
+                  label={getStrategyDisplayName(
+                    strategies,
+                    currentTask.strategy_type
+                  )}
+                  size="small"
+                  variant="outlined"
+                />
+              )}
+              {currentTask.config_name && (
+                <Chip
+                  label={currentTask.config_name}
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                />
+              )}
             </Box>
             <Typography variant="body2" color="text.secondary">
               {formatDate(currentTask.start_time)} to{' '}
@@ -267,14 +308,19 @@ export default function BacktestTaskCard({
           </Box>
         </Box>
 
-        {/* Action buttons using shared component */}
+        {/* Action buttons using TaskControlButtons component */}
         <Box sx={{ mb: 2 }}>
-          <TaskActionButtons
+          <TaskControlButtons
+            taskId={task.id}
             status={displayStatus}
             onStart={handleStart}
             onStop={handleStop}
-            onRerun={handleRerun}
-            loading={isLoading}
+            onResume={handleResume}
+            onRestart={handleRestart}
+            onDelete={handleDelete}
+            isLoading={isLoading}
+            size="small"
+            showLabels={true}
           />
         </Box>
 
@@ -290,13 +336,13 @@ export default function BacktestTaskCard({
           </Box>
         )}
 
-        {/* Metrics for completed tasks */}
+        {/* Stats for completed tasks */}
         {displayStatus === TaskStatus.COMPLETED &&
           currentTask.latest_execution && (
             <Grid container spacing={2} sx={{ mt: 1 }}>
               {currentTask.latest_execution.total_return && (
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <MetricCard
+                  <StatCard
                     title="Total Return"
                     value={`${currentTask.latest_execution.total_return}%`}
                     color={
@@ -309,7 +355,7 @@ export default function BacktestTaskCard({
               )}
               {currentTask.latest_execution.win_rate && (
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <MetricCard
+                  <StatCard
                     title="Win Rate"
                     value={`${currentTask.latest_execution.win_rate}%`}
                   />
@@ -317,7 +363,7 @@ export default function BacktestTaskCard({
               )}
               {currentTask.latest_execution.total_trades !== undefined && (
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <MetricCard
+                  <StatCard
                     title="Total Trades"
                     value={currentTask.latest_execution.total_trades.toString()}
                   />
@@ -375,6 +421,16 @@ export default function BacktestTaskCard({
         anchorEl={anchorEl}
         onClose={handleActionsClose}
         onRefresh={onRefresh}
+      />
+
+      <DeleteTaskDialog
+        open={deleteDialogOpen}
+        taskName={task.name}
+        taskStatus={task.status}
+        onCancel={() => setDeleteDialogOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        isLoading={isDeleting}
+        hasExecutionHistory={true}
       />
     </Card>
   );

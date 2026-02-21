@@ -49,7 +49,7 @@ def _coerce_optional_bool(*, name: str, value: object) -> bool | None:
 class Command(BaseCommand):
     help = "Manage public account settings (registration/login/email whitelist)."
 
-    def add_arguments(self, parser) -> None:  # type: ignore[no-untyped-def]
+    def add_arguments(self, parser) -> None:
         parser.add_argument(
             "--show",
             action="store_true",
@@ -80,7 +80,7 @@ class Command(BaseCommand):
             help="Enable/disable email whitelist enforcement.",
         )
 
-    def handle(self, *args, **options) -> None:  # type: ignore[no-untyped-def]
+    def handle(self, *args, **options) -> None:
         settings = PublicAccountSettings.get_settings()
 
         if options["show"]:

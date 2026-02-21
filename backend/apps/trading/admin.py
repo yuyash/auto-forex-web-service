@@ -3,17 +3,21 @@ from django.contrib import admin
 from apps.trading.models import (
     BacktestTask,
     CeleryTaskStatus,
-    ExecutionMetrics,
-    StrategyConfig,
-    TaskExecution,
-    TaskExecutionResult,
+    Equity,
+    Layer,
+    Order,
+    Position,
+    StrategyConfiguration,
+    TaskLog,
+    Trade,
     TradingEvent,
     TradingTask,
 )
+from apps.trading.models.state import ExecutionState
 
 
-@admin.register(StrategyConfig)
-class StrategyConfigAdmin(admin.ModelAdmin):
+@admin.register(StrategyConfiguration)
+class StrategyConfigurationAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "name", "strategy_type", "created_at", "updated_at")
     list_filter = ("strategy_type", "created_at")
     search_fields = ("name", "strategy_type", "user__email", "user__username")
@@ -53,50 +57,6 @@ class TradingTaskAdmin(admin.ModelAdmin):
     ordering = ("-created_at",)
 
 
-@admin.register(TaskExecution)
-class TaskExecutionAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "task_type",
-        "task_id",
-        "execution_number",
-        "status",
-        "progress",
-        "started_at",
-        "completed_at",
-        "created_at",
-    )
-    list_filter = ("task_type", "status", "created_at")
-    search_fields = ("task_type", "task_id", "error_message")
-    ordering = ("-created_at",)
-
-
-@admin.register(ExecutionMetrics)
-class ExecutionMetricsAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "execution",
-        "total_return",
-        "total_pnl",
-        "realized_pnl",
-        "unrealized_pnl",
-        "total_trades",
-        "win_rate",
-        "created_at",
-    )
-    list_filter = ("created_at",)
-    search_fields = ("execution__id",)
-    ordering = ("-created_at",)
-
-
-@admin.register(TaskExecutionResult)
-class TaskExecutionResultAdmin(admin.ModelAdmin):
-    list_display = ("id", "task_type", "task_id", "success", "oanda_account_id", "created_at")
-    list_filter = ("task_type", "success", "created_at")
-    search_fields = ("task_type", "task_id", "oanda_account_id", "error")
-    ordering = ("-created_at",)
-
-
 @admin.register(CeleryTaskStatus)
 class CeleryTaskStatusAdmin(admin.ModelAdmin):
     list_display = (
@@ -130,3 +90,126 @@ class TradingEventAdmin(admin.ModelAdmin):
     list_filter = ("severity", "event_type", "task_type", "created_at")
     search_fields = ("event_type", "description", "instrument", "task_type", "task_id")
     ordering = ("-created_at",)
+
+
+@admin.register(TaskLog)
+class TaskLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "task_type",
+        "task_id",
+        "timestamp",
+        "level",
+        "component",
+        "message",
+    )
+    list_filter = ("task_type", "level", "component", "timestamp")
+    search_fields = ("task_id", "component", "message")
+    ordering = ("-timestamp",)
+    readonly_fields = (
+        "task_type",
+        "task_id",
+        "timestamp",
+        "level",
+        "component",
+        "message",
+        "details",
+    )
+
+
+@admin.register(ExecutionState)
+class ExecutionStateAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "task_type",
+        "task_id",
+        "created_at",
+        "updated_at",
+    )
+    list_filter = ("task_type", "created_at")
+    search_fields = ("task_id",)
+    ordering = ("-updated_at",)
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "task_type",
+        "task_id",
+        "broker_order_id",
+        "instrument",
+        "units",
+        "direction",
+        "order_type",
+        "status",
+        "submitted_at",
+    )
+    list_filter = ("task_type", "direction", "order_type", "status", "submitted_at")
+    search_fields = ("task_id", "broker_order_id", "instrument")
+    ordering = ("-submitted_at",)
+
+
+@admin.register(Position)
+class PositionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "task_type",
+        "task_id",
+        "instrument",
+        "units",
+        "entry_price",
+        "entry_time",
+        "updated_at",
+    )
+    list_filter = ("task_type", "is_open", "direction", "entry_time")
+    search_fields = ("task_id", "instrument")
+    ordering = ("-entry_time",)
+
+
+@admin.register(Trade)
+class TradeAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "task_type",
+        "task_id",
+        "instrument",
+        "direction",
+        "units",
+        "price",
+        "timestamp",
+    )
+    list_filter = ("task_type", "direction", "timestamp")
+    search_fields = ("task_id", "instrument")
+    ordering = ("-timestamp",)
+
+
+@admin.register(Equity)
+class EquityAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "task_type",
+        "task_id",
+        "timestamp",
+        "balance",
+        "ticks_processed",
+    )
+    list_filter = ("task_type", "timestamp")
+    search_fields = ("task_id",)
+    ordering = ("-timestamp",)
+
+
+@admin.register(Layer)
+class LayerAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "task_id",
+        "index",
+        "direction",
+        "retracement_count",
+        "is_active",
+        "created_at",
+    )
+    list_filter = ("direction", "is_active", "created_at")
+    search_fields = ("task_id",)
+    ordering = ("task_id", "index")

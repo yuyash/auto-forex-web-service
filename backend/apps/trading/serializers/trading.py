@@ -1,9 +1,13 @@
 """Serializers for trading tasks."""
 
+import logging
+
 from rest_framework import serializers
 
-from apps.market.models import OandaAccount
-from apps.trading.models import StrategyConfig, TradingTask
+from apps.market.models import OandaAccounts
+from apps.trading.models import StrategyConfiguration, TradingTask
+
+logger = logging.getLogger(__name__)
 
 
 class TradingTaskSerializer(serializers.ModelSerializer):
@@ -12,17 +16,17 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     """
 
     user_id = serializers.IntegerField(source="user.id", read_only=True)
-    config_id = serializers.IntegerField(source="config.id", read_only=True)
+    config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
     instrument = serializers.SerializerMethodField()
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
-    latest_execution = serializers.SerializerMethodField()
     # State management fields for frontend button logic
     has_strategy_state = serializers.SerializerMethodField()
     can_resume = serializers.SerializerMethodField()
+    current_tick = serializers.SerializerMethodField()
 
     class Meta:
         model = TradingTask
@@ -39,11 +43,12 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "sell_on_stop",
+            "pip_size",
             "status",
-            "latest_execution",
             # State management fields
             "has_strategy_state",
             "can_resume",
+            "current_tick",
             "created_at",
             "updated_at",
         ]
@@ -58,9 +63,10 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "account_name",
             "account_type",
             "status",
-            "latest_execution",
+            "pip_size",
             "has_strategy_state",
             "can_resume",
+            "current_tick",
             "created_at",
             "updated_at",
         ]
@@ -81,49 +87,39 @@ class TradingTaskSerializer(serializers.ModelSerializer):
         """Check if task can be resumed with state recovery."""
         return obj.can_resume()
 
-    def get_latest_execution(self, obj: TradingTask) -> dict | None:
-        """Get summary of latest execution with metrics."""
-        execution = obj.get_latest_execution()
-        if not execution:
+    def get_current_tick(self, obj: TradingTask) -> dict | None:
+        """Return the current tick position and price.
+
+        For running tasks this returns the live tick from ExecutionState.
+        For stopped/completed tasks it returns the last recorded tick so
+        that Unrealized PnL can still be displayed.
+        """
+        from apps.trading.enums import TaskType
+        from apps.trading.models.state import ExecutionState
+
+        if not obj.celery_task_id:
             return None
 
-        result = {
-            "id": execution.id,
-            "execution_number": execution.execution_number,
-            "status": execution.status,
-            "started_at": execution.started_at,
-            "completed_at": execution.completed_at,
-        }
+        try:
+            state = ExecutionState.objects.filter(
+                task_type=TaskType.TRADING.value,
+                task_id=obj.pk,
+                celery_task_id=obj.celery_task_id,
+            ).first()
 
-        # Include metrics if available
-        if hasattr(execution, "metrics") and execution.metrics:
-            metrics = execution.metrics
-            result.update(
-                {
-                    "total_pnl": str(metrics.total_pnl),
-                    "realized_pnl": str(metrics.realized_pnl),
-                    "unrealized_pnl": str(metrics.unrealized_pnl),
-                    "total_trades": metrics.total_trades,
-                    "winning_trades": metrics.winning_trades,
-                    "losing_trades": metrics.losing_trades,
-                    "win_rate": str(metrics.win_rate),
-                }
-            )
-        else:
-            # Default values when no metrics exist yet
-            result.update(
-                {
-                    "total_pnl": "0.00",
-                    "realized_pnl": "0.00",
-                    "unrealized_pnl": "0.00",
-                    "total_trades": 0,
-                    "winning_trades": 0,
-                    "losing_trades": 0,
-                    "win_rate": "0.00",
-                }
-            )
+            if not state or not state.last_tick_timestamp:
+                return None
 
-        return result
+            return {
+                "timestamp": state.last_tick_timestamp.isoformat(),
+                "price": str(state.last_tick_price) if state.last_tick_price is not None else None,
+            }
+        except Exception as e:
+            logger.error(
+                f"[TradingTaskSerializer] Error getting current_tick for task {obj.pk}: {e}",
+                exc_info=True,
+            )
+            return None
 
 
 class TradingTaskListSerializer(serializers.ModelSerializer):
@@ -132,7 +128,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     """
 
     user_id = serializers.IntegerField(source="user.id", read_only=True)
-    config_id = serializers.IntegerField(source="config.id", read_only=True)
+    config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
     instrument = serializers.SerializerMethodField()
@@ -155,6 +151,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "sell_on_stop",
+            "pip_size",
             "status",
             "created_at",
             "updated_at",
@@ -195,14 +192,14 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "sell_on_stop": {"required": False},
         }
 
-    def validate_config(self, value: StrategyConfig) -> StrategyConfig:
+    def validate_config(self, value: StrategyConfiguration) -> StrategyConfiguration:
         """Validate that config belongs to the user."""
         user = self.context["request"].user
         if value.user != user:
             raise serializers.ValidationError("Configuration does not belong to the current user")
         return value
 
-    def validate_oanda_account(self, value: OandaAccount) -> OandaAccount:
+    def validate_oanda_account(self, value: OandaAccounts) -> OandaAccounts:
         """Validate that account belongs to the user and is active."""
         user = self.context["request"].user
         if value.user != user:
@@ -230,8 +227,20 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict) -> TradingTask:
         """Create trading task with user from context."""
+        from apps.trading.utils import pip_size_for_instrument
+
         user = self.context["request"].user
         validated_data["user"] = user
+
+        # Set instrument and pip_size from config if not explicitly provided
+        config = validated_data.get("config")
+        if config and config.parameters:
+            instrument = config.parameters.get("instrument")
+            if instrument:
+                validated_data.setdefault("instrument", instrument)
+                # Derive pip_size from instrument (JPY pairs use 0.01, others use 0.0001)
+                validated_data.setdefault("pip_size", pip_size_for_instrument(instrument))
+
         return TradingTask.objects.create(**validated_data)
 
     def update(self, instance: TradingTask, validated_data: dict) -> TradingTask:

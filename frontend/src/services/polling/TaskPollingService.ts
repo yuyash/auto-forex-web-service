@@ -1,17 +1,21 @@
-// Task Polling Service - HTTP polling for task status, details, and logs
+// Task Polling Service - HTTP polling for task status and details
 
-import { apiClient } from '../api/client';
-import type { BacktestTask, TradingTask, ExecutionLog } from '../../types';
+import { TradingService } from '../../api/generated/services/TradingService';
+import type { BacktestTask, TradingTask } from '../../types';
 import type { ExecutionSummary } from '../../types/execution';
 import { TaskStatus } from '../../types/common';
 
 export type TaskType = 'backtest' | 'trading';
 
 export interface TaskStatusResponse {
-  task_id: number;
+  task_id: string;
   task_type: TaskType;
   status: TaskStatus;
   progress: number;
+  current_tick?: {
+    timestamp: string;
+    price: string | null;
+  } | null;
   started_at: string | null;
   completed_at: string | null;
   error_message: string | null;
@@ -23,17 +27,9 @@ export interface TaskDetailsResponse {
   current_execution: ExecutionSummary | null;
 }
 
-export interface TaskLogsResponse {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: ExecutionLog[];
-}
-
 export interface PollingCallbacks {
   onStatusUpdate?: (status: TaskStatusResponse) => void;
   onDetailsUpdate?: (details: TaskDetailsResponse) => void;
-  onLogsUpdate?: (logs: TaskLogsResponse) => void;
   onError?: (error: Error) => void;
 }
 
@@ -62,14 +58,14 @@ interface PollingState {
  * - Stops polling when task completes or fails
  */
 export class TaskPollingService {
-  private taskId: number;
+  private taskId: string;
   private taskType: TaskType;
   private callbacks: PollingCallbacks;
   private options: Required<PollingOptions>;
   private state: PollingState;
 
   constructor(
-    taskId: number,
+    taskId: string,
     taskType: TaskType,
     callbacks: PollingCallbacks = {},
     options: PollingOptions = {}
@@ -176,20 +172,12 @@ export class TaskPollingService {
       this.state.retryCount = 0;
       this.state.currentInterval = this.options.interval;
 
-      // Stop polling if task is in terminal state
-      if (this.isTerminalStatus(status.status)) {
-        this.stopPolling();
-      }
+      // Continue polling regardless of task status to detect any status changes
 
-      // Optionally fetch details and logs
+      // Optionally fetch details
       if (this.callbacks.onDetailsUpdate) {
         const details = await this.fetchDetails();
         this.callbacks.onDetailsUpdate(details);
-      }
-
-      if (this.callbacks.onLogsUpdate) {
-        const logs = await this.fetchLogs();
-        this.callbacks.onLogsUpdate(logs);
       }
     } catch (error) {
       this.handleError(error as Error);
@@ -200,42 +188,49 @@ export class TaskPollingService {
    * Fetch task status
    */
   private async fetchStatus(): Promise<TaskStatusResponse> {
-    const endpoint = `/trading/${this.taskType}-tasks/${this.taskId}/status/`;
-    return apiClient.get<TaskStatusResponse>(endpoint);
+    const task =
+      this.taskType === 'backtest'
+        ? await TradingService.tradingTasksBacktestRetrieve(this.taskId)
+        : await TradingService.tradingTasksTradingRetrieve(this.taskId);
+
+    return {
+      task_id: task.id ?? '',
+      task_type: this.taskType,
+      status: task.status as TaskStatus,
+      progress:
+        ('progress' in task
+          ? (task as { progress?: number }).progress
+          : undefined) || 0,
+      current_tick:
+        'current_tick' in task
+          ? ((
+              task as {
+                current_tick?: {
+                  timestamp: string;
+                  price: string | null;
+                } | null;
+              }
+            ).current_tick ?? null)
+          : null,
+      started_at: task.started_at || null,
+      completed_at: task.completed_at || null,
+      error_message: task.error_message || null,
+    };
   }
 
   /**
    * Fetch task details
    */
   private async fetchDetails(): Promise<TaskDetailsResponse> {
-    const endpoint = `/trading/${this.taskType}-tasks/${this.taskId}/`;
-    const task = await apiClient.get<BacktestTask | TradingTask>(endpoint);
-
-    // Extract current execution from task
-    const current_execution: ExecutionSummary | null =
-      'latest_execution' in task ? (task.latest_execution ?? null) : null;
+    const task =
+      this.taskType === 'backtest'
+        ? await TradingService.tradingTasksBacktestRetrieve(this.taskId)
+        : await TradingService.tradingTasksTradingRetrieve(this.taskId);
 
     return {
-      task,
-      current_execution,
+      task: task as unknown as BacktestTask | TradingTask,
+      current_execution: null,
     };
-  }
-
-  /**
-   * Fetch task logs
-   */
-  private async fetchLogs(params?: {
-    execution_id?: number;
-    level?: string;
-    page?: number;
-    page_size?: number;
-  }): Promise<TaskLogsResponse> {
-    const endpoint = `/trading/${this.taskType}-tasks/${this.taskId}/logs/`;
-    return apiClient.get<TaskLogsResponse>(endpoint, {
-      page: 1,
-      page_size: 100,
-      ...params,
-    });
   }
 
   /**
@@ -266,17 +261,6 @@ export class TaskPollingService {
     console.warn(
       `Polling error (retry ${this.state.retryCount}/${this.options.maxRetries}). ` +
         `Next attempt in ${this.state.currentInterval}ms`
-    );
-  }
-
-  /**
-   * Check if status is terminal (completed, failed, stopped)
-   */
-  private isTerminalStatus(status: TaskStatus): boolean {
-    return (
-      status === TaskStatus.COMPLETED ||
-      status === TaskStatus.FAILED ||
-      status === TaskStatus.STOPPED
     );
   }
 

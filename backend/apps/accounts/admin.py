@@ -178,11 +178,11 @@ class PublicAccountSettingsAdmin(admin.ModelAdmin):
         ),
     )
 
-    def has_add_permission(self, request):  # type: ignore[no-untyped-def]
+    def has_add_permission(self, request):
         """Allow add only if the singleton doesn't exist yet."""
         return not PublicAccountSettings.objects.exists()
 
-    def has_delete_permission(self, request, obj=None):  # type: ignore[no-untyped-def]
+    def has_delete_permission(self, request, obj=None):
         """Prevent deleting the singleton settings."""
         return False
 

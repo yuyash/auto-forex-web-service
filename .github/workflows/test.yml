@@ -61,7 +61,7 @@ jobs:
       - name: Run ty type check
         run: uv run ty check
 
-      - name: Run tests
+      - name: Run unit tests
         env:
           DB_NAME: test_db
           DB_USER: postgres
@@ -72,13 +72,100 @@ jobs:
           SECRET_KEY: test-secret-key-for-ci-only-minimum-50-characters-long
           DEBUG: "False"
           ALLOWED_HOSTS: localhost,127.0.0.1
-        run: uv run pytest --cov=. --cov-report=xml -v
+          DJANGO_SETTINGS_MODULE: config.settings_test
+        run: |
+          echo "::group::Running unit tests"
+          uv run pytest tests/unit/ -v --cov=. --cov-report=xml --cov-report=html --cov-append --junitxml=junit-unit.xml
+          UNIT_EXIT_CODE=$?
+          echo "::endgroup::"
+          if [ $UNIT_EXIT_CODE -ne 0 ]; then
+            echo "::error::Unit tests failed with exit code $UNIT_EXIT_CODE"
+            exit $UNIT_EXIT_CODE
+          fi
+          echo "✅ Unit tests passed"
 
-      - name: Upload coverage report
+      - name: Run integration tests with parallel execution
+        env:
+          DB_NAME: test_db
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_HOST: localhost
+          DB_PORT: 5432
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key-for-ci-only-minimum-50-characters-long
+          DEBUG: "False"
+          ALLOWED_HOSTS: localhost,127.0.0.1
+          DJANGO_SETTINGS_MODULE: config.settings_test
+        run: |
+          echo "::group::Running integration tests"
+          uv run pytest tests/integration/ -n auto -v --cov=. --cov-report=xml --cov-report=html --cov-append --junitxml=junit-integration.xml
+          INTEGRATION_EXIT_CODE=$?
+          echo "::endgroup::"
+          if [ $INTEGRATION_EXIT_CODE -ne 0 ]; then
+            echo "::error::Integration tests failed with exit code $INTEGRATION_EXIT_CODE"
+            exit $INTEGRATION_EXIT_CODE
+          fi
+          echo "✅ Integration tests passed"
+
+      - name: Check coverage threshold
+        env:
+          DB_NAME: test_db
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_HOST: localhost
+          DB_PORT: 5432
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key-for-ci-only-minimum-50-characters-long
+          DEBUG: "False"
+          ALLOWED_HOSTS: localhost,127.0.0.1
+          DJANGO_SETTINGS_MODULE: config.settings_test
+        run: |
+          echo "::group::Checking coverage threshold"
+          uv run coverage combine || true
+          uv run coverage report --fail-under=80
+          COVERAGE_EXIT_CODE=$?
+          echo "::endgroup::"
+          if [ $COVERAGE_EXIT_CODE -ne 0 ]; then
+            echo "::error::Coverage threshold not met (required: 80%)"
+            exit $COVERAGE_EXIT_CODE
+          fi
+          echo "✅ Coverage threshold met (80%)"
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: |
+            backend/junit-unit.xml
+            backend/junit-integration.xml
+          check_name: Backend Test Results
+          comment_mode: off
+
+      - name: Upload coverage report to Codecov
         uses: codecov/codecov-action@v4
+        if: always()
         with:
           files: ./backend/coverage.xml
           fail_ci_if_error: false
+          flags: backend
+
+      - name: Upload HTML coverage report as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report-backend
+          path: ./backend/htmlcov/
+          retention-days: 30
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-backend
+          path: |
+            ./backend/junit-unit.xml
+            ./backend/junit-integration.xml
+          retention-days: 7
 
   test-frontend:
     name: Frontend Tests

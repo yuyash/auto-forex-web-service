@@ -1,184 +1,126 @@
-"""Calculator components for Floor strategy."""
+"""Calculation utilities for Floor strategy."""
 
 from decimal import Decimal
 
-from apps.trading.enums import TradingMode
-from apps.trading.strategies.floor.enums import Direction
-from apps.trading.strategies.floor.models import LayerState
+from apps.trading.strategies.floor.enums import Direction, Progression
 
 
-class PriceCalculator:
-    """Handles price and P&L calculations."""
+class ProgressionCalculator:
+    """Calculate progressive values."""
 
-    def __init__(self, pip_size: Decimal, trading_mode: TradingMode = TradingMode.NETTING) -> None:
-        self.pip_size = pip_size
-        self.trading_mode = trading_mode
+    @staticmethod
+    def calculate(
+        base: Decimal,
+        index: int,
+        mode: Progression,
+        increment: Decimal,
+    ) -> Decimal:
+        """Calculate progressive value.
 
-    def pips_between(self, price_a: Decimal, price_b: Decimal) -> Decimal:
-        """Calculate pips between two prices."""
-        return (price_b - price_a) / self.pip_size
+        Args:
+            base: Base value
+            index: Current index (0, 1, 2, ...)
+            mode: Progression mode
+            increment: Increment value
 
-    def calculate_pnl(self, layers: list[LayerState], bid: Decimal, ask: Decimal) -> Decimal:
-        """Calculate net P&L in pips, weighted by lot size.
-
-        In Netting Mode: Returns weighted average P&L across all layers.
-        In Hedging Mode: Returns weighted average P&L across all individual positions.
+        Returns:
+            Calculated value
         """
-        if self.trading_mode == TradingMode.HEDGING:
-            return self._calculate_pnl_hedging(layers, bid, ask)
-        return self._calculate_pnl_netting(layers, bid, ask)
+        if mode == Progression.CONSTANT:
+            return base
 
-    def _calculate_pnl_netting(
-        self, layers: list[LayerState], bid: Decimal, ask: Decimal
-    ) -> Decimal:
-        """Calculate P&L for Netting Mode (weighted average)."""
-        total = Decimal("0")
-        weight = Decimal("0")
+        if mode == Progression.ADDITIVE:
+            return base + (increment * Decimal(index))
 
-        for layer in layers:
-            if layer.lot_size <= 0:
-                continue
+        if mode == Progression.SUBTRACTIVE:
+            result = base - (increment * Decimal(index))
+            return max(result, Decimal("0"))  # Never go negative
 
-            mark = bid if layer.direction == Direction.LONG else ask
-            pips = self.pips_between(layer.entry_price, mark)
+        if mode == Progression.MULTIPLICATIVE:
+            # 2の累乗をかける: base * (2 ^ index)
+            multiplier = Decimal(2**index)
+            return base * multiplier
 
-            if layer.direction == Direction.SHORT:
-                pips = -pips
+        if mode == Progression.DIVISIVE:
+            # 2の累乗で割る: base / (2 ^ index)
+            if index == 0:
+                return base
+            divisor = Decimal(2**index)
+            return base / divisor
 
-            total += pips * layer.lot_size
-            weight += layer.lot_size
+        return base
 
-        return total / weight if weight > 0 else Decimal("0")
 
-    def _calculate_pnl_hedging(
-        self, layers: list[LayerState], bid: Decimal, ask: Decimal
-    ) -> Decimal:
-        """Calculate P&L for Hedging Mode (individual positions)."""
-        total = Decimal("0")
-        weight = Decimal("0")
+class MarginCalculator:
+    """Calculate margin requirements."""
 
-        for layer in layers:
-            for position in layer.positions:
-                if position.lot_size <= 0:
-                    continue
+    def __init__(self, margin_rate: Decimal) -> None:
+        """Initialize calculator.
 
-                mark = bid if layer.direction == Direction.LONG else ask
-                pips = self.pips_between(position.entry_price, mark)
-
-                if layer.direction == Direction.SHORT:
-                    pips = -pips
-
-                total += pips * position.lot_size
-                weight += position.lot_size
-
-        return total / weight if weight > 0 else Decimal("0")
-
-    def calculate_layer_pnl(self, layer: LayerState, bid: Decimal, ask: Decimal) -> Decimal:
-        """Calculate P&L for a single layer in pips.
-
-        In Netting Mode: Returns P&L based on weighted average entry price.
-        In Hedging Mode: Returns weighted average P&L of all positions in the layer.
+        Args:
+            margin_rate: Margin rate (e.g., 0.04 for 4%)
         """
-        if self.trading_mode == TradingMode.HEDGING:
-            return self._calculate_layer_pnl_hedging(layer, bid, ask)
-        return self._calculate_layer_pnl_netting(layer, bid, ask)
+        self.margin_rate = margin_rate
 
-    def _calculate_layer_pnl_netting(
-        self, layer: LayerState, bid: Decimal, ask: Decimal
+    def calculate_required_margin(
+        self,
+        current_price: Decimal,
+        total_units: Decimal,
     ) -> Decimal:
-        """Calculate layer P&L for Netting Mode."""
-        if layer.lot_size <= 0:
-            return Decimal("0")
+        """Calculate required margin.
 
-        mark = bid if layer.direction == Direction.LONG else ask
-        pips = self.pips_between(layer.entry_price, mark)
+        Formula: current_price * total_units * margin_rate
 
-        if layer.direction == Direction.SHORT:
-            pips = -pips
+        Args:
+            current_price: Current market price
+            total_units: Total position size
 
-        return pips
+        Returns:
+            Required margin
+        """
+        return current_price * total_units * self.margin_rate
 
-    def _calculate_layer_pnl_hedging(
-        self, layer: LayerState, bid: Decimal, ask: Decimal
+    def calculate_margin_ratio(
+        self,
+        required_margin: Decimal,
+        nav: Decimal,
     ) -> Decimal:
-        """Calculate layer P&L for Hedging Mode (weighted average of positions)."""
-        total = Decimal("0")
-        weight = Decimal("0")
+        """Calculate margin ratio (証拠金清算割合).
 
-        for position in layer.positions:
-            if position.lot_size <= 0:
-                continue
+        Formula: required_margin / nav
 
-            mark = bid if layer.direction == Direction.LONG else ask
-            pips = self.pips_between(position.entry_price, mark)
+        Args:
+            required_margin: Required margin
+            nav: Net asset value (有効証拠金)
 
-            if layer.direction == Direction.SHORT:
-                pips = -pips
+        Returns:
+            Margin ratio (1.0 = 100%)
+        """
+        if nav <= 0:
+            return Decimal("999")  # Extremely high ratio
 
-            total += pips * position.lot_size
-            weight += position.lot_size
-
-        return total / weight if weight > 0 else Decimal("0")
-
-    def against_position_pips(self, layer: LayerState, bid: Decimal, ask: Decimal) -> Decimal:
-        """Calculate adverse movement in pips for a layer."""
-        mark = bid if layer.direction == Direction.LONG else ask
-
-        if layer.direction == Direction.LONG:
-            if mark >= layer.entry_price:
-                return Decimal("0")
-            return abs(self.pips_between(layer.entry_price, mark))
-        else:
-            if mark <= layer.entry_price:
-                return Decimal("0")
-            return abs(self.pips_between(layer.entry_price, mark))
+        return required_margin / nav
 
 
-class IndicatorCalculator:
-    """Handles technical indicator calculations."""
+class TrendDetector:
+    """Detect trend from candle data."""
 
     @staticmethod
-    def sma(values: list[Decimal]) -> Decimal:
-        """Calculate Simple Moving Average."""
-        return sum(values) / Decimal(len(values)) if values else Decimal("0")
+    def detect_direction(candle_closes: list[Decimal]) -> Direction:
+        """Detect trend direction from candle closes.
 
-    @staticmethod
-    def ema(values: list[Decimal], period: int) -> Decimal:
-        """Calculate Exponential Moving Average."""
-        if not values:
-            return Decimal("0")
+        Simple momentum: compare first and last candle.
 
-        k = Decimal("2") / (Decimal(period) + Decimal("1"))
-        ema_val = values[0]
+        Args:
+            candle_closes: List of candle close prices
 
-        for v in values[1:]:
-            ema_val = (v * k) + (ema_val * (Decimal("1") - k))
+        Returns:
+            Direction.LONG if uptrend, Direction.SHORT if downtrend
+        """
+        if len(candle_closes) < 2:
+            return Direction.LONG  # Default
 
-        return ema_val
+        first = candle_closes[0]
+        last = candle_closes[-1]
 
-    @staticmethod
-    def rsi(values: list[Decimal], period: int) -> Decimal:
-        """Calculate Relative Strength Index."""
-        if len(values) < period + 1:
-            return Decimal("50")
-
-        gains: list[Decimal] = []
-        losses: list[Decimal] = []
-
-        for i in range(-period, 0):
-            delta = values[i] - values[i - 1]
-            if delta >= 0:
-                gains.append(delta)
-                losses.append(Decimal("0"))
-            else:
-                gains.append(Decimal("0"))
-                losses.append(-delta)
-
-        avg_gain = sum(gains) / Decimal(period)
-        avg_loss = sum(losses) / Decimal(period)
-
-        if avg_loss == 0:
-            return Decimal("100")
-
-        rs = avg_gain / avg_loss
-        return Decimal("100") - (Decimal("100") / (Decimal("1") + rs))
+        return Direction.LONG if last >= first else Direction.SHORT

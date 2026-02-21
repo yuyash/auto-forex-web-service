@@ -71,9 +71,26 @@ function TabPanel(props: TabPanelProps) {
       role="tabpanel"
       id={`task-tabpanel-${index}`}
       aria-labelledby={`task-tab-${index}`}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        overflow: 'auto',
+      }}
       {...other}
     >
-      <Box sx={{ py: 3 }}>{children}</Box>
+      <Box
+        sx={{
+          py: 3,
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
+        {children}
+      </Box>
     </div>
   );
 }
@@ -88,7 +105,7 @@ function a11yProps(index: number) {
 export default function TradingTaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const taskId = parseInt(id || '0', 10);
+  const taskId = id || '';
 
   const [tabValue, setTabValue] = useState(2); // Default to Executions tab (index 2)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -103,15 +120,16 @@ export default function TradingTaskDetailPage() {
   const { strategies } = useStrategies();
 
   // Use HTTP polling for task status updates (Requirements 1.2, 1.3, 4.3, 4.4)
-  const { status: polledStatus, refetch: refetchPolledStatus } = useTaskPolling(
-    taskId,
-    'trading',
-    {
-      enabled: !!taskId,
-      pollStatus: true,
-      interval: 3000, // Poll every 3 seconds for active tasks
-    }
-  );
+  const {
+    status: polledStatus,
+    refetch: refetchPolledStatus,
+    startPolling,
+    isPolling,
+  } = useTaskPolling(taskId, 'trading', {
+    enabled: !!taskId,
+    pollStatus: true,
+    interval: 3000, // Poll every 3 seconds for active tasks
+  });
 
   // Refetch when status changes
   const prevStatusRef = useRef<string | undefined>(undefined);
@@ -143,6 +161,24 @@ export default function TradingTaskDetailPage() {
       prevStatusRef.current = polledStatus.status;
     }
   }, [polledStatus, task, refetch]);
+
+  // Restart polling when task transitions from terminal to non-terminal state
+  useEffect(() => {
+    if (!task) return;
+
+    const isNonTerminalStatus = (status: TaskStatus) =>
+      status === TaskStatus.CREATED ||
+      status === TaskStatus.STARTING ||
+      status === TaskStatus.RUNNING ||
+      status === TaskStatus.PAUSED ||
+      status === TaskStatus.STOPPING;
+
+    // If task is in non-terminal state but polling is stopped, restart it
+    if (isNonTerminalStatus(task.status) && !isPolling) {
+      console.log('[TradingTaskDetail] Task restarted, resuming polling');
+      startPolling();
+    }
+  }, [task, isPolling, startPolling]);
 
   // Refetch task data after mutations complete
   useEffect(() => {
@@ -321,7 +357,9 @@ export default function TradingTaskDetailPage() {
     try {
       setIsTransitioning(true);
       await deleteTask.mutate(taskId);
-      navigate('/trading-tasks');
+      // Cache is invalidated inside the mutation hook.
+      // Navigate with state so the list page knows to refetch.
+      navigate('/trading-tasks', { state: { deleted: true } });
     } catch {
       // Error handled by mutation hook
     } finally {
@@ -415,7 +453,17 @@ export default function TradingTaskDetailPage() {
     currentStatus !== TaskStatus.RUNNING && currentStatus !== TaskStatus.PAUSED;
 
   return (
-    <Container maxWidth={false} sx={{ py: 4 }}>
+    <Container
+      maxWidth={false}
+      sx={{
+        py: 4,
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        overflow: 'hidden',
+      }}
+    >
       {/* Breadcrumbs */}
       <Breadcrumbs sx={{ mb: 2 }}>
         <Link
@@ -438,14 +486,22 @@ export default function TradingTaskDetailPage() {
       )}
 
       {/* Header */}
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Paper sx={{ p: 2, pb: 1, mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
           <IconButton onClick={handleBack} sx={{ mt: -1 }}>
             <ArrowBackIcon />
           </IconButton>
 
           <Box sx={{ flex: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                p: '8px',
+                mb: '8px',
+              }}
+            >
               <Typography variant="h4" component="h1">
                 {task.name}
               </Typography>
@@ -584,12 +640,21 @@ export default function TradingTaskDetailPage() {
       </Paper>
 
       {/* Tabs */}
-      <Paper sx={{ mb: 3 }}>
+      <Paper
+        sx={{
+          mb: 3,
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+        }}
+      >
         <Tabs
           value={tabValue}
           onChange={handleTabChange}
           aria-label="task detail tabs"
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
+          sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
         >
           <Tab label="Live" {...a11yProps(0)} />
           <Tab label="Performance" {...a11yProps(1)} />

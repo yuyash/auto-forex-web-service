@@ -9,24 +9,34 @@
     },
     "retracement_lot_mode": {
       "type": "string",
-      "title": "Retracement Lot Mode",
-      "enum": ["additive", "multiplicative"],
-      "description": "How lot size changes on each retracement entry."
+      "title": "Intra-Layer Retracement Lot Mode",
+      "enum": [
+        "constant",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive"
+      ],
+      "description": "Controls how lot size changes on each retracement entry within a single layer. 'constant' keeps the same lot size, 'additive' adds a fixed amount per retracement, 'subtractive' subtracts a fixed amount (min 0.01), 'multiplicative' doubles each time (base × 2^N), 'divisive' halves each time (base / 2^N)."
     },
     "retracement_lot_amount": {
       "type": "number",
-      "title": "Retracement Lot Amount",
-      "description": "Amount to add/multiply by on each retracement entry."
+      "title": "Intra-Layer Retracement Lot Amount",
+      "description": "The increment value used for intra-layer lot sizing. For 'additive' mode this is added per retracement; for 'subtractive' it is subtracted per retracement.",
+      "dependsOn": {
+        "field": "retracement_lot_mode",
+        "values": ["additive", "subtractive"]
+      }
     },
     "retracement_pips": {
       "type": "number",
-      "title": "Retracement Pips",
-      "description": "Adverse movement in pips required to trigger a retracement entry."
+      "title": "Retracement Trigger Pips (Base)",
+      "description": "Base adverse movement in pips required to trigger a retracement entry. This is the starting value for Layer 0; cross-layer progression may modify it for subsequent layers."
     },
     "take_profit_pips": {
       "type": "number",
-      "title": "Take Profit Pips",
-      "description": "Profit in pips required to close the position."
+      "title": "Take Profit Pips (Base)",
+      "description": "Base profit in pips required to close a position. This is the starting value for Layer 0; cross-layer and intra-layer progression may modify it."
     },
     "max_layers": {
       "type": "integer",
@@ -41,154 +51,213 @@
     "volatility_lock_multiplier": {
       "type": "number",
       "title": "Volatility Lock Multiplier",
-      "description": "ATR multiplier threshold to trigger volatility lock."
+      "description": "ATR multiplier threshold to trigger volatility lock.",
+      "dependsOn": {
+        "field": "volatility_check_enabled",
+        "values": ["true"]
+      }
     },
     "retracement_trigger_progression": {
       "type": "string",
-      "title": "Retracement Trigger Progression",
-      "enum": ["equal", "additive", "exponential", "inverse"],
-      "description": "How retracement triggers progress across layers."
+      "title": "Cross-Layer Retracement Trigger Progression",
+      "enum": [
+        "constant",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive"
+      ],
+      "description": "Controls how the starting retracement trigger pips change when a new layer opens. Layer 0 uses the base Retracement Pips; subsequent layers apply this progression formula."
     },
     "retracement_trigger_increment": {
       "type": "number",
-      "title": "Retracement Trigger Increment",
-      "description": "Used for additive/exponential progression.",
+      "title": "Cross-Layer Retracement Trigger Increment",
+      "description": "Increment value for cross-layer retracement trigger progression. Used with 'additive' and 'subtractive' modes.",
       "dependsOn": {
         "field": "retracement_trigger_progression",
-        "values": ["additive", "exponential"]
+        "values": ["additive", "subtractive"]
       }
     },
-    "lot_size_progression": {
+    "take_profit_trigger_progression": {
       "type": "string",
-      "title": "Lot Size Progression",
-      "enum": ["equal", "additive", "exponential", "inverse"],
-      "description": "How base lot size changes across layers."
+      "title": "Cross-Layer Take Profit Progression",
+      "enum": [
+        "constant",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive"
+      ],
+      "description": "Controls how the starting take-profit pips change when a new layer opens. Layer 0 uses the base Take Profit Pips; subsequent layers apply this progression formula."
     },
-    "lot_size_increment": {
+    "take_profit_trigger_increment": {
       "type": "number",
-      "title": "Lot Size Increment",
-      "description": "Used for additive/exponential progression.",
+      "title": "Cross-Layer Take Profit Increment",
+      "description": "Increment value for cross-layer take-profit progression. Used with 'additive' and 'subtractive' modes.",
       "dependsOn": {
-        "field": "lot_size_progression",
-        "values": ["additive", "exponential"]
+        "field": "take_profit_trigger_progression",
+        "values": ["additive", "subtractive"]
       }
     },
-    "entry_signal_lookback_ticks": {
-      "type": "integer",
-      "title": "Momentum Lookback Ticks",
-      "description": "Number of ticks to analyze when using momentum direction.",
-      "dependsOn": {
-        "field": "direction_method",
-        "values": ["momentum"],
-        "and": [{ "field": "momentum_lookback_source", "values": ["ticks"] }]
-      }
-    },
-    "momentum_lookback_source": {
+    "take_profit_pips_mode": {
       "type": "string",
-      "title": "Momentum Lookback Source",
-      "enum": ["ticks", "candles"],
-      "default": "candles",
-      "description": "Use raw ticks or candle closes to decide momentum direction.",
+      "title": "Intra-Layer Take Profit Pips Mode",
+      "enum": [
+        "constant",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive"
+      ],
+      "description": "Controls how take-profit pips change on each retracement entry within a single layer. 'constant' keeps the same TP for all entries, 'additive' increases TP per retracement, etc."
+    },
+    "take_profit_pips_amount": {
+      "type": "number",
+      "title": "Intra-Layer Take Profit Pips Amount",
+      "description": "Increment value for intra-layer take-profit pips adjustment. Used with 'additive' and 'subtractive' modes.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["momentum"]
+        "field": "take_profit_pips_mode",
+        "values": ["additive", "subtractive"]
       }
     },
     "entry_signal_lookback_candles": {
       "type": "integer",
       "title": "Momentum Lookback Candles",
       "default": 50,
-      "description": "Number of candles to analyze when using candle-based momentum.",
-      "dependsOn": {
-        "field": "direction_method",
-        "values": ["momentum"],
-        "and": [{ "field": "momentum_lookback_source", "values": ["candles"] }]
-      }
+      "description": "Number of candles to analyze for trend direction."
     },
     "entry_signal_candle_granularity_seconds": {
       "type": "integer",
       "title": "Momentum Candle Granularity (seconds)",
       "default": 60,
-      "description": "Candle size in seconds used for momentum lookback.",
+      "description": "Candle size in seconds used for trend lookback."
+    },
+    "lot_unit_size": {
+      "type": "number",
+      "title": "Lot Unit Size",
+      "default": 1000,
+      "description": "Units per 1 lot."
+    },
+    "allow_duplicate_units": {
+      "type": "boolean",
+      "title": "Allow Duplicate Units",
+      "default": false,
+      "description": "If false, duplicate position sizes are automatically avoided."
+    },
+    "hedging_enabled": {
+      "type": "boolean",
+      "title": "Hedging Enabled",
+      "default": false,
+      "description": "Whether account can hold opposite positions simultaneously."
+    },
+    "margin_rate": {
+      "type": "number",
+      "title": "Margin Rate",
+      "default": 0.04,
+      "description": "Margin requirement rate.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["momentum"],
-        "and": [{ "field": "momentum_lookback_source", "values": ["candles"] }]
+        "field": "margin_protection_enabled",
+        "values": ["true"]
       }
     },
-    "direction_method": {
-      "type": "string",
-      "title": "Direction Decision Method",
-      "enum": [
-        "momentum",
-        "sma_crossover",
-        "ema_crossover",
-        "price_vs_sma",
-        "rsi"
-      ],
-      "description": "Technical method used to decide long vs short."
-    },
-    "sma_fast_period": {
-      "type": "integer",
-      "title": "SMA Fast Period",
-      "description": "Fast SMA window size (in ticks).",
+    "margin_cut_start_ratio": {
+      "type": "number",
+      "title": "Margin Cut Start Ratio",
+      "default": 0.6,
+      "description": "Start forced reduction when margin ratio reaches this value.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["sma_crossover"]
+        "field": "margin_protection_enabled",
+        "values": ["true"]
       }
     },
-    "sma_slow_period": {
-      "type": "integer",
-      "title": "SMA Slow Period",
-      "description": "Slow SMA window size (in ticks).",
+    "margin_cut_target_ratio": {
+      "type": "number",
+      "title": "Margin Cut Target Ratio",
+      "default": 0.5,
+      "description": "Target ratio after forced reduction.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["sma_crossover", "price_vs_sma"]
+        "field": "margin_protection_enabled",
+        "values": ["true"]
       }
     },
-    "ema_fast_period": {
-      "type": "integer",
-      "title": "EMA Fast Period",
-      "description": "Fast EMA window size (in ticks).",
+    "margin_protection_enabled": {
+      "type": "boolean",
+      "title": "Margin Protection Enabled",
+      "default": true,
+      "description": "Enable forced closeout logic based on margin ratio thresholds."
+    },
+    "volatility_check_enabled": {
+      "type": "boolean",
+      "title": "Volatility Check Enabled",
+      "default": true,
+      "description": "Enable ATR-based volatility lock/unlock checks."
+    },
+    "volatility_unlock_multiplier": {
+      "type": "number",
+      "title": "Volatility Unlock Multiplier",
+      "default": 1.5,
+      "description": "ATR multiplier threshold to unlock strategy after lock.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["ema_crossover"]
+        "field": "volatility_check_enabled",
+        "values": ["true"]
       }
     },
-    "ema_slow_period": {
-      "type": "integer",
-      "title": "EMA Slow Period",
-      "description": "Slow EMA window size (in ticks).",
+    "dynamic_parameter_adjustment_enabled": {
+      "type": "boolean",
+      "title": "Dynamic Parameter Adjustment",
+      "default": false,
+      "description": "Adjust triggers/targets based on volatility.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["ema_crossover"]
+        "field": "volatility_check_enabled",
+        "values": ["true"]
       }
     },
-    "rsi_period": {
+    "atr_period": {
       "type": "integer",
-      "title": "RSI Period",
-      "description": "RSI window size (in ticks).",
+      "title": "ATR Period",
+      "default": 14,
+      "description": "ATR window for lock detection.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["rsi"]
+        "field": "volatility_check_enabled",
+        "values": ["true"],
+        "or": [
+          {
+            "field": "dynamic_parameter_adjustment_enabled",
+            "values": ["true"]
+          }
+        ]
       }
     },
-    "rsi_overbought": {
+    "atr_baseline_period": {
       "type": "integer",
-      "title": "RSI Overbought",
-      "description": "RSI threshold above which to short.",
+      "title": "ATR Baseline Period",
+      "default": 50,
+      "description": "Baseline ATR window used for ATR multiplier comparison.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["rsi"]
+        "field": "volatility_check_enabled",
+        "values": ["true"],
+        "or": [
+          {
+            "field": "dynamic_parameter_adjustment_enabled",
+            "values": ["true"]
+          }
+        ]
       }
     },
-    "rsi_oversold": {
-      "type": "integer",
-      "title": "RSI Oversold",
-      "description": "RSI threshold below which to long.",
+    "market_condition_override_enabled": {
+      "type": "boolean",
+      "title": "Spread Breaker",
+      "default": true,
+      "description": "Enable temporary rule override on bad market conditions."
+    },
+    "market_condition_spread_limit_pips": {
+      "type": "number",
+      "title": "Spread Limit (pips)",
+      "default": 3.0,
+      "description": "Skip new entries when spread exceeds this value.",
       "dependsOn": {
-        "field": "direction_method",
-        "values": ["rsi"]
+        "field": "market_condition_override_enabled",
+        "values": ["true"]
       }
     }
   },

@@ -1,144 +1,283 @@
+"""Celery tasks for live trading execution."""
+
 from __future__ import annotations
 
+import traceback
 from logging import Logger, getLogger
 from typing import Any
+from uuid import UUID
 
 from celery import shared_task
-from django.conf import settings
 from django.utils import timezone as dj_timezone
 
-from apps.trading.enums import TaskStatus, TaskType
-from apps.trading.models import (
-    CeleryTaskStatus,
-    TradingTask,
-)
-from apps.trading.services.executor import TradingExecutor
-from apps.trading.services.lifecycle import ExecutionLifecycle, StrategyCreationContext
-from apps.trading.services.source import LiveTickDataSource
-from apps.trading.tasks.base import BaseTaskRunner
+from apps.trading.engine import TradingEngine
+from apps.trading.enums import LogLevel, TaskStatus, TaskType
+from apps.trading.logging import TaskLoggingSession
+from apps.trading.models import CeleryTaskStatus, TaskLog, TradingTask
+from apps.trading.tasks.executor import TradingExecutor
+from apps.trading.tasks.source import LiveTickDataSource
+from apps.trading.utils import pip_size_for_instrument
 
 logger: Logger = getLogger(name=__name__)
 
 
-class TradingTaskRunner(BaseTaskRunner):
-    """Task runner for live trading tasks."""
+@shared_task(
+    bind=True,
+    name="trading.tasks.run_trading_task",
+)
+def run_trading_task(self: Any, task_id: UUID) -> None:
+    """Celery task wrapper for running trading tasks.
 
-    def _create_data_source(self) -> LiveTickDataSource:
-        """Create data source for live trading execution."""
-        channel = settings.MARKET_TICK_CHANNEL
-        return LiveTickDataSource(
-            channel=channel,
-            instrument=self.task.instrument,
-        )
+    Args:
+        task_id: UUID of the TradingTask to execute
+    """
+    task = None
+    logging_session: TaskLoggingSession | None = None
 
-    def _create_executor(self, data_source: LiveTickDataSource, strategy: Any) -> TradingExecutor:
-        """Create TradingExecutor instance."""
-        # Type assertion for TradingTask
-        assert isinstance(self.task, TradingTask), "Task must be TradingTask"
+    try:
+        logger.info(f"Starting a new celery trading task. Task ID: {task_id}.")
+        task = TradingTask.objects.get(pk=task_id)
+        logging_session = TaskLoggingSession(task)
+        logging_session.start()
 
-        from apps.market.services.oanda import OandaService
-
-        trading_service = OandaService(account=self.task.oanda_account)
-
-        return TradingExecutor(
-            data_source=data_source,
-            strategy=strategy,
-            trading_service=trading_service,
-            execution=self.execution,
-            task=self.task,
-        )
-
-    @shared_task(bind=True, name="trading.tasks.run_trading_task")
-    def run(self, task_id: int, execution_id: int | None = None) -> None:
-        """Run a live trading task using TradingExecutor."""
-        # Initialize Celery task service
-        self._initialize_task_service(
-            task_name="trading.tasks.run_trading_task",
-            task_id=task_id,
-            kind="trading",
-        )
-
-        logger.info(f"Trading task started (task_id={task_id}, execution_id={execution_id})")
-
-        try:
-            # Load the trading task
-            self.task: TradingTask = TradingTask.objects.select_related(
-                "config", "oanda_account", "user"
-            ).get(pk=task_id)
-        except TradingTask.DoesNotExist:
-            logger.error(f"TradingTask {task_id} not found")
-            self.task_service.mark_stopped(
-                status=CeleryTaskStatus.Status.FAILED, status_message="Task not found"
-            )
-            return
-
-        # Setup execution context (with stale execution check)
-        try:
-            self._setup_execution_context(
-                task_id=task_id,
-                execution_id=execution_id,
-                task_type=TaskType.TRADING,
-                log_message="Trading execution started",
-            )
-        except ValueError as e:
-            # Stale execution detected - skip this task
+        # Guard: only allow execution from STARTING status.
+        # This prevents duplicate Celery dispatches or retries from
+        # re-running a task that has already completed/failed/stopped.
+        if task.status not in [TaskStatus.STARTING, TaskStatus.CREATED]:
             logger.warning(
-                "Skipping stale trading execution: task_id=%d, execution_id=%s, reason=%s",
-                task_id,
-                execution_id,
-                str(e),
-            )
-            self.task_service.mark_stopped(
-                status=CeleryTaskStatus.Status.FAILED,
-                status_message=f"Stale execution skipped: {str(e)}",
+                f"SKIPPING execution - task_id={task_id}, status={task.status} "
+                f"is not STARTING/CREATED. Another worker may have already processed this task."
             )
             return
 
-        # Create strategy with automatic error handling
-        with StrategyCreationContext(
-            execution=self.execution,
-            task=self.task,
-            event_emitter=self.event_emitter,
-            task_service=self.task_service,
-            strategy_config=self.task.config,
-        ) as strategy_ctx:
-            strategy = strategy_ctx.create_strategy()
-            if strategy is None:
-                return  # Error was handled by context manager
-
-        # Create data source and executor
-        data_source = self._create_data_source()
-        executor = self._create_executor(data_source, strategy)
-
-        # Execute with lifecycle management
-        with ExecutionLifecycle(
-            execution=self.execution,
-            task=self.task,
-            event_emitter=self.event_emitter,
-            task_service=self.task_service,
-            success_status=TaskStatus.STOPPED,  # Trading tasks stop, not complete
-        ) as lifecycle:
-            lifecycle.set_strategy_type(self.task.config.strategy_type)
-            executor.execute()
-
-    @shared_task(bind=True, name="trading.tasks.stop_trading_task")
-    def stop(self, task_id: int, mode: str = "graceful") -> None:
-        """Request stop for a running trading task.
-
-        This handles complex cleanup operations like closing positions.
-        Backtest tasks use a simpler direct stop mechanism via
-        TaskLockManager.set_cancellation_flag().
-
-        Args:
-            task_id: ID of the trading task to stop
-            mode: Stop mode ('immediate', 'graceful', 'graceful_close')
-        """
-        task_name = "trading.tasks.run_trading_task"
-        instance_key = str(task_id)
-        CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
-            status=CeleryTaskStatus.Status.STOP_REQUESTED,
-            status_message=f"stop_requested mode={mode}",
-            last_heartbeat_at=dj_timezone.now(),
+        # Atomically transition to RUNNING only if still in STARTING/CREATED.
+        now = dj_timezone.now()
+        rows_updated = TradingTask.objects.filter(
+            pk=task_id,
+            status__in=[TaskStatus.STARTING, TaskStatus.CREATED],
+        ).update(
+            status=TaskStatus.RUNNING,
+            started_at=now,
         )
 
-        logger.info(f"Stop requested for trading task {task_id} (mode={mode})")
+        if rows_updated == 0:
+            task.refresh_from_db()
+            logger.warning(
+                f"SKIPPING execution (lost race) - task_id={task_id}, "
+                f"current_status={task.status}. Another worker won the transition."
+            )
+            return
+
+        task.refresh_from_db()
+        logger.info(f"Transitioning: STARTING -> RUNNING - task_id={task_id}")
+        logger.info(f"Current: RUNNING - task_id={task_id}, started_at={task.started_at}")
+
+        # Log task start
+        TaskLog.objects.create(
+            task_type=TaskType.TRADING,
+            task_id=task.pk,
+            celery_task_id=self.request.id,
+            level=LogLevel.INFO,
+            component=__name__,
+            message="Trading task execution started",
+        )
+
+        # Execute the trading task
+        execute_trading(task)
+
+        # Mark as stopped (trading tasks run until stopped, only if not already stopped/stopping)
+        logger.info(f"Execution completed, checking final status - task_id={task_id}")
+        task.refresh_from_db()
+        logger.info(f"Current after execution: {task.status} - task_id={task_id}")
+
+        if task.status not in [TaskStatus.STOPPED, TaskStatus.STOPPING]:
+            # Atomically transition RUNNING -> STOPPED
+            logger.info(f"Transitioning: {task.status} -> STOPPED - task_id={task_id}")
+            rows_updated = TradingTask.objects.filter(
+                pk=task_id,
+                status=TaskStatus.RUNNING,
+            ).update(
+                status=TaskStatus.STOPPED,
+            )
+            if rows_updated == 0:
+                task.refresh_from_db()
+                logger.warning(
+                    f"STOPPED transition failed - task_id={task_id}, current_status={task.status}."
+                )
+                return
+            task.refresh_from_db()
+            logger.info(f"Current: {task.status} - task_id={task_id}")
+        else:
+            logger.info(f"Already in terminal state: {task.status} - task_id={task_id}")
+
+        # Log task completion
+        TaskLog.objects.create(
+            task_type=TaskType.TRADING,
+            task_id=task.pk,
+            celery_task_id=task.celery_task_id,
+            level=LogLevel.INFO,
+            component=__name__,
+            message="Trading task stopped successfully",
+        )
+    except TradingTask.DoesNotExist:
+        logger.error(f"TradingTask {task_id} not found")
+        raise
+    except Exception as e:
+        handle_exception(task_id, task, e)
+        raise
+    finally:
+        if logging_session:
+            logging_session.stop()
+
+
+def execute_trading(task: TradingTask) -> None:
+    """Execute a trading task.
+
+    Args:
+        task: Trading task to execute
+    """
+
+    # Resolve pip_size: use task value, or derive from instrument
+    resolved_pip_size = task.pip_size or pip_size_for_instrument(task.instrument)
+
+    # Create trading engine
+    engine = TradingEngine(
+        instrument=task.instrument,
+        pip_size=resolved_pip_size,
+        strategy_config=task.config,
+        trading_mode=getattr(task, "trading_mode", "hedging"),
+        account_currency=getattr(task.oanda_account, "currency", ""),
+    )
+
+    # Persist pip_size back to task if it was null
+    if not task.pip_size:
+        task.pip_size = resolved_pip_size
+        task.save(update_fields=["pip_size", "updated_at"])
+
+    # Create data source for live ticks
+    channel = f"live:{task.oanda_account.account_id}:{task.instrument}"
+    data_source = LiveTickDataSource(
+        channel=channel,
+        instrument=task.instrument,
+    )
+
+    # Create manager
+    # Create executor
+    executor = TradingExecutor(
+        task=task,
+        engine=engine,
+        data_source=data_source,
+    )
+
+    # Execute
+    executor.execute()
+
+
+def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) -> None:
+    # Capture error details and update task
+    error_message = str(error)
+    error_traceback = traceback.format_exc()
+
+    logger.error(
+        f"Trading task {task_id} failed: {error_message}",
+        exc_info=True,
+    )
+
+    if task:
+        # Update task with error information
+        task.status = TaskStatus.FAILED
+        task.completed_at = dj_timezone.now()
+        task.error_message = error_message
+        task.error_traceback = error_traceback
+        task.save(
+            update_fields=[
+                "status",
+                "completed_at",
+                "error_message",
+                "error_traceback",
+            ]
+        )
+
+        # Update CeleryTaskStatus to maintain state consistency
+        from apps.trading.models.celery import CeleryTaskStatus
+
+        CeleryTaskStatus.objects.filter(
+            task_name="trading.tasks.run_trading_task",
+            instance_key=str(task_id),
+        ).update(
+            status=CeleryTaskStatus.Status.FAILED,
+            status_message=f"Task failed: {type(error).__name__}: {error_message}",
+        )
+
+        logger.info(f"CeleryTaskStatus updated to FAILED - task_id={task_id}")
+
+        # Log error
+        TaskLog.objects.create(
+            task_type=TaskType.TRADING,
+            task_id=task.pk,
+            celery_task_id=task.celery_task_id,
+            level=LogLevel.ERROR,
+            component=__name__,
+            message=f"Trading task execution failed: {type(error).__name__}: {error_message}",
+        )
+
+
+@shared_task(bind=True, name="trading.tasks.stop_trading_task")
+def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
+    """Stop a running trading task.
+
+    This performs the actual stop operation, updating the task to STOPPED status.
+
+    Args:
+        task_id: UUID of the trading task to stop
+        mode: Stop mode ('immediate', 'graceful', 'graceful_close')
+    """
+    from apps.trading.enums import TaskStatus
+
+    try:
+        logger.info(f"Stop task started - task_id={task_id}, mode={mode}")
+        task = TradingTask.objects.get(pk=task_id)
+        logger.info(f"Task loaded - task_id={task_id}, status={task.status}")
+
+        # Handle STOPPING state (normal case)
+        if task.status == TaskStatus.STOPPING:
+            logger.info(f"Current: STOPPING, proceeding with stop - task_id={task_id}")
+            # Revoke the Celery task if it exists
+            if task.celery_task_id:
+                from celery import current_app
+
+                logger.info(
+                    f"Revoking Celery task - task_id={task_id}, "
+                    f"celery_task_id={task.celery_task_id}"
+                )
+                current_app.control.revoke(task.celery_task_id, terminate=True)
+                logger.info(
+                    f"Celery task revoked - task_id={task_id}, celery_task_id={task.celery_task_id}"
+                )
+
+            # Update task status to STOPPED (without completed_at since it didn't complete)
+            logger.info(f"Transitioning: {task.status} -> STOPPED - task_id={task_id}")
+            task.status = TaskStatus.STOPPED
+            task.save(update_fields=["status", "updated_at"])
+            logger.info(f"Current: STOPPED - task_id={task_id}")
+
+            # Update CeleryTaskStatus
+            task_name = "trading.tasks.run_trading_task"
+            instance_key = str(task_id)
+            CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
+                status=CeleryTaskStatus.Status.STOPPED,
+                stopped_at=dj_timezone.now(),
+                last_heartbeat_at=dj_timezone.now(),
+            )
+
+            logger.info(f"Trading task {task_id} stopped successfully (mode={mode})")
+
+        # Handle STOPPED state (race condition - task stopped before stop task ran)
+        elif task.status == TaskStatus.STOPPED:
+            logger.info(f"Already STOPPED - task_id={task_id}, nothing to do")
+
+        else:
+            logger.warning(f"Unexpected state: {task.status} - task_id={task_id}")
+    except TradingTask.DoesNotExist:
+        logger.error(f"Trading task {task_id} not found")
+        raise

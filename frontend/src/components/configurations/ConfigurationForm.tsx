@@ -25,6 +25,7 @@ import { useStrategies } from '../../hooks/useStrategies';
 import { strategiesApi } from '../../services/api';
 import type { StrategyConfigCreateData } from '../../types/configuration';
 import type { StrategyConfig, ConfigSchema } from '../../types/strategy';
+import { STRATEGY_CONFIG_SCHEMAS } from './strategyConfigSchemas';
 
 // Validation schema
 const configurationSchema = z.object({
@@ -50,330 +51,40 @@ interface ConfigurationFormProps {
   isLoading?: boolean;
 }
 
-const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
-  type: 'object',
-  title: 'Floor Strategy Configuration',
-  description:
-    'Configuration for the Floor Strategy with dynamic retracement and ATR-based volatility lock.',
-  properties: {
-    instrument: {
-      type: 'string',
-      title: 'Instrument',
-      description: 'Trading instrument (currency pair) to trade',
-      enum: [
-        'EUR_USD',
-        'GBP_USD',
-        'USD_JPY',
-        'USD_CHF',
-        'AUD_USD',
-        'USD_CAD',
-        'NZD_USD',
-        'EUR_GBP',
-        'EUR_JPY',
-        'GBP_JPY',
-      ],
-      default: 'USD_JPY',
-    },
-    base_lot_size: {
-      type: 'number',
-      title: 'Base Lot Size',
-      description:
-        'Initial lot size for first entry. Actual units = base_lot_size × base_unit_size',
-      default: 1.0,
-      minimum: 0.01,
-    },
-    base_unit_size: {
-      type: 'integer',
-      title: 'Base Unit Size',
-      description:
-        'Multiplier to convert lot size to OANDA units. Default 1000 means 1 lot = 1000 units',
-      default: 1000,
-      minimum: 1,
-    },
-    retracement_lot_mode: {
-      type: 'string',
-      title: 'Retracement Mode',
-      description: 'How position size changes on each retracement entry',
-      enum: ['additive', 'multiplicative'],
-      default: 'additive',
-    },
-    retracement_lot_amount: {
-      type: 'number',
-      title: 'Retracement Amount',
-      description:
-        'Amount to add (additive) or multiply by (multiplicative) on each retracement entry',
-      default: 1.0,
-      minimum: 0.01,
-    },
-    retracement_pips: {
-      type: 'number',
-      title: 'Retracement Pips',
-      description: 'Number of pips retracement required to trigger retracement',
-      default: 30,
-      minimum: 1,
-    },
-    take_profit_pips: {
-      type: 'number',
-      title: 'Take Profit Pips',
-      description: 'Number of pips profit to trigger position close',
-      default: 25,
-      minimum: 1,
-    },
-    max_layers: {
-      type: 'integer',
-      title: 'Maximum Layers',
-      description: 'Maximum number of concurrent layers',
-      default: 3,
-      minimum: 1,
-    },
-    max_retracements_per_layer: {
-      type: 'integer',
-      title: 'Max Retracements Per Layer',
-      description:
-        'Upper bound on how many retracement entries a layer can perform before it must reset or close.',
-      default: 10,
-      minimum: 1,
-    },
-    volatility_lock_multiplier: {
-      type: 'number',
-      title: 'Volatility Lock Multiplier',
-      description:
-        'ATR multiplier to trigger volatility lock (e.g., 5.0 = 5x normal ATR)',
-      default: 5.0,
-      minimum: 1,
-    },
-    retracement_trigger_progression: {
-      type: 'string',
-      title: 'Retracement Trigger Progression',
-      description: 'How retracement triggers progress across layers',
-      enum: ['equal', 'additive', 'exponential', 'inverse'],
-      default: 'additive',
-    },
-    retracement_trigger_increment: {
-      type: 'number',
-      title: 'Retracement Trigger Increment',
-      description:
-        'Value to add (additive) or multiply by (exponential). Not used for equal/inverse',
-      default: 5,
-      minimum: 0,
-      dependsOn: {
-        field: 'retracement_trigger_progression',
-        values: ['additive', 'exponential'],
-      },
-    },
-    lot_size_progression: {
-      type: 'string',
-      title: 'Lot Size Progression',
-      description: 'How lot sizes progress across layers',
-      enum: ['equal', 'additive', 'exponential', 'inverse'],
-      default: 'additive',
-    },
-    lot_size_increment: {
-      type: 'number',
-      title: 'Lot Size Increment',
-      description:
-        'Value to add (additive) or multiply by (exponential). Not used for equal/inverse',
-      default: 0.5,
-      minimum: 0,
-      dependsOn: {
-        field: 'lot_size_progression',
-        values: ['additive', 'exponential'],
-      },
-    },
-    direction_method: {
-      type: 'string',
-      title: 'Direction Decision Method',
-      description:
-        'Technical analysis method to determine trade direction. Tick-based methods use raw tick data. OHLC methods aggregate ticks into candles for longer-term analysis.',
-      enum: [
-        'momentum',
-        'sma_crossover',
-        'ema_crossover',
-        'price_vs_sma',
-        'rsi',
-        'ohlc_sma_crossover',
-        'ohlc_ema_crossover',
-        'ohlc_price_vs_sma',
-      ],
-      default: 'momentum',
-    },
-    entry_signal_lookback_ticks: {
-      type: 'integer',
-      title: 'Momentum Lookback Ticks',
-      description:
-        'Number of ticks to analyze for determining entry direction based on price momentum.',
-      default: 10,
-      minimum: 5,
-      dependsOn: {
-        field: 'direction_method',
-        values: ['momentum'],
-      },
-    },
-    sma_fast_period: {
-      type: 'integer',
-      title: 'SMA Fast Period',
-      description: 'Period for fast Simple Moving Average (in ticks).',
-      default: 10,
-      minimum: 2,
-      dependsOn: {
-        field: 'direction_method',
-        values: ['sma_crossover'],
-      },
-    },
-    sma_slow_period: {
-      type: 'integer',
-      title: 'SMA Slow Period',
-      description: 'Period for slow Simple Moving Average (in ticks).',
-      default: 30,
-      minimum: 5,
-      dependsOn: {
-        field: 'direction_method',
-        values: ['sma_crossover', 'price_vs_sma'],
-      },
-    },
-    ema_fast_period: {
-      type: 'integer',
-      title: 'EMA Fast Period',
-      description: 'Period for fast Exponential Moving Average (in ticks).',
-      default: 12,
-      minimum: 2,
-      dependsOn: {
-        field: 'direction_method',
-        values: ['ema_crossover'],
-      },
-    },
-    ema_slow_period: {
-      type: 'integer',
-      title: 'EMA Slow Period',
-      description: 'Period for slow Exponential Moving Average (in ticks).',
-      default: 26,
-      minimum: 5,
-      dependsOn: {
-        field: 'direction_method',
-        values: ['ema_crossover'],
-      },
-    },
-    rsi_period: {
-      type: 'integer',
-      title: 'RSI Period',
-      description: 'Period for Relative Strength Index calculation (in ticks).',
-      default: 14,
-      minimum: 2,
-      dependsOn: {
-        field: 'direction_method',
-        values: ['rsi'],
-      },
-    },
-    rsi_overbought: {
-      type: 'integer',
-      title: 'RSI Overbought Level',
-      description:
-        'RSI level above which market is overbought (triggers short).',
-      default: 70,
-      minimum: 50,
-      dependsOn: {
-        field: 'direction_method',
-        values: ['rsi'],
-      },
-    },
-    rsi_oversold: {
-      type: 'integer',
-      title: 'RSI Oversold Level',
-      description: 'RSI level below which market is oversold (triggers long).',
-      default: 30,
-      minimum: 0,
-      dependsOn: {
-        field: 'direction_method',
-        values: ['rsi'],
-      },
-    },
-    ohlc_granularity: {
-      type: 'integer',
-      title: 'OHLC Candle Granularity',
-      description:
-        'Candle period for OHLC methods. Values: 300=M5, 900=M15, 1800=M30, 3600=H1, 14400=H4, 86400=D1.',
-      enum: [300, 900, 1800, 3600, 7200, 14400, 28800, 43200, 86400, 604800],
-      default: 3600,
-      dependsOn: {
-        field: 'direction_method',
-        values: [
-          'ohlc_sma_crossover',
-          'ohlc_ema_crossover',
-          'ohlc_price_vs_sma',
-        ],
-      },
-    },
-    ohlc_fast_period: {
-      type: 'integer',
-      title: 'OHLC Fast MA Period',
-      description:
-        'Number of candles for fast moving average in OHLC crossover methods.',
-      default: 10,
-      minimum: 2,
-      dependsOn: {
-        field: 'direction_method',
-        values: ['ohlc_sma_crossover', 'ohlc_ema_crossover'],
-      },
-    },
-    ohlc_slow_period: {
-      type: 'integer',
-      title: 'OHLC Slow MA Period',
-      description: 'Number of candles for slow moving average in OHLC methods.',
-      default: 20,
-      minimum: 5,
-      dependsOn: {
-        field: 'direction_method',
-        values: [
-          'ohlc_sma_crossover',
-          'ohlc_ema_crossover',
-          'ohlc_price_vs_sma',
-        ],
-      },
-    },
-  },
-  required: [
-    'base_lot_size',
-    'retracement_lot_mode',
-    'retracement_lot_amount',
-    'retracement_pips',
-    'take_profit_pips',
-  ],
-};
-
-const STRATEGY_CONFIG_SCHEMAS: Record<string, ConfigSchema> = {
-  floor: FLOOR_STRATEGY_SCHEMA,
-};
-
 // Default parameters for each strategy type
 // These should match the required parameters in the backend strategy schemas
 const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
   floor: {
-    instrument: 'USD_JPY',
     base_lot_size: 1.0,
-    base_unit_size: 1000,
+    lot_unit_size: 1000,
     retracement_lot_mode: 'additive',
     retracement_lot_amount: 1.0,
     retracement_pips: 30,
     take_profit_pips: 25,
     max_layers: 3,
     max_retracements_per_layer: 10,
+    retracement_trigger_progression: 'constant',
+    retracement_trigger_increment: 5.0,
+    take_profit_trigger_progression: 'constant',
+    take_profit_trigger_increment: 5.0,
+    take_profit_pips_mode: 'constant',
+    take_profit_pips_amount: 5.0,
+    entry_signal_lookback_candles: 50,
+    entry_signal_candle_granularity_seconds: 60,
+    allow_duplicate_units: false,
+    hedging_enabled: false,
+    margin_protection_enabled: true,
+    margin_rate: 0.04,
+    margin_cut_start_ratio: 0.6,
+    margin_cut_target_ratio: 0.5,
+    volatility_check_enabled: true,
     volatility_lock_multiplier: 5.0,
-    retracement_trigger_progression: 'additive',
-    retracement_trigger_increment: 5,
-    lot_size_progression: 'additive',
-    lot_size_increment: 0.5,
-    entry_signal_lookback_ticks: 10,
-    direction_method: 'momentum',
-    sma_fast_period: 10,
-    sma_slow_period: 30,
-    ema_fast_period: 12,
-    ema_slow_period: 26,
-    rsi_period: 14,
-    rsi_overbought: 70,
-    rsi_oversold: 30,
-    ohlc_granularity: 3600,
-    ohlc_fast_period: 10,
-    ohlc_slow_period: 20,
+    volatility_unlock_multiplier: 1.5,
+    dynamic_parameter_adjustment_enabled: false,
+    atr_period: 14,
+    atr_baseline_period: 50,
+    market_condition_override_enabled: true,
+    market_condition_spread_limit_pips: 3.0,
   },
   ma_crossover: {
     instrument: 'USD_JPY',
@@ -472,6 +183,12 @@ const ConfigurationForm = ({
   const initialStrategyType = initialData?.strategy_type || '';
   const initialStrategySchema = useMemo<ConfigSchema | undefined>(() => {
     if (!initialStrategyType) return undefined;
+
+    // Prefer the frontend-defined schema (which includes group metadata)
+    // over the API-returned one.
+    const frontendSchema = STRATEGY_CONFIG_SCHEMAS[initialStrategyType];
+    if (frontendSchema) return frontendSchema;
+
     const fromApi = strategies.find((s) => s.id === initialStrategyType)
       ?.config_schema as unknown;
 
@@ -484,7 +201,7 @@ const ConfigurationForm = ({
       return fromApi as ConfigSchema;
     }
 
-    return STRATEGY_CONFIG_SCHEMAS[initialStrategyType];
+    return undefined;
   }, [initialStrategyType, strategies]);
 
   const initialParameters = useMemo<StrategyConfig>(() => {
@@ -538,6 +255,11 @@ const ConfigurationForm = ({
   const strategySchema = useMemo<ConfigSchema | undefined>(() => {
     if (!selectedStrategyType) return undefined;
 
+    // Prefer the frontend-defined schema (which includes group metadata)
+    // over the API-returned one.
+    const frontendSchema = STRATEGY_CONFIG_SCHEMAS[selectedStrategyType];
+    if (frontendSchema) return frontendSchema;
+
     const fromApi = selectedStrategy?.config_schema as unknown;
     if (
       fromApi &&
@@ -548,7 +270,7 @@ const ConfigurationForm = ({
       return fromApi as ConfigSchema;
     }
 
-    return STRATEGY_CONFIG_SCHEMAS[selectedStrategyType];
+    return undefined;
   }, [selectedStrategy, selectedStrategyType]);
 
   const previousStrategyTypeRef = useRef<string>(initialStrategyType || '');
@@ -728,23 +450,33 @@ const ConfigurationForm = ({
     const fieldSchema = strategySchema.properties[key];
     if (!fieldSchema?.dependsOn) return true;
 
-    const dependentRaw = parameters[fieldSchema.dependsOn.field];
-    const dependentValue =
-      dependentRaw === undefined || dependentRaw === null
-        ? ''
-        : String(dependentRaw);
-    if (!fieldSchema.dependsOn.values.includes(dependentValue)) return false;
+    const matchesSingleCondition = (cond: {
+      field: string;
+      values: string[];
+      and?: Array<{ field: string; values: string[] }>;
+    }): boolean => {
+      const dependentRaw = parameters[cond.field];
+      const dependentValue =
+        dependentRaw === undefined || dependentRaw === null
+          ? ''
+          : String(dependentRaw);
+      if (!cond.values.includes(dependentValue)) return false;
+      if (!cond.and || cond.and.length === 0) return true;
+      return cond.and.every((andCond) => {
+        const rawCond = parameters[andCond.field];
+        const valueCond =
+          rawCond === undefined || rawCond === null ? '' : String(rawCond);
+        return andCond.values.includes(valueCond);
+      });
+    };
 
-    if (!fieldSchema.dependsOn.and || fieldSchema.dependsOn.and.length === 0) {
-      return true;
+    if (matchesSingleCondition(fieldSchema.dependsOn)) return true;
+    if (!fieldSchema.dependsOn.or || fieldSchema.dependsOn.or.length === 0) {
+      return false;
     }
-
-    return fieldSchema.dependsOn.and.every((cond) => {
-      const rawCond = parameters[cond.field];
-      const valueCond =
-        rawCond === undefined || rawCond === null ? '' : String(rawCond);
-      return cond.values.includes(valueCond);
-    });
+    return fieldSchema.dependsOn.or.some((orCond) =>
+      matchesSingleCondition(orCond)
+    );
   };
 
   const reviewParameters: Array<[string, unknown]> = strategySchema

@@ -12,7 +12,7 @@ from typing import Any
 from django.apps import apps as django_apps
 
 from apps.market.enums import MarketEventCategory, MarketEventSeverity, MarketEventType
-from apps.market.models import OandaAccount
+from apps.market.models import OandaAccounts
 
 
 class MarketEventService:
@@ -29,7 +29,7 @@ class MarketEventService:
         severity: MarketEventSeverity = MarketEventSeverity.INFO,
         category: MarketEventCategory = MarketEventCategory.MARKET,
         user: Any | None = None,
-        account: OandaAccount | None = None,
+        account: OandaAccounts | None = None,
         instrument: str | None = None,
         details: dict[str, Any] | None = None,
     ) -> None:
@@ -57,7 +57,7 @@ class MarketEventService:
         description: str,
         severity: MarketEventSeverity = MarketEventSeverity.INFO,
         user: Any | None = None,
-        account: OandaAccount | None = None,
+        account: OandaAccounts | None = None,
         instrument: str | None = None,
         details: dict[str, Any] | None = None,
     ) -> None:
@@ -79,7 +79,7 @@ class MarketEventService:
         description: str,
         severity: MarketEventSeverity = MarketEventSeverity.INFO,
         user: Any | None = None,
-        account: OandaAccount | None = None,
+        account: OandaAccounts | None = None,
         instrument: str | None = None,
         details: dict[str, Any] | None = None,
     ) -> None:

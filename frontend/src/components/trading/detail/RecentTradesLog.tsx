@@ -45,7 +45,7 @@ interface Trade {
 }
 
 interface RecentTradesLogProps {
-  taskId: number;
+  taskId: string | number;
   executionStartedAt?: string;
 }
 

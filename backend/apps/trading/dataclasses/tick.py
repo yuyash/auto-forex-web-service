@@ -24,9 +24,6 @@ class Tick:
         bid: Bid price as Decimal
         ask: Ask price as Decimal
         mid: Mid price as Decimal (calculated from bid/ask if not provided)
-
-    Requirements: 9.2, 18.4
-
     Example:
         >>> from datetime import datetime, UTC
         >>> tick = Tick(

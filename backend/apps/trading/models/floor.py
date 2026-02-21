@@ -1,160 +1,129 @@
-"""Floor strategy state models."""
+"""Floor strategy models."""
 
 from decimal import Decimal
+from uuid import uuid4
 
 from django.db import models
 
-from apps.trading.enums import TaskStatus
+from apps.trading.enums import Direction
 
 
-class FloorSide(models.TextChoices):
-    """Side used by the floor strategy for layering."""
+class Layer(models.Model):
+    """
+    Trading layer for Floor strategy.
 
-    LONG = "long", "Long"
-    SHORT = "short", "Short"
-
-
-class FloorStrategyTaskState(models.Model):
-    """Persisted floor strategy state for a task (trading or backtest).
-
-    This model exists to persist strategy state across Celery restarts and task
-    lifecycle operations without relying on JSON/dict blobs.
+    A layer represents a group of positions opened at different price levels
+    as the market retraces. Each layer tracks its positions in FIFO order.
     """
 
-    trading_task = models.OneToOneField(
-        "trading.TradingTask",
-        on_delete=models.CASCADE,
-        related_name="floor_state",
-        null=True,
-        blank=True,
-        help_text="Associated live trading task (if applicable)",
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid4,
+        editable=False,
+        help_text="Unique identifier for this layer",
     )
-    backtest_task = models.OneToOneField(
-        "trading.BacktestTask",
-        on_delete=models.CASCADE,
-        related_name="floor_state",
-        null=True,
-        blank=True,
-        help_text="Associated backtest task (if applicable)",
-    )
-
-    status = models.CharField(
-        max_length=20,
-        default=TaskStatus.CREATED,
-        choices=TaskStatus.choices,
+    task_id = models.UUIDField(
         db_index=True,
-        help_text="Persisted strategy lifecycle status",
+        help_text="UUID of the task this layer belongs to",
     )
-    side = models.CharField(
+    index = models.IntegerField(
+        help_text="Layer index (0, 1, 2, ...)",
+    )
+    direction = models.CharField(
         max_length=10,
-        choices=FloorSide.choices,
-        null=True,
-        blank=True,
-        help_text="Current floor strategy side (long/short)",
+        choices=Direction.choices,
+        help_text="Layer direction (LONG/SHORT)",
     )
-    reference_price = models.DecimalField(
-        max_digits=15,
-        decimal_places=6,
-        null=True,
-        blank=True,
-        help_text="Reference price used to build/anchor floor layers",
+    retracement_count = models.IntegerField(
+        default=0,
+        help_text="Number of retracements in this layer",
     )
-    last_tick_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Timestamp of the last processed tick (best-effort)",
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="Whether the layer is currently active",
     )
-
-    started_at = models.DateTimeField(null=True, blank=True)
-    paused_at = models.DateTimeField(null=True, blank=True)
-    stopped_at = models.DateTimeField(null=True, blank=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        help_text="Timestamp when this layer was created",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Timestamp when this layer was last updated",
+    )
 
     class Meta:
-        db_table = "floor_strategy_task_states"
-        verbose_name = "Floor Strategy Task State"
-        verbose_name_plural = "Floor Strategy Task States"
-        constraints = [
-            models.CheckConstraint(
-                name="floor_state_exactly_one_task",
-                condition=(
-                    (models.Q(trading_task__isnull=False) & models.Q(backtest_task__isnull=True))
-                    | (models.Q(trading_task__isnull=True) & models.Q(backtest_task__isnull=False))
-                ),
-            ),
-        ]
+        db_table = "floor_layers"
+        verbose_name = "Floor Layer"
+        verbose_name_plural = "Floor Layers"
+        ordering = ["task_id", "index"]
         indexes = [
-            models.Index(fields=["status", "updated_at"]),
+            models.Index(fields=["task_id", "is_active", "index"]),
+            models.Index(fields=["task_id", "index"]),
         ]
-
-    def __str__(self) -> str:
-        task = self.trading_task or self.backtest_task
-        task_name = getattr(task, "name", "<unknown>")
-        return f"FloorState({task_name}) - {self.status}"
-
-
-class FloorStrategyLayerState(models.Model):
-    """Persisted per-layer state for the floor strategy."""
-
-    floor_state = models.ForeignKey(
-        "trading.FloorStrategyTaskState",
-        on_delete=models.CASCADE,
-        related_name="layers",
-        help_text="Owning floor strategy task state",
-    )
-
-    layer_index = models.PositiveIntegerField(help_text="0-based layer index")
-    is_open = models.BooleanField(default=False)
-
-    entry_price = models.DecimalField(
-        max_digits=15,
-        decimal_places=6,
-        null=True,
-        blank=True,
-        help_text="Price where this layer was opened",
-    )
-    opened_at = models.DateTimeField(null=True, blank=True)
-    closed_at = models.DateTimeField(null=True, blank=True)
-    close_price = models.DecimalField(
-        max_digits=15,
-        decimal_places=6,
-        null=True,
-        blank=True,
-        help_text="Price where this layer was closed",
-    )
-    units = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal("0"),
-        help_text="Units allocated to this layer",
-    )
-    realized_pnl = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="Realized P&L when the layer is closed",
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "floor_strategy_layer_states"
-        verbose_name = "Floor Strategy Layer State"
-        verbose_name_plural = "Floor Strategy Layer States"
         constraints = [
             models.UniqueConstraint(
-                fields=["floor_state", "layer_index"],
-                name="unique_floor_layer_per_state",
-            )
-        ]
-        indexes = [
-            models.Index(fields=["floor_state", "is_open"]),
+                fields=["task_id", "index"],
+                name="unique_task_layer_index",
+            ),
         ]
 
     def __str__(self) -> str:
-        floor_state_id = getattr(self, "floor_state_id", None)
-        return f"FloorLayer(state={floor_state_id}, idx={self.layer_index}, open={self.is_open})"
+        status = "ACTIVE" if self.is_active else "CLOSED"
+        return f"Layer {self.index} ({status}) - {self.direction} - {self.retracement_count} retracements"
+
+    @property
+    def total_units(self) -> Decimal:
+        """Get total units across all positions in this layer."""
+        from apps.trading.models.positions import Position
+
+        positions = Position.objects.filter(
+            task_id=self.task_id,
+            layer_index=self.index,
+            is_open=True,
+        )
+        return sum((Decimal(str(p.units)) for p in positions), Decimal("0"))
+
+    @property
+    def average_entry_price(self) -> Decimal:
+        """Calculate weighted average entry price across all positions."""
+        from apps.trading.models.positions import Position
+
+        positions = Position.objects.filter(
+            task_id=self.task_id,
+            layer_index=self.index,
+            is_open=True,
+        )
+
+        if not positions.exists():
+            return Decimal("0")
+
+        total_cost = sum(
+            (p.entry_price * Decimal(str(abs(p.units))) for p in positions),
+            Decimal("0"),
+        )
+        total_units = self.total_units
+
+        return total_cost / total_units if total_units > 0 else Decimal("0")
+
+    @property
+    def position_count(self) -> int:
+        """Get number of open positions in this layer."""
+        from apps.trading.models.positions import Position
+
+        return Position.objects.filter(
+            task_id=self.task_id,
+            layer_index=self.index,
+            is_open=True,
+        ).count()
+
+    def close(self) -> None:
+        """Mark layer as inactive."""
+        self.is_active = False
+        self.save(update_fields=["is_active", "updated_at"])
+
+    def increment_retracement(self) -> None:
+        """Increment retracement count."""
+        self.retracement_count += 1
+        self.save(update_fields=["retracement_count", "updated_at"])

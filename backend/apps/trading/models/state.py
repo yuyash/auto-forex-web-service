@@ -1,75 +1,92 @@
-"""Execution state snapshot models."""
+"""Execution state persistence model."""
+
+from __future__ import annotations
 
 from django.db import models
 
+from apps.trading.models.base import UUIDModel
 
-class ExecutionStateSnapshot(models.Model):
-    """Periodic state snapshots for task execution resumability.
 
-    This model stores snapshots of execution state at regular intervals,
-    enabling tasks to resume from where they left off after stopping or
-    failing. Each snapshot includes the complete strategy state, account
-    balance, open positions, and progress tracking.
+class ExecutionState(UUIDModel):
+    """Persistent storage for execution state.
 
-    Requirements: 4.1, 4.2
+    This model stores the complete execution state for a task, including
+    strategy-specific state, current balance, and progress tracking.
+    It replaces the result_data JSON field and FloorStrategyTaskState model.
+
+    The model uses a polymorphic reference to tasks (BacktestTask or TradingTask)
+    via task_type and task_id fields, allowing it to work with both task types.
+
+    Attributes:
+        task_type: Type of task ("backtest" or "trading")
+        task_id: UUID of the task
+        celery_task_id: Celery task ID for tracking
+        strategy_state: Strategy-specific state as JSON
+        current_balance: Current account balance
+        ticks_processed: Number of ticks processed
+        last_tick_timestamp: Timestamp of last processed tick
+        created_at: When this state was first created (from UUIDModel)
+        updated_at: When this state was last updated (from UUIDModel)
     """
 
-    execution = models.ForeignKey(
-        "trading.TaskExecution",
-        on_delete=models.CASCADE,
-        related_name="state_snapshots",
-        help_text="Associated task execution",
+    task_type = models.CharField(
+        max_length=32,
+        db_index=True,
+        help_text="Type of task: 'backtest' or 'trading'",
     )
-    sequence = models.IntegerField(
-        help_text="Monotonic sequence number for this execution",
+    task_id = models.UUIDField(
+        db_index=True,
+        help_text="UUID of the associated task",
     )
-    timestamp = models.DateTimeField(
-        auto_now_add=True,
-        help_text="Timestamp when the snapshot was created",
+    celery_task_id = models.CharField(
+        max_length=255,
+        db_index=True,
+        help_text="Celery task ID for tracking execution",
     )
+
+    # Execution state fields
     strategy_state = models.JSONField(
         default=dict,
-        help_text="Strategy-specific state dictionary",
+        blank=True,
+        help_text="Strategy-specific state as JSON",
     )
     current_balance = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
+        max_digits=20,
+        decimal_places=10,
         help_text="Current account balance",
-    )
-    open_positions = models.JSONField(
-        default=list,
-        help_text="List of open position dictionaries",
     )
     ticks_processed = models.IntegerField(
         default=0,
         help_text="Number of ticks processed so far",
     )
-    last_tick_timestamp = models.CharField(
-        max_length=64,
+    last_tick_timestamp = models.DateTimeField(
+        null=True,
         blank=True,
-        default="",
-        help_text="ISO format timestamp of last processed tick",
+        help_text="Timestamp of the last processed tick",
     )
-    metrics = models.JSONField(
-        default=dict,
-        help_text="Current performance metrics dictionary",
+    last_tick_price = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        null=True,
+        blank=True,
+        help_text="Mid price of the last processed tick",
     )
 
     class Meta:
-        db_table = "execution_state_snapshots"
-        verbose_name = "Execution State Snapshot"
-        verbose_name_plural = "Execution State Snapshots"
+        db_table = "execution_state"
+        verbose_name = "Execution State"
+        verbose_name_plural = "Execution States"
+        indexes = [
+            models.Index(fields=["task_type", "task_id", "celery_task_id"]),
+            models.Index(fields=["task_type", "task_id"]),
+            models.Index(fields=["celery_task_id"]),
+        ]
         constraints = [
             models.UniqueConstraint(
-                fields=["execution", "sequence"],
-                name="unique_execution_state_snapshot",
+                fields=["task_type", "task_id", "celery_task_id"],
+                name="unique_task_celery_execution_state",
             )
         ]
-        indexes = [
-            models.Index(fields=["execution", "sequence"]),
-            models.Index(fields=["execution", "timestamp"]),
-        ]
-        ordering = ["-sequence"]
 
     def __str__(self) -> str:
-        return f"StateSnapshot(exec={self.execution_id}, seq={self.sequence})"  # type: ignore[attr-defined]
+        return f"ExecutionState({self.task_type}:{self.task_id}, ticks={self.ticks_processed})"

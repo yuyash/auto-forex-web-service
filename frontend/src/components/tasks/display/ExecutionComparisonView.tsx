@@ -26,8 +26,8 @@ import type { TaskExecution } from '../../../types/execution';
 
 interface ExecutionComparisonViewProps {
   executions: TaskExecution[];
-  selectedExecutionIds: number[];
-  onSelectionChange: (executionIds: number[]) => void;
+  selectedExecutionIds: string[];
+  onSelectionChange: (executionIds: string[]) => void;
   onClose?: () => void;
 }
 
@@ -46,9 +46,11 @@ export function ExecutionComparisonView({
       .filter((exec) => exec.metrics); // Only include executions with metrics
   }, [executions, selectedExecutionIds]);
 
-  const handleToggleExecution = (executionId: number) => {
+  const handleToggleExecution = (executionId: string) => {
     if (selectedExecutionIds.includes(executionId)) {
-      onSelectionChange(selectedExecutionIds.filter((id) => id !== executionId));
+      onSelectionChange(
+        selectedExecutionIds.filter((id) => id !== executionId)
+      );
     } else {
       if (selectedExecutionIds.length < 5) {
         // Limit to 5 executions
@@ -196,7 +198,8 @@ export function ExecutionComparisonView({
           )}
         </Box>
         <Alert severity="info">
-          Select 2-5 executions to compare their performance metrics side-by-side.
+          Select 2-5 executions to compare their performance metrics
+          side-by-side.
         </Alert>
       </Paper>
     );
@@ -273,11 +276,21 @@ export function ExecutionComparisonView({
                   />
                 </Box>
                 <StatusBadge status={execution.status} size="small" />
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                  sx={{ mt: 1 }}
+                >
                   {formatDate(execution.started_at)}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  Duration: {formatDuration(execution.started_at, execution.completed_at)}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                >
+                  Duration:{' '}
+                  {formatDuration(execution.started_at, execution.completed_at)}
                 </Typography>
               </CardContent>
             </Card>
@@ -307,7 +320,10 @@ export function ExecutionComparisonView({
           <TableBody>
             {/* Basic Info Section */}
             <TableRow>
-              <TableCell colSpan={selectedExecutions.length + 1} sx={{ bgcolor: 'grey.100' }}>
+              <TableCell
+                colSpan={selectedExecutions.length + 1}
+                sx={{ bgcolor: 'grey.100' }}
+              >
                 <Typography variant="subtitle2" fontWeight="bold">
                   Basic Information
                 </Typography>
@@ -336,7 +352,10 @@ export function ExecutionComparisonView({
               {selectedExecutions.map((execution) => (
                 <TableCell key={execution.id} align="center">
                   <Typography variant="body2">
-                    {formatDuration(execution.started_at, execution.completed_at)}
+                    {formatDuration(
+                      execution.started_at,
+                      execution.completed_at
+                    )}
                   </Typography>
                 </TableCell>
               ))}
@@ -344,27 +363,35 @@ export function ExecutionComparisonView({
 
             {/* Performance Metrics Section */}
             <TableRow>
-              <TableCell colSpan={selectedExecutions.length + 1} sx={{ bgcolor: 'grey.100' }}>
+              <TableCell
+                colSpan={selectedExecutions.length + 1}
+                sx={{ bgcolor: 'grey.100' }}
+              >
                 <Typography variant="subtitle2" fontWeight="bold">
                   Performance Metrics
                 </Typography>
               </TableCell>
             </TableRow>
             {displayedRows.map((row, index) => {
-              const values = selectedExecutions.map((exec) => row.getValue(exec));
+              const values = selectedExecutions.map((exec) =>
+                row.getValue(exec)
+              );
               const allSame = areValuesSame(values);
 
               return (
                 <TableRow
                   key={index}
                   sx={{
-                    bgcolor: allSame && showOnlyDifferences ? 'grey.50' : 'inherit',
+                    bgcolor:
+                      allSame && showOnlyDifferences ? 'grey.50' : 'inherit',
                   }}
                 >
                   <TableCell>{row.label}</TableCell>
                   {selectedExecutions.map((execution) => {
                     const value = row.getValue(execution);
-                    const isPositive = row.isPositive ? row.isPositive(value) : undefined;
+                    const isPositive = row.isPositive
+                      ? row.isPositive(value)
+                      : undefined;
 
                     return (
                       <TableCell key={execution.id} align="center">
@@ -375,7 +402,9 @@ export function ExecutionComparisonView({
                             color={isPositive ? 'success' : 'error'}
                           />
                         ) : (
-                          <Typography variant="body2">{row.format(value)}</Typography>
+                          <Typography variant="body2">
+                            {row.format(value)}
+                          </Typography>
                         )}
                       </TableCell>
                     );

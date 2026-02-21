@@ -1,26 +1,38 @@
 """Strategy configuration models."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.db import models
 
 from apps.trading.enums import StrategyType
+from apps.trading.models.base import UUIDModel
+
+if TYPE_CHECKING:
+    from apps.trading.models import BacktestTask, TradingTask
 
 
-class StrategyConfigManager(models.Manager["StrategyConfig"]):
-    """Custom manager for StrategyConfig model."""
+class StrategyConfigurationManager(models.Manager["StrategyConfiguration"]):
+    """Custom manager for StrategyConfiguration model."""
 
-    def create_for_user(self, user: Any, **kwargs: Any) -> "StrategyConfig":
+    def create_for_user(self, user: Any, **kwargs: Any) -> "StrategyConfiguration":
         return self.create(user=user, **kwargs)
 
-    def for_user(self, user: Any) -> models.QuerySet["StrategyConfig"]:
+    def for_user(self, user: Any) -> models.QuerySet["StrategyConfiguration"]:
         return self.filter(user=user)
 
 
-class StrategyConfig(models.Model):
-    """Reusable strategy configuration used by TradingTask and BacktestTask."""
+class StrategyConfiguration(UUIDModel):
+    """Reusable strategy configuration used by TradingTask and BacktestTask.
 
-    objects = StrategyConfigManager()
+    Inherits UUID primary key and timestamps from UUIDModel.
+    """
+
+    objects = StrategyConfigurationManager()
+
+    # Type hints for reverse relations (created by ForeignKey related_name)
+    if TYPE_CHECKING:
+        backtest_tasks: models.Manager["BacktestTask"]
+        trading_tasks: models.Manager["TradingTask"]
 
     user = models.ForeignKey(
         "accounts.User",
@@ -45,17 +57,9 @@ class StrategyConfig(models.Model):
         default="",
         help_text="Optional description of this configuration",
     )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        help_text="Timestamp when the configuration was created",
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        help_text="Timestamp when the configuration was last updated",
-    )
 
     class Meta:
-        db_table = "strategy_configs"
+        db_table = "strategy_configurations"
         verbose_name = "Strategy Configuration"
         verbose_name_plural = "Strategy Configurations"
         ordering = ["-created_at"]
@@ -69,6 +73,42 @@ class StrategyConfig(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.strategy_type})"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert configuration to dictionary.
+
+        Returns:
+            Dictionary representation of the configuration
+        """
+        return {
+            "id": str(self.id),
+            "user_id": self.user.pk,
+            "name": self.name,
+            "strategy_type": self.strategy_type,
+            "parameters": self.parameters,
+            "description": self.description,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], user: Any) -> "StrategyConfiguration":
+        """Create configuration from dictionary.
+
+        Args:
+            data: Dictionary containing configuration data
+            user: User instance to associate with the configuration
+
+        Returns:
+            StrategyConfiguration instance
+        """
+        return cls(
+            user=user,
+            name=data["name"],
+            strategy_type=data["strategy_type"],
+            parameters=data.get("parameters", {}),
+            description=data.get("description", ""),
+        )
 
     @property
     def strategy_type_enum(self) -> "StrategyType":
@@ -91,8 +131,28 @@ class StrategyConfig(models.Model):
         return self.parameters or {}
 
     def is_in_use(self) -> bool:
+        """Check if configuration is referenced by any tasks.
+
+        Returns:
+            True if any trading or backtest tasks reference this configuration,
+            False otherwise.
+        """
+        from apps.trading.models import BacktestTask, TradingTask
+
+        return (
+            TradingTask.objects.filter(config=self).exists()
+            or BacktestTask.objects.filter(config=self).exists()
+        )
+
+    def has_active_tasks(self) -> bool:
+        """Check if configuration is used by any currently running tasks.
+
+        Returns:
+            True if any running tasks reference this configuration,
+            False otherwise.
+        """
         from apps.trading.enums import TaskStatus
-        from apps.trading.models.tasks import BacktestTask, TradingTask
+        from apps.trading.models import BacktestTask, TradingTask
 
         return (
             TradingTask.objects.filter(
@@ -106,8 +166,12 @@ class StrategyConfig(models.Model):
         )
 
     def validate_parameters(self) -> tuple[bool, str | None]:
-        """Validate parameters against the strategy registry schema (best-effort)."""
-        from apps.trading.services.registry import registry
+        """Validate parameters against the strategy registry schema (best-effort).
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        from apps.trading.strategies.registry import registry
 
         if not registry.is_registered(self.strategy_type):
             return False, f"Strategy type '{self.strategy_type}' is not registered"

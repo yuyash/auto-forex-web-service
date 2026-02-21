@@ -3,9 +3,9 @@ import { TaskStatus, DataSource } from './common';
 import type { ExecutionSummary } from './execution';
 
 export interface BacktestTask {
-  id: number;
+  id: string;
   user_id: number;
-  config_id: number;
+  config_id: string;
   config_name: string;
   strategy_type: string;
   name: string;
@@ -19,14 +19,23 @@ export interface BacktestTask {
   instrument: string;
   trading_mode?: 'netting' | 'hedging';
   status: TaskStatus;
+  progress?: number; // Progress percentage (0-100) for running tasks
+  current_tick?: {
+    timestamp: string;
+    price: string | null;
+  } | null;
   sell_at_completion: boolean;
   latest_execution?: ExecutionSummary;
+  started_at?: string;
+  completed_at?: string;
+  celery_task_id?: string;
+  error_message?: string;
   created_at: string;
   updated_at: string;
 }
 
 export interface BacktestTaskCreateData {
-  config_id: number;
+  config: string;
   name: string;
   description?: string;
   data_source: DataSource;
@@ -42,7 +51,7 @@ export interface BacktestTaskCreateData {
 
 // Form data type - matches the validation schema (after transformation)
 export interface BacktestTaskFormData {
-  config_id: number;
+  config_id: string;
   name: string;
   description?: string;
   data_source: DataSource;
@@ -57,7 +66,7 @@ export interface BacktestTaskFormData {
 }
 
 export interface BacktestTaskUpdateData {
-  config?: number;
+  config?: string;
   name?: string;
   description?: string;
   data_source?: DataSource;
@@ -76,7 +85,7 @@ export interface BacktestTaskListParams {
   page_size?: number;
   search?: string;
   status?: TaskStatus;
-  config_id?: number;
+  config_id?: string;
   strategy_type?: string;
   ordering?: string;
 }
@@ -89,7 +98,7 @@ export interface BacktestTaskCopyData {
  * Live/intermediate results during backtest execution
  */
 export interface BacktestLiveResults {
-  task_id: number;
+  task_id: string;
   has_data: boolean;
   message?: string;
   day_date?: string;

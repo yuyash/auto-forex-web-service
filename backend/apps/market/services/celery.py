@@ -116,7 +116,7 @@ class CeleryTaskService:
             .values_list("status", flat=True)
             .first()
         )
-        self._cached_should_stop = status == CeleryTaskStatus.Status.STOP_REQUESTED
+        self._cached_should_stop = status == CeleryTaskStatus.Status.STOPPING
         self._last_stop_check_monotonic = now_monotonic
         return self._cached_should_stop
 

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
-from logging import getLogger
+from logging import Logger, getLogger
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -22,11 +22,11 @@ from django.conf import settings
 from v20.transaction import StopLossDetails, TakeProfitDetails
 
 from apps.market.enums import MarketEventSeverity, MarketEventType
-from apps.market.models import OandaAccount, TickData
+from apps.market.models import OandaAccounts, TickData
 from apps.market.services.compliance import ComplianceService, ComplianceViolationError
 from apps.market.services.events import MarketEventService
 
-logger = getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 class OrderType(str, Enum):
@@ -206,48 +206,71 @@ class OandaService:
 
     Provides methods to fetch orders, positions, and account details
     directly from OANDA without database caching.
+
+    Supports dry-run mode for backtesting and simulation.
     """
 
-    def __init__(self, account: OandaAccount):
+    def __init__(self, account: OandaAccounts | None = None, dry_run: bool = False):
         """
         Initialize OANDA API client.
 
         Args:
-            account: OandaAccount instance with API credentials
+            account: OandaAccounts instance with API credentials (optional for dry_run mode)
+            dry_run: If True, simulate API calls without making actual requests
         """
         self.account = account
-        rest_hostname = str(account.api_hostname)
-        stream_hostname = self._to_stream_hostname(rest_hostname)
-
-        self.api = v20.Context(
-            hostname=rest_hostname,
-            token=account.get_api_token(),
-            poll_timeout=10,
-        )
-
-        # v20 Context uses a single hostname for both REST and streaming.
-        # OANDA streams live on a different hostname (stream-*) than REST (api-*).
-        # If we use the REST host for pricing.stream, OANDA returns 404.
-        self.stream_hostname = stream_hostname
-        self.stream_api = v20.Context(
-            hostname=stream_hostname,
-            token=account.get_api_token(),
-            stream_timeout=int(getattr(settings, "OANDA_STREAM_TIMEOUT", 30)),
-            poll_timeout=10,
-        )
-
+        self.dry_run = dry_run
         self.max_retries = 3
         self.retry_delay = 0.5  # seconds
-        self.compliance_manager = ComplianceService(account)
         self.event_service = MarketEventService()
         self._account_resource_cache: dict[str, Any] | None = None
 
-        logger.info(
-            "OANDA service initialized (account_id=%s, api_hostname=%s, stream_hostname=%s)",
-            str(getattr(account, "account_id", "")),
-            rest_hostname,
-            stream_hostname,
-        )
+        # Dry-run state
+        self._dry_run_order_counter = 0
+        self._dry_run_positions: dict[str, Position] = {}
+
+        # Only initialize API connections if we have an account
+        # In dry-run mode without an account, we skip all API calls
+        if account is not None:
+            rest_hostname = str(account.api_hostname)
+            stream_hostname = self._to_stream_hostname(rest_hostname)
+
+            self.api = v20.Context(
+                hostname=rest_hostname,
+                token=account.get_api_token(),
+                poll_timeout=10,
+            )
+
+            # v20 Context uses a single hostname for both REST and streaming.
+            # OANDA streams live on a different hostname (stream-*) than REST (api-*).
+            # If we use the REST host for pricing.stream, OANDA returns 404.
+            self.stream_hostname = stream_hostname
+            self.stream_api = v20.Context(
+                hostname=stream_hostname,
+                token=account.get_api_token(),
+                stream_timeout=int(getattr(settings, "OANDA_STREAM_TIMEOUT", 30)),
+                poll_timeout=10,
+            )
+
+            self.compliance_manager = ComplianceService(account)
+
+            logger.info(
+                "OANDA service initialized (account_id=%s, api_hostname=%s, stream_hostname=%s, dry_run=%s)",
+                str(getattr(account, "account_id", "")),
+                rest_hostname,
+                stream_hostname,
+                dry_run,
+            )
+        else:
+            # No account - dry-run only mode
+            self.api = None
+            self.stream_api = None
+            self.stream_hostname = None
+            self.compliance_manager = None
+
+            logger.info(
+                "OANDA service initialized in dry-run mode without account (simulation only)"
+            )
 
     @staticmethod
     def _to_stream_hostname(hostname: str) -> str:
@@ -301,8 +324,12 @@ class OandaService:
                 maybe_dict = as_dict()
                 if isinstance(maybe_dict, dict):
                     return maybe_dict
-            except Exception:
-                pass
+            except Exception as exc:  # nosec B110
+                # Log conversion failure but continue with fallback
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.debug("Failed to convert account data using .dict(): %s", exc)
 
         try:
             return dict(vars(account_data))
@@ -315,6 +342,8 @@ class OandaService:
         This is used to expose broker flags/parameters (e.g. `hedgingEnabled`) and
         to avoid repeated network calls by caching within this service instance.
         """
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
 
         if not refresh and self._account_resource_cache is not None:
             return self._account_resource_cache
@@ -334,15 +363,19 @@ class OandaService:
             self._account_resource_cache = account_resource
             return account_resource
         except Exception as e:
+            account_id = self.account.account_id if self.account else "unknown"
             logger.error(
                 "Error fetching account resource for %s: %s",
-                self.account.account_id,
+                account_id,
                 str(e),
                 exc_info=True,
             )
             raise OandaAPIError(f"Error fetching account resource: {str(e)}") from e
 
     def cancel_order(self, order: Order) -> CancelledOrder:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             response = self.api.order.cancel(self.account.account_id, order.order_id)
             if response.status not in (200, 201):
@@ -382,16 +415,20 @@ class OandaService:
             )
 
         except Exception as e:
+            account_id = self.account.account_id if self.account else "unknown"
             logger.error(
                 "Error cancelling order %s for %s: %s",
                 order.order_id,
-                self.account.account_id,
+                account_id,
                 str(e),
                 exc_info=True,
             )
             raise OandaAPIError(f"Error cancelling order: {str(e)}") from e
 
     def close_trade(self, trade: OpenTrade, units: Decimal | None = None) -> MarketOrder:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             kwargs: dict[str, Any] = {"units": str(units) if units else "ALL"}
             response = self.api.trade.close(self.account.account_id, trade.trade_id, **kwargs)
@@ -426,16 +463,22 @@ class OandaService:
             )
 
         except Exception as e:
+            account_id = self.account.account_id if self.account else "unknown"
             logger.error(
                 "Error closing trade %s for %s: %s",
                 trade.trade_id,
-                self.account.account_id,
+                account_id,
                 str(e),
                 exc_info=True,
             )
             raise OandaAPIError(f"Error closing trade: {str(e)}") from e
 
-    def close_position(self, position: Position, units: Decimal | None = None) -> MarketOrder:
+    def close_position(
+        self,
+        position: Position,
+        units: Decimal | None = None,
+        override_price: Decimal | None = None,
+    ) -> MarketOrder:
         """
         Close an open position for an instrument.
 
@@ -445,10 +488,20 @@ class OandaService:
         Args:
             position: A Position returned by get_open_positions().
             units: Optional number of units to close (positive Decimal). If omitted, closes ALL.
+            override_price: Optional price to use for dry-run close instead of latest tick data.
 
         Returns:
             MarketOrder representing the closeout fill.
         """
+        # Dry-run mode: simulate position close
+        if self.dry_run:
+            return self._simulate_position_close(position, units, override_price=override_price)
+
+        # Require account for live trading
+        if self.account is None:
+            raise OandaAPIError("Account required for live trading")
+        if self.api is None:
+            raise OandaAPIError("API client not initialized")
 
         try:
             if units is not None:
@@ -522,6 +575,8 @@ class OandaService:
             raise OandaAPIError(f"Error closing position: {str(e)}") from e
 
     def create_limit_order(self, request: LimitOrderRequest) -> LimitOrder:
+        assert self.account is not None, "Account not initialized"
+
         direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
         abs_units = abs(request.units)
 
@@ -587,9 +642,23 @@ class OandaService:
             create_time=created_time,
         )
 
-    def create_market_order(self, request: MarketOrderRequest) -> MarketOrder:
+    def create_market_order(
+        self,
+        request: MarketOrderRequest,
+        override_price: Decimal | None = None,
+    ) -> MarketOrder:
         direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
         abs_units = abs(request.units)
+
+        # Dry-run mode: simulate order execution
+        if self.dry_run:
+            return self._simulate_market_order(
+                request, direction, abs_units, override_price=override_price
+            )
+
+        # Require account for live trading
+        if self.account is None:
+            raise OandaAPIError("Account required for live trading")
 
         order_request = {
             "instrument": request.instrument,
@@ -684,6 +753,8 @@ class OandaService:
         raise OandaAPIError(f"Market order rejected: {reject_reason_str}")
 
     def create_stop_order(self, request: StopOrderRequest) -> StopOrder:
+        assert self.account is not None, "Account not initialized"
+
         direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
         abs_units = abs(request.units)
 
@@ -789,6 +860,8 @@ class OandaService:
         Raises:
             OandaAPIError: If API call fails
         """
+        assert self.account is not None, "Account not initialized"
+
         try:
             account_data = self.get_account_resource()
 
@@ -830,14 +903,16 @@ class OandaService:
         Raises:
             OandaAPIError: If the API call fails
         """
+        assert self.account is not None, "Account not initialized"
 
         try:
             account_data = self.get_account_resource()
             return bool(account_data.get("hedgingEnabled", False))
         except Exception as e:
+            account_id = self.account.account_id if self.account else "unknown"
             logger.error(
                 "Error fetching account hedging mode for %s: %s",
-                self.account.account_id,
+                account_id,
                 str(e),
                 exc_info=True,
             )
@@ -861,6 +936,9 @@ class OandaService:
         Raises:
             OandaAPIError: If API call fails
         """
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             response = self.api.position.list_open(self.account.account_id)
 
@@ -921,6 +999,9 @@ class OandaService:
         Raises:
             OandaAPIError: If API call fails
         """
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             response = self.api.trade.list_open(self.account.account_id)
 
@@ -969,6 +1050,9 @@ class OandaService:
             raise OandaAPIError(f"Error fetching trades: {str(e)}") from e
 
     def get_pending_orders(self, instrument: str | None = None) -> list[PendingOrder]:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             response = self.api.order.list_pending(self.account.account_id)
             if response.status != 200:
@@ -994,6 +1078,9 @@ class OandaService:
     def get_order_history(
         self, instrument: str | None = None, count: int = 50, state: str = "ALL"
     ) -> list[Order]:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             kwargs: dict[str, Any] = {"count": count, "state": state}
             if instrument:
@@ -1018,6 +1105,9 @@ class OandaService:
             raise OandaAPIError(f"Error fetching order history: {str(e)}") from e
 
     def get_order(self, order_id: str) -> Order:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             response = self.api.order.get(self.account.account_id, order_id)
             if response.status != 200:
@@ -1040,6 +1130,9 @@ class OandaService:
         page_size: int = 100,
         transaction_type: str | None = None,
     ) -> list[Transaction]:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         try:
             kwargs: dict[str, Any] = {"pageSize": page_size}
             if from_time:
@@ -1082,13 +1175,19 @@ class OandaService:
                         for txn in page_response.body.get("transactions", []):
                             if isinstance(txn, dict):
                                 transactions.append(self._parse_transaction(txn))
-                except Exception:  # pylint: disable=broad-exception-caught
+                except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B112
+                    # Log parsing error but continue with next page
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.warning("Failed to parse transaction page: %s", exc)
                     continue
             return transactions
         except Exception as e:
+            account_id = self.account.account_id if self.account else "unknown"
             logger.error(
                 "Error fetching transactions for %s: %s",
-                self.account.account_id,
+                account_id,
                 str(e),
                 exc_info=True,
             )
@@ -1101,6 +1200,9 @@ class OandaService:
         snapshot: bool = True,
         include_heartbeats: bool = False,
     ) -> Iterator[TickData]:
+        assert self.stream_api is not None, "Stream API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         instruments_param = instruments if isinstance(instruments, str) else ",".join(instruments)
 
         response = self.stream_api.pricing.stream(
@@ -1235,6 +1337,9 @@ class OandaService:
         )
 
     def _execute_with_retry(self, order_data: dict[str, Any]) -> Any:
+        assert self.api is not None, "API client not initialized"
+        assert self.account is not None, "Account not initialized"
+
         last_error: str | None = None
 
         for attempt in range(self.max_retries):
@@ -1312,7 +1417,7 @@ class OandaService:
             average_price=avg_price,
             unrealized_pnl=unrealized_pl,
             trade_ids=[str(t) for t in trade_ids],
-            account_id=str(self.account.account_id),
+            account_id=str(self.account.account_id) if self.account else "",
         )
 
     def _parse_iso_datetime(self, value: Any) -> datetime | None:
@@ -1423,6 +1528,10 @@ class OandaService:
             return None
 
     def _validate_compliance(self, order_request: dict[str, Any]) -> None:
+        # Skip compliance checks if no account (dry-run only mode)
+        if self.account is None or self.compliance_manager is None:
+            return
+
         is_valid, error_message = self.compliance_manager.validate_order(order_request)
 
         if not is_valid:
@@ -1442,3 +1551,170 @@ class OandaService:
             )
 
             raise ComplianceViolationError(error_message)
+
+    def _simulate_market_order(
+        self,
+        request: MarketOrderRequest,
+        direction: OrderDirection,
+        abs_units: Decimal,
+        override_price: Decimal | None = None,
+    ) -> MarketOrder:
+        """Simulate market order execution for dry-run mode."""
+        from apps.market.models import TickData as TickDataModel
+
+        self._dry_run_order_counter += 1
+        order_id = f"DRY-{self._dry_run_order_counter}"
+        now = datetime.now(UTC)
+
+        # Use override price if provided (e.g. from strategy event entry_price)
+        if override_price is not None:
+            fill_price = override_price
+        else:
+            # Get latest tick data for the instrument to simulate fill price
+            try:
+                latest_tick = (
+                    TickDataModel.objects.filter(instrument=request.instrument)
+                    .order_by("-timestamp")
+                    .first()
+                )
+                if latest_tick:
+                    # Use bid for sells, ask for buys
+                    fill_price = (
+                        latest_tick.ask if direction == OrderDirection.LONG else latest_tick.bid
+                    )
+                else:
+                    # Fallback to a reasonable default if no tick data
+                    fill_price = Decimal("1.0000")
+            except Exception:
+                fill_price = Decimal("1.0000")
+
+        # Update dry-run position tracking
+        position_key = f"{request.instrument}_{direction.value}"
+        account_id = str(self.account.account_id) if self.account else "DRY-RUN-ACCOUNT"
+
+        if position_key in self._dry_run_positions:
+            existing = self._dry_run_positions[position_key]
+            # Update weighted average price
+            total_units = existing.units + abs_units
+            new_avg_price = (
+                existing.average_price * existing.units + fill_price * abs_units
+            ) / total_units
+            self._dry_run_positions[position_key] = Position(
+                instrument=request.instrument,
+                direction=direction,
+                units=total_units,
+                average_price=new_avg_price,
+                unrealized_pnl=Decimal("0"),
+                trade_ids=[order_id],
+                account_id=account_id,
+            )
+        else:
+            self._dry_run_positions[position_key] = Position(
+                instrument=request.instrument,
+                direction=direction,
+                units=abs_units,
+                average_price=fill_price,
+                unrealized_pnl=Decimal("0"),
+                trade_ids=[order_id],
+                account_id=account_id,
+            )
+
+        logger.info(
+            "[DRY-RUN] Market order simulated: %s %s %s @ %s",
+            direction.value,
+            abs_units,
+            request.instrument,
+            fill_price,
+        )
+
+        return MarketOrder(
+            order_id=order_id,
+            instrument=str(request.instrument),
+            order_type=OrderType.MARKET,
+            direction=direction,
+            units=abs_units,
+            price=fill_price,
+            state=OrderState.FILLED,
+            time_in_force="FOK",
+            create_time=now,
+            fill_time=now,
+        )
+
+    def _simulate_position_close(
+        self,
+        position: Position,
+        units: Decimal | None,
+        override_price: Decimal | None = None,
+    ) -> MarketOrder:
+        """Simulate position close for dry-run mode."""
+        from apps.market.models import TickData as TickDataModel
+
+        self._dry_run_order_counter += 1
+        order_id = f"DRY-CLOSE-{self._dry_run_order_counter}"
+        now = datetime.now(UTC)
+
+        # Use override price if provided (e.g. from strategy event exit_price)
+        if override_price is not None:
+            close_price = override_price
+        else:
+            # Get latest tick data for close price
+            try:
+                latest_tick = (
+                    TickDataModel.objects.filter(instrument=position.instrument)
+                    .order_by("-timestamp")
+                    .first()
+                )
+                if latest_tick:
+                    # Use opposite side for closing: bid for long close, ask for short close
+                    close_price = (
+                        latest_tick.bid
+                        if position.direction == OrderDirection.LONG
+                        else latest_tick.ask
+                    )
+                else:
+                    close_price = Decimal("1.0000")
+            except Exception:
+                close_price = Decimal("1.0000")
+
+        # Determine closed units even when the position is not tracked locally.
+        close_units = position.units if units is None else min(units, position.units)
+
+        # Update dry-run position tracking
+        position_key = f"{position.instrument}_{position.direction.value}"
+        if position_key in self._dry_run_positions:
+            if close_units >= position.units:
+                # Close entire position
+                del self._dry_run_positions[position_key]
+            else:
+                # Partial close
+                remaining_units = position.units - close_units
+                self._dry_run_positions[position_key] = Position(
+                    instrument=position.instrument,
+                    direction=position.direction,
+                    units=remaining_units,
+                    average_price=position.average_price,
+                    unrealized_pnl=Decimal("0"),
+                    trade_ids=position.trade_ids,
+                    account_id=position.account_id,
+                )
+
+        logger.info(
+            "[DRY-RUN] Position close simulated: %s %s %s @ %s",
+            position.direction.value,
+            close_units,
+            position.instrument,
+            close_price,
+        )
+
+        return MarketOrder(
+            order_id=order_id,
+            instrument=position.instrument,
+            order_type=OrderType.MARKET,
+            direction=position.direction,
+            units=close_units,
+            price=close_price,
+            state=OrderState.FILLED,
+            time_in_force="FOK",
+            create_time=now,
+            fill_time=now,
+        )

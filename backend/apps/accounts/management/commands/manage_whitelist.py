@@ -21,7 +21,7 @@ class Command(BaseCommand):
 
     help = "Manage email whitelist for registration and login"
 
-    def add_arguments(self, parser) -> None:  # type: ignore[no-untyped-def]
+    def add_arguments(self, parser) -> None:
         """Add command arguments."""
         parser.add_argument(
             "--list",
@@ -64,7 +64,7 @@ class Command(BaseCommand):
             help="Show whitelist status",
         )
 
-    def handle(self, *args, **options) -> None:  # type: ignore[no-untyped-def]
+    def handle(self, *args, **options) -> None:
         """Handle the command."""
         if options["list"]:
             self.list_whitelist()

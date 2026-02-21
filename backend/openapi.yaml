@@ -1,0 +1,4179 @@
+openapi: 3.0.3
+info:
+  title: Auto Forex Trading API
+  version: 1.0.0
+  description:
+    API for managing algorithmic forex trading operations across multiple
+    OANDA accounts
+  contact:
+    name: Auto Forex Support
+    email: support@autoforex.example.com
+  license:
+    name: Proprietary
+paths:
+  /api/accounts/auth/login:
+    post:
+      operationId: accounts_auth_login_create
+      description:
+        Authenticate user with email and password. Returns JWT token on
+        success. Rate limited to 5 attempts per 15 minutes per IP address.
+      summary: POST /api/accounts/auth/login
+      tags:
+        - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserLoginRequest"
+        required: true
+      security:
+        - {}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      email:
+                        type: string
+                      username:
+                        type: string
+                      is_staff:
+                        type: boolean
+                      timezone:
+                        type: string
+                      language:
+                        type: string
+          description: Login successful
+        "401":
+          description: Invalid credentials
+        "403":
+          description: Account locked or email not whitelisted
+        "429":
+          description: Too many failed login attempts
+        "503":
+          description: Login is disabled
+  /api/accounts/auth/logout:
+    post:
+      operationId: accounts_auth_logout_create
+      description:
+        Logout user and terminate all active sessions. Requires valid JWT
+        token in Authorization header.
+      summary: POST /api/accounts/auth/logout
+      tags:
+        - Authentication
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  sessions_terminated:
+                    type: integer
+          description: Logout successful
+        "401":
+          description: Invalid or expired token
+  /api/accounts/auth/refresh:
+    post:
+      operationId: accounts_auth_refresh_create
+      description:
+        Refresh an existing JWT token to extend its expiration time. Requires
+        valid JWT token in Authorization header.
+      summary: POST /api/accounts/auth/refresh
+      tags:
+        - Authentication
+      security:
+        - {}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      email:
+                        type: string
+                      username:
+                        type: string
+                      is_staff:
+                        type: boolean
+                      timezone:
+                        type: string
+                      language:
+                        type: string
+          description: Token refreshed successfully
+        "401":
+          description: Invalid or expired token
+        "500":
+          description: Failed to retrieve user information
+  /api/accounts/auth/register:
+    post:
+      operationId: accounts_auth_register_create
+      description: Register a new user account and send email verification link.
+      summary: POST /api/accounts/auth/register
+      tags:
+        - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRegistrationRequest"
+        required: true
+      security:
+        - {}
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      email:
+                        type: string
+                      username:
+                        type: string
+                      first_name:
+                        type: string
+                      last_name:
+                        type: string
+                      email_verified:
+                        type: boolean
+                  email_sent:
+                    type: boolean
+          description: User registered successfully
+        "400":
+          description: Validation error
+        "503":
+          description: Registration is disabled
+  /api/accounts/auth/resend-verification:
+    post:
+      operationId: accounts_auth_resend_verification_create
+      description: Resend email verification link to the specified email address.
+      summary: POST /api/accounts/auth/resend-verification
+      tags:
+        - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendVerificationRequest"
+        required: true
+      security:
+        - {}
+      responses:
+        "200":
+          description: Verification email sent
+        "400":
+          description: Email is required or already verified
+  /api/accounts/auth/verify-email:
+    post:
+      operationId: accounts_auth_verify_email_create
+      description:
+        Verify user email address using the verification token sent via
+        email.
+      summary: POST /api/accounts/auth/verify-email
+      tags:
+        - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailVerificationRequest"
+        required: true
+      security:
+        - {}
+      responses:
+        "200":
+          description: Email verified successfully
+        "400":
+          description: Invalid or expired token
+  /api/accounts/notifications:
+    get:
+      operationId: accounts_notifications_retrieve
+      description:
+        Retrieve list of notifications for the authenticated user. Supports
+        filtering by read status and pagination.
+      summary: GET /api/accounts/notifications
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: "Number of results per page (default: 50, max: 200)"
+        - in: query
+          name: unread_only
+          schema:
+            type: boolean
+          description: Filter to show only unread notifications
+      tags:
+        - Notifications
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Paginated notifications list
+        "401":
+          description: Authentication required
+        "500":
+          description: Failed to retrieve notifications
+  /api/accounts/notifications/{notification_id}/read:
+    post:
+      operationId: accounts_notifications_read_create
+      description: Mark a single notification as read for the authenticated user.
+      summary: POST /api/accounts/notifications/{notification_id}/read
+      parameters:
+        - in: path
+          name: notification_id
+          schema:
+            type: integer
+          description: ID of the notification to mark as read
+          required: true
+      tags:
+        - Notifications
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Notification marked as read
+        "401":
+          description: Authentication required
+        "404":
+          description: Notification not found
+        "500":
+          description: Failed to mark notification as read
+  /api/accounts/notifications/read-all:
+    post:
+      operationId: accounts_notifications_read_all_create
+      description: Mark all unread notifications as read for the authenticated user.
+      summary: POST /api/accounts/notifications/read-all
+      tags:
+        - Notifications
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  count:
+                    type: integer
+          description: All notifications marked as read
+        "401":
+          description: Authentication required
+        "500":
+          description: Failed to mark all notifications as read
+  /api/accounts/settings/:
+    get:
+      operationId: accounts_settings_retrieve
+      description:
+        Retrieve user profile and settings including timezone, language,
+        and notification preferences.
+      summary: GET /api/accounts/settings/
+      tags:
+        - User Settings
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      username:
+                        type: string
+                      email:
+                        type: string
+                      first_name:
+                        type: string
+                      last_name:
+                        type: string
+                  settings:
+                    type: object
+                    properties:
+                      timezone:
+                        type: string
+                      language:
+                        type: string
+                      notifications_enabled:
+                        type: boolean
+          description: ""
+        "401":
+          description: Authentication required
+    put:
+      operationId: accounts_settings_update
+      description:
+        Update user profile and settings. Can update timezone, language,
+        notification preferences, etc.
+      summary: PUT /api/accounts/settings/
+      tags:
+        - User Settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserSettingsUpdateRequest"
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Settings updated successfully
+        "400":
+          description: Validation error
+        "401":
+          description: Authentication required
+  /api/accounts/settings/public:
+    get:
+      operationId: accounts_settings_public_retrieve
+      description:
+        Retrieve public account settings including registration and login
+        availability. No authentication required.
+      summary: GET /api/accounts/settings/public
+      tags:
+        - Public Settings
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+        - {}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicAccountSettings"
+          description: Public settings retrieved successfully
+  /api/health/:
+    get:
+      operationId: health_check
+      description:
+        Check the health status of the backend API service. Returns overall
+        system status.
+      summary: GET /api/health/
+      tags:
+        - health
+      security:
+        - {}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - healthy
+                    description: Overall health status
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: Timestamp of the health check
+                  response_time_ms:
+                    type: integer
+                    description: Response time in milliseconds
+                required:
+                  - status
+                  - timestamp
+                  - response_time_ms
+                example:
+                  status: healthy
+                  timestamp: "2024-01-18T12:00:00Z"
+                  response_time_ms: 15
+          description: Service is healthy
+        "503":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - unhealthy
+                    description: Overall health status
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: Timestamp of the health check
+                  response_time_ms:
+                    type: integer
+                    description: Response time in milliseconds
+                required:
+                  - status
+                  - timestamp
+                  - response_time_ms
+                example:
+                  status: unhealthy
+                  timestamp: "2024-01-18T12:00:00Z"
+                  response_time_ms: 20
+          description: Service is unhealthy
+  /api/market/accounts/:
+    get:
+      operationId: list_oanda_accounts
+      description: Retrieve all OANDA accounts for the authenticated user
+      summary: GET /api/market/accounts/
+      tags:
+        - Market - Accounts
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OandaAccounts"
+          description: List of OANDA accounts
+        "401":
+          description: Authentication required
+    post:
+      operationId: create_oanda_account
+      description: Add a new OANDA account for the authenticated user
+      summary: POST /api/market/accounts/
+      tags:
+        - Market - Accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OandaAccountsRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OandaAccounts"
+          description: Account created successfully
+        "400":
+          description: Invalid data
+        "401":
+          description: Authentication required
+  /api/market/accounts/{account_id}/:
+    get:
+      operationId: get_oanda_account_detail
+      description:
+        Retrieve detailed information about a specific OANDA account including
+        live data from OANDA API
+      summary: GET /api/market/accounts/{account_id}/
+      parameters:
+        - in: path
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+          required: true
+      tags:
+        - Market - Accounts
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OandaAccounts"
+          description: Account details retrieved successfully
+        "401":
+          description: Authentication required
+        "404":
+          description: Account not found
+    put:
+      operationId: update_oanda_account
+      description: Update a specific OANDA account
+      summary: PUT /api/market/accounts/{account_id}/
+      parameters:
+        - in: path
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+          required: true
+      tags:
+        - Market - Accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OandaAccountsRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OandaAccounts"
+          description: Account updated successfully
+        "400":
+          description: Invalid data
+        "401":
+          description: Authentication required
+        "404":
+          description: Account not found
+    delete:
+      operationId: delete_oanda_account
+      description: Delete a specific OANDA account
+      summary: DELETE /api/market/accounts/{account_id}/
+      parameters:
+        - in: path
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+          required: true
+      tags:
+        - Market - Accounts
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Account deleted successfully
+        "400":
+          description: Account is in use
+        "401":
+          description: Authentication required
+        "404":
+          description: Account not found
+  /api/market/candles/:
+    get:
+      operationId: get_candle_data
+      description: Fetch historical candle data from OANDA for charting and analysis
+      summary: GET /api/market/candles/
+      parameters:
+        - in: query
+          name: account_id
+          schema:
+            type: string
+          description: OANDA account ID (uses default if not provided)
+        - in: query
+          name: after
+          schema:
+            type: integer
+          description: Unix timestamp for fetching newer data
+        - in: query
+          name: before
+          schema:
+            type: integer
+          description: Unix timestamp for fetching older data
+        - in: query
+          name: count
+          schema:
+            type: integer
+            default: 100
+          description: Number of candles to fetch (1-5000)
+        - in: query
+          name: from_time
+          schema:
+            type: string
+          description: Start time in RFC3339 format
+        - in: query
+          name: granularity
+          schema:
+            type: string
+            default: H1
+          description: Candle granularity (S5, M1, H1, D, etc.)
+        - in: query
+          name: instrument
+          schema:
+            type: string
+          description: Currency pair (e.g., EUR_USD, GBP_USD)
+          required: true
+        - in: query
+          name: to_time
+          schema:
+            type: string
+          description: End time in RFC3339 format
+      tags:
+        - market
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/market/candles/granularities/:
+    get:
+      operationId: list_supported_granularities
+      description: Retrieve list of supported OANDA granularities/timeframes
+      summary: GET /api/market/granularities/
+      tags:
+        - market
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/market/health/oanda/:
+    get:
+      operationId: get_oanda_health_status
+      description:
+        Retrieve the latest health check status for the selected OANDA
+        account
+      summary: GET /api/market/health/oanda/
+      parameters:
+        - in: query
+          name: account_id
+          schema:
+            type: string
+          description: OANDA account ID (uses default if not provided)
+      tags:
+        - Market - Health
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OandaApiHealthStatus"
+          description: Health status retrieved successfully
+        "400":
+          description: No OANDA account found
+    post:
+      operationId: check_oanda_health
+      description: Perform a live health check against OANDA API and persist the result
+      summary: POST /api/market/health/oanda/
+      parameters:
+        - in: query
+          name: account_id
+          schema:
+            type: string
+          description: OANDA account ID (uses default if not provided)
+      tags:
+        - Market - Health
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OandaApiHealthStatus"
+          description: Health check performed successfully
+        "400":
+          description: No OANDA account found
+  /api/market/instruments/:
+    get:
+      operationId: list_supported_instruments
+      description: Retrieve list of supported currency pairs from OANDA API
+      summary: GET /api/market/instruments/
+      tags:
+        - market
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/market/instruments/{instrument}/:
+    get:
+      operationId: get_instrument_detail
+      description: Fetch detailed information about a specific currency pair
+      summary: GET /api/market/instruments/{instrument}/
+      parameters:
+        - in: path
+          name: instrument
+          schema:
+            type: string
+          description: Currency pair (e.g., EUR_USD)
+          required: true
+      tags:
+        - market
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/market/market/status/:
+    get:
+      operationId: get_market_status
+      description:
+        Retrieve current forex market open/close status and trading session
+        information
+      summary: GET /api/market/status/
+      tags:
+        - market
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/market/orders/:
+    get:
+      operationId: list_orders
+      description: List user's orders directly from OANDA API
+      summary: GET /api/market/orders/
+      parameters:
+        - in: query
+          name: account_id
+          schema:
+            type: integer
+          description: Filter by OANDA account ID
+        - in: query
+          name: instrument
+          schema:
+            type: string
+          description: Filter by currency pair
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: "Number of results per page (default: 50, max: 200)"
+        - in: query
+          name: status
+          schema:
+            type: string
+            default: all
+          description: Filter by order status (pending/all)
+      tags:
+        - Market - Orders
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+    post:
+      operationId: create_order
+      description: Submit new order (market, limit, stop, OCO)
+      summary: POST /api/market/orders/
+      tags:
+        - Market - Orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/market/orders/{order_id}/:
+    get:
+      operationId: get_order_detail
+      description: Retrieve order details from OANDA API
+      summary: GET /api/market/orders/{order_id}/
+      parameters:
+        - in: query
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+          required: true
+        - in: path
+          name: order_id
+          schema:
+            type: string
+          description: OANDA Order ID
+          required: true
+      tags:
+        - Market - Orders
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+    delete:
+      operationId: cancel_order
+      description: Cancel a pending order via OANDA API
+      summary: DELETE /api/market/orders/{order_id}/
+      parameters:
+        - in: query
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+          required: true
+        - in: path
+          name: order_id
+          schema:
+            type: string
+          description: OANDA Order ID
+          required: true
+      tags:
+        - Market - Orders
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/market/positions/:
+    get:
+      operationId: list_positions
+      description: Retrieve positions directly from OANDA API
+      summary: GET /api/market/positions/
+      parameters:
+        - in: query
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+        - in: query
+          name: instrument
+          schema:
+            type: string
+          description: Currency pair filter
+        - in: query
+          name: status
+          schema:
+            type: string
+            default: open
+          description: Position status (open/closed/all)
+      tags:
+        - Market - Positions
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+    put:
+      operationId: open_position
+      description: Open a new position by submitting a market order via OANDA
+      summary: PUT /api/market/positions/
+      tags:
+        - Market - Positions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PositionRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/market/positions/{position_id}/:
+    get:
+      operationId: get_position_detail
+      description:
+        Retrieve detailed information for a specific trade/position from
+        OANDA
+      summary: GET /api/market/positions/{position_id}/
+      parameters:
+        - in: query
+          name: account_id
+          schema:
+            type: integer
+          description: OANDA account database ID
+          required: true
+        - in: path
+          name: position_id
+          schema:
+            type: string
+          description: OANDA Trade ID
+          required: true
+      tags:
+        - Market - Positions
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+    patch:
+      operationId: close_position
+      description: Close a position via OANDA API
+      summary: PATCH /api/market/positions/{position_id}/
+      parameters:
+        - in: path
+          name: position_id
+          schema:
+            type: string
+          description: OANDA Trade ID
+          required: true
+      tags:
+        - Market - Positions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/market/ticks/:
+    get:
+      operationId: get_tick_data
+      description: Fetch historical tick data from local DB
+      summary: GET /api/market/ticks/
+      parameters:
+        - in: query
+          name: count
+          schema:
+            type: integer
+          description: "Number of ticks to return (1-20000, default: 5000)"
+        - in: query
+          name: from_time
+          schema:
+            type: string
+          description: Start time in RFC3339 format
+        - in: query
+          name: instrument
+          schema:
+            type: string
+          description: Currency pair (e.g., USD_JPY)
+          required: true
+        - in: query
+          name: to_time
+          schema:
+            type: string
+          description: End time in RFC3339 format
+      tags:
+        - market
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/strategies/:
+    get:
+      operationId: trading_strategies_retrieve
+      description: Get all available trading strategies with their configuration schemas
+      summary: List available strategies
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyList"
+          description: ""
+  /api/trading/strategies/{strategy_id}/defaults/:
+    get:
+      operationId: trading_strategies_defaults_retrieve
+      description: Get default configuration parameters for a specific strategy
+      summary: Get strategy defaults
+      parameters:
+        - in: path
+          name: strategy_id
+          schema:
+            type: string
+          required: true
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+        "404":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/strategy-configs/:
+    get:
+      operationId: trading_strategy_configs_list
+      description: List all strategy configurations for the authenticated user
+      summary: List strategy configurations
+      parameters:
+        - name: page
+          required: false
+          in: query
+          description: A page number within the paginated result set.
+          schema:
+            type: integer
+        - name: page_size
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedStrategyConfigListList"
+          description: ""
+    post:
+      operationId: trading_strategy_configs_create
+      description: Create a new strategy configuration
+      summary: Create strategy configuration
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StrategyConfigCreateRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyConfigDetail"
+          description: ""
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/strategy-configs/{config_id}/:
+    get:
+      operationId: trading_strategy_configs_retrieve
+      description: Retrieve a specific strategy configuration
+      summary: Get strategy configuration
+      parameters:
+        - in: path
+          name: config_id
+          schema:
+            type: string
+            format: uuid
+          description: Strategy configuration UUID
+          required: true
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyConfigDetail"
+          description: ""
+        "404":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+    put:
+      operationId: trading_strategy_configs_update
+      description: Update an existing strategy configuration
+      summary: Update strategy configuration
+      parameters:
+        - in: path
+          name: config_id
+          schema:
+            type: string
+            format: uuid
+          description: Strategy configuration UUID
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StrategyConfigCreateRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyConfigDetail"
+          description: ""
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+        "404":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+    delete:
+      operationId: trading_strategy_configs_destroy
+      description: Delete a strategy configuration (fails if in use by active tasks)
+      summary: Delete strategy configuration
+      parameters:
+        - in: path
+          name: config_id
+          schema:
+            type: string
+            format: uuid
+          description: Strategy configuration UUID
+          required: true
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "204":
+          description: No response body
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+        "404":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/tasks/backtest/:
+    get:
+      operationId: trading_tasks_backtest_list
+      description: |-
+        ViewSet for BacktestTask operations with task-centric API.
+
+        Provides CRUD operations and task lifecycle management including:
+        - submit: Submit task for execution
+        - stop: Stop running task
+        - pause: Pause running task
+        - restart: Restart task from beginning
+        - resume: Resume paused task
+        - logs: Retrieve task logs with pagination
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+      parameters:
+        - in: query
+          name: config_id
+          schema:
+            type: string
+          description: Filter by configuration ID
+        - in: query
+          name: ordering
+          schema:
+            type: string
+          description: Ordering field (e.g. -created_at)
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: Number of results per page
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Search in name or description
+        - in: query
+          name: status
+          schema:
+            type: string
+          description: Filter by task status
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedBacktestTaskList"
+          description: ""
+    post:
+      operationId: trading_tasks_backtest_create
+      description: |-
+        ViewSet for BacktestTask operations with task-centric API.
+
+        Provides CRUD operations and task lifecycle management including:
+        - submit: Submit task for execution
+        - stop: Stop running task
+        - pause: Pause running task
+        - restart: Restart task from beginning
+        - resume: Resume paused task
+        - logs: Retrieve task logs with pagination
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BacktestTaskCreateRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BacktestTaskCreate"
+          description: ""
+  /api/trading/tasks/backtest/{id}/:
+    get:
+      operationId: trading_tasks_backtest_retrieve
+      description: |-
+        ViewSet for BacktestTask operations with task-centric API.
+
+        Provides CRUD operations and task lifecycle management including:
+        - submit: Submit task for execution
+        - stop: Stop running task
+        - pause: Pause running task
+        - restart: Restart task from beginning
+        - resume: Resume paused task
+        - logs: Retrieve task logs with pagination
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BacktestTask"
+          description: ""
+    put:
+      operationId: trading_tasks_backtest_update
+      description: |-
+        ViewSet for BacktestTask operations with task-centric API.
+
+        Provides CRUD operations and task lifecycle management including:
+        - submit: Submit task for execution
+        - stop: Stop running task
+        - pause: Pause running task
+        - restart: Restart task from beginning
+        - resume: Resume paused task
+        - logs: Retrieve task logs with pagination
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BacktestTaskCreateRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BacktestTaskCreate"
+          description: ""
+    patch:
+      operationId: trading_tasks_backtest_partial_update
+      description: |-
+        ViewSet for BacktestTask operations with task-centric API.
+
+        Provides CRUD operations and task lifecycle management including:
+        - submit: Submit task for execution
+        - stop: Stop running task
+        - pause: Pause running task
+        - restart: Restart task from beginning
+        - resume: Resume paused task
+        - logs: Retrieve task logs with pagination
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchedBacktestTaskCreateRequest"
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BacktestTaskCreate"
+          description: ""
+    delete:
+      operationId: trading_tasks_backtest_destroy
+      description: |-
+        ViewSet for BacktestTask operations with task-centric API.
+
+        Provides CRUD operations and task lifecycle management including:
+        - submit: Submit task for execution
+        - stop: Stop running task
+        - pause: Pause running task
+        - restart: Restart task from beginning
+        - resume: Resume paused task
+        - logs: Retrieve task logs with pagination
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "204":
+          description: No response body
+  /api/trading/tasks/backtest/{id}/events/:
+    get:
+      operationId: trading_tasks_backtest_events_list
+      description: Get task events with pagination and filtering.
+      summary: Get task events
+      parameters:
+        - in: query
+          name: celery_task_id
+          schema:
+            type: string
+          description: Filter by celery task ID
+        - in: query
+          name: event_type
+          schema:
+            type: string
+          description: Filter by event type
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: "Number of results per page (default: 100, max: 1000)"
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
+        - in: query
+          name: severity
+          schema:
+            type: string
+          description: Filter by severity
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTradingEventList"
+          description: ""
+  /api/trading/tasks/backtest/{id}/logs/:
+    get:
+      operationId: trading_tasks_backtest_logs_list
+      description: Get task logs with pagination and filtering.
+      summary: Get task logs
+      parameters:
+        - in: query
+          name: celery_task_id
+          schema:
+            type: string
+          description: Filter by celery task ID
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - in: query
+          name: level
+          schema:
+            type: string
+          description: Filter by log level
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: "Number of results per page (default: 100, max: 1000)"
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTaskLogList"
+          description: ""
+  /api/trading/tasks/backtest/{id}/pause/:
+    post:
+      operationId: trading_tasks_backtest_pause_create
+      description: Pause a running task, preserving execution state
+      summary: Pause running task
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BacktestTaskRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BacktestTask"
+          description: ""
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/tasks/backtest/{id}/restart/:
+    post:
+      operationId: trading_tasks_backtest_restart_create
+      description: Restart a task from the beginning, clearing all execution data
+      summary: Restart task from beginning
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BacktestTaskRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BacktestTask"
+          description: ""
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+        "404":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+        "500":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/tasks/backtest/{id}/resume/:
+    post:
+      operationId: trading_tasks_backtest_resume_create
+      description: Resume a paused task, continuing execution from where it left off
+      summary: Resume paused task
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BacktestTaskRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BacktestTask"
+          description: ""
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+        "404":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+        "500":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/tasks/backtest/{id}/start/:
+    post:
+      operationId: trading_tasks_backtest_start_create
+      description:
+        Submit a pending task to Celery for execution. Only tasks in CREATED
+        status can be submitted. Use restart or resume for STOPPED tasks.
+      summary: Submit task for execution
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BacktestTaskRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BacktestTask"
+          description: ""
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+        "500":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/tasks/backtest/{id}/stop/:
+    post:
+      operationId: trading_tasks_backtest_stop_create
+      description: Stop a currently running or paused task asynchronously
+      summary: Stop running task
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BacktestTaskRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+        "404":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+        "500":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/tasks/backtest/{id}/trades/:
+    get:
+      operationId: trading_tasks_backtest_trades_list
+      description: Get task trades with pagination.
+      summary: Get task trades
+      parameters:
+        - in: query
+          name: celery_task_id
+          schema:
+            type: string
+          description: Filter by celery task ID
+        - in: query
+          name: direction
+          schema:
+            type: string
+          description: Filter by direction (buy/sell)
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: "Number of results per page (default: 100, max: 1000)"
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTradeList"
+          description: ""
+  /api/trading/tasks/trading/:
+    get:
+      operationId: trading_tasks_trading_list
+      description: |-
+        ViewSet for TradingTask operations with task-centric API.
+
+        Provides CRUD operations and task lifecycle management including:
+        - submit: Submit task for execution
+        - stop: Stop running task
+        - restart: Restart task from beginning
+        - resume: Resume cancelled task
+        - logs: Retrieve task logs with pagination
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+      parameters:
+        - in: query
+          name: account_id
+          schema:
+            type: integer
+          description: Filter by OANDA account ID
+        - in: query
+          name: config_id
+          schema:
+            type: string
+          description: Filter by configuration ID
+        - in: query
+          name: ordering
+          schema:
+            type: string
+          description: Ordering field (e.g. -created_at)
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: Number of results per page
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Search in name or description
+        - in: query
+          name: status
+          schema:
+            type: string
+          description: Filter by task status
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTradingTaskList"
+          description: ""
+    post:
+      operationId: trading_tasks_trading_create
+      description: |-
+        ViewSet for TradingTask operations with task-centric API.
+
+        Provides CRUD operations and task lifecycle management including:
+        - submit: Submit task for execution
+        - stop: Stop running task
+        - restart: Restart task from beginning
+        - resume: Resume cancelled task
+        - logs: Retrieve task logs with pagination
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradingTaskCreateRequest"
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingTaskCreate"
+          description: ""
+  /api/trading/tasks/trading/{id}/:
+    get:
+      operationId: trading_tasks_trading_retrieve
+      description: |-
+        ViewSet for TradingTask operations with task-centric API.
+
+        Provides CRUD operations and task lifecycle management including:
+        - submit: Submit task for execution
+        - stop: Stop running task
+        - restart: Restart task from beginning
+        - resume: Resume cancelled task
+        - logs: Retrieve task logs with pagination
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingTask"
+          description: ""
+    put:
+      operationId: trading_tasks_trading_update
+      description: |-
+        ViewSet for TradingTask operations with task-centric API.
+
+        Provides CRUD operations and task lifecycle management including:
+        - submit: Submit task for execution
+        - stop: Stop running task
+        - restart: Restart task from beginning
+        - resume: Resume cancelled task
+        - logs: Retrieve task logs with pagination
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradingTaskCreateRequest"
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingTaskCreate"
+          description: ""
+    patch:
+      operationId: trading_tasks_trading_partial_update
+      description: |-
+        ViewSet for TradingTask operations with task-centric API.
+
+        Provides CRUD operations and task lifecycle management including:
+        - submit: Submit task for execution
+        - stop: Stop running task
+        - restart: Restart task from beginning
+        - resume: Resume cancelled task
+        - logs: Retrieve task logs with pagination
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchedTradingTaskCreateRequest"
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingTaskCreate"
+          description: ""
+    delete:
+      operationId: trading_tasks_trading_destroy
+      description: |-
+        ViewSet for TradingTask operations with task-centric API.
+
+        Provides CRUD operations and task lifecycle management including:
+        - submit: Submit task for execution
+        - stop: Stop running task
+        - restart: Restart task from beginning
+        - resume: Resume cancelled task
+        - logs: Retrieve task logs with pagination
+        - events: Retrieve task events
+        - trades: Retrieve trade history
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "204":
+          description: No response body
+  /api/trading/tasks/trading/{id}/events/:
+    get:
+      operationId: trading_tasks_trading_events_list
+      description: Get task events with pagination and filtering.
+      summary: Get task events
+      parameters:
+        - in: query
+          name: celery_task_id
+          schema:
+            type: string
+          description: Filter by celery task ID
+        - in: query
+          name: event_type
+          schema:
+            type: string
+          description: Filter by event type
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: "Number of results per page (default: 100, max: 1000)"
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
+        - in: query
+          name: severity
+          schema:
+            type: string
+          description: Filter by severity
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTradingEventList"
+          description: ""
+  /api/trading/tasks/trading/{id}/logs/:
+    get:
+      operationId: trading_tasks_trading_logs_list
+      description: Get task logs with pagination and filtering.
+      summary: Get task logs
+      parameters:
+        - in: query
+          name: celery_task_id
+          schema:
+            type: string
+          description: Filter by celery task ID
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - in: query
+          name: level
+          schema:
+            type: string
+          description: Filter by log level
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: "Number of results per page (default: 100, max: 1000)"
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTaskLogList"
+          description: ""
+  /api/trading/tasks/trading/{id}/restart/:
+    post:
+      operationId: trading_tasks_trading_restart_create
+      description: Restart a task from the beginning, clearing all execution data
+      summary: Restart task from beginning
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradingTaskRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingTask"
+          description: ""
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/tasks/trading/{id}/resume/:
+    post:
+      operationId: trading_tasks_trading_resume_create
+      description: Resume a cancelled task, preserving execution context
+      summary: Resume cancelled task
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradingTaskRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingTask"
+          description: ""
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/tasks/trading/{id}/start/:
+    post:
+      operationId: trading_tasks_trading_start_create
+      description:
+        Submit a pending task to Celery for execution. Only tasks in CREATED
+        status can be submitted. Use restart or resume for STOPPED tasks.
+      summary: Submit task for execution
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradingTaskRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingTask"
+          description: ""
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/tasks/trading/{id}/stop/:
+    post:
+      operationId: trading_tasks_trading_stop_create
+      description:
+        Stop a currently running task asynchronously (graceful stop for
+        trading tasks)
+      summary: Stop running task
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+      tags:
+        - trading
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradingTaskRequest"
+        required: true
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+        "400":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ""
+  /api/trading/tasks/trading/{id}/trades/:
+    get:
+      operationId: trading_tasks_trading_trades_list
+      description: Get task trades with pagination.
+      summary: Get task trades
+      parameters:
+        - in: query
+          name: celery_task_id
+          schema:
+            type: string
+          description: Filter by celery task ID
+        - in: query
+          name: direction
+          schema:
+            type: string
+          description: Filter by direction (buy/sell)
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            description: Unique identifier for this record
+          required: true
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: "Number of results per page (default: 100, max: 1000)"
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
+      tags:
+        - trading
+      security:
+        - jwtAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTradeList"
+          description: ""
+components:
+  schemas:
+    ApiTypeEnum:
+      enum:
+        - practice
+        - live
+      type: string
+      description: |-
+        * `practice` - Practice
+        * `live` - Live
+    BacktestTask:
+      type: object
+      description: Serializer for BacktestTask with execution data.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Unique identifier for this record
+        name:
+          type: string
+          description: Human-readable name for this backtest task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this backtest task
+        task_type:
+          type: string
+          description: |-
+            Get the task type.
+
+            Args:
+                obj: Task instance
+
+            Returns:
+                str: "backtest" or "trading"
+          readOnly: true
+        status:
+          allOf:
+            - $ref: "#/components/schemas/StatusEnum"
+          readOnly: true
+          description: |-
+            Current task status
+
+            * `created` - Created
+            * `starting` - Starting
+            * `running` - Running
+            * `paused` - Paused
+            * `stopping` - Stopping
+            * `stopped` - Stopped
+            * `completed` - Completed
+            * `failed` - Failed
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when this record was created
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when this record was last updated
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Timestamp when the task execution started
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Timestamp when the task execution completed
+        duration:
+          type: number
+          format: double
+          nullable: true
+          description: |-
+            Calculate task execution duration in seconds.
+
+            Args:
+                obj: Task instance
+
+            Returns:
+                float | None: Duration in seconds if both started_at and completed_at are set,
+                             None otherwise
+          readOnly: true
+        celery_task_id:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Celery task ID for tracking execution
+        error_message:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Error message if task failed
+        error_traceback:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Full error traceback if task failed
+        user:
+          type: integer
+          readOnly: true
+          description: User who created this backtest task
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        data_source:
+          allOf:
+            - $ref: "#/components/schemas/DataSourceEnum"
+          description: |-
+            Data source for historical tick data
+
+            * `postgresql` - PostgreSQL
+            * `athena` - AWS Athena
+            * `s3` - AWS S3
+        start_time:
+          type: string
+          format: date-time
+          description: Start time for backtest period
+        end_time:
+          type: string
+          format: date-time
+          description: End time for backtest period
+        initial_balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Initial account balance for backtest
+        commission_per_trade:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Commission to apply per trade
+        instrument:
+          type: string
+          description: Trading instrument (e.g., EUR_USD, USD_JPY)
+          maxLength: 20
+        trading_mode:
+          allOf:
+            - $ref: "#/components/schemas/TradingModeEnum"
+          description: |-
+            Trading mode: netting (aggregated positions) or hedging (independent trades)
+
+            * `netting` - Netting Mode
+            * `hedging` - Hedging Mode
+        progress:
+          type: integer
+          description: |-
+            Calculate backtest progress percentage based on current tick timestamp.
+
+            Progress is calculated as:
+            (current_tick_timestamp - start_time) / (end_time - start_time) * 100
+
+            Args:
+                obj: BacktestTask instance
+
+            Returns:
+                int: Progress percentage (0-100)
+          readOnly: true
+        current_tick:
+          allOf:
+            - $ref: "#/components/schemas/CurrentTick"
+          readOnly: true
+          nullable: true
+          description: Current tick position and price (only present for running tasks)
+      required:
+        - config
+        - end_time
+        - name
+        - start_time
+    BacktestTaskCreate:
+      type: object
+      description: Serializer for creating and updating BacktestTask.
+      properties:
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        name:
+          type: string
+          description: Human-readable name for this backtest task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this backtest task
+        data_source:
+          allOf:
+            - $ref: "#/components/schemas/DataSourceEnum"
+          description: |-
+            Data source for historical tick data
+
+            * `postgresql` - PostgreSQL
+            * `athena` - AWS Athena
+            * `s3` - AWS S3
+        start_time:
+          type: string
+          format: date-time
+          description: Start time for backtest period
+        end_time:
+          type: string
+          format: date-time
+          description: End time for backtest period
+        initial_balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Initial account balance for backtest
+        commission_per_trade:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Commission to apply per trade
+        pip_size:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
+          nullable: true
+          description:
+            Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01
+            for USD_JPY). If not provided, will be fetched from OANDA account.
+        instrument:
+          type: string
+          description: Trading instrument (e.g., EUR_USD, USD_JPY)
+          maxLength: 20
+        trading_mode:
+          allOf:
+            - $ref: "#/components/schemas/TradingModeEnum"
+          description: |-
+            Trading mode: netting (aggregated positions) or hedging (independent trades)
+
+            * `netting` - Netting Mode
+            * `hedging` - Hedging Mode
+      required:
+        - config
+    BacktestTaskCreateRequest:
+      type: object
+      description: Serializer for creating and updating BacktestTask.
+      properties:
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable name for this backtest task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this backtest task
+        data_source:
+          allOf:
+            - $ref: "#/components/schemas/DataSourceEnum"
+          description: |-
+            Data source for historical tick data
+
+            * `postgresql` - PostgreSQL
+            * `athena` - AWS Athena
+            * `s3` - AWS S3
+        start_time:
+          type: string
+          format: date-time
+          description: Start time for backtest period
+        end_time:
+          type: string
+          format: date-time
+          description: End time for backtest period
+        initial_balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Initial account balance for backtest
+        commission_per_trade:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Commission to apply per trade
+        pip_size:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
+          nullable: true
+          description:
+            Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01
+            for USD_JPY). If not provided, will be fetched from OANDA account.
+        instrument:
+          type: string
+          minLength: 1
+          description: Trading instrument (e.g., EUR_USD, USD_JPY)
+          maxLength: 20
+        trading_mode:
+          allOf:
+            - $ref: "#/components/schemas/TradingModeEnum"
+          description: |-
+            Trading mode: netting (aggregated positions) or hedging (independent trades)
+
+            * `netting` - Netting Mode
+            * `hedging` - Hedging Mode
+      required:
+        - config
+    BacktestTaskRequest:
+      type: object
+      description: Serializer for BacktestTask with execution data.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable name for this backtest task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this backtest task
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        data_source:
+          allOf:
+            - $ref: "#/components/schemas/DataSourceEnum"
+          description: |-
+            Data source for historical tick data
+
+            * `postgresql` - PostgreSQL
+            * `athena` - AWS Athena
+            * `s3` - AWS S3
+        start_time:
+          type: string
+          format: date-time
+          description: Start time for backtest period
+        end_time:
+          type: string
+          format: date-time
+          description: End time for backtest period
+        initial_balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Initial account balance for backtest
+        commission_per_trade:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Commission to apply per trade
+        instrument:
+          type: string
+          minLength: 1
+          description: Trading instrument (e.g., EUR_USD, USD_JPY)
+          maxLength: 20
+        trading_mode:
+          allOf:
+            - $ref: "#/components/schemas/TradingModeEnum"
+          description: |-
+            Trading mode: netting (aggregated positions) or hedging (independent trades)
+
+            * `netting` - Netting Mode
+            * `hedging` - Hedging Mode
+      required:
+        - config
+        - end_time
+        - name
+        - start_time
+    DataSourceEnum:
+      enum:
+        - postgresql
+        - athena
+        - s3
+      type: string
+      description: |-
+        * `postgresql` - PostgreSQL
+        * `athena` - AWS Athena
+        * `s3` - AWS S3
+    DirectionEnum:
+      enum:
+        - long
+        - short
+      type: string
+      description: |-
+        * `long` - Long
+        * `short` - Short
+    EmailVerificationRequest:
+      type: object
+      description: Serializer for email verification request.
+      properties:
+        token:
+          type: string
+          minLength: 1
+          description: Email verification token
+      required:
+        - token
+    EventTypeEnum:
+      enum:
+        - tick_received
+        - strategy_signal
+        - trade_executed
+        - status_changed
+        - error_occurred
+        - initial_entry
+        - retracement
+        - take_profit
+        - add_layer
+        - remove_layer
+        - volatility_lock
+        - margin_protection
+        - strategy_started
+        - strategy_paused
+        - strategy_resumed
+        - strategy_stopped
+      type: string
+      description: |-
+        * `tick_received` - Tick Received
+        * `strategy_signal` - Strategy Signal
+        * `trade_executed` - Trade Executed
+        * `status_changed` - Status Changed
+        * `error_occurred` - Error Occurred
+        * `initial_entry` - Initial Entry
+        * `retracement` - Retracement
+        * `take_profit` - Take Profit
+        * `add_layer` - Add Layer
+        * `remove_layer` - Remove Layer
+        * `volatility_lock` - Volatility Lock
+        * `margin_protection` - Margin Protection
+        * `strategy_started` - Strategy Started
+        * `strategy_paused` - Strategy Paused
+        * `strategy_resumed` - Strategy Resumed
+        * `strategy_stopped` - Strategy Stopped
+    ExecutionMethodEnum:
+      enum:
+        - tick_received
+        - strategy_signal
+        - trade_executed
+        - status_changed
+        - error_occurred
+        - initial_entry
+        - retracement
+        - take_profit
+        - add_layer
+        - remove_layer
+        - volatility_lock
+        - margin_protection
+        - strategy_started
+        - strategy_paused
+        - strategy_resumed
+        - strategy_stopped
+      type: string
+      description: |-
+        * `tick_received` - Tick Received
+        * `strategy_signal` - Strategy Signal
+        * `trade_executed` - Trade Executed
+        * `status_changed` - Status Changed
+        * `error_occurred` - Error Occurred
+        * `initial_entry` - Initial Entry
+        * `retracement` - Retracement
+        * `take_profit` - Take Profit
+        * `add_layer` - Add Layer
+        * `remove_layer` - Remove Layer
+        * `volatility_lock` - Volatility Lock
+        * `margin_protection` - Margin Protection
+        * `strategy_started` - Strategy Started
+        * `strategy_paused` - Strategy Paused
+        * `strategy_resumed` - Strategy Resumed
+        * `strategy_stopped` - Strategy Stopped
+    JurisdictionEnum:
+      enum:
+        - US
+        - JP
+        - OTHER
+      type: string
+      description: |-
+        * `US` - United States
+        * `JP` - Japan
+        * `OTHER` - Other/International
+    LanguageEnum:
+      enum:
+        - en
+        - ja
+      type: string
+      description: |-
+        * `en` - en
+        * `ja` - ja
+    LevelEnum:
+      enum:
+        - DEBUG
+        - INFO
+        - WARNING
+        - ERROR
+        - CRITICAL
+      type: string
+      description: |-
+        * `DEBUG` - Debug
+        * `INFO` - Info
+        * `WARNING` - Warning
+        * `ERROR` - Error
+        * `CRITICAL` - Critical
+    OandaAccounts:
+      type: object
+      description: Serializer for OANDA account.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account_id:
+          type: string
+          description: OANDA account ID
+          maxLength: 100
+        api_type:
+          allOf:
+            - $ref: "#/components/schemas/ApiTypeEnum"
+          description: |-
+            API endpoint type (practice or live)
+
+            * `practice` - Practice
+            * `live` - Live
+        jurisdiction:
+          allOf:
+            - $ref: "#/components/schemas/JurisdictionEnum"
+          description: |-
+            Regulatory jurisdiction for this account
+
+            * `US` - United States
+            * `JP` - Japan
+            * `OTHER` - Other/International
+        currency:
+          type: string
+          description: Account base currency
+          maxLength: 3
+        balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Current account balance
+        margin_used:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Margin currently used by open positions
+        margin_available:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Margin available for new positions
+        unrealized_pnl:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Unrealized profit/loss from open positions
+        is_active:
+          type: boolean
+          description: Whether the account is active
+        is_default:
+          type: boolean
+          description: Whether this is the default account for market data collection
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when the account was added
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when the account was last updated
+      required:
+        - account_id
+    OandaAccountsRequest:
+      type: object
+      description: Serializer for OANDA account.
+      properties:
+        account_id:
+          type: string
+          minLength: 1
+          description: OANDA account ID
+          maxLength: 100
+        api_token:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: OANDA API token (will be encrypted)
+        api_type:
+          allOf:
+            - $ref: "#/components/schemas/ApiTypeEnum"
+          description: |-
+            API endpoint type (practice or live)
+
+            * `practice` - Practice
+            * `live` - Live
+        jurisdiction:
+          allOf:
+            - $ref: "#/components/schemas/JurisdictionEnum"
+          description: |-
+            Regulatory jurisdiction for this account
+
+            * `US` - United States
+            * `JP` - Japan
+            * `OTHER` - Other/International
+        currency:
+          type: string
+          minLength: 1
+          description: Account base currency
+          maxLength: 3
+        is_active:
+          type: boolean
+          description: Whether the account is active
+        is_default:
+          type: boolean
+          description: Whether this is the default account for market data collection
+      required:
+        - account_id
+        - api_token
+    OandaApiHealthStatus:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account:
+          type: integer
+          readOnly: true
+        oanda_account_id:
+          type: string
+          readOnly: true
+        api_type:
+          type: string
+          readOnly: true
+        is_available:
+          type: boolean
+          readOnly: true
+        checked_at:
+          type: string
+          format: date-time
+          readOnly: true
+        latency_ms:
+          type: integer
+          readOnly: true
+          nullable: true
+        http_status:
+          type: integer
+          readOnly: true
+          nullable: true
+        error_message:
+          type: string
+          readOnly: true
+    OrderRequest:
+      type: object
+      description: Serializer for creating orders.
+      properties:
+        instrument:
+          type: string
+          minLength: 1
+          description: Currency pair (e.g., 'EUR_USD')
+          maxLength: 10
+        order_type:
+          allOf:
+            - $ref: "#/components/schemas/OrderTypeEnum"
+          description: |-
+            Type of order
+
+            * `market` - market
+            * `limit` - limit
+            * `stop` - stop
+            * `oco` - oco
+        direction:
+          allOf:
+            - $ref: "#/components/schemas/DirectionEnum"
+          description: |-
+            Trade direction
+
+            * `long` - Long
+            * `short` - Short
+        units:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Number of units to trade
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
+          nullable: true
+          description: Order price (required for limit/stop orders)
+        take_profit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
+          nullable: true
+          description: Take-profit price
+        stop_loss:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
+          nullable: true
+          description: Stop-loss price
+        limit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
+          nullable: true
+          description: Limit price (for OCO orders)
+        stop_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
+          nullable: true
+          description: Stop price (for OCO orders)
+      required:
+        - direction
+        - instrument
+        - order_type
+        - units
+    OrderTypeEnum:
+      enum:
+        - market
+        - limit
+        - stop
+        - oco
+      type: string
+      description: |-
+        * `market` - market
+        * `limit` - limit
+        * `stop` - stop
+        * `oco` - oco
+    PaginatedBacktestTaskList:
+      type: object
+      required:
+        - count
+        - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BacktestTask"
+    PaginatedStrategyConfigListList:
+      type: object
+      required:
+        - count
+        - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/StrategyConfigList"
+    PaginatedTaskLogList:
+      type: object
+      required:
+        - count
+        - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskLog"
+    PaginatedTradeList:
+      type: object
+      required:
+        - count
+        - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/Trade"
+    PaginatedTradingEventList:
+      type: object
+      required:
+        - count
+        - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/TradingEvent"
+    PaginatedTradingTaskList:
+      type: object
+      required:
+        - count
+        - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/TradingTask"
+    PatchedBacktestTaskCreateRequest:
+      type: object
+      description: Serializer for creating and updating BacktestTask.
+      properties:
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable name for this backtest task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this backtest task
+        data_source:
+          allOf:
+            - $ref: "#/components/schemas/DataSourceEnum"
+          description: |-
+            Data source for historical tick data
+
+            * `postgresql` - PostgreSQL
+            * `athena` - AWS Athena
+            * `s3` - AWS S3
+        start_time:
+          type: string
+          format: date-time
+          description: Start time for backtest period
+        end_time:
+          type: string
+          format: date-time
+          description: End time for backtest period
+        initial_balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Initial account balance for backtest
+        commission_per_trade:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Commission to apply per trade
+        pip_size:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
+          nullable: true
+          description:
+            Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01
+            for USD_JPY). If not provided, will be fetched from OANDA account.
+        instrument:
+          type: string
+          minLength: 1
+          description: Trading instrument (e.g., EUR_USD, USD_JPY)
+          maxLength: 20
+        trading_mode:
+          allOf:
+            - $ref: "#/components/schemas/TradingModeEnum"
+          description: |-
+            Trading mode: netting (aggregated positions) or hedging (independent trades)
+
+            * `netting` - Netting Mode
+            * `hedging` - Hedging Mode
+    PatchedTradingTaskCreateRequest:
+      type: object
+      description: |-
+        Serializer for creating and updating TradingTask.
+
+        Includes validation for account ownership and configuration.
+      properties:
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        oanda_account:
+          type: integer
+          description: OANDA account used for trading
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable name for this trading task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this trading task
+        sell_on_stop:
+          type: boolean
+          description: Close all positions when task is stopped
+    PositionRequest:
+      type: object
+      description: Serializer for opening a position via a market order.
+      properties:
+        instrument:
+          type: string
+          minLength: 1
+          maxLength: 10
+        direction:
+          $ref: "#/components/schemas/DirectionEnum"
+        units:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+        take_profit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
+          nullable: true
+        stop_loss:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,5})?$
+          nullable: true
+      required:
+        - direction
+        - instrument
+        - units
+    PublicAccountSettings:
+      type: object
+      description: Serializer for public account settings (no authentication required).
+      properties:
+        registration_enabled:
+          type: boolean
+          description: Whether new user registration is enabled
+        login_enabled:
+          type: boolean
+          description: Whether user login is enabled
+        email_whitelist_enabled:
+          type: boolean
+          description: Whether email whitelist is enforced for registration/login
+    ResendVerificationRequest:
+      type: object
+      description: Serializer for resend verification email request.
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          description: Email address to resend verification to
+      required:
+        - email
+    CurrentTick:
+      type: object
+      description: Current tick position and price for a running task.
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of the current tick
+        price:
+          type: string
+          nullable: true
+          description: Mid price at the current tick
+      required:
+        - timestamp
+    StatusEnum:
+      enum:
+        - created
+        - starting
+        - running
+        - paused
+        - stopping
+        - stopped
+        - completed
+        - failed
+      type: string
+      description: |-
+        * `created` - Created
+        * `starting` - Starting
+        * `running` - Running
+        * `paused` - Paused
+        * `stopping` - Stopping
+        * `stopped` - Stopped
+        * `completed` - Completed
+        * `failed` - Failed
+    StrategyConfigCreateRequest:
+      type: object
+      description: |-
+        Serializer for creating and updating strategy configurations.
+
+        Includes validation against strategy registry.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable name for this configuration
+          maxLength: 255
+        strategy_type:
+          type: string
+          minLength: 1
+          description: Type of strategy (e.g., 'floor', 'ma_crossover', 'rsi')
+          maxLength: 50
+        parameters:
+          description: Strategy-specific configuration parameters
+        description:
+          type: string
+          description: Optional description of this configuration
+      required:
+        - name
+        - strategy_type
+    StrategyConfigDetail:
+      type: object
+      description: Serializer for strategy configuration full details.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Unique identifier for this record
+        user_id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          description: Human-readable name for this configuration
+          maxLength: 255
+        strategy_type:
+          type: string
+          description: Type of strategy (e.g., 'floor', 'ma_crossover', 'rsi')
+          maxLength: 50
+        parameters:
+          description: Strategy-specific configuration parameters
+        description:
+          type: string
+          description: Optional description of this configuration
+        is_in_use:
+          type: boolean
+          description: Get whether configuration is in use by active tasks.
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when this record was created
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when this record was last updated
+      required:
+        - name
+        - strategy_type
+    StrategyConfigList:
+      type: object
+      description: Serializer for strategy configuration list view (summary only).
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Unique identifier for this record
+        user_id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+          description: Human-readable name for this configuration
+        strategy_type:
+          type: string
+          readOnly: true
+          description: Type of strategy (e.g., 'floor', 'ma_crossover', 'rsi')
+        description:
+          type: string
+          readOnly: true
+          description: Optional description of this configuration
+        is_in_use:
+          type: boolean
+          description: Get whether configuration is in use by active tasks.
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when this record was created
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when this record was last updated
+    StrategyList:
+      type: object
+      description: Serializer for listing available strategies.
+      properties:
+        id:
+          type: string
+          description: Strategy identifier
+        name:
+          type: string
+          description: Strategy name
+        class_name:
+          type: string
+          description: Strategy class name
+        description:
+          type: string
+          description: Strategy description
+        config_schema:
+          description: Configuration schema
+      required:
+        - class_name
+        - config_schema
+        - description
+        - id
+        - name
+    TaskLog:
+      type: object
+      description: |-
+        Serializer for TaskLog model.
+
+        Provides access to task execution logs with timestamp, level, and message.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Unique identifier for this log entry
+        task_type:
+          allOf:
+            - $ref: "#/components/schemas/TaskTypeEnum"
+          description: |-
+            Type of task (backtest or trading)
+
+            * `backtest` - Backtest
+            * `trading` - Trading
+        task_id:
+          type: string
+          format: uuid
+          description: UUID of the task this log entry belongs to
+        celery_task_id:
+          type: string
+          nullable: true
+          description: Celery task ID for this execution
+          maxLength: 255
+        timestamp:
+          type: string
+          format: date-time
+          readOnly: true
+          description: When this log entry was created
+        level:
+          allOf:
+            - $ref: "#/components/schemas/LevelEnum"
+          description: |-
+            Log severity level
+
+            * `DEBUG` - Debug
+            * `INFO` - Info
+            * `WARNING` - Warning
+            * `ERROR` - Error
+            * `CRITICAL` - Critical
+        component:
+          type: string
+          description: Component/logger name that emitted this log
+          maxLength: 255
+        message:
+          type: string
+          description: Log message content
+        details:
+          description: Additional structured log details
+      required:
+        - message
+        - task_id
+        - task_type
+    TaskTypeEnum:
+      enum:
+        - backtest
+        - trading
+      type: string
+      description: |-
+        * `backtest` - Backtest
+        * `trading` - Trading
+    Trade:
+      type: object
+      description: Serializer for trade data from Trades model.
+      properties:
+        direction:
+          $ref: "#/components/schemas/DirectionEnum"
+        units:
+          type: integer
+        instrument:
+          type: string
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,10})?$
+        execution_method:
+          $ref: "#/components/schemas/ExecutionMethodEnum"
+        execution_method_display:
+          type: string
+          description: Human-readable display name for the execution method.
+          readOnly: true
+        layer_index:
+          type: integer
+          nullable: true
+        pnl:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,10})?$
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        open_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,10})?$
+          nullable: true
+        open_timestamp:
+          type: string
+          format: date-time
+          nullable: true
+        close_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,10})?$
+          nullable: true
+        close_timestamp:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - direction
+        - execution_method
+        - instrument
+        - price
+        - timestamp
+        - units
+    TradingEvent:
+      type: object
+      description: Serializer for TradingEvent model.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        event_type:
+          $ref: "#/components/schemas/EventTypeEnum"
+        event_type_display:
+          type: string
+          description: Human-readable display name for the event type.
+          readOnly: true
+        severity:
+          type: string
+          maxLength: 16
+        description:
+          type: string
+        user:
+          type: integer
+          nullable: true
+        account:
+          type: integer
+          nullable: true
+        instrument:
+          type: string
+          nullable: true
+          maxLength: 32
+        task_type:
+          type: string
+          maxLength: 32
+        task_id:
+          type: string
+          format: uuid
+          nullable: true
+        celery_task_id:
+          type: string
+          nullable: true
+          description: Celery task ID for tracking specific execution
+          maxLength: 255
+        details: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+        - description
+        - event_type
+    TradingModeEnum:
+      enum:
+        - netting
+        - hedging
+      type: string
+      description: |-
+        * `netting` - Netting Mode
+        * `hedging` - Hedging Mode
+    TradingTask:
+      type: object
+      description: Serializer for TradingTask with execution data.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Unique identifier for this record
+        name:
+          type: string
+          description: Human-readable name for this trading task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this trading task
+        task_type:
+          type: string
+          description: |-
+            Get the task type.
+
+            Args:
+                obj: Task instance
+
+            Returns:
+                str: "backtest" or "trading"
+          readOnly: true
+        status:
+          allOf:
+            - $ref: "#/components/schemas/StatusEnum"
+          readOnly: true
+          description: |-
+            Current task status
+
+            * `created` - Created
+            * `starting` - Starting
+            * `running` - Running
+            * `paused` - Paused
+            * `stopping` - Stopping
+            * `stopped` - Stopped
+            * `completed` - Completed
+            * `failed` - Failed
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when this record was created
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when this record was last updated
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Timestamp when the task execution started
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Timestamp when the task execution completed
+        duration:
+          type: number
+          format: double
+          nullable: true
+          description: |-
+            Calculate task execution duration in seconds.
+
+            Args:
+                obj: Task instance
+
+            Returns:
+                float | None: Duration in seconds if both started_at and completed_at are set,
+                             None otherwise
+          readOnly: true
+        celery_task_id:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Celery task ID for tracking execution
+        error_message:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Error message if task failed
+        error_traceback:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Full error traceback if task failed
+        user:
+          type: integer
+          readOnly: true
+          description: User who created this trading task
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        oanda_account:
+          type: integer
+          description: OANDA account used for trading
+        sell_on_stop:
+          type: boolean
+          description: Close all positions when task is stopped
+        instrument:
+          type: string
+          description: Trading instrument (e.g., EUR_USD, USD_JPY)
+          maxLength: 20
+        trading_mode:
+          allOf:
+            - $ref: "#/components/schemas/TradingModeEnum"
+          description: |-
+            Trading mode: netting (aggregated positions) or hedging (independent trades)
+
+            * `netting` - Netting Mode
+            * `hedging` - Hedging Mode
+        strategy_state:
+          readOnly: true
+          description: Strategy-specific state for persistence across restarts
+        current_tick:
+          allOf:
+            - $ref: "#/components/schemas/CurrentTick"
+          readOnly: true
+          nullable: true
+          description: Current tick position and price (only present for running tasks)
+      required:
+        - config
+        - name
+        - oanda_account
+    TradingTaskCreate:
+      type: object
+      description: |-
+        Serializer for creating and updating TradingTask.
+
+        Includes validation for account ownership and configuration.
+      properties:
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        oanda_account:
+          type: integer
+          description: OANDA account used for trading
+        name:
+          type: string
+          description: Human-readable name for this trading task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this trading task
+        sell_on_stop:
+          type: boolean
+          description: Close all positions when task is stopped
+    TradingTaskCreateRequest:
+      type: object
+      description: |-
+        Serializer for creating and updating TradingTask.
+
+        Includes validation for account ownership and configuration.
+      properties:
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        oanda_account:
+          type: integer
+          description: OANDA account used for trading
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable name for this trading task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this trading task
+        sell_on_stop:
+          type: boolean
+          description: Close all positions when task is stopped
+    TradingTaskRequest:
+      type: object
+      description: Serializer for TradingTask with execution data.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable name for this trading task
+          maxLength: 255
+        description:
+          type: string
+          description: Optional description of this trading task
+        config:
+          type: string
+          format: uuid
+          description: Strategy configuration used by this task
+        oanda_account:
+          type: integer
+          description: OANDA account used for trading
+        sell_on_stop:
+          type: boolean
+          description: Close all positions when task is stopped
+        instrument:
+          type: string
+          minLength: 1
+          description: Trading instrument (e.g., EUR_USD, USD_JPY)
+          maxLength: 20
+        trading_mode:
+          allOf:
+            - $ref: "#/components/schemas/TradingModeEnum"
+          description: |-
+            Trading mode: netting (aggregated positions) or hedging (independent trades)
+
+            * `netting` - Netting Mode
+            * `hedging` - Hedging Mode
+      required:
+        - config
+        - name
+        - oanda_account
+    UserLoginRequest:
+      type: object
+      description: Serializer for user login.
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          description: User's email address
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: User's password
+      required:
+        - email
+        - password
+    UserRegistrationRequest:
+      type: object
+      description: Serializer for user registration.
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          description: User's email address (used for login)
+          maxLength: 254
+        username:
+          type: string
+          minLength: 1
+          description: Username (auto-generated from email if not provided)
+          pattern: ^[a-zA-Z0-9._-]+$
+          maxLength: 150
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Password must be at least 8 characters long
+        password_confirm:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Confirm password
+      required:
+        - email
+        - password
+        - password_confirm
+    UserSettingsUpdateRequest:
+      type: object
+      description: Serializer for updating user settings.
+      properties:
+        timezone:
+          type: string
+          minLength: 1
+        language:
+          $ref: "#/components/schemas/LanguageEnum"
+        first_name:
+          type: string
+        last_name:
+          type: string
+        username:
+          type: string
+          minLength: 1
+        notification_enabled:
+          type: boolean
+        notification_email:
+          type: boolean
+        notification_browser:
+          type: boolean
+        settings_json: {}
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+servers:
+  - url: http://localhost:8000
+    description: Development server
+  - url: https://api.autoforex.example.com
+    description: Production server
+tags:
+  - name: accounts
+    description: User account management
+  - name: health
+    description: System health checks
+  - name: market
+    description: Market data and OANDA account management
+  - name: trading
+    description: Trading tasks and execution management

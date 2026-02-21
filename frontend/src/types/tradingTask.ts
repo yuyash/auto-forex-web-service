@@ -3,13 +3,13 @@ import { TaskStatus } from './common';
 import type { ExecutionSummary } from './execution';
 
 export interface TradingTask {
-  id: number;
+  id: string;
   user_id: number;
-  config_id: number;
+  config_id: string;
   config_name: string;
   strategy_type: string;
   instrument: string;
-  account_id: number;
+  account_id: string;
   account_name: string;
   account_type: 'live' | 'practice';
   name: string;
@@ -22,23 +22,30 @@ export interface TradingTask {
   has_open_positions: boolean;
   open_positions_count: number;
   can_resume: boolean;
+  started_at?: string;
+  completed_at?: string;
+  celery_task_id?: string;
+  error_message?: string;
+  trading_mode?: string;
+  pip_size?: string;
+  current_tick?: { timestamp: string; price: string | null } | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface TradingTaskCreateData {
-  config_id: number;
-  account_id: number;
+  config_id: string;
+  account_id: string;
   name: string;
   description?: string;
   sell_on_stop?: boolean;
 }
 
 export interface TradingTaskUpdateData {
-  config?: number;
+  config?: string;
   name?: string;
   description?: string;
-  account_id?: number;
+  account_id?: string;
   sell_on_stop?: boolean;
 }
 
@@ -47,8 +54,8 @@ export interface TradingTaskListParams {
   page_size?: number;
   search?: string;
   status?: TaskStatus;
-  config_id?: number;
-  account_id?: number;
+  config_id?: string;
+  account_id?: string;
   strategy_type?: string;
   ordering?: string;
 }

@@ -1,145 +1,14 @@
-"""Event and log models for executions."""
+"""Event and log models for trading."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from django.db import models
 
-
-class ExecutionStrategyEvent(models.Model):
-    """Incrementally persisted strategy events during an execution.
-
-    These rows enable live strategy markers/timelines while an execution is RUNNING.
-    The final immutable `ExecutionMetrics.strategy_events` remains the canonical
-    completed payload.
-    """
-
-    execution = models.ForeignKey(
-        "trading.TaskExecution",
-        on_delete=models.CASCADE,
-        related_name="strategy_event_rows",
-        help_text="Owning task execution",
-    )
-    sequence = models.PositiveIntegerField(help_text="Monotonic per-execution sequence")
-    event_type = models.CharField(
-        max_length=64,
-        blank=True,
-        default="",
-        db_index=True,
-        help_text="Best-effort event['type'] for filtering/debug",
-    )
-    strategy_type = models.CharField(
-        max_length=64,
-        blank=True,
-        default="",
-        db_index=True,
-        help_text="Strategy type identifier (e.g., 'floor', 'momentum') for filtering and registry lookup",
-    )
-    timestamp = models.DateTimeField(
-        null=True,
-        blank=True,
-        db_index=True,
-        help_text="Event timestamp parsed from event data, used for chronological ordering",
-    )
-    event = models.JSONField(default=dict, help_text="Raw strategy event payload")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "execution_strategy_events"
-        verbose_name = "Execution Strategy Event"
-        verbose_name_plural = "Execution Strategy Events"
-        indexes = [
-            models.Index(fields=["execution", "sequence"]),
-            models.Index(fields=["execution", "created_at"]),
-            models.Index(fields=["execution", "strategy_type"]),
-            models.Index(fields=["execution", "timestamp"]),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["execution", "sequence"],
-                name="uniq_execution_strategy_event_sequence",
-            )
-        ]
-        ordering = ["sequence", "id"]
-
-    def __str__(self) -> str:
-        return f"ExecutionStrategyEvent(exec={self.execution_id}, seq={self.sequence}, type={self.event_type})"  # type: ignore[attr-defined]
-
-
-class ExecutionTradeLogEntry(models.Model):
-    """Incrementally persisted trade log entries during an execution."""
-
-    execution = models.ForeignKey(
-        "trading.TaskExecution",
-        on_delete=models.CASCADE,
-        related_name="trade_log_rows",
-        help_text="Owning task execution",
-    )
-    sequence = models.PositiveIntegerField(help_text="Monotonic per-execution sequence")
-    trade = models.JSONField(default=dict, help_text="Raw trade payload")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "execution_trade_logs"
-        verbose_name = "Execution Trade Log Entry"
-        verbose_name_plural = "Execution Trade Log Entries"
-        indexes = [
-            models.Index(fields=["execution", "sequence"]),
-            models.Index(fields=["execution", "created_at"]),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["execution", "sequence"],
-                name="uniq_execution_trade_log_sequence",
-            )
-        ]
-        ordering = ["sequence", "id"]
-
-    def __str__(self) -> str:
-        return f"ExecutionTradeLogEntry(exec={self.execution_id}, seq={self.sequence})"  # type: ignore[attr-defined]
-
-
-class ExecutionEquityPoint(models.Model):
-    """Incrementally persisted equity curve points during an execution."""
-
-    execution = models.ForeignKey(
-        "trading.TaskExecution",
-        on_delete=models.CASCADE,
-        related_name="equity_point_rows",
-        help_text="Owning task execution",
-    )
-    sequence = models.PositiveIntegerField(help_text="Monotonic per-execution sequence")
-    timestamp = models.DateTimeField(
-        null=True, blank=True, help_text="Point timestamp (best-effort)"
-    )
-    timestamp_raw = models.CharField(
-        max_length=64,
-        blank=True,
-        default="",
-        help_text="Original timestamp string when parsing fails",
-    )
-    balance = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        help_text="Account balance after applying realized P&L",
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "execution_equity_points"
-        verbose_name = "Execution Equity Point"
-        verbose_name_plural = "Execution Equity Points"
-        indexes = [
-            models.Index(fields=["execution", "sequence"]),
-            models.Index(fields=["execution", "timestamp"]),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["execution", "sequence"],
-                name="uniq_execution_equity_point_sequence",
-            )
-        ]
-        ordering = ["sequence", "id"]
-
-    def __str__(self) -> str:
-        return f"ExecutionEquityPoint(exec={self.execution_id}, seq={self.sequence})"  # type: ignore[attr-defined]
+if TYPE_CHECKING:
+    from apps.trading.dataclasses.context import EventContext
+    from apps.trading.events.base import StrategyEvent
 
 
 class TradingEvent(models.Model):
@@ -160,7 +29,7 @@ class TradingEvent(models.Model):
         related_name="trading_events",
     )
     account = models.ForeignKey(
-        "market.OandaAccount",
+        "market.OandaAccounts",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -169,13 +38,13 @@ class TradingEvent(models.Model):
     instrument = models.CharField(max_length=32, null=True, blank=True, db_index=True)
 
     task_type = models.CharField(max_length=32, blank=True, default="", db_index=True)
-    task_id = models.IntegerField(null=True, blank=True, db_index=True)
-    execution = models.ForeignKey(
-        "trading.TaskExecution",
-        on_delete=models.SET_NULL,
+    task_id = models.UUIDField(null=True, blank=True, db_index=True)
+    celery_task_id = models.CharField(
+        max_length=255,
         null=True,
         blank=True,
-        related_name="trading_events",
+        db_index=True,
+        help_text="Celery task ID for tracking specific execution",
     )
 
     details = models.JSONField(default=dict, blank=True)
@@ -183,9 +52,45 @@ class TradingEvent(models.Model):
 
     class Meta:
         db_table = "trading_events"
-        verbose_name = "Trading Event"
+        verbose_name = "Trading Events"
         verbose_name_plural = "Trading Events"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["task_type", "task_id", "-created_at"]),
+            models.Index(fields=["task_type", "task_id", "celery_task_id", "-created_at"]),
+            models.Index(fields=["event_type", "-created_at"]),
+        ]
 
     def __str__(self) -> str:
         return f"{self.created_at.isoformat()} [{self.severity}] {self.event_type}"
+
+    @classmethod
+    def from_event(
+        cls,
+        *,
+        event: "StrategyEvent",
+        context: "EventContext",
+        celery_task_id: str | None = None,
+    ) -> "TradingEvent":
+        """Create a TradingEvent instance from a StrategyEvent.
+
+        Args:
+            event: Strategy event to convert
+            context: Event context with user, account, instrument, task info
+            celery_task_id: Optional Celery task ID
+
+        Returns:
+            TradingEvent: New TradingEvent instance (not saved to database)
+        """
+        return cls(
+            task_type=context.task_type.value,
+            task_id=context.task_id,
+            celery_task_id=celery_task_id,
+            event_type=event.event_type,
+            severity="info",
+            description=str(event.to_dict()),
+            user=context.user,
+            account=context.account,
+            instrument=context.instrument,
+            details=event.to_dict(),
+        )

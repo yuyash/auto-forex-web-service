@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Third-party apps
     "rest_framework",
+    "drf_spectacular",
     "channels",
     "django_celery_beat",
     # Local apps
@@ -72,8 +73,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Custom security and logging middleware
-    "apps.accounts.middleware.HTTPAccessLoggingMiddleware",
-    "apps.accounts.middleware.SecurityMonitoringMiddleware",
+    "apps.accounts.middlewares.logging.HTTPAccessLoggingMiddleware",
+    "apps.accounts.middlewares.security.SecurityMonitoringMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -231,6 +232,9 @@ CELERY_TASK_ROUTES = {
     "trading.tasks.run_backtest_task": {"queue": "trading"},
 }
 
+# Celery Beat periodic task schedule
+CELERY_BEAT_SCHEDULE = {}
+
 
 # =============================================================================
 # Market Tick Pub/Sub
@@ -296,32 +300,25 @@ TRADING_FLOOR_STRATEGY_DEFAULTS = {
         os.getenv("TRADING_FLOOR_VOLATILITY_LOCK_MULTIPLIER", "5.0")
     ),
     "retracement_trigger_progression": os.getenv(
-        "TRADING_FLOOR_RETRACEMENT_TRIGGER_PROGRESSION", "additive"
+        "TRADING_FLOOR_RETRACEMENT_TRIGGER_PROGRESSION", "constant"
     ),
     "retracement_trigger_increment": float(
         os.getenv("TRADING_FLOOR_RETRACEMENT_TRIGGER_INCREMENT", "5")
     ),
-    "lot_size_progression": os.getenv("TRADING_FLOOR_LOT_SIZE_PROGRESSION", "additive"),
-    "lot_size_increment": float(os.getenv("TRADING_FLOOR_LOT_SIZE_INCREMENT", "0.5")),
-    "entry_signal_lookback_ticks": int(
-        os.getenv("TRADING_FLOOR_ENTRY_SIGNAL_LOOKBACK_TICKS", "10")
+    "take_profit_trigger_progression": os.getenv(
+        "TRADING_FLOOR_TAKE_PROFIT_TRIGGER_PROGRESSION", "constant"
     ),
-    # Momentum defaults: candle-based lookback by default.
-    "momentum_lookback_source": os.getenv("TRADING_FLOOR_MOMENTUM_LOOKBACK_SOURCE", "candles"),
+    "take_profit_trigger_increment": float(
+        os.getenv("TRADING_FLOOR_TAKE_PROFIT_TRIGGER_INCREMENT", "5")
+    ),
+    "take_profit_pips_mode": os.getenv("TRADING_FLOOR_TAKE_PROFIT_PIPS_MODE", "constant"),
+    "take_profit_pips_amount": float(os.getenv("TRADING_FLOOR_TAKE_PROFIT_PIPS_AMOUNT", "5")),
     "entry_signal_lookback_candles": int(
         os.getenv("TRADING_FLOOR_ENTRY_SIGNAL_LOOKBACK_CANDLES", "50")
     ),
     "entry_signal_candle_granularity_seconds": int(
         os.getenv("TRADING_FLOOR_ENTRY_SIGNAL_CANDLE_GRANULARITY_SECONDS", "60")
     ),
-    "direction_method": os.getenv("TRADING_FLOOR_DIRECTION_METHOD", "momentum"),
-    "sma_fast_period": int(os.getenv("TRADING_FLOOR_SMA_FAST_PERIOD", "10")),
-    "sma_slow_period": int(os.getenv("TRADING_FLOOR_SMA_SLOW_PERIOD", "30")),
-    "ema_fast_period": int(os.getenv("TRADING_FLOOR_EMA_FAST_PERIOD", "12")),
-    "ema_slow_period": int(os.getenv("TRADING_FLOOR_EMA_SLOW_PERIOD", "26")),
-    "rsi_period": int(os.getenv("TRADING_FLOOR_RSI_PERIOD", "14")),
-    "rsi_overbought": int(os.getenv("TRADING_FLOOR_RSI_OVERBOUGHT", "70")),
-    "rsi_oversold": int(os.getenv("TRADING_FLOOR_RSI_OVERSOLD", "30")),
 }
 MARKET_BACKTEST_PUBLISH_BATCH_SIZE = int(os.getenv("MARKET_BACKTEST_PUBLISH_BATCH_SIZE", "1000"))
 
@@ -331,7 +328,7 @@ MARKET_BACKTEST_PUBLISH_BATCH_SIZE = int(os.getenv("MARKET_BACKTEST_PUBLISH_BATC
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "apps.accounts.authentication.JWTAuthentication",
+        "apps.accounts.auth.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
@@ -349,9 +346,43 @@ REST_FRAMEWORK = {
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DATETIME_FORMAT": "%Y-%m-%dT%H:%M:%S.%fZ",
     "DATE_FORMAT": "%Y-%m-%d",
     "TIME_FORMAT": "%H:%M:%S",
+}
+
+
+# =============================================================================
+# DRF Spectacular (OpenAPI) Configuration
+# =============================================================================
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Auto Forex Trading API",
+    "DESCRIPTION": "API for managing algorithmic forex trading operations across multiple OANDA accounts",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SCHEMA_PATH_PREFIX": "/api/",
+    "SERVERS": [
+        {"url": "http://localhost:8000", "description": "Development server"},
+        {"url": "https://api.autoforex.example.com", "description": "Production server"},
+    ],
+    "TAGS": [
+        {"name": "accounts", "description": "User account management"},
+        {"name": "health", "description": "System health checks"},
+        {"name": "market", "description": "Market data and OANDA account management"},
+        {"name": "trading", "description": "Trading tasks and execution management"},
+    ],
+    "CONTACT": {
+        "name": "Auto Forex Support",
+        "email": "support@autoforex.example.com",
+    },
+    "LICENSE": {
+        "name": "Proprietary",
+    },
+    "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
+    "COMPONENT_NO_READ_ONLY_REQUIRED": True,
 }
 
 

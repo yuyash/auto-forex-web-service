@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 
 import {
   Box,
@@ -44,6 +44,10 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import {
+  fetchTickDataRange,
+  type TickDataRange,
+} from '../../services/api/market';
 
 const steps = ['Configuration', 'Parameters', 'Review'];
 const DEFAULT_DATE_RANGE_DAYS = 30;
@@ -60,7 +64,7 @@ const createDefaultDateRange = () => {
 };
 
 interface BacktestTaskFormProps {
-  taskId?: number;
+  taskId?: string;
   initialData?: Partial<BacktestTaskSchemaOutput>;
 }
 
@@ -68,12 +72,12 @@ interface BacktestTaskFormProps {
 interface ReviewContentProps {
   selectedConfig: {
     name: string;
-    id: number;
+    id: string;
     description?: string;
     parameters?: Record<string, unknown>;
   };
   formValues: {
-    config_id: number;
+    config_id: string;
     name: string;
     description?: string;
     data_source: DataSource;
@@ -198,7 +202,7 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
         <Typography variant="body1">
           {pip_size !== undefined && pip_size !== null
             ? pip_size
-            : 'Auto (from OANDA account)'}
+            : 'Auto (derived from instrument)'}
         </Typography>
       </Grid>
 
@@ -229,7 +233,7 @@ export default function BacktestTaskForm({
 
   const resolvedDefaultValues = useMemo(() => {
     const baseDefaults: BacktestTaskSchemaOutput = {
-      config_id: 0,
+      config_id: '',
       name: '',
       description: '',
       data_source: DataSource.POSTGRESQL,
@@ -259,6 +263,11 @@ export default function BacktestTaskForm({
   const createTask = useCreateBacktestTask();
   const updateTask = useUpdateBacktestTask();
 
+  // Tick data availability state
+  const [dataRange, setDataRange] = useState<TickDataRange | null>(null);
+  const [dataRangeError, setDataRangeError] = useState<string | null>(null);
+  const [dataRangeLoading, setDataRangeLoading] = useState(false);
+
   const {
     control,
     handleSubmit,
@@ -277,7 +286,6 @@ export default function BacktestTaskForm({
     defaultValues: resolvedDefaultValues,
   });
 
-  // eslint-disable-next-line react-hooks/incompatible-library
   const selectedConfigId = watch('config_id');
 
   // Sync saved formData back into React Hook Form when changing steps
@@ -300,15 +308,68 @@ export default function BacktestTaskForm({
   const configurations = configurationsData?.results || [];
   const { strategies } = useStrategies();
 
-  // Convert config_id to number for the API call
-  const configIdNumber =
-    typeof selectedConfigId === 'string'
-      ? selectedConfigId === ''
-        ? 0
-        : Number(selectedConfigId)
-      : selectedConfigId || 0;
+  // config_id is now a UUID string
+  const configIdString = selectedConfigId || '';
 
-  const { data: selectedConfig } = useConfiguration(configIdNumber);
+  const { data: selectedConfig } = useConfiguration(configIdString);
+
+  // Fetch tick data range when instrument changes
+  const checkDataRange = useCallback(async (instrument: string) => {
+    if (!instrument) {
+      setDataRange(null);
+      setDataRangeError(null);
+      return;
+    }
+    setDataRangeLoading(true);
+    setDataRangeError(null);
+    try {
+      const range = await fetchTickDataRange(instrument);
+      setDataRange(range);
+    } catch {
+      setDataRangeError('ティックデータの範囲を取得できませんでした');
+      setDataRange(null);
+    } finally {
+      setDataRangeLoading(false);
+    }
+  }, []);
+
+  const watchedInstrument = watch('instrument');
+  const watchedStartTime = watch('start_time');
+  const watchedEndTime = watch('end_time');
+
+  useEffect(() => {
+    checkDataRange(watchedInstrument);
+  }, [watchedInstrument, checkDataRange]);
+
+  // Compute data coverage warning
+  const dataCoverageWarning = useMemo<string | null>(() => {
+    if (!dataRange || !dataRange.has_data) {
+      if (dataRange && !dataRange.has_data && watchedInstrument) {
+        return `${watchedInstrument} のティックデータがデータベースに存在しません。`;
+      }
+      return null;
+    }
+    const warnings: string[] = [];
+    if (watchedStartTime && dataRange.min_timestamp) {
+      const start = new Date(watchedStartTime);
+      const minTs = new Date(dataRange.min_timestamp);
+      if (start < minTs) {
+        warnings.push(
+          `開始日時がデータの最古のタイムスタンプ (${minTs.toLocaleString()}) より前です。`
+        );
+      }
+    }
+    if (watchedEndTime && dataRange.max_timestamp) {
+      const end = new Date(watchedEndTime);
+      const maxTs = new Date(dataRange.max_timestamp);
+      if (end > maxTs) {
+        warnings.push(
+          `終了日時がデータの最新のタイムスタンプ (${maxTs.toLocaleString()}) より後です。`
+        );
+      }
+    }
+    return warnings.length > 0 ? warnings.join(' ') : null;
+  }, [dataRange, watchedInstrument, watchedStartTime, watchedEndTime]);
 
   const handleNext = async () => {
     // Save current form values to state BEFORE validation
@@ -340,6 +401,11 @@ export default function BacktestTaskForm({
       }
     }
 
+    // Block proceeding from Parameters step if data coverage is insufficient
+    if (activeStep === 1 && dataCoverageWarning) {
+      return;
+    }
+
     // Validation passed or no validation needed, proceed to next step
     canSubmitRef.current = false; // Reset submit flag when navigating
     setActiveStep((prevActiveStep) => prevActiveStep + 1);
@@ -365,7 +431,7 @@ export default function BacktestTaskForm({
 
     // Zod has already validated and converted types, so we can use the data directly
     const apiData: BacktestTaskCreateData = {
-      config_id: completeData.config_id,
+      config: completeData.config_id,
       name: completeData.name,
       description: completeData.description,
       data_source: DataSource.POSTGRESQL,
@@ -373,7 +439,7 @@ export default function BacktestTaskForm({
       end_time: completeData.end_time,
       initial_balance: completeData.initial_balance,
       commission_per_trade: completeData.commission_per_trade,
-      pip_size: completeData.pip_size,
+      ...(completeData.pip_size != null && { pip_size: completeData.pip_size }),
       instrument: completeData.instrument,
       sell_at_completion: completeData.sell_at_completion,
     };
@@ -391,14 +457,14 @@ export default function BacktestTaskForm({
       navigate('/backtest-tasks');
     } catch (error: unknown) {
       const err = error as {
-        data?: Record<string, string | string[]>;
+        details?: Record<string, string | string[]>;
         message?: string;
       };
 
       // Extract backend validation errors if available
       let errorMessage = 'Failed to create task';
-      if (err?.data) {
-        const backendErrors = err.data;
+      if (err?.details && typeof err.details === 'object') {
+        const backendErrors = err.details as Record<string, string | string[]>;
         const errorMessages: string[] = [];
 
         // Map backend field names to frontend field names
@@ -449,10 +515,11 @@ export default function BacktestTaskForm({
                   render={({ field }) => (
                     <ConfigurationSelector
                       configurations={configurations}
-                      value={field.value as number | string | undefined}
+                      value={field.value as string | undefined}
                       onChange={field.onChange}
                       error={errors.config_id?.message}
                       helperText={errors.config_id?.message}
+                      required
                     />
                   )}
                 />
@@ -553,6 +620,32 @@ export default function BacktestTaskForm({
                 />
               </Grid>
 
+              {/* Tick data availability info */}
+              {dataRangeLoading && (
+                <Grid size={{ xs: 12 }}>
+                  <Alert severity="info">ティックデータの範囲を確認中...</Alert>
+                </Grid>
+              )}
+              {dataRangeError && (
+                <Grid size={{ xs: 12 }}>
+                  <Alert severity="warning">{dataRangeError}</Alert>
+                </Grid>
+              )}
+              {dataRange && dataRange.has_data && (
+                <Grid size={{ xs: 12 }}>
+                  <Alert severity="info">
+                    {dataRange.instrument} のデータ範囲:{' '}
+                    {new Date(dataRange.min_timestamp!).toLocaleString()} 〜{' '}
+                    {new Date(dataRange.max_timestamp!).toLocaleString()}
+                  </Alert>
+                </Grid>
+              )}
+              {dataCoverageWarning && (
+                <Grid size={{ xs: 12 }}>
+                  <Alert severity="warning">{dataCoverageWarning}</Alert>
+                </Grid>
+              )}
+
               <Grid size={{ xs: 12, md: 6 }}>
                 <Controller
                   name="initial_balance"
@@ -600,8 +693,7 @@ export default function BacktestTaskForm({
                       placeholder="e.g., EUR_USD, USD_JPY"
                       error={!!errors.instrument}
                       helperText={
-                        errors.instrument?.message ||
-                        'Trading pair to backtest'
+                        errors.instrument?.message || 'Trading pair to backtest'
                       }
                     />
                   )}
@@ -615,6 +707,11 @@ export default function BacktestTaskForm({
                   render={({ field }) => (
                     <TextField
                       {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : Number(val));
+                      }}
                       fullWidth
                       label="Pip Size (Optional)"
                       type="number"
@@ -622,7 +719,7 @@ export default function BacktestTaskForm({
                       error={!!errors.pip_size}
                       helperText={
                         errors.pip_size?.message ||
-                        'Leave empty to auto-fetch from OANDA account. Common values: 0.0001 (EUR_USD), 0.01 (USD_JPY)'
+                        'Leave empty to auto-derive from instrument. Common values: 0.0001 (EUR_USD), 0.01 (USD_JPY)'
                       }
                     />
                   )}
@@ -694,7 +791,7 @@ export default function BacktestTaskForm({
       case 2: {
         // Use the saved formData state which contains all values from all steps
         const formValues = {
-          config_id: formData.config_id as number,
+          config_id: formData.config_id as string,
           name: formData.name as string,
           description: formData.description,
           data_source: formData.data_source as DataSource,
@@ -704,7 +801,10 @@ export default function BacktestTaskForm({
           commission_per_trade: formData.commission_per_trade as number,
           pip_size: formData.pip_size as number | undefined,
           instrument: formData.instrument as string,
-          trading_mode: formData.trading_mode as 'netting' | 'hedging' | undefined,
+          trading_mode: formData.trading_mode as
+            | 'netting'
+            | 'hedging'
+            | undefined,
           sell_at_completion: formData.sell_at_completion as boolean,
         };
 

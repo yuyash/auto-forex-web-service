@@ -1,44 +1,28 @@
 """Enums for Floor strategy."""
 
-from enum import StrEnum
+from enum import Enum
+
+from apps.trading.enums import Direction  # Use the main Direction enum
+
+__all__ = ["Direction", "StrategyStatus", "Progression"]
 
 
-class StrategyStatus(StrEnum):
+class StrategyStatus(str, Enum):
+    """Strategy execution status."""
+
     RUNNING = "running"
     PAUSED = "paused"
     STOPPED = "stopped"
 
 
-class Direction(StrEnum):
-    LONG = "long"
-    SHORT = "short"
+class Progression(str, Enum):
+    """Progression mode for cross-layer parameter changes.
 
+    Controls how a base value changes as the layer index increases (Layer 0 → 1 → 2 …).
+    """
 
-class Progression(StrEnum):
-    EQUAL = "equal"
-    ADDITIVE = "additive"
-    EXPONENTIAL = "exponential"
-    INVERSE = "inverse"
-
-
-class DirectionMethod(StrEnum):
-    MOMENTUM = "momentum"
-    SMA_CROSSOVER = "sma_crossover"
-    EMA_CROSSOVER = "ema_crossover"
-    PRICE_VS_SMA = "price_vs_sma"
-    RSI = "rsi"
-    OHLC_SMA_CROSSOVER = "ohlc_sma_crossover"
-    OHLC_EMA_CROSSOVER = "ohlc_ema_crossover"
-    OHLC_PRICE_VS_SMA = "ohlc_price_vs_sma"
-
-
-class MomentumLookbackSource(StrEnum):
-    TICKS = "ticks"
-    CANDLES = "candles"
-
-
-class LotMode(StrEnum):
-    """Lot size calculation mode."""
-
-    ADDITIVE = "additive"
-    MULTIPLICATIVE = "multiplicative"
+    CONSTANT = "constant"  # 一定 — 全レイヤーで同じ値
+    ADDITIVE = "additive"  # 加算 — base + increment × layer_index
+    SUBTRACTIVE = "subtractive"  # 減算 — base − increment × layer_index (最小 0)
+    MULTIPLICATIVE = "multiplicative"  # 乗算 — base × (2 ^ layer_index)
+    DIVISIVE = "divisive"  # 除算 — base / (2 ^ layer_index)

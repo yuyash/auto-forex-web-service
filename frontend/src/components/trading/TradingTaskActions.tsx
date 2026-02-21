@@ -95,7 +95,7 @@ export default function TradingTaskActions({
       setDeleteDialogOpen(false);
       // Trigger refresh after successful delete
       onRefresh?.();
-      navigate('/trading-tasks');
+      navigate('/trading-tasks', { state: { deleted: true } });
     } catch (error) {
       console.error('Failed to delete task:', error);
       const errorMessage =

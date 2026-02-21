@@ -37,7 +37,8 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
   trades,
 }) => {
   const [instrumentFilter, setInstrumentFilter] = useState<string>('all');
-  const [directionFilter, setDirectionFilter] = useState<DirectionFilter>('all');
+  const [directionFilter, setDirectionFilter] =
+    useState<DirectionFilter>('all');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [sortField, setSortField] = useState<SortField>('entry_time');
@@ -94,8 +95,10 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
           bValue = b.pnl;
           break;
         case 'duration':
-          aValue = new Date(a.exit_time).getTime() - new Date(a.entry_time).getTime();
-          bValue = new Date(b.exit_time).getTime() - new Date(b.entry_time).getTime();
+          aValue =
+            new Date(a.exit_time).getTime() - new Date(a.entry_time).getTime();
+          bValue =
+            new Date(b.exit_time).getTime() - new Date(b.entry_time).getTime();
           break;
         default:
           return 0;
@@ -109,7 +112,15 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
     });
 
     return filtered;
-  }, [trades, instrumentFilter, directionFilter, dateFrom, dateTo, sortField, sortOrder]);
+  }, [
+    trades,
+    instrumentFilter,
+    directionFilter,
+    dateFrom,
+    dateTo,
+    sortField,
+    sortOrder,
+  ]);
 
   const handleClearFilters = () => {
     setInstrumentFilter('all');
@@ -145,7 +156,8 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
           trade.exit_price,
           trade.pnl,
           trade.realized_pnl || '',
-          new Date(trade.exit_time).getTime() - new Date(trade.entry_time).getTime(),
+          new Date(trade.exit_time).getTime() -
+            new Date(trade.entry_time).getTime(),
         ].join(',')
       ),
     ];
@@ -167,7 +179,8 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
   };
 
   const formatDuration = (entryTime: string, exitTime: string): string => {
-    const durationMs = new Date(exitTime).getTime() - new Date(entryTime).getTime();
+    const durationMs =
+      new Date(exitTime).getTime() - new Date(entryTime).getTime();
     const seconds = Math.floor(durationMs / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
@@ -315,24 +328,40 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
   return (
     <Card>
       <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 2,
+          }}
+        >
           <Typography variant="h6">Trade History</Typography>
-          
+
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Tooltip title={showFilters ? 'Hide Filters' : 'Show Filters'}>
-              <IconButton onClick={() => setShowFilters(!showFilters)} size="small">
+              <IconButton
+                onClick={() => setShowFilters(!showFilters)}
+                size="small"
+              >
                 <FilterIcon />
                 {activeFiltersCount > 0 && (
                   <Chip
                     label={activeFiltersCount}
                     size="small"
                     color="primary"
-                    sx={{ position: 'absolute', top: -5, right: -5, height: 18, minWidth: 18 }}
+                    sx={{
+                      position: 'absolute',
+                      top: -5,
+                      right: -5,
+                      height: 18,
+                      minWidth: 18,
+                    }}
                   />
                 )}
               </IconButton>
             </Tooltip>
-            
+
             <Button
               variant="outlined"
               startIcon={<DownloadIcon />}
@@ -347,7 +376,9 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
 
         {/* Filters */}
         {showFilters && (
-          <Box sx={{ mb: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+          <Box
+            sx={{ mb: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}
+          >
             <Stack spacing={2}>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                 <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -371,7 +402,9 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                   <Select
                     value={directionFilter}
                     label="Direction"
-                    onChange={(e) => setDirectionFilter(e.target.value as DirectionFilter)}
+                    onChange={(e) =>
+                      setDirectionFilter(e.target.value as DirectionFilter)
+                    }
                   >
                     <MenuItem value="all">All Directions</MenuItem>
                     <MenuItem value="long">Long</MenuItem>

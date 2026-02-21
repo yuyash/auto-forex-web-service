@@ -5,22 +5,22 @@ This module contains signal handlers for:
 - Auto-creating UserSettings when a User is created
 """
 
-import logging
+from logging import Logger, getLogger
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from apps.accounts.models import User, UserSettings
 
-logger = logging.getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
-@receiver(post_save, sender=User)
+@receiver(signal=post_save, sender=User)
 def create_user_settings(
-    sender: type[User],  # pylint: disable=unused-argument
+    sender: type[User],
     instance: User,
     created: bool,
-    **kwargs: object,  # pylint: disable=unused-argument
+    **kwargs: object,
 ) -> None:
     """
     Auto-create UserSettings when a User is created.
@@ -32,4 +32,17 @@ def create_user_settings(
         **kwargs: Additional keyword arguments
     """
     if created:
+        logger.info(
+            "Signal received: Creating UserSettings for user '%s' (email: %s, id: %s)",
+            instance.username,
+            instance.email,
+            instance.pk,
+        )
         UserSettings.objects.create(user=instance)
+    else:
+        logger.debug(
+            "Signal received: User '%s' (email: %s, id: %s) was updated",
+            instance.username,
+            instance.email,
+            instance.pk,
+        )

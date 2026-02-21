@@ -18,7 +18,7 @@ interface LogEntry {
 
 export interface LogPanelProps {
   taskType: 'backtest' | 'trading';
-  taskId: number;
+  taskId: string;
   maxEntries?: number;
   autoScroll?: boolean;
   showTimestamp?: boolean;
@@ -38,7 +38,6 @@ export interface LogPanelProps {
  * - Allow scrolling through historical logs
  * - Filter logs by task_id to show only relevant logs
  *
- * Requirements: 6.7, 6.8, 6.9, 6.10
  */
 export const LogPanel: React.FC<LogPanelProps> = ({
   maxEntries = 1000,
@@ -50,9 +49,6 @@ export const LogPanel: React.FC<LogPanelProps> = ({
   const [autoScroll, setAutoScroll] = useState(initialAutoScroll);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const isUserScrollingRef = useRef(false);
-
-  // Note: WebSocket log streaming has been removed.
-  // Logs are now fetched via HTTP API and stored in the database.
 
   // Auto-scroll to latest log entry when new logs arrive
   useEffect(() => {

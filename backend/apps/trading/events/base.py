@@ -7,16 +7,20 @@ IDE support and compile-time checking.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from apps.trading.enums import EventType
 
+if TYPE_CHECKING:
+    from apps.trading.dataclasses.context import EventContext
+
 
 @dataclass
-class StrategyEvent:
+class StrategyEvent(ABC):
     """Base class for all strategy events.
 
     This is the abstract base class that all specific event types inherit from.
@@ -24,13 +28,26 @@ class StrategyEvent:
 
     Attributes:
         event_type: Type of event (EventType enum value)
-        timestamp: Event timestamp (optional)
-
-    Requirements: 1.2, 3.2
-    """
+        timestamp: Event timestamp (optional)"""
 
     event_type: EventType
     timestamp: datetime | None = None
+
+    @abstractmethod
+    def activate(self, context: "EventContext") -> None:
+        """Execute event-specific logic.
+
+        This method is called by the EventExecutor to perform the actions
+        associated with this event. Each event type implements its own
+        activation logic (e.g., opening positions, closing positions, logging).
+
+        Args:
+            context: Event context containing task, account, instrument info
+
+        Raises:
+            NotImplementedError: If the subclass doesn't implement this method
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} must implement activate() method")
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary format for database storage.
@@ -75,6 +92,8 @@ class StrategyEvent:
             return RemoveLayerEvent.from_dict(event_dict)
         elif event_type == EventType.VOLATILITY_LOCK:
             return VolatilityLockEvent.from_dict(event_dict)
+        elif event_type == EventType.VOLATILITY_HEDGE_NEUTRALIZE:
+            return VolatilityHedgeNeutralizeEvent.from_dict(event_dict)
         elif event_type == EventType.MARGIN_PROTECTION:
             return MarginProtectionEvent.from_dict(event_dict)
         else:
@@ -116,6 +135,34 @@ class InitialEntryEvent(StrategyEvent):
     def __post_init__(self):
         if not self.event_type:
             self.event_type = EventType.INITIAL_ENTRY
+
+    def activate(self, context: "EventContext") -> None:
+        """Execute initial entry event logic.
+
+        This method logs the initial entry action at INFO level.
+        The actual position ordering will be handled by the EventExecutor.
+
+        Args:
+            context: Event context containing task, account, instrument info
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            f"Initial entry: layer={self.layer_number}, direction={self.direction}, "
+            f"price={self.price}, units={self.units}",
+            extra={
+                "task_id": str(context.task_id),
+                "task_type": context.task_type.value,
+                "instrument": context.instrument,
+                "event_type": self.event_type.value,
+                "layer_number": self.layer_number,
+                "direction": self.direction,
+                "price": str(self.price),
+                "units": self.units,
+                "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            },
+        )
 
     def to_dict(self) -> dict[str, Any]:
         result = super().to_dict()
@@ -208,6 +255,35 @@ class RetracementEvent(StrategyEvent):
     def __post_init__(self):
         if not self.event_type:
             self.event_type = EventType.RETRACEMENT
+
+    def activate(self, context: "EventContext") -> None:
+        """Execute retracement event logic.
+
+        This method logs the retracement action at INFO level.
+        The actual position addition will be handled by the EventExecutor.
+
+        Args:
+            context: Event context containing task, account, instrument info
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            f"Retracement: layer={self.layer_number}, direction={self.direction}, "
+            f"price={self.price}, units={self.units}, count={self.retracement_count}",
+            extra={
+                "task_id": str(context.task_id),
+                "task_type": context.task_type.value,
+                "instrument": context.instrument,
+                "event_type": self.event_type.value,
+                "layer_number": self.layer_number,
+                "direction": self.direction,
+                "price": str(self.price),
+                "units": self.units,
+                "retracement_count": self.retracement_count,
+                "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            },
+        )
 
     def to_dict(self) -> dict[str, Any]:
         result = super().to_dict()
@@ -311,6 +387,38 @@ class TakeProfitEvent(StrategyEvent):
     def __post_init__(self):
         if not self.event_type:
             self.event_type = EventType.TAKE_PROFIT
+
+    def activate(self, context: "EventContext") -> None:
+        """Execute take profit event logic.
+
+        This method logs the take profit action at INFO level.
+        The actual position closing will be handled by the EventExecutor.
+
+        Args:
+            context: Event context containing task, account, instrument info
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            f"Take profit: layer={self.layer_number}, direction={self.direction}, "
+            f"entry={self.entry_price}, exit={self.exit_price}, units={self.units}, "
+            f"pnl={self.pnl}, pips={self.pips}",
+            extra={
+                "task_id": str(context.task_id),
+                "task_type": context.task_type.value,
+                "instrument": context.instrument,
+                "event_type": self.event_type.value,
+                "layer_number": self.layer_number,
+                "direction": self.direction,
+                "entry_price": str(self.entry_price),
+                "exit_price": str(self.exit_price),
+                "units": self.units,
+                "pnl": str(self.pnl),
+                "pips": str(self.pips),
+                "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            },
+        )
 
     def to_dict(self) -> dict[str, Any]:
         result = super().to_dict()
@@ -420,6 +528,31 @@ class AddLayerEvent(StrategyEvent):
         if not self.event_type:
             self.event_type = EventType.ADD_LAYER
 
+    def activate(self, context: "EventContext") -> None:
+        """Execute add layer event logic.
+
+        This method logs the add layer action at INFO level.
+        The actual layer creation will be handled by the EventExecutor.
+
+        Args:
+            context: Event context containing task, account, instrument info
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            f"Add layer: layer_number={self.layer_number}",
+            extra={
+                "task_id": str(context.task_id),
+                "task_type": context.task_type.value,
+                "instrument": context.instrument,
+                "event_type": self.event_type.value,
+                "layer_number": self.layer_number,
+                "add_time": self.add_time.isoformat() if self.add_time else None,
+                "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            },
+        )
+
     def to_dict(self) -> dict[str, Any]:
         result = super().to_dict()
         result["layer_number"] = self.layer_number
@@ -484,6 +617,32 @@ class RemoveLayerEvent(StrategyEvent):
     def __post_init__(self):
         if not self.event_type:
             self.event_type = EventType.REMOVE_LAYER
+
+    def activate(self, context: "EventContext") -> None:
+        """Execute remove layer event logic.
+
+        This method logs the remove layer action at INFO level.
+        The actual layer closing will be handled by the EventExecutor.
+
+        Args:
+            context: Event context containing task, account, instrument info
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            f"Remove layer: layer_number={self.layer_number}",
+            extra={
+                "task_id": str(context.task_id),
+                "task_type": context.task_type.value,
+                "instrument": context.instrument,
+                "event_type": self.event_type.value,
+                "layer_number": self.layer_number,
+                "add_time": self.add_time.isoformat() if self.add_time else None,
+                "remove_time": self.remove_time.isoformat() if self.remove_time else None,
+                "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            },
+        )
 
     def to_dict(self) -> dict[str, Any]:
         result = super().to_dict()
@@ -565,6 +724,32 @@ class VolatilityLockEvent(StrategyEvent):
         if not self.event_type:
             self.event_type = EventType.VOLATILITY_LOCK
 
+    def activate(self, context: "EventContext") -> None:
+        """Execute volatility lock event logic.
+
+        This method logs the volatility lock action at INFO level.
+        The actual position closing will be handled by the EventExecutor.
+
+        Args:
+            context: Event context containing task, account, instrument info
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            f"Volatility lock: reason={self.reason}, atr={self.atr_value}, threshold={self.threshold}",
+            extra={
+                "task_id": str(context.task_id),
+                "task_type": context.task_type.value,
+                "instrument": context.instrument,
+                "event_type": self.event_type.value,
+                "reason": self.reason,
+                "atr_value": str(self.atr_value) if self.atr_value else None,
+                "threshold": str(self.threshold) if self.threshold else None,
+                "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            },
+        )
+
     def to_dict(self) -> dict[str, Any]:
         result = super().to_dict()
         result["reason"] = self.reason
@@ -605,6 +790,86 @@ class VolatilityLockEvent(StrategyEvent):
 
 
 @dataclass
+class VolatilityHedgeNeutralizeEvent(StrategyEvent):
+    """Event emitted when hedging-mode volatility lock neutralizes positions.
+
+    Instead of closing all positions, this event instructs the handler to open
+    opposite hedge positions for each existing open position so that the net
+    exposure becomes zero.  The strategy then pauses until volatility subsides.
+
+    Attributes:
+        reason: Human-readable description of why the neutralization was triggered.
+        atr_value: Current ATR value that triggered the event.
+        threshold: ATR threshold that was exceeded.
+        hedge_instructions: List of dicts describing each hedge to open.
+            Each dict contains: ``direction``, ``units``, ``layer_index``,
+            ``source_entry_id``.
+    """
+
+    reason: str = ""
+    atr_value: Decimal | None = None
+    threshold: Decimal | None = None
+    hedge_instructions: list[dict[str, Any]] = field(default_factory=list)
+
+    def __post_init__(self):
+        if not self.event_type:
+            self.event_type = EventType.VOLATILITY_HEDGE_NEUTRALIZE
+
+    def activate(self, context: "EventContext") -> None:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "Volatility hedge neutralize: reason=%s, hedges=%d",
+            self.reason,
+            len(self.hedge_instructions),
+            extra={
+                "task_id": str(context.task_id),
+                "task_type": context.task_type.value,
+                "instrument": context.instrument,
+                "event_type": self.event_type.value,
+            },
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        result = super().to_dict()
+        result["reason"] = self.reason
+        if self.atr_value is not None:
+            result["atr_value"] = str(self.atr_value)
+        if self.threshold is not None:
+            result["threshold"] = str(self.threshold)
+        result["hedge_instructions"] = self.hedge_instructions
+        return result
+
+    @classmethod
+    def from_dict(cls, event_dict: dict[str, Any]) -> "VolatilityHedgeNeutralizeEvent":
+        from decimal import Decimal as D
+
+        atr_value_raw = event_dict.get("atr_value")
+        atr_value = D(str(atr_value_raw)) if atr_value_raw else None
+        threshold_raw = event_dict.get("threshold")
+        threshold = D(str(threshold_raw)) if threshold_raw else None
+        timestamp_raw = event_dict.get("timestamp")
+        timestamp = None
+        if timestamp_raw:
+            if isinstance(timestamp_raw, datetime):
+                timestamp = timestamp_raw
+            else:
+                try:
+                    timestamp = datetime.fromisoformat(str(timestamp_raw))
+                except (ValueError, TypeError):
+                    pass
+        return cls(
+            event_type=EventType.VOLATILITY_HEDGE_NEUTRALIZE,
+            timestamp=timestamp,
+            reason=str(event_dict.get("reason", "")),
+            atr_value=atr_value,
+            threshold=threshold,
+            hedge_instructions=list(event_dict.get("hedge_instructions", [])),
+        )
+
+
+@dataclass
 class MarginProtectionEvent(StrategyEvent):
     """Event for margin protection triggered.
 
@@ -613,6 +878,7 @@ class MarginProtectionEvent(StrategyEvent):
         current_margin: Current margin level (optional)
         threshold: Margin threshold (optional)
         positions_closed: Number of positions closed (optional)
+        units_to_close: Number of units to close (optional)
 
     Example:
         >>> event = MarginProtectionEvent(
@@ -629,10 +895,41 @@ class MarginProtectionEvent(StrategyEvent):
     current_margin: Decimal | None = None
     threshold: Decimal | None = None
     positions_closed: int | None = None
+    units_to_close: int | None = None
 
     def __post_init__(self):
         if not self.event_type:
             self.event_type = EventType.MARGIN_PROTECTION
+
+    def activate(self, context: "EventContext") -> None:
+        """Execute margin protection event logic.
+
+        This method logs the margin protection action at INFO level.
+        The actual position closing will be handled by the EventExecutor.
+
+        Args:
+            context: Event context containing task, account, instrument info
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            f"Margin protection: reason={self.reason}, current={self.current_margin}, "
+            f"threshold={self.threshold}, closed={self.positions_closed}, "
+            f"units_to_close={self.units_to_close}",
+            extra={
+                "task_id": str(context.task_id),
+                "task_type": context.task_type.value,
+                "instrument": context.instrument,
+                "event_type": self.event_type.value,
+                "reason": self.reason,
+                "current_margin": str(self.current_margin) if self.current_margin else None,
+                "threshold": str(self.threshold) if self.threshold else None,
+                "positions_closed": self.positions_closed,
+                "units_to_close": self.units_to_close,
+                "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            },
+        )
 
     def to_dict(self) -> dict[str, Any]:
         result = super().to_dict()
@@ -643,6 +940,8 @@ class MarginProtectionEvent(StrategyEvent):
             result["threshold"] = str(self.threshold)
         if self.positions_closed is not None:
             result["positions_closed"] = self.positions_closed
+        if self.units_to_close is not None:
+            result["units_to_close"] = self.units_to_close
         return result
 
     @classmethod
@@ -673,6 +972,7 @@ class MarginProtectionEvent(StrategyEvent):
             current_margin=current_margin,
             threshold=threshold,
             positions_closed=event_dict.get("positions_closed"),
+            units_to_close=event_dict.get("units_to_close"),
         )
 
 
@@ -696,6 +996,51 @@ class GenericStrategyEvent(StrategyEvent):
 
     data: dict[str, Any] = field(default_factory=dict)
 
+    def activate(self, context: "EventContext") -> None:
+        """Execute generic event logic.
+
+        For generic events, this logs the event at an appropriate level based on event type.
+        Lifecycle events log at INFO or DEBUG, error events at WARNING or ERROR.
+
+        Args:
+            context: Event context containing task, account, instrument info
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        # Determine log level based on event type
+        from apps.trading.enums import EventType
+
+        if self.event_type == EventType.TICK_RECEIVED:
+            log_level = logging.DEBUG
+        elif self.event_type in {
+            EventType.STRATEGY_STARTED,
+            EventType.STRATEGY_PAUSED,
+            EventType.STRATEGY_RESUMED,
+            EventType.STRATEGY_STOPPED,
+        }:
+            log_level = logging.INFO
+        elif self.event_type == EventType.STATUS_CHANGED:
+            log_level = logging.WARNING
+        elif self.event_type == EventType.ERROR_OCCURRED:
+            log_level = logging.ERROR
+        else:
+            log_level = logging.INFO
+
+        logger.log(
+            log_level,
+            f"Event: {self.event_type.value}",
+            extra={
+                "task_id": str(context.task_id),
+                "task_type": context.task_type.value,
+                "instrument": context.instrument,
+                "event_type": self.event_type.value,
+                "event_data": self.data,
+                "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            },
+        )
+
     def to_dict(self) -> dict[str, Any]:
         result = super().to_dict()
         result.update(self.data)
@@ -708,7 +1053,7 @@ class GenericStrategyEvent(StrategyEvent):
             event_type = EventType(event_type_str)
         except ValueError:
             # If not a valid EventType, use the string as-is
-            event_type = event_type_str  # type: ignore
+            event_type = event_type_str
 
         timestamp_raw = event_dict.get("timestamp")
         timestamp = None
@@ -725,7 +1070,7 @@ class GenericStrategyEvent(StrategyEvent):
         data = {k: v for k, v in event_dict.items() if k not in {"event_type", "timestamp"}}
 
         return cls(
-            event_type=event_type,  # type: ignore
+            event_type=event_type,
             timestamp=timestamp,
             data=data,
         )
