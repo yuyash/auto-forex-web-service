@@ -246,7 +246,7 @@ class TaskExecutor:
             for m in self._metric_buffer
         ]
         created = MetricSnapshot.objects.bulk_create(objs, ignore_conflicts=True)
-        logger.info(
+        logger.debug(
             "Flushed metric snapshots - task_id=%s, buffered=%d, created=%d, "
             "first_ts=%s, last_ts=%s",
             self.task.pk,
