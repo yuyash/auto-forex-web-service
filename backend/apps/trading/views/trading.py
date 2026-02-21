@@ -250,6 +250,48 @@ class TradingTaskViewSet(TaskSubResourceMixin, ModelViewSet):
             )
 
     @extend_schema(
+        summary="Pause running task",
+        description="Pause a running task, preserving execution state",
+        responses={200: TradingTaskSerializer, 400: dict},
+    )
+    @action(detail=True, methods=["post"])
+    def pause(self, request: Request, pk: int | None = None) -> Response:
+        """Pause running task."""
+        task = self.get_object()
+
+        logger.info(
+            "API: Pausing trading task",
+            extra={"task_id": task.pk, "user_id": request.user.pk, "current_status": task.status},
+        )
+
+        if task.status != TaskStatus.RUNNING:
+            return Response(
+                {"error": "Task must be running to pause"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            success = self.task_service.pause_task(task.pk)
+            if success:
+                serializer = self.get_serializer(task)
+                return Response({"results": serializer.data})
+            else:
+                return Response(
+                    {"error": "Failed to pause task"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+        except Exception as e:
+            logger.error(
+                "API: Failed to pause trading task",
+                extra={"task_id": task.pk, "error": str(e)},
+                exc_info=True,
+            )
+            return Response(
+                {"error": f"Failed to pause task: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    @extend_schema(
         summary="Resume cancelled task",
         description="Resume a cancelled task, preserving execution context",
         responses={200: TradingTaskSerializer, 400: dict},

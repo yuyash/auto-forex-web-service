@@ -133,13 +133,14 @@ export const tradingTasksApi = {
   },
 
   /**
-   * Pause a trading task (not implemented yet)
+   * Pause a running trading task
    */
-  pause: (
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _id: string
-  ): Promise<TradingTask> => {
-    throw new Error('Pause is not implemented for trading tasks');
+  pause: async (id: string): Promise<TradingTask> => {
+    const result = await TradingService.tradingTasksTradingPauseCreate(
+      id,
+      {} as Record<string, unknown>
+    );
+    return toLocal(result);
   },
 
   /**

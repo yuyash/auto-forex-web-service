@@ -71,7 +71,7 @@ describe('TaskControlButtons', () => {
     expect(handleStop).toHaveBeenCalledWith('1');
   });
 
-  it('should enable resume button when status is paused', () => {
+  it('should disable resume button when status is paused (temporarily disabled feature)', () => {
     const handleResume = vi.fn();
     render(
       <TaskControlButtons
@@ -84,10 +84,11 @@ describe('TaskControlButtons', () => {
 
     const resumeButton = screen.getByRole('button', { name: /resume/i });
     expect(resumeButton).toBeInTheDocument();
-    expect(resumeButton).not.toBeDisabled();
+    // TODO: Pause/Resume are temporarily disabled. Change back to not.toBeDisabled() when re-enabled.
+    expect(resumeButton).toBeDisabled();
   });
 
-  it('should call onResume when resume button is clicked', () => {
+  it('should not call onResume when resume button is clicked (temporarily disabled feature)', () => {
     const handleResume = vi.fn();
     render(
       <TaskControlButtons
@@ -99,7 +100,8 @@ describe('TaskControlButtons', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /resume/i }));
-    expect(handleResume).toHaveBeenCalledWith('1');
+    // TODO: Pause/Resume are temporarily disabled. Change to toHaveBeenCalledWith('1') when re-enabled.
+    expect(handleResume).not.toHaveBeenCalled();
   });
 
   it('should enable restart button when status is stopped', () => {

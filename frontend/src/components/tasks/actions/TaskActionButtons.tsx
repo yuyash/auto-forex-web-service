@@ -4,6 +4,7 @@ import {
   PlayArrow,
   PlayCircleOutline,
   Stop,
+  Pause,
   Refresh,
   Delete,
   RestartAlt,
@@ -14,6 +15,7 @@ export interface TaskActionButtonsProps {
   status: TaskStatus;
   onStart?: () => void;
   onStop?: () => void;
+  onPause?: () => void;
   onResume?: () => void;
   onRestart?: () => void;
   onRerun?: () => void;
@@ -42,6 +44,7 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
   status,
   onStart,
   onStop,
+  onPause,
   onResume,
   onRestart,
   onRerun,
@@ -63,13 +66,20 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
   const showStart = isCreated && onStart;
 
   // Resume: For PAUSED tasks only
-  const showResume = isPaused && canResume && onResume;
+  // TODO: Pause/Resume are temporarily disabled. Remove the override below to re-enable.
+  // eslint-disable-next-line no-constant-binary-expression
+  const showResume = false && isPaused && canResume && onResume;
 
   // Restart: For STOPPED/COMPLETED/FAILED tasks when we want a fresh start
   const showRestart = (isStopped || isCompleted || isFailed) && onRestart;
 
   // Stop: For STARTING/RUNNING/PAUSED tasks
   const showStop = (isRunning || isPaused) && onStop;
+
+  // Pause: For RUNNING tasks only
+  // TODO: Pause/Resume are temporarily disabled. Remove the override below to re-enable.
+  // eslint-disable-next-line no-constant-binary-expression
+  const showPause = false && isRunning && onPause;
 
   // Rerun: For COMPLETED/FAILED tasks (legacy, if Restart is not used)
   const showRerun = (isCompleted || isFailed) && !showRestart && onRerun;
@@ -151,6 +161,23 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
         >
           Stop
         </Button>
+      )}
+
+      {/* Pause button - shown for running tasks */}
+      {showPause && (
+        <Tooltip title="Pause task, preserving execution state" arrow>
+          <Button
+            variant="outlined"
+            color="warning"
+            startIcon={<Pause />}
+            onClick={onPause}
+            disabled={actionDisabled}
+            size="small"
+            aria-label="Pause task"
+          >
+            Pause
+          </Button>
+        </Tooltip>
       )}
 
       {/* Rerun button - shown for completed/failed tasks (legacy) */}

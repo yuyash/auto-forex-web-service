@@ -21,7 +21,10 @@ import {
   Alert,
   Grid,
   Divider,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
+import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useBacktestTask } from '../../hooks/useBacktestTasks';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
 import { TaskControlButtons } from '../common/TaskControlButtons';
@@ -294,10 +297,43 @@ export const BacktestTaskDetail: React.FC = () => {
                   startPolling();
                 }
               }}
-              onDelete={() => {
-                setDeleteDialogOpen(true);
+              onPause={async (id) => {
+                const { backtestTasksApi } = await import('../../services/api');
+                await backtestTasksApi.pause(id);
+                refetch();
               }}
             />
+            <Box sx={{ display: 'flex' }}>
+              <Tooltip title="Edit">
+                <span>
+                  <IconButton
+                    onClick={() => navigate(`/backtest-tasks/${taskId}/edit`)}
+                    disabled={
+                      (polledStatus?.status || task.status) === 'RUNNING' ||
+                      (polledStatus?.status || task.status) === 'PAUSED'
+                    }
+                    aria-label="Edit"
+                  >
+                    <EditIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Delete">
+                <span>
+                  <IconButton
+                    onClick={() => setDeleteDialogOpen(true)}
+                    disabled={
+                      (polledStatus?.status || task.status) === 'RUNNING' ||
+                      (polledStatus?.status || task.status) === 'PAUSED'
+                    }
+                    color="error"
+                    aria-label="Delete"
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
           </Box>
         </Box>
       </Paper>

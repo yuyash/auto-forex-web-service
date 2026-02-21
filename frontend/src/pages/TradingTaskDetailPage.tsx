@@ -23,11 +23,14 @@ import {
   ContentCopy as ContentCopyIcon,
   Edit as EditIcon,
   MoreVert as MoreVertIcon,
+  // PauseIcon kept for future re-enable of pause feature
+  // Pause as PauseIcon,
 } from '@mui/icons-material';
 import { useTradingTask } from '../hooks/useTradingTasks';
 import {
   useStartTradingTask,
   useStopTradingTask,
+  usePauseTradingTask,
   useResumeTradingTask,
   useRestartTradingTask,
   useRerunTradingTask,
@@ -205,6 +208,7 @@ export default function TradingTaskDetailPage() {
 
   const startTask = useStartTradingTask();
   const stopTask = useStopTradingTask();
+  const pauseTask = usePauseTradingTask();
   const resumeTask = useResumeTradingTask();
   const restartTask = useRestartTradingTask();
   const rerunTask = useRerunTradingTask();
@@ -252,6 +256,21 @@ export default function TradingTaskDetailPage() {
       handleMenuClose();
     } catch (error) {
       console.error('[TradingTask] Failed to start task:', error);
+      setActionError((error as Error).message);
+    } finally {
+      setIsTransitioning(false);
+    }
+  };
+
+  const handlePause = async () => {
+    try {
+      setActionError(null);
+      setIsTransitioning(true);
+      await pauseTask.mutate(taskId);
+      await refetch();
+      refetchPolledStatus();
+      handleMenuClose();
+    } catch (error) {
       setActionError((error as Error).message);
     } finally {
       setIsTransitioning(false);
@@ -434,7 +453,9 @@ export default function TradingTaskDetailPage() {
       : task.status;
 
   const canStart = currentStatus === TaskStatus.CREATED;
-  const canResume = Boolean(task.can_resume);
+  // TODO: Pause/Resume are temporarily disabled. Remove the overrides below to re-enable.
+  // eslint-disable-next-line no-constant-binary-expression
+  const canResume = false && Boolean(task.can_resume);
   const canRestart =
     currentStatus === TaskStatus.STOPPED ||
     currentStatus === TaskStatus.PAUSED ||
@@ -447,6 +468,8 @@ export default function TradingTaskDetailPage() {
 
   const canStop =
     currentStatus === TaskStatus.RUNNING || currentStatus === TaskStatus.PAUSED;
+  // eslint-disable-next-line no-constant-binary-expression
+  const canPause = false && currentStatus === TaskStatus.RUNNING;
   const canEdit =
     currentStatus !== TaskStatus.RUNNING && currentStatus !== TaskStatus.PAUSED;
   const canDelete =
@@ -560,6 +583,7 @@ export default function TradingTaskDetailPage() {
                 onStart={
                   currentStatus === TaskStatus.CREATED ? handleStart : undefined
                 }
+                onPause={canPause ? handlePause : undefined}
                 onResume={handleResume}
                 onRestart={handleRestart}
                 onStop={handleStop}
@@ -622,6 +646,15 @@ export default function TradingTaskDetailPage() {
               disabled={isTransitioning}
             >
               Stop
+            </MenuItem>
+          )}
+          {canPause && (
+            <MenuItem
+              onClick={handlePause}
+              sx={{ color: 'warning.main' }}
+              disabled={isTransitioning}
+            >
+              Pause
             </MenuItem>
           )}
           {canRerun && (

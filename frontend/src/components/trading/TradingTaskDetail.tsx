@@ -21,7 +21,10 @@ import {
   Alert,
   Grid,
   Divider,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
+import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import {
   useTradingTask,
   useTradingTaskPolling,
@@ -251,10 +254,43 @@ export const TradingTaskDetail: React.FC = () => {
                 await tradingTasksApi.resume(id);
                 refetch();
               }}
-              onDelete={() => {
-                setDeleteDialogOpen(true);
+              onPause={async (id) => {
+                const { tradingTasksApi } = await import(
+                  '../../services/api/tradingTasks'
+                );
+                await tradingTasksApi.pause(id);
+                refetch();
               }}
             />
+            <Box sx={{ display: 'flex' }}>
+              <Tooltip title="Edit">
+                <span>
+                  <IconButton
+                    onClick={() => navigate(`/trading-tasks/${taskId}/edit`)}
+                    disabled={
+                      task.status === 'RUNNING' || task.status === 'PAUSED'
+                    }
+                    aria-label="Edit"
+                  >
+                    <EditIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Delete">
+                <span>
+                  <IconButton
+                    onClick={() => setDeleteDialogOpen(true)}
+                    disabled={
+                      task.status === 'RUNNING' || task.status === 'PAUSED'
+                    }
+                    color="error"
+                    aria-label="Delete"
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
           </Box>
         </Box>
       </Paper>

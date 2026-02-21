@@ -848,6 +848,28 @@ export class TradingService {
     });
   }
   /**
+   * Pause running task
+   * Pause a running task, preserving execution state
+   * @param id
+   * @param requestBody
+   * @returns TradingTask
+   * @throws ApiError
+   */
+  public static tradingTasksTradingPauseCreate(
+    id: string,
+    requestBody: TradingTaskRequest
+  ): CancelablePromise<TradingTask> {
+    return __request(OpenAPI, {
+      method: 'POST',
+      url: '/api/trading/tasks/trading/{id}/pause/',
+      path: {
+        id: id,
+      },
+      body: requestBody,
+      mediaType: 'application/json',
+    });
+  }
+  /**
    * Resume cancelled task
    * Resume a cancelled task, preserving execution context
    * @param id
