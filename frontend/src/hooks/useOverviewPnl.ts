@@ -4,7 +4,7 @@
  * Both Realized and Unrealized PnL are derived exclusively from the
  * Positions API so that every view shows the same numbers.
  *
- * Realized PnL  = sum of closed positions' realized_pnl
+ * Realized PnL  = sum of closed positions' (exit_price - entry_price) * units (direction-aware)
  * Unrealized PnL = sum of open positions' unrealized_pnl
  * Total Trades count comes from the trades API.
  */
@@ -60,8 +60,16 @@ export function useOverviewPnl(
 
   return useMemo(() => {
     const realizedPnl = closedPositions.reduce(
-      (sum: number, p: TaskPosition) =>
-        sum + (p.realized_pnl ? parseFloat(p.realized_pnl) : 0),
+      (sum: number, p: TaskPosition) => {
+        if (!p.exit_price || !p.entry_price) return sum;
+        const exit = parseFloat(p.exit_price);
+        const entry = parseFloat(p.entry_price);
+        const units = Math.abs(p.units ?? 0);
+        const dir = String(p.direction).toLowerCase();
+        const pnl =
+          dir === 'long' ? (exit - entry) * units : (entry - exit) * units;
+        return sum + pnl;
+      },
       0
     );
 

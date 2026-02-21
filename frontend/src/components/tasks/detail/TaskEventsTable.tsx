@@ -17,6 +17,8 @@ import {
   TablePagination,
 } from '@mui/material';
 import DataTable, { type Column } from '../../common/DataTable';
+import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
+import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import { useTaskEvents, type TaskEvent } from '../../../hooks/useTaskEvents';
 import { TaskType } from '../../../types/common';
 
@@ -34,8 +36,9 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
   const [severityFilter, setSeverityFilter] = useState<string>('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
+  const [isReloading, setIsReloading] = useState(false);
 
-  const { events, totalCount, isLoading, error } = useTaskEvents({
+  const { events, totalCount, isLoading, error, refetch } = useTaskEvents({
     taskId,
     taskType,
     severity: severityFilter || undefined,
@@ -43,6 +46,49 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
     pageSize: rowsPerPage,
     enableRealTimeUpdates,
   });
+
+  const selection = useTableRowSelection();
+
+  const getRowId = useCallback((row: TaskEvent) => String(row.id), []);
+
+  const pageRowIds = events.map((r) => String(r.id));
+
+  const handleToggleAll = useCallback(() => {
+    if (selection.isAllPageSelected(pageRowIds)) {
+      for (const id of pageRowIds) {
+        if (selection.selectedRowIds.has(id)) {
+          selection.toggleRowSelection(id);
+        }
+      }
+    } else {
+      selection.selectAllOnPage(pageRowIds);
+    }
+  }, [pageRowIds, selection]);
+
+  const handleReload = useCallback(async () => {
+    setIsReloading(true);
+    await refetch();
+    setIsReloading(false);
+  }, [refetch]);
+
+  const handleCopy = useCallback(() => {
+    const eventsMap = new Map(events.map((e) => [String(e.id), e]));
+    selection.copySelectedRows(
+      ['Timestamp', 'Event Type', 'Severity', 'Description'],
+      (id) => {
+        const r = eventsMap.get(id);
+        if (!r) return '';
+        return [
+          r.created_at
+            ? new Date(r.created_at as string).toLocaleString()
+            : '-',
+          r.event_type_display ?? r.event_type ?? '-',
+          (r.severity as string) ?? '-',
+          (r.description as string) ?? '-',
+        ].join('\t');
+      }
+    );
+  }, [events, selection]);
 
   const handleSeverityChange = (value: string) => {
     setSeverityFilter(value);
@@ -129,15 +175,12 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
     const el = rootRef.current;
     if (!el) return;
     const top = el.getBoundingClientRect().top;
-    // title/filter bar (44) + DataTable internal pagination (52)
-    // + external TablePagination (52) + padding/margin (24)
     const reserved = 44 + 52 + 52 + 24 + 68;
     const available = window.innerHeight - top - reserved;
     setTableMaxHeight(`${Math.max(200, Math.round(available))}px`);
   }, []);
 
   useEffect(() => {
-    // Double rAF to wait for layout to settle
     let raf: number;
     raf = requestAnimationFrame(() => {
       raf = requestAnimationFrame(measure);
@@ -195,6 +238,15 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
             <MenuItem value="critical">Critical</MenuItem>
           </Select>
         </FormControl>
+        <Box sx={{ flex: 1 }} />
+        <TableSelectionToolbar
+          selectedCount={selection.selectedRowIds.size}
+          onCopy={handleCopy}
+          onSelectAll={() => selection.selectAllOnPage(pageRowIds)}
+          onReset={selection.resetSelection}
+          onReload={handleReload}
+          isReloading={isReloading}
+        />
       </Box>
 
       <DataTable
@@ -206,6 +258,13 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
         rowsPerPageOptions={[rowsPerPage]}
         storageKey="task-events"
         tableMaxHeight={tableMaxHeight}
+        selectable
+        getRowId={getRowId}
+        selectedRowIds={selection.selectedRowIds}
+        onToggleRow={selection.toggleRowSelection}
+        allPageSelected={selection.isAllPageSelected(pageRowIds)}
+        indeterminate={selection.isIndeterminate(pageRowIds)}
+        onToggleAll={handleToggleAll}
       />
 
       <TablePagination

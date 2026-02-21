@@ -27,7 +27,6 @@ interface Position {
   units: number;
   entry_price: string;
   current_price: string;
-  realized_pnl: string;
   opened_at: string;
   closed_at: string;
 }
@@ -79,17 +78,26 @@ export function RecentTradesLog({
       }>(url);
       // Convert positions to trades format
       const closedPositions = response.results || [];
-      const tradeData: Trade[] = closedPositions.map((pos: Position) => ({
-        id: pos.id,
-        instrument: pos.instrument,
-        direction: pos.direction,
-        units: pos.units,
-        entry_price: pos.entry_price,
-        exit_price: pos.current_price,
-        pnl: pos.realized_pnl || '0',
-        entry_time: pos.opened_at,
-        exit_time: pos.closed_at,
-      }));
+      const tradeData: Trade[] = closedPositions.map((pos: Position) => {
+        const entry = parseFloat(pos.entry_price);
+        const exit = parseFloat(pos.current_price);
+        const units = Math.abs(pos.units);
+        const pnl =
+          pos.direction === 'long'
+            ? (exit - entry) * units
+            : (entry - exit) * units;
+        return {
+          id: pos.id,
+          instrument: pos.instrument,
+          direction: pos.direction,
+          units: pos.units,
+          entry_price: pos.entry_price,
+          exit_price: pos.current_price,
+          pnl: String(pnl),
+          entry_time: pos.opened_at,
+          exit_time: pos.closed_at,
+        };
+      });
       setTrades(tradeData);
       setTotalPages(Math.ceil(tradeData.length / tradesPerPage));
       setError(null);

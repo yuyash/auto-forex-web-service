@@ -118,13 +118,6 @@ export function ExecutionComparisonView({
         v !== undefined && parseFloat(String(v)) >= 0,
     },
     {
-      label: 'Realized PnL',
-      getValue: (exec: TaskExecution) => exec.metrics?.realized_pnl,
-      format: (v: string | number | undefined) => `$${formatMetric(v)}`,
-      isPositive: (v: string | number | undefined) =>
-        v !== undefined && parseFloat(String(v)) >= 0,
-    },
-    {
       label: 'Unrealized PnL',
       getValue: (exec: TaskExecution) => exec.metrics?.unrealized_pnl,
       format: (v: string | number | undefined) => `$${formatMetric(v)}`,

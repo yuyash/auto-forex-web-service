@@ -15,6 +15,7 @@ import {
   CircularProgress,
   Alert,
   Skeleton,
+  Checkbox,
 } from '@mui/material';
 
 export interface Column<T> {
@@ -48,6 +49,20 @@ interface DataTableProps<T> {
   tableMaxHeight?: number | string;
   /** Hide the built-in pagination footer (useful when pagination is managed externally) */
   hidePagination?: boolean;
+  /** Row selection support */
+  selectable?: boolean;
+  /** Function to extract a unique ID from each row */
+  getRowId?: (row: T) => string;
+  /** Set of currently selected row IDs */
+  selectedRowIds?: Set<string>;
+  /** Callback when a row's checkbox is toggled */
+  onToggleRow?: (id: string) => void;
+  /** Whether all rows on the current page are selected */
+  allPageSelected?: boolean;
+  /** Whether selection is indeterminate (some but not all selected) */
+  indeterminate?: boolean;
+  /** Callback when the header checkbox is toggled */
+  onToggleAll?: () => void;
 }
 
 type Order = 'asc' | 'desc';
@@ -76,6 +91,13 @@ function DataTable<T extends object>({
   storageKey,
   tableMaxHeight,
   hidePagination = false,
+  selectable = false,
+  getRowId,
+  selectedRowIds,
+  onToggleRow,
+  allPageSelected = false,
+  indeterminate = false,
+  onToggleAll,
 }: DataTableProps<T>): React.ReactElement {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage);
@@ -293,6 +315,9 @@ function DataTable<T extends object>({
           >
             <TableHead>
               <TableRow>
+                {selectable && (
+                  <TableCell padding="checkbox" sx={{ width: 42 }} />
+                )}
                 {columns.map((column) => (
                   <TableCell
                     key={String(column.id)}
@@ -307,6 +332,11 @@ function DataTable<T extends object>({
             <TableBody>
               {[...Array(5)].map((_, index) => (
                 <TableRow key={index}>
+                  {selectable && (
+                    <TableCell padding="checkbox">
+                      <Skeleton variant="rectangular" width={20} height={20} />
+                    </TableCell>
+                  )}
                   {columns.map((column) => (
                     <TableCell key={String(column.id)}>
                       <Skeleton variant="text" />
@@ -350,6 +380,16 @@ function DataTable<T extends object>({
         >
           <TableHead>
             <TableRow>
+              {selectable && (
+                <TableCell padding="checkbox" sx={{ width: 42 }}>
+                  <Checkbox
+                    size="small"
+                    checked={allPageSelected}
+                    indeterminate={indeterminate}
+                    onChange={onToggleAll}
+                  />
+                </TableCell>
+              )}
               {columns.map((column) => {
                 const colId = String(column.id);
                 return (
@@ -377,6 +417,7 @@ function DataTable<T extends object>({
             </TableRow>
             {columns.some((col) => col.filterable) && (
               <TableRow>
+                {selectable && <TableCell padding="checkbox" />}
                 {columns.map((column) => (
                   <TableCell
                     key={`filter-${String(column.id)}`}
@@ -402,7 +443,10 @@ function DataTable<T extends object>({
           <TableBody>
             {paginatedData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} align="center">
+                <TableCell
+                  colSpan={columns.length + (selectable ? 1 : 0)}
+                  align="center"
+                >
                   <Box py={3}>
                     <Typography variant="body2" color="text.secondary">
                       {emptyMessage}
@@ -411,26 +455,47 @@ function DataTable<T extends object>({
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedData.map((row, index) => (
-                <TableRow
-                  hover
-                  key={index}
-                  onClick={() => onRowClick?.(row)}
-                  sx={{ cursor: onRowClick ? 'pointer' : 'default' }}
-                >
-                  {columns.map((column) => (
-                    <TableCell
-                      key={String(column.id)}
-                      align={column.align || 'left'}
-                      style={getColumnStyle(column)}
-                    >
-                      {column.render
-                        ? column.render(row)
-                        : String(getNestedValue(row, String(column.id)) ?? '')}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              paginatedData.map((row, index) => {
+                const rowId =
+                  selectable && getRowId ? getRowId(row) : undefined;
+                const isChecked =
+                  rowId != null && selectedRowIds
+                    ? selectedRowIds.has(rowId)
+                    : false;
+                return (
+                  <TableRow
+                    hover
+                    key={index}
+                    onClick={() => onRowClick?.(row)}
+                    selected={isChecked}
+                    sx={{ cursor: onRowClick ? 'pointer' : 'default' }}
+                  >
+                    {selectable && (
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          size="small"
+                          checked={isChecked}
+                          onChange={() => rowId != null && onToggleRow?.(rowId)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </TableCell>
+                    )}
+                    {columns.map((column) => (
+                      <TableCell
+                        key={String(column.id)}
+                        align={column.align || 'left'}
+                        style={getColumnStyle(column)}
+                      >
+                        {column.render
+                          ? column.render(row)
+                          : String(
+                              getNestedValue(row, String(column.id)) ?? ''
+                            )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

@@ -394,7 +394,7 @@ class EventHandler:
                 logger.info(
                     "Take profit executed (full close): layer=%s, pnl=%s, position_id=%s",
                     event.layer_number,
-                    closed_position.realized_pnl,
+                    realized_delta,
                     closed_position.id,
                 )
             else:
@@ -464,7 +464,7 @@ class EventHandler:
                     "Closed position due to volatility: layer=%s, position_id=%s, pnl=%s",
                     position.layer_index,
                     closed.id,
-                    closed.realized_pnl,
+                    realized_delta,
                 )
             except OrderServiceError as e:
                 logger.error(
@@ -608,13 +608,12 @@ class EventHandler:
                     remaining_units -= units_to_close or 0
                 logger.info(
                     "Closed position due to margin protection: layer=%s, position_id=%s, "
-                    "units_requested=%s, remaining_units=%s, realized_delta=%s, pnl=%s",
+                    "units_requested=%s, remaining_units=%s, realized_delta=%s",
                     position.layer_index,
                     closed.id,
                     units_to_close,
                     remaining_units,
                     realized_delta,
-                    closed.realized_pnl,
                 )
             except OrderServiceError as e:
                 logger.error(

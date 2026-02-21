@@ -131,7 +131,6 @@ export interface BacktestLiveResults {
     exit_price?: number;
     units?: number;
     pnl?: number;
-    realized_pnl?: number;
     duration?: number | string;
     layer_number?: number;
     is_first_lot?: boolean;

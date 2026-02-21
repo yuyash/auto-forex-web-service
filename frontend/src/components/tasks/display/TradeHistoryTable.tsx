@@ -155,7 +155,6 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
           trade.entry_price,
           trade.exit_price,
           trade.pnl,
-          trade.realized_pnl || '',
           new Date(trade.exit_time).getTime() -
             new Date(trade.entry_time).getTime(),
         ].join(',')

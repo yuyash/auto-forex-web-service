@@ -242,12 +242,6 @@ export const ExecutionSummaryCard: React.FC<ExecutionSummaryCardProps> = ({
                   >
                     {formatCurrency(totalPnl)}
                   </Typography>
-                  {metrics.realized_pnl && (
-                    <Typography variant="caption" color="text.secondary">
-                      Realized:{' '}
-                      {formatCurrency(parseFloat(metrics.realized_pnl))}
-                    </Typography>
-                  )}
                 </Box>
               </Grid>
 

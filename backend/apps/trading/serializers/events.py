@@ -86,8 +86,5 @@ class PositionSerializer(serializers.Serializer):
         max_digits=20, decimal_places=10, required=False, allow_null=True
     )
     exit_time = serializers.DateTimeField(required=False, allow_null=True)
-    realized_pnl = serializers.DecimalField(
-        max_digits=20, decimal_places=10, required=False, allow_null=True
-    )
     is_open = serializers.BooleanField()
     layer_index = serializers.IntegerField(required=False, allow_null=True)

@@ -217,18 +217,12 @@ class OrderService:
             # Update position
             if units is None or units >= abs(position.units):
                 # Full close
-                previous_realized = Decimal(str(position.realized_pnl or "0"))
                 original_units = abs(position.units)
                 exit_time_value = tick_timestamp or oanda_order.fill_time or timezone.now()
                 position.close(
                     exit_price=oanda_order.price or Decimal("0"),
                     exit_time=exit_time_value,  # type: ignore[arg-type]
                 )
-                # Preserve previously realized pnl from prior partial closes.
-                if previous_realized != Decimal("0"):
-                    position.realized_pnl = (
-                        Decimal(str(position.realized_pnl or "0")) + previous_realized
-                    )
                 position.save()
 
                 logger.info(
@@ -268,7 +262,6 @@ class OrderService:
                     position.units = position.units - units
                 else:
                     position.units = position.units + units
-                position.realized_pnl = Decimal(str(position.realized_pnl or "0")) + realized_delta
                 position.save()
 
                 logger.info(

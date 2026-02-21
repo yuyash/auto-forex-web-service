@@ -12,7 +12,7 @@ class Position(models.Model):
     """
     Active or historical position from task execution.
 
-    Stores position details including entry/exit prices, PnL, and timestamps.
+    Stores position details including entry/exit prices and timestamps.
     Positions are created when trades are opened and updated when closed.
 
     In Netting Mode: One position per instrument per task (aggregated).
@@ -76,13 +76,6 @@ class Position(models.Model):
         blank=True,
         help_text="When the position was closed (null if still open)",
     )
-    realized_pnl = models.DecimalField(
-        max_digits=20,
-        decimal_places=10,
-        null=True,
-        blank=True,
-        help_text="Realized profit/loss (null if position is still open)",
-    )
     is_open = models.BooleanField(
         default=True,
         db_index=True,
@@ -118,12 +111,11 @@ class Position(models.Model):
 
     def __str__(self) -> str:
         status = "OPEN" if self.is_open else "CLOSED"
-        pnl = self.realized_pnl if not self.is_open else None
-        return f"{status} {self.direction} {self.units} {self.instrument} @ {self.entry_price} (PnL: {pnl})"
+        return f"{status} {self.direction} {self.units} {self.instrument} @ {self.entry_price}"
 
     def close(self, exit_price: Decimal, exit_time: models.DateTimeField) -> None:
         """
-        Close the position and calculate realized PnL.
+        Close the position.
 
         Args:
             exit_price: Price at which position was closed
@@ -132,10 +124,3 @@ class Position(models.Model):
         self.exit_price = exit_price
         self.exit_time = exit_time
         self.is_open = False
-
-        # Calculate realized PnL
-        price_diff = exit_price - self.entry_price
-        if self.direction == Direction.SHORT:
-            price_diff = -price_diff
-
-        self.realized_pnl = price_diff * abs(self.units)

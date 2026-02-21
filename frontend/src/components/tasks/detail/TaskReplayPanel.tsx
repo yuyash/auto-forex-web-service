@@ -633,10 +633,16 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   const replaySummary = useMemo(() => {
     // Realized PnL — from closed positions
-    const realizedPnl = pnlClosedPositions.reduce(
-      (sum, p) => sum + (p.realized_pnl ? parseFloat(p.realized_pnl) : 0),
-      0
-    );
+    const realizedPnl = pnlClosedPositions.reduce((sum, p) => {
+      if (!p.exit_price || !p.entry_price) return sum;
+      const exit = parseFloat(p.exit_price);
+      const entry = parseFloat(p.entry_price);
+      const units = Math.abs(p.units ?? 0);
+      const dir = String(p.direction).toLowerCase();
+      const pnl =
+        dir === 'long' ? (exit - entry) * units : (entry - exit) * units;
+      return sum + pnl;
+    }, 0);
 
     // Unrealized PnL — always compute from currentPrice for open positions
     // (matches TaskPositionsTable calculation exactly)

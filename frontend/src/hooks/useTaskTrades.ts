@@ -9,6 +9,7 @@ import { TradingService } from '../api/generated/services/TradingService';
 import { TaskType } from '../types/common';
 
 export interface TaskTrade {
+  id: number | string;
   sequence: number;
   timestamp: string;
   instrument: string;
@@ -16,6 +17,7 @@ export interface TaskTrade {
   units: string;
   price: string;
   layer_index?: number | null;
+  retracement_count?: number | null;
   execution_method?: string;
   execution_method_display?: string;
   commission?: string;

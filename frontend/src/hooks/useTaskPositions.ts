@@ -23,7 +23,6 @@ export interface TaskPosition {
   entry_time: string;
   exit_price?: string | null;
   exit_time?: string | null;
-  realized_pnl?: string | null;
   unrealized_pnl?: string | null;
   is_open: boolean;
   layer_index?: number | null;

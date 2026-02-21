@@ -6,9 +6,11 @@
  * Reads from the `positions` table (Position model).
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Box, Chip, Typography, Alert, TablePagination } from '@mui/material';
 import DataTable, { type Column } from '../../common/DataTable';
+import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
+import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import {
   useTaskPositions,
   type TaskPosition,
@@ -34,6 +36,11 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const [openPage, setOpenPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [openRowsPerPage, setOpenRowsPerPage] = useState(10);
+  const [isClosedReloading, setIsClosedReloading] = useState(false);
+  const [isOpenReloading, setIsOpenReloading] = useState(false);
+
+  const closedSelection = useTableRowSelection();
+  const openSelection = useTableRowSelection();
 
   // Paginated positions for table display
   const {
@@ -41,6 +48,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: closedTotalCount,
     isLoading: closedLoading,
     error: closedError,
+    refetch: refetchClosed,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -55,6 +63,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: openTotalCount,
     isLoading: openLoading,
     error: openError,
+    refetch: refetchOpen,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -86,18 +95,22 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
 
   const totalRealizedPnl = useMemo(
     () =>
-      allClosedPositions.reduce(
-        (sum, p) => sum + (p.realized_pnl ? parseFloat(p.realized_pnl) : 0),
-        0
-      ),
+      allClosedPositions.reduce((sum, p) => {
+        if (!p.exit_price || !p.entry_price) return sum;
+        const exit = parseFloat(p.exit_price);
+        const entry = parseFloat(p.entry_price);
+        const units = Math.abs(p.units ?? 0);
+        const dir = String(p.direction).toLowerCase();
+        const pnl =
+          dir === 'long' ? (exit - entry) * units : (entry - exit) * units;
+        return sum + pnl;
+      }, 0),
     [allClosedPositions]
   );
 
   const totalUnrealizedPnl = useMemo(
     () =>
       allOpenPositions.reduce((sum, p) => {
-        // Always compute from currentPrice for open positions
-        // (matches TaskReplayPanel calculation exactly)
         if (currentPrice == null || !p.entry_price) return sum;
         const entryP = parseFloat(p.entry_price);
         const units = Math.abs(p.units ?? 0);
@@ -110,6 +123,126 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       }, 0),
     [allOpenPositions, currentPrice]
   );
+
+  const getRowId = useCallback((row: TaskPosition) => String(row.id), []);
+
+  const closedPageRowIds = closedPositions.map((r) => String(r.id));
+  const openPageRowIds = openPositions.map((r) => String(r.id));
+
+  const handleClosedToggleAll = useCallback(() => {
+    if (closedSelection.isAllPageSelected(closedPageRowIds)) {
+      for (const id of closedPageRowIds) {
+        if (closedSelection.selectedRowIds.has(id)) {
+          closedSelection.toggleRowSelection(id);
+        }
+      }
+    } else {
+      closedSelection.selectAllOnPage(closedPageRowIds);
+    }
+  }, [closedPageRowIds, closedSelection]);
+
+  const handleOpenToggleAll = useCallback(() => {
+    if (openSelection.isAllPageSelected(openPageRowIds)) {
+      for (const id of openPageRowIds) {
+        if (openSelection.selectedRowIds.has(id)) {
+          openSelection.toggleRowSelection(id);
+        }
+      }
+    } else {
+      openSelection.selectAllOnPage(openPageRowIds);
+    }
+  }, [openPageRowIds, openSelection]);
+
+  const handleClosedReload = useCallback(async () => {
+    setIsClosedReloading(true);
+    await refetchClosed();
+    setIsClosedReloading(false);
+  }, [refetchClosed]);
+
+  const handleOpenReload = useCallback(async () => {
+    setIsOpenReloading(true);
+    await refetchOpen();
+    setIsOpenReloading(false);
+  }, [refetchOpen]);
+
+  const handleClosedCopy = useCallback(() => {
+    const posMap = new Map(closedPositions.map((p) => [String(p.id), p]));
+    closedSelection.copySelectedRows(
+      [
+        'Open Time',
+        'Close Time',
+        'Instrument',
+        'Direction',
+        'Units',
+        'Open Price',
+        'Close Price',
+        'Realized PnL',
+      ],
+      (id) => {
+        const r = posMap.get(id);
+        if (!r) return '';
+        return [
+          r.entry_time ? new Date(r.entry_time).toLocaleString() : '-',
+          r.exit_time ? new Date(r.exit_time).toLocaleString() : '-',
+          r.instrument ?? '-',
+          r.direction ?? '-',
+          String(Math.abs(r.units)),
+          r.entry_price ? parseFloat(r.entry_price).toFixed(3) : '-',
+          r.exit_price ? parseFloat(r.exit_price).toFixed(3) : '-',
+          r.exit_price && r.entry_price
+            ? (() => {
+                const exit = parseFloat(r.exit_price);
+                const entry = parseFloat(r.entry_price);
+                const units = Math.abs(r.units ?? 0);
+                const dir = String(r.direction).toLowerCase();
+                const pnl =
+                  dir === 'long'
+                    ? (exit - entry) * units
+                    : (entry - exit) * units;
+                return pnl.toFixed(2);
+              })()
+            : '-',
+        ].join('\t');
+      }
+    );
+  }, [closedPositions, closedSelection]);
+
+  const handleOpenCopy = useCallback(() => {
+    const posMap = new Map(openPositions.map((p) => [String(p.id), p]));
+    openSelection.copySelectedRows(
+      [
+        'Open Time',
+        'Instrument',
+        'Direction',
+        'Units',
+        'Open Price',
+        'Unrealized PnL',
+      ],
+      (id) => {
+        const r = posMap.get(id);
+        if (!r) return '';
+        let unrealizedPnl = '-';
+        if (currentPrice != null && r.entry_price) {
+          const entryP = parseFloat(r.entry_price);
+          const units = Math.abs(r.units ?? 0);
+          const dir = String(r.direction).toLowerCase();
+          const val =
+            dir === 'long'
+              ? (currentPrice - entryP) * units
+              : (entryP - currentPrice) * units;
+          unrealizedPnl = val.toFixed(2);
+        }
+        return [
+          r.entry_time ? new Date(r.entry_time).toLocaleString() : '-',
+          r.instrument ?? '-',
+          r.direction ?? '-',
+          String(Math.abs(r.units)),
+          r.entry_price ? parseFloat(r.entry_price).toFixed(3) : '-',
+          unrealizedPnl,
+        ].join('\t');
+      }
+    );
+  }, [openPositions, openSelection, currentPrice]);
 
   const formatTimestamp = (timestamp: string): string => {
     return new Date(timestamp).toLocaleString('en-US', {
@@ -216,8 +349,13 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       minWidth: 90,
       align: 'right',
       render: (row) => {
-        if (!row.realized_pnl) return '-';
-        const val = parseFloat(row.realized_pnl);
+        if (!row.exit_price || !row.entry_price) return '-';
+        const exit = parseFloat(row.exit_price);
+        const entry = parseFloat(row.entry_price);
+        const units = Math.abs(row.units ?? 0);
+        const dir = String(row.direction).toLowerCase();
+        const val =
+          dir === 'long' ? (exit - entry) * units : (entry - exit) * units;
         return (
           <Typography
             variant="body2"
@@ -307,8 +445,6 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       minWidth: 100,
       align: 'right',
       render: (row) => {
-        // Always compute from currentPrice for open positions so the
-        // value updates in real-time (the DB column is not kept in sync).
         if (currentPrice == null || !row.entry_price) return '-';
         const entryP = parseFloat(row.entry_price);
         const units = Math.abs(row.units ?? 0);
@@ -350,14 +486,26 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         }}
       >
         <Typography variant="h6">Closed Positions</Typography>
-        <Typography
-          variant="subtitle1"
-          fontWeight="bold"
-          color={totalRealizedPnl >= 0 ? 'success.main' : 'error.main'}
-        >
-          Total Realized PnL: {totalRealizedPnl >= 0 ? '+' : ''}¥
-          {totalRealizedPnl.toFixed(2)}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography
+            variant="subtitle1"
+            fontWeight="bold"
+            color={totalRealizedPnl >= 0 ? 'success.main' : 'error.main'}
+          >
+            Total Realized PnL: {totalRealizedPnl >= 0 ? '+' : ''}¥
+            {totalRealizedPnl.toFixed(2)}
+          </Typography>
+          <TableSelectionToolbar
+            selectedCount={closedSelection.selectedRowIds.size}
+            onCopy={handleClosedCopy}
+            onSelectAll={() =>
+              closedSelection.selectAllOnPage(closedPageRowIds)
+            }
+            onReset={closedSelection.resetSelection}
+            onReload={handleClosedReload}
+            isReloading={isClosedReloading}
+          />
+        </Box>
       </Box>
 
       <DataTable
@@ -369,6 +517,13 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         rowsPerPageOptions={[rowsPerPage]}
         tableMaxHeight="none"
         hidePagination
+        selectable
+        getRowId={getRowId}
+        selectedRowIds={closedSelection.selectedRowIds}
+        onToggleRow={closedSelection.toggleRowSelection}
+        allPageSelected={closedSelection.isAllPageSelected(closedPageRowIds)}
+        indeterminate={closedSelection.isIndeterminate(closedPageRowIds)}
+        onToggleAll={handleClosedToggleAll}
       />
 
       <TablePagination
@@ -395,14 +550,24 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         }}
       >
         <Typography variant="h6">Open Positions</Typography>
-        <Typography
-          variant="subtitle1"
-          fontWeight="bold"
-          color={totalUnrealizedPnl >= 0 ? 'success.main' : 'error.main'}
-        >
-          Total Unrealized PnL: {totalUnrealizedPnl >= 0 ? '+' : ''}¥
-          {totalUnrealizedPnl.toFixed(2)}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography
+            variant="subtitle1"
+            fontWeight="bold"
+            color={totalUnrealizedPnl >= 0 ? 'success.main' : 'error.main'}
+          >
+            Total Unrealized PnL: {totalUnrealizedPnl >= 0 ? '+' : ''}¥
+            {totalUnrealizedPnl.toFixed(2)}
+          </Typography>
+          <TableSelectionToolbar
+            selectedCount={openSelection.selectedRowIds.size}
+            onCopy={handleOpenCopy}
+            onSelectAll={() => openSelection.selectAllOnPage(openPageRowIds)}
+            onReset={openSelection.resetSelection}
+            onReload={handleOpenReload}
+            isReloading={isOpenReloading}
+          />
+        </Box>
       </Box>
 
       <DataTable
@@ -414,6 +579,13 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         rowsPerPageOptions={[openRowsPerPage]}
         tableMaxHeight="none"
         hidePagination
+        selectable
+        getRowId={getRowId}
+        selectedRowIds={openSelection.selectedRowIds}
+        onToggleRow={openSelection.toggleRowSelection}
+        allPageSelected={openSelection.isAllPageSelected(openPageRowIds)}
+        indeterminate={openSelection.isIndeterminate(openPageRowIds)}
+        onToggleAll={handleOpenToggleAll}
       />
 
       <TablePagination

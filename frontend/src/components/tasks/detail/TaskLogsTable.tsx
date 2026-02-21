@@ -17,6 +17,8 @@ import {
   TablePagination,
 } from '@mui/material';
 import DataTable, { type Column } from '../../common/DataTable';
+import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
+import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import { useTaskLogs, type TaskLog } from '../../../hooks/useTaskLogs';
 import { TaskType } from '../../../types/common';
 
@@ -34,17 +36,59 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   enableRealTimeUpdates = false,
 }) => {
   const [levelFilter, setLevelFilter] = useState<string>('');
-  const [page, setPage] = useState(0); // 0-indexed for MUI TablePagination
+  const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
+  const [isReloading, setIsReloading] = useState(false);
 
-  const { logs, totalCount, isLoading, error } = useTaskLogs({
+  const { logs, totalCount, isLoading, error, refetch } = useTaskLogs({
     taskId,
     taskType,
     level: levelFilter || undefined,
-    page: page + 1, // DRF uses 1-indexed pages
+    page: page + 1,
     pageSize: rowsPerPage,
     enableRealTimeUpdates,
   });
+
+  const selection = useTableRowSelection();
+
+  const getRowId = useCallback((row: TaskLog) => String(row.id), []);
+
+  const pageRowIds = logs.map((r) => String(r.id));
+
+  const handleToggleAll = useCallback(() => {
+    if (selection.isAllPageSelected(pageRowIds)) {
+      for (const id of pageRowIds) {
+        if (selection.selectedRowIds.has(id)) {
+          selection.toggleRowSelection(id);
+        }
+      }
+    } else {
+      selection.selectAllOnPage(pageRowIds);
+    }
+  }, [pageRowIds, selection]);
+
+  const handleReload = useCallback(async () => {
+    setIsReloading(true);
+    await refetch();
+    setIsReloading(false);
+  }, [refetch]);
+
+  const handleCopy = useCallback(() => {
+    const logsMap = new Map(logs.map((l) => [String(l.id), l]));
+    selection.copySelectedRows(
+      ['Timestamp', 'Level', 'Component', 'Message'],
+      (id) => {
+        const r = logsMap.get(id);
+        if (!r) return '';
+        return [
+          r.timestamp ? new Date(r.timestamp as string).toLocaleString() : '-',
+          (r.level as string) ?? '-',
+          (r.component as string) ?? '-',
+          (r.message as string) ?? '-',
+        ].join('\t');
+      }
+    );
+  }, [logs, selection]);
 
   const handleLevelFilterChange = (value: string) => {
     setLevelFilter(value);
@@ -140,8 +184,6 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     const el = rootRef.current;
     if (!el) return;
     const top = el.getBoundingClientRect().top;
-    // title/filter bar (44) + DataTable internal pagination (52)
-    // + external TablePagination (52) + padding/margin (24)
     const reserved = 44 + 52 + 52 + 24 + 68;
     const available = window.innerHeight - top - reserved;
     setTableMaxHeight(`${Math.max(200, Math.round(available))}px`);
@@ -206,6 +248,15 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
             <MenuItem value="CRITICAL">Critical</MenuItem>
           </Select>
         </FormControl>
+        <Box sx={{ flex: 1 }} />
+        <TableSelectionToolbar
+          selectedCount={selection.selectedRowIds.size}
+          onCopy={handleCopy}
+          onSelectAll={() => selection.selectAllOnPage(pageRowIds)}
+          onReset={selection.resetSelection}
+          onReload={handleReload}
+          isReloading={isReloading}
+        />
       </Box>
 
       <DataTable
@@ -217,6 +268,13 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
         rowsPerPageOptions={[rowsPerPage]}
         storageKey="task-logs"
         tableMaxHeight={tableMaxHeight}
+        selectable
+        getRowId={getRowId}
+        selectedRowIds={selection.selectedRowIds}
+        onToggleRow={selection.toggleRowSelection}
+        allPageSelected={selection.isAllPageSelected(pageRowIds)}
+        indeterminate={selection.isIndeterminate(pageRowIds)}
+        onToggleAll={handleToggleAll}
       />
 
       <TablePagination
