@@ -336,7 +336,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   }, [enableRealTimeUpdates]);
 
   type SortableKey =
-    | 'sequence'
     | 'timestamp'
     | 'direction'
     | 'layer_index'
@@ -413,7 +412,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   // Column resize state
   const defaultReplayWidths: Record<string, number> = {
-    sequence: 40,
     timestamp: 150,
     direction: 55,
     layer_index: 50,
@@ -493,9 +491,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     const sorted = [...trades].sort((a, b) => {
       let cmp = 0;
       switch (orderBy) {
-        case 'sequence':
-          cmp = a.sequence - b.sequence;
-          break;
         case 'timestamp':
           cmp =
             new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
@@ -560,7 +555,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   const copySelectedRows = useCallback(() => {
     const header = [
-      '#',
       'Time',
       'Direction',
       'Layer',
@@ -573,7 +567,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       .filter((r) => selectedRowIds.has(r.id))
       .map((r) =>
         [
-          r.sequence,
           new Date(r.timestamp).toLocaleString(),
           r.direction.toUpperCase(),
           r.layer_index ?? '-',
@@ -1430,19 +1423,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                 />
               </TableCell>
               <TableCell
-                sortDirection={orderBy === 'sequence' ? order : false}
-                sx={{ position: 'relative', width: replayColWidths.sequence }}
-              >
-                <TableSortLabel
-                  active={orderBy === 'sequence'}
-                  direction={orderBy === 'sequence' ? order : 'asc'}
-                  onClick={() => handleSort('sequence')}
-                >
-                  #
-                </TableSortLabel>
-                {resizeHandle('sequence')}
-              </TableCell>
-              <TableCell
                 sortDirection={orderBy === 'timestamp' ? order : false}
                 sx={{ position: 'relative', width: replayColWidths.timestamp }}
               >
@@ -1566,15 +1546,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                       onClick={(e) => e.stopPropagation()}
                       onChange={() => toggleRowSelection(row.id)}
                     />
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {row.sequence}
                   </TableCell>
                   <TableCell
                     sx={{

@@ -316,7 +316,10 @@ function DataTable<T extends object>({
             <TableHead>
               <TableRow>
                 {selectable && (
-                  <TableCell padding="checkbox" sx={{ width: 42 }} />
+                  <TableCell
+                    padding="none"
+                    sx={{ width: 50, textAlign: 'center' }}
+                  />
                 )}
                 {columns.map((column) => (
                   <TableCell
@@ -333,8 +336,13 @@ function DataTable<T extends object>({
               {[...Array(5)].map((_, index) => (
                 <TableRow key={index}>
                   {selectable && (
-                    <TableCell padding="checkbox">
-                      <Skeleton variant="rectangular" width={20} height={20} />
+                    <TableCell padding="none" sx={{ textAlign: 'center' }}>
+                      <Skeleton
+                        variant="rectangular"
+                        width={20}
+                        height={20}
+                        sx={{ mx: 'auto' }}
+                      />
                     </TableCell>
                   )}
                   {columns.map((column) => (
@@ -381,7 +389,10 @@ function DataTable<T extends object>({
           <TableHead>
             <TableRow>
               {selectable && (
-                <TableCell padding="checkbox" sx={{ width: 42 }}>
+                <TableCell
+                  padding="none"
+                  sx={{ width: 50, textAlign: 'center' }}
+                >
                   <Checkbox
                     size="small"
                     checked={allPageSelected}
@@ -417,7 +428,7 @@ function DataTable<T extends object>({
             </TableRow>
             {columns.some((col) => col.filterable) && (
               <TableRow>
-                {selectable && <TableCell padding="checkbox" />}
+                {selectable && <TableCell padding="none" sx={{ width: 50 }} />}
                 {columns.map((column) => (
                   <TableCell
                     key={`filter-${String(column.id)}`}
@@ -471,7 +482,7 @@ function DataTable<T extends object>({
                     sx={{ cursor: onRowClick ? 'pointer' : 'default' }}
                   >
                     {selectable && (
-                      <TableCell padding="checkbox">
+                      <TableCell padding="none" sx={{ textAlign: 'center' }}>
                         <Checkbox
                           size="small"
                           checked={isChecked}
