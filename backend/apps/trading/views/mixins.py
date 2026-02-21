@@ -51,6 +51,12 @@ def _position_serializer():
     return PositionSerializer
 
 
+def _order_serializer():
+    from apps.trading.serializers.events import OrderSerializer
+
+    return OrderSerializer
+
+
 class TaskSubResourceMixin:
     """Mixin providing paginated logs / events / trades actions."""
 
@@ -298,8 +304,14 @@ class TaskSubResourceMixin:
         )
         normalized: list[dict] = []
         for trade in trades_qs:
-            side = str(trade["direction"]).lower()
-            trade["direction"] = "buy" if side == "long" else "sell" if side == "short" else side
+            raw_direction = trade["direction"]
+            if raw_direction is None:
+                trade["direction"] = None
+            else:
+                side = str(raw_direction).lower()
+                trade["direction"] = (
+                    "buy" if side == "long" else "sell" if side == "short" else side
+                )
             normalized.append(trade)
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(normalized, request)
@@ -362,4 +374,70 @@ class TaskSubResourceMixin:
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = PositionSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    @extend_schema(
+        summary="Get task orders",
+        description="Get task orders with pagination and filtering.",
+        parameters=[
+            OpenApiParameter(
+                name="status",
+                type=str,
+                required=False,
+                description="Filter by order status (pending/filled/cancelled/rejected/triggered)",
+            ),
+            OpenApiParameter(
+                name="order_type",
+                type=str,
+                required=False,
+                description="Filter by order type (market/limit/stop/oco)",
+            ),
+            OpenApiParameter(
+                name="direction",
+                type=str,
+                required=False,
+                description="Filter by direction (long/short)",
+            ),
+            OpenApiParameter(
+                name="celery_task_id",
+                type=str,
+                required=False,
+                description="Filter by celery task ID",
+            ),
+            *_PAGINATION_PARAMS,
+        ],
+        responses={200: _order_serializer()(many=True)},
+    )
+    @action(detail=True, methods=["get"])
+    def orders(self, request: Request, pk: str | None = None) -> Response:
+        from apps.trading.models.orders import Order
+        from apps.trading.serializers.events import OrderSerializer
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        celery_task_id = request.query_params.get("celery_task_id") or getattr(
+            task, "celery_task_id", None
+        )
+        queryset = Order.objects.filter(
+            task_type=self.task_type_label,
+            task_id=task.pk,
+        ).order_by("-submitted_at")
+
+        if celery_task_id:
+            queryset = queryset.filter(celery_task_id=celery_task_id)
+
+        status_param = (request.query_params.get("status") or "").lower()
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        order_type_param = (request.query_params.get("order_type") or "").lower()
+        if order_type_param:
+            queryset = queryset.filter(order_type=order_type_param)
+
+        direction = (request.query_params.get("direction") or "").lower()
+        if direction:
+            queryset = queryset.filter(direction=direction)
+
+        paginator = TaskSubResourcePagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = OrderSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)

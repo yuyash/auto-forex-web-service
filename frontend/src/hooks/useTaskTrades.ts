@@ -13,7 +13,7 @@ export interface TaskTrade {
   sequence: number;
   timestamp: string;
   instrument: string;
-  direction: 'long' | 'short';
+  direction: 'long' | 'short' | null | '';
   units: string;
   price: string;
   layer_index?: number | null;
@@ -96,7 +96,14 @@ export const useTaskTrades = ({
         Record<string, unknown>
       >;
       const mapped = rawResults.map((t, index) => {
-        const dir = String(t.direction || '').toLowerCase();
+        const rawDir = t.direction;
+        let mappedDir: string | null;
+        if (rawDir == null || rawDir === '') {
+          mappedDir = null;
+        } else {
+          const dir = String(rawDir).toLowerCase();
+          mappedDir = dir === 'buy' ? 'long' : dir === 'sell' ? 'short' : dir;
+        }
         // API Trade model has no `id` field; synthesise a stable one
         // from the record's position in the overall result set.
         const syntheticId =
@@ -105,7 +112,7 @@ export const useTaskTrades = ({
         return {
           ...t,
           id: syntheticId,
-          direction: dir === 'buy' ? 'long' : dir === 'sell' ? 'short' : dir,
+          direction: mappedDir,
         };
       });
       setTrades(mapped as unknown as TaskTrade[]);

@@ -78,7 +78,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
           r.timestamp ? new Date(r.timestamp).toLocaleString() : '-',
           r.instrument ?? '-',
           r.execution_method_display || r.execution_method || '-',
-          String(r.direction).toUpperCase(),
+          String(r.direction ?? '').toUpperCase(),
           r.units ?? '-',
           r.price ? parseFloat(r.price).toFixed(5) : '-',
           r.layer_index != null ? String(r.layer_index) : '-',
@@ -130,16 +130,11 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       width: 90,
       minWidth: 70,
       render: (row) => {
-        const dir = String(row.direction).toLowerCase();
+        const dir = row.direction ? String(row.direction).toLowerCase() : '';
+        if (!dir) return null;
         return (
           <Chip
-            label={
-              dir === 'long'
-                ? 'LONG'
-                : dir === 'short'
-                  ? 'SHORT'
-                  : (row.direction as string)
-            }
+            label={dir === 'long' ? 'LONG' : dir === 'short' ? 'SHORT' : dir}
             color={dir === 'long' ? 'success' : 'error'}
             size="small"
           />

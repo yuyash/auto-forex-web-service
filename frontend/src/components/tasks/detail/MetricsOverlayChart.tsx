@@ -1,11 +1,10 @@
 /**
  * useMetricsOverlay — hook that attaches metric overlay series
- * (Margin Ratio, ATR, Lock Threshold, cut-start/cut-target thresholds)
- * directly onto the parent candlestick chart so they share the exact
- * same X-axis.
+ * (Margin Ratio, ATR, Lock Threshold) directly onto the parent
+ * candlestick chart so they share the exact same X-axis.
  *
  * Metrics use two additional price scales:
- *   • 'metrics-right': Margin Ratio (%) + threshold lines
+ *   • 'metrics-right': Margin Ratio (%)
  *   • 'left':          Current ATR (pips) + Lock Threshold
  *
  * The candlestick series lives on the default 'right' price scale,
@@ -23,28 +22,15 @@ import {
   type MetricSnapshotPoint,
 } from '../../../utils/fetchMetricSnapshots';
 import { TaskType } from '../../../types/common';
-import { configurationsApi } from '../../../services/api/configurations';
 
 export interface UseMetricsOverlayOptions {
   taskId: string;
   taskType: TaskType;
-  configId?: string;
   enableRealTimeUpdates?: boolean;
   chart: IChartApi | null;
   candleTimestamps?: number[];
   /** Current tick timestamp (ISO string) — used to extend metric drawing up to the position line */
   currentTickTimestamp?: string | null;
-}
-
-function makeThresholdData(
-  timestamps: number[],
-  value: number
-): { time: UTCTimestamp; value: number }[] {
-  if (timestamps.length === 0) return [];
-  return [
-    { time: timestamps[0] as UTCTimestamp, value },
-    { time: timestamps[timestamps.length - 1] as UTCTimestamp, value },
-  ];
 }
 
 function resampleSnapshots(
@@ -69,28 +55,6 @@ function attachSeries(chart: IChartApi) {
     lineWidth: 2,
     title: 'Margin Ratio',
     priceScaleId: 'metrics-right',
-    priceFormat: { type: 'percent' as const, minMove: 0.01 },
-  });
-  const cutStart = chart.addSeries(LineSeries, {
-    color: '#ef4444',
-    lineWidth: 1,
-    lineStyle: 1,
-    title: 'Cut Start',
-    priceScaleId: 'metrics-right',
-    crosshairMarkerVisible: false,
-    lastValueVisible: true,
-    priceLineVisible: false,
-    priceFormat: { type: 'percent' as const, minMove: 0.01 },
-  });
-  const cutTarget = chart.addSeries(LineSeries, {
-    color: '#ef4444',
-    lineWidth: 1,
-    lineStyle: 1,
-    title: 'Cut Target',
-    priceScaleId: 'metrics-right',
-    crosshairMarkerVisible: false,
-    lastValueVisible: true,
-    priceLineVisible: false,
     priceFormat: { type: 'percent' as const, minMove: 0.01 },
   });
   const atr = chart.addSeries(LineSeries, {
@@ -125,13 +89,12 @@ function attachSeries(chart: IChartApi) {
     scaleMargins: { top: 0.7, bottom: 0.02 },
   });
 
-  return { mr, cutStart, cutTarget, atr, vt };
+  return { mr, atr, vt };
 }
 
 export function useMetricsOverlay({
   taskId,
   taskType,
-  configId,
   enableRealTimeUpdates = false,
   chart,
   candleTimestamps,
@@ -141,27 +104,6 @@ export function useMetricsOverlay({
   const attachedToChart = useRef<IChartApi | null>(null);
 
   const [snapshots, setSnapshots] = useState<MetricSnapshotPoint[]>([]);
-  const [marginCutStartRatio, setMarginCutStartRatio] = useState<
-    number | undefined
-  >();
-  const [marginCutTargetRatio, setMarginCutTargetRatio] = useState<
-    number | undefined
-  >();
-
-  // Fetch strategy config
-  useEffect(() => {
-    if (!configId) return;
-    configurationsApi
-      .get(configId)
-      .then((config) => {
-        const params = (config.parameters ?? {}) as Record<string, string>;
-        const start = parseFloat(params.margin_cut_start_ratio);
-        const target = parseFloat(params.margin_cut_target_ratio);
-        if (Number.isFinite(start)) setMarginCutStartRatio(start);
-        if (Number.isFinite(target)) setMarginCutTargetRatio(target);
-      })
-      .catch(() => {});
-  }, [configId]);
 
   // Fetch snapshots
   const loadData = useCallback(async () => {
@@ -234,15 +176,13 @@ export function useMetricsOverlay({
     const s = seriesRef.current;
     if (!s) return;
 
-    // Even when there are no metric snapshots, we still want to draw
-    // the constant threshold lines across the full candle range.
+    // When there are no metric snapshots and no candles, nothing to draw.
     const hasCandles = candleTimestamps && candleTimestamps.length > 0;
     const hasSnapshots = snapshots.length > 0;
 
     if (!hasSnapshots && !hasCandles) return;
 
     let extended: MetricSnapshotPoint[] = [];
-    let timestamps: number[] = [];
 
     if (hasSnapshots) {
       const aligned = hasCandles
@@ -265,12 +205,7 @@ export function useMetricsOverlay({
           }
         }
       }
-      timestamps = extended.map((p) => p.t);
     }
-
-    // Threshold lines should span the full candle range (left edge to
-    // right edge) since they are constant values, not time-series data.
-    const fullRangeTimestamps = hasCandles ? candleTimestamps : timestamps;
 
     try {
       s.mr.setData(
@@ -280,20 +215,6 @@ export function useMetricsOverlay({
             time: p.t as UTCTimestamp,
             value: (p.mr as number) * 100,
           }))
-      );
-      s.cutStart.setData(
-        marginCutStartRatio !== undefined &&
-          marginCutStartRatio > 0 &&
-          fullRangeTimestamps.length > 0
-          ? makeThresholdData(fullRangeTimestamps, marginCutStartRatio * 100)
-          : []
-      );
-      s.cutTarget.setData(
-        marginCutTargetRatio !== undefined &&
-          marginCutTargetRatio > 0 &&
-          fullRangeTimestamps.length > 0
-          ? makeThresholdData(fullRangeTimestamps, marginCutTargetRatio * 100)
-          : []
       );
       s.atr.setData(
         extended
@@ -308,14 +229,7 @@ export function useMetricsOverlay({
     } catch {
       // Chart disposed mid-update — ignore
     }
-  }, [
-    snapshots,
-    candleTimestamps,
-    marginCutStartRatio,
-    marginCutTargetRatio,
-    chart,
-    tickSec,
-  ]);
+  }, [snapshots, candleTimestamps, chart, tickSec]);
 
   return { hasData: snapshots.length > 0 };
 }

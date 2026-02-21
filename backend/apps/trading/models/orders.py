@@ -51,12 +51,26 @@ class Order(models.Model):
         db_index=True,
         help_text="UUID of the task this order belongs to",
     )
+    celery_task_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Celery task ID for tracking which execution run created this order",
+    )
     broker_order_id = models.CharField(
         max_length=255,
         null=True,
         blank=True,
         db_index=True,
         help_text="Order ID from the broker (OANDA)",
+    )
+    oanda_trade_id = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="OANDA trade ID associated with this order",
     )
     instrument = models.CharField(
         max_length=32,
@@ -71,7 +85,9 @@ class Order(models.Model):
     direction = models.CharField(
         max_length=10,
         choices=Direction.choices,
-        help_text="Order direction (LONG/SHORT)",
+        null=True,
+        blank=True,
+        help_text="Order direction (LONG/SHORT). Null for trade-close orders (e.g. take profit).",
     )
     units = models.IntegerField(
         help_text="Number of units to trade (positive for long, negative for short)",
@@ -111,13 +127,6 @@ class Order(models.Model):
         null=True,
         blank=True,
         help_text="When the order was cancelled (null if not cancelled)",
-    )
-    take_profit = models.DecimalField(
-        max_digits=20,
-        decimal_places=10,
-        null=True,
-        blank=True,
-        help_text="Take profit price (optional)",
     )
     stop_loss = models.DecimalField(
         max_digits=20,
@@ -160,8 +169,9 @@ class Order(models.Model):
         ]
 
     def __str__(self) -> str:
+        direction_str = self.direction or "CLOSE"
         return (
-            f"{self.status} {self.order_type} {self.direction} "
+            f"{self.status} {self.order_type} {direction_str} "
             f"{self.units} {self.instrument} @ {self.fill_price or self.requested_price or 'market'}"
         )
 

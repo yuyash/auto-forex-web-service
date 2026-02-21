@@ -186,7 +186,6 @@ def execute_backtest(task: BacktestTask) -> None:
         instrument=task.instrument,
         pip_size=resolved_pip_size,
         strategy_config=task.config,
-        trading_mode=getattr(task, "trading_mode", "hedging"),
         account_currency=task.account_currency or "USD",
     )
 

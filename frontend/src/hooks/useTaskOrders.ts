@@ -1,11 +1,7 @@
 /**
- * useTaskPositions Hook
+ * useTaskOrders Hook
  *
- * Fetches positions from task-based API endpoints with DRF pagination.
- * Reads from the `positions` table (Position model) instead of `trades`.
- *
- * Uses axios with withCredentials (same auth mechanism as the generated
- * OpenAPI client) so that session cookies are sent correctly.
+ * Fetches orders from task-based API endpoints with DRF pagination.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -14,34 +10,40 @@ import { OpenAPI } from '../api/generated/core/OpenAPI';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 
-export interface TaskPosition {
+export interface TaskOrder {
   id: string;
+  celery_task_id?: string | null;
+  broker_order_id?: string | null;
+  oanda_trade_id?: string | null;
   instrument: string;
-  direction: 'long' | 'short';
+  order_type: string;
+  direction?: string | null;
   units: number;
-  entry_price: string;
-  entry_time: string;
-  exit_price?: string | null;
-  exit_time?: string | null;
-  unrealized_pnl?: string | null;
-  is_open: boolean;
-  layer_index?: number | null;
-  retracement_count?: number | null;
+  requested_price?: string | null;
+  fill_price?: string | null;
+  status: string;
+  submitted_at: string;
+  filled_at?: string | null;
+  cancelled_at?: string | null;
+  stop_loss?: string | null;
+  error_message?: string | null;
+  is_dry_run: boolean;
 }
 
-interface UseTaskPositionsOptions {
+interface UseTaskOrdersOptions {
   taskId: string | number;
   taskType: TaskType;
-  status?: 'open' | 'closed';
-  direction?: 'long' | 'short';
+  status?: string;
+  orderType?: string;
+  direction?: string;
   page?: number;
   pageSize?: number;
   enableRealTimeUpdates?: boolean;
   refreshInterval?: number;
 }
 
-interface UseTaskPositionsResult {
-  positions: TaskPosition[];
+interface UseTaskOrdersResult {
+  orders: TaskOrder[];
   totalCount: number;
   hasNext: boolean;
   hasPrevious: boolean;
@@ -50,24 +52,25 @@ interface UseTaskPositionsResult {
   refetch: () => Promise<void>;
 }
 
-export const useTaskPositions = ({
+export const useTaskOrders = ({
   taskId,
   taskType,
   status,
+  orderType,
   direction,
   page = 1,
   pageSize = 100,
   enableRealTimeUpdates = false,
   refreshInterval = 5000,
-}: UseTaskPositionsOptions): UseTaskPositionsResult => {
-  const [positions, setPositions] = useState<TaskPosition[]>([]);
+}: UseTaskOrdersOptions): UseTaskOrdersResult => {
+  const [orders, setOrders] = useState<TaskOrder[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [hasNext, setHasNext] = useState(false);
   const [hasPrevious, setHasPrevious] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchPositions = useCallback(async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -81,10 +84,11 @@ export const useTaskPositions = ({
         page: String(page),
         page_size: String(pageSize),
       };
-      if (status) params.position_status = status;
+      if (status) params.status = status;
+      if (orderType) params.order_type = orderType;
       if (direction) params.direction = direction;
 
-      const url = `${OpenAPI.BASE}${prefix}/${taskId}/positions/`;
+      const url = `${OpenAPI.BASE}${prefix}/${taskId}/orders/`;
 
       const headers: Record<string, string> = {
         Accept: 'application/json',
@@ -106,7 +110,7 @@ export const useTaskPositions = ({
       });
 
       const data = response.data;
-      setPositions((data.results || []) as TaskPosition[]);
+      setOrders((data.results || []) as TaskOrder[]);
       setTotalCount(data.count ?? 0);
       setHasNext(Boolean(data.next));
       setHasPrevious(Boolean(data.previous));
@@ -115,34 +119,33 @@ export const useTaskPositions = ({
         handleAuthErrorStatus(err.response.status, {
           source: 'http',
           status: err.response.status,
-          context: 'task_positions',
+          context: 'task_orders',
         });
       }
-      const msg =
-        err instanceof Error ? err.message : 'Failed to load positions';
+      const msg = err instanceof Error ? err.message : 'Failed to load orders';
       setError(new Error(msg));
     } finally {
       setIsLoading(false);
     }
-  }, [taskId, taskType, status, direction, page, pageSize]);
+  }, [taskId, taskType, status, orderType, direction, page, pageSize]);
 
   useEffect(() => {
-    fetchPositions();
-  }, [fetchPositions]);
+    fetchOrders();
+  }, [fetchOrders]);
 
   useEffect(() => {
     if (!enableRealTimeUpdates) return;
-    const interval = setInterval(fetchPositions, refreshInterval);
+    const interval = setInterval(fetchOrders, refreshInterval);
     return () => clearInterval(interval);
-  }, [enableRealTimeUpdates, refreshInterval, fetchPositions]);
+  }, [enableRealTimeUpdates, refreshInterval, fetchOrders]);
 
   return {
-    positions,
+    orders,
     totalCount,
     hasNext,
     hasPrevious,
     isLoading,
     error,
-    refetch: fetchPositions,
+    refetch: fetchOrders,
   };
 };

@@ -109,7 +109,7 @@ class BacktestTask(UUIDModel):
     trading_mode = models.CharField(
         max_length=20,
         choices=TradingMode.choices,
-        default=TradingMode.NETTING,
+        default=TradingMode.HEDGING,
         help_text="Trading mode: netting (aggregated positions) or hedging (independent trades)",
     )
     status = models.CharField(

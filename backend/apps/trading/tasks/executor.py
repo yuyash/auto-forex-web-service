@@ -81,9 +81,7 @@ class TaskExecutor:
         self.pip_size = task.pip_size
         self.initial_balance = self._get_initial_balance()
 
-        self.event_handler = EventHandler(
-            order_service, self.instrument, trading_mode=getattr(task, "trading_mode", "hedging")
-        )
+        self.event_handler = EventHandler(order_service, self.instrument)
 
         self._metric_buffer: list[dict] = []
 

@@ -32,7 +32,6 @@ class TradingEngine:
         instrument: str,
         pip_size: Decimal,
         strategy_config: StrategyConfiguration,
-        trading_mode: str = "hedging",
         account_currency: str = "",
     ) -> None:
         """Initialize trading engine.
@@ -41,13 +40,11 @@ class TradingEngine:
             instrument: Trading instrument (e.g., "USD_JPY")
             pip_size: Pip size for instrument
             strategy_config: Strategy configuration
-            trading_mode: "netting" (FIFO, US) or "hedging" (JP, etc.)
             account_currency: Account base currency (e.g., "JPY", "USD")
         """
         self.instrument = instrument
         self.pip_size = pip_size
         self.strategy_config = strategy_config
-        self.trading_mode = trading_mode
         self.account_currency = account_currency
 
         # Create strategy based on type
@@ -85,7 +82,6 @@ class TradingEngine:
                 instrument=self.instrument,
                 pip_size=self.pip_size,
                 config=config,
-                trading_mode=self.trading_mode,
             )
 
         raise ValueError(f"Unknown strategy type: {strategy_type}")

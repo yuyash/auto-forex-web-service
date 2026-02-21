@@ -92,7 +92,7 @@ type ReplayTrade = {
   timestamp: string;
   timeSec: UTCTimestamp;
   instrument: string;
-  direction: 'long' | 'short';
+  direction: 'long' | 'short' | '';
   units: string;
   price: string;
   execution_method?: string;
@@ -260,7 +260,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   enableRealTimeUpdates = false,
   currentTick,
   latestExecution,
-  configId,
 }) => {
   const panelRootRef = useRef<HTMLDivElement | null>(null);
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
@@ -568,7 +567,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       .map((r) =>
         [
           new Date(r.timestamp).toLocaleString(),
-          r.direction.toUpperCase(),
+          r.direction ? r.direction.toUpperCase() : '',
           r.layer_index ?? '-',
           r.retracement_count ?? '-',
           r.units,
@@ -614,7 +613,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   useMetricsOverlay({
     taskId: String(taskId),
     taskType,
-    configId,
     enableRealTimeUpdates,
     chart: chartInstance,
     candleTimestamps: candleTimestampsMemo,
@@ -756,19 +754,25 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             (t: Record<string, unknown>, idx: number): ReplayTrade | null => {
               const timestamp = String(t.timestamp || '');
               const parsedTime = parseUtcTimestamp(timestamp);
-              const direction = String(t.direction || '').toLowerCase();
-              const mappedDirection =
-                direction === 'buy'
-                  ? 'long'
-                  : direction === 'sell'
-                    ? 'short'
-                    : direction;
-              if (
-                !timestamp ||
-                parsedTime === null ||
-                (mappedDirection !== 'long' && mappedDirection !== 'short')
-              ) {
+              if (!timestamp || parsedTime === null) {
                 return null;
+              }
+              const rawDir = t.direction;
+              let mappedDirection: 'long' | 'short' | '';
+              if (
+                rawDir == null ||
+                rawDir === '' ||
+                String(rawDir).toLowerCase() === 'none'
+              ) {
+                mappedDirection = '';
+              } else {
+                const direction = String(rawDir).toLowerCase();
+                mappedDirection =
+                  direction === 'buy'
+                    ? 'long'
+                    : direction === 'sell'
+                      ? 'short'
+                      : (direction as 'long' | 'short' | '');
               }
               return {
                 id: `${timestamp}-${idx}`,
@@ -776,7 +780,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                 timestamp,
                 timeSec: parsedTime,
                 instrument: String(t.instrument || instrument),
-                direction: mappedDirection as 'long' | 'short',
+                direction: mappedDirection,
                 units: String(t.units ?? ''),
                 price: String(t.price ?? ''),
                 execution_method: String(t.execution_method || ''),
@@ -1086,28 +1090,40 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         executionMethod === 'margin_protection' ||
         executionMethod === 'volatility_lock';
 
-      const openSide = t.direction === 'long' ? 'LONG' : 'SHORT';
-      const closeSide = t.direction === 'long' ? 'SHORT' : 'LONG';
+      const openSide =
+        t.direction === 'long'
+          ? 'LONG'
+          : t.direction === 'short'
+            ? 'SHORT'
+            : '';
+      const closeSide =
+        t.direction === 'long'
+          ? 'SHORT'
+          : t.direction === 'short'
+            ? 'LONG'
+            : '';
       const sideLabel = isClose ? closeSide : openSide;
-      const actionLabel = isClose ? 'CLOSE' : 'OPEN';
+      const actionLabel = isClose ? 'CLOSE' : t.direction ? 'OPEN' : '';
       const lotLabel = lots === null ? '' : ` ${Math.round(lots)}L`;
 
       return {
         time: t.timeSec,
         position:
-          t.direction === 'long'
-            ? ('belowBar' as const)
-            : ('aboveBar' as const),
+          t.direction === 'short'
+            ? ('aboveBar' as const)
+            : ('belowBar' as const),
         shape:
-          t.direction === 'long'
-            ? ('arrowUp' as const)
-            : ('arrowDown' as const),
+          t.direction === 'short'
+            ? ('arrowDown' as const)
+            : ('arrowUp' as const),
         color: selected
           ? '#f59e0b'
           : t.direction === 'long'
             ? '#16a34a'
-            : '#ef4444',
-        text: `${actionLabel} ${sideLabel}${lotLabel}`,
+            : t.direction === 'short'
+              ? '#ef4444'
+              : '#9ca3af',
+        text: `${actionLabel} ${sideLabel}${lotLabel}`.trim(),
       };
     });
 
@@ -1309,11 +1325,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           </Button>
         )}
       </Box>
-
-      {/* Metric overlay labels */}
-      <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-        Margin Ratio (%) &amp; Volatility — Current ATR / Lock Threshold (pips)
-      </Typography>
 
       <Paper
         variant="outlined"
@@ -1563,7 +1574,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {row.direction.toUpperCase()}
+                    {row.direction ? row.direction.toUpperCase() : ''}
                   </TableCell>
                   <TableCell
                     sx={{

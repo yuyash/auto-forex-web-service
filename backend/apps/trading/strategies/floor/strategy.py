@@ -56,7 +56,6 @@ class FloorStrategy(Strategy):
         instrument: str,
         pip_size: Decimal,
         config: FloorStrategyConfig,
-        trading_mode: str = "hedging",
     ) -> None:
         """Initialize trading engine.
 
@@ -64,23 +63,18 @@ class FloorStrategy(Strategy):
             instrument: Trading instrument (e.g., "USD_JPY")
             pip_size: Pip size for instrument
             config: Strategy configuration
-            trading_mode: "netting" enforces FIFO close order (US regulation),
-                          "hedging" allows LIFO / independent closes (JP, etc.)
         """
         super().__init__(instrument, pip_size, config)
-
-        self.trading_mode = trading_mode
 
         # Components
         self.candle_manager = CandleManager(config)
         self.trend_detector = TrendDetector()
 
         logger.info(
-            "Initialized Floor trading engine: instrument=%s, pip_size=%s, hedging=%s, trading_mode=%s",
+            "Initialized Floor trading engine: instrument=%s, pip_size=%s, hedging=%s",
             instrument,
             pip_size,
             config.hedging_enabled,
-            trading_mode,
         )
 
     @staticmethod
@@ -127,6 +121,21 @@ class FloorStrategy(Strategy):
         closes = self.candle_manager.get_candle_closes(floor_state)
         direction = self.trend_detector.detect_direction(closes)
         return direction.value
+
+    def _new_layer_direction(
+        self, floor_state: FloorStrategyState, previous_floor_index: int
+    ) -> str:
+        """Determine direction for a newly added layer.
+
+        When layer_direction_mode is "inherit", reuse the direction of the
+        previous layer.  When "independent" (default), re-evaluate from
+        recent candle data.
+        """
+        if self.config.layer_direction_mode == "inherit":
+            prev_dir = floor_state.floor_directions.get(previous_floor_index)
+            if prev_dir:
+                return prev_dir
+        return self._choose_direction(floor_state)
 
     def _lots_to_units(self, lots: Decimal) -> int:
         raw_units = lots * self.config.lot_unit_size
@@ -692,20 +701,21 @@ class FloorStrategy(Strategy):
             state.strategy_state = floor_state.to_dict()
             return StrategyResult(state=state, events=events)
 
-        # 1) Take profit: LIFO (newest first) in hedging mode,
-        #    FIFO (oldest first) in netting mode (US FIFO regulation).
-        fifo_mode = self.trading_mode == "netting"
+        # 1) Take profit: check ALL open entries across all layers.
         closed_any = False
         for entry in sorted(
-            active_entries, key=lambda item: int(item.get("entry_id", 0)), reverse=not fifo_mode
+            list(floor_state.open_entries),
+            key=lambda item: int(item.get("entry_id", 0)),
+            reverse=True,
         ):
             direction = self._normalize_direction(str(entry.get("direction", "long")))
             entry_price = Decimal(str(entry.get("entry_price", "0")))
+            entry_floor = int(entry.get("floor_index", active_floor))
             tp_pips = Decimal(
                 str(
                     entry.get(
                         "take_profit_pips",
-                        self._effective_take_profit(floor_state, active_floor),
+                        self._effective_take_profit(floor_state, entry_floor),
                     )
                 )
             )
@@ -724,7 +734,7 @@ class FloorStrategy(Strategy):
                 TakeProfitEvent(
                     event_type=EventType.TAKE_PROFIT,
                     timestamp=tick.timestamp,
-                    layer_number=active_floor,
+                    layer_number=entry_floor,
                     direction=direction,
                     entry_price=entry_price,
                     exit_price=exit_price,
@@ -733,7 +743,7 @@ class FloorStrategy(Strategy):
                     pips=pnl_pips,
                     entry_time=None,
                     exit_time=tick.timestamp,
-                    retracement_count=floor_state.floor_retracement_counts.get(active_floor, 0),
+                    retracement_count=floor_state.floor_retracement_counts.get(entry_floor, 0),
                     entry_id=int(entry.get("entry_id", 0)),
                     position_id=entry.get("position_id"),
                 )
@@ -751,8 +761,31 @@ class FloorStrategy(Strategy):
             # Recompute retracement count from remaining entries instead of
             # resetting to zero – only the closed entries should be subtracted.
             self._recompute_floor_retracements(floor_state)
+
+            # Check each layer in the return stack (and active layer) for
+            # removal if all its entries have been closed.
+            # Process from the active layer inward so return_stack pops work.
             remaining_active = self._active_floor_entries(floor_state, active_floor)
             if not remaining_active and active_floor != floor_state.home_floor_index:
+                events.append(
+                    RemoveLayerEvent(
+                        event_type=EventType.REMOVE_LAYER,
+                        timestamp=tick.timestamp,
+                        layer_number=active_floor,
+                        remove_time=tick.timestamp,
+                    )
+                )
+                if floor_state.return_stack:
+                    floor_state.active_floor_index = floor_state.return_stack.pop()
+                else:
+                    floor_state.active_floor_index = floor_state.home_floor_index
+                active_floor = floor_state.active_floor_index
+
+            # Also collapse any now-empty intermediate layers that were
+            # cleared by cross-layer take-profit.
+            while active_floor != floor_state.home_floor_index:
+                if self._active_floor_entries(floor_state, active_floor):
+                    break
                 events.append(
                     RemoveLayerEvent(
                         event_type=EventType.REMOVE_LAYER,
@@ -842,7 +875,7 @@ class FloorStrategy(Strategy):
                     add_time=tick.timestamp,
                 )
             )
-            new_direction = self._choose_direction(floor_state)
+            new_direction = self._new_layer_direction(floor_state, active_floor)
             initial_units = self._entry_units(floor_state, new_floor, self.config.base_lot_size)
             events.append(
                 self._open_entry(

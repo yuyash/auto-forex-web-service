@@ -48,7 +48,7 @@ class TradingEventSerializer(serializers.ModelSerializer):
 class TradeSerializer(serializers.Serializer):
     """Serializer for trade data from Trades model."""
 
-    direction = serializers.ChoiceField(choices=Direction.choices)
+    direction = serializers.ChoiceField(choices=Direction.choices, allow_null=True)
     units = serializers.IntegerField()
     instrument = serializers.CharField()
     price = serializers.DecimalField(max_digits=20, decimal_places=10)
@@ -88,3 +88,32 @@ class PositionSerializer(serializers.Serializer):
     exit_time = serializers.DateTimeField(required=False, allow_null=True)
     is_open = serializers.BooleanField()
     layer_index = serializers.IntegerField(required=False, allow_null=True)
+    retracement_count = serializers.IntegerField(required=False, allow_null=True)
+
+
+class OrderSerializer(serializers.Serializer):
+    """Serializer for order data from Order model."""
+
+    id = serializers.UUIDField()
+    celery_task_id = serializers.CharField(required=False, allow_null=True)
+    broker_order_id = serializers.CharField(required=False, allow_null=True)
+    oanda_trade_id = serializers.CharField(required=False, allow_null=True)
+    instrument = serializers.CharField()
+    order_type = serializers.CharField()
+    direction = serializers.CharField(required=False, allow_null=True)
+    units = serializers.IntegerField()
+    requested_price = serializers.DecimalField(
+        max_digits=20, decimal_places=10, required=False, allow_null=True
+    )
+    fill_price = serializers.DecimalField(
+        max_digits=20, decimal_places=10, required=False, allow_null=True
+    )
+    status = serializers.CharField()
+    submitted_at = serializers.DateTimeField()
+    filled_at = serializers.DateTimeField(required=False, allow_null=True)
+    cancelled_at = serializers.DateTimeField(required=False, allow_null=True)
+    stop_loss = serializers.DecimalField(
+        max_digits=20, decimal_places=10, required=False, allow_null=True
+    )
+    error_message = serializers.CharField(required=False, allow_null=True)
+    is_dry_run = serializers.BooleanField()

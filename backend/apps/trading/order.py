@@ -187,31 +187,52 @@ class OrderService:
             )
 
         try:
-            # Get OANDA position representation
-            oanda_position = self._position_to_oanda_position(position)
+            # Determine close units
+            close_units_int = units if units is not None else abs(position.units)
+            close_units_decimal = Decimal(str(close_units_int))
 
-            # Close via OANDA service (executes opposite trade)
-            close_units = Decimal(str(units)) if units is not None else None
-            oanda_order = self.oanda_service.close_position(
-                position=oanda_position,
-                units=close_units,
-                override_price=override_price,
-            )
+            # Use trade ID-based close when available (required for hedging accounts)
+            if position.oanda_trade_id and not self.dry_run:
+                from apps.market.services.oanda import OpenTrade, OrderDirection
+
+                oanda_direction = (
+                    OrderDirection.LONG
+                    if position.direction == Direction.LONG
+                    else OrderDirection.SHORT
+                )
+                trade = OpenTrade(
+                    trade_id=position.oanda_trade_id,
+                    instrument=position.instrument,
+                    direction=oanda_direction,
+                    units=Decimal(str(abs(position.units))),
+                    entry_price=position.entry_price,
+                    unrealized_pnl=Decimal("0"),
+                    open_time=position.entry_time,
+                    state="OPEN",
+                    account_id=str(self.account.account_id) if self.account else "",
+                )
+                oanda_order = self.oanda_service.close_trade(
+                    trade=trade,
+                    units=close_units_decimal if units is not None else None,
+                )
+            else:
+                # Fallback: instrument-based close (dry-run or legacy positions without trade ID)
+                oanda_position = self._position_to_oanda_position(position)
+                oanda_order = self.oanda_service.close_position(
+                    position=oanda_position,
+                    units=close_units_decimal if units is not None else None,
+                    override_price=override_price,
+                )
 
             # Create order record for the closing trade
-            # The order direction is opposite to the position direction
-            close_direction = (
-                Direction.SHORT if position.direction == Direction.LONG else Direction.LONG
-            )
-            close_units_int = units if units is not None else abs(position.units)
-
             order = self._create_order_record(
                 instrument=position.instrument,
                 order_type=OrderType.MARKET,
-                direction=close_direction,  # Opposite direction
+                direction=None,
                 units=close_units_int,
                 oanda_order=oanda_order,
                 tick_timestamp=tick_timestamp,
+                oanda_trade_id=position.oanda_trade_id,
             )
 
             # Update position
@@ -337,9 +358,9 @@ class OrderService:
                 direction=direction,
                 units=units,
                 oanda_order=oanda_order,
-                take_profit=take_profit,
                 stop_loss=stop_loss,
                 tick_timestamp=tick_timestamp,
+                oanda_trade_id=getattr(oanda_order, "trade_id", None),
             )
 
             # Create or update position
@@ -352,6 +373,7 @@ class OrderService:
                 entry_time=entry_time,
                 layer_index=layer_index,
                 merge_with_existing=merge_with_existing,
+                oanda_trade_id=getattr(oanda_order, "trade_id", None),
             )
 
             logger.info(
@@ -382,19 +404,20 @@ class OrderService:
         self,
         instrument: str,
         order_type: OrderType,
-        direction: Direction,
+        direction: Direction | None,
         units: int,
         oanda_order: OandaMarketOrder,
         requested_price: Decimal | None = None,
-        take_profit: Decimal | None = None,
         stop_loss: Decimal | None = None,
         tick_timestamp: datetime | None = None,
+        oanda_trade_id: str | None = None,
     ) -> Order:
         """Create order database record."""
         order = Order.objects.create(
             task_type=self.task_type,
             task_id=self.task.id,
             broker_order_id=oanda_order.order_id,
+            oanda_trade_id=oanda_trade_id,
             instrument=instrument,
             order_type=order_type,
             direction=direction,
@@ -403,7 +426,6 @@ class OrderService:
             fill_price=oanda_order.price,
             status=OrderStatus.FILLED,
             filled_at=tick_timestamp or oanda_order.fill_time,
-            take_profit=take_profit,
             stop_loss=stop_loss,
             is_dry_run=self.dry_run,
         )
@@ -419,6 +441,7 @@ class OrderService:
         *,
         layer_index: int | None = None,
         merge_with_existing: bool = True,
+        oanda_trade_id: str | None = None,
     ) -> Position:
         """Create new position or update existing one."""
         if merge_with_existing:
@@ -447,6 +470,8 @@ class OrderService:
                 existing_position.entry_price = new_avg_price
                 if layer_index is not None:
                     existing_position.layer_index = layer_index
+                if oanda_trade_id is not None:
+                    existing_position.oanda_trade_id = oanda_trade_id
                 existing_position.celery_task_id = getattr(self.task, "celery_task_id", None)
                 existing_position.save()
 
@@ -471,6 +496,7 @@ class OrderService:
             entry_time=entry_time,
             is_open=True,
             layer_index=layer_index,
+            oanda_trade_id=oanda_trade_id,
         )
 
         logger.debug(

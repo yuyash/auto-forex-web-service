@@ -41,7 +41,9 @@ class Trade(models.Model):
     )
     direction = models.CharField(
         max_length=10,
-        help_text="Trade direction (LONG/SHORT)",
+        null=True,
+        blank=True,
+        help_text="Trade direction (LONG/SHORT). Null for close-only trades (e.g. take profit).",
     )
     units = models.IntegerField(
         help_text="Number of units traded",
@@ -49,6 +51,13 @@ class Trade(models.Model):
     instrument = models.CharField(
         max_length=32,
         help_text="Trading instrument (e.g., EUR_USD)",
+    )
+    oanda_trade_id = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="OANDA trade ID associated with this trade",
     )
     price = models.DecimalField(
         max_digits=20,
@@ -92,4 +101,5 @@ class Trade(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.direction} {self.units} {self.instrument} @ {self.price}"
+        direction_str = self.direction or "CLOSE"
+        return f"{direction_str} {self.units} {self.instrument} @ {self.price}"

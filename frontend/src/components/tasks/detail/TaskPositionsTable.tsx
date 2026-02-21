@@ -283,7 +283,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       minWidth: 70,
       render: (row) => (
         <Chip
-          label={row.direction}
+          label={row.direction.toUpperCase()}
           color={row.direction === 'long' ? 'success' : 'error'}
           size="small"
         />
@@ -390,7 +390,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       minWidth: 70,
       render: (row) => (
         <Chip
-          label={row.direction}
+          label={row.direction.toUpperCase()}
           color={row.direction === 'long' ? 'success' : 'error'}
           size="small"
         />

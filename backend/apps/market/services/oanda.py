@@ -155,7 +155,7 @@ class Order:
 
 @dataclass(frozen=True, slots=True)
 class MarketOrder(Order):
-    pass
+    trade_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -692,6 +692,12 @@ class OandaService:
             fill_price = Decimal(str(fill_price_raw)) if fill_price_raw is not None else None
             fill_time = self._parse_iso_datetime(getattr(fill_tx, "time", None))
 
+            # Extract OANDA trade ID from the fill transaction
+            trade_id: str | None = None
+            trade_opened = getattr(fill_tx, "tradeOpened", None)
+            if trade_opened:
+                trade_id = str(getattr(trade_opened, "tradeID", "")) or None
+
             self.event_service.log_trading_event(
                 event_type=MarketEventType.ORDER_SUBMITTED,
                 description=(
@@ -711,6 +717,7 @@ class OandaService:
                     "stop_loss": str(request.stop_loss) if request.stop_loss else None,
                     "status": "filled",
                     "fill_price": str(fill_price) if fill_price is not None else None,
+                    "trade_id": trade_id,
                 },
             )
 
@@ -725,6 +732,7 @@ class OandaService:
                 time_in_force="FOK",
                 create_time=fill_time,
                 fill_time=fill_time,
+                trade_id=trade_id,
             )
 
         reject_reason = getattr(reject_tx, "rejectReason", None) if reject_tx else None
@@ -1564,6 +1572,7 @@ class OandaService:
 
         self._dry_run_order_counter += 1
         order_id = f"DRY-{self._dry_run_order_counter}"
+        trade_id = f"DRY-TRADE-{self._dry_run_order_counter}"
         now = datetime.now(UTC)
 
         # Use override price if provided (e.g. from strategy event entry_price)
@@ -1638,6 +1647,7 @@ class OandaService:
             time_in_force="FOK",
             create_time=now,
             fill_time=now,
+            trade_id=trade_id,
         )
 
     def _simulate_position_close(

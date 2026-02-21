@@ -86,6 +86,18 @@ class Position(models.Model):
         blank=True,
         help_text="Layer index for Floor strategy (null for other strategies)",
     )
+    retracement_count = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of retracements for this position",
+    )
+    oanda_trade_id = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="OANDA trade ID for trade-based close operations",
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         db_index=True,

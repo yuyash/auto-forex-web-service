@@ -177,14 +177,15 @@ class TestFloorStrategyOnTick:
         )  # floor 2
         assert state.strategy_state["active_floor_index"] == 2
 
-        # Favorable move to TP floor 2; should return to floor 1 (stack pop), not home floor 0.
+        # Favorable move to TP floor 2; cross-layer TP closes all layers
+        # whose entries are in profit, collapsing back to home floor 0.
         state.ticks_processed += 1
         result = strategy.on_tick(
             tick=_make_tick(ts + timedelta(seconds=180), "150.20", "150.22"),
             state=state,
         )
         assert any(isinstance(ev, RemoveLayerEvent) for ev in result.events)
-        assert state.strategy_state["active_floor_index"] == 1
+        assert state.strategy_state["active_floor_index"] == 0
 
     def test_per_floor_take_profit_and_retracement_are_used(self) -> None:
         strategy = _strategy(

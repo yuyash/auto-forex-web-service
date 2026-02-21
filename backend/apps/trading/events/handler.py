@@ -34,17 +34,15 @@ class EventHandler:
         position_map: Maps layer numbers to Position instances
     """
 
-    def __init__(self, order_service: OrderService, instrument: str, trading_mode: str = "hedging"):
+    def __init__(self, order_service: OrderService, instrument: str):
         """Initialize event handler.
 
         Args:
             order_service: OrderService instance for executing trades
             instrument: Trading instrument (e.g., 'EUR_USD')
-            trading_mode: "netting" (FIFO) or "hedging" (LIFO for TP)
         """
         self.order_service = order_service
         self.instrument = instrument
-        self.trading_mode = trading_mode
         self.position_map: dict[int, Position] = {}  # layer_number -> Position
         self.layer_position_ids: dict[int, list[str]] = defaultdict(list)
         self._position_cache: dict[str, Position] = {}
@@ -106,7 +104,7 @@ class EventHandler:
                 return candidate
             logger.warning(
                 "position_id %s from TakeProfitEvent not found or already closed, "
-                "falling back to FIFO lookup for layer %s",
+                "falling back to entry-time lookup for layer %s",
                 event.position_id,
                 event.layer_number,
             )
@@ -115,7 +113,7 @@ class EventHandler:
         self._rehydrate_layer_positions(layer_number)
         stack = self.layer_position_ids.get(layer_number, [])
 
-        # Always FIFO: oldest first (front of list)
+        # Oldest first (entry-time order)
         while stack:
             candidate_id = stack[0]
             candidate = self._get_open_position_by_id(candidate_id)
@@ -174,7 +172,7 @@ class EventHandler:
     def _record_trade(
         self,
         *,
-        direction: Direction,
+        direction: Direction | None,
         units: int,
         instrument: str,
         price: Decimal,
@@ -182,19 +180,21 @@ class EventHandler:
         timestamp,
         layer_index: int | None = None,
         retracement_count: int | None = None,
+        oanda_trade_id: str | None = None,
     ) -> None:
         Trade.objects.create(
             task_type=self.order_service.task_type.value,
             task_id=self._task_pk,
             celery_task_id=self.order_service.task.celery_task_id,
             timestamp=timestamp,
-            direction=direction.value,
+            direction=direction.value if direction else None,
             units=units,
             instrument=instrument,
             price=price,
             execution_method=execution_method,
             layer_index=layer_index,
             retracement_count=retracement_count,
+            oanda_trade_id=oanda_trade_id,
         )
 
     def handle_event(self, trading_event: TradingEvent) -> Decimal:
@@ -265,6 +265,7 @@ class EventHandler:
             timestamp=event.timestamp,
             layer_index=event.layer_number,
             retracement_count=event.retracement_count,
+            oanda_trade_id=position.oanda_trade_id,
         )
 
         logger.info(
@@ -310,6 +311,7 @@ class EventHandler:
             timestamp=event.timestamp,
             layer_index=event.layer_number,
             retracement_count=event.retracement_count,
+            oanda_trade_id=position.oanda_trade_id,
         )
 
         logger.info(
@@ -328,8 +330,7 @@ class EventHandler:
 
         When the requested units exceed a single position's size, this
         method iterates through multiple positions in the same layer
-        (respecting the trading_mode order) until the full amount is
-        closed or no more open positions remain.
+        until the full amount is closed or no more open positions remain.
 
         Args:
             event: Take profit event with close details
@@ -382,11 +383,8 @@ class EventHandler:
             )
             realized_delta_total += realized_delta
 
-            close_direction = (
-                Direction.SHORT if position.direction == Direction.LONG else Direction.LONG
-            )
             self._record_trade(
-                direction=close_direction,
+                direction=None,
                 units=closed_units,
                 instrument=position.instrument,
                 price=Decimal(str(closed_position.exit_price or position.entry_price)),
@@ -394,6 +392,7 @@ class EventHandler:
                 timestamp=event.timestamp,
                 layer_index=event.layer_number,
                 retracement_count=event.retracement_count,
+                oanda_trade_id=position.oanda_trade_id,
             )
 
             self._prune_closed_position(event.layer_number, closed_position)
@@ -456,17 +455,15 @@ class EventHandler:
                 closed_positions.append(closed)
                 self._prune_closed_position(position.layer_index or 0, closed)
                 realized_delta_total += realized_delta
-                close_direction = (
-                    Direction.SHORT if position.direction == Direction.LONG else Direction.LONG
-                )
                 self._record_trade(
-                    direction=close_direction,
+                    direction=None,
                     units=abs(position.units),
                     instrument=position.instrument,
                     price=Decimal(str(closed.exit_price or position.entry_price)),
                     execution_method=str(event.event_type.value),
                     timestamp=event.timestamp,
                     layer_index=position.layer_index,
+                    oanda_trade_id=position.oanda_trade_id,
                 )
                 logger.info(
                     "Closed position due to volatility: layer=%s, position_id=%s, pnl=%s",
@@ -599,17 +596,15 @@ class EventHandler:
                 closed_positions.append(closed)
                 self._prune_closed_position(position.layer_index or 0, closed)
                 realized_delta_total += realized_delta
-                close_direction = (
-                    Direction.SHORT if position.direction == Direction.LONG else Direction.LONG
-                )
                 self._record_trade(
-                    direction=close_direction,
+                    direction=None,
                     units=units_to_close or abs(position.units),
                     instrument=position.instrument,
                     price=Decimal(str(closed.exit_price or position.entry_price)),
                     execution_method=str(event.event_type.value),
                     timestamp=event.timestamp,
                     layer_index=position.layer_index,
+                    oanda_trade_id=position.oanda_trade_id,
                 )
                 touched_positions += 1
                 if remaining_units is not None:

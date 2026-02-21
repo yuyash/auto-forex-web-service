@@ -36,7 +36,7 @@ import {
   useConfiguration,
   useConfigurations,
 } from '../../hooks/useConfigurations';
-import { useAccounts } from '../../hooks/useAccounts';
+import { useAccounts, useAccount } from '../../hooks/useAccounts';
 import { useTradingTasks } from '../../hooks/useTradingTasks';
 import { TaskStatus } from '../../types/common';
 import {
@@ -128,9 +128,20 @@ export default function TradingTaskForm({
       ? formData.account_id
       : selectedAccountId;
 
-  const selectedAccount = accounts.find(
+  const selectedAccountFromList = accounts.find(
     (account) => String(account.id) === effectiveAccountId
   );
+
+  // Fetch live account details (balance, margin, etc.) from OANDA API
+  const accountIdNum = effectiveAccountId ? Number(effectiveAccountId) : 0;
+  const { data: accountDetail } = useAccount(accountIdNum, {
+    enabled: accountIdNum > 0,
+  });
+
+  // Prefer live detail data over stale list data
+  const selectedAccount = accountDetail
+    ? (accountDetail as Account)
+    : selectedAccountFromList;
 
   // Fetch all configurations and strategies
   const { data: configurationsData } = useConfigurations({ page_size: 100 });
@@ -251,12 +262,7 @@ export default function TradingTaskForm({
                         label="Account"
                         value={field.value || ''}
                         onChange={(e) => {
-                          const value = e.target.value;
-                          field.onChange(
-                            typeof value === 'string' && value === ''
-                              ? 0
-                              : Number(value)
-                          );
+                          field.onChange(String(e.target.value));
                         }}
                       >
                         <MenuItem value="">
@@ -288,7 +294,7 @@ export default function TradingTaskForm({
                     <Typography variant="body2">
                       <strong>Account ID:</strong> {selectedAccount.account_id}
                     </Typography>
-                    <Typography variant="body2">
+                    <Typography variant="body2" component="div">
                       <strong>Type:</strong>{' '}
                       <Chip
                         label={selectedAccount.api_type.toUpperCase()}

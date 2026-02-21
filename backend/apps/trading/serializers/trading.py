@@ -171,35 +171,44 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
     """
     Serializer for creating and updating TradingTask.
 
-    Includes validation for account ownership and configuration.
+    Accepts config_id and account_id from the frontend, mapping them
+    to the config and oanda_account FK fields.
     """
+
+    config_id = serializers.PrimaryKeyRelatedField(
+        queryset=StrategyConfiguration.objects.all(),
+        source="config",
+        required=False,
+    )
+    account_id = serializers.PrimaryKeyRelatedField(
+        queryset=OandaAccounts.objects.all(),
+        source="oanda_account",
+        required=False,
+    )
 
     class Meta:
         model = TradingTask
         fields = [
-            "config",
-            "oanda_account",
+            "config_id",
+            "account_id",
             "name",
             "description",
             "sell_on_stop",
         ]
-        # Make fields optional for partial updates (PATCH)
         extra_kwargs = {
-            "config": {"required": False},
-            "oanda_account": {"required": False},
             "name": {"required": False},
             "description": {"required": False},
             "sell_on_stop": {"required": False},
         }
 
-    def validate_config(self, value: StrategyConfiguration) -> StrategyConfiguration:
+    def validate_config_id(self, value: StrategyConfiguration) -> StrategyConfiguration:
         """Validate that config belongs to the user."""
         user = self.context["request"].user
         if value.user != user:
             raise serializers.ValidationError("Configuration does not belong to the current user")
         return value
 
-    def validate_oanda_account(self, value: OandaAccounts) -> OandaAccounts:
+    def validate_account_id(self, value: OandaAccounts) -> OandaAccounts:
         """Validate that account belongs to the user and is active."""
         user = self.context["request"].user
         if value.user != user:
@@ -210,18 +219,19 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs: dict) -> dict:
         """Validate configuration parameters."""
+        # On create, config and oanda_account are required
+        if not self.instance:
+            if "config" not in attrs:
+                raise serializers.ValidationError({"config_id": "This field is required."})
+            if "oanda_account" not in attrs:
+                raise serializers.ValidationError({"account_id": "This field is required."})
+
         # Validate configuration parameters
         config = attrs.get("config")
         if config:
             is_valid, error_message = config.validate_parameters()
             if not is_valid:
-                raise serializers.ValidationError({"config": error_message})
-
-            # Validate configuration has instrument parameter
-            if not config.parameters.get("instrument"):
-                raise serializers.ValidationError(
-                    {"config": "Configuration must have an instrument parameter"}
-                )
+                raise serializers.ValidationError({"config_id": error_message})
 
         return attrs
 

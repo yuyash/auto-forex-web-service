@@ -34,6 +34,7 @@ import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskPositionsTable } from '../tasks/detail/TaskPositionsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
 import { TaskReplayPanel } from '../tasks/detail/TaskReplayPanel';
+import { TaskOrdersTable } from '../tasks/detail/TaskOrdersTable';
 import { TaskProgress } from '../tasks/TaskProgress';
 import { useOverviewPnl } from '../../hooks/useOverviewPnl';
 import { TaskStatus, TaskType } from '../../types/common';
@@ -105,6 +106,7 @@ export const BacktestTaskDetail: React.FC = () => {
     replay: 3,
     events: 4,
     logs: 5,
+    orders: 6,
     equity: 3,
   };
   const tabNames = [
@@ -114,6 +116,7 @@ export const BacktestTaskDetail: React.FC = () => {
     'replay',
     'events',
     'logs',
+    'orders',
   ];
   const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
 
@@ -361,6 +364,7 @@ export const BacktestTaskDetail: React.FC = () => {
           <Tab label="Replay" {...a11yProps(3)} />
           <Tab label="Events" {...a11yProps(4)} />
           <Tab label="Logs" {...a11yProps(5)} />
+          <Tab label="Orders" {...a11yProps(6)} />
         </Tabs>
 
         {/* Overview Tab */}
@@ -672,6 +676,17 @@ export const BacktestTaskDetail: React.FC = () => {
             taskId={taskId}
             taskType={TaskType.BACKTEST}
             executionId={task.celery_task_id || undefined}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
+          />
+        </TabPanel>
+
+        {/* Orders Tab */}
+        <TabPanel value={currentTabValue} index={6}>
+          <TaskOrdersTable
+            taskId={taskId}
+            taskType={TaskType.BACKTEST}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }

@@ -67,6 +67,7 @@ class FloorStrategyConfig:
     candle_granularity_seconds: int
     candle_lookback_count: int
     hedging_enabled: bool
+    layer_direction_mode: str  # "independent" = re-evaluate, "inherit" = same as previous layer
     allow_duplicate_units: bool
     margin_cut_start_ratio: Decimal
     margin_cut_target_ratio: Decimal
@@ -239,7 +240,13 @@ class FloorStrategyConfig:
                 ),
                 20,
             ),
-            hedging_enabled=_to_bool(raw.get("hedging_enabled", False), False),
+            hedging_enabled=_to_bool(raw.get("hedging_enabled", True), True),
+            layer_direction_mode=(
+                str(raw.get("layer_direction_mode", "independent")).strip().lower()
+                if str(raw.get("layer_direction_mode", "independent")).strip().lower()
+                in {"independent", "inherit"}
+                else "independent"
+            ),
             allow_duplicate_units=_to_bool(raw.get("allow_duplicate_units", False), False),
             margin_cut_start_ratio=_to_decimal(raw.get("margin_cut_start_ratio", "0.6"), "0.6"),
             margin_cut_target_ratio=_to_decimal(raw.get("margin_cut_target_ratio", "0.5"), "0.5"),
@@ -286,6 +293,7 @@ class FloorStrategyConfig:
             "candle_granularity_seconds": self.candle_granularity_seconds,
             "candle_lookback_count": self.candle_lookback_count,
             "hedging_enabled": self.hedging_enabled,
+            "layer_direction_mode": self.layer_direction_mode,
             "allow_duplicate_units": self.allow_duplicate_units,
             "margin_cut_start_ratio": str(self.margin_cut_start_ratio),
             "margin_cut_target_ratio": str(self.margin_cut_target_ratio),

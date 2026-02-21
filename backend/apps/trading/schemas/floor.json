@@ -147,8 +147,15 @@
     "hedging_enabled": {
       "type": "boolean",
       "title": "Hedging Enabled",
-      "default": false,
-      "description": "Whether account can hold opposite positions simultaneously."
+      "default": true,
+      "description": "Whether account can hold opposite positions simultaneously. Defaults to true for JP OANDA accounts."
+    },
+    "layer_direction_mode": {
+      "type": "string",
+      "title": "Layer Direction Mode",
+      "enum": ["independent", "inherit"],
+      "default": "independent",
+      "description": "How direction is determined when a new layer is added. 'independent' re-evaluates from recent candle data; 'inherit' uses the same direction as the previous layer."
     },
     "margin_rate": {
       "type": "number",

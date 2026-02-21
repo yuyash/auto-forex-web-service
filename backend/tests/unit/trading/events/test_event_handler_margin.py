@@ -23,6 +23,7 @@ def _position(units: int, layer_index: int = 0):
         entry_price=Decimal("150.000"),
         entry_time=None,
         exit_price=None,
+        oanda_trade_id=None,
     )
 
 
