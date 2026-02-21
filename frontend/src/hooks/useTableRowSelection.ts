@@ -11,6 +11,7 @@ export interface UseTableRowSelectionResult {
   selectedRowIds: Set<string>;
   toggleRowSelection: (id: string) => void;
   selectAllOnPage: (pageRowIds: string[]) => void;
+  deselectAllOnPage: (pageRowIds: string[]) => void;
   resetSelection: () => void;
   isAllPageSelected: (pageRowIds: string[]) => boolean;
   isIndeterminate: (pageRowIds: string[]) => boolean;
@@ -36,6 +37,14 @@ export function useTableRowSelection(): UseTableRowSelectionResult {
     setSelectedRowIds((prev) => {
       const next = new Set(prev);
       for (const id of pageRowIds) next.add(id);
+      return next;
+    });
+  }, []);
+
+  const deselectAllOnPage = useCallback((pageRowIds: string[]) => {
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev);
+      for (const id of pageRowIds) next.delete(id);
       return next;
     });
   }, []);
@@ -72,6 +81,7 @@ export function useTableRowSelection(): UseTableRowSelectionResult {
     selectedRowIds,
     toggleRowSelection,
     selectAllOnPage,
+    deselectAllOnPage,
     resetSelection,
     isAllPageSelected,
     isIndeterminate,

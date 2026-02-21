@@ -95,10 +95,16 @@ export const useTaskTrades = ({
       const rawResults = (response.results || []) as Array<
         Record<string, unknown>
       >;
-      const mapped = rawResults.map((t) => {
+      const mapped = rawResults.map((t, index) => {
         const dir = String(t.direction || '').toLowerCase();
+        // API Trade model has no `id` field; synthesise a stable one
+        // from the record's position in the overall result set.
+        const syntheticId =
+          t.id ??
+          `${(page - 1) * pageSize + index}-${t.timestamp ?? ''}-${t.price ?? ''}`;
         return {
           ...t,
+          id: syntheticId,
           direction: dir === 'buy' ? 'long' : dir === 'sell' ? 'short' : dir,
         };
       });

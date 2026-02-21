@@ -55,11 +55,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
 
   const handleToggleAll = useCallback(() => {
     if (selection.isAllPageSelected(pageRowIds)) {
-      for (const id of pageRowIds) {
-        if (selection.selectedRowIds.has(id)) {
-          selection.toggleRowSelection(id);
-        }
-      }
+      selection.deselectAllOnPage(pageRowIds);
     } else {
       selection.selectAllOnPage(pageRowIds);
     }

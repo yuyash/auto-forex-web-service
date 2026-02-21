@@ -46,12 +46,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
 
   const handleToggleAll = useCallback(() => {
     if (selection.isAllPageSelected(pageRowIds)) {
-      // Deselect all on page
-      for (const id of pageRowIds) {
-        if (selection.selectedRowIds.has(id)) {
-          selection.toggleRowSelection(id);
-        }
-      }
+      selection.deselectAllOnPage(pageRowIds);
     } else {
       selection.selectAllOnPage(pageRowIds);
     }
