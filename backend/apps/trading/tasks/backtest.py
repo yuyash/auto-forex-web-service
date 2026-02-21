@@ -8,7 +8,6 @@ from typing import Any
 from uuid import UUID
 
 from celery import shared_task
-from celery.exceptions import SoftTimeLimitExceeded
 from django.utils import timezone as dj_timezone
 
 from apps.trading.engine import TradingEngine
@@ -25,8 +24,6 @@ logger: Logger = getLogger(name=__name__)
 @shared_task(
     bind=True,
     name="trading.tasks.run_backtest_task",
-    time_limit=7200,  # Hard limit: 2 hours
-    soft_time_limit=7000,  # Soft limit: ~1 hour 56 minutes (gives 4 minutes for cleanup)
 )
 def run_backtest_task(self: Any, task_id: UUID) -> None:
     """Celery task wrapper for running backtest tasks.
@@ -152,24 +149,6 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             f"SUCCESS - task_id={task_id}, "
             f"completed_at={task.completed_at}, duration={(task.completed_at - task.started_at).total_seconds()}s"
         )
-
-    except SoftTimeLimitExceeded:
-        logger.warning(f"SOFT_TIMEOUT - task_id={task_id}, celery_task_id={self.request.id}")
-        if task:
-            task.status = TaskStatus.FAILED
-            task.completed_at = dj_timezone.now()
-            task.error_message = "Task exceeded time limit (soft timeout)"
-            task.save(update_fields=["status", "completed_at", "error_message"])
-
-            TaskLog.objects.create(
-                task_type=TaskType.BACKTEST,
-                task_id=task.pk,
-                celery_task_id=task.celery_task_id,
-                level=LogLevel.WARNING,
-                component=__name__,
-                message="Backtest task exceeded soft time limit",
-            )
-        raise
 
     except BacktestTask.DoesNotExist:
         logger.error(f"TASK_NOT_FOUND - task_id={task_id}")
