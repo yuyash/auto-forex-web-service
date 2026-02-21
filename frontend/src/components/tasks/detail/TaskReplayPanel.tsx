@@ -47,7 +47,7 @@ import {
 import { getAuthToken } from '../../../api/client';
 import { fetchAllTrades } from '../../../utils/fetchAllTrades';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
-import { useTaskTrades } from '../../../hooks/useTaskTrades';
+import { useTaskPositions } from '../../../hooks/useTaskPositions';
 import { TaskType } from '../../../types/common';
 import { handleAuthErrorStatus } from '../../../utils/authEvents';
 import { detectMarketGaps } from '../../../utils/marketClosedMarkers';
@@ -99,10 +99,6 @@ type ReplayTrade = {
   execution_method_display?: string;
   layer_index?: number | null;
   retracement_count?: number | null;
-  pnl?: string;
-  open_price?: string | null;
-  close_timestamp?: string | null;
-  close_price?: string | null;
 };
 
 interface TaskReplayPanelProps {
@@ -114,8 +110,6 @@ interface TaskReplayPanelProps {
   enableRealTimeUpdates?: boolean;
   currentTick?: { timestamp: string; price: string | null } | null;
   latestExecution?: {
-    realized_pnl?: string;
-    unrealized_pnl?: string;
     total_trades?: number;
   };
   pipSize?: number | null;
@@ -266,7 +260,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   enableRealTimeUpdates = false,
   currentTick,
   latestExecution,
-  pipSize,
   configId,
 }) => {
   const panelRootRef = useRef<HTMLDivElement | null>(null);
@@ -291,16 +284,16 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const [error, setError] = useState<string | null>(null);
   const { granularities } = useSupportedGranularities();
 
-  // Fetch open/closed trades via the same hook as TaskTradesTable so that
-  // Realized PnL and Unrealized PnL are computed identically.
-  const { trades: pnlClosedTrades } = useTaskTrades({
+  // Fetch open/closed positions via useTaskPositions so that
+  // Realized PnL and Unrealized PnL are computed from the positions table.
+  const { positions: pnlClosedPositions } = useTaskPositions({
     taskId,
     taskType,
     status: 'closed',
     pageSize: 1000,
     enableRealTimeUpdates,
   });
-  const { trades: pnlOpenTrades } = useTaskTrades({
+  const { positions: pnlOpenPositions } = useTaskPositions({
     taskId,
     taskType,
     status: 'open',
@@ -350,8 +343,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     | 'retracement_count'
     | 'units'
     | 'price'
-    | 'pnl'
-    | 'pips'
     | 'execution_method';
   const [orderBy, setOrderBy] = useState<SortableKey>('timestamp');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
@@ -429,8 +420,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     retracement_count: 35,
     units: 65,
     price: 85,
-    pnl: 85,
-    pips: 65,
     execution_method: 95,
   };
   const [replayColWidths, setReplayColWidths] = useState(defaultReplayWidths);
@@ -526,21 +515,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         case 'price':
           cmp = Number(a.price) - Number(b.price);
           break;
-        case 'pnl':
-          cmp = (Number(a.pnl) || 0) - (Number(b.pnl) || 0);
-          break;
-        case 'pips': {
-          const aPips =
-            a.pnl && pipSize
-              ? parseFloat(a.pnl) / Math.abs(Number(a.units)) / pipSize
-              : 0;
-          const bPips =
-            b.pnl && pipSize
-              ? parseFloat(b.pnl) / Math.abs(Number(b.units)) / pipSize
-              : 0;
-          cmp = aPips - bPips;
-          break;
-        }
         case 'execution_method':
           cmp = (a.execution_method || '').localeCompare(
             b.execution_method || ''
@@ -550,7 +524,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       return order === 'asc' ? cmp : -cmp;
     });
     return sorted;
-  }, [trades, orderBy, order, pipSize]);
+  }, [trades, orderBy, order]);
 
   const paginatedTrades = useMemo(
     () =>
@@ -593,8 +567,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       'Ret',
       'Units',
       'Price',
-      'PnL',
-      'Pips',
       'Event',
     ].join('\t');
     const rows = sortedTrades
@@ -608,20 +580,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           r.retracement_count ?? '-',
           r.units,
           r.price ? `¥${parseFloat(r.price).toFixed(3)}` : '-',
-          r.pnl ? `¥${parseFloat(r.pnl).toFixed(3)}` : '-',
-          (() => {
-            if (!r.pnl || !pipSize) return '-';
-            const pnlVal = parseFloat(r.pnl);
-            const units = Math.abs(Number(r.units));
-            if (!Number.isFinite(pnlVal) || !units) return '-';
-            const p = pnlVal / units / pipSize;
-            return Number.isFinite(p) ? p.toFixed(1) : '-';
-          })(),
           r.execution_method_display || r.execution_method || '-',
         ].join('\t')
       );
     navigator.clipboard.writeText([header, ...rows].join('\n'));
-  }, [selectedRowIds, sortedTrades, pipSize]);
+  }, [selectedRowIds, sortedTrades]);
 
   // Reset to first page when sort changes (not on data refresh)
   useEffect(() => {
@@ -669,23 +632,23 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     currentTick?.price != null ? parseFloat(currentTick.price) : null;
 
   const replaySummary = useMemo(() => {
-    // Realized PnL — same logic as TaskTradesTable
-    const realizedPnl = pnlClosedTrades.reduce(
-      (sum, t) => sum + (t.pnl ? parseFloat(t.pnl) : 0),
+    // Realized PnL — from closed positions
+    const realizedPnl = pnlClosedPositions.reduce(
+      (sum, p) => sum + (p.realized_pnl ? parseFloat(p.realized_pnl) : 0),
       0
     );
 
-    // Unrealized PnL — same logic as TaskTradesTable
-    const unrealizedPnl = pnlOpenTrades.reduce((sum, t) => {
-      if (currentPrice == null || !t.open_price) return sum;
-      const openP = parseFloat(t.open_price);
-      const units =
-        typeof t.units === 'string' ? parseFloat(t.units) : (t.units ?? 0);
-      const dir = String(t.direction).toLowerCase();
+    // Unrealized PnL — always compute from currentPrice for open positions
+    // (matches TaskPositionsTable calculation exactly)
+    const unrealizedPnl = pnlOpenPositions.reduce((sum, p) => {
+      if (currentPrice == null || !p.entry_price) return sum;
+      const entryP = parseFloat(p.entry_price);
+      const units = Math.abs(p.units ?? 0);
+      const dir = String(p.direction).toLowerCase();
       const pnl =
-        dir === 'long' || dir === 'buy'
-          ? (currentPrice - openP) * units
-          : (openP - currentPrice) * units;
+        dir === 'long'
+          ? (currentPrice - entryP) * units
+          : (entryP - currentPrice) * units;
       return sum + pnl;
     }, 0);
 
@@ -694,17 +657,17 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         ? latestExecution.total_trades
         : trades.length;
 
-    const openTradesCount = pnlOpenTrades.length;
+    const openPositionsCount = pnlOpenPositions.length;
 
     return {
       realizedPnl: Number.isFinite(realizedPnl) ? realizedPnl : 0,
       unrealizedPnl: Number.isFinite(unrealizedPnl) ? unrealizedPnl : 0,
       totalTrades: totalTradesRaw,
-      openTrades: openTradesCount,
+      openPositions: openPositionsCount,
     };
   }, [
-    pnlClosedTrades,
-    pnlOpenTrades,
+    pnlClosedPositions,
+    pnlOpenPositions,
     currentPrice,
     latestExecution,
     trades.length,
@@ -726,114 +689,128 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       }
       setError(null);
 
-      const candleResponse = await fetchCandles(
-        instrument,
-        granularity,
-        startTime,
-        endTime
-      );
-      const rawCandles = Array.isArray(candleResponse?.candles)
-        ? candleResponse.candles
-        : [];
-      const candleByTime = new Map<number, CandlePoint>();
-      rawCandles
-        .map((c: Record<string, unknown>) => {
-          const parsedTime = parseUtcTimestamp(c.time);
-          const open = Number(c.open);
-          const high = Number(c.high);
-          const low = Number(c.low);
-          const close = Number(c.close);
-          if (
-            parsedTime === null ||
-            [open, high, low, close].some((v) => Number.isNaN(v))
-          ) {
-            return null;
-          }
-          return {
-            time: parsedTime,
-            open,
-            high,
-            low,
-            close,
-          } as CandlePoint;
-        })
-        .filter((v: CandlePoint | null): v is CandlePoint => v !== null)
-        .forEach((c) => candleByTime.set(Number(c.time), c));
+      // Fetch candles — errors here are only fatal on the very first load
+      // (when we have no data to show).  On subsequent fetches we keep the
+      // previously loaded candles visible so that stopping a task does not
+      // wipe the chart.
+      let candlesFetched = false;
+      try {
+        const candleResponse = await fetchCandles(
+          instrument,
+          granularity,
+          startTime,
+          endTime
+        );
+        const rawCandles = Array.isArray(candleResponse?.candles)
+          ? candleResponse.candles
+          : [];
+        const candleByTime = new Map<number, CandlePoint>();
+        rawCandles
+          .map((c: Record<string, unknown>) => {
+            const parsedTime = parseUtcTimestamp(c.time);
+            const open = Number(c.open);
+            const high = Number(c.high);
+            const low = Number(c.low);
+            const close = Number(c.close);
+            if (
+              parsedTime === null ||
+              [open, high, low, close].some((v) => Number.isNaN(v))
+            ) {
+              return null;
+            }
+            return {
+              time: parsedTime,
+              open,
+              high,
+              low,
+              close,
+            } as CandlePoint;
+          })
+          .filter((v: CandlePoint | null): v is CandlePoint => v !== null)
+          .forEach((c) => candleByTime.set(Number(c.time), c));
 
-      const candlePoints: CandlePoint[] = Array.from(
-        candleByTime.values()
-      ).sort((a, b) => Number(a.time) - Number(b.time));
-      // Only update candles state when we receive non-empty data so that a
-      // transient empty response (e.g. market API hiccup during polling)
-      // does not wipe out previously loaded candles and destroy the chart.
-      if (candlePoints.length > 0) {
-        setCandles(candlePoints);
+        const candlePoints: CandlePoint[] = Array.from(
+          candleByTime.values()
+        ).sort((a, b) => Number(a.time) - Number(b.time));
+        // Only update candles state when we receive non-empty data so that a
+        // transient empty response (e.g. market API hiccup during polling)
+        // does not wipe out previously loaded candles and destroy the chart.
+        if (candlePoints.length > 0) {
+          setCandles(candlePoints);
+        }
+        candlesFetched = true;
+      } catch (candleError) {
+        // On the very first load with no existing data, propagate the error
+        // so the user sees feedback.  Otherwise silently keep the old candles.
+        if (isInitialLoad) {
+          throw candleError;
+        }
+        console.warn('Failed to refresh candle data:', candleError);
       }
 
-      const rawTrades = await fetchAllTrades(String(taskId), taskType);
+      // Fetch trades — errors here never hide already-loaded candles.
+      try {
+        const rawTrades = await fetchAllTrades(String(taskId), taskType);
 
-      const tradeRows: ReplayTrade[] = rawTrades
-        .map((t: Record<string, unknown>, idx: number): ReplayTrade | null => {
-          const timestamp = String(t.timestamp || '');
-          const parsedTime = parseUtcTimestamp(timestamp);
-          const direction = String(t.direction || '').toLowerCase();
-          const mappedDirection =
-            direction === 'buy'
-              ? 'long'
-              : direction === 'sell'
-                ? 'short'
-                : direction;
-          if (
-            !timestamp ||
-            parsedTime === null ||
-            (mappedDirection !== 'long' && mappedDirection !== 'short')
-          ) {
-            return null;
-          }
-          return {
-            id: `${timestamp}-${idx}`,
-            sequence: idx + 1,
-            timestamp,
-            timeSec: parsedTime,
-            instrument: String(t.instrument || instrument),
-            direction: mappedDirection as 'long' | 'short',
-            units: String(t.units ?? ''),
-            price: String(t.price ?? ''),
-            execution_method: String(t.execution_method || ''),
-            execution_method_display: t.execution_method_display
-              ? String(t.execution_method_display)
-              : undefined,
-            layer_index:
-              t.layer_index === null || t.layer_index === undefined
-                ? null
-                : Number(t.layer_index),
-            retracement_count:
-              t.retracement_count === null || t.retracement_count === undefined
-                ? null
-                : Number(t.retracement_count),
-            pnl:
-              t.pnl === null || t.pnl === undefined ? undefined : String(t.pnl),
-            open_price:
-              t.open_price === null || t.open_price === undefined
-                ? null
-                : String(t.open_price),
-            close_timestamp:
-              t.close_timestamp === null || t.close_timestamp === undefined
-                ? null
-                : String(t.close_timestamp),
-            close_price:
-              t.close_price === null || t.close_price === undefined
-                ? null
-                : String(t.close_price),
-          };
-        })
-        .filter((v): v is ReplayTrade => v !== null)
-        .sort(
-          (a, b) =>
-            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-        );
+        const tradeRows: ReplayTrade[] = rawTrades
+          .map(
+            (t: Record<string, unknown>, idx: number): ReplayTrade | null => {
+              const timestamp = String(t.timestamp || '');
+              const parsedTime = parseUtcTimestamp(timestamp);
+              const direction = String(t.direction || '').toLowerCase();
+              const mappedDirection =
+                direction === 'buy'
+                  ? 'long'
+                  : direction === 'sell'
+                    ? 'short'
+                    : direction;
+              if (
+                !timestamp ||
+                parsedTime === null ||
+                (mappedDirection !== 'long' && mappedDirection !== 'short')
+              ) {
+                return null;
+              }
+              return {
+                id: `${timestamp}-${idx}`,
+                sequence: idx + 1,
+                timestamp,
+                timeSec: parsedTime,
+                instrument: String(t.instrument || instrument),
+                direction: mappedDirection as 'long' | 'short',
+                units: String(t.units ?? ''),
+                price: String(t.price ?? ''),
+                execution_method: String(t.execution_method || ''),
+                execution_method_display: t.execution_method_display
+                  ? String(t.execution_method_display)
+                  : undefined,
+                layer_index:
+                  t.layer_index === null || t.layer_index === undefined
+                    ? null
+                    : Number(t.layer_index),
+                retracement_count:
+                  t.retracement_count === null ||
+                  t.retracement_count === undefined
+                    ? null
+                    : Number(t.retracement_count),
+              };
+            }
+          )
+          .filter((v): v is ReplayTrade => v !== null)
+          .sort(
+            (a, b) =>
+              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          );
 
-      setTrades(tradeRows);
+        setTrades(tradeRows);
+      } catch (tradeError) {
+        // On the very first load when candles also failed, propagate.
+        // Otherwise keep existing trades and log the warning.
+        if (isInitialLoad && !candlesFetched) {
+          throw tradeError;
+        }
+        console.warn('Failed to refresh trade data:', tradeError);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load replay data');
     } finally {
@@ -1105,16 +1082,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       const units = Number(t.units);
       const lots = Number.isFinite(units) ? Math.abs(units) / LOT_UNITS : null;
       const executionMethod = String(t.execution_method || '').toLowerCase();
-      const hasNumericPnl =
-        t.pnl !== undefined &&
-        t.pnl !== null &&
-        t.pnl !== '' &&
-        Number.isFinite(Number(t.pnl));
-      const isCloseByMethod =
+      const isClose =
         executionMethod === 'take_profit' ||
         executionMethod === 'margin_protection' ||
         executionMethod === 'volatility_lock';
-      const isClose = hasNumericPnl || isCloseByMethod;
 
       const openSide = t.direction === 'long' ? 'LONG' : 'SHORT';
       const closeSide = t.direction === 'long' ? 'SHORT' : 'LONG';
@@ -1194,7 +1165,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     );
   }
 
-  if (error) {
+  if (error && candles.length === 0) {
     return (
       <Box ref={panelRootRef} sx={{ p: 3 }}>
         <Alert severity="error">{error}</Alert>
@@ -1212,6 +1183,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         boxSizing: 'border-box',
       }}
     >
+      {error && (
+        <Alert severity="warning" sx={{ mb: 1 }}>
+          {error}
+        </Alert>
+      )}
       <Box
         sx={{
           display: 'flex',
@@ -1267,10 +1243,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
         <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
           <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
-            Open Trades (count)
+            Open Positions (count)
           </Typography>
           <Typography variant="body2" fontWeight="bold" lineHeight={1.4}>
-            {replaySummary.openTrades} trades
+            {replaySummary.openPositions} positions
           </Typography>
         </Box>
 
@@ -1548,34 +1524,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                 {resizeHandle('price')}
               </TableCell>
               <TableCell
-                align="right"
-                sortDirection={orderBy === 'pnl' ? order : false}
-                sx={{ position: 'relative', width: replayColWidths.pnl }}
-              >
-                <TableSortLabel
-                  active={orderBy === 'pnl'}
-                  direction={orderBy === 'pnl' ? order : 'asc'}
-                  onClick={() => handleSort('pnl')}
-                >
-                  PnL
-                </TableSortLabel>
-                {resizeHandle('pnl')}
-              </TableCell>
-              <TableCell
-                align="right"
-                sortDirection={orderBy === 'pips' ? order : false}
-                sx={{ position: 'relative', width: replayColWidths.pips }}
-              >
-                <TableSortLabel
-                  active={orderBy === 'pips'}
-                  direction={orderBy === 'pips' ? order : 'asc'}
-                  onClick={() => handleSort('pips')}
-                >
-                  Pips
-                </TableSortLabel>
-                {resizeHandle('pips')}
-              </TableCell>
-              <TableCell
                 sortDirection={orderBy === 'execution_method' ? order : false}
                 sx={{
                   position: 'relative',
@@ -1678,44 +1626,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     }}
                   >
                     {row.price ? `¥${parseFloat(row.price).toFixed(3)}` : '-'}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {row.pnl ? `¥${parseFloat(row.pnl).toFixed(3)}` : '-'}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {(() => {
-                      if (!row.pnl || !pipSize) return '-';
-                      const pnlVal = parseFloat(row.pnl);
-                      const units = Math.abs(Number(row.units));
-                      if (!Number.isFinite(pnlVal) || !units) return '-';
-                      const pips = pnlVal / units / pipSize;
-                      if (!Number.isFinite(pips)) return '-';
-                      return (
-                        <Typography
-                          component="span"
-                          variant="body2"
-                          color={pips >= 0 ? 'success.main' : 'error.main'}
-                          fontWeight="bold"
-                        >
-                          {pips >= 0 ? '+' : ''}
-                          {pips.toFixed(1)}
-                        </Typography>
-                      );
-                    })()}
                   </TableCell>
                   <TableCell
                     sx={{

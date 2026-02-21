@@ -28,6 +28,7 @@ import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
+import { TaskPositionsTable } from '../tasks/detail/TaskPositionsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
 import { TaskReplayPanel } from '../tasks/detail/TaskReplayPanel';
 import { TaskProgress } from '../tasks/TaskProgress';
@@ -96,13 +97,21 @@ export const BacktestTaskDetail: React.FC = () => {
   const tabParam = searchParams.get('tab') || 'overview';
   const tabMap: Record<string, number> = {
     overview: 0,
-    trades: 1,
-    replay: 2,
-    events: 3,
-    logs: 4,
-    equity: 2,
+    positions: 1,
+    trades: 2,
+    replay: 3,
+    events: 4,
+    logs: 5,
+    equity: 3,
   };
-  const tabNames = ['overview', 'trades', 'replay', 'events', 'logs'];
+  const tabNames = [
+    'overview',
+    'positions',
+    'trades',
+    'replay',
+    'events',
+    'logs',
+  ];
   const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
 
   const {
@@ -112,11 +121,7 @@ export const BacktestTaskDetail: React.FC = () => {
     refetch,
   } = useBacktestTask(taskId || undefined);
 
-  const overviewSummary = useOverviewPnl(
-    taskId,
-    TaskType.BACKTEST,
-    task?.latest_execution
-  );
+  const overviewSummary = useOverviewPnl(taskId, TaskType.BACKTEST);
 
   // Use HTTP polling for task status updates
   const {
@@ -315,10 +320,11 @@ export const BacktestTaskDetail: React.FC = () => {
           sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
         >
           <Tab label="Overview" {...a11yProps(0)} />
-          <Tab label="Trades" {...a11yProps(1)} />
-          <Tab label="Replay" {...a11yProps(2)} />
-          <Tab label="Events" {...a11yProps(3)} />
-          <Tab label="Logs" {...a11yProps(4)} />
+          <Tab label="Positions" {...a11yProps(1)} />
+          <Tab label="Trades" {...a11yProps(2)} />
+          <Tab label="Replay" {...a11yProps(3)} />
+          <Tab label="Events" {...a11yProps(4)} />
+          <Tab label="Logs" {...a11yProps(5)} />
         </Tabs>
 
         {/* Overview Tab */}
@@ -562,9 +568,9 @@ export const BacktestTaskDetail: React.FC = () => {
           </Box>
         </TabPanel>
 
-        {/* Trades Tab */}
+        {/* Positions Tab */}
         <TabPanel value={currentTabValue} index={1}>
-          <TaskTradesTable
+          <TaskPositionsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
             enableRealTimeUpdates={
@@ -581,8 +587,20 @@ export const BacktestTaskDetail: React.FC = () => {
           />
         </TabPanel>
 
-        {/* Replay Tab */}
+        {/* Trades Tab */}
         <TabPanel value={currentTabValue} index={2}>
+          <TaskTradesTable
+            taskId={taskId}
+            taskType={TaskType.BACKTEST}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
+            pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
+          />
+        </TabPanel>
+
+        {/* Replay Tab */}
+        <TabPanel value={currentTabValue} index={3}>
           <TaskReplayPanel
             taskId={taskId}
             taskType={TaskType.BACKTEST}
@@ -602,7 +620,7 @@ export const BacktestTaskDetail: React.FC = () => {
         </TabPanel>
 
         {/* Events Tab */}
-        <TabPanel value={currentTabValue} index={3}>
+        <TabPanel value={currentTabValue} index={4}>
           <TaskEventsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
@@ -613,7 +631,7 @@ export const BacktestTaskDetail: React.FC = () => {
         </TabPanel>
 
         {/* Logs Tab */}
-        <TabPanel value={currentTabValue} index={4}>
+        <TabPanel value={currentTabValue} index={5}>
           <TaskLogsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}

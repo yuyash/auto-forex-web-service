@@ -35,6 +35,13 @@ class Position(models.Model):
         db_index=True,
         help_text="UUID of the task this position belongs to",
     )
+    celery_task_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Celery task ID for tracking which execution run created this position",
+    )
     instrument = models.CharField(
         max_length=32,
         db_index=True,
@@ -76,12 +83,6 @@ class Position(models.Model):
         blank=True,
         help_text="Realized profit/loss (null if position is still open)",
     )
-    unrealized_pnl = models.DecimalField(
-        max_digits=20,
-        decimal_places=10,
-        default=Decimal("0"),
-        help_text="Current unrealized profit/loss (updated periodically for open positions)",
-    )
     is_open = models.BooleanField(
         default=True,
         db_index=True,
@@ -109,6 +110,7 @@ class Position(models.Model):
         ordering = ["-entry_time"]
         indexes = [
             models.Index(fields=["task_type", "task_id", "-entry_time"]),
+            models.Index(fields=["task_type", "task_id", "celery_task_id", "-entry_time"]),
             models.Index(fields=["task_type", "task_id", "instrument", "is_open"]),
             models.Index(fields=["is_open", "-entry_time"]),
             models.Index(fields=["instrument", "is_open"]),
@@ -116,7 +118,7 @@ class Position(models.Model):
 
     def __str__(self) -> str:
         status = "OPEN" if self.is_open else "CLOSED"
-        pnl = self.realized_pnl if not self.is_open else self.unrealized_pnl
+        pnl = self.realized_pnl if not self.is_open else None
         return f"{status} {self.direction} {self.units} {self.instrument} @ {self.entry_price} (PnL: {pnl})"
 
     def close(self, exit_price: Decimal, exit_time: models.DateTimeField) -> None:
@@ -137,20 +139,3 @@ class Position(models.Model):
             price_diff = -price_diff
 
         self.realized_pnl = price_diff * abs(self.units)
-        self.unrealized_pnl = Decimal("0")
-
-    def update_unrealized_pnl(self, current_price: Decimal) -> None:
-        """
-        Update unrealized PnL based on current market price.
-
-        Args:
-            current_price: Current market price for the instrument
-        """
-        if not self.is_open:
-            return
-
-        price_diff = current_price - self.entry_price
-        if self.direction == Direction.SHORT:
-            price_diff = -price_diff
-
-        self.unrealized_pnl = price_diff * abs(self.units)

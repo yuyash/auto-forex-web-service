@@ -16,6 +16,7 @@ class Strategy(ABC):
 
     instrument: str
     pip_size: Decimal
+    account_currency: str
     config: Any  # Strategy-specific config dataclass (e.g., FloorStrategyConfig)
 
     def __init__(self, instrument: str, pip_size: Decimal, config: Any) -> None:
@@ -28,6 +29,7 @@ class Strategy(ABC):
         """
         self.instrument = instrument
         self.pip_size = pip_size
+        self.account_currency = ""
         self.config = config
 
     @staticmethod

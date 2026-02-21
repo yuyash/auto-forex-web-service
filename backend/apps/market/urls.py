@@ -21,6 +21,7 @@ from apps.market.views import (
     PositionView,
     SupportedGranularitiesView,
     SupportedInstrumentsView,
+    TickDataRangeView,
     TickDataView,
 )
 
@@ -35,6 +36,7 @@ urlpatterns: List[URLPattern] = [
     ),
     path(route="candles/", view=CandleDataView.as_view(), name="candle_data"),
     path(route="ticks/", view=TickDataView.as_view(), name="tick_data"),
+    path(route="ticks/data-range/", view=TickDataRangeView.as_view(), name="tick_data_range"),
     path(
         route="candles/granularities/",
         view=SupportedGranularitiesView.as_view(),

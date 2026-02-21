@@ -1,15 +1,17 @@
 /**
- * Hook for computing Overview PnL from trades API.
+ * Hook for computing Overview PnL from positions API.
  *
- * Uses the same calculation logic as TaskReplayPanel to ensure
- * consistent PnL values between Overview and Replay tabs.
+ * Both Realized and Unrealized PnL are derived exclusively from the
+ * Positions API so that every view shows the same numbers.
  *
- * Fetches all trade pages to compute accurate totals.
+ * Realized PnL  = sum of closed positions' realized_pnl
+ * Unrealized PnL = sum of open positions' unrealized_pnl
+ * Total Trades count comes from the trades API.
  */
 
 import { useState, useEffect, useMemo } from 'react';
 import { fetchAllTrades } from '../utils/fetchAllTrades';
-import type { ExecutionSummary } from '../types/execution';
+import { useTaskPositions, type TaskPosition } from './useTaskPositions';
 import { TaskType } from '../types/common';
 
 interface OverviewPnl {
@@ -20,27 +22,36 @@ interface OverviewPnl {
 
 export function useOverviewPnl(
   taskId: string,
-  taskType: TaskType,
-  latestExecution?: ExecutionSummary
+  taskType: TaskType
 ): OverviewPnl {
-  const [trades, setTrades] = useState<Array<{ pnl?: string | number | null }>>(
-    []
-  );
+  const [tradeCount, setTradeCount] = useState<number | null>(null);
+
+  const { positions: closedPositions } = useTaskPositions({
+    taskId,
+    taskType,
+    status: 'closed',
+    pageSize: 1000,
+  });
+
+  const { positions: openPositions } = useTaskPositions({
+    taskId,
+    taskType,
+    status: 'open',
+    pageSize: 1000,
+  });
 
   useEffect(() => {
     if (!taskId) return;
 
     let cancelled = false;
-
     const load = async () => {
       try {
         const allTrades = await fetchAllTrades(taskId, taskType);
-        if (!cancelled) setTrades(allTrades);
+        if (!cancelled) setTradeCount(allTrades.length);
       } catch {
-        // If trades fetch fails, leave empty — latestExecution fallback will apply
+        // leave null — will fall back to 0
       }
     };
-
     load();
     return () => {
       cancelled = true;
@@ -48,28 +59,24 @@ export function useOverviewPnl(
   }, [taskId, taskType]);
 
   return useMemo(() => {
-    const pnlFromTrades = trades.reduce((sum, trade) => {
-      const pnl = Number(trade.pnl);
-      return Number.isFinite(pnl) ? sum + pnl : sum;
-    }, 0);
+    const realizedPnl = closedPositions.reduce(
+      (sum: number, p: TaskPosition) =>
+        sum + (p.realized_pnl ? parseFloat(p.realized_pnl) : 0),
+      0
+    );
 
-    const realizedRaw =
-      latestExecution?.realized_pnl !== undefined
-        ? Number(latestExecution.realized_pnl)
-        : pnlFromTrades;
-    const unrealizedRaw =
-      latestExecution?.unrealized_pnl !== undefined
-        ? Number(latestExecution.unrealized_pnl)
-        : 0;
-    const totalTradesRaw =
-      typeof latestExecution?.total_trades === 'number'
-        ? latestExecution.total_trades
-        : trades.length;
+    const unrealizedRaw = openPositions.reduce(
+      (sum: number, p: TaskPosition) =>
+        sum + (p.unrealized_pnl ? parseFloat(p.unrealized_pnl) : 0),
+      0
+    );
+
+    const totalTrades = tradeCount ?? 0;
 
     return {
-      realizedPnl: Number.isFinite(realizedRaw) ? realizedRaw : 0,
+      realizedPnl: Number.isFinite(realizedPnl) ? realizedPnl : 0,
       unrealizedPnl: Number.isFinite(unrealizedRaw) ? unrealizedRaw : 0,
-      totalTrades: totalTradesRaw,
+      totalTrades,
     };
-  }, [latestExecution, trades]);
+  }, [closedPositions, openPositions, tradeCount]);
 }

@@ -79,8 +79,8 @@ vi.mock('../../../src/components/tasks/detail/TaskLogsTable', () => ({
   TaskLogsTable: () => <div>Logs Table</div>,
 }));
 
-vi.mock('../../../src/components/tasks/detail/TaskTradesTable', () => ({
-  TaskTradesTable: () => <div>Trades Table</div>,
+vi.mock('../../../src/components/tasks/detail/TaskPositionsTable', () => ({
+  TaskPositionsTable: () => <div>Positions Table</div>,
 }));
 
 vi.mock('../../../src/components/tasks/detail/TaskReplayPanel', () => ({
@@ -89,6 +89,25 @@ vi.mock('../../../src/components/tasks/detail/TaskReplayPanel', () => ({
 
 vi.mock('../../../src/components/tasks/TaskProgress', () => ({
   TaskProgress: () => <div>Task Progress</div>,
+}));
+
+vi.mock('../../../src/hooks/useOverviewPnl', () => ({
+  useOverviewPnl: vi.fn(() => ({
+    realizedPnl: 0,
+    unrealizedPnl: 0,
+    totalTrades: 0,
+  })),
+}));
+
+vi.mock('../../../src/components/tasks/actions/DeleteTaskDialog', () => ({
+  DeleteTaskDialog: () => null,
+}));
+
+vi.mock('../../../src/hooks/useBacktestTaskMutations', () => ({
+  useDeleteBacktestTask: vi.fn(() => ({
+    mutate: vi.fn(),
+    isLoading: false,
+  })),
 }));
 
 // Test wrapper
@@ -160,7 +179,7 @@ describe('BacktestTaskDetail', () => {
       expect(screen.getByText('Overview')).toBeInTheDocument();
       expect(screen.getByText('Events')).toBeInTheDocument();
       expect(screen.getByText('Logs')).toBeInTheDocument();
-      expect(screen.getByText('Trades')).toBeInTheDocument();
+      expect(screen.getByText('Positions')).toBeInTheDocument();
       expect(screen.getByText('Replay')).toBeInTheDocument();
     });
   });
@@ -195,14 +214,14 @@ describe('BacktestTaskDetail', () => {
     });
   });
 
-  it('switches to Trades tab when clicked', async () => {
+  it('switches to Positions tab when clicked', async () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
-    const tradesTab = screen.getByText('Trades');
-    fireEvent.click(tradesTab);
+    const positionsTab = screen.getByText('Positions');
+    fireEvent.click(positionsTab);
 
     await waitFor(() => {
-      expect(screen.getByText('Trades Table')).toBeInTheDocument();
+      expect(screen.getByText('Positions Table')).toBeInTheDocument();
     });
   });
 

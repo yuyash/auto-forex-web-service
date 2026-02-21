@@ -17,20 +17,14 @@ export interface TaskTrade {
   price: string;
   layer_index?: number | null;
   execution_method?: string;
-  pnl?: string;
+  execution_method_display?: string;
   commission?: string;
-  details?: Record<string, unknown>;
-  open_price?: string | null;
-  open_timestamp?: string | null;
-  close_price?: string | null;
-  close_timestamp?: string | null;
 }
 
 interface UseTaskTradesOptions {
   taskId: string | number;
   taskType: TaskType;
   direction?: 'long' | 'short';
-  status?: 'open' | 'closed';
   page?: number;
   pageSize?: number;
   enableRealTimeUpdates?: boolean;
@@ -51,7 +45,6 @@ export const useTaskTrades = ({
   taskId,
   taskType,
   direction,
-  status,
   page = 1,
   pageSize = 100,
   enableRealTimeUpdates = false,
@@ -85,9 +78,7 @@ export const useTaskTrades = ({
               apiDirection,
               undefined, // ordering
               page,
-              pageSize,
-              undefined, // search
-              status
+              pageSize
             )
           : await TradingService.tradingTasksTradingTradesList(
               String(taskId),
@@ -95,9 +86,7 @@ export const useTaskTrades = ({
               apiDirection,
               undefined, // ordering
               page,
-              pageSize,
-              undefined, // search
-              status
+              pageSize
             );
 
       // Map buy/sell from API response to long/short
@@ -122,7 +111,7 @@ export const useTaskTrades = ({
     } finally {
       setIsLoading(false);
     }
-  }, [taskId, taskType, direction, status, page, pageSize]);
+  }, [taskId, taskType, direction, page, pageSize]);
 
   useEffect(() => {
     fetchTrades();

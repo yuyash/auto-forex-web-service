@@ -65,41 +65,10 @@ class Trade(models.Model):
         db_index=True,
         help_text="Layer index for Floor strategy-related trades",
     )
-    open_price = models.DecimalField(
-        max_digits=20,
-        decimal_places=10,
-        null=True,
-        blank=True,
-        help_text="Entry price when position was opened (populated on close trades)",
-    )
-    open_timestamp = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When the position was originally opened (populated on close trades)",
-    )
-    close_price = models.DecimalField(
-        max_digits=20,
-        decimal_places=10,
-        null=True,
-        blank=True,
-        help_text="Exit price when position was closed (populated on close trades)",
-    )
-    close_timestamp = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When the position was closed (populated on close trades)",
-    )
     retracement_count = models.IntegerField(
         null=True,
         blank=True,
         help_text="Number of retracements in the layer at the time of this trade",
-    )
-    pnl = models.DecimalField(
-        max_digits=20,
-        decimal_places=10,
-        null=True,
-        blank=True,
-        help_text="Profit/loss for this trade (for closes)",
     )
 
     class Meta:
@@ -115,4 +84,4 @@ class Trade(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.direction} {self.units} {self.instrument} @ {self.price} ({self.pnl})"
+        return f"{self.direction} {self.units} {self.instrument} @ {self.price}"

@@ -52,6 +52,7 @@ vi.mock('../../../src/hooks/useTradingTasks', () => ({
   useTradingTaskPolling: vi.fn(() => ({
     data: null,
   })),
+  invalidateTradingTasksCache: vi.fn(),
 }));
 
 vi.mock('../../../src/hooks/useOverviewPnl', () => ({
@@ -79,12 +80,23 @@ vi.mock('../../../src/components/tasks/detail/TaskLogsTable', () => ({
   TaskLogsTable: () => <div>Logs Table</div>,
 }));
 
-vi.mock('../../../src/components/tasks/detail/TaskTradesTable', () => ({
-  TaskTradesTable: () => <div>Trades Table</div>,
+vi.mock('../../../src/components/tasks/detail/TaskPositionsTable', () => ({
+  TaskPositionsTable: () => <div>Positions Table</div>,
 }));
 
 vi.mock('../../../src/components/tasks/detail/TaskReplayPanel', () => ({
   TaskReplayPanel: () => <div>Replay Panel</div>,
+}));
+
+vi.mock('../../../src/components/tasks/actions/DeleteTaskDialog', () => ({
+  DeleteTaskDialog: () => null,
+}));
+
+vi.mock('../../../src/hooks/useTradingTaskMutations', () => ({
+  useDeleteTradingTask: vi.fn(() => ({
+    mutate: vi.fn(),
+    isLoading: false,
+  })),
 }));
 
 // Test wrapper
@@ -147,7 +159,7 @@ describe('TradingTaskDetail', () => {
       expect(screen.getByText('Overview')).toBeInTheDocument();
       expect(screen.getByText('Events')).toBeInTheDocument();
       expect(screen.getByText('Logs')).toBeInTheDocument();
-      expect(screen.getByText('Trades')).toBeInTheDocument();
+      expect(screen.getByText('Positions')).toBeInTheDocument();
       expect(screen.getByText('Replay')).toBeInTheDocument();
     });
   });
@@ -182,14 +194,14 @@ describe('TradingTaskDetail', () => {
     });
   });
 
-  it('switches to Trades tab when clicked', async () => {
+  it('switches to Positions tab when clicked', async () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
-    const tradesTab = screen.getByText('Trades');
-    fireEvent.click(tradesTab);
+    const positionsTab = screen.getByText('Positions');
+    fireEvent.click(positionsTab);
 
     await waitFor(() => {
-      expect(screen.getByText('Trades Table')).toBeInTheDocument();
+      expect(screen.getByText('Positions Table')).toBeInTheDocument();
     });
   });
 

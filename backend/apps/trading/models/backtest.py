@@ -76,6 +76,11 @@ class BacktestTask(UUIDModel):
     end_time = models.DateTimeField(
         help_text="End time for backtest period",
     )
+    account_currency = models.CharField(
+        max_length=3,
+        default="USD",
+        help_text="Account base currency (e.g., USD, JPY)",
+    )
     initial_balance = models.DecimalField(
         max_digits=15,
         decimal_places=2,
@@ -207,6 +212,7 @@ class BacktestTask(UUIDModel):
             start_time=self.start_time,
             end_time=self.end_time,
             initial_balance=self.initial_balance,
+            account_currency=self.account_currency,
             commission_per_trade=self.commission_per_trade,
             status=TaskStatus.CREATED,
         )

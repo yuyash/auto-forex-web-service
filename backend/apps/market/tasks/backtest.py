@@ -111,9 +111,37 @@ class BacktestTickPublisherRunner:
 
         try:
             logger.info(f"[PUBLISHER:RUN] Starting tick publishing - request_id={request_id}")
-            published = self._publish_ticks(
+            published, last_tick_ts = self._publish_ticks(
                 client, channel, instrument, start_dt, end_dt, batch_size, request_id
             )
+
+            # Check for insufficient data coverage
+            data_gap = self._check_data_coverage(
+                instrument, start_dt, end_dt, published, last_tick_ts, request_id
+            )
+
+            if data_gap:
+                # Data does not cover the requested range — mark as failed
+                logger.error(
+                    f"[PUBLISHER:RUN] INSUFFICIENT_DATA - request_id={request_id}, "
+                    f"published={published}, last_tick_ts={last_tick_ts}, "
+                    f"end_dt={end_dt}, gap={data_gap}"
+                )
+                self._send_error(
+                    client,
+                    channel,
+                    request_id,
+                    instrument,
+                    f"Insufficient tick data: {data_gap}",
+                )
+                assert self.task_service is not None
+                self.task_service.mark_stopped(
+                    status=CeleryTaskStatus.Status.FAILED,
+                    status_message=f"Insufficient tick data: {data_gap}",
+                )
+                # Also mark the BacktestTask as failed
+                self._mark_backtest_task_failed(request_id, data_gap)
+                return
 
             # Send EOF marker
             logger.info(
@@ -166,8 +194,12 @@ class BacktestTickPublisherRunner:
         end_dt: datetime,
         batch_size: int,
         request_id: str,
-    ) -> int:
-        """Publish ticks from database to Redis."""
+    ) -> tuple[int, datetime | None]:
+        """Publish ticks from database to Redis.
+
+        Returns:
+            Tuple of (published_count, last_tick_timestamp).
+        """
         assert self.task_service is not None
 
         logger.info(
@@ -176,6 +208,7 @@ class BacktestTickPublisherRunner:
         )
 
         published = 0
+        last_ts: datetime | None = None
 
         qs = (
             TickData.objects.filter(
@@ -192,23 +225,19 @@ class BacktestTickPublisherRunner:
         )
 
         # iterator(chunk_size=...) fetches DB rows in bounded chunks.
-        tick_count = 0
         for row in qs.iterator(chunk_size=batch_size):
             # Check stop signal before every tick
-            should_stop = self._should_stop_publishing(request_id)
-            if should_stop:
+            if self._should_stop_publishing(request_id):
                 logger.info(
                     f"[PUBLISHER:PUBLISH] Stop signal received - request_id={request_id}, "
-                    f"instrument={instrument}, published={published}, tick_count={tick_count}"
+                    f"instrument={instrument}, published={published}"
                 )
                 self._send_stopped(client, channel, request_id, instrument, published)
                 self.task_service.mark_stopped(
                     status=CeleryTaskStatus.Status.STOPPED,
                     status_message=f"published={published}",
                 )
-                return published
-
-            tick_count += 1
+                return published, last_ts
 
             ts = row.get("timestamp")
             if not isinstance(ts, datetime):
@@ -229,6 +258,7 @@ class BacktestTickPublisherRunner:
                 ),
             )
             published += 1
+            last_ts = ts
 
             if published % max(batch_size * 10, 1) == 0:
                 logger.info(
@@ -242,9 +272,94 @@ class BacktestTickPublisherRunner:
 
         logger.info(
             f"[PUBLISHER:PUBLISH] Iteration complete - request_id={request_id}, "
-            f"total_published={published}"
+            f"total_published={published}, last_ts={last_ts}"
         )
-        return published
+        return published, last_ts
+
+    @staticmethod
+    def _check_data_coverage(
+        instrument: str,
+        start_dt: datetime,
+        end_dt: datetime,
+        published: int,
+        last_tick_ts: datetime | None,
+        request_id: str,
+    ) -> str | None:
+        """Check whether published ticks adequately cover the requested range.
+
+        Returns a human-readable gap description if coverage is insufficient,
+        or ``None`` when the data looks fine.
+        """
+        if published == 0:
+            return (
+                f"No tick data found for {instrument} "
+                f"between {start_dt.isoformat()} and {end_dt.isoformat()}"
+            )
+
+        if last_tick_ts is None:
+            return None  # shouldn't happen when published > 0
+
+        # Allow a tolerance of 2 hours for the gap between the last tick and
+        # end_dt.  Forex market close (Fri 21:00 → Sun 21:00 UTC) creates a
+        # natural ~48 h gap, but if end_dt falls *within* a trading session and
+        # the last tick is more than 2 h before it, data is likely missing.
+        from datetime import timedelta
+
+        gap = end_dt - last_tick_ts
+        # Tolerance: if the gap is larger than 2 hours AND the end_dt does not
+        # fall inside a known market-close window, flag it.
+        tolerance = timedelta(hours=2)
+
+        if gap <= tolerance:
+            return None
+
+        # Check whether the gap is explained by a weekend market close.
+        # Forex closes Fri 21:00 UTC → Sun 21:00 UTC.
+        if _gap_spans_only_market_close(last_tick_ts, end_dt):
+            return None
+
+        logger.warning(
+            f"[PUBLISHER:COVERAGE] Data gap detected - request_id={request_id}, "
+            f"last_tick_ts={last_tick_ts}, end_dt={end_dt}, gap={gap}"
+        )
+        return (
+            f"Tick data for {instrument} ends at {last_tick_ts.isoformat()} "
+            f"but the requested end_time is {end_dt.isoformat()} "
+            f"(gap: {gap})"
+        )
+
+    @staticmethod
+    def _mark_backtest_task_failed(request_id: str, reason: str) -> None:
+        """Mark the BacktestTask as FAILED with an error message."""
+        try:
+            from django.utils import timezone as dj_timezone
+
+            from apps.trading.enums import TaskStatus
+            from apps.trading.models import BacktestTask
+
+            rows = BacktestTask.objects.filter(
+                pk=request_id,
+                status=TaskStatus.RUNNING,
+            ).update(
+                status=TaskStatus.FAILED,
+                completed_at=dj_timezone.now(),
+                error_message=f"Insufficient tick data: {reason}",
+            )
+            if rows:
+                logger.info(
+                    f"[PUBLISHER:FAIL_TASK] BacktestTask marked FAILED - request_id={request_id}"
+                )
+            else:
+                logger.warning(
+                    f"[PUBLISHER:FAIL_TASK] Could not mark BacktestTask FAILED "
+                    f"(not in RUNNING state) - request_id={request_id}"
+                )
+        except Exception as exc:
+            logger.error(
+                f"[PUBLISHER:FAIL_TASK] Error marking BacktestTask FAILED - "
+                f"request_id={request_id}, error={exc}",
+                exc_info=True,
+            )
 
     def _should_stop_publishing(self, request_id: str) -> bool:
         """Check if publishing should stop.
@@ -376,3 +491,27 @@ class BacktestTickPublisherRunner:
                 f"[PUBLISHER:ERROR] Failed to publish error message - request_id={request_id}, "
                 f"error={exc}"
             )
+
+
+def _gap_spans_only_market_close(last_tick: datetime, end_dt: datetime) -> bool:
+    """Return True if the gap between *last_tick* and *end_dt* is fully
+    explained by a forex weekend market closure (Fri 21:00 → Sun 21:00 UTC).
+
+    The check is intentionally generous: if *last_tick* falls on Friday after
+    20:00 UTC and *end_dt* falls on Sunday after 21:00 or on Monday, the gap
+    is considered a normal weekend closure.
+    """
+    from datetime import timedelta
+
+    lt_weekday = last_tick.weekday()  # 0=Mon … 6=Sun
+    et_weekday = end_dt.weekday()
+
+    # last_tick on Friday (4) evening
+    if lt_weekday == 4 and last_tick.hour >= 20:
+        # end_dt on Sunday evening after reopen, or Monday+
+        if (et_weekday == 6 and end_dt.hour >= 21) or et_weekday in (0, 1, 2, 3, 4):
+            # Sanity: gap should be less than ~3 days
+            if (end_dt - last_tick) < timedelta(days=3, hours=6):
+                return True
+
+    return False

@@ -2,7 +2,6 @@
 
 from decimal import Decimal
 
-from apps.trading.models import Layer
 from apps.trading.strategies.floor.enums import Direction, Progression
 
 
@@ -50,80 +49,6 @@ class ProgressionCalculator:
             return base / divisor
 
         return base
-
-
-class PnLCalculator:
-    """Calculate profit and loss."""
-
-    def __init__(self, pip_size: Decimal) -> None:
-        """Initialize calculator.
-
-        Args:
-            pip_size: Pip size for the instrument
-        """
-        self.pip_size = pip_size
-
-    def pips_between(self, price1: Decimal, price2: Decimal) -> Decimal:
-        """Calculate pips between two prices.
-
-        Args:
-            price1: First price
-            price2: Second price
-
-        Returns:
-            Pips difference (positive if price2 > price1)
-        """
-        return (price2 - price1) / self.pip_size
-
-    def calculate_layer_pnl_pips(
-        self,
-        layer: Layer,
-        current_bid: Decimal,
-        current_ask: Decimal,
-    ) -> Decimal:
-        """Calculate layer P&L in pips.
-
-        Args:
-            layer: Layer to calculate
-            current_bid: Current bid price
-            current_ask: Current ask price
-
-        Returns:
-            P&L in pips (positive for profit, negative for loss)
-        """
-        if layer.position_count == 0 or not layer.direction:
-            return Decimal("0")
-
-        avg_entry = layer.average_entry_price
-
-        if layer.direction == Direction.LONG:
-            # LONGの場合、bidで決済
-            return self.pips_between(avg_entry, current_bid)
-        else:
-            # SHORTの場合、askで決済
-            return self.pips_between(current_ask, avg_entry)
-
-    def calculate_unrealized_pnl(
-        self,
-        layer: Layer,
-        current_bid: Decimal,
-        current_ask: Decimal,
-    ) -> Decimal:
-        """Calculate unrealized P&L in quote currency.
-
-        Args:
-            layer: Layer to calculate
-            current_bid: Current bid price
-            current_ask: Current ask price
-
-        Returns:
-            Unrealized P&L in quote currency
-        """
-        if layer.position_count == 0 or not layer.direction:
-            return Decimal("0")
-
-        pnl_pips = self.calculate_layer_pnl_pips(layer, current_bid, current_ask)
-        return pnl_pips * self.pip_size * layer.total_units
 
 
 class MarginCalculator:

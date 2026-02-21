@@ -34,6 +34,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "start_time",
             "end_time",
             "initial_balance",
+            "account_currency",
             "commission_per_trade",
             "pip_size",
             "instrument",
@@ -192,6 +193,7 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
             "start_time",
             "end_time",
             "initial_balance",
+            "account_currency",
             "pip_size",
             "instrument",
             "trading_mode",
@@ -285,6 +287,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "start_time",
             "end_time",
             "initial_balance",
+            "account_currency",
             "commission_per_trade",
             "pip_size",
             "instrument",
@@ -297,6 +300,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "start_time": {"required": False},
             "end_time": {"required": False},
             "initial_balance": {"required": False},
+            "account_currency": {"required": False},
             "commission_per_trade": {"required": False},
             "pip_size": {"required": False},
             "instrument": {"required": False},
@@ -367,6 +371,46 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         instrument = attrs.get("instrument")
         if not instrument:
             raise serializers.ValidationError({"instrument": "Instrument is required"})
+
+        # Validate tick data exists for the requested date range
+        if start_time and end_time and instrument:
+            from django.db.models import Max, Min
+
+            from apps.market.models import TickData
+
+            agg = TickData.objects.filter(instrument=instrument).aggregate(
+                min_ts=Min("timestamp"),
+                max_ts=Max("timestamp"),
+            )
+            if agg["min_ts"] is None:
+                raise serializers.ValidationError(
+                    {
+                        "instrument": (
+                            f"No tick data available for {instrument}. "
+                            "Please choose an instrument that has historical data."
+                        )
+                    }
+                )
+            if start_time < agg["min_ts"]:
+                raise serializers.ValidationError(
+                    {
+                        "start_time": (
+                            f"start_time is before the earliest available tick data "
+                            f"({agg['min_ts'].isoformat()}). "
+                            "Please choose a later start time."
+                        )
+                    }
+                )
+            if end_time > agg["max_ts"]:
+                raise serializers.ValidationError(
+                    {
+                        "end_time": (
+                            f"end_time is after the latest available tick data "
+                            f"({agg['max_ts'].isoformat()}). "
+                            "Please choose an earlier end time."
+                        )
+                    }
+                )
 
         return attrs
 

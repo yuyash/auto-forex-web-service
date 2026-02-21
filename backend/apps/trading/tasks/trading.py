@@ -146,6 +146,7 @@ def execute_trading(task: TradingTask) -> None:
         pip_size=resolved_pip_size,
         strategy_config=task.config,
         trading_mode=getattr(task, "trading_mode", "hedging"),
+        account_currency=getattr(task.oanda_account, "currency", ""),
     )
 
     # Persist pip_size back to task if it was null

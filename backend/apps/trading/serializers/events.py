@@ -58,18 +58,7 @@ class TradeSerializer(serializers.Serializer):
     )
     layer_index = serializers.IntegerField(required=False, allow_null=True)
     retracement_count = serializers.IntegerField(required=False, allow_null=True)
-    pnl = serializers.DecimalField(
-        max_digits=20, decimal_places=10, required=False, allow_null=True
-    )
     timestamp = serializers.DateTimeField()
-    open_price = serializers.DecimalField(
-        max_digits=20, decimal_places=10, required=False, allow_null=True
-    )
-    open_timestamp = serializers.DateTimeField(required=False, allow_null=True)
-    close_price = serializers.DecimalField(
-        max_digits=20, decimal_places=10, required=False, allow_null=True
-    )
-    close_timestamp = serializers.DateTimeField(required=False, allow_null=True)
 
     def get_execution_method_display(self, obj: object) -> str:
         """Return the human-readable label for the execution method."""
@@ -82,3 +71,23 @@ class TradeSerializer(serializers.Serializer):
             return EventType(value).label
         except ValueError:
             return value
+
+
+class PositionSerializer(serializers.Serializer):
+    """Serializer for position data from Position model."""
+
+    id = serializers.UUIDField()
+    instrument = serializers.CharField()
+    direction = serializers.CharField()
+    units = serializers.IntegerField()
+    entry_price = serializers.DecimalField(max_digits=20, decimal_places=10)
+    entry_time = serializers.DateTimeField()
+    exit_price = serializers.DecimalField(
+        max_digits=20, decimal_places=10, required=False, allow_null=True
+    )
+    exit_time = serializers.DateTimeField(required=False, allow_null=True)
+    realized_pnl = serializers.DecimalField(
+        max_digits=20, decimal_places=10, required=False, allow_null=True
+    )
+    is_open = serializers.BooleanField()
+    layer_index = serializers.IntegerField(required=False, allow_null=True)

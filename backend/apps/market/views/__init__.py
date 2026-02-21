@@ -10,7 +10,7 @@ from apps.market.views.market import MarketStatusView
 from apps.market.views.oanda import OandaAccountDetailView, OandaAccountView
 from apps.market.views.orders import OrderDetailView, OrderView
 from apps.market.views.positions import PositionDetailView, PositionView
-from apps.market.views.ticks import TickDataView
+from apps.market.views.ticks import TickDataRangeView, TickDataView
 
 __all__: List[str] = [
     "CandleDataView",
@@ -25,5 +25,6 @@ __all__: List[str] = [
     "PositionView",
     "SupportedGranularitiesView",
     "SupportedInstrumentsView",
+    "TickDataRangeView",
     "TickDataView",
 ]

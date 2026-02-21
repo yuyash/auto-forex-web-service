@@ -233,32 +233,44 @@ export function useMetricsOverlay({
   useEffect(() => {
     const s = seriesRef.current;
     if (!s) return;
-    if (snapshots.length === 0) return;
 
-    const aligned =
-      candleTimestamps && candleTimestamps.length > 0
+    // Even when there are no metric snapshots, we still want to draw
+    // the constant threshold lines across the full candle range.
+    const hasCandles = candleTimestamps && candleTimestamps.length > 0;
+    const hasSnapshots = snapshots.length > 0;
+
+    if (!hasSnapshots && !hasCandles) return;
+
+    let extended: MetricSnapshotPoint[] = [];
+    let timestamps: number[] = [];
+
+    if (hasSnapshots) {
+      const aligned = hasCandles
         ? resampleSnapshots(snapshots, candleTimestamps)
         : snapshots;
-    if (aligned.length === 0) return;
 
-    // When a currentTickTimestamp is provided, extend the aligned data
-    // with any snapshots that fall between the last candle and the tick
-    // position.  This ensures the metric lines visually reach the
-    // SequencePositionLine instead of stopping at the last closed candle.
-    let extended = aligned;
-    if (tickSec !== null && candleTimestamps && candleTimestamps.length > 0) {
-      const lastCandleTime = candleTimestamps[candleTimestamps.length - 1];
-      if (tickSec > lastCandleTime) {
-        const extra = snapshots.filter(
-          (p) => p.t > lastCandleTime && p.t <= tickSec
-        );
-        if (extra.length > 0) {
-          extended = [...aligned, ...extra];
+      // When a currentTickTimestamp is provided, extend the aligned data
+      // with any snapshots that fall between the last candle and the tick
+      // position.  This ensures the metric lines visually reach the
+      // SequencePositionLine instead of stopping at the last closed candle.
+      extended = aligned;
+      if (tickSec !== null && hasCandles) {
+        const lastCandleTime = candleTimestamps[candleTimestamps.length - 1];
+        if (tickSec > lastCandleTime) {
+          const extra = snapshots.filter(
+            (p) => p.t > lastCandleTime && p.t <= tickSec
+          );
+          if (extra.length > 0) {
+            extended = [...aligned, ...extra];
+          }
         }
       }
+      timestamps = extended.map((p) => p.t);
     }
 
-    const timestamps = extended.map((p) => p.t);
+    // Threshold lines should span the full candle range (left edge to
+    // right edge) since they are constant values, not time-series data.
+    const fullRangeTimestamps = hasCandles ? candleTimestamps : timestamps;
 
     try {
       s.mr.setData(
@@ -270,13 +282,17 @@ export function useMetricsOverlay({
           }))
       );
       s.cutStart.setData(
-        marginCutStartRatio !== undefined && marginCutStartRatio > 0
-          ? makeThresholdData(timestamps, marginCutStartRatio * 100)
+        marginCutStartRatio !== undefined &&
+          marginCutStartRatio > 0 &&
+          fullRangeTimestamps.length > 0
+          ? makeThresholdData(fullRangeTimestamps, marginCutStartRatio * 100)
           : []
       );
       s.cutTarget.setData(
-        marginCutTargetRatio !== undefined && marginCutTargetRatio > 0
-          ? makeThresholdData(timestamps, marginCutTargetRatio * 100)
+        marginCutTargetRatio !== undefined &&
+          marginCutTargetRatio > 0 &&
+          fullRangeTimestamps.length > 0
+          ? makeThresholdData(fullRangeTimestamps, marginCutTargetRatio * 100)
           : []
       );
       s.atr.setData(

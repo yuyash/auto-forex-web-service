@@ -3,6 +3,7 @@
 from datetime import datetime
 from logging import Logger, getLogger
 
+from django.db.models import Max, Min
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
@@ -126,5 +127,71 @@ class TickDataView(APIView):
             logger.error("Error fetching ticks: %s", exc, exc_info=True)
             return Response(
                 {"error": f"Failed to fetch ticks: {str(exc)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class TickDataRangeView(APIView):
+    """API endpoint returning the available date range of tick data per instrument."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="GET /api/market/ticks/data-range/",
+        description=(
+            "Return the earliest and latest tick timestamps for a given instrument. "
+            "Useful for validating backtest date ranges before task creation."
+        ),
+        operation_id="get_tick_data_range",
+        tags=["market"],
+        parameters=[
+            OpenApiParameter(
+                name="instrument",
+                type=str,
+                required=True,
+                description="Currency pair (e.g., USD_JPY)",
+            ),
+        ],
+        responses={200: dict},
+    )
+    def get(self, request: Request) -> Response:
+        instrument = request.query_params.get("instrument")
+        if not instrument:
+            return Response(
+                {"error": "instrument parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            agg = TickData.objects.filter(instrument=instrument).aggregate(
+                min_timestamp=Min("timestamp"),
+                max_timestamp=Max("timestamp"),
+            )
+
+            min_ts = agg["min_timestamp"]
+            max_ts = agg["max_timestamp"]
+
+            if min_ts is None or max_ts is None:
+                return Response(
+                    {
+                        "instrument": instrument,
+                        "has_data": False,
+                        "min_timestamp": None,
+                        "max_timestamp": None,
+                    }
+                )
+
+            return Response(
+                {
+                    "instrument": instrument,
+                    "has_data": True,
+                    "min_timestamp": min_ts.isoformat().replace("+00:00", "Z"),
+                    "max_timestamp": max_ts.isoformat().replace("+00:00", "Z"),
+                }
+            )
+        except Exception as exc:
+            logger.error("Error fetching tick data range: %s", exc, exc_info=True)
+            return Response(
+                {"error": f"Failed to fetch tick data range: {str(exc)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

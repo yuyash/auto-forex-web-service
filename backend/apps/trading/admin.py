@@ -159,7 +159,6 @@ class PositionAdmin(admin.ModelAdmin):
         "instrument",
         "units",
         "entry_price",
-        "unrealized_pnl",
         "entry_time",
         "updated_at",
     )
@@ -178,7 +177,6 @@ class TradeAdmin(admin.ModelAdmin):
         "direction",
         "units",
         "price",
-        "pnl",
         "timestamp",
     )
     list_filter = ("task_type", "direction", "timestamp")

@@ -99,6 +99,10 @@ export type TradingTask = {
    */
   sell_on_stop?: boolean;
   /**
+   * Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY).
+   */
+  pip_size?: string | null;
+  /**
    * Trading instrument (e.g., EUR_USD, USD_JPY)
    */
   instrument?: string;

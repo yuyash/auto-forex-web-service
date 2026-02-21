@@ -1,7 +1,7 @@
 """Shared mixins for task viewsets.
 
-Extracts common paginated action logic (logs, events, trades) used by
-both BacktestTaskViewSet and TradingTaskViewSet.
+Extracts common paginated action logic (logs, events, trades, positions)
+used by both BacktestTaskViewSet and TradingTaskViewSet.
 """
 
 from __future__ import annotations
@@ -43,6 +43,12 @@ def _trade_serializer():
     from apps.trading.serializers.events import TradeSerializer
 
     return TradeSerializer
+
+
+def _position_serializer():
+    from apps.trading.serializers.events import PositionSerializer
+
+    return PositionSerializer
 
 
 class TaskSubResourceMixin:
@@ -248,12 +254,6 @@ class TaskSubResourceMixin:
                 description="Filter by direction (buy/sell)",
             ),
             OpenApiParameter(
-                name="trade_status",
-                type=str,
-                required=False,
-                description="Filter by status (open/closed). open = no close_timestamp, closed = has close_timestamp.",
-            ),
-            OpenApiParameter(
                 name="celery_task_id",
                 type=str,
                 required=False,
@@ -270,7 +270,6 @@ class TaskSubResourceMixin:
 
         task = self.get_object()  # type: ignore[attr-defined]
         direction = (request.query_params.get("direction") or "").lower()
-        status = (request.query_params.get("trade_status") or "").lower()
         celery_task_id = request.query_params.get("celery_task_id") or task.celery_task_id
         queryset = Trade.objects.filter(
             task_type=self.task_type_label,
@@ -280,10 +279,6 @@ class TaskSubResourceMixin:
             queryset = queryset.filter(celery_task_id=celery_task_id)
         else:
             queryset = queryset.none()
-        if status == "open":
-            queryset = queryset.filter(close_timestamp__isnull=True)
-        elif status == "closed":
-            queryset = queryset.filter(close_timestamp__isnull=False, pnl__isnull=False)
         if direction:
             if direction == "buy":
                 queryset = queryset.filter(direction="long")
@@ -299,12 +294,7 @@ class TaskSubResourceMixin:
             "execution_method",
             "layer_index",
             "retracement_count",
-            "pnl",
             "timestamp",
-            "open_price",
-            "open_timestamp",
-            "close_price",
-            "close_timestamp",
         )
         normalized: list[dict] = []
         for trade in trades_qs:
@@ -314,4 +304,62 @@ class TaskSubResourceMixin:
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(normalized, request)
         serializer = TradeSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    @extend_schema(
+        summary="Get task positions",
+        description="Get task positions (open and closed) with pagination.",
+        parameters=[
+            OpenApiParameter(
+                name="position_status",
+                type=str,
+                required=False,
+                description="Filter by status (open/closed)",
+            ),
+            OpenApiParameter(
+                name="direction",
+                type=str,
+                required=False,
+                description="Filter by direction (long/short)",
+            ),
+            OpenApiParameter(
+                name="celery_task_id",
+                type=str,
+                required=False,
+                description="Filter by celery task ID",
+            ),
+            *_PAGINATION_PARAMS,
+        ],
+        responses={200: _position_serializer()(many=True)},
+    )
+    @action(detail=True, methods=["get"])
+    def positions(self, request: Request, pk: str | None = None) -> Response:
+        from apps.trading.models.positions import Position
+        from apps.trading.serializers.events import PositionSerializer
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        celery_task_id = request.query_params.get("celery_task_id") or getattr(
+            task, "celery_task_id", None
+        )
+        queryset = Position.objects.filter(
+            task_type=self.task_type_label,
+            task_id=task.pk,
+        ).order_by("-entry_time")
+
+        if celery_task_id:
+            queryset = queryset.filter(celery_task_id=celery_task_id)
+
+        status_param = (request.query_params.get("position_status") or "").lower()
+        if status_param == "open":
+            queryset = queryset.filter(is_open=True)
+        elif status_param == "closed":
+            queryset = queryset.filter(is_open=False)
+
+        direction = (request.query_params.get("direction") or "").lower()
+        if direction:
+            queryset = queryset.filter(direction=direction)
+
+        paginator = TaskSubResourcePagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = PositionSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)

@@ -31,6 +31,7 @@ from apps.trading.strategies.floor.models import (
     FloorStrategyState,
 )
 from apps.trading.strategies.registry import register_strategy
+from apps.trading.utils import quote_to_account_rate
 
 logger: Logger = getLogger(name=__name__)
 
@@ -221,12 +222,13 @@ class FloorStrategy(Strategy):
 
     def _estimate_unrealized(self, floor_state: FloorStrategyState, tick) -> Decimal:
         total = Decimal("0")
+        conv = quote_to_account_rate(self.instrument, tick.mid, self.account_currency)
         for entry in floor_state.open_entries:
             direction = self._normalize_direction(str(entry.get("direction", "long")))
             units = Decimal(str(entry.get("units", 0)))
             entry_price = Decimal(str(entry.get("entry_price", "0")))
             pnl_pips = self._pips_for_entry(direction, entry_price, tick)
-            total += pnl_pips * self.pip_size * units
+            total += pnl_pips * self.pip_size * units * conv
         return total
 
     def _estimate_nav(self, state, floor_state: FloorStrategyState, tick) -> Decimal:
@@ -245,7 +247,8 @@ class FloorStrategy(Strategy):
         nav = self._estimate_nav(state, floor_state, tick)
         if nav <= 0:
             return Decimal("999")
-        required = tick.mid * total_units * self.config.margin_rate
+        conv = quote_to_account_rate(self.instrument, tick.mid, self.account_currency)
+        required = tick.mid * total_units * self.config.margin_rate * conv
         return required / nav
 
     def _estimate_atr_pips(self, floor_state: FloorStrategyState, period: int) -> Decimal:
@@ -371,7 +374,8 @@ class FloorStrategy(Strategy):
 
         nav = max(Decimal("1"), floor_state.account_nav)
         target_required_margin = self.config.margin_cut_target_ratio * nav
-        target_units = int(target_required_margin / (tick.mid * self.config.margin_rate))
+        conv = quote_to_account_rate(self.instrument, tick.mid, self.account_currency)
+        target_units = int(target_required_margin / (tick.mid * self.config.margin_rate * conv))
         units_to_close = max(0, total_units - target_units)
         if units_to_close <= 0:
             return []
@@ -619,8 +623,9 @@ class FloorStrategy(Strategy):
             # check the *would-be* margin for a single base-lot entry.
             min_units = int(self.config.base_lot_size)
             nav = max(Decimal("1"), floor_state.account_nav)
+            conv = quote_to_account_rate(self.instrument, tick.mid, self.account_currency)
             hypothetical_margin = (
-                tick.mid * Decimal(str(min_units)) * self.config.margin_rate
+                tick.mid * Decimal(str(min_units)) * self.config.margin_rate * conv
             ) / nav
             if hypothetical_margin >= self.config.margin_cut_target_ratio:
                 logger.warning(
@@ -708,7 +713,8 @@ class FloorStrategy(Strategy):
 
             exit_price = self._price_for_close(direction, tick)
             units = int(entry.get("units", 0))
-            pnl_amount = (exit_price - entry_price) * Decimal(units)
+            conv = quote_to_account_rate(self.instrument, tick.mid, self.account_currency)
+            pnl_amount = (exit_price - entry_price) * Decimal(units) * conv
             if direction == "short":
                 pnl_amount = -pnl_amount
 
@@ -735,9 +741,6 @@ class FloorStrategy(Strategy):
             ]
             metrics = floor_state.metrics
             metrics["take_profit_count"] = int(metrics.get("take_profit_count", 0)) + 1
-            metrics["realized_pnl"] = str(
-                Decimal(str(metrics.get("realized_pnl", "0"))) + pnl_amount
-            )
             closed_any = True
 
         if closed_any:

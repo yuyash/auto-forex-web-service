@@ -33,6 +33,7 @@ class TradingEngine:
         pip_size: Decimal,
         strategy_config: StrategyConfiguration,
         trading_mode: str = "hedging",
+        account_currency: str = "",
     ) -> None:
         """Initialize trading engine.
 
@@ -41,14 +42,17 @@ class TradingEngine:
             pip_size: Pip size for instrument
             strategy_config: Strategy configuration
             trading_mode: "netting" (FIFO, US) or "hedging" (JP, etc.)
+            account_currency: Account base currency (e.g., "JPY", "USD")
         """
         self.instrument = instrument
         self.pip_size = pip_size
         self.strategy_config = strategy_config
         self.trading_mode = trading_mode
+        self.account_currency = account_currency
 
         # Create strategy based on type
         self.strategy = self._create_strategy()
+        self.strategy.account_currency = account_currency
 
         logger.info(
             "Initialized TradingEngine: instrument=%s, pip_size=%s, strategy=%s",

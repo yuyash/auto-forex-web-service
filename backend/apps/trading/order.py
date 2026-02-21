@@ -24,6 +24,7 @@ from apps.market.services.oanda import (
 from apps.trading.enums import Direction, TaskType
 from apps.trading.models import Order, Position
 from apps.trading.models.orders import OrderStatus, OrderType
+from apps.trading.utils import quote_to_account_rate
 
 if TYPE_CHECKING:
     from apps.trading.models import BacktestTask, TradingTask
@@ -92,6 +93,7 @@ class OrderService:
         layer_index: int | None = None,
         merge_with_existing: bool = True,
         override_price: Decimal | None = None,
+        tick_timestamp: datetime | None = None,
     ) -> Position:
         """
         Open a new position with specified direction.
@@ -105,6 +107,7 @@ class OrderService:
             layer_index: Optional layer index for Floor strategy
             merge_with_existing: Whether to merge into existing same-direction position
             override_price: Optional price to use for dry-run open instead of latest tick data.
+            tick_timestamp: Optional tick timestamp to use for position/order times instead of wall clock.
 
         Returns:
             Position: Created or updated position
@@ -134,6 +137,7 @@ class OrderService:
             layer_index=layer_index,
             merge_with_existing=merge_with_existing,
             override_price=override_price,
+            tick_timestamp=tick_timestamp,
         )
 
     def close_position(
@@ -141,6 +145,7 @@ class OrderService:
         position: Position,
         units: int | None = None,
         override_price: Decimal | None = None,
+        tick_timestamp: datetime | None = None,
     ) -> tuple[Position, Decimal]:
         """
         Close an existing position (full or partial).
@@ -153,6 +158,7 @@ class OrderService:
             position: Position to close
             units: Optional number of units to close (if None, closes all)
             override_price: Optional price to use for dry-run close instead of latest tick data.
+            tick_timestamp: Optional tick timestamp to use for position/order times instead of wall clock.
 
         Returns:
             tuple[Position, Decimal]: Updated position and realized pnl delta for this close
@@ -205,6 +211,7 @@ class OrderService:
                 direction=close_direction,  # Opposite direction
                 units=close_units_int,
                 oanda_order=oanda_order,
+                tick_timestamp=tick_timestamp,
             )
 
             # Update position
@@ -212,7 +219,7 @@ class OrderService:
                 # Full close
                 previous_realized = Decimal(str(position.realized_pnl or "0"))
                 original_units = abs(position.units)
-                exit_time_value = oanda_order.fill_time or timezone.now()
+                exit_time_value = tick_timestamp or oanda_order.fill_time or timezone.now()
                 position.close(
                     exit_price=oanda_order.price or Decimal("0"),
                     exit_time=exit_time_value,  # type: ignore[arg-type]
@@ -237,7 +244,12 @@ class OrderService:
                 realized_delta = (oanda_order.price or Decimal("0")) - position.entry_price
                 if position.direction == Direction.SHORT:
                     realized_delta = -realized_delta
-                realized_delta = realized_delta * Decimal(original_units)
+                conv = quote_to_account_rate(
+                    position.instrument,
+                    oanda_order.price or position.entry_price,
+                    account_currency=self.account.currency if self.account else "",
+                )
+                realized_delta = realized_delta * Decimal(original_units) * conv
             else:
                 # Partial close - reduce units
                 close_price = oanda_order.price or Decimal("0")
@@ -245,7 +257,12 @@ class OrderService:
                 realized_delta = close_price - position.entry_price
                 if position.direction == Direction.SHORT:
                     realized_delta = -realized_delta
-                realized_delta = realized_delta * close_units_decimal
+                conv = quote_to_account_rate(
+                    position.instrument,
+                    close_price or position.entry_price,
+                    account_currency=self.account.currency if self.account else "",
+                )
+                realized_delta = realized_delta * close_units_decimal * conv
 
                 if position.direction == Direction.LONG:
                     position.units = position.units - units
@@ -288,6 +305,7 @@ class OrderService:
         layer_index: int | None = None,
         merge_with_existing: bool = True,
         override_price: Decimal | None = None,
+        tick_timestamp: datetime | None = None,
     ) -> Position:
         """
         Execute a market order and create/update position.
@@ -328,15 +346,17 @@ class OrderService:
                 oanda_order=oanda_order,
                 take_profit=take_profit,
                 stop_loss=stop_loss,
+                tick_timestamp=tick_timestamp,
             )
 
             # Create or update position
+            entry_time = tick_timestamp or oanda_order.fill_time or timezone.now()
             position = self._create_or_update_position(
                 instrument=instrument,
                 direction=direction,
                 units=abs(units),
                 entry_price=oanda_order.price or Decimal("0"),
-                entry_time=oanda_order.fill_time or timezone.now(),
+                entry_time=entry_time,
                 layer_index=layer_index,
                 merge_with_existing=merge_with_existing,
             )
@@ -375,6 +395,7 @@ class OrderService:
         requested_price: Decimal | None = None,
         take_profit: Decimal | None = None,
         stop_loss: Decimal | None = None,
+        tick_timestamp: datetime | None = None,
     ) -> Order:
         """Create order database record."""
         order = Order.objects.create(
@@ -388,7 +409,7 @@ class OrderService:
             requested_price=requested_price,
             fill_price=oanda_order.price,
             status=OrderStatus.FILLED,
-            filled_at=oanda_order.fill_time,
+            filled_at=tick_timestamp or oanda_order.fill_time,
             take_profit=take_profit,
             stop_loss=stop_loss,
             is_dry_run=self.dry_run,
@@ -433,6 +454,7 @@ class OrderService:
                 existing_position.entry_price = new_avg_price
                 if layer_index is not None:
                     existing_position.layer_index = layer_index
+                existing_position.celery_task_id = getattr(self.task, "celery_task_id", None)
                 existing_position.save()
 
                 logger.debug(
@@ -448,6 +470,7 @@ class OrderService:
         position = Position.objects.create(
             task_type=self.task_type,
             task_id=self.task.id,
+            celery_task_id=getattr(self.task, "celery_task_id", None),
             instrument=instrument,
             direction=direction,
             units=units,
@@ -482,7 +505,7 @@ class OrderService:
             direction=oanda_direction,
             units=Decimal(str(abs(position.units))),
             average_price=position.entry_price,
-            unrealized_pnl=position.unrealized_pnl,
+            unrealized_pnl=Decimal("0"),
             trade_ids=[],
             account_id=account_id,
         )

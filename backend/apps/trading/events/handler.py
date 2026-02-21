@@ -168,49 +168,6 @@ class EventHandler:
             self._cache_position(position.layer_index or 0, position)
         return open_positions
 
-    def _close_entry_trades(
-        self,
-        position: Position,
-        close_price: Decimal,
-        close_timestamp,
-        units_closed: int | None = None,
-    ) -> None:
-        """Mark original entry trade records as closed.
-
-        When a position is closed (take profit, volatility lock, margin
-        protection), the entry Trade records still have
-        ``close_timestamp=NULL``.  The frontend uses
-        ``close_timestamp__isnull=True`` to list open positions, so we
-        must stamp those entry rows to keep the UI in sync.
-
-        For a full close (``units_closed is None`` or equals position
-        units) we update *all* matching open entry trades.  For a
-        partial close we update only enough rows to cover the closed
-        units, oldest first.
-        """
-        entry_qs = Trade.objects.filter(
-            task_type=self.order_service.task_type.value,
-            task_id=self._task_pk,
-            instrument=position.instrument,
-            layer_index=position.layer_index,
-            direction=position.direction,
-            close_timestamp__isnull=True,
-        ).order_by("timestamp")
-
-        if units_closed is None or units_closed >= abs(position.units):
-            # Full close – stamp every open entry trade for this position
-            entry_qs.update(close_price=close_price, close_timestamp=close_timestamp)
-        else:
-            # Partial close – stamp oldest entries up to units_closed
-            remaining = units_closed
-            for trade in entry_qs.iterator():
-                if remaining <= 0:
-                    break
-                trade.close_price = close_price
-                trade.close_timestamp = close_timestamp
-                trade.save(update_fields=["close_price", "close_timestamp"])
-                remaining -= trade.units
-
     def _record_trade(
         self,
         *,
@@ -222,11 +179,6 @@ class EventHandler:
         timestamp,
         layer_index: int | None = None,
         retracement_count: int | None = None,
-        pnl: Decimal | None = None,
-        open_price: Decimal | None = None,
-        open_timestamp=None,
-        close_price: Decimal | None = None,
-        close_timestamp=None,
     ) -> None:
         Trade.objects.create(
             task_type=self.order_service.task_type.value,
@@ -240,11 +192,6 @@ class EventHandler:
             execution_method=execution_method,
             layer_index=layer_index,
             retracement_count=retracement_count,
-            pnl=pnl,
-            open_price=open_price,
-            open_timestamp=open_timestamp,
-            close_price=close_price,
-            close_timestamp=close_timestamp,
         )
 
     def handle_event(self, trading_event: TradingEvent) -> Decimal:
@@ -297,6 +244,7 @@ class EventHandler:
             layer_index=event.layer_number,
             merge_with_existing=False,
             override_price=event.price if event.price else None,
+            tick_timestamp=event.timestamp,
         )
 
         self._cache_position(event.layer_number, position)
@@ -309,8 +257,6 @@ class EventHandler:
             timestamp=event.timestamp,
             layer_index=event.layer_number,
             retracement_count=event.retracement_count,
-            open_price=position.entry_price,
-            open_timestamp=event.timestamp,
         )
 
         logger.info(
@@ -343,6 +289,7 @@ class EventHandler:
             layer_index=event.layer_number,
             merge_with_existing=False,
             override_price=event.price if event.price else None,
+            tick_timestamp=event.timestamp,
         )
 
         self._cache_position(event.layer_number, position)
@@ -355,8 +302,6 @@ class EventHandler:
             timestamp=event.timestamp,
             layer_index=event.layer_number,
             retracement_count=event.retracement_count,
-            open_price=position.entry_price,
-            open_timestamp=event.timestamp,
         )
 
         logger.info(
@@ -425,6 +370,7 @@ class EventHandler:
                 position=position,
                 units=units_to_close,
                 override_price=override_price,
+                tick_timestamp=event.timestamp,
             )
             realized_delta_total += realized_delta
 
@@ -440,18 +386,6 @@ class EventHandler:
                 timestamp=event.timestamp,
                 layer_index=event.layer_number,
                 retracement_count=event.retracement_count,
-                pnl=realized_delta,
-                open_price=position.entry_price,
-                open_timestamp=position.entry_time,
-                close_price=Decimal(str(closed_position.exit_price or position.entry_price)),
-                close_timestamp=event.timestamp,
-            )
-
-            self._close_entry_trades(
-                position=position,
-                close_price=Decimal(str(closed_position.exit_price or position.entry_price)),
-                close_timestamp=event.timestamp,
-                units_closed=units_to_close,
             )
 
             self._prune_closed_position(event.layer_number, closed_position)
@@ -507,7 +441,10 @@ class EventHandler:
             if not position.is_open:
                 continue
             try:
-                closed, realized_delta = self.order_service.close_position(position)
+                closed, realized_delta = self.order_service.close_position(
+                    position,
+                    tick_timestamp=event.timestamp,
+                )
                 closed_positions.append(closed)
                 self._prune_closed_position(position.layer_index or 0, closed)
                 realized_delta_total += realized_delta
@@ -522,16 +459,6 @@ class EventHandler:
                     execution_method=str(event.event_type.value),
                     timestamp=event.timestamp,
                     layer_index=position.layer_index,
-                    pnl=realized_delta,
-                    open_price=position.entry_price,
-                    open_timestamp=position.entry_time,
-                    close_price=Decimal(str(closed.exit_price or position.entry_price)),
-                    close_timestamp=event.timestamp,
-                )
-                self._close_entry_trades(
-                    position=position,
-                    close_price=Decimal(str(closed.exit_price or position.entry_price)),
-                    close_timestamp=event.timestamp,
                 )
                 logger.info(
                     "Closed position due to volatility: layer=%s, position_id=%s, pnl=%s",
@@ -588,6 +515,7 @@ class EventHandler:
                     direction=direction,
                     layer_index=layer_index,
                     merge_with_existing=False,
+                    tick_timestamp=event.timestamp,
                 )
                 self._cache_position(layer_index, hedged)
                 logger.info(
@@ -656,7 +584,9 @@ class EventHandler:
                 if remaining_units is not None:
                     units_to_close = min(abs(position.units), remaining_units)
                 closed, realized_delta = self.order_service.close_position(
-                    position, units=units_to_close
+                    position,
+                    units=units_to_close,
+                    tick_timestamp=event.timestamp,
                 )
                 closed_positions.append(closed)
                 self._prune_closed_position(position.layer_index or 0, closed)
@@ -672,17 +602,6 @@ class EventHandler:
                     execution_method=str(event.event_type.value),
                     timestamp=event.timestamp,
                     layer_index=position.layer_index,
-                    pnl=realized_delta,
-                    open_price=position.entry_price,
-                    open_timestamp=position.entry_time,
-                    close_price=Decimal(str(closed.exit_price or position.entry_price)),
-                    close_timestamp=event.timestamp,
-                )
-                self._close_entry_trades(
-                    position=position,
-                    close_price=Decimal(str(closed.exit_price or position.entry_price)),
-                    close_timestamp=event.timestamp,
-                    units_closed=units_to_close,
                 )
                 touched_positions += 1
                 if remaining_units is not None:
