@@ -131,6 +131,7 @@ class InitialEntryEvent(StrategyEvent):
     units: int = 0
     entry_time: datetime | None = None
     retracement_count: int = 0
+    entry_id: int | None = None  # Strategy-internal entry ID for position tracking
 
     def __post_init__(self):
         if not self.event_type:
@@ -175,6 +176,8 @@ class InitialEntryEvent(StrategyEvent):
                 "retracement_count": self.retracement_count,
             }
         )
+        if self.entry_id is not None:
+            result["entry_id"] = self.entry_id
         if self.entry_time:
             result["entry_time"] = self.entry_time.isoformat()
         return result
@@ -217,6 +220,7 @@ class InitialEntryEvent(StrategyEvent):
             units=int(event_dict.get("units", 0)),
             entry_time=entry_time,
             retracement_count=int(event_dict.get("retracement_count", 0)),
+            entry_id=event_dict.get("entry_id"),
         )
 
 
@@ -251,6 +255,7 @@ class RetracementEvent(StrategyEvent):
     units: int = 0
     entry_time: datetime | None = None
     retracement_count: int = 0
+    entry_id: int | None = None  # Strategy-internal entry ID for position tracking
 
     def __post_init__(self):
         if not self.event_type:
@@ -296,6 +301,8 @@ class RetracementEvent(StrategyEvent):
                 "retracement_count": self.retracement_count,
             }
         )
+        if self.entry_id is not None:
+            result["entry_id"] = self.entry_id
         if self.entry_time:
             result["entry_time"] = self.entry_time.isoformat()
         return result
@@ -338,6 +345,7 @@ class RetracementEvent(StrategyEvent):
             units=int(event_dict.get("units", 0)),
             entry_time=entry_time,
             retracement_count=int(event_dict.get("retracement_count", 0)),
+            entry_id=event_dict.get("entry_id"),
         )
 
 
@@ -383,6 +391,8 @@ class TakeProfitEvent(StrategyEvent):
     entry_time: datetime | None = None
     exit_time: datetime | None = None
     retracement_count: int = 0
+    entry_id: int | None = None  # Strategy-internal entry ID
+    position_id: str | None = None  # Position UUID for direct targeting
 
     def __post_init__(self):
         if not self.event_type:
@@ -434,6 +444,10 @@ class TakeProfitEvent(StrategyEvent):
                 "retracement_count": self.retracement_count,
             }
         )
+        if self.entry_id is not None:
+            result["entry_id"] = self.entry_id
+        if self.position_id is not None:
+            result["position_id"] = self.position_id
         if self.entry_time:
             result["entry_time"] = self.entry_time.isoformat()
         if self.exit_time:
@@ -502,6 +516,8 @@ class TakeProfitEvent(StrategyEvent):
             entry_time=entry_time,
             exit_time=exit_time,
             retracement_count=int(event_dict.get("retracement_count", 0)),
+            entry_id=event_dict.get("entry_id"),
+            position_id=event_dict.get("position_id"),
         )
 
 

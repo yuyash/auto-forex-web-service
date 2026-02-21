@@ -48,6 +48,7 @@ class EventHandler:
         self.position_map: dict[int, Position] = {}  # layer_number -> Position
         self.layer_position_ids: dict[int, list[str]] = defaultdict(list)
         self._position_cache: dict[str, Position] = {}
+        self._last_entry_result: tuple[int | None, str] | None = None  # (entry_id, position_id)
 
     @property
     def _task_pk(self):
@@ -98,29 +99,31 @@ class EventHandler:
         self.position_map[layer_number] = open_positions[-1]
 
     def _find_take_profit_target(self, event: TakeProfitEvent) -> Position | None:
+        # If the event carries a specific position_id, use it directly.
+        if event.position_id:
+            candidate = self._get_open_position_by_id(event.position_id)
+            if candidate:
+                return candidate
+            logger.warning(
+                "position_id %s from TakeProfitEvent not found or already closed, "
+                "falling back to FIFO lookup for layer %s",
+                event.position_id,
+                event.layer_number,
+            )
+
         layer_number = event.layer_number
         self._rehydrate_layer_positions(layer_number)
         stack = self.layer_position_ids.get(layer_number, [])
 
-        if self.trading_mode == "netting":
-            # FIFO: oldest first (front of list)
-            while stack:
-                candidate_id = stack[0]
-                candidate = self._get_open_position_by_id(candidate_id)
-                if candidate:
-                    return candidate
-                stack.pop(0)
-        else:
-            # LIFO: newest first (back of list)
-            while stack:
-                candidate_id = stack[-1]
-                candidate = self._get_open_position_by_id(candidate_id)
-                if candidate:
-                    return candidate
-                stack.pop()
+        # Always FIFO: oldest first (front of list)
+        while stack:
+            candidate_id = stack[0]
+            candidate = self._get_open_position_by_id(candidate_id)
+            if candidate:
+                return candidate
+            stack.pop(0)
 
         direction = Direction(event.direction)
-        order_dir = "entry_time" if self.trading_mode == "netting" else "-entry_time"
         fallback = (
             Position.objects.filter(
                 task_type=self.order_service.task_type,
@@ -130,7 +133,7 @@ class EventHandler:
                 is_open=True,
                 layer_index=layer_number,
             )
-            .order_by(order_dir)
+            .order_by("entry_time")
             .first()
         )
         return fallback
@@ -200,6 +203,9 @@ class EventHandler:
         Args:
             trading_event: TradingEvent instance from database
 
+        Returns:
+            Decimal: Realized pnl delta (0 for entry events)
+
         Raises:
             OrderServiceError: If order execution fails
         """
@@ -208,10 +214,12 @@ class EventHandler:
 
         # Dispatch to appropriate handler based on event type
         if isinstance(strategy_event, InitialEntryEvent):
-            self.handle_initial_entry(strategy_event)
+            position = self.handle_initial_entry(strategy_event)
+            self._last_entry_result = (strategy_event.entry_id, str(position.id))
             return Decimal("0")
         if isinstance(strategy_event, RetracementEvent):
-            self.handle_retracement(strategy_event)
+            position = self.handle_retracement(strategy_event)
+            self._last_entry_result = (strategy_event.entry_id, str(position.id))
             return Decimal("0")
         if isinstance(strategy_event, TakeProfitEvent):
             return self.handle_take_profit(strategy_event)

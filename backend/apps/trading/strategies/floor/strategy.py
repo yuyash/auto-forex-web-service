@@ -192,6 +192,7 @@ class FloorStrategy(Strategy):
                 units=units,
                 entry_time=tick.timestamp,
                 retracement_count=0,
+                entry_id=entry_id,
             )
 
         retracement_count = floor_state.floor_retracement_counts.get(floor_index, 0)
@@ -204,6 +205,7 @@ class FloorStrategy(Strategy):
             units=units,
             entry_time=tick.timestamp,
             retracement_count=retracement_count,
+            entry_id=entry_id,
         )
 
     @staticmethod
@@ -732,6 +734,8 @@ class FloorStrategy(Strategy):
                     entry_time=None,
                     exit_time=tick.timestamp,
                     retracement_count=floor_state.floor_retracement_counts.get(active_floor, 0),
+                    entry_id=int(entry.get("entry_id", 0)),
+                    position_id=entry.get("position_id"),
                 )
             )
             floor_state.open_entries = [

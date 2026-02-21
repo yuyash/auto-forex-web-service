@@ -124,13 +124,30 @@ class TaskExecutor:
     def handle_events(self, state: ExecutionState, events: List[TradingEvent]) -> None:
         """Handle events from strategy execution.
 
+        After processing entry events (initial_entry / retracement), writes
+        the created Position UUID back into the corresponding open_entries
+        record in strategy_state so that subsequent TakeProfitEvents can
+        target the exact position.
+
         Args:
             events: List of TradingEvent instances that were saved
         """
         realized_delta_total = Decimal("0")
         for trading_event in events:
             try:
+                self.event_handler._last_entry_result = None
                 realized_delta_total += self.event_handler.handle_event(trading_event)
+
+                # Write position_id back to strategy state for entry events
+                entry_result = self.event_handler._last_entry_result
+                if entry_result is not None:
+                    entry_id, position_id = entry_result
+                    if entry_id is not None and state.strategy_state:
+                        open_entries = state.strategy_state.get("open_entries", [])
+                        for entry in open_entries:
+                            if int(entry.get("entry_id", -1)) == entry_id:
+                                entry["position_id"] = position_id
+                                break
             except OrderServiceError as e:
                 logger.error(
                     "Order execution failed for trading event %s: %s",

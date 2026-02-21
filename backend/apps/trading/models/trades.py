@@ -70,6 +70,14 @@ class Trade(models.Model):
         blank=True,
         help_text="Number of retracements in the layer at the time of this trade",
     )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp when this record was created",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Timestamp when this record was last updated",
+    )
 
     class Meta:
         db_table = "trades"
