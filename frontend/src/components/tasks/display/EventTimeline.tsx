@@ -176,13 +176,26 @@ const EventItem: React.FC<{ event: BacktestStrategyEvent; index: number }> = ({
     >
       <Box sx={{ width: '100%' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <Typography variant="caption" color="text.disabled" sx={{ minWidth: 40 }}>
+          <Typography
+            variant="caption"
+            color="text.disabled"
+            sx={{ minWidth: 40 }}
+          >
             #{index + 1}
           </Typography>
           <Chip
             label={config.label}
             size="small"
-            color={config.color as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
+            color={
+              config.color as
+                | 'default'
+                | 'primary'
+                | 'secondary'
+                | 'error'
+                | 'info'
+                | 'success'
+                | 'warning'
+            }
             icon={config.icon as React.ReactElement}
           />
           {event.direction && (
@@ -191,7 +204,11 @@ const EventItem: React.FC<{ event: BacktestStrategyEvent; index: number }> = ({
               color={event.direction === 'long' ? 'success' : 'error'}
             />
           )}
-          <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ ml: 'auto' }}
+          >
             {event.timestamp && formatDateTime(event.timestamp)}
           </Typography>
         </Box>
@@ -225,7 +242,8 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   events,
   isLoading = false,
 }) => {
-  const [eventTypeFilter, setEventTypeFilter] = useState<EventTypeFilter>('all');
+  const [eventTypeFilter, setEventTypeFilter] =
+    useState<EventTypeFilter>('all');
   const [showFilters, setShowFilters] = useState(false);
 
   // Get unique event types
@@ -291,19 +309,35 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   return (
     <Card>
       <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 2,
+          }}
+        >
           <Typography variant="h6">Event Timeline</Typography>
 
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Tooltip title={showFilters ? 'Hide Filters' : 'Show Filters'}>
-              <IconButton onClick={() => setShowFilters(!showFilters)} size="small">
+              <IconButton
+                onClick={() => setShowFilters(!showFilters)}
+                size="small"
+              >
                 <FilterIcon />
                 {activeFiltersCount > 0 && (
                   <Chip
                     label={activeFiltersCount}
                     size="small"
                     color="primary"
-                    sx={{ position: 'absolute', top: -5, right: -5, height: 18, minWidth: 18 }}
+                    sx={{
+                      position: 'absolute',
+                      top: -5,
+                      right: -5,
+                      height: 18,
+                      minWidth: 18,
+                    }}
                   />
                 )}
               </IconButton>
@@ -312,19 +346,33 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
         </Box>
 
         {/* Event Statistics */}
-        <Box sx={{ mb: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+        <Box
+          sx={{ mb: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}
+        >
           <Typography variant="subtitle2" gutterBottom>
             Event Summary
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             {Object.entries(eventStats).map(([type, count]) => {
-              const config = eventTypeConfig[type] || { label: type, color: 'default' };
+              const config = eventTypeConfig[type] || {
+                label: type,
+                color: 'default',
+              };
               return (
                 <Chip
                   key={type}
                   label={`${config.label}: ${count}`}
                   size="small"
-                  color={config.color as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
+                  color={
+                    config.color as
+                      | 'default'
+                      | 'primary'
+                      | 'secondary'
+                      | 'error'
+                      | 'info'
+                      | 'success'
+                      | 'warning'
+                  }
                   variant="outlined"
                 />
               );
@@ -334,7 +382,9 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 
         {/* Filters */}
         {showFilters && (
-          <Box sx={{ mb: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+          <Box
+            sx={{ mb: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}
+          >
             <Stack spacing={2}>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                 <FormControl size="small" sx={{ minWidth: 200 }}>

@@ -3,7 +3,7 @@
 from rest_framework import serializers
 from rest_framework.request import Request
 
-from apps.trading.models import StrategyConfig
+from apps.trading.models import StrategyConfiguration
 
 
 class StrategyConfigDetailSerializer(serializers.ModelSerializer):
@@ -15,7 +15,7 @@ class StrategyConfigDetailSerializer(serializers.ModelSerializer):
     is_in_use = serializers.SerializerMethodField()
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
-        model = StrategyConfig
+        model = StrategyConfiguration
         fields = [
             "id",
             "user_id",
@@ -29,7 +29,7 @@ class StrategyConfigDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "user_id", "is_in_use", "created_at", "updated_at"]
 
-    def get_is_in_use(self, obj: StrategyConfig) -> bool:
+    def get_is_in_use(self, obj: StrategyConfiguration) -> bool:
         """Get whether configuration is in use by active tasks."""
         return obj.is_in_use()
 
@@ -43,7 +43,7 @@ class StrategyConfigListSerializer(serializers.ModelSerializer):
     is_in_use = serializers.SerializerMethodField()
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
-        model = StrategyConfig
+        model = StrategyConfiguration
         fields = [
             "id",
             "user_id",
@@ -56,7 +56,7 @@ class StrategyConfigListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_is_in_use(self, obj: StrategyConfig) -> bool:
+    def get_is_in_use(self, obj: StrategyConfiguration) -> bool:
         """Get whether configuration is in use by active tasks."""
         return obj.is_in_use()
 
@@ -69,7 +69,7 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
     """
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
-        model = StrategyConfig
+        model = StrategyConfiguration
         fields = [
             "name",
             "strategy_type",
@@ -79,7 +79,7 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
 
     def validate_strategy_type(self, value: str) -> str:
         """Validate strategy type exists in registry."""
-        from apps.trading.services.registry import registry
+        from apps.trading.strategies.registry import registry
 
         if not registry.is_registered(value):
             available = ", ".join(registry.list_strategies())
@@ -105,7 +105,7 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
 
         if strategy_type:
             # Create temporary config for validation
-            temp_config = StrategyConfig(
+            temp_config = StrategyConfiguration(
                 strategy_type=strategy_type,
                 parameters=normalized_parameters,
             )
@@ -119,32 +119,22 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
 
     @staticmethod
     def _normalize_floor_parameters(parameters: dict) -> dict:
-        """Drop unused floor strategy fields based on progression choices."""
-        normalized = dict(parameters)
+        """Normalize floor strategy parameters through typed config model."""
+        from apps.trading.strategies.floor.models import FloorStrategyConfig
 
-        # Rename legacy scaling fields to retracement lot fields.
+        config = FloorStrategyConfig.from_dict(dict(parameters))
+        return config.to_dict()
 
-        # retracement_trigger_base is deprecated; always derive from max retracements
-        normalized.pop("retracement_trigger_base", None)
-
-        retracement_progression = normalized.get("retracement_trigger_progression", "additive")
-        if retracement_progression not in {"additive", "exponential"}:
-            normalized.pop("retracement_trigger_increment", None)
-
-        lot_progression = normalized.get("lot_size_progression", "additive")
-        if lot_progression not in {"additive", "exponential"}:
-            normalized.pop("lot_size_increment", None)
-
-        return normalized
-
-    def create(self, validated_data: dict) -> StrategyConfig:
+    def create(self, validated_data: dict) -> StrategyConfiguration:
         """Create strategy configuration with user from context."""
         request: Request = self.context["request"]
         user = request.user
         # Type narrowing: request.user is authenticated in view
-        return StrategyConfig.objects.create_for_user(user, **validated_data)
+        return StrategyConfiguration.objects.create_for_user(user, **validated_data)
 
-    def update(self, instance: StrategyConfig, validated_data: dict) -> StrategyConfig:
+    def update(
+        self, instance: StrategyConfiguration, validated_data: dict
+    ) -> StrategyConfiguration:
         """Update strategy configuration."""
         # Don't allow updating strategy_type if config is in use
         if (

@@ -1,25 +1,34 @@
-from __future__ import annotations
+"""Unit tests for market enums."""
 
-from apps.market.enums import ApiType, Jurisdiction, MarketEventCategory, MarketEventSeverity
+from apps.market.enums import ApiType, Jurisdiction
 
 
-class TestMarketEnums:
-    def test_api_type_values(self) -> None:
-        assert ApiType.PRACTICE in ApiType
-        assert ApiType.LIVE in ApiType
-        assert "practice" in ApiType.values
-        assert "live" in ApiType.values
+class TestApiType:
+    """Test ApiType enum."""
 
-    def test_jurisdiction_values(self) -> None:
-        assert "US" in Jurisdiction.values
-        assert "JP" in Jurisdiction.values
-        assert "OTHER" in Jurisdiction.values
+    def test_api_type_values(self):
+        """Test ApiType has expected values."""
+        assert ApiType.PRACTICE == "practice"
+        assert ApiType.LIVE == "live"
 
-    def test_market_event_enums(self) -> None:
-        assert "market" in MarketEventCategory.values
-        assert "trading" in MarketEventCategory.values
-        assert "security" in MarketEventCategory.values
+    def test_api_type_choices(self):
+        """Test ApiType choices."""
+        choices = ApiType.choices
+        assert len(choices) == 2
+        assert ("practice", "Practice") in choices
+        assert ("live", "Live") in choices
 
-        assert "info" in MarketEventSeverity.values
-        assert "warning" in MarketEventSeverity.values
-        assert "error" in MarketEventSeverity.values
+
+class TestJurisdiction:
+    """Test Jurisdiction enum."""
+
+    def test_jurisdiction_values(self):
+        """Test Jurisdiction has expected values."""
+        assert Jurisdiction.US == "US"
+        assert Jurisdiction.JP == "JP"
+        assert Jurisdiction.OTHER == "OTHER"
+
+    def test_jurisdiction_choices(self):
+        """Test Jurisdiction choices."""
+        choices = Jurisdiction.choices
+        assert len(choices) == 3

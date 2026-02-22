@@ -15,9 +15,11 @@ export const generateAriaId = (prefix: string): string => {
 export const getStatusAriaLabel = (status: string): string => {
   const statusLabels: Record<string, string> = {
     created: 'Task created, not yet started',
+    starting: 'Task is starting',
     running: 'Task is currently running',
-    stopped: 'Task has been stopped',
     paused: 'Task is paused',
+    stopping: 'Task is stopping',
+    stopped: 'Task has been stopped',
     completed: 'Task completed successfully',
     failed: 'Task failed with errors',
   };
@@ -39,16 +41,6 @@ export const getProgressAriaLabel = (
     return 'Task failed';
   }
   return `Task progress: ${progress}% complete`;
-};
-
-/**
- * Get ARIA label for metric card
- */
-export const getMetricAriaLabel = (
-  label: string,
-  value: string | number
-): string => {
-  return `${label}: ${value}`;
 };
 
 /**

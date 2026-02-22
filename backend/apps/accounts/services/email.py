@@ -9,7 +9,7 @@ AWS SES using boto3 (AWS SDK default credential chain).
 
 from __future__ import annotations
 
-import logging
+from logging import Logger, getLogger
 from typing import Any
 
 import boto3
@@ -18,7 +18,7 @@ from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
-logger = logging.getLogger(__name__)
+logger: Logger = getLogger(name=__name__)
 
 
 class AccountEmailService:

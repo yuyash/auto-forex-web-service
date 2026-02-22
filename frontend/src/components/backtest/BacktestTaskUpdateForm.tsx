@@ -34,11 +34,10 @@ import {
 // Update schema - only editable fields
 const backtestTaskUpdateSchema = z
   .object({
-    config_id: z.coerce
-      .number({
-        message: 'Configuration must be a number',
-      })
-      .positive('Configuration is required'),
+    config_id: z
+      .string()
+      .min(1, 'Configuration is required')
+      .uuid('Configuration must be a valid ID'),
     data_source: z.nativeEnum(DataSource),
     start_time: z.string().min(1, 'Start date is required'),
     end_time: z.string().min(1, 'End date is required'),
@@ -70,7 +69,7 @@ const backtestTaskUpdateSchema = z
 type BacktestTaskUpdateData = z.infer<typeof backtestTaskUpdateSchema>;
 
 interface BacktestTaskUpdateFormProps {
-  taskId: number;
+  taskId: string;
   taskName: string;
   taskDescription?: string;
   initialData: BacktestTaskUpdateData;
@@ -98,21 +97,17 @@ export default function BacktestTaskUpdateForm({
   });
 
   // Fetch all configurations and strategies
-  const { data: configurationsData } = useConfigurations({ page_size: 100 });
+  const { data: configurationsData, isLoading: configurationsLoading } =
+    useConfigurations({ page_size: 100 });
   const configurations = configurationsData?.results || [];
   const { strategies } = useStrategies();
 
   // Watch selected config
   // eslint-disable-next-line react-hooks/incompatible-library
   const selectedConfigId = watch('config_id');
-  const configIdNumber =
-    typeof selectedConfigId === 'string'
-      ? selectedConfigId === ''
-        ? 0
-        : Number(selectedConfigId)
-      : selectedConfigId || 0;
+  const configIdString = selectedConfigId || '';
 
-  const { data: selectedConfig } = useConfiguration(configIdNumber);
+  const { data: selectedConfig } = useConfiguration(configIdString);
 
   const onSubmit = async (data: BacktestTaskUpdateData) => {
     setSubmitError(null);
@@ -140,13 +135,13 @@ export default function BacktestTaskUpdateForm({
     } catch (error: unknown) {
       console.error('Failed to update task:', error);
       const err = error as {
-        data?: Record<string, string | string[]>;
+        details?: Record<string, string | string[]>;
         message?: string;
       };
 
       let errorMessage = 'Failed to update task';
-      if (err?.data) {
-        const backendErrors = err.data;
+      if (err?.details && typeof err.details === 'object') {
+        const backendErrors = err.details as Record<string, string | string[]>;
         const errorMessages: string[] = [];
 
         const fieldMapping: Record<string, string> = {
@@ -222,6 +217,7 @@ export default function BacktestTaskUpdateForm({
               render={({ field }) => (
                 <ConfigurationSelector
                   configurations={configurations}
+                  isLoading={configurationsLoading}
                   value={field.value}
                   onChange={field.onChange}
                   error={errors.config_id?.message}

@@ -49,7 +49,12 @@ function setCachedError(key: string, error: Error): void {
 export function invalidateBacktestTasksCache(): void {
   cache.clear();
   errorCache.clear();
+  // Notify all active subscribers to refetch
+  backtestCacheListeners.forEach((cb) => cb());
 }
+
+// Listeners that get called when cache is invalidated
+const backtestCacheListeners = new Set<() => void>();
 
 function getInflightRequest<T>(key: string): Promise<T> | null {
   return inflightRequests.get(key) as Promise<T> | null;
@@ -166,6 +171,15 @@ export function useBacktestTasks(
     };
   }, [fetchData]);
 
+  // Subscribe to cache invalidation events
+  useEffect(() => {
+    const listener = () => fetchData();
+    backtestCacheListeners.add(listener);
+    return () => {
+      backtestCacheListeners.delete(listener);
+    };
+  }, [fetchData]);
+
   return {
     data,
     isLoading,
@@ -184,39 +198,60 @@ interface UseBacktestTaskResult {
 /**
  * Hook to fetch a single backtest task
  */
-export function useBacktestTask(id?: number): UseBacktestTaskResult {
+export function useBacktestTask(id?: string): UseBacktestTaskResult {
   const [data, setData] = useState<BacktestTask | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchData = useCallback(async () => {
     // Skip fetching if no valid ID
-    if (!id || id === 0) {
+    if (!id) {
       setIsLoading(false);
       return;
     }
 
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
     try {
-      setIsLoading(true);
+      // Only show loading spinner on initial fetch (no data yet)
+      if (!data) {
+        setIsLoading(true);
+      }
       setError(null);
+      abortControllerRef.current = new AbortController();
+
+      // Add cache-busting query parameter when force is true
       const result = await backtestTasksApi.get(id);
       setData(result);
     } catch (err) {
-      setError(err as Error);
+      if ((err as Error).name !== 'AbortError') {
+        setError(err as Error);
+      }
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
-  }, [id]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchData();
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [fetchData]);
 
   return {
     data,
     isLoading,
     error,
-    refetch: fetchData,
+    refetch: () => fetchData(),
   };
 }
 
@@ -224,7 +259,7 @@ export function useBacktestTask(id?: number): UseBacktestTaskResult {
  * Hook to poll backtest task status for running tasks
  */
 export function useBacktestTaskPolling(
-  id: number,
+  id: string,
   enabled: boolean = true,
   interval: number = 10000
 ): UseBacktestTaskResult {

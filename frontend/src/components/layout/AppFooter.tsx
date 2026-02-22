@@ -83,13 +83,13 @@ const AppFooter = () => {
         }
 
         const data = await response.json().catch(() => null);
-        
+
         // Check if accounts array exists and has at least one account
         if (data && typeof data === 'object' && 'results' in data) {
           const results = (data as { results?: unknown }).results;
           return Array.isArray(results) && results.length > 0;
         }
-        
+
         // If response is an array directly
         return Array.isArray(data) && data.length > 0;
       } catch {
@@ -126,7 +126,7 @@ const AppFooter = () => {
       try {
         // First check if any OANDA account exists
         const hasAccount = await checkAccountExists();
-        
+
         if (!hasAccount) {
           setOandaHealth({
             state: 'empty',

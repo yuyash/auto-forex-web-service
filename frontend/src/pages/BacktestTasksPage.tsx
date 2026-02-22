@@ -23,8 +23,11 @@ import {
   Search as SearchIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import { useBacktestTasks } from '../hooks/useBacktestTasks';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  useBacktestTasks,
+  invalidateBacktestTasksCache,
+} from '../hooks/useBacktestTasks';
 import { TaskStatus } from '../types/common';
 import BacktestTaskCard from '../components/backtest/BacktestTaskCard';
 import { LoadingSpinner, Breadcrumbs } from '../components/common';
@@ -60,11 +63,21 @@ function a11yProps(index: number) {
 
 export default function BacktestTasksPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [tabValue, setTabValue] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('-created_at');
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
+  // Force refetch when navigating back after a deletion
+  useEffect(() => {
+    if (location.state?.deleted) {
+      invalidateBacktestTasksCache();
+      // Clear the state so it doesn't re-trigger on subsequent renders
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state?.deleted, navigate, location.pathname]);
 
   // Determine status filter based on active tab
   const getStatusFilter = (): TaskStatus | undefined => {

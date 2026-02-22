@@ -1,4 +1,4 @@
-import {
+import React, {
   createContext,
   useContext,
   useState,
@@ -8,8 +8,25 @@ import {
 import type { ReactNode } from 'react';
 import type { User, SystemSettings, AuthContextType } from '../types/auth';
 import { AUTH_LOGOUT_EVENT, type AuthLogoutDetail } from '../utils/authEvents';
+import { setAuthToken, clearAuthToken } from '../api';
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Persist context across HMR to prevent "useAuth must be used within AuthProvider" errors
+// during Vite hot module replacement
+const AUTH_CONTEXT_KEY = '__AUTH_CONTEXT__';
+const globalWindow =
+  typeof window !== 'undefined'
+    ? (window as unknown as Record<string, unknown>)
+    : ({} as Record<string, unknown>);
+
+if (!globalWindow[AUTH_CONTEXT_KEY]) {
+  globalWindow[AUTH_CONTEXT_KEY] = createContext<AuthContextType | undefined>(
+    undefined
+  );
+}
+
+const AuthContext = globalWindow[AUTH_CONTEXT_KEY] as React.Context<
+  AuthContextType | undefined
+>;
 
 const getInitialAuthState = (): { token: string | null; user: User | null } => {
   try {
@@ -39,6 +56,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [systemSettingsLoading, setSystemSettingsLoading] =
     useState<boolean>(true);
 
+  // Initialize OpenAPI client with stored token on mount
+  useEffect(() => {
+    if (initialState.token) {
+      setAuthToken(initialState.token);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const fetchSystemSettings = useCallback(async () => {
     setSystemSettingsLoading(true);
     try {
@@ -67,6 +91,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(newUser);
     localStorage.setItem('token', newToken);
     localStorage.setItem('user', JSON.stringify(newUser));
+    // Configure OpenAPI client with the new token
+    setAuthToken(newToken);
   }, []);
 
   const logout = useCallback(async () => {
@@ -91,6 +117,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    // Clear OpenAPI client token
+    clearAuthToken();
   }, [token]);
 
   const refreshToken = useCallback(async (): Promise<boolean> => {

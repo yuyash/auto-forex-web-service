@@ -1,44 +1,44 @@
 """Views for strategy configuration management."""
 
-from typing import Any
+from uuid import UUID
 
 from django.db import models
+from django.db.models import ProtectedError
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.trading.models import StrategyConfig
+from apps.trading.models import StrategyConfiguration
 from apps.trading.serializers import (
     StrategyConfigCreateSerializer,
     StrategyConfigDetailSerializer,
     StrategyConfigListSerializer,
 )
-
-
-class StrategyConfigPagination(PageNumberPagination):
-    """Pagination class for strategy configurations."""
-
-    page_size = 20
-    page_size_query_param = "page_size"
-    max_page_size = 100
+from apps.trading.views.pagination import StandardPagination
 
 
 class StrategyConfigView(APIView):
     """List and create strategy configurations."""
 
     permission_classes = [IsAuthenticated]
-    pagination_class = StrategyConfigPagination
+    pagination_class = StandardPagination
+    serializer_class = StrategyConfigListSerializer
 
+    @extend_schema(
+        summary="List strategy configurations",
+        description="List all strategy configurations for the authenticated user",
+        responses={200: StrategyConfigListSerializer(many=True)},
+    )
     def get(self, request: Request) -> Response:
-        from apps.trading.models import StrategyConfig
+        from apps.trading.models import StrategyConfiguration
 
         strategy_type = request.query_params.get("strategy_type")
         search = request.query_params.get("search")
 
-        queryset = StrategyConfig.objects.filter(user=request.user.pk)
+        queryset = StrategyConfiguration.objects.filter(user=request.user.pk)
         if strategy_type:
             queryset = queryset.filter(strategy_type=strategy_type)
         if search:
@@ -52,6 +52,12 @@ class StrategyConfigView(APIView):
         serializer = StrategyConfigListSerializer(paginated_queryset, many=True)
         return paginator.get_paginated_response(serializer.data)
 
+    @extend_schema(
+        summary="Create strategy configuration",
+        description="Create a new strategy configuration",
+        request=StrategyConfigCreateSerializer,
+        responses={201: StrategyConfigDetailSerializer, 400: dict},
+    )
     def post(self, request: Request) -> Response:
         serializer = StrategyConfigCreateSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
@@ -71,172 +77,53 @@ class StrategyConfigView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class TaskExecutionPagination(PageNumberPagination):
-    """Pagination for task execution history endpoints."""
-
-    page_size = 20
-    page_size_query_param = "page_size"
-    max_page_size = 100
-
-
-def _paginate_list_by_page(
-    *,
-    request: Request,
-    items: list,
-    base_url: str,
-    page_param: str = "page",
-    page_size_param: str = "page_size",
-    default_page_size: int = 100,
-    max_page_size: int = 1000,
-    extra_query: dict[str, str | None] | None = None,
-) -> dict[str, Any]:
-    """Paginate an in-memory list using page/page_size.
-
-    Returns a dict with keys: count, next, previous, results.
-    """
-
-    def _to_int(value: str | None, default: int) -> int:
-        if value is None or value == "":
-            return default
-        return int(value)
-
-    raw_page = request.query_params.get(page_param)
-    raw_page_size = request.query_params.get(page_size_param)
-
-    page = _to_int(raw_page, 1)
-    page_size = _to_int(raw_page_size, default_page_size)
-
-    if page < 1:
-        page = 1
-    if page_size < 1:
-        page_size = default_page_size
-    page_size = min(page_size, max_page_size)
-
-    count = len(items)
-    start = (page - 1) * page_size
-    end = start + page_size
-    results = items[start:end]
-
-    extra_query = extra_query or {}
-    query_parts = [f"{page_size_param}={page_size}"] + [
-        f"{k}={v}" for k, v in extra_query.items() if v is not None
-    ]
-
-    next_url = None
-    if end < count:
-        next_url = f"{base_url}?{page_param}={page + 1}&" + "&".join(query_parts)
-
-    previous_url = None
-    if page > 1:
-        previous_url = f"{base_url}?{page_param}={page - 1}&" + "&".join(query_parts)
-
-    return {
-        "count": count,
-        "next": next_url,
-        "previous": previous_url,
-        "results": results,
-    }
-
-
-def _paginate_queryset_by_page(
-    *,
-    request: Request,
-    queryset: Any,
-    base_url: str,
-    page_param: str = "page",
-    page_size_param: str = "page_size",
-    default_page_size: int = 100,
-    max_page_size: int = 1000,
-    extra_query: dict[str, str | None] | None = None,
-) -> dict[str, Any]:
-    """Paginate a queryset using page/page_size.
-
-    The queryset must support slicing and .count().
-    Returns a dict with keys: count, next, previous, results.
-    """
-
-    def _to_int(value: str | None, default: int) -> int:
-        if value is None or value == "":
-            return default
-        return int(value)
-
-    raw_page = request.query_params.get(page_param)
-    raw_page_size = request.query_params.get(page_size_param)
-
-    page = _to_int(raw_page, 1)
-    page_size = _to_int(raw_page_size, default_page_size)
-
-    if page < 1:
-        page = 1
-    if page_size < 1:
-        page_size = default_page_size
-    page_size = min(page_size, max_page_size)
-
-    count = int(queryset.count())
-    start = (page - 1) * page_size
-    end = start + page_size
-    results = list(queryset[start:end])
-
-    extra_query = extra_query or {}
-    query_parts = [f"{page_size_param}={page_size}"] + [
-        f"{k}={v}" for k, v in extra_query.items() if v is not None
-    ]
-
-    next_url = None
-    if end < count:
-        next_url = f"{base_url}?{page_param}={page + 1}&" + "&".join(query_parts)
-
-    previous_url = None
-    if page > 1:
-        previous_url = f"{base_url}?{page_param}={page - 1}&" + "&".join(query_parts)
-
-    return {
-        "count": count,
-        "next": next_url,
-        "previous": previous_url,
-        "results": results,
-    }
-
-
-def _get_execution_metrics_or_none(execution: Any) -> Any | None:
-    """Safely resolve the reverse OneToOne `execution.metrics` relation.
-
-    Accessing a missing reverse OneToOne raises `<RelatedModel>.DoesNotExist`,
-    which does *not* inherit from `AttributeError` and therefore is not safely
-    handled by `getattr(..., default)` or `hasattr(...)`.
-    """
-
-    try:
-        return execution.metrics
-    except Exception:
-        return None
-
-
 class StrategyConfigDetailView(APIView):
     """Retrieve, update, and delete a strategy configuration."""
 
     permission_classes = [IsAuthenticated]
+    serializer_class = StrategyConfigDetailSerializer
 
-    def get(self, request: Request, config_id: int) -> Response:
+    _config_id_param = OpenApiParameter(
+        name="config_id",
+        type={"type": "string", "format": "uuid"},
+        location=OpenApiParameter.PATH,
+        required=True,
+        description="Strategy configuration UUID",
+    )
+
+    @extend_schema(
+        summary="Get strategy configuration",
+        description="Retrieve a specific strategy configuration",
+        parameters=[_config_id_param],
+        responses={200: StrategyConfigDetailSerializer, 404: dict},
+    )
+    def get(self, request: Request, config_id: UUID) -> Response:
         from apps.trading.serializers import StrategyConfigDetailSerializer
 
         try:
-            config = StrategyConfig.objects.get(id=config_id, user=request.user.pk)
-        except StrategyConfig.DoesNotExist:
+            config = StrategyConfiguration.objects.get(id=config_id, user=request.user.pk)
+        except StrategyConfiguration.DoesNotExist:
             return Response({"error": "Configuration not found"}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = StrategyConfigDetailSerializer(config)
         return Response(serializer.data)
 
-    def put(self, request: Request, config_id: int) -> Response:
+    @extend_schema(
+        summary="Update strategy configuration",
+        description="Update an existing strategy configuration",
+        parameters=[_config_id_param],
+        request=StrategyConfigCreateSerializer,
+        responses={200: StrategyConfigDetailSerializer, 400: dict, 404: dict},
+    )
+    def put(self, request: Request, config_id: UUID) -> Response:
         from apps.trading.serializers import (
             StrategyConfigCreateSerializer,
             StrategyConfigDetailSerializer,
         )
 
         try:
-            config = StrategyConfig.objects.get(id=config_id, user=request.user.pk)
-        except StrategyConfig.DoesNotExist:
+            config = StrategyConfiguration.objects.get(id=config_id, user=request.user.pk)
+        except StrategyConfiguration.DoesNotExist:
             return Response({"error": "Configuration not found"}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = StrategyConfigCreateSerializer(
@@ -250,22 +137,38 @@ class StrategyConfigDetailView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request: Request, config_id: int) -> Response:
+    @extend_schema(
+        summary="Delete strategy configuration",
+        description="Delete a strategy configuration (fails if in use by active tasks)",
+        parameters=[_config_id_param],
+        responses={204: None, 400: dict, 404: dict},
+    )
+    def delete(self, request: Request, config_id: UUID) -> Response:
         try:
-            config = StrategyConfig.objects.get(id=config_id, user=request.user.pk)
-        except StrategyConfig.DoesNotExist:
+            config = StrategyConfiguration.objects.get(id=config_id, user=request.user.pk)
+        except StrategyConfiguration.DoesNotExist:
             return Response({"error": "Configuration not found"}, status=status.HTTP_404_NOT_FOUND)
 
         if config.is_in_use():
             return Response(
                 {
-                    "error": "Cannot delete configuration that is in use by active tasks",
-                    "detail": "Stop or delete all tasks using this configuration first",
+                    "error": "Cannot delete configuration that is in use by tasks",
+                    "detail": "Delete all tasks using this configuration first",
                 },
-                status=status.HTTP_409_CONFLICT,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        config.delete()
+        try:
+            config.delete()
+        except ProtectedError:
+            return Response(
+                {
+                    "error": "Cannot delete configuration that is in use by tasks",
+                    "detail": "Delete all tasks using this configuration first",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         return Response(
             {"message": "Configuration deleted successfully"}, status=status.HTTP_204_NO_CONTENT
         )

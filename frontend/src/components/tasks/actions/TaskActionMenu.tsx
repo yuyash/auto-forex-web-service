@@ -94,6 +94,7 @@ export const TaskActionMenu: React.FC<TaskActionMenuProps> = ({
   }
 
   // Lifecycle actions
+  // CREATED: Start only
   if (status === TaskStatus.CREATED && onStart) {
     actions.push({
       id: 'start',
@@ -104,6 +105,18 @@ export const TaskActionMenu: React.FC<TaskActionMenuProps> = ({
     });
   }
 
+  // STARTING: Stop only
+  if (status === TaskStatus.STARTING && onStop) {
+    actions.push({
+      id: 'stop',
+      label: 'Stop',
+      icon: <Stop />,
+      onClick: onStop,
+      color: 'error',
+    });
+  }
+
+  // RUNNING: Stop, Pause
   if (status === TaskStatus.RUNNING) {
     if (onPause) {
       actions.push({
@@ -125,38 +138,55 @@ export const TaskActionMenu: React.FC<TaskActionMenuProps> = ({
     }
   }
 
-  if (status === TaskStatus.PAUSED && onResume) {
-    actions.push({
-      id: 'resume',
-      label: 'Resume',
-      icon: <PlayCircle />,
-      onClick: onResume,
-      color: 'primary',
-    });
+  // PAUSED: Stop, Resume
+  if (status === TaskStatus.PAUSED) {
+    if (onResume) {
+      actions.push({
+        id: 'resume',
+        label: 'Resume',
+        icon: <PlayCircle />,
+        onClick: onResume,
+        color: 'primary',
+      });
+    }
+    if (onStop) {
+      actions.push({
+        id: 'stop',
+        label: 'Stop',
+        icon: <Stop />,
+        onClick: onStop,
+        color: 'error',
+      });
+    }
   }
 
-  if (
-    (status === TaskStatus.STOPPED ||
-      status === TaskStatus.COMPLETED ||
-      status === TaskStatus.FAILED) &&
-    onStart
-  ) {
-    actions.push({
-      id: 'start',
-      label: 'Start',
-      icon: <PlayArrow />,
-      onClick: onStart,
-      color: 'primary',
-    });
+  // STOPPED: Restart only
+  if (status === TaskStatus.STOPPED) {
+    if (onRerun) {
+      actions.push({
+        id: 'rerun',
+        label: 'Restart',
+        icon: <Refresh />,
+        onClick: onRerun,
+      });
+    }
   }
 
-  if (
-    (status === TaskStatus.COMPLETED || status === TaskStatus.FAILED) &&
-    onRerun
-  ) {
+  // COMPLETED: Restart (via Rerun)
+  if (status === TaskStatus.COMPLETED && onRerun) {
     actions.push({
       id: 'rerun',
-      label: 'Rerun',
+      label: 'Restart',
+      icon: <Refresh />,
+      onClick: onRerun,
+    });
+  }
+
+  // FAILED: Restart (via Rerun)
+  if (status === TaskStatus.FAILED && onRerun) {
+    actions.push({
+      id: 'rerun',
+      label: 'Restart',
       icon: <Refresh />,
       onClick: onRerun,
     });
@@ -184,29 +214,37 @@ export const TaskActionMenu: React.FC<TaskActionMenuProps> = ({
   }
 
   if (onEdit) {
+    const isActive = [
+      TaskStatus.STARTING,
+      TaskStatus.RUNNING,
+      TaskStatus.PAUSED,
+      TaskStatus.STOPPING,
+    ].includes(status);
     actions.push({
       id: 'edit',
       label: 'Edit',
       icon: <Edit />,
       onClick: onEdit,
-      disabled: status === TaskStatus.RUNNING,
-      tooltip:
-        status === TaskStatus.RUNNING ? 'Cannot edit while running' : undefined,
+      disabled: isActive,
+      tooltip: isActive ? 'Cannot edit while task is active' : undefined,
     });
   }
 
   if (onDelete) {
+    const cannotDelete = [
+      TaskStatus.STARTING,
+      TaskStatus.RUNNING,
+      TaskStatus.PAUSED,
+      TaskStatus.STOPPING,
+    ].includes(status);
     actions.push({
       id: 'delete',
       label: 'Delete',
       icon: <Delete />,
       onClick: onDelete,
       color: 'error',
-      disabled: status === TaskStatus.RUNNING,
-      tooltip:
-        status === TaskStatus.RUNNING
-          ? 'Cannot delete while running'
-          : undefined,
+      disabled: cannotDelete,
+      tooltip: cannotDelete ? 'Cannot delete while task is active' : undefined,
     });
   }
 

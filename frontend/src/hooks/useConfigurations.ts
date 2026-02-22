@@ -228,7 +228,7 @@ interface UseConfigurationResult {
 /**
  * Hook to fetch a single strategy configuration
  */
-export function useConfiguration(id?: number): UseConfigurationResult {
+export function useConfiguration(id?: string): UseConfigurationResult {
   const [data, setData] = useState<StrategyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true); // Start as true to prevent premature redirects
   const [error, setError] = useState<Error | null>(null);
@@ -244,7 +244,7 @@ export function useConfiguration(id?: number): UseConfigurationResult {
 
   const fetchData = useCallback(async () => {
     // Skip fetching if no valid ID
-    if (!id || id === 0) {
+    if (!id || id === '') {
       setIsLoading(false);
       return;
     }
@@ -252,7 +252,7 @@ export function useConfiguration(id?: number): UseConfigurationResult {
     const currentRequestId = requestIdRef.current + 1;
     requestIdRef.current = currentRequestId;
 
-    const hasValidId = typeof id === 'number' && Number.isFinite(id) && id > 0;
+    const hasValidId = typeof id === 'string' && id.length > 0;
 
     if (!hasValidId) {
       if (isMountedRef.current && currentRequestId === requestIdRef.current) {
@@ -306,7 +306,7 @@ interface UseConfigurationTasksResult {
 /**
  * Hook to fetch tasks using a configuration
  */
-export function useConfigurationTasks(id: number): UseConfigurationTasksResult {
+export function useConfigurationTasks(id: string): UseConfigurationTasksResult {
   const [data, setData] = useState<ConfigurationTask[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -315,7 +315,7 @@ export function useConfigurationTasks(id: number): UseConfigurationTasksResult {
     try {
       setIsLoading(true);
       setError(null);
-      const result = await configurationsApi.getTasks(id);
+      const result = await configurationsApi.getTasks(String(id));
       setData(result);
     } catch (err) {
       setError(err as Error);

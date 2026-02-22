@@ -41,9 +41,6 @@ const TradingTaskDetailPage = lazy(
   () => import('./pages/TradingTaskDetailPage')
 );
 
-const RunningTaskView = lazy(() => import('./pages/RunningTaskView'));
-const ExecutionResultsView = lazy(() => import('./pages/ExecutionResultsView'));
-
 const OandaAccountDetailPage = lazy(
   () => import('./pages/OandaAccountDetailPage')
 );
@@ -190,19 +187,6 @@ function AppRoutes() {
               path="/trading-tasks/:id/edit"
               element={<TradingTaskFormPage />}
             />
-            <Route
-              path="/:taskType/:taskId/executions/:executionId"
-              element={<RunningTaskView />}
-            />
-            <Route
-              path="/:taskType/:taskId/executions/:executionId/results"
-              element={<ExecutionResultsView />}
-            />
-            {/* Direct execution routes (without taskType/taskId) */}
-            <Route
-              path="/executions/:executionId/results"
-              element={<ExecutionResultsView />}
-            />
           </Route>
         </Route>
 
@@ -222,11 +206,11 @@ function ThemedApp() {
       <CssBaseline />
       <QueryProvider>
         <ToastProvider>
-          <AuthProvider>
-            <BrowserRouter>
+          <BrowserRouter>
+            <AuthProvider>
               <AppRoutes />
-            </BrowserRouter>
-          </AuthProvider>
+            </AuthProvider>
+          </BrowserRouter>
         </ToastProvider>
       </QueryProvider>
     </ThemeProvider>

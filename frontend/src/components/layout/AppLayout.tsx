@@ -34,7 +34,8 @@ const AppLayout = () => {
         sx={{
           display: 'flex',
           flexDirection: 'column',
-          minHeight: '100vh',
+          height: '100vh',
+          overflow: 'hidden',
         }}
       >
         <AppHeader onMenuClick={handleDrawerToggle} />
@@ -42,6 +43,7 @@ const AppLayout = () => {
           sx={{
             display: 'flex',
             flexGrow: 1,
+            overflow: 'hidden',
           }}
         >
           {/* Sidebar navigation - only shown on tablet */}
@@ -62,6 +64,7 @@ const AppLayout = () => {
               flexGrow: 1,
               display: 'flex',
               flexDirection: 'column',
+              overflowY: 'auto',
               marginTop: '32px', // Space for AppBar
               marginBottom: isMobile ? '112px' : 0, // Space for footer + bottom nav on mobile
               width: showSidebar ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%',

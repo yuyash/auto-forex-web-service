@@ -13,7 +13,7 @@ import {
   type SelectChangeEvent,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
-import { MetricCard } from '../../tasks/display/MetricCard';
+import { StatCard } from '../../tasks/display/StatCard';
 import { EquityCurveChart } from '../../tasks/charts/EquityCurveChart';
 import { TradeLogTable } from '../../tasks/charts/TradeLogTable';
 import { FloorLayerLog } from '../../backtest/FloorLayerLog';
@@ -21,13 +21,13 @@ import { TradingTaskChart } from '../TradingTaskChart';
 import { tradingTasksApi } from '../../../services/api/tradingTasks';
 import type { TradingTask } from '../../../types/tradingTask';
 import { TaskStatus } from '../../../types/common';
-import { useTradingResults } from '../../../hooks/useTaskResults';
 import type {
   BacktestStrategyEvent,
   EquityPoint,
-  ExecutionMetricsCheckpoint,
   Trade,
+  ExecutionMetricsCheckpoint,
 } from '../../../types/execution';
+import { useTradingResults } from '../../../hooks/useTradingResults';
 import {
   TrendingUp as TrendingUpIcon,
   ShowChart as ShowChartIcon,
@@ -119,9 +119,9 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
       // Reset state when we shouldn't fetch - these are intentional resets
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setMetricsCheckpoint(null);
-       
+
       setMetricsCheckpointLoading(false);
-       
+
       setMetricsCheckpointError(null);
       return;
     }
@@ -172,21 +172,21 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
       // Reset state when we shouldn't fetch - these are intentional resets
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setEquityCurve([]);
-       
+
       setEquityCurveLoading(false);
-       
+
       setEquityCurveError(null);
-       
+
       setTradeLogs([]);
-       
+
       setTradeLogsLoading(false);
-       
+
       setTradeLogsError(null);
-       
+
       setStrategyEvents([]);
-       
+
       setStrategyEventsLoading(false);
-       
+
       setStrategyEventsError(null);
       return;
     }
@@ -403,7 +403,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
       {(hasMetrics || !!metricsCheckpoint) && (
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <MetricCard
+            <StatCard
               title="Total Return"
               value={`${parseFloat(
                 (metrics ?? metricsCheckpoint)?.total_return ?? '0'
@@ -421,7 +421,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           </Grid>
 
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <MetricCard
+            <StatCard
               title="Win Rate"
               value={`${parseFloat(
                 (metrics ?? metricsCheckpoint)?.win_rate ?? '0'
@@ -433,7 +433,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           </Grid>
 
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <MetricCard
+            <StatCard
               title="Total Trades"
               value={
                 (metrics ?? metricsCheckpoint)?.total_trades?.toString() ?? '0'
@@ -445,7 +445,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
           </Grid>
 
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <MetricCard
+            <StatCard
               title="Max Drawdown"
               value={`${parseFloat(
                 (metrics ?? metricsCheckpoint)?.max_drawdown ?? '0'

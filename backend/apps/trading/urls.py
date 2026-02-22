@@ -4,52 +4,29 @@ URL configuration for trading app.
 This module defines URL patterns for trading data and strategy endpoints.
 """
 
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 
 from apps.trading.views import (
-    BacktestTaskCopyView,
-    BacktestTaskDetailView,
-    BacktestTaskEquityCurveView,
-    BacktestTaskExecutionsView,
-    BacktestTaskExportView,
-    BacktestTaskLogsView,
-    BacktestTaskMetricsCheckpointView,
-    BacktestTaskResultsView,
-    BacktestTaskStartView,
-    BacktestTaskStatusView,
-    BacktestTaskStopView,
-    BacktestTaskStrategyEventsView,
-    BacktestTaskTradeLogsView,
-    BacktestTaskView,
-    ExecutionDetailView,
-    ExecutionEquityView,
-    ExecutionEventsView,
-    ExecutionMetricsView,
-    ExecutionStatusView,
-    ExecutionTradesView,
+    BacktestTaskViewSet,
     StrategyConfigDetailView,
     StrategyConfigView,
     StrategyDefaultsView,
     StrategyView,
-    TradingTaskCopyView,
-    TradingTaskDetailView,
-    TradingTaskEquityCurveView,
-    TradingTaskExecutionsView,
-    TradingTaskLogsView,
-    TradingTaskMetricsCheckpointView,
-    TradingTaskRestartView,
-    TradingTaskResultsView,
-    TradingTaskStartView,
-    TradingTaskStatusView,
-    TradingTaskStopView,
-    TradingTaskStrategyEventsView,
-    TradingTaskTradeLogsView,
-    TradingTaskView,
+    TradingTaskViewSet,
 )
 
 app_name = "trading"
 
+# Router for task-centric API viewsets
+router = DefaultRouter()
+router.register(r"tasks/backtest", BacktestTaskViewSet, basename="backtest-task")
+router.register(r"tasks/trading", TradingTaskViewSet, basename="trading-task")
+
 urlpatterns = [
+    # Task-centric API endpoints
+    path("", include(router.urls)),
+    # Strategy endpoints
     path("strategies/", StrategyView.as_view(), name="strategy_list"),
     path(
         "strategies/<str:strategy_id>/defaults/",
@@ -63,181 +40,8 @@ urlpatterns = [
         name="strategy_config_list_create",
     ),
     path(
-        "strategy-configs/<int:config_id>/",
+        "strategy-configs/<uuid:config_id>/",
         StrategyConfigDetailView.as_view(),
         name="strategy_config_detail",
-    ),
-    # Backtest task endpoints
-    path(
-        "backtest-tasks/",
-        BacktestTaskView.as_view(),
-        name="backtest_task_list_create",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/",
-        BacktestTaskDetailView.as_view(),
-        name="backtest_task_detail",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/copy/",
-        BacktestTaskCopyView.as_view(),
-        name="backtest_task_copy",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/start/",
-        BacktestTaskStartView.as_view(),
-        name="backtest_task_start",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/stop/",
-        BacktestTaskStopView.as_view(),
-        name="backtest_task_stop",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/status/",
-        BacktestTaskStatusView.as_view(),
-        name="backtest_task_status",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/executions/",
-        BacktestTaskExecutionsView.as_view(),
-        name="backtest_task_executions",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/logs/",
-        BacktestTaskLogsView.as_view(),
-        name="backtest_task_logs",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/export/",
-        BacktestTaskExportView.as_view(),
-        name="backtest_task_export",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/results/",
-        BacktestTaskResultsView.as_view(),
-        name="backtest_task_results",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/equity-curve/",
-        BacktestTaskEquityCurveView.as_view(),
-        name="backtest_task_equity_curve",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/strategy-events/",
-        BacktestTaskStrategyEventsView.as_view(),
-        name="backtest_task_strategy_events",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/trade-logs/",
-        BacktestTaskTradeLogsView.as_view(),
-        name="backtest_task_trade_logs",
-    ),
-    path(
-        "backtest-tasks/<int:task_id>/metrics-checkpoint/",
-        BacktestTaskMetricsCheckpointView.as_view(),
-        name="backtest_task_metrics_checkpoint",
-    ),
-    # Trading task endpoints
-    path(
-        "trading-tasks/",
-        TradingTaskView.as_view(),
-        name="trading_task_list_create",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/",
-        TradingTaskDetailView.as_view(),
-        name="trading_task_detail",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/copy/",
-        TradingTaskCopyView.as_view(),
-        name="trading_task_copy",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/start/",
-        TradingTaskStartView.as_view(),
-        name="trading_task_start",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/stop/",
-        TradingTaskStopView.as_view(),
-        name="trading_task_stop",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/restart/",
-        TradingTaskRestartView.as_view(),
-        name="trading_task_restart",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/status/",
-        TradingTaskStatusView.as_view(),
-        name="trading_task_status",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/executions/",
-        TradingTaskExecutionsView.as_view(),
-        name="trading_task_executions",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/logs/",
-        TradingTaskLogsView.as_view(),
-        name="trading_task_logs",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/results/",
-        TradingTaskResultsView.as_view(),
-        name="trading_task_results",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/equity-curve/",
-        TradingTaskEquityCurveView.as_view(),
-        name="trading_task_equity_curve",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/strategy-events/",
-        TradingTaskStrategyEventsView.as_view(),
-        name="trading_task_strategy_events",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/trade-logs/",
-        TradingTaskTradeLogsView.as_view(),
-        name="trading_task_trade_logs",
-    ),
-    path(
-        "trading-tasks/<int:task_id>/metrics-checkpoint/",
-        TradingTaskMetricsCheckpointView.as_view(),
-        name="trading_task_metrics_checkpoint",
-    ),
-    # Execution-specific endpoints (task 14)
-    path(
-        "executions/<int:execution_id>/",
-        ExecutionDetailView.as_view(),
-        name="execution_detail",
-    ),
-    path(
-        "executions/<int:execution_id>/status/",
-        ExecutionStatusView.as_view(),
-        name="execution_status",
-    ),
-    path(
-        "executions/<int:execution_id>/events/",
-        ExecutionEventsView.as_view(),
-        name="execution_events",
-    ),
-    path(
-        "executions/<int:execution_id>/trades/",
-        ExecutionTradesView.as_view(),
-        name="execution_trades",
-    ),
-    path(
-        "executions/<int:execution_id>/equity/",
-        ExecutionEquityView.as_view(),
-        name="execution_equity",
-    ),
-    path(
-        "executions/<int:execution_id>/metrics/latest/",
-        ExecutionMetricsView.as_view(),
-        name="execution_metrics_latest",
     ),
 ]

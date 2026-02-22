@@ -27,6 +27,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { type TradingTaskCreateData } from '../../types/tradingTask';
+import type { Account } from '../../types/strategy';
 import {
   useCreateTradingTask,
   useUpdateTradingTask,
@@ -35,7 +36,7 @@ import {
   useConfiguration,
   useConfigurations,
 } from '../../hooks/useConfigurations';
-import { useAccounts } from '../../hooks/useAccounts';
+import { useAccounts, useAccount } from '../../hooks/useAccounts';
 import { useTradingTasks } from '../../hooks/useTradingTasks';
 import { TaskStatus } from '../../types/common';
 import {
@@ -47,8 +48,8 @@ const steps = ['Account', 'Configuration', 'Review'];
 
 // Validation schema
 const tradingTaskSchema = z.object({
-  account_id: z.number().min(1, 'Account is required'),
-  config_id: z.number().min(1, 'Configuration is required'),
+  account_id: z.string().min(1, 'Account is required'),
+  config_id: z.string().min(1, 'Configuration is required'),
   name: z.string().min(1, 'Name is required').max(255),
   description: z.string().optional(),
   risk_acknowledged: z.boolean().optional(),
@@ -57,7 +58,7 @@ const tradingTaskSchema = z.object({
 type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
 
 interface TradingTaskFormProps {
-  taskId?: number;
+  taskId?: string;
   initialData?: Partial<TradingTaskCreateData>;
 }
 
@@ -83,8 +84,8 @@ export default function TradingTaskForm({
   } = useForm<TradingTaskFormData>({
     resolver: zodResolver(tradingTaskSchema),
     defaultValues: {
-      account_id: initialData?.account_id || 0,
-      config_id: initialData?.config_id || 0,
+      account_id: initialData?.account_id || '',
+      config_id: initialData?.config_id || '',
       name: initialData?.name || '',
       description: initialData?.description || '',
       risk_acknowledged: false,
@@ -114,7 +115,11 @@ export default function TradingTaskForm({
 
   // Fetch accounts
   const { data: accountsData } = useAccounts({ page_size: 100 });
-  const accounts = accountsData?.results || [];
+  const accounts = (
+    Array.isArray(accountsData)
+      ? accountsData
+      : (accountsData as unknown as { results?: Account[] })?.results || []
+  ) as Account[];
 
   // For review step, use saved formData instead of watch
   // This ensures values persist across step changes
@@ -123,36 +128,33 @@ export default function TradingTaskForm({
       ? formData.account_id
       : selectedAccountId;
 
-  // Convert account_id to number for finding the account
-  const accountIdNumber =
-    typeof effectiveAccountId === 'string'
-      ? effectiveAccountId === ''
-        ? 0
-        : Number(effectiveAccountId)
-      : effectiveAccountId || 0;
-
-  const selectedAccount = accounts.find(
-    (account) => account.id === accountIdNumber
+  const selectedAccountFromList = accounts.find(
+    (account) => String(account.id) === effectiveAccountId
   );
+
+  // Fetch live account details (balance, margin, etc.) from OANDA API
+  const accountIdNum = effectiveAccountId ? Number(effectiveAccountId) : 0;
+  const { data: accountDetail } = useAccount(accountIdNum, {
+    enabled: accountIdNum > 0,
+  });
+
+  // Prefer live detail data over stale list data
+  const selectedAccount = accountDetail
+    ? (accountDetail as Account)
+    : selectedAccountFromList;
 
   // Fetch all configurations and strategies
   const { data: configurationsData } = useConfigurations({ page_size: 100 });
   const configurations = configurationsData?.results || [];
   const { strategies } = useStrategies();
 
-  // Convert config_id to number for the API call
-  const configIdNumber =
-    typeof selectedConfigId === 'string'
-      ? selectedConfigId === ''
-        ? 0
-        : Number(selectedConfigId)
-      : selectedConfigId || 0;
-
-  const { data: selectedConfig } = useConfiguration(configIdNumber);
+  const { data: selectedConfig } = useConfiguration(
+    selectedConfigId || undefined
+  );
 
   // Check if account already has an active task (only if valid account selected)
   const { data: existingTasks } = useTradingTasks(
-    selectedAccountId && selectedAccountId > 0
+    selectedAccountId
       ? {
           account_id: selectedAccountId,
           status: TaskStatus.RUNNING,
@@ -260,12 +262,7 @@ export default function TradingTaskForm({
                         label="Account"
                         value={field.value || ''}
                         onChange={(e) => {
-                          const value = e.target.value;
-                          field.onChange(
-                            typeof value === 'string' && value === ''
-                              ? 0
-                              : Number(value)
-                          );
+                          field.onChange(String(e.target.value));
                         }}
                       >
                         <MenuItem value="">
@@ -273,8 +270,7 @@ export default function TradingTaskForm({
                         </MenuItem>
                         {accounts.map((account) => (
                           <MenuItem key={account.id} value={account.id}>
-                            {account.account_id} ({account.api_type}) - Balance:{' '}
-                            ${parseFloat(account.balance).toFixed(2)}
+                            {account.account_id} ({account.api_type})
                           </MenuItem>
                         ))}
                       </Select>
@@ -297,7 +293,7 @@ export default function TradingTaskForm({
                     <Typography variant="body2">
                       <strong>Account ID:</strong> {selectedAccount.account_id}
                     </Typography>
-                    <Typography variant="body2">
+                    <Typography variant="body2" component="div">
                       <strong>Type:</strong>{' '}
                       <Chip
                         label={selectedAccount.api_type.toUpperCase()}
@@ -322,7 +318,7 @@ export default function TradingTaskForm({
 
               {hasActiveTask && (
                 <Grid size={{ xs: 12 }}>
-                  <Alert severity="warning" icon={<WarningIcon />}>
+                  <Alert severity="error" icon={<WarningIcon />}>
                     <Typography variant="subtitle2" gutterBottom>
                       Active Task Detected
                     </Typography>
@@ -331,8 +327,8 @@ export default function TradingTaskForm({
                       <strong>{existingTasks.results[0].name}</strong>
                     </Typography>
                     <Typography variant="body2" sx={{ mt: 1 }}>
-                      Starting a new task will automatically stop the existing
-                      task.
+                      Only one task can run per account at a time. Please stop
+                      the existing task before starting a new one.
                     </Typography>
                   </Alert>
                 </Grid>
@@ -474,7 +470,7 @@ export default function TradingTaskForm({
                           {selectedAccount.account_id} (
                           {selectedAccount.api_type})
                         </>
-                      ) : selectedAccountId > 0 ? (
+                      ) : selectedAccountId ? (
                         'Loading account...'
                       ) : (
                         'No account selected'
@@ -596,6 +592,9 @@ export default function TradingTaskForm({
         {getStepContent(activeStep)}
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+          <Button onClick={() => navigate(-1)} sx={{ mr: 'auto' }}>
+            Cancel
+          </Button>
           <Button
             disabled={activeStep === 0}
             onClick={handleBack}

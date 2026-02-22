@@ -122,7 +122,7 @@ export class TaskStore {
    * @param status - Confirmed status from server
    * @param execution_id - Optional execution ID for running tasks
    */
-  confirmStatusUpdate(status: TaskStatus, execution_id?: number): void {
+  confirmStatusUpdate(status: TaskStatus, execution_id?: string): void {
     if (!this.state.task) {
       console.warn('[TaskStore] Cannot confirm status: no task loaded');
       return;
@@ -212,8 +212,8 @@ export class TaskStore {
    * @param interval - Polling interval in milliseconds (default: 3000)
    */
   startPolling(
-    taskId: number,
-    fetchFn: (id: number) => Promise<BacktestTask>,
+    taskId: string,
+    fetchFn: (id: string) => Promise<BacktestTask>,
     interval: number = 3000
   ): void {
     // Stop any existing polling

@@ -33,32 +33,50 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   minDate,
   maxDate,
 }) => {
-  // Convert string to Date if needed
+  // Convert string to Date if needed (may return Invalid Date for bad input)
   const toDate = (value: Date | string | null): Date | null => {
     if (!value) return null;
     if (value instanceof Date) return value;
-    return new Date(value);
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
   };
 
   const startDateValue = toDate(startDate);
   const endDateValue = toDate(endDate);
 
+  const isValidDate = (d: Date | null): d is Date =>
+    d instanceof Date && !isNaN(d.getTime());
+
   const handleStartChange = (date: Date | null) => {
-    onStartDateChange(date ? date.toISOString() : null);
+    onStartDateChange(date && isValidDate(date) ? date.toISOString() : null);
   };
 
   const handleEndChange = (date: Date | null) => {
-    onEndDateChange(date ? date.toISOString() : null);
+    onEndDateChange(date && isValidDate(date) ? date.toISOString() : null);
   };
   // Validation
   const startError = React.useMemo(() => {
     if (!startDateValue && required) {
       return 'Start date is required';
     }
-    if (startDateValue && endDateValue && startDateValue >= endDateValue) {
+    if (startDateValue && !isValidDate(startDateValue)) {
+      return 'Invalid date';
+    }
+    if (
+      startDateValue &&
+      endDateValue &&
+      isValidDate(startDateValue) &&
+      isValidDate(endDateValue) &&
+      startDateValue >= endDateValue
+    ) {
       return 'Start date must be before end date';
     }
-    if (startDateValue && maxDate && startDateValue > maxDate) {
+    if (
+      startDateValue &&
+      maxDate &&
+      isValidDate(startDateValue) &&
+      startDateValue > maxDate
+    ) {
       return `Start date must be before ${maxDate.toLocaleDateString()}`;
     }
     return null;
@@ -68,10 +86,24 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     if (!endDateValue && required) {
       return 'End date is required';
     }
-    if (startDateValue && endDateValue && endDateValue <= startDateValue) {
+    if (endDateValue && !isValidDate(endDateValue)) {
+      return 'Invalid date';
+    }
+    if (
+      startDateValue &&
+      endDateValue &&
+      isValidDate(startDateValue) &&
+      isValidDate(endDateValue) &&
+      endDateValue <= startDateValue
+    ) {
       return 'End date must be after start date';
     }
-    if (endDateValue && minDate && endDateValue < minDate) {
+    if (
+      endDateValue &&
+      minDate &&
+      isValidDate(endDateValue) &&
+      endDateValue < minDate
+    ) {
       return `End date must be after ${minDate.toLocaleDateString()}`;
     }
     return null;

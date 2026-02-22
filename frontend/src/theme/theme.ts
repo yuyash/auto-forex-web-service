@@ -224,6 +224,59 @@ const components = {
       },
     },
   },
+  // MUI X Charts configuration
+  MuiChartsAxis: {
+    styleOverrides: {
+      root: {
+        '& .MuiChartsAxis-line': {
+          stroke: 'rgba(0, 0, 0, 0.12)',
+        },
+        '& .MuiChartsAxis-tick': {
+          stroke: 'rgba(0, 0, 0, 0.12)',
+        },
+        '& .MuiChartsAxis-tickLabel': {
+          fill: 'rgba(0, 0, 0, 0.6)',
+          fontSize: '0.75rem',
+        },
+      },
+    },
+  },
+  MuiChartsGrid: {
+    styleOverrides: {
+      root: {
+        '& .MuiChartsGrid-line': {
+          stroke: 'rgba(0, 0, 0, 0.06)',
+          strokeDasharray: '3 3',
+        },
+      },
+    },
+  },
+  MuiChartsTooltip: {
+    styleOverrides: {
+      root: {
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        border: '1px solid rgba(0, 0, 0, 0.12)',
+        borderRadius: 4,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        padding: '8px 12px',
+      },
+      table: {
+        '& td': {
+          padding: '2px 8px',
+          fontSize: '0.875rem',
+        },
+      },
+    },
+  },
+  MuiChartsLegend: {
+    styleOverrides: {
+      root: {
+        '& .MuiChartsLegend-series': {
+          fontSize: '0.875rem',
+        },
+      },
+    },
+  },
 };
 
 // Create theme options

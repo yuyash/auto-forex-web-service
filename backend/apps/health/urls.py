@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from django.urls import path
+from typing import List
+
+from django.urls import URLPattern, path
 
 from apps.health.views import HealthView
 
 app_name = "health"
 
-urlpatterns = [
-    path("", HealthView.as_view(), name="health_check"),
+urlpatterns: List[URLPattern] = [
+    path(route="", view=HealthView.as_view(), name="health_check"),
 ]

@@ -9,7 +9,7 @@ from time import perf_counter
 import v20
 from django.utils import timezone
 
-from apps.market.models import OandaAccount, OandaApiHealthStatus
+from apps.market.models import OandaAccounts, OandaApiHealthStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,7 +24,7 @@ class OandaHealthCheckResult:
 class OandaHealthCheckService:
     """Checks OANDA API availability for a given account and persists the result."""
 
-    def __init__(self, account: OandaAccount):
+    def __init__(self, account: OandaAccounts):
         self.account = account
 
     def check(self) -> OandaApiHealthStatus:

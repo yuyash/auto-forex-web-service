@@ -70,7 +70,7 @@ export function useUpdateConfiguration(options?: {
   onError?: (error: Error) => void;
 }): MutationResult<
   StrategyConfig,
-  { id: number; data: StrategyConfigUpdateData }
+  { id: string; data: StrategyConfigUpdateData }
 > {
   const [state, setState] = useState<MutationState<StrategyConfig>>({
     data: null,
@@ -79,7 +79,7 @@ export function useUpdateConfiguration(options?: {
   });
 
   const mutate = useCallback(
-    async (variables: { id: number; data: StrategyConfigUpdateData }) => {
+    async (variables: { id: string; data: StrategyConfigUpdateData }) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         const result = await configurationsApi.update(
@@ -117,7 +117,7 @@ export function useUpdateConfiguration(options?: {
 export function useDeleteConfiguration(options?: {
   onSuccess?: () => void;
   onError?: (error: Error) => void;
-}): MutationResult<void, number> {
+}): MutationResult<void, string> {
   const [state, setState] = useState<MutationState<void>>({
     data: null,
     isLoading: false,
@@ -125,7 +125,7 @@ export function useDeleteConfiguration(options?: {
   });
 
   const mutate = useCallback(
-    async (id: number) => {
+    async (id: string) => {
       try {
         setState({ data: null, isLoading: true, error: null });
         await configurationsApi.delete(id);

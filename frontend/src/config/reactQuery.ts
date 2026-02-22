@@ -44,9 +44,9 @@ export const queryKeys = {
     list: (params?: Record<string, unknown>) =>
       [...queryKeys.configurations.lists(), params] as const,
     details: () => [...queryKeys.configurations.all, 'detail'] as const,
-    detail: (id: number) =>
+    detail: (id: string) =>
       [...queryKeys.configurations.details(), id] as const,
-    tasks: (id: number) =>
+    tasks: (id: string) =>
       [...queryKeys.configurations.detail(id), 'tasks'] as const,
   },
 
@@ -57,10 +57,10 @@ export const queryKeys = {
     list: (params?: Record<string, unknown>) =>
       [...queryKeys.backtestTasks.lists(), params] as const,
     details: () => [...queryKeys.backtestTasks.all, 'detail'] as const,
-    detail: (id: number) => [...queryKeys.backtestTasks.details(), id] as const,
-    executions: (id: number) =>
+    detail: (id: string) => [...queryKeys.backtestTasks.details(), id] as const,
+    executions: (id: string) =>
       [...queryKeys.backtestTasks.detail(id), 'executions'] as const,
-    execution: (taskId: number, executionId: number) =>
+    execution: (taskId: string, executionId: string) =>
       [...queryKeys.backtestTasks.executions(taskId), executionId] as const,
   },
 
@@ -71,10 +71,10 @@ export const queryKeys = {
     list: (params?: Record<string, unknown>) =>
       [...queryKeys.tradingTasks.lists(), params] as const,
     details: () => [...queryKeys.tradingTasks.all, 'detail'] as const,
-    detail: (id: number) => [...queryKeys.tradingTasks.details(), id] as const,
-    executions: (id: number) =>
+    detail: (id: string) => [...queryKeys.tradingTasks.details(), id] as const,
+    executions: (id: string) =>
       [...queryKeys.tradingTasks.detail(id), 'executions'] as const,
-    execution: (taskId: number, executionId: number) =>
+    execution: (taskId: string, executionId: string) =>
       [...queryKeys.tradingTasks.executions(taskId), executionId] as const,
   },
 
@@ -82,11 +82,11 @@ export const queryKeys = {
   executions: {
     all: ['executions'] as const,
     lists: () => [...queryKeys.executions.all, 'list'] as const,
-    list: (taskType: string, taskId: number) =>
+    list: (taskType: string, taskId: string) =>
       [...queryKeys.executions.lists(), taskType, taskId] as const,
     details: () => [...queryKeys.executions.all, 'detail'] as const,
-    detail: (id: number) => [...queryKeys.executions.details(), id] as const,
-    metrics: (id: number) =>
+    detail: (id: string) => [...queryKeys.executions.details(), id] as const,
+    metrics: (id: string) =>
       [...queryKeys.executions.detail(id), 'metrics'] as const,
   },
 
@@ -116,7 +116,7 @@ export const cacheInvalidation = {
   },
 
   // Invalidate specific configuration
-  invalidateConfiguration: (id: number) => {
+  invalidateConfiguration: (id: string) => {
     return queryClient.invalidateQueries({
       queryKey: queryKeys.configurations.detail(id),
     });
@@ -130,7 +130,7 @@ export const cacheInvalidation = {
   },
 
   // Invalidate specific backtest task
-  invalidateBacktestTask: (id: number) => {
+  invalidateBacktestTask: (id: string) => {
     return queryClient.invalidateQueries({
       queryKey: queryKeys.backtestTasks.detail(id),
     });
@@ -144,14 +144,14 @@ export const cacheInvalidation = {
   },
 
   // Invalidate specific trading task
-  invalidateTradingTask: (id: number) => {
+  invalidateTradingTask: (id: string) => {
     return queryClient.invalidateQueries({
       queryKey: queryKeys.tradingTasks.detail(id),
     });
   },
 
   // Invalidate task executions
-  invalidateExecutions: (taskType: string, taskId: number) => {
+  invalidateExecutions: (taskType: string, taskId: string) => {
     return queryClient.invalidateQueries({
       queryKey: queryKeys.executions.list(taskType, taskId),
     });

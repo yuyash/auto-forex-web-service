@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
-import { MetricCard } from '../../tasks/display/MetricCard';
+import { StatCard } from '../../tasks/display/StatCard';
 import { OpenPositionsTable } from './OpenPositionsTable';
 import { RecentTradesLog } from './RecentTradesLog';
 import { type TradingTask } from '../../../types/tradingTask';
@@ -80,7 +80,7 @@ export function LiveTaskTab({ task }: LiveTaskTabProps) {
           Task is not running
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Start the task to view live metrics and positions
+          Start the task to view live stats and positions
         </Typography>
       </Box>
     );
@@ -114,10 +114,10 @@ export function LiveTaskTab({ task }: LiveTaskTabProps) {
         </Button>
       </Box>
 
-      {/* Live Metrics Dashboard */}
+      {/* Live Stats Dashboard */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <MetricCard
+          <StatCard
             title="Current P&L"
             value={`$${parseFloat(liveMetrics.currentPnL).toFixed(2)}`}
             trend={parseFloat(liveMetrics.currentPnL) >= 0 ? 'up' : 'down'}
@@ -127,25 +127,21 @@ export function LiveTaskTab({ task }: LiveTaskTabProps) {
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <MetricCard
+          <StatCard
             title="Open Positions"
             value={liveMetrics.openPositions.toString()}
             color="info"
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <MetricCard
+          <StatCard
             title="Total Trades"
             value={liveMetrics.totalTrades.toString()}
             color="primary"
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <MetricCard
-            title="Uptime"
-            value={liveMetrics.uptime}
-            color="default"
-          />
+          <StatCard title="Uptime" value={liveMetrics.uptime} color="default" />
         </Grid>
       </Grid>
 

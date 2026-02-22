@@ -11,11 +11,12 @@
         "0.0.0.0:8000"
       ],
       "django": true,
-      "justMyCode": true,
+      "justMyCode": false,
       "console": "internalConsole",
       "cwd": "${workspaceFolder}/backend",
       "envFile": "${workspaceFolder}/.env",
       "env": {
+        "DEBUG": "true",
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "DB_HOST": "localhost",
         "REDIS_URL": "redis://localhost:6379/0"

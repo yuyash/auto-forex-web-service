@@ -29,7 +29,7 @@ const ConfigurationFormPage = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Fetch configuration if editing
-  const configId = id ? Number(id) : undefined;
+  const configId = id || undefined;
   const { data: configuration, isLoading: isLoadingConfig } =
     useConfiguration(configId);
 

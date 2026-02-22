@@ -32,20 +32,30 @@ const STATUS_CONFIG: Record<
     color: 'default',
     icon: FiberManualRecord,
   },
+  [TaskStatus.STARTING]: {
+    label: 'Starting',
+    color: 'info',
+    icon: PlayArrow,
+  },
   [TaskStatus.RUNNING]: {
     label: 'Running',
     color: 'primary',
     icon: PlayArrow,
   },
-  [TaskStatus.STOPPED]: {
-    label: 'Stopped',
-    color: 'default',
-    icon: Stop,
-  },
   [TaskStatus.PAUSED]: {
     label: 'Paused',
-    color: 'warning',
+    color: 'info',
     icon: Pause,
+  },
+  [TaskStatus.STOPPING]: {
+    label: 'Stopping',
+    color: 'warning',
+    icon: Stop,
+  },
+  [TaskStatus.STOPPED]: {
+    label: 'Stopped',
+    color: 'warning',
+    icon: Stop,
   },
   [TaskStatus.COMPLETED]: {
     label: 'Completed',
