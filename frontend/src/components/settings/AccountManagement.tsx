@@ -64,7 +64,9 @@ const AccountManagement = () => {
   });
   const [isDefault, setIsDefault] = useState(false);
 
-  const [formErrors, setFormErrors] = useState<Partial<AccountFormData>>({});
+  const [formErrors, setFormErrors] = useState<
+    Partial<Record<keyof AccountFormData, string>>
+  >({});
 
   // Fetch accounts
   const fetchAccounts = useCallback(
@@ -244,7 +246,7 @@ const AccountManagement = () => {
       if (err.details && typeof err.details === 'object') {
         // DRF returns field-level errors like { account_id: ["..."], api_token: ["..."] }
         const details = err.details as Record<string, unknown>;
-        const fieldErrors: Partial<AccountFormData> = {};
+        const fieldErrors: Partial<Record<keyof AccountFormData, string>> = {};
         const messages: string[] = [];
 
         for (const [key, val] of Object.entries(details)) {

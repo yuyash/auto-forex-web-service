@@ -71,7 +71,11 @@ class TestTickSupervisorRunnerExtendedIntegration:
         assert account.pk == live_account.pk
 
     @patch("apps.market.tasks.supervisor.redis_client")
-    def test_ensure_tasks_running(self, mock_redis: Any) -> None:
+    @patch("apps.market.tasks.publish_oanda_ticks.delay")
+    @patch("apps.market.tasks.subscribe_ticks_to_db.delay")
+    def test_ensure_tasks_running(
+        self, mock_sub_delay: Any, mock_pub_delay: Any, mock_redis: Any
+    ) -> None:
         """Test ensuring tasks are running."""
         mock_client = MagicMock()
         mock_client.exists.return_value = False
@@ -84,3 +88,6 @@ class TestTickSupervisorRunnerExtendedIntegration:
             client=mock_client,
             account_pk=1,
         )
+
+        mock_pub_delay.assert_called_once_with(account_id=1)
+        mock_sub_delay.assert_called_once()
