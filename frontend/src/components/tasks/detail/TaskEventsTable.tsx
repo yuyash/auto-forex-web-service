@@ -261,6 +261,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
         allPageSelected={selection.isAllPageSelected(pageRowIds)}
         indeterminate={selection.isIndeterminate(pageRowIds)}
         onToggleAll={handleToggleAll}
+        fillEmptyRows
       />
 
       <TablePagination

@@ -562,6 +562,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         onToggleAll={handleClosedToggleAll}
         defaultOrderBy="entry_time"
         defaultOrder="desc"
+        fillEmptyRows
       />
 
       <TablePagination
@@ -626,6 +627,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         onToggleAll={handleOpenToggleAll}
         defaultOrderBy="entry_time"
         defaultOrder="desc"
+        fillEmptyRows
       />
 
       <TablePagination

@@ -292,6 +292,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
         onToggleAll={handleToggleAll}
         defaultOrderBy="submitted_at"
         defaultOrder="desc"
+        fillEmptyRows
       />
 
       <TablePagination

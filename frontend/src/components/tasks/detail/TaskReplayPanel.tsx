@@ -28,6 +28,7 @@ import {
   TableSortLabel,
   Tooltip,
   Typography,
+  ToggleButton,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import SelectAllIcon from '@mui/icons-material/SelectAll';
@@ -659,6 +660,8 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     );
   }, [pnlOpenPositions, pnlClosedPositions]);
 
+  const [showOpenPosOnly, setShowOpenPosOnly] = useState(false);
+
   const [posPage, setPosPage] = useState(0);
   const [posRowsPerPage, setPosRowsPerPage] = useState(10);
 
@@ -692,7 +695,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   }, []);
 
   const sortedPositions = useMemo(() => {
-    return [...allPositions].sort((a, b) => {
+    const base = showOpenPosOnly
+      ? allPositions.filter((p) => p._status === 'open')
+      : allPositions;
+    return [...base].sort((a, b) => {
       let cmp = 0;
       switch (posOrderBy) {
         case 'entry_time':
@@ -743,7 +749,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       }
       return posOrder === 'asc' ? cmp : -cmp;
     });
-  }, [allPositions, posOrderBy, posOrder, currentPrice, pipSize]);
+  }, [
+    allPositions,
+    showOpenPosOnly,
+    posOrderBy,
+    posOrder,
+    currentPrice,
+    pipSize,
+  ]);
 
   const paginatedPositions = useMemo(
     () =>
@@ -1654,23 +1667,50 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         setPage(targetPage);
       }
 
-      // Scroll chart to show the open trade
+      // Scroll chart to show all related markers (open + close).
+      // Strategy: keep the current zoom level and only pan horizontally.
+      // If the current span is too narrow to contain all markers, zoom out
+      // just enough to fit them with some padding.
       const ts = chartRef.current?.timeScale();
       if (ts) {
         const range = ts.getVisibleRange();
         if (range) {
           const from = Number(range.from);
           const to = Number(range.to);
-          const target = Number(openTrade.timeSec);
-          if (target < from || target > to) {
-            const span = to - from;
-            const half = span / 2;
+          const span = to - from;
+
+          // Compute the bounding range of all related markers
+          const times = relatedTrades.map((t) => Number(t.timeSec));
+          const minTime = Math.min(...times);
+          const maxTime = Math.max(...times);
+          const markerSpan = maxTime - minTime;
+
+          // Add 10% padding on each side so markers aren't at the very edge
+          const padding = Math.max(markerSpan * 0.1, span * 0.05);
+          const paddedMin = minTime - padding;
+          const paddedMax = maxTime + padding;
+          const paddedSpan = paddedMax - paddedMin;
+
+          const allVisible = minTime >= from && maxTime <= to;
+
+          if (!allVisible) {
             programmaticScrollRef.current = true;
             try {
-              ts.setVisibleRange({
-                from: (target - half) as Time,
-                to: (target + half) as Time,
-              });
+              if (paddedSpan <= span) {
+                // Current zoom is wide enough — just pan to centre the markers
+                const centre = (minTime + maxTime) / 2;
+                const half = span / 2;
+                ts.setVisibleRange({
+                  from: (centre - half) as Time,
+                  to: (centre + half) as Time,
+                });
+              } else {
+                // Need to zoom out to fit all markers
+                ts.setVisibleRange({
+                  from: paddedMin as Time,
+                  to: paddedMax as Time,
+                });
+              }
             } catch (e) {
               console.warn(
                 'Failed to set visible range on position select:',
@@ -2218,6 +2258,24 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     </TableRow>
                   );
                 })}
+                {/* Fill empty rows to keep table height stable */}
+                {paginatedTrades.length < rowsPerPage &&
+                  paginatedTrades.length > 0 &&
+                  Array.from({
+                    length: rowsPerPage - paginatedTrades.length,
+                  }).map((_, i) => (
+                    <TableRow key={`trade-empty-${i}`} sx={{ height: 37 }}>
+                      <TableCell
+                        colSpan={8}
+                        sx={{
+                          backgroundColor: 'action.hover',
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          py: 0,
+                        }}
+                      />
+                    </TableRow>
+                  ))}
               </TableBody>
             </Table>
           </TableContainer>
@@ -2268,6 +2326,28 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                 — {selectedPosIds.size} selected
               </Typography>
             )}
+            <Tooltip title="Show open positions only">
+              <ToggleButton
+                size="small"
+                value="openOnly"
+                selected={showOpenPosOnly}
+                onChange={() => {
+                  setShowOpenPosOnly((prev) => !prev);
+                  setPosPage(0);
+                }}
+                sx={{
+                  ml: 1,
+                  px: 1,
+                  py: 0,
+                  height: 24,
+                  fontSize: '0.7rem',
+                  textTransform: 'none',
+                  lineHeight: 1,
+                }}
+              >
+                Open Only
+              </ToggleButton>
+            </Tooltip>
             <Box sx={{ flex: 1 }} />
             <Tooltip title="Copy selected positions">
               <span>
@@ -2643,12 +2723,29 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     </TableRow>
                   );
                 })}
+                {/* Fill empty rows to keep table height stable */}
+                {paginatedPositions.length < posRowsPerPage &&
+                  Array.from({
+                    length: posRowsPerPage - paginatedPositions.length,
+                  }).map((_, i) => (
+                    <TableRow key={`pos-empty-${i}`} sx={{ height: 37 }}>
+                      <TableCell
+                        colSpan={12}
+                        sx={{
+                          backgroundColor: 'action.hover',
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          py: 0,
+                        }}
+                      />
+                    </TableRow>
+                  ))}
               </TableBody>
             </Table>
           </TableContainer>
           <TablePagination
             component="div"
-            count={allPositions.length}
+            count={sortedPositions.length}
             page={posPage}
             onPageChange={(_e, newPage) => setPosPage(newPage)}
             rowsPerPage={posRowsPerPage}

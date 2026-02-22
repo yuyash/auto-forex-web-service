@@ -67,6 +67,10 @@ interface DataTableProps<T> {
   defaultOrderBy?: keyof T | string;
   /** Default sort direction */
   defaultOrder?: Order;
+  /** Fill remaining rows with empty placeholder rows to keep table height stable */
+  fillEmptyRows?: boolean;
+  /** Row height for filler rows (should match data row height) */
+  fillerRowHeight?: number;
 }
 
 type Order = 'asc' | 'desc';
@@ -104,6 +108,8 @@ function DataTable<T extends object>({
   onToggleAll,
   defaultOrderBy,
   defaultOrder,
+  fillEmptyRows = false,
+  fillerRowHeight = 37,
 }: DataTableProps<T>): React.ReactElement {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage);
@@ -516,6 +522,24 @@ function DataTable<T extends object>({
                 );
               })
             )}
+            {fillEmptyRows &&
+              paginatedData.length > 0 &&
+              paginatedData.length < rowsPerPage &&
+              Array.from({
+                length: rowsPerPage - paginatedData.length,
+              }).map((_, i) => (
+                <TableRow key={`filler-${i}`} sx={{ height: fillerRowHeight }}>
+                  <TableCell
+                    colSpan={columns.length + (selectable ? 1 : 0)}
+                    sx={{
+                      backgroundColor: 'action.hover',
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      py: 0,
+                    }}
+                  />
+                </TableRow>
+              ))}
           </TableBody>
         </Table>
       </TableContainer>

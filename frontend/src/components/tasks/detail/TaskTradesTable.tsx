@@ -224,6 +224,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         onToggleAll={handleToggleAll}
         defaultOrderBy="timestamp"
         defaultOrder="desc"
+        fillEmptyRows
       />
 
       <TablePagination
