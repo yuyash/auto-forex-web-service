@@ -4,8 +4,8 @@
  * candlestick chart so they share the exact same X-axis.
  *
  * Metrics use two additional price scales:
- *   • 'metrics-right': Margin Ratio (%)
- *   • 'left':          Current ATR (pips) + Lock Threshold
+ *   • 'left':          Margin Ratio (%)
+ *   • 'metrics-right': Current ATR (pips) + Lock Threshold
  *
  * The candlestick series lives on the default 'right' price scale,
  * so there is no conflict.
@@ -54,34 +54,39 @@ function attachSeries(chart: IChartApi) {
     color: '#3b82f6',
     lineWidth: 2,
     title: 'Margin Ratio',
-    priceScaleId: 'metrics-right',
-    priceFormat: { type: 'percent' as const, minMove: 0.01 },
+    priceScaleId: 'left',
+    priceFormat: {
+      type: 'custom' as const,
+      minMove: 0.01,
+      formatter: (price: number) => `${price.toFixed(2)}%`,
+    },
   });
   const atr = chart.addSeries(LineSeries, {
     color: '#8b5cf6',
     lineWidth: 2,
     title: 'Current ATR',
-    priceScaleId: 'left',
+    priceScaleId: 'metrics-right',
   });
   const vt = chart.addSeries(LineSeries, {
     color: '#f97316',
     lineWidth: 1,
     lineStyle: 1,
     title: 'Lock Threshold',
-    priceScaleId: 'left',
+    priceScaleId: 'metrics-right',
     crosshairMarkerVisible: false,
     lastValueVisible: true,
     priceLineVisible: false,
   });
 
   // Configure scales now that series exist
-  chart.priceScale('metrics-right').applyOptions({
+  chart.priceScale('left').applyOptions({
     visible: true,
     borderColor: '#cbd5e1',
     minimumWidth: 60,
+    ticksVisible: true,
     scaleMargins: { top: 0.7, bottom: 0.02 },
   });
-  chart.priceScale('left').applyOptions({
+  chart.priceScale('metrics-right').applyOptions({
     visible: true,
     borderColor: '#cbd5e1',
     minimumWidth: 60,

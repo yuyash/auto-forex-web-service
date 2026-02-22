@@ -231,6 +231,7 @@ class OrderService:
                 direction=None,
                 units=close_units_int,
                 oanda_order=oanda_order,
+                requested_price=override_price,
                 tick_timestamp=tick_timestamp,
                 oanda_trade_id=position.oanda_trade_id,
             )
@@ -300,13 +301,37 @@ class OrderService:
             return position, realized_delta
 
         except Exception as e:
+            error_msg = f"Failed to close position: {str(e)}"
             logger.error(
                 "Failed to close position %s: %s",
                 position.id,
                 str(e),
                 exc_info=True,
             )
-            raise OrderServiceError(f"Failed to close position: {str(e)}") from e
+            # Record the rejected order so the failure is visible in the UI
+            close_units = units if units is not None else abs(position.units)
+            try:
+                rejected_order = Order.objects.create(
+                    task_type=self.task_type,
+                    task_id=self.task.id,
+                    instrument=position.instrument,
+                    order_type=OrderType.MARKET,
+                    direction=None,
+                    units=close_units,
+                    requested_price=override_price,
+                    oanda_trade_id=position.oanda_trade_id,
+                    status=OrderStatus.PENDING,
+                    is_dry_run=self.dry_run,
+                )
+                rejected_order.mark_rejected(error_msg)
+                rejected_order.save()
+            except Exception:
+                logger.warning(
+                    "Failed to persist rejected order record for closing position %s",
+                    position.id,
+                    exc_info=True,
+                )
+            raise OrderServiceError(error_msg) from e
 
     def _execute_market_order(
         self,
@@ -358,6 +383,7 @@ class OrderService:
                 direction=direction,
                 units=units,
                 oanda_order=oanda_order,
+                requested_price=override_price,
                 stop_loss=stop_loss,
                 tick_timestamp=tick_timestamp,
                 oanda_trade_id=getattr(oanda_order, "trade_id", None),
@@ -390,6 +416,7 @@ class OrderService:
             return position
 
         except Exception as e:
+            error_msg = f"Failed to execute market order: {str(e)}"
             logger.error(
                 "Failed to execute market order: %s %s %s - %s",
                 direction,
@@ -398,7 +425,31 @@ class OrderService:
                 str(e),
                 exc_info=True,
             )
-            raise OrderServiceError(f"Failed to execute market order: {str(e)}") from e
+            # Record the rejected order so the failure is visible in the UI
+            try:
+                rejected_order = Order.objects.create(
+                    task_type=self.task_type,
+                    task_id=self.task.id,
+                    instrument=instrument,
+                    order_type=OrderType.MARKET,
+                    direction=direction,
+                    units=units,
+                    requested_price=override_price,
+                    stop_loss=stop_loss,
+                    status=OrderStatus.PENDING,
+                    is_dry_run=self.dry_run,
+                )
+                rejected_order.mark_rejected(error_msg)
+                rejected_order.save()
+            except Exception:
+                logger.warning(
+                    "Failed to persist rejected order record for %s %s %s",
+                    direction,
+                    abs(units),
+                    instrument,
+                    exc_info=True,
+                )
+            raise OrderServiceError(error_msg) from e
 
     def _create_order_record(
         self,

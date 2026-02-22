@@ -63,6 +63,10 @@ interface DataTableProps<T> {
   indeterminate?: boolean;
   /** Callback when the header checkbox is toggled */
   onToggleAll?: () => void;
+  /** Default column to sort by */
+  defaultOrderBy?: keyof T | string;
+  /** Default sort direction */
+  defaultOrder?: Order;
 }
 
 type Order = 'asc' | 'desc';
@@ -98,11 +102,15 @@ function DataTable<T extends object>({
   allPageSelected = false,
   indeterminate = false,
   onToggleAll,
+  defaultOrderBy,
+  defaultOrder,
 }: DataTableProps<T>): React.ReactElement {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage);
-  const [orderBy, setOrderBy] = useState<keyof T | string>('');
-  const [order, setOrder] = useState<Order>('asc');
+  const [orderBy, setOrderBy] = useState<keyof T | string>(
+    defaultOrderBy ?? ''
+  );
+  const [order, setOrder] = useState<Order>(defaultOrder ?? 'asc');
   const [filters, setFilters] = useState<Record<string, string>>({});
 
   // Column widths state for resizing

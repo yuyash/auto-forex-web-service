@@ -298,6 +298,24 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       render: (row) => String(Math.abs(row.units)),
     },
     {
+      id: 'layer_index',
+      label: 'Layer',
+      width: 70,
+      minWidth: 50,
+      align: 'right',
+      render: (row) =>
+        row.layer_index != null ? String(row.layer_index) : '-',
+    },
+    {
+      id: 'retracement_count',
+      label: 'Retracement',
+      width: 100,
+      minWidth: 70,
+      align: 'right',
+      render: (row) =>
+        row.retracement_count != null ? String(row.retracement_count) : '-',
+    },
+    {
       id: 'entry_price',
       label: 'Open Price',
       width: 110,
@@ -403,6 +421,24 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       minWidth: 70,
       align: 'right',
       render: (row) => String(Math.abs(row.units)),
+    },
+    {
+      id: 'layer_index',
+      label: 'Layer',
+      width: 70,
+      minWidth: 50,
+      align: 'right',
+      render: (row) =>
+        row.layer_index != null ? String(row.layer_index) : '-',
+    },
+    {
+      id: 'retracement_count',
+      label: 'Retracement',
+      width: 100,
+      minWidth: 70,
+      align: 'right',
+      render: (row) =>
+        row.retracement_count != null ? String(row.retracement_count) : '-',
     },
     {
       id: 'entry_price',
@@ -524,6 +560,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         allPageSelected={closedSelection.isAllPageSelected(closedPageRowIds)}
         indeterminate={closedSelection.isIndeterminate(closedPageRowIds)}
         onToggleAll={handleClosedToggleAll}
+        defaultOrderBy="entry_time"
+        defaultOrder="desc"
       />
 
       <TablePagination
@@ -586,6 +624,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         allPageSelected={openSelection.isAllPageSelected(openPageRowIds)}
         indeterminate={openSelection.isIndeterminate(openPageRowIds)}
         onToggleAll={handleOpenToggleAll}
+        defaultOrderBy="entry_time"
+        defaultOrder="desc"
       />
 
       <TablePagination

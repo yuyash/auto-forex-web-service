@@ -222,6 +222,8 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         allPageSelected={selection.isAllPageSelected(pageRowIds)}
         indeterminate={selection.isIndeterminate(pageRowIds)}
         onToggleAll={handleToggleAll}
+        defaultOrderBy="timestamp"
+        defaultOrder="desc"
       />
 
       <TablePagination

@@ -6,6 +6,7 @@ used by both BacktestTaskViewSet and TradingTaskViewSet.
 
 from __future__ import annotations
 
+from django.db import models
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.decorators import action
 from rest_framework.request import Request
@@ -414,9 +415,7 @@ class TaskSubResourceMixin:
         from apps.trading.serializers.events import OrderSerializer
 
         task = self.get_object()  # type: ignore[attr-defined]
-        celery_task_id = request.query_params.get("celery_task_id") or getattr(
-            task, "celery_task_id", None
-        )
+        celery_task_id = request.query_params.get("celery_task_id")
         queryset = Order.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
@@ -424,6 +423,14 @@ class TaskSubResourceMixin:
 
         if celery_task_id:
             queryset = queryset.filter(celery_task_id=celery_task_id)
+        else:
+            # Include orders from the current execution run as well as
+            # orders that were created without a celery_task_id.
+            task_celery_id = getattr(task, "celery_task_id", None)
+            if task_celery_id:
+                queryset = queryset.filter(
+                    models.Q(celery_task_id=task_celery_id) | models.Q(celery_task_id__isnull=True)
+                )
 
         status_param = (request.query_params.get("status") or "").lower()
         if status_param:

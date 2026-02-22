@@ -41,11 +41,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
 
   const handleToggleAll = useCallback(() => {
     if (selection.isAllPageSelected(pageRowIds)) {
-      for (const id of pageRowIds) {
-        if (selection.selectedRowIds.has(id)) {
-          selection.toggleRowSelection(id);
-        }
-      }
+      selection.deselectAllOnPage(pageRowIds);
     } else {
       selection.selectAllOnPage(pageRowIds);
     }
@@ -120,7 +116,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
   const columns: Column<TaskOrder>[] = [
     {
       id: 'submitted_at',
-      label: 'Submitted',
+      label: 'Timestamp',
       width: 180,
       minWidth: 140,
       render: (row) =>
@@ -267,7 +263,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
           alignItems: 'center',
         }}
       >
-        <Typography variant="h6">Orders</Typography>
+        <Typography variant="h6">Orders ({totalCount})</Typography>
         <TableSelectionToolbar
           selectedCount={selection.selectedRowIds.size}
           onCopy={handleCopy}
@@ -294,6 +290,8 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
         allPageSelected={selection.isAllPageSelected(pageRowIds)}
         indeterminate={selection.isIndeterminate(pageRowIds)}
         onToggleAll={handleToggleAll}
+        defaultOrderBy="submitted_at"
+        defaultOrder="desc"
       />
 
       <TablePagination

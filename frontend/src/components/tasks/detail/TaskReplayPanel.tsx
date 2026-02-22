@@ -343,12 +343,16 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     | 'price'
     | 'execution_method';
   const [orderBy, setOrderBy] = useState<SortableKey>('timestamp');
-  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
+  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // Row selection for copy
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
+
+  // Track whether the selection came from a chart click (to auto-navigate table)
+  const chartClickedRef = useRef(false);
+  const selectedRowRef = useRef<HTMLTableRowElement | null>(null);
 
   // Chart height state for draggable separator
   const MIN_CHART_HEIGHT = 200;
@@ -583,6 +587,36 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     setPage(0);
   }, [orderBy, order]);
 
+  // When a chart marker is clicked, navigate the table to the page containing
+  // the selected trade and scroll the row into view.
+  const pendingScrollRef = useRef(false);
+
+  useEffect(() => {
+    if (!chartClickedRef.current || !selectedTradeId) return;
+    chartClickedRef.current = false;
+
+    const idx = sortedTrades.findIndex((t) => t.id === selectedTradeId);
+    if (idx === -1) return;
+
+    const targetPage = Math.floor(idx / rowsPerPage);
+    pendingScrollRef.current = true;
+    setPage(targetPage);
+  }, [selectedTradeId, sortedTrades, rowsPerPage]);
+
+  // After the table re-renders with the selected row on the correct page,
+  // scroll to it (only when triggered by a chart click).
+  useEffect(() => {
+    if (!pendingScrollRef.current) return;
+    pendingScrollRef.current = false;
+    const raf = requestAnimationFrame(() => {
+      selectedRowRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [page, selectedTradeId]);
+
   const granularityOptions = useMemo(() => {
     if (granularities.length > 0) {
       return granularities.filter((g) => ALLOWED_VALUES.has(g.value));
@@ -598,6 +632,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   }, [granularityOptions, startTime, endTime]);
 
   const [granularity, setGranularity] = useState<string>('H1');
+  // Stores the visible time range before a granularity change so we can
+  // restore it after new candles load, preventing the chart from jumping.
+  const savedVisibleRangeRef = useRef<{ from: number; to: number } | null>(
+    null
+  );
   const pnlCurrency = instrument?.includes('_')
     ? instrument.split('_')[1]
     : 'N/A';
@@ -878,10 +917,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         scaleMargins: { top: 0.02, bottom: 0.45 },
       },
       leftPriceScale: {
-        borderColor: 'transparent',
+        borderColor: '#cbd5e1',
         visible: true,
         minimumWidth: 80,
-        ticksVisible: false,
+        ticksVisible: true,
       },
       timeScale: {
         borderColor: '#cbd5e1',
@@ -929,6 +968,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         const currDiff = Math.abs(Number(curr.timeSec) - t);
         return currDiff < prevDiff ? curr : prev;
       }, tradesRef.current[0]);
+      chartClickedRef.current = true;
       setSelectedTradeId(nearest.id);
     });
 
@@ -1000,6 +1040,25 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         console.warn('Failed to fit chart content:', e);
       }
       hasInitialFit.current = true;
+    }
+
+    // After a granularity change, restore the previously visible time range
+    // so the chart doesn't jump to the latest candles.
+    if (savedVisibleRangeRef.current && chartRef.current) {
+      const { from, to } = savedVisibleRangeRef.current;
+      savedVisibleRangeRef.current = null;
+      programmaticScrollRef.current = true;
+      try {
+        chartRef.current.timeScale().setVisibleRange({
+          from: from as import('lightweight-charts').Time,
+          to: to as import('lightweight-charts').Time,
+        });
+      } catch (e) {
+        console.warn(
+          'Failed to restore visible range after granularity change:',
+          e
+        );
+      }
     }
   }, [candles, programmaticScrollRef]);
 
@@ -1136,6 +1195,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   }, [trades, selectedTradeId, programmaticScrollRef]);
 
   const handleGranularityChange = (e: SelectChangeEvent) => {
+    // Save the current visible time range so we can restore it after new
+    // candles load, keeping the user's view position stable.
+    const ts = chartRef.current?.timeScale();
+    if (ts) {
+      const range = ts.getVisibleRange();
+      if (range) {
+        savedVisibleRangeRef.current = {
+          from: Number(range.from),
+          to: Number(range.to),
+        };
+      }
+    }
     setGranularity(String(e.target.value));
   };
 
@@ -1311,7 +1382,12 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           <Button
             size="small"
             variant={autoFollow ? 'contained' : 'outlined'}
-            onClick={() => setAutoFollow(true)}
+            onClick={() => {
+              setAutoFollow(true);
+              setSelectedTradeId(null);
+              setSelectedRowIds(new Set());
+              setPage(0);
+            }}
             disabled={autoFollow}
             sx={{
               fontSize: '0.75rem',
@@ -1545,10 +1621,22 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               return (
                 <TableRow
                   key={row.id}
+                  ref={selected ? selectedRowRef : undefined}
                   hover
                   onClick={() => onRowSelect(row)}
                   selected={selected}
-                  sx={{ cursor: 'pointer' }}
+                  sx={{
+                    cursor: 'pointer',
+                    ...(selected && {
+                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                      '&.Mui-selected': {
+                        backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                      },
+                      '&.Mui-selected:hover': {
+                        backgroundColor: 'rgba(245, 158, 11, 0.25)',
+                      },
+                    }),
+                  }}
                 >
                   <TableCell padding="checkbox">
                     <Checkbox
