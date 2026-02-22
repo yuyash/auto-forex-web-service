@@ -1120,7 +1120,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         // transient empty response (e.g. market API hiccup during polling)
         // does not wipe out previously loaded candles and destroy the chart.
         if (candlePoints.length > 0) {
-          setCandles(candlePoints);
+          setCandles((prev) => {
+            // Skip update if candle count and last candle timestamp are identical
+            if (
+              prev.length === candlePoints.length &&
+              prev.length > 0 &&
+              Number(prev[prev.length - 1].time) ===
+                Number(candlePoints[candlePoints.length - 1].time)
+            ) {
+              return prev;
+            }
+            return candlePoints;
+          });
         }
         candlesFetched = true;
       } catch (candleError) {
@@ -1196,7 +1207,17 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
           );
 
-        setTrades(tradeRows);
+        setTrades((prev) => {
+          // Skip update if trade count and last trade ID are identical
+          if (
+            prev.length === tradeRows.length &&
+            prev.length > 0 &&
+            prev[prev.length - 1].id === tradeRows[tradeRows.length - 1].id
+          ) {
+            return prev;
+          }
+          return tradeRows;
+        });
       } catch (tradeError) {
         // On the very first load when candles also failed, propagate.
         // Otherwise keep existing trades and log the warning.

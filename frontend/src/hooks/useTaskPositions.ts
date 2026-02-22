@@ -69,6 +69,10 @@ export const useTaskPositions = ({
   const [error, setError] = useState<Error | null>(null);
 
   const fetchPositions = useCallback(async () => {
+    if (!taskId) {
+      setIsLoading(false);
+      return;
+    }
     try {
       setIsLoading(true);
       setError(null);

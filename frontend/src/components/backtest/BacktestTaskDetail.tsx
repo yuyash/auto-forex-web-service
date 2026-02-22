@@ -40,47 +40,7 @@ import { useOverviewPnl } from '../../hooks/useOverviewPnl';
 import { TaskStatus, TaskType } from '../../types/common';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { useDeleteBacktestTask } from '../../hooks/useBacktestTaskMutations';
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
-  const isActive = value === index;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={!isActive}
-      id={`task-tabpanel-${index}`}
-      aria-labelledby={`task-tab-${index}`}
-      style={{
-        display: isActive ? 'flex' : 'none',
-        flexDirection: 'column',
-        flex: 1,
-        minHeight: 0,
-        overflow: 'auto',
-      }}
-      {...other}
-    >
-      <Box
-        sx={{
-          pt: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          flex: 1,
-          minHeight: 0,
-        }}
-      >
-        {children}
-      </Box>
-    </div>
-  );
-}
+import { LazyTabPanel } from '../common/LazyTabPanel';
 
 function a11yProps(index: number) {
   return {
@@ -128,7 +88,9 @@ export const BacktestTaskDetail: React.FC = () => {
     refetch,
   } = useBacktestTask(taskId || undefined);
 
-  const overviewSummary = useOverviewPnl(taskId, TaskType.BACKTEST);
+  const overviewSummary = useOverviewPnl(taskId, TaskType.BACKTEST, {
+    totalTrades: task?.latest_execution?.total_trades,
+  });
 
   // Use HTTP polling for task status updates
   const {
@@ -369,7 +331,7 @@ export const BacktestTaskDetail: React.FC = () => {
         </Tabs>
 
         {/* Overview Tab */}
-        <TabPanel value={currentTabValue} index={0}>
+        <LazyTabPanel value={currentTabValue} index={0}>
           <Box sx={{ p: 3 }}>
             <Grid container spacing={3}>
               <Grid size={{ xs: 12, md: 6 }}>
@@ -595,10 +557,10 @@ export const BacktestTaskDetail: React.FC = () => {
               )}
             </Grid>
           </Box>
-        </TabPanel>
+        </LazyTabPanel>
 
         {/* Trend Tab */}
-        <TabPanel value={currentTabValue} index={1}>
+        <LazyTabPanel value={currentTabValue} index={1}>
           <TaskReplayPanel
             taskId={taskId}
             taskType={TaskType.BACKTEST}
@@ -615,10 +577,10 @@ export const BacktestTaskDetail: React.FC = () => {
             pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
             configId={task.config_id}
           />
-        </TabPanel>
+        </LazyTabPanel>
 
         {/* Positions Tab */}
-        <TabPanel value={currentTabValue} index={2}>
+        <LazyTabPanel value={currentTabValue} index={2}>
           <TaskPositionsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
@@ -634,10 +596,10 @@ export const BacktestTaskDetail: React.FC = () => {
             }
             pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
           />
-        </TabPanel>
+        </LazyTabPanel>
 
         {/* Trades Tab */}
-        <TabPanel value={currentTabValue} index={3}>
+        <LazyTabPanel value={currentTabValue} index={3}>
           <TaskTradesTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
@@ -646,10 +608,10 @@ export const BacktestTaskDetail: React.FC = () => {
             }
             pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
           />
-        </TabPanel>
+        </LazyTabPanel>
 
         {/* Orders Tab */}
-        <TabPanel value={currentTabValue} index={4}>
+        <LazyTabPanel value={currentTabValue} index={4}>
           <TaskOrdersTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
@@ -657,10 +619,10 @@ export const BacktestTaskDetail: React.FC = () => {
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
           />
-        </TabPanel>
+        </LazyTabPanel>
 
         {/* Events Tab */}
-        <TabPanel value={currentTabValue} index={5}>
+        <LazyTabPanel value={currentTabValue} index={5}>
           <TaskEventsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
@@ -668,10 +630,10 @@ export const BacktestTaskDetail: React.FC = () => {
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
           />
-        </TabPanel>
+        </LazyTabPanel>
 
         {/* Logs Tab */}
-        <TabPanel value={currentTabValue} index={6}>
+        <LazyTabPanel value={currentTabValue} index={6}>
           <TaskLogsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
@@ -680,7 +642,7 @@ export const BacktestTaskDetail: React.FC = () => {
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
           />
-        </TabPanel>
+        </LazyTabPanel>
       </Paper>
 
       <DeleteTaskDialog

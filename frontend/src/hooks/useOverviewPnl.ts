@@ -20,27 +20,52 @@ interface OverviewPnl {
   totalTrades: number;
 }
 
+interface UseOverviewPnlOptions {
+  /** Pre-fetched closed positions — when provided, skips internal fetch */
+  closedPositions?: TaskPosition[];
+  /** Pre-fetched open positions — when provided, skips internal fetch */
+  openPositions?: TaskPosition[];
+  /** Override trade count instead of fetching all trades */
+  totalTrades?: number;
+}
+
 export function useOverviewPnl(
   taskId: string,
-  taskType: TaskType
+  taskType: TaskType,
+  options?: UseOverviewPnlOptions
 ): OverviewPnl {
-  const [tradeCount, setTradeCount] = useState<number | null>(null);
+  const externalClosed = options?.closedPositions;
+  const externalOpen = options?.openPositions;
+  const externalTradeCount = options?.totalTrades;
 
-  const { positions: closedPositions } = useTaskPositions({
-    taskId,
+  const skipInternalClosed = externalClosed !== undefined;
+  const skipInternalOpen = externalOpen !== undefined;
+
+  const [tradeCount, setTradeCount] = useState<number | null>(
+    externalTradeCount ?? null
+  );
+
+  // Only fetch positions internally when not provided externally.
+  // When skipped, pass empty taskId so useTaskPositions bails out early.
+  const { positions: internalClosed } = useTaskPositions({
+    taskId: skipInternalClosed ? '' : taskId,
     taskType,
     status: 'closed',
     pageSize: 1000,
   });
 
-  const { positions: openPositions } = useTaskPositions({
-    taskId,
+  const { positions: internalOpen } = useTaskPositions({
+    taskId: skipInternalOpen ? '' : taskId,
     taskType,
     status: 'open',
     pageSize: 1000,
   });
 
+  const closedPositions = externalClosed ?? internalClosed;
+  const openPositions = externalOpen ?? internalOpen;
+
   useEffect(() => {
+    if (externalTradeCount !== undefined) return;
     if (!taskId) return;
 
     let cancelled = false;
@@ -56,7 +81,10 @@ export function useOverviewPnl(
     return () => {
       cancelled = true;
     };
-  }, [taskId, taskType]);
+  }, [taskId, taskType, externalTradeCount]);
+
+  // Derive the effective trade count: prefer external, then fetched, then 0
+  const effectiveTradeCount = externalTradeCount ?? tradeCount ?? 0;
 
   return useMemo(() => {
     const realizedPnl = closedPositions.reduce(
@@ -79,12 +107,12 @@ export function useOverviewPnl(
       0
     );
 
-    const totalTrades = tradeCount ?? 0;
+    const totalTrades = effectiveTradeCount;
 
     return {
       realizedPnl: Number.isFinite(realizedPnl) ? realizedPnl : 0,
       unrealizedPnl: Number.isFinite(unrealizedRaw) ? unrealizedRaw : 0,
       totalTrades,
     };
-  }, [closedPositions, openPositions, tradeCount]);
+  }, [closedPositions, openPositions, effectiveTradeCount]);
 }

@@ -77,10 +77,6 @@ class RedisTickDataSource(TickDataSource):
         self.pubsub = None
 
     def __iter__(self) -> Iterator[list[Tick]]:
-        """Iterate over batches of ticks from Redis.
-
-        Yields:
-            Batches of Tick objects"""
         # Initialize Redis connection FIRST before triggering publisher
         self.client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
         self.pubsub = self.client.pubsub(ignore_subscribe_messages=True)

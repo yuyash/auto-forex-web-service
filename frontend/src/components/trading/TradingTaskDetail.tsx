@@ -42,47 +42,7 @@ import { TaskStatus, TaskType } from '../../types/common';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { useDeleteTradingTask } from '../../hooks/useTradingTaskMutations';
 import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
-  const isActive = value === index;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={!isActive}
-      id={`task-tabpanel-${index}`}
-      aria-labelledby={`task-tab-${index}`}
-      style={{
-        display: isActive ? 'flex' : 'none',
-        flexDirection: 'column',
-        flex: 1,
-        minHeight: 0,
-        overflow: 'auto',
-      }}
-      {...other}
-    >
-      <Box
-        sx={{
-          pt: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          flex: 1,
-          minHeight: 0,
-        }}
-      >
-        {children}
-      </Box>
-    </div>
-  );
-}
+import { LazyTabPanel } from '../common/LazyTabPanel';
 
 function a11yProps(index: number) {
   return {
@@ -134,7 +94,9 @@ export const TradingTaskDetail: React.FC = () => {
   // Use polled current_tick when available (fresher data for running tasks)
   const currentTick = polledTask?.current_tick ?? task?.current_tick;
 
-  const overviewSummary = useOverviewPnl(taskId, TaskType.TRADING);
+  const overviewSummary = useOverviewPnl(taskId, TaskType.TRADING, {
+    totalTrades: task?.latest_execution?.total_trades,
+  });
 
   // Derive tab value from URL parameter (use this for rendering)
   const currentTabValue =
@@ -316,7 +278,7 @@ export const TradingTaskDetail: React.FC = () => {
         </Tabs>
 
         {/* Overview Tab */}
-        <TabPanel value={currentTabValue} index={0}>
+        <LazyTabPanel value={currentTabValue} index={0}>
           <Box sx={{ p: 3 }}>
             <Grid container spacing={3}>
               <Grid size={{ xs: 12, md: 6 }}>
@@ -505,10 +467,10 @@ export const TradingTaskDetail: React.FC = () => {
               )}
             </Grid>
           </Box>
-        </TabPanel>
+        </LazyTabPanel>
 
         {/* Positions Tab */}
-        <TabPanel value={currentTabValue} index={1}>
+        <LazyTabPanel value={currentTabValue} index={1}>
           <TaskPositionsTable
             taskId={taskId}
             taskType={TaskType.TRADING}
@@ -518,20 +480,20 @@ export const TradingTaskDetail: React.FC = () => {
             }
             pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
           />
-        </TabPanel>
+        </LazyTabPanel>
 
         {/* Trades Tab */}
-        <TabPanel value={currentTabValue} index={2}>
+        <LazyTabPanel value={currentTabValue} index={2}>
           <TaskTradesTable
             taskId={taskId}
             taskType={TaskType.TRADING}
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
             pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
           />
-        </TabPanel>
+        </LazyTabPanel>
 
         {/* Replay Tab */}
-        <TabPanel value={currentTabValue} index={3}>
+        <LazyTabPanel value={currentTabValue} index={3}>
           <TaskReplayPanel
             taskId={taskId}
             taskType={TaskType.TRADING}
@@ -542,35 +504,35 @@ export const TradingTaskDetail: React.FC = () => {
             pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
             configId={task.config_id}
           />
-        </TabPanel>
+        </LazyTabPanel>
 
         {/* Events Tab */}
-        <TabPanel value={currentTabValue} index={4}>
+        <LazyTabPanel value={currentTabValue} index={4}>
           <TaskEventsTable
             taskId={taskId}
             taskType={TaskType.TRADING}
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
           />
-        </TabPanel>
+        </LazyTabPanel>
 
         {/* Logs Tab */}
-        <TabPanel value={currentTabValue} index={5}>
+        <LazyTabPanel value={currentTabValue} index={5}>
           <TaskLogsTable
             taskId={taskId}
             taskType={TaskType.TRADING}
             executionId={task.celery_task_id || undefined}
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
           />
-        </TabPanel>
+        </LazyTabPanel>
 
         {/* Orders Tab */}
-        <TabPanel value={currentTabValue} index={6}>
+        <LazyTabPanel value={currentTabValue} index={6}>
           <TaskOrdersTable
             taskId={taskId}
             taskType={TaskType.TRADING}
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
           />
-        </TabPanel>
+        </LazyTabPanel>
       </Paper>
 
       <DeleteTaskDialog

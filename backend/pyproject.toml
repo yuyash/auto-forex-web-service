@@ -144,6 +144,9 @@ omit = [
     "manage.py",
     "*/asgi.py",
     "*/wsgi.py",
+    "*/management/commands/*",
+    "config/settings_test.py",
+    "config/celery.py",
 ]
 branch = true
 parallel = true
@@ -162,6 +165,7 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
+    "pass  # nosec",
 ]
 
 [tool.coverage.html]
@@ -199,6 +203,11 @@ dev = [
     "pytest-xdist>=3.8.0",
     "types-pyjwt>=1.7.1",
 ]
+
+[tool.ty.src]
+# Exclude test files from type checking — tests use MagicMock/factory-boy
+# patterns that produce false-positive type errors.
+exclude = ["tests/"]
 
 [tool.pyright]
 pythonVersion = "3.13"
