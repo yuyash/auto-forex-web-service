@@ -6,7 +6,7 @@ used by both BacktestTaskViewSet and TradingTaskViewSet.
 
 from __future__ import annotations
 
-from django.db import models
+from django.utils.dateparse import parse_datetime
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.decorators import action
 from rest_framework.request import Request
@@ -26,6 +26,21 @@ _PAGINATION_PARAMS = [
         description="Number of results per page (default: 100, max: 1000)",
     ),
 ]
+
+_SINCE_PARAM = OpenApiParameter(
+    name="since",
+    type=str,
+    required=False,
+    description="ISO-8601 timestamp for incremental fetching – only return records updated after this time.",
+)
+
+
+def _parse_since(request: Request):
+    """Return a datetime from the ``since`` query-param, or *None*."""
+    raw = request.query_params.get("since")
+    if raw:
+        return parse_datetime(raw)
+    return None
 
 
 def _task_log_serializer():
@@ -56,6 +71,18 @@ def _order_serializer():
     from apps.trading.serializers.events import OrderSerializer
 
     return OrderSerializer
+
+
+def _pnl_summary_serializer():
+    from rest_framework import serializers
+
+    class PnlSummarySerializer(serializers.Serializer):
+        realized_pnl = serializers.CharField()
+        unrealized_pnl = serializers.CharField()
+        total_trades = serializers.IntegerField()
+        open_position_count = serializers.IntegerField()
+
+    return PnlSummarySerializer
 
 
 class TaskSubResourceMixin:
@@ -383,9 +410,12 @@ class TaskSubResourceMixin:
         serializer = PositionSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
+    # ------------------------------------------------------------------
+    # orders (with incremental fetching via `since`)
+    # ------------------------------------------------------------------
     @extend_schema(
         summary="Get task orders",
-        description="Get task orders with pagination and filtering.",
+        description="Get task orders with pagination and filtering. Supports incremental fetching via `since`.",
         parameters=[
             OpenApiParameter(
                 name="status",
@@ -411,6 +441,7 @@ class TaskSubResourceMixin:
                 required=False,
                 description="Filter by celery task ID",
             ),
+            _SINCE_PARAM,
             *_PAGINATION_PARAMS,
         ],
         responses={200: _order_serializer()(many=True)},
@@ -427,16 +458,10 @@ class TaskSubResourceMixin:
             task_id=task.pk,
         ).order_by("-submitted_at")
 
-        if celery_task_id:
-            queryset = queryset.filter(celery_task_id=celery_task_id)
-        else:
-            # Include orders from the current execution run as well as
-            # orders that were created without a celery_task_id.
-            task_celery_id = getattr(task, "celery_task_id", None)
-            if task_celery_id:
-                queryset = queryset.filter(
-                    models.Q(celery_task_id=task_celery_id) | models.Q(celery_task_id__isnull=True)
-                )
+        # Filter by celery execution ID: use explicit param, fall back to task's current ID.
+        effective_celery_id = celery_task_id or getattr(task, "celery_task_id", None)
+        if effective_celery_id:
+            queryset = queryset.filter(celery_task_id=effective_celery_id)
 
         status_param = (request.query_params.get("status") or "").lower()
         if status_param:
@@ -450,7 +475,58 @@ class TaskSubResourceMixin:
         if direction:
             queryset = queryset.filter(direction=direction)
 
+        since = _parse_since(request)
+        if since:
+            queryset = queryset.filter(updated_at__gt=since)
+
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = OrderSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
+
+    # ------------------------------------------------------------------
+    # pnl_summary
+    # ------------------------------------------------------------------
+    @extend_schema(
+        summary="Get task PnL summary",
+        description=(
+            "Returns aggregated PnL for the task. "
+            "Realized PnL is computed from closed positions in the database. "
+            "Unrealized PnL is the sum of open positions' unrealized_pnl, "
+            "which is updated each tick batch by the executor. "
+            "Total trade count is included so the frontend does not need to "
+            "fetch all trades just to count them."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="celery_task_id",
+                type=str,
+                required=False,
+                description="Filter by celery task ID",
+            ),
+        ],
+        responses={200: _pnl_summary_serializer()()},
+    )
+    @action(detail=True, methods=["get"], url_path="pnl-summary")
+    def pnl_summary(self, request: Request, pk: str | None = None) -> Response:
+        from apps.trading.services.pnl import compute_pnl_summary
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        celery_task_id = request.query_params.get("celery_task_id") or getattr(
+            task, "celery_task_id", None
+        )
+
+        summary = compute_pnl_summary(
+            task_type=self.task_type_label,
+            task_id=str(task.pk),
+            celery_task_id=celery_task_id,
+        )
+
+        return Response(
+            {
+                "realized_pnl": str(summary.realized_pnl),
+                "unrealized_pnl": str(summary.unrealized_pnl),
+                "total_trades": summary.total_trades,
+                "open_position_count": summary.open_position_count,
+            }
+        )

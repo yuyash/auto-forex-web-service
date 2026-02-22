@@ -45,26 +45,40 @@ class TestCandleDataView:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "NO_OANDA_ACCOUNT" in response.data.get("error_code", "")
 
-    def test_get_candles_with_account(self, user: Any) -> None:
+    @patch("apps.market.views.candles.v20.Context")
+    def test_get_candles_with_account(self, mock_context: Mock, user: Any) -> None:
         """Test candle data retrieval with account."""
-        # Create test account
-        OandaAccounts.objects.create(
+        account = OandaAccounts.objects.create(
             user=user,
             account_id="101-001-1234567-001",
             api_type=ApiType.PRACTICE,
         )
+        account.set_api_token("test_token_12345")
+        account.save()
+
+        mock_candle = MagicMock()
+        mock_candle.complete = True
+        mock_candle.time = "2024-01-01T00:00:00.000000000Z"
+        mock_candle.volume = 100
+        mock_candle.mid.o = "1.10000"
+        mock_candle.mid.h = "1.10100"
+        mock_candle.mid.l = "1.09900"
+        mock_candle.mid.c = "1.10050"
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.body = {"candles": [mock_candle]}
+
+        mock_api = MagicMock()
+        mock_api.instrument.candles.return_value = mock_response
+        mock_context.return_value = mock_api
 
         client = APIClient()
         client.force_authenticate(user=user)
 
-        # This will fail to connect to OANDA but tests the flow
         response = client.get("/api/market/candles/?instrument=EUR_USD&count=1")
 
-        # May return 500 if OANDA API is not available, which is expected in unit tests
-        assert response.status_code in [
-            status.HTTP_200_OK,
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-        ]
+        assert response.status_code == status.HTTP_200_OK
 
     @patch("apps.market.views.candles.v20.Context")
     def test_get_candles_api_error(self, mock_context: Mock, user: Any) -> None:

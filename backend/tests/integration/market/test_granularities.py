@@ -1,6 +1,7 @@
 """Integration tests for granularities API."""
 
 from typing import Any
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from rest_framework import status
@@ -31,7 +32,8 @@ class TestSupportedGranularitiesAPIIntegration:
         assert "H1" in granularities
         assert "D" in granularities
 
-    def test_get_granularities_with_account(self, user: Any) -> None:
+    @patch("apps.market.views.granularities.v20.Context")
+    def test_get_granularities_with_account(self, mock_context: Mock, user: Any) -> None:
         """Test fetching granularities with active account."""
         OandaAccounts.objects.create(
             user=user,
@@ -39,6 +41,15 @@ class TestSupportedGranularitiesAPIIntegration:
             api_type=ApiType.PRACTICE,
             is_active=True,
         )
+
+        mock_instrument = MagicMock()
+        mock_instrument.name = "EUR_USD"
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.body = {"instruments": [mock_instrument]}
+        mock_api = MagicMock()
+        mock_api.account.instruments.return_value = mock_response
+        mock_context.return_value = mock_api
 
         client = APIClient()
         client.force_authenticate(user=user)

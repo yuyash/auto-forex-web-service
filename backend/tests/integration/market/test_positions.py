@@ -1,6 +1,7 @@
 """Integration tests for positions API."""
 
 from typing import Any
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from rest_framework import status
@@ -24,7 +25,8 @@ class TestPositionAPIIntegration:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 0
 
-    def test_get_positions_with_account(self, user: Any) -> None:
+    @patch("apps.market.views.positions.OandaService")
+    def test_get_positions_with_account(self, mock_service_cls: Mock, user: Any) -> None:
         """Test getting positions with account."""
         account = OandaAccounts.objects.create(
             user=user,
@@ -32,20 +34,19 @@ class TestPositionAPIIntegration:
             api_type=ApiType.PRACTICE,
             is_active=True,
         )
-        # Set encrypted token
         account.set_api_token("test_token_12345")
         account.save()
+
+        mock_service_instance = MagicMock()
+        mock_service_instance.get_open_trades.return_value = []
+        mock_service_cls.return_value = mock_service_instance
 
         client = APIClient()
         client.force_authenticate(user=user)
 
         response = client.get(f"/api/market/positions/?account_id={account.id}")
 
-        # May return error if OANDA API unavailable
-        assert response.status_code in [
-            status.HTTP_200_OK,
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-        ]
+        assert response.status_code == status.HTTP_200_OK
 
     def test_put_position_missing_account_id(self, user: Any) -> None:
         """Test that account_id is required for opening position."""

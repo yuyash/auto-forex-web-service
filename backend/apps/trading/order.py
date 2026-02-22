@@ -63,6 +63,13 @@ class OrderService:
         self.dry_run = dry_run
         self.oanda_service = OandaService(account=account, dry_run=dry_run)
 
+        # celery_task_id is required for all Position/Order/Trade records
+        self.celery_task_id: str = getattr(task, "celery_task_id", None) or ""
+        if not self.celery_task_id:
+            raise OrderServiceError(
+                "Task must have a celery_task_id before OrderService can be used"
+            )
+
         # Determine task type
         if hasattr(task, "__class__"):
             task_class_name = task.__class__.__name__
@@ -317,6 +324,7 @@ class OrderService:
                 rejected_order = Order.objects.create(
                     task_type=self.task_type,
                     task_id=self.task.id,
+                    celery_task_id=self.celery_task_id,
                     instrument=position.instrument,
                     order_type=OrderType.MARKET,
                     direction=None,
@@ -437,6 +445,7 @@ class OrderService:
                 rejected_order = Order.objects.create(
                     task_type=self.task_type,
                     task_id=self.task.id,
+                    celery_task_id=self.celery_task_id,
                     instrument=instrument,
                     order_type=OrderType.MARKET,
                     direction=direction,
@@ -475,6 +484,7 @@ class OrderService:
         order = Order.objects.create(
             task_type=self.task_type,
             task_id=self.task.id,
+            celery_task_id=self.celery_task_id,
             broker_order_id=oanda_order.order_id,
             oanda_trade_id=oanda_trade_id,
             instrument=instrument,
@@ -535,7 +545,7 @@ class OrderService:
                     existing_position.oanda_trade_id = oanda_trade_id
                 if retracement_count is not None:
                     existing_position.retracement_count = retracement_count
-                existing_position.celery_task_id = getattr(self.task, "celery_task_id", None)
+                existing_position.celery_task_id = self.celery_task_id
                 existing_position.save()
 
                 logger.debug(
@@ -551,7 +561,7 @@ class OrderService:
         position = Position.objects.create(
             task_type=self.task_type,
             task_id=self.task.id,
-            celery_task_id=getattr(self.task, "celery_task_id", None),
+            celery_task_id=self.celery_task_id,
             instrument=instrument,
             direction=direction,
             units=units,

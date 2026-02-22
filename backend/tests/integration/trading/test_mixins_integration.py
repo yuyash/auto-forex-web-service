@@ -234,6 +234,7 @@ class TestOrders:
         Order.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
+            celery_task_id=task.celery_task_id,
             instrument="USD_JPY",
             order_type=OrderType.MARKET,
             direction=Direction.LONG,

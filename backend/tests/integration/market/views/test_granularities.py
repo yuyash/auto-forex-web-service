@@ -1,6 +1,7 @@
 """Unit tests for granularities views."""
 
 from typing import Any
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from rest_framework import status
@@ -31,7 +32,8 @@ class TestSupportedGranularitiesView:
         assert "H1" in granularities
         assert "D" in granularities
 
-    def test_get_granularities_with_active_account(self, user: Any) -> None:
+    @patch("apps.market.views.granularities.v20.Context")
+    def test_get_granularities_with_active_account(self, mock_context: Mock, user: Any) -> None:
         """Test fetching granularities with active account."""
         OandaAccounts.objects.create(
             user=user,
@@ -40,13 +42,21 @@ class TestSupportedGranularitiesView:
             is_active=True,
         )
 
+        mock_instrument = MagicMock()
+        mock_instrument.name = "EUR_USD"
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.body = {"instruments": [mock_instrument]}
+        mock_api = MagicMock()
+        mock_api.account.instruments.return_value = mock_response
+        mock_context.return_value = mock_api
+
         client = APIClient()
         client.force_authenticate(user=user)
 
         response = client.get("/api/market/candles/granularities/")
 
         assert response.status_code == status.HTTP_200_OK
-        # Will use standard or OANDA depending on API availability
         assert response.data["source"] in ["oanda", "standard"]
 
     def test_get_granularities_unauthenticated(self) -> None:

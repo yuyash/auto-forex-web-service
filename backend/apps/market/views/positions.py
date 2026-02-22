@@ -19,6 +19,7 @@ from apps.market.services.oanda import (
     OandaService,
     OpenTrade,
 )
+from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
 
@@ -262,12 +263,9 @@ class PositionView(APIView):
             },
         )
 
-        return Response(
-            {
-                "results": all_positions,
-                "count": len(all_positions),
-            }
-        )
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(all_positions, request)
+        return paginator.get_paginated_response(page)
 
 
 class PositionDetailView(APIView):

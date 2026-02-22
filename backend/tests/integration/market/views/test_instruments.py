@@ -15,7 +15,8 @@ from apps.market.models import OandaAccounts
 class TestSupportedInstrumentsView:
     """Test SupportedInstrumentsView."""
 
-    def test_get_instruments_with_active_account(self, user: Any) -> None:
+    @patch("apps.market.views.instruments.v20.Context")
+    def test_get_instruments_with_active_account(self, mock_context: Mock, user: Any) -> None:
         """Test fetching instruments when active account exists."""
         OandaAccounts.objects.create(
             user=user,
@@ -24,6 +25,16 @@ class TestSupportedInstrumentsView:
             is_active=True,
         )
 
+        # Mock OANDA API response to avoid real HTTP calls in CI
+        mock_instrument = MagicMock()
+        mock_instrument.name = "EUR_USD"
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.body = {"instruments": [mock_instrument]}
+        mock_api = MagicMock()
+        mock_api.account.instruments.return_value = mock_response
+        mock_context.return_value = mock_api
+
         client = APIClient()
         client.force_authenticate(user=user)
 
@@ -31,7 +42,6 @@ class TestSupportedInstrumentsView:
 
         assert response.status_code == status.HTTP_200_OK
         assert "instruments" in response.data
-        # Will use fallback or OANDA depending on API availability
         assert response.data["source"] in ["oanda", "fallback"]
 
     def test_get_instruments_fallback(self, user: Any) -> None:

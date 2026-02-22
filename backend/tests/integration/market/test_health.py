@@ -1,6 +1,7 @@
 """Integration tests for health API."""
 
 from typing import Any
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from rest_framework import status
@@ -49,7 +50,8 @@ class TestOandaApiHealthAPIIntegration:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_post_health_check_with_account(self, user: Any) -> None:
+    @patch("apps.market.services.health.v20.Context")
+    def test_post_health_check_with_account(self, mock_context: Mock, user: Any) -> None:
         """Test performing health check with account."""
         OandaAccounts.objects.create(
             user=user,
@@ -57,16 +59,18 @@ class TestOandaApiHealthAPIIntegration:
             api_type=ApiType.PRACTICE,
         )
 
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_api = MagicMock()
+        mock_api.account.get.return_value = mock_response
+        mock_context.return_value = mock_api
+
         client = APIClient()
         client.force_authenticate(user=user)
 
         response = client.post("/api/market/health/oanda/")
 
-        # May succeed or fail depending on OANDA API availability
-        assert response.status_code in [
-            status.HTTP_200_OK,
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-        ]
+        assert response.status_code == status.HTTP_200_OK
 
     def test_health_check_unauthenticated(self) -> None:
         """Test that unauthenticated users cannot access health endpoint."""

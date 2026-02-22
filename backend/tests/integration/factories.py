@@ -96,9 +96,11 @@ class TickDataFactory(DjangoModelFactory):
         "pydecimal", left_digits=1, right_digits=5, positive=True, min_value=1.0, max_value=2.0
     )
     ask = factory.LazyAttribute(
-        lambda obj: obj.bid
-        + fake.pydecimal(
-            left_digits=0, right_digits=5, positive=True, min_value=0.00001, max_value=0.0001
+        lambda obj: (
+            obj.bid
+            + fake.pydecimal(
+                left_digits=0, right_digits=5, positive=True, min_value=0.00001, max_value=0.0001
+            )
         )
     )
     mid = factory.LazyAttribute(lambda obj: (obj.bid + obj.ask) / 2)
@@ -144,6 +146,7 @@ class BacktestTaskFactory(DjangoModelFactory):
     )
     status = "pending"
     data_source = "postgresql"
+    celery_task_id = factory.Faker("uuid4")
 
 
 class TradingTaskFactory(DjangoModelFactory):
@@ -158,6 +161,7 @@ class TradingTaskFactory(DjangoModelFactory):
     name = factory.Faker("catch_phrase")
     instrument = "USD_JPY"
     status = "created"
+    celery_task_id = factory.Faker("uuid4")
 
 
 class UserNotificationFactory(DjangoModelFactory):

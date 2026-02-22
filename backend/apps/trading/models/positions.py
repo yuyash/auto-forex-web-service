@@ -37,8 +37,6 @@ class Position(models.Model):
     )
     celery_task_id = models.CharField(
         max_length=255,
-        null=True,
-        blank=True,
         db_index=True,
         help_text="Celery task ID for tracking which execution run created this position",
     )
@@ -90,6 +88,12 @@ class Position(models.Model):
         null=True,
         blank=True,
         help_text="Number of retracements for this position",
+    )
+    unrealized_pnl = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        default=Decimal("0"),
+        help_text="Unrealized PnL based on the latest tick price. Updated each tick batch.",
     )
     oanda_trade_id = models.CharField(
         max_length=64,

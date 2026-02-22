@@ -18,6 +18,7 @@ from apps.trading.events.handler import EventHandler
 from apps.trading.models import BacktestTask, TradingEvent, TradingTask
 from apps.trading.models.state import ExecutionState
 from apps.trading.order import OrderService, OrderServiceError
+from apps.trading.services.unrealized_pnl import update_unrealized_pnl
 from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
 
@@ -430,6 +431,15 @@ class TaskExecutor:
                 )
                 self.save_state(state)
                 self._flush_metric_snapshots(state)
+
+                # Update unrealized PnL for all open positions using latest price
+                if state.last_tick_price is not None:
+                    update_unrealized_pnl(
+                        task_type=self.task_type.value,
+                        task_id=str(self.task.pk),
+                        current_price=Decimal(str(state.last_tick_price)),
+                        celery_task_id=getattr(self.task, "celery_task_id", None),
+                    )
 
                 if batch_count % 50 == 0:
                     logger.info(

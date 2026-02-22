@@ -53,8 +53,6 @@ class Order(models.Model):
     )
     celery_task_id = models.CharField(
         max_length=255,
-        null=True,
-        blank=True,
         db_index=True,
         help_text="Celery task ID for tracking which execution run created this order",
     )
