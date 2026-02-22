@@ -2,6 +2,7 @@
  * useTaskOrders Hook
  *
  * Fetches orders from task-based API endpoints with DRF pagination.
+ * Supports incremental fetching via the `since` parameter.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -33,11 +34,15 @@ export interface TaskOrder {
 interface UseTaskOrdersOptions {
   taskId: string | number;
   taskType: TaskType;
+  /** Filter orders by a specific Celery execution ID. */
+  celeryTaskId?: string;
   status?: string;
   orderType?: string;
   direction?: string;
   page?: number;
   pageSize?: number;
+  /** ISO 8601 timestamp — only return records updated after this time. */
+  since?: string;
   enableRealTimeUpdates?: boolean;
   refreshInterval?: number;
 }
@@ -55,11 +60,13 @@ interface UseTaskOrdersResult {
 export const useTaskOrders = ({
   taskId,
   taskType,
+  celeryTaskId,
   status,
   orderType,
   direction,
   page = 1,
   pageSize = 100,
+  since,
   enableRealTimeUpdates = false,
   refreshInterval = 5000,
 }: UseTaskOrdersOptions): UseTaskOrdersResult => {
@@ -87,6 +94,8 @@ export const useTaskOrders = ({
       if (status) params.status = status;
       if (orderType) params.order_type = orderType;
       if (direction) params.direction = direction;
+      if (since) params.since = since;
+      if (celeryTaskId) params.celery_task_id = celeryTaskId;
 
       const url = `${OpenAPI.BASE}${prefix}/${taskId}/orders/`;
 
@@ -127,7 +136,17 @@ export const useTaskOrders = ({
     } finally {
       setIsLoading(false);
     }
-  }, [taskId, taskType, status, orderType, direction, page, pageSize]);
+  }, [
+    taskId,
+    taskType,
+    celeryTaskId,
+    status,
+    orderType,
+    direction,
+    page,
+    pageSize,
+    since,
+  ]);
 
   useEffect(() => {
     fetchOrders();

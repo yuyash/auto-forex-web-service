@@ -2,10 +2,7 @@
  * useTaskPositions Hook
  *
  * Fetches positions from task-based API endpoints with DRF pagination.
- * Reads from the `positions` table (Position model) instead of `trades`.
- *
- * Uses axios with withCredentials (same auth mechanism as the generated
- * OpenAPI client) so that session cookies are sent correctly.
+ * Supports incremental fetching via the `since` parameter.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -37,6 +34,8 @@ interface UseTaskPositionsOptions {
   direction?: 'long' | 'short';
   page?: number;
   pageSize?: number;
+  /** ISO 8601 timestamp — only return records updated after this time. */
+  since?: string;
   enableRealTimeUpdates?: boolean;
   refreshInterval?: number;
 }
@@ -58,6 +57,7 @@ export const useTaskPositions = ({
   direction,
   page = 1,
   pageSize = 100,
+  since,
   enableRealTimeUpdates = false,
   refreshInterval = 5000,
 }: UseTaskPositionsOptions): UseTaskPositionsResult => {
@@ -88,6 +88,7 @@ export const useTaskPositions = ({
       };
       if (status) params.position_status = status;
       if (direction) params.direction = direction;
+      if (since) params.since = since;
 
       const url = `${OpenAPI.BASE}${prefix}/${taskId}/positions/`;
 
@@ -129,7 +130,7 @@ export const useTaskPositions = ({
     } finally {
       setIsLoading(false);
     }
-  }, [taskId, taskType, status, direction, page, pageSize]);
+  }, [taskId, taskType, status, direction, page, pageSize, since]);
 
   useEffect(() => {
     fetchPositions();

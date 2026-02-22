@@ -1,118 +1,112 @@
 /**
- * Hook for computing Overview PnL from positions API.
+ * Hook for fetching PnL summary from the backend API.
  *
- * Both Realized and Unrealized PnL are derived exclusively from the
- * Positions API so that every view shows the same numbers.
+ * Realized PnL and trade count are computed server-side via DB aggregation,
+ * eliminating the need to fetch all positions/trades on the client.
  *
- * Realized PnL  = sum of closed positions' (exit_price - entry_price) * units (direction-aware)
- * Unrealized PnL = sum of open positions' unrealized_pnl
- * Total Trades count comes from the trades API.
+ * Unrealized PnL is currently not stored in the Position model (it depends
+ * on live market prices from OANDA), so the backend returns 0 for now.
  */
 
-import { useState, useEffect, useMemo } from 'react';
-import { fetchAllTrades } from '../utils/fetchAllTrades';
-import { useTaskPositions, type TaskPosition } from './useTaskPositions';
+import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+import { OpenAPI } from '../api/generated/core/OpenAPI';
 import { TaskType } from '../types/common';
+import { handleAuthErrorStatus } from '../utils/authEvents';
 
-interface OverviewPnl {
+interface PnlSummary {
   realizedPnl: number;
   unrealizedPnl: number;
   totalTrades: number;
+  openPositionCount: number;
 }
 
-interface UseOverviewPnlOptions {
-  /** Pre-fetched closed positions — when provided, skips internal fetch */
-  closedPositions?: TaskPosition[];
-  /** Pre-fetched open positions — when provided, skips internal fetch */
-  openPositions?: TaskPosition[];
-  /** Override trade count instead of fetching all trades */
-  totalTrades?: number;
+interface UseOverviewPnlResult extends PnlSummary {
+  isLoading: boolean;
+  error: Error | null;
+  refetch: () => Promise<void>;
 }
 
 export function useOverviewPnl(
   taskId: string,
-  taskType: TaskType,
-  options?: UseOverviewPnlOptions
-): OverviewPnl {
-  const externalClosed = options?.closedPositions;
-  const externalOpen = options?.openPositions;
-  const externalTradeCount = options?.totalTrades;
-
-  const skipInternalClosed = externalClosed !== undefined;
-  const skipInternalOpen = externalOpen !== undefined;
-
-  const [tradeCount, setTradeCount] = useState<number | null>(
-    externalTradeCount ?? null
-  );
-
-  // Only fetch positions internally when not provided externally.
-  // When skipped, pass empty taskId so useTaskPositions bails out early.
-  const { positions: internalClosed } = useTaskPositions({
-    taskId: skipInternalClosed ? '' : taskId,
-    taskType,
-    status: 'closed',
-    pageSize: 1000,
+  taskType: TaskType
+): UseOverviewPnlResult {
+  const [data, setData] = useState<PnlSummary>({
+    realizedPnl: 0,
+    unrealizedPnl: 0,
+    totalTrades: 0,
+    openPositionCount: 0,
   });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-  const { positions: internalOpen } = useTaskPositions({
-    taskId: skipInternalOpen ? '' : taskId,
-    taskType,
-    status: 'open',
-    pageSize: 1000,
-  });
+  const fetchPnl = useCallback(async () => {
+    if (!taskId) {
+      setIsLoading(false);
+      return;
+    }
+    try {
+      setIsLoading(true);
+      setError(null);
 
-  const closedPositions = externalClosed ?? internalClosed;
-  const openPositions = externalOpen ?? internalOpen;
+      const prefix =
+        taskType === TaskType.BACKTEST
+          ? '/api/trading/tasks/backtest'
+          : '/api/trading/tasks/trading';
+
+      const url = `${OpenAPI.BASE}${prefix}/${taskId}/pnl-summary/`;
+
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+      };
+      if (OpenAPI.TOKEN) {
+        const token =
+          typeof OpenAPI.TOKEN === 'function'
+            ? await (OpenAPI.TOKEN as (options: unknown) => Promise<string>)({})
+            : OpenAPI.TOKEN;
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      }
+
+      const response = await axios.get(url, {
+        headers,
+        withCredentials: OpenAPI.WITH_CREDENTIALS,
+      });
+
+      const d = response.data;
+      setData({
+        realizedPnl: parseFloat(d.realized_pnl) || 0,
+        unrealizedPnl: parseFloat(d.unrealized_pnl) || 0,
+        totalTrades: d.total_trades ?? 0,
+        openPositionCount: d.open_position_count ?? 0,
+      });
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response) {
+        handleAuthErrorStatus(err.response.status, {
+          source: 'http',
+          status: err.response.status,
+          context: 'pnl_summary',
+        });
+      }
+      setError(
+        new Error(
+          err instanceof Error ? err.message : 'Failed to load PnL summary'
+        )
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [taskId, taskType]);
 
   useEffect(() => {
-    if (externalTradeCount !== undefined) return;
-    if (!taskId) return;
+    fetchPnl();
+  }, [fetchPnl]);
 
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const allTrades = await fetchAllTrades(taskId, taskType);
-        if (!cancelled) setTradeCount(allTrades.length);
-      } catch {
-        // leave null — will fall back to 0
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [taskId, taskType, externalTradeCount]);
-
-  // Derive the effective trade count: prefer external, then fetched, then 0
-  const effectiveTradeCount = externalTradeCount ?? tradeCount ?? 0;
-
-  return useMemo(() => {
-    const realizedPnl = closedPositions.reduce(
-      (sum: number, p: TaskPosition) => {
-        if (!p.exit_price || !p.entry_price) return sum;
-        const exit = parseFloat(p.exit_price);
-        const entry = parseFloat(p.entry_price);
-        const units = Math.abs(p.units ?? 0);
-        const dir = String(p.direction).toLowerCase();
-        const pnl =
-          dir === 'long' ? (exit - entry) * units : (entry - exit) * units;
-        return sum + pnl;
-      },
-      0
-    );
-
-    const unrealizedRaw = openPositions.reduce(
-      (sum: number, p: TaskPosition) =>
-        sum + (p.unrealized_pnl ? parseFloat(p.unrealized_pnl) : 0),
-      0
-    );
-
-    const totalTrades = effectiveTradeCount;
-
-    return {
-      realizedPnl: Number.isFinite(realizedPnl) ? realizedPnl : 0,
-      unrealizedPnl: Number.isFinite(unrealizedRaw) ? unrealizedRaw : 0,
-      totalTrades,
-    };
-  }, [closedPositions, openPositions, effectiveTradeCount]);
+  return {
+    ...data,
+    isLoading,
+    error,
+    refetch: fetchPnl,
+  };
 }

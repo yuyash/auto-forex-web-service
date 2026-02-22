@@ -94,9 +94,7 @@ export const TradingTaskDetail: React.FC = () => {
   // Use polled current_tick when available (fresher data for running tasks)
   const currentTick = polledTask?.current_tick ?? task?.current_tick;
 
-  const overviewSummary = useOverviewPnl(taskId, TaskType.TRADING, {
-    totalTrades: task?.latest_execution?.total_trades,
-  });
+  const overviewSummary = useOverviewPnl(taskId, TaskType.TRADING);
 
   // Derive tab value from URL parameter (use this for rendering)
   const currentTabValue =
@@ -233,7 +231,8 @@ export const TradingTaskDetail: React.FC = () => {
                   <IconButton
                     onClick={() => navigate(`/trading-tasks/${taskId}/edit`)}
                     disabled={
-                      task.status === 'RUNNING' || task.status === 'PAUSED'
+                      task.status === TaskStatus.RUNNING ||
+                      task.status === TaskStatus.PAUSED
                     }
                     aria-label="Edit"
                   >
@@ -246,7 +245,8 @@ export const TradingTaskDetail: React.FC = () => {
                   <IconButton
                     onClick={() => setDeleteDialogOpen(true)}
                     disabled={
-                      task.status === 'RUNNING' || task.status === 'PAUSED'
+                      task.status === TaskStatus.RUNNING ||
+                      task.status === TaskStatus.PAUSED
                     }
                     color="error"
                     aria-label="Delete"
@@ -530,6 +530,7 @@ export const TradingTaskDetail: React.FC = () => {
           <TaskOrdersTable
             taskId={taskId}
             taskType={TaskType.TRADING}
+            celeryTaskId={task.celery_task_id || undefined}
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
           />
         </LazyTabPanel>

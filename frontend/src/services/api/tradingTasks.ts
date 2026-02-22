@@ -112,7 +112,7 @@ export const tradingTasksApi = {
     // Do NOT use withRetry — start is not idempotent (dispatches a Celery task).
     const result = await TradingService.tradingTasksTradingStartCreate(
       id,
-      {} as Record<string, unknown>
+      {} as unknown as TradingTaskRequest
     );
     return toLocal(result);
   },
@@ -128,7 +128,7 @@ export const tradingTasksApi = {
     // Do NOT use withRetry — stop dispatches a Celery task.
     return TradingService.tradingTasksTradingStopCreate(
       id,
-      {} as Record<string, unknown>
+      {} as unknown as TradingTaskRequest
     );
   },
 
@@ -138,7 +138,7 @@ export const tradingTasksApi = {
   pause: async (id: string): Promise<TradingTask> => {
     const result = await TradingService.tradingTasksTradingPauseCreate(
       id,
-      {} as Record<string, unknown>
+      {} as unknown as TradingTaskRequest
     );
     return toLocal(result);
   },
@@ -150,7 +150,7 @@ export const tradingTasksApi = {
     // Do NOT use withRetry — resume dispatches a Celery task.
     const result = await TradingService.tradingTasksTradingResumeCreate(
       id,
-      {} as Record<string, unknown>
+      {} as unknown as TradingTaskRequest
     );
     return toLocal(result);
   },
@@ -166,7 +166,7 @@ export const tradingTasksApi = {
     // Do NOT use withRetry — restart is not idempotent (dispatches a Celery task).
     const result = await TradingService.tradingTasksTradingRestartCreate(
       id,
-      {} as Record<string, unknown>
+      {} as unknown as TradingTaskRequest
     );
     return toLocal(result);
   },

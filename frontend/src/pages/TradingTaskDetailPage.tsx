@@ -455,7 +455,7 @@ export default function TradingTaskDetailPage() {
   const canStart = currentStatus === TaskStatus.CREATED;
   // TODO: Pause/Resume are temporarily disabled. Remove the overrides below to re-enable.
   // eslint-disable-next-line no-constant-binary-expression
-  const canResume = false && Boolean(task.can_resume);
+  const canResume = false && Boolean(task?.can_resume);
   const canRestart =
     currentStatus === TaskStatus.STOPPED ||
     currentStatus === TaskStatus.PAUSED ||

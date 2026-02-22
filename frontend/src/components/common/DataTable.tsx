@@ -466,7 +466,7 @@ function DataTable<T extends object>({
             )}
           </TableHead>
           <TableBody>
-            {paginatedData.length === 0 ? (
+            {paginatedData.length === 0 && !fillEmptyRows ? (
               <TableRow>
                 <TableCell
                   colSpan={columns.length + (selectable ? 1 : 0)}
@@ -523,7 +523,6 @@ function DataTable<T extends object>({
               })
             )}
             {fillEmptyRows &&
-              paginatedData.length > 0 &&
               paginatedData.length < rowsPerPage &&
               Array.from({
                 length: rowsPerPage - paginatedData.length,

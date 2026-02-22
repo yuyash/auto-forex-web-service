@@ -9,6 +9,10 @@ import type {
   PatchedBacktestTaskCreateRequest,
 } from '../../api/generated';
 
+// Empty body cast for action endpoints (start/stop/pause/resume/restart)
+// that require BacktestTaskRequest but don't actually need a body.
+const EMPTY_BODY = {} as BacktestTaskRequest;
+
 // Alias for backward compatibility after OpenAPI regeneration
 type PatchedBacktestTaskRequest = PatchedBacktestTaskCreateRequest;
 import type {
@@ -84,23 +88,20 @@ export const backtestTasksApi = {
     // Do NOT use withRetry — start is not idempotent (dispatches a Celery task).
     const result = await TradingService.tradingTasksBacktestStartCreate(
       id,
-      {} as Record<string, unknown>
+      EMPTY_BODY
     );
     return toLocal(result);
   },
 
   stop: async (id: string): Promise<Record<string, unknown>> => {
     // Do NOT use withRetry — stop dispatches a Celery task.
-    return TradingService.tradingTasksBacktestStopCreate(
-      id,
-      {} as Record<string, unknown>
-    );
+    return TradingService.tradingTasksBacktestStopCreate(id, EMPTY_BODY);
   },
 
   pause: async (id: string): Promise<BacktestTask> => {
     const result = await TradingService.tradingTasksBacktestPauseCreate(
       id,
-      {} as Record<string, unknown>
+      EMPTY_BODY
     );
     return toLocal(result);
   },
@@ -109,7 +110,7 @@ export const backtestTasksApi = {
     // Do NOT use withRetry — resume dispatches a Celery task.
     const result = await TradingService.tradingTasksBacktestResumeCreate(
       id,
-      {} as Record<string, unknown>
+      EMPTY_BODY
     );
     return toLocal(result);
   },
@@ -123,7 +124,7 @@ export const backtestTasksApi = {
     // Retrying a restart dispatches duplicate Celery tasks.
     const result = await TradingService.tradingTasksBacktestRestartCreate(
       id,
-      {} as Record<string, unknown>
+      EMPTY_BODY
     );
     return toLocal(result);
   },

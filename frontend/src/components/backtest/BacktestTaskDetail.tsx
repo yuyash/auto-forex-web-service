@@ -88,9 +88,7 @@ export const BacktestTaskDetail: React.FC = () => {
     refetch,
   } = useBacktestTask(taskId || undefined);
 
-  const overviewSummary = useOverviewPnl(taskId, TaskType.BACKTEST, {
-    totalTrades: task?.latest_execution?.total_trades,
-  });
+  const overviewSummary = useOverviewPnl(taskId, TaskType.BACKTEST);
 
   // Use HTTP polling for task status updates
   const {
@@ -275,8 +273,10 @@ export const BacktestTaskDetail: React.FC = () => {
                   <IconButton
                     onClick={() => navigate(`/backtest-tasks/${taskId}/edit`)}
                     disabled={
-                      (polledStatus?.status || task.status) === 'RUNNING' ||
-                      (polledStatus?.status || task.status) === 'PAUSED'
+                      (polledStatus?.status || task.status) ===
+                        TaskStatus.RUNNING ||
+                      (polledStatus?.status || task.status) ===
+                        TaskStatus.PAUSED
                     }
                     aria-label="Edit"
                   >
@@ -289,8 +289,10 @@ export const BacktestTaskDetail: React.FC = () => {
                   <IconButton
                     onClick={() => setDeleteDialogOpen(true)}
                     disabled={
-                      (polledStatus?.status || task.status) === 'RUNNING' ||
-                      (polledStatus?.status || task.status) === 'PAUSED'
+                      (polledStatus?.status || task.status) ===
+                        TaskStatus.RUNNING ||
+                      (polledStatus?.status || task.status) ===
+                        TaskStatus.PAUSED
                     }
                     color="error"
                     aria-label="Delete"
@@ -615,6 +617,7 @@ export const BacktestTaskDetail: React.FC = () => {
           <TaskOrdersTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
+            celeryTaskId={task.celery_task_id || undefined}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }

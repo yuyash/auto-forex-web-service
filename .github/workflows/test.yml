@@ -84,6 +84,7 @@ jobs:
           fi
           echo "✅ Unit tests passed"
 
+      # Integration tests
       - name: Run integration tests with parallel execution
         env:
           DB_NAME: test_db
@@ -98,7 +99,7 @@ jobs:
           DJANGO_SETTINGS_MODULE: config.settings_test
         run: |
           echo "::group::Running integration tests"
-          uv run pytest tests/integration/ -n auto -v --cov=. --cov-report=xml --cov-report=html --cov-append --junitxml=junit-integration.xml
+          uv run pytest tests/integration/ -n auto -v --timeout=30 --cov=. --cov-report=xml --cov-report=html --cov-append --junitxml=junit-integration.xml
           INTEGRATION_EXIT_CODE=$?
           echo "::endgroup::"
           if [ $INTEGRATION_EXIT_CODE -ne 0 ]; then
