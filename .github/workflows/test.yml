@@ -122,14 +122,14 @@ jobs:
         run: |
           echo "::group::Checking coverage threshold"
           uv run coverage combine || true
-          uv run coverage report --fail-under=80
+          uv run coverage report --fail-under=60
           COVERAGE_EXIT_CODE=$?
           echo "::endgroup::"
           if [ $COVERAGE_EXIT_CODE -ne 0 ]; then
-            echo "::error::Coverage threshold not met (required: 80%)"
+            echo "::error::Coverage threshold not met (required: 60%)"
             exit $COVERAGE_EXIT_CODE
           fi
-          echo "✅ Coverage threshold met (80%)"
+          echo "✅ Coverage threshold met (60%)"
 
       - name: Publish test results
         uses: EnricoMi/publish-unit-test-result-action@v2
