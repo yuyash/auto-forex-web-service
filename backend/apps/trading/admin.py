@@ -138,6 +138,7 @@ class OrderAdmin(admin.ModelAdmin):
         "task_type",
         "task_id",
         "broker_order_id",
+        "position",
         "instrument",
         "units",
         "direction",
@@ -147,6 +148,7 @@ class OrderAdmin(admin.ModelAdmin):
     )
     list_filter = ("task_type", "direction", "order_type", "status", "submitted_at")
     search_fields = ("task_id", "broker_order_id", "instrument")
+    raw_id_fields = ("position",)
     ordering = ("-submitted_at",)
 
 
@@ -173,6 +175,8 @@ class TradeAdmin(admin.ModelAdmin):
         "id",
         "task_type",
         "task_id",
+        "position",
+        "order",
         "instrument",
         "direction",
         "units",
@@ -181,6 +185,7 @@ class TradeAdmin(admin.ModelAdmin):
     )
     list_filter = ("task_type", "direction", "timestamp")
     search_fields = ("task_id", "instrument")
+    raw_id_fields = ("position", "order")
     ordering = ("-timestamp",)
 
 

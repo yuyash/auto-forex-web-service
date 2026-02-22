@@ -145,7 +145,7 @@ class TestFloorStrategyOnTick:
         )
 
         assert any(isinstance(ev, AddLayerEvent) for ev in result.events)
-        assert state.strategy_state["active_floor_index"] == 1
+        assert state.strategy_state["active_floor_index"] == 2
 
     def test_returns_to_previous_floor_using_return_stack(self) -> None:
         strategy = _strategy(
@@ -169,23 +169,23 @@ class TestFloorStrategyOnTick:
         _ = strategy.on_tick(
             tick=_make_tick(ts + timedelta(seconds=60), "149.80", "149.82"),
             state=state,
-        )  # floor 1
+        )  # adds layer 2
         state.ticks_processed += 1
         _ = strategy.on_tick(
             tick=_make_tick(ts + timedelta(seconds=120), "149.60", "149.62"),
             state=state,
-        )  # floor 2
-        assert state.strategy_state["active_floor_index"] == 2
+        )  # adds layer 3
+        assert state.strategy_state["active_floor_index"] == 3
 
-        # Favorable move to TP floor 2; cross-layer TP closes all layers
-        # whose entries are in profit, collapsing back to home floor 0.
+        # Favorable move to TP floor 3; cross-layer TP closes all layers
+        # whose entries are in profit, collapsing back to home floor 1.
         state.ticks_processed += 1
         result = strategy.on_tick(
             tick=_make_tick(ts + timedelta(seconds=180), "150.20", "150.22"),
             state=state,
         )
         assert any(isinstance(ev, RemoveLayerEvent) for ev in result.events)
-        assert state.strategy_state["active_floor_index"] == 0
+        assert state.strategy_state["active_floor_index"] == 1
 
     def test_per_floor_take_profit_and_retracement_are_used(self) -> None:
         strategy = _strategy(
@@ -208,14 +208,14 @@ class TestFloorStrategyOnTick:
             state=state,
         )
 
-        floor1_entries = [
-            item for item in state.strategy_state["open_entries"] if int(item["floor_index"]) == 1
+        floor2_entries = [
+            item for item in state.strategy_state["open_entries"] if int(item["floor_index"]) == 2
         ]
-        assert floor1_entries
-        # floor profile for floor 1 should be applied to initial entry.
-        assert Decimal(str(floor1_entries[-1]["take_profit_pips"])) == Decimal("11")
+        assert floor2_entries
+        # floor profile for floor 2 should be applied to initial entry.
+        assert Decimal(str(floor2_entries[-1]["take_profit_pips"])) == Decimal("11")
 
-        # 8 pips favorable should NOT close floor 1 position because TP is 11 pips.
+        # 8 pips favorable should NOT close floor 2 position because TP is 11 pips.
         state.ticks_processed += 1
         result = strategy.on_tick(
             tick=_make_tick(ts + timedelta(seconds=120), "149.90", "149.92"),
@@ -286,7 +286,7 @@ class TestFloorStrategyOnTick:
                 "open_entries": [
                     {
                         "entry_id": 1,
-                        "floor_index": 0,
+                        "floor_index": 1,
                         "direction": "long",
                         "entry_price": "149.00",
                         "units": 1000,
@@ -296,7 +296,7 @@ class TestFloorStrategyOnTick:
                     },
                     {
                         "entry_id": 2,
-                        "floor_index": 0,
+                        "floor_index": 1,
                         "direction": "long",
                         "entry_price": "148.50",
                         "units": 1500,
@@ -305,7 +305,7 @@ class TestFloorStrategyOnTick:
                         "is_initial": False,
                     },
                 ],
-                "floor_retracement_counts": {"0": 1},
+                "floor_retracement_counts": {"1": 1},
             },
             current_balance=Decimal("1000"),
             ticks_processed=2,
@@ -342,7 +342,7 @@ class TestFloorStrategyOnTick:
                 "open_entries": [
                     {
                         "entry_id": 1,
-                        "floor_index": 0,
+                        "floor_index": 1,
                         "direction": "long",
                         "entry_price": "149.00",
                         "units": 1000,

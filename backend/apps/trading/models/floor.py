@@ -27,7 +27,7 @@ class Layer(models.Model):
         help_text="UUID of the task this layer belongs to",
     )
     index = models.IntegerField(
-        help_text="Layer index (0, 1, 2, ...)",
+        help_text="Layer index (1, 2, 3, ...)",
     )
     direction = models.CharField(
         max_length=10,

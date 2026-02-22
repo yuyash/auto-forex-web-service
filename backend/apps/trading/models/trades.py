@@ -79,6 +79,22 @@ class Trade(models.Model):
         blank=True,
         help_text="Number of retracements in the layer at the time of this trade",
     )
+    position = models.ForeignKey(
+        "trading.Position",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="trades",
+        help_text="Position this trade belongs to",
+    )
+    order = models.ForeignKey(
+        "trading.Order",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="trades",
+        help_text="Order that resulted in this trade",
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         help_text="Timestamp when this record was created",

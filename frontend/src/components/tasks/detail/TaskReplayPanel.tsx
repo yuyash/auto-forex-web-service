@@ -10,6 +10,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   CircularProgress,
   FormControl,
   IconButton,
@@ -32,6 +33,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import SelectAllIcon from '@mui/icons-material/SelectAll';
 import DeselectIcon from '@mui/icons-material/Deselect';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   CandlestickSeries,
@@ -47,7 +49,10 @@ import {
 import { getAuthToken } from '../../../api/client';
 import { fetchAllTrades } from '../../../utils/fetchAllTrades';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
-import { useTaskPositions } from '../../../hooks/useTaskPositions';
+import {
+  useTaskPositions,
+  type TaskPosition,
+} from '../../../hooks/useTaskPositions';
 import { TaskType } from '../../../types/common';
 import { handleAuthErrorStatus } from '../../../utils/authEvents';
 import { detectMarketGaps } from '../../../utils/marketClosedMarkers';
@@ -99,6 +104,7 @@ type ReplayTrade = {
   execution_method_display?: string;
   layer_index?: number | null;
   retracement_count?: number | null;
+  position_id?: string | null;
 };
 
 interface TaskReplayPanelProps {
@@ -251,6 +257,50 @@ const fetchCandles = async (
   return body;
 };
 
+/** Compute PnL for a single position (used for sorting). */
+const computePosPnl = (
+  pos: TaskPosition & { _status: 'open' | 'closed' },
+  currentPrice: number | null
+): number => {
+  const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
+  const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
+  const units = Math.abs(pos.units ?? 0);
+  const dir = String(pos.direction).toLowerCase();
+  if (pos._status === 'open' && currentPrice != null && entryP != null) {
+    return dir === 'long'
+      ? (currentPrice - entryP) * units
+      : (entryP - currentPrice) * units;
+  }
+  if (pos._status === 'closed' && exitP != null && entryP != null) {
+    return dir === 'long' ? (exitP - entryP) * units : (entryP - exitP) * units;
+  }
+  return 0;
+};
+
+/** Compute Pips for a single position (used for sorting and display). */
+const computePosPips = (
+  pos: TaskPosition & { _status: 'open' | 'closed' },
+  currentPrice: number | null,
+  pipSize: number | null | undefined
+): number => {
+  if (!pipSize) return 0;
+  const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
+  if (entryP == null || !Number.isFinite(entryP)) return 0;
+  const dir = String(pos.direction).toLowerCase();
+  if (pos._status === 'open' && currentPrice != null) {
+    const diff = dir === 'long' ? currentPrice - entryP : entryP - currentPrice;
+    const pips = diff / pipSize;
+    return Number.isFinite(pips) ? pips : 0;
+  }
+  const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
+  if (exitP != null && Number.isFinite(exitP)) {
+    const diff = dir === 'long' ? exitP - entryP : entryP - exitP;
+    const pips = diff / pipSize;
+    return Number.isFinite(pips) ? pips : 0;
+  }
+  return 0;
+};
+
 export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   taskId,
   taskType,
@@ -260,6 +310,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   enableRealTimeUpdates = false,
   currentTick,
   latestExecution,
+  pipSize,
 }) => {
   const panelRootRef = useRef<HTMLDivElement | null>(null);
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
@@ -587,6 +638,254 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     setPage(0);
   }, [orderBy, order]);
 
+  const currentPrice =
+    currentTick?.price != null ? parseFloat(currentTick.price) : null;
+
+  // Merge open + closed positions for the Positions panel in the Trend tab
+  const allPositions = useMemo<
+    (TaskPosition & { _status: 'open' | 'closed' })[]
+  >(() => {
+    const open = pnlOpenPositions.map((p) => ({
+      ...p,
+      _status: 'open' as const,
+    }));
+    const closed = pnlClosedPositions.map((p) => ({
+      ...p,
+      _status: 'closed' as const,
+    }));
+    return [...open, ...closed].sort(
+      (a, b) =>
+        new Date(b.entry_time).getTime() - new Date(a.entry_time).getTime()
+    );
+  }, [pnlOpenPositions, pnlClosedPositions]);
+
+  const [posPage, setPosPage] = useState(0);
+  const [posRowsPerPage, setPosRowsPerPage] = useState(10);
+
+  type PosSortableKey =
+    | 'entry_time'
+    | 'exit_time'
+    | '_status'
+    | 'direction'
+    | 'layer_index'
+    | 'retracement_count'
+    | 'units'
+    | 'entry_price'
+    | 'exit_price'
+    | '_pips'
+    | '_pnl';
+  const [posOrderBy, setPosOrderBy] = useState<PosSortableKey>('entry_time');
+  const [posOrder, setPosOrder] = useState<'asc' | 'desc'>('desc');
+
+  const handlePosSort = useCallback((column: PosSortableKey) => {
+    setPosOrderBy((prev) => {
+      if (prev === column) {
+        setPosOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setPosOrder(
+        column === 'entry_time' || column === 'exit_time' ? 'desc' : 'asc'
+      );
+      return column;
+    });
+    setPosPage(0);
+  }, []);
+
+  const sortedPositions = useMemo(() => {
+    return [...allPositions].sort((a, b) => {
+      let cmp = 0;
+      switch (posOrderBy) {
+        case 'entry_time':
+          cmp =
+            new Date(a.entry_time).getTime() - new Date(b.entry_time).getTime();
+          break;
+        case 'exit_time': {
+          const aT = a.exit_time ? new Date(a.exit_time).getTime() : 0;
+          const bT = b.exit_time ? new Date(b.exit_time).getTime() : 0;
+          cmp = aT - bT;
+          break;
+        }
+        case '_status':
+          cmp = a._status.localeCompare(b._status);
+          break;
+        case 'direction':
+          cmp = a.direction.localeCompare(b.direction);
+          break;
+        case 'layer_index':
+          cmp = (a.layer_index ?? -1) - (b.layer_index ?? -1);
+          break;
+        case 'retracement_count':
+          cmp = (a.retracement_count ?? -1) - (b.retracement_count ?? -1);
+          break;
+        case 'units':
+          cmp = Math.abs(a.units ?? 0) - Math.abs(b.units ?? 0);
+          break;
+        case 'entry_price':
+          cmp =
+            parseFloat(a.entry_price || '0') - parseFloat(b.entry_price || '0');
+          break;
+        case 'exit_price':
+          cmp =
+            parseFloat(a.exit_price || '0') - parseFloat(b.exit_price || '0');
+          break;
+        case '_pips': {
+          const pipsA = computePosPips(a, currentPrice, pipSize);
+          const pipsB = computePosPips(b, currentPrice, pipSize);
+          cmp = pipsA - pipsB;
+          break;
+        }
+        case '_pnl': {
+          const pnlA = computePosPnl(a, currentPrice);
+          const pnlB = computePosPnl(b, currentPrice);
+          cmp = pnlA - pnlB;
+          break;
+        }
+      }
+      return posOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [allPositions, posOrderBy, posOrder, currentPrice, pipSize]);
+
+  const paginatedPositions = useMemo(
+    () =>
+      sortedPositions.slice(
+        posPage * posRowsPerPage,
+        posPage * posRowsPerPage + posRowsPerPage
+      ),
+    [sortedPositions, posPage, posRowsPerPage]
+  );
+
+  // Position row selection
+  const [selectedPosIds, setSelectedPosIds] = useState<Set<string>>(new Set());
+
+  // Single-position highlight (like selectedTradeId for trades)
+  const [selectedPosId, setSelectedPosId] = useState<string | null>(null);
+  // Set of trade IDs highlighted because of a position click
+  const [highlightedTradeIds, setHighlightedTradeIds] = useState<Set<string>>(
+    new Set()
+  );
+  const selectedPosRowRef = useRef<HTMLTableRowElement | null>(null);
+  const pendingPosScrollRef = useRef(false);
+
+  const isAllPosPageSelected =
+    paginatedPositions.length > 0 &&
+    paginatedPositions.every((r) => selectedPosIds.has(r.id));
+
+  const togglePosSelection = useCallback((id: string) => {
+    setSelectedPosIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAllPosOnPage = useCallback(() => {
+    setSelectedPosIds((prev) => {
+      const next = new Set(prev);
+      for (const row of paginatedPositions) next.add(row.id);
+      return next;
+    });
+  }, [paginatedPositions]);
+
+  const resetPosSelection = useCallback(() => {
+    setSelectedPosIds(new Set());
+  }, []);
+
+  const copySelectedPositions = useCallback(() => {
+    const header = [
+      'Open Time',
+      'Close Time',
+      'Status',
+      'Dir',
+      'Layer',
+      'Retrace',
+      'Units',
+      'Entry',
+      'Exit',
+      'Pips',
+      'PnL',
+    ].join('\t');
+    const rows = allPositions
+      .filter((r) => selectedPosIds.has(r.id))
+      .map((pos) => {
+        const isOpen = pos._status === 'open';
+        const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
+        const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
+        const units = Math.abs(pos.units ?? 0);
+        const dir = String(pos.direction).toLowerCase();
+        let pnl: number | null = null;
+        if (isOpen && currentPrice != null && entryP != null) {
+          pnl =
+            dir === 'long'
+              ? (currentPrice - entryP) * units
+              : (entryP - currentPrice) * units;
+        } else if (!isOpen && exitP != null && entryP != null) {
+          pnl =
+            dir === 'long'
+              ? (exitP - entryP) * units
+              : (entryP - exitP) * units;
+        }
+        const pips = computePosPips(pos, currentPrice, pipSize);
+        const hasPrice = isOpen
+          ? currentPrice != null && entryP != null
+          : exitP != null && entryP != null;
+        return [
+          pos.entry_time ? new Date(pos.entry_time).toLocaleString() : '-',
+          pos.exit_time ? new Date(pos.exit_time).toLocaleString() : '-',
+          isOpen ? 'Open' : 'Closed',
+          dir.toUpperCase(),
+          pos.layer_index ?? '-',
+          pos.retracement_count ?? '-',
+          pos.units,
+          entryP != null ? `¥${entryP.toFixed(3)}` : '-',
+          exitP != null ? `¥${exitP.toFixed(3)}` : '-',
+          pipSize && hasPrice ? pips.toFixed(1) : '-',
+          pnl != null ? pnl.toFixed(2) : '-',
+        ].join('\t');
+      });
+    navigator.clipboard.writeText([header, ...rows].join('\n'));
+  }, [selectedPosIds, allPositions, currentPrice, pipSize]);
+
+  // --- Cross-linking helpers: trade ↔ position (using backend IDs) ---
+  const positionById = useMemo(() => {
+    const map = new Map<string, (typeof allPositions)[number]>();
+    for (const pos of allPositions) map.set(pos.id, pos);
+    return map;
+  }, [allPositions]);
+
+  const tradeById = useMemo(() => {
+    const map = new Map<string, ReplayTrade>();
+    for (const t of trades) map.set(t.id, t);
+    return map;
+  }, [trades]);
+
+  const posToTradeIds = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const pos of allPositions) {
+      if (pos.trade_ids && pos.trade_ids.length > 0) {
+        map.set(pos.id, pos.trade_ids);
+      }
+    }
+    return map;
+  }, [allPositions]);
+
+  const findPositionForTrade = useCallback(
+    (trade: ReplayTrade): (typeof allPositions)[number] | null => {
+      if (trade.position_id) {
+        return positionById.get(trade.position_id) ?? null;
+      }
+      return null;
+    },
+    [positionById]
+  );
+
+  const findTradeIdsForPosition = useCallback(
+    (pos: (typeof allPositions)[number]): string[] => {
+      return posToTradeIds.get(pos.id) ?? [];
+    },
+    [posToTradeIds]
+  );
+
   // When a chart marker is clicked, navigate the table to the page containing
   // the selected trade and scroll the row into view.
   const pendingScrollRef = useRef(false);
@@ -601,7 +900,33 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     const targetPage = Math.floor(idx / rowsPerPage);
     pendingScrollRef.current = true;
     setPage(targetPage);
-  }, [selectedTradeId, sortedTrades, rowsPerPage]);
+
+    // Also highlight the related position
+    const trade = trades.find((t) => t.id === selectedTradeId);
+    if (trade) {
+      const pos = findPositionForTrade(trade);
+      if (pos) {
+        setSelectedPosId(pos.id);
+        const posIdx = sortedPositions.findIndex((p) => p.id === pos.id);
+        if (posIdx !== -1) {
+          const targetPosPage = Math.floor(posIdx / posRowsPerPage);
+          pendingPosScrollRef.current = true;
+          setPosPage(targetPosPage);
+        }
+      } else {
+        setSelectedPosId(null);
+      }
+    }
+    setHighlightedTradeIds(new Set());
+  }, [
+    selectedTradeId,
+    sortedTrades,
+    rowsPerPage,
+    trades,
+    findPositionForTrade,
+    sortedPositions,
+    posRowsPerPage,
+  ]);
 
   // After the table re-renders with the selected row on the correct page,
   // scroll to it (only when triggered by a chart click).
@@ -616,6 +941,19 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     });
     return () => cancelAnimationFrame(raf);
   }, [page, selectedTradeId]);
+
+  // Scroll the Positions table to the highlighted position row
+  useEffect(() => {
+    if (!pendingPosScrollRef.current) return;
+    pendingPosScrollRef.current = false;
+    const raf = requestAnimationFrame(() => {
+      selectedPosRowRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [posPage, selectedPosId]);
 
   const granularityOptions = useMemo(() => {
     if (granularities.length > 0) {
@@ -657,9 +995,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     candleTimestamps: candleTimestampsMemo,
     currentTickTimestamp: enableRealTimeUpdates ? currentTick?.timestamp : null,
   });
-
-  const currentPrice =
-    currentTick?.price != null ? parseFloat(currentTick.price) : null;
 
   const replaySummary = useMemo(() => {
     // Realized PnL — from closed positions
@@ -814,7 +1149,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                       : (direction as 'long' | 'short' | '');
               }
               return {
-                id: `${timestamp}-${idx}`,
+                id: t.id ? String(t.id) : `${timestamp}-${idx}`,
                 sequence: idx + 1,
                 timestamp,
                 timeSec: parsedTime,
@@ -835,6 +1170,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                   t.retracement_count === undefined
                     ? null
                     : Number(t.retracement_count),
+                position_id:
+                  t.position_id === null || t.position_id === undefined
+                    ? null
+                    : String(t.position_id),
               };
             }
           )
@@ -968,8 +1307,19 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         const currDiff = Math.abs(Number(curr.timeSec) - t);
         return currDiff < prevDiff ? curr : prev;
       }, tradesRef.current[0]);
-      chartClickedRef.current = true;
-      setSelectedTradeId(nearest.id);
+
+      // Toggle off if the same trade is already selected
+      setSelectedTradeId((prev) => {
+        if (prev === nearest.id) {
+          // Deselect — clear all cross-highlights
+          setSelectedPosId(null);
+          setHighlightedTradeIds(new Set());
+          return null;
+        }
+        // Select — let the existing effect handle cross-highlighting
+        chartClickedRef.current = true;
+        return nearest.id;
+      });
     });
 
     // Detect user-initiated scroll/zoom and disable auto-follow
@@ -1140,7 +1490,8 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     if (!seriesRef.current || !markersRef.current) return;
 
     const tradeMarkers = trades.map((t) => {
-      const selected = t.id === selectedTradeId;
+      const selected =
+        t.id === selectedTradeId || highlightedTradeIds.has(t.id);
       const units = Number(t.units);
       const lots = Number.isFinite(units) ? Math.abs(units) / LOT_UNITS : null;
       const executionMethod = String(t.execution_method || '').toLowerCase();
@@ -1192,7 +1543,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     } catch (e) {
       console.warn('Failed to set trade markers:', e);
     }
-  }, [trades, selectedTradeId, programmaticScrollRef]);
+  }, [trades, selectedTradeId, highlightedTradeIds, programmaticScrollRef]);
 
   const handleGranularityChange = (e: SelectChangeEvent) => {
     // Save the current visible time range so we can restore it after new
@@ -1211,8 +1562,32 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   };
 
   const onRowSelect = (row: ReplayTrade) => {
+    // Toggle off if the same trade is already selected
+    if (row.id === selectedTradeId) {
+      setSelectedTradeId(null);
+      setSelectedPosId(null);
+      setHighlightedTradeIds(new Set());
+      return;
+    }
+
     setSelectedTradeId(row.id);
+    setHighlightedTradeIds(new Set());
     setAutoFollow(false);
+
+    // Also highlight the related position
+    const pos = findPositionForTrade(row);
+    if (pos) {
+      setSelectedPosId(pos.id);
+      const posIdx = sortedPositions.findIndex((p) => p.id === pos.id);
+      if (posIdx !== -1) {
+        const targetPosPage = Math.floor(posIdx / posRowsPerPage);
+        pendingPosScrollRef.current = true;
+        setPosPage(targetPosPage);
+      }
+    } else {
+      setSelectedPosId(null);
+    }
+
     const ts = chartRef.current?.timeScale();
     if (!ts) return;
 
@@ -1237,6 +1612,76 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       });
     } catch (e) {
       console.warn('Failed to set visible range on row select:', e);
+    }
+  };
+
+  const onPosRowSelect = (pos: (typeof allPositions)[number]) => {
+    // Toggle off if the same position is already selected
+    if (pos.id === selectedPosId) {
+      setSelectedPosId(null);
+      setSelectedTradeId(null);
+      setHighlightedTradeIds(new Set());
+      return;
+    }
+
+    setSelectedPosId(pos.id);
+    setAutoFollow(false);
+
+    // Find related trade IDs from the position's trade_ids
+    const relatedTradeIds = findTradeIdsForPosition(pos);
+    const relatedIdSet = new Set(relatedTradeIds);
+    setHighlightedTradeIds(relatedIdSet);
+
+    // Find the first (open) trade to highlight in the Trades table and scroll chart to it
+    // Prefer the earliest trade (the open trade)
+    const relatedTrades = relatedTradeIds
+      .map((tid) => tradeById.get(tid))
+      .filter((t): t is ReplayTrade => t != null)
+      .sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+
+    if (relatedTrades.length > 0) {
+      const openTrade = relatedTrades[0];
+      setSelectedTradeId(openTrade.id);
+
+      // Navigate Trades table to the open trade's page
+      const idx = sortedTrades.findIndex((t) => t.id === openTrade.id);
+      if (idx !== -1) {
+        const targetPage = Math.floor(idx / rowsPerPage);
+        pendingScrollRef.current = true;
+        setPage(targetPage);
+      }
+
+      // Scroll chart to show the open trade
+      const ts = chartRef.current?.timeScale();
+      if (ts) {
+        const range = ts.getVisibleRange();
+        if (range) {
+          const from = Number(range.from);
+          const to = Number(range.to);
+          const target = Number(openTrade.timeSec);
+          if (target < from || target > to) {
+            const span = to - from;
+            const half = span / 2;
+            programmaticScrollRef.current = true;
+            try {
+              ts.setVisibleRange({
+                from: (target - half) as Time,
+                to: (target + half) as Time,
+              });
+            } catch (e) {
+              console.warn(
+                'Failed to set visible range on position select:',
+                e
+              );
+            }
+          }
+        }
+      }
+    } else {
+      setSelectedTradeId(null);
     }
   };
 
@@ -1386,6 +1831,8 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               setAutoFollow(true);
               setSelectedTradeId(null);
               setSelectedRowIds(new Set());
+              setSelectedPosId(null);
+              setHighlightedTradeIds(new Set());
               setPage(0);
             }}
             disabled={autoFollow}
@@ -1400,6 +1847,19 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             Follow
           </Button>
         )}
+
+        <Tooltip title="Reset zoom (show all)">
+          <IconButton
+            size="small"
+            onClick={() => {
+              programmaticScrollRef.current = true;
+              chartRef.current?.timeScale().fitContent();
+            }}
+            sx={{ height: 32, width: 32 }}
+          >
+            <ZoomOutMapIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       <Paper
@@ -1438,300 +1898,771 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         />
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-        <Typography variant="subtitle1">Layer Trade Timeline</Typography>
-        {selectedRowIds.size > 0 && (
-          <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-            ({selectedRowIds.size} selected)
-          </Typography>
-        )}
-        <Box sx={{ flex: 1 }} />
-        <Tooltip title="Copy selected rows">
-          <span>
-            <IconButton
-              size="small"
-              onClick={copySelectedRows}
-              disabled={selectedRowIds.size === 0}
-            >
-              <ContentCopyIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title="Select all on page">
-          <IconButton size="small" onClick={selectAllOnPage}>
-            <SelectAllIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Reset selection">
-          <span>
-            <IconButton
-              size="small"
-              onClick={resetSelection}
-              disabled={selectedRowIds.size === 0}
-            >
-              <DeselectIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title="Reload data">
-          <IconButton
-            size="small"
-            onClick={fetchReplayData}
-            disabled={isRefreshing}
+      <Box sx={{ display: 'flex', gap: 2, mt: 0.5, alignItems: 'flex-start' }}>
+        {/* Left column: Trades */}
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              height: 36,
+              minHeight: 36,
+            }}
           >
-            <RefreshIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Box>
-
-      <TableContainer component={Paper} variant="outlined">
-        <Table stickyHeader size="small" sx={{ tableLayout: 'fixed' }}>
-          <TableHead>
-            <TableRow>
-              <TableCell padding="checkbox" sx={{ width: 42 }}>
-                <Checkbox
+            <Typography variant="subtitle1">Trades</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+              ({sortedTrades.length})
+            </Typography>
+            {selectedRowIds.size > 0 && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 0.5 }}
+              >
+                — {selectedRowIds.size} selected
+              </Typography>
+            )}
+            <Box sx={{ flex: 1 }} />
+            <Tooltip title="Copy selected rows">
+              <span>
+                <IconButton
                   size="small"
-                  checked={isAllPageSelected}
-                  indeterminate={
-                    !isAllPageSelected &&
-                    paginatedTrades.some((r) => selectedRowIds.has(r.id))
-                  }
-                  onChange={() => {
-                    if (isAllPageSelected) {
-                      setSelectedRowIds((prev) => {
-                        const next = new Set(prev);
-                        for (const row of paginatedTrades) next.delete(row.id);
-                        return next;
-                      });
-                    } else {
-                      selectAllOnPage();
-                    }
-                  }}
-                />
-              </TableCell>
-              <TableCell
-                sortDirection={orderBy === 'timestamp' ? order : false}
-                sx={{ position: 'relative', width: replayColWidths.timestamp }}
+                  onClick={copySelectedRows}
+                  disabled={selectedRowIds.size === 0}
+                >
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Select all on page">
+              <IconButton size="small" onClick={selectAllOnPage}>
+                <SelectAllIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Reset selection">
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={resetSelection}
+                  disabled={selectedRowIds.size === 0}
+                >
+                  <DeselectIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Reload data">
+              <IconButton
+                size="small"
+                onClick={fetchReplayData}
+                disabled={isRefreshing}
               >
-                <TableSortLabel
-                  active={orderBy === 'timestamp'}
-                  direction={orderBy === 'timestamp' ? order : 'asc'}
-                  onClick={() => handleSort('timestamp')}
-                >
-                  Time
-                </TableSortLabel>
-                {resizeHandle('timestamp')}
-              </TableCell>
-              <TableCell
-                sortDirection={orderBy === 'direction' ? order : false}
-                sx={{ position: 'relative', width: replayColWidths.direction }}
-              >
-                <TableSortLabel
-                  active={orderBy === 'direction'}
-                  direction={orderBy === 'direction' ? order : 'asc'}
-                  onClick={() => handleSort('direction')}
-                >
-                  Direction
-                </TableSortLabel>
-                {resizeHandle('direction')}
-              </TableCell>
-              <TableCell
-                sortDirection={orderBy === 'layer_index' ? order : false}
-                sx={{
-                  position: 'relative',
-                  width: replayColWidths.layer_index,
-                }}
-              >
-                <TableSortLabel
-                  active={orderBy === 'layer_index'}
-                  direction={orderBy === 'layer_index' ? order : 'asc'}
-                  onClick={() => handleSort('layer_index')}
-                >
-                  Layer
-                </TableSortLabel>
-                {resizeHandle('layer_index')}
-              </TableCell>
-              <TableCell
-                align="right"
-                sortDirection={orderBy === 'retracement_count' ? order : false}
-                sx={{
-                  position: 'relative',
-                  width: replayColWidths.retracement_count,
-                }}
-              >
-                <TableSortLabel
-                  active={orderBy === 'retracement_count'}
-                  direction={orderBy === 'retracement_count' ? order : 'asc'}
-                  onClick={() => handleSort('retracement_count')}
-                >
-                  Ret
-                </TableSortLabel>
-                {resizeHandle('retracement_count')}
-              </TableCell>
-              <TableCell
-                align="right"
-                sortDirection={orderBy === 'units' ? order : false}
-                sx={{ position: 'relative', width: replayColWidths.units }}
-              >
-                <TableSortLabel
-                  active={orderBy === 'units'}
-                  direction={orderBy === 'units' ? order : 'asc'}
-                  onClick={() => handleSort('units')}
-                >
-                  Units
-                </TableSortLabel>
-                {resizeHandle('units')}
-              </TableCell>
-              <TableCell
-                align="right"
-                sortDirection={orderBy === 'price' ? order : false}
-                sx={{ position: 'relative', width: replayColWidths.price }}
-              >
-                <TableSortLabel
-                  active={orderBy === 'price'}
-                  direction={orderBy === 'price' ? order : 'asc'}
-                  onClick={() => handleSort('price')}
-                >
-                  Price
-                </TableSortLabel>
-                {resizeHandle('price')}
-              </TableCell>
-              <TableCell
-                sortDirection={orderBy === 'execution_method' ? order : false}
-                sx={{
-                  position: 'relative',
-                  width: replayColWidths.execution_method,
-                }}
-              >
-                <TableSortLabel
-                  active={orderBy === 'execution_method'}
-                  direction={orderBy === 'execution_method' ? order : 'asc'}
-                  onClick={() => handleSort('execution_method')}
-                >
-                  Event
-                </TableSortLabel>
-                {resizeHandle('execution_method')}
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {paginatedTrades.map((row) => {
-              const selected = row.id === selectedTradeId;
-              const checked = selectedRowIds.has(row.id);
-              return (
-                <TableRow
-                  key={row.id}
-                  ref={selected ? selectedRowRef : undefined}
-                  hover
-                  onClick={() => onRowSelect(row)}
-                  selected={selected}
-                  sx={{
-                    cursor: 'pointer',
-                    ...(selected && {
-                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                      '&.Mui-selected': {
-                        backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                      },
-                      '&.Mui-selected:hover': {
-                        backgroundColor: 'rgba(245, 158, 11, 0.25)',
-                      },
-                    }),
-                  }}
-                >
-                  <TableCell padding="checkbox">
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+
+          <TableContainer component={Paper} variant="outlined">
+            <Table stickyHeader size="small" sx={{ tableLayout: 'fixed' }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox" sx={{ width: 42 }}>
                     <Checkbox
                       size="small"
-                      checked={checked}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={() => toggleRowSelection(row.id)}
+                      checked={isAllPageSelected}
+                      indeterminate={
+                        !isAllPageSelected &&
+                        paginatedTrades.some((r) => selectedRowIds.has(r.id))
+                      }
+                      onChange={() => {
+                        if (isAllPageSelected) {
+                          setSelectedRowIds((prev) => {
+                            const next = new Set(prev);
+                            for (const row of paginatedTrades)
+                              next.delete(row.id);
+                            return next;
+                          });
+                        } else {
+                          selectAllOnPage();
+                        }
+                      }}
                     />
                   </TableCell>
                   <TableCell
+                    sortDirection={orderBy === 'timestamp' ? order : false}
                     sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
+                      position: 'relative',
+                      width: replayColWidths.timestamp,
                     }}
                   >
-                    {new Date(row.timestamp).toLocaleString()}
+                    <TableSortLabel
+                      active={orderBy === 'timestamp'}
+                      direction={orderBy === 'timestamp' ? order : 'asc'}
+                      onClick={() => handleSort('timestamp')}
+                    >
+                      Time
+                    </TableSortLabel>
+                    {resizeHandle('timestamp')}
                   </TableCell>
                   <TableCell
+                    sortDirection={orderBy === 'direction' ? order : false}
                     sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
+                      position: 'relative',
+                      width: replayColWidths.direction,
                     }}
                   >
-                    {row.direction ? row.direction.toUpperCase() : ''}
+                    <TableSortLabel
+                      active={orderBy === 'direction'}
+                      direction={orderBy === 'direction' ? order : 'asc'}
+                      onClick={() => handleSort('direction')}
+                    >
+                      Direction
+                    </TableSortLabel>
+                    {resizeHandle('direction')}
                   </TableCell>
                   <TableCell
+                    sortDirection={orderBy === 'layer_index' ? order : false}
                     sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
+                      position: 'relative',
+                      width: replayColWidths.layer_index,
                     }}
                   >
-                    {row.layer_index ?? '-'}
+                    <TableSortLabel
+                      active={orderBy === 'layer_index'}
+                      direction={orderBy === 'layer_index' ? order : 'asc'}
+                      onClick={() => handleSort('layer_index')}
+                    >
+                      Layer
+                    </TableSortLabel>
+                    {resizeHandle('layer_index')}
                   </TableCell>
                   <TableCell
                     align="right"
+                    sortDirection={
+                      orderBy === 'retracement_count' ? order : false
+                    }
                     sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
+                      position: 'relative',
+                      width: replayColWidths.retracement_count,
                     }}
                   >
-                    {row.retracement_count ?? '-'}
+                    <TableSortLabel
+                      active={orderBy === 'retracement_count'}
+                      direction={
+                        orderBy === 'retracement_count' ? order : 'asc'
+                      }
+                      onClick={() => handleSort('retracement_count')}
+                    >
+                      Ret
+                    </TableSortLabel>
+                    {resizeHandle('retracement_count')}
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                    sortDirection={orderBy === 'units' ? order : false}
+                    sx={{ position: 'relative', width: replayColWidths.units }}
                   >
-                    {row.units}
+                    <TableSortLabel
+                      active={orderBy === 'units'}
+                      direction={orderBy === 'units' ? order : 'asc'}
+                      onClick={() => handleSort('units')}
+                    >
+                      Units
+                    </TableSortLabel>
+                    {resizeHandle('units')}
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                    sortDirection={orderBy === 'price' ? order : false}
+                    sx={{ position: 'relative', width: replayColWidths.price }}
                   >
-                    {row.price ? `¥${parseFloat(row.price).toFixed(3)}` : '-'}
+                    <TableSortLabel
+                      active={orderBy === 'price'}
+                      direction={orderBy === 'price' ? order : 'asc'}
+                      onClick={() => handleSort('price')}
+                    >
+                      Price
+                    </TableSortLabel>
+                    {resizeHandle('price')}
                   </TableCell>
                   <TableCell
+                    sortDirection={
+                      orderBy === 'execution_method' ? order : false
+                    }
                     sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
+                      position: 'relative',
+                      width: replayColWidths.execution_method,
                     }}
                   >
-                    {row.execution_method_display ||
-                      row.execution_method ||
-                      '-'}
+                    <TableSortLabel
+                      active={orderBy === 'execution_method'}
+                      direction={orderBy === 'execution_method' ? order : 'asc'}
+                      onClick={() => handleSort('execution_method')}
+                    >
+                      Event
+                    </TableSortLabel>
+                    {resizeHandle('execution_method')}
                   </TableCell>
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      <TablePagination
-        component="div"
-        count={sortedTrades.length}
-        page={page}
-        onPageChange={(_e, newPage) => setPage(newPage)}
-        rowsPerPage={rowsPerPage}
-        onRowsPerPageChange={(e) => {
-          setRowsPerPage(parseInt(e.target.value, 10));
-          setPage(0);
-        }}
-        rowsPerPageOptions={[10, 25, 50, 100]}
-      />
+              </TableHead>
+              <TableBody>
+                {paginatedTrades.map((row) => {
+                  const selected = row.id === selectedTradeId;
+                  const highlighted = highlightedTradeIds.has(row.id);
+                  const checked = selectedRowIds.has(row.id);
+                  return (
+                    <TableRow
+                      key={row.id}
+                      ref={selected ? selectedRowRef : undefined}
+                      hover
+                      onClick={() => onRowSelect(row)}
+                      selected={selected || highlighted}
+                      sx={{
+                        cursor: 'pointer',
+                        height: 37,
+                        ...((selected || highlighted) && {
+                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                          '&.Mui-selected': {
+                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                          },
+                          '&.Mui-selected:hover': {
+                            backgroundColor: 'rgba(245, 158, 11, 0.25)',
+                          },
+                        }),
+                      }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          size="small"
+                          checked={checked}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => toggleRowSelection(row.id)}
+                        />
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {new Date(row.timestamp).toLocaleString()}
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {row.direction ? row.direction.toUpperCase() : ''}
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {row.layer_index ?? '-'}
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {row.retracement_count ?? '-'}
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {row.units}
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {row.price
+                          ? `¥${parseFloat(row.price).toFixed(3)}`
+                          : '-'}
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {row.execution_method_display ||
+                          row.execution_method ||
+                          '-'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination
+            component="div"
+            count={sortedTrades.length}
+            page={page}
+            onPageChange={(_e, newPage) => setPage(newPage)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(e) => {
+              const newVal = parseInt(e.target.value, 10);
+              setRowsPerPage(newVal);
+              setPage(0);
+              setPosRowsPerPage(newVal);
+              setPosPage(0);
+            }}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+          />
+        </Box>
+
+        {/* Right column: Positions */}
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              height: 36,
+              minHeight: 36,
+            }}
+          >
+            <Typography variant="subtitle1">Positions</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+              ({allPositions.length})
+            </Typography>
+            {selectedPosIds.size > 0 && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 0.5 }}
+              >
+                — {selectedPosIds.size} selected
+              </Typography>
+            )}
+            <Box sx={{ flex: 1 }} />
+            <Tooltip title="Copy selected positions">
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={copySelectedPositions}
+                  disabled={selectedPosIds.size === 0}
+                >
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Select all on page">
+              <IconButton size="small" onClick={selectAllPosOnPage}>
+                <SelectAllIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Reset selection">
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={resetPosSelection}
+                  disabled={selectedPosIds.size === 0}
+                >
+                  <DeselectIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Reload data">
+              <IconButton
+                size="small"
+                onClick={fetchReplayData}
+                disabled={isRefreshing}
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+
+          <TableContainer component={Paper} variant="outlined">
+            <Table stickyHeader size="small" sx={{ tableLayout: 'fixed' }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox" sx={{ width: 42 }}>
+                    <Checkbox
+                      size="small"
+                      checked={isAllPosPageSelected}
+                      indeterminate={
+                        !isAllPosPageSelected &&
+                        paginatedPositions.some((r) => selectedPosIds.has(r.id))
+                      }
+                      onChange={() => {
+                        if (isAllPosPageSelected) {
+                          setSelectedPosIds((prev) => {
+                            const next = new Set(prev);
+                            for (const row of paginatedPositions)
+                              next.delete(row.id);
+                            return next;
+                          });
+                        } else {
+                          selectAllPosOnPage();
+                        }
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell
+                    sx={{ width: 130 }}
+                    sortDirection={
+                      posOrderBy === 'entry_time' ? posOrder : false
+                    }
+                  >
+                    <TableSortLabel
+                      active={posOrderBy === 'entry_time'}
+                      direction={posOrderBy === 'entry_time' ? posOrder : 'asc'}
+                      onClick={() => handlePosSort('entry_time')}
+                    >
+                      Open Time
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell
+                    sx={{ width: 130 }}
+                    sortDirection={
+                      posOrderBy === 'exit_time' ? posOrder : false
+                    }
+                  >
+                    <TableSortLabel
+                      active={posOrderBy === 'exit_time'}
+                      direction={posOrderBy === 'exit_time' ? posOrder : 'asc'}
+                      onClick={() => handlePosSort('exit_time')}
+                    >
+                      Close Time
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell
+                    sx={{ width: 65 }}
+                    sortDirection={posOrderBy === '_status' ? posOrder : false}
+                  >
+                    <TableSortLabel
+                      active={posOrderBy === '_status'}
+                      direction={posOrderBy === '_status' ? posOrder : 'asc'}
+                      onClick={() => handlePosSort('_status')}
+                    >
+                      Status
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell
+                    sx={{ width: 65 }}
+                    sortDirection={
+                      posOrderBy === 'direction' ? posOrder : false
+                    }
+                  >
+                    <TableSortLabel
+                      active={posOrderBy === 'direction'}
+                      direction={posOrderBy === 'direction' ? posOrder : 'asc'}
+                      onClick={() => handlePosSort('direction')}
+                    >
+                      Dir
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell
+                    sx={{ width: 50 }}
+                    sortDirection={
+                      posOrderBy === 'layer_index' ? posOrder : false
+                    }
+                  >
+                    <TableSortLabel
+                      active={posOrderBy === 'layer_index'}
+                      direction={
+                        posOrderBy === 'layer_index' ? posOrder : 'asc'
+                      }
+                      onClick={() => handlePosSort('layer_index')}
+                    >
+                      Layer
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell
+                    sx={{ width: 50 }}
+                    sortDirection={
+                      posOrderBy === 'retracement_count' ? posOrder : false
+                    }
+                  >
+                    <TableSortLabel
+                      active={posOrderBy === 'retracement_count'}
+                      direction={
+                        posOrderBy === 'retracement_count' ? posOrder : 'asc'
+                      }
+                      onClick={() => handlePosSort('retracement_count')}
+                    >
+                      Retrace
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ width: 65 }}
+                    sortDirection={posOrderBy === 'units' ? posOrder : false}
+                  >
+                    <TableSortLabel
+                      active={posOrderBy === 'units'}
+                      direction={posOrderBy === 'units' ? posOrder : 'asc'}
+                      onClick={() => handlePosSort('units')}
+                    >
+                      Units
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ width: 85 }}
+                    sortDirection={
+                      posOrderBy === 'entry_price' ? posOrder : false
+                    }
+                  >
+                    <TableSortLabel
+                      active={posOrderBy === 'entry_price'}
+                      direction={
+                        posOrderBy === 'entry_price' ? posOrder : 'asc'
+                      }
+                      onClick={() => handlePosSort('entry_price')}
+                    >
+                      Entry
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ width: 85 }}
+                    sortDirection={
+                      posOrderBy === 'exit_price' ? posOrder : false
+                    }
+                  >
+                    <TableSortLabel
+                      active={posOrderBy === 'exit_price'}
+                      direction={posOrderBy === 'exit_price' ? posOrder : 'asc'}
+                      onClick={() => handlePosSort('exit_price')}
+                    >
+                      Exit
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ width: 75 }}
+                    sortDirection={posOrderBy === '_pips' ? posOrder : false}
+                  >
+                    <TableSortLabel
+                      active={posOrderBy === '_pips'}
+                      direction={posOrderBy === '_pips' ? posOrder : 'asc'}
+                      onClick={() => handlePosSort('_pips')}
+                    >
+                      Pips
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ width: 90 }}
+                    sortDirection={posOrderBy === '_pnl' ? posOrder : false}
+                  >
+                    <TableSortLabel
+                      active={posOrderBy === '_pnl'}
+                      direction={posOrderBy === '_pnl' ? posOrder : 'asc'}
+                      onClick={() => handlePosSort('_pnl')}
+                    >
+                      PnL
+                    </TableSortLabel>
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {paginatedPositions.map((pos) => {
+                  const isOpen = pos._status === 'open';
+                  const entryP = pos.entry_price
+                    ? parseFloat(pos.entry_price)
+                    : null;
+                  const exitP = pos.exit_price
+                    ? parseFloat(pos.exit_price)
+                    : null;
+                  const units = Math.abs(pos.units ?? 0);
+                  const dir = String(pos.direction).toLowerCase();
+                  let pnl: number | null = null;
+                  if (isOpen && currentPrice != null && entryP != null) {
+                    pnl =
+                      dir === 'long'
+                        ? (currentPrice - entryP) * units
+                        : (entryP - currentPrice) * units;
+                  } else if (!isOpen && exitP != null && entryP != null) {
+                    pnl =
+                      dir === 'long'
+                        ? (exitP - entryP) * units
+                        : (entryP - exitP) * units;
+                  }
+                  const posSelected = pos.id === selectedPosId;
+                  return (
+                    <TableRow
+                      key={pos.id}
+                      ref={posSelected ? selectedPosRowRef : undefined}
+                      hover
+                      onClick={() => onPosRowSelect(pos)}
+                      selected={posSelected}
+                      sx={{
+                        cursor: 'pointer',
+                        height: 37,
+                        ...(posSelected && {
+                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                          '&.Mui-selected': {
+                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                          },
+                          '&.Mui-selected:hover': {
+                            backgroundColor: 'rgba(245, 158, 11, 0.25)',
+                          },
+                        }),
+                      }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          size="small"
+                          checked={selectedPosIds.has(pos.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => togglePosSelection(pos.id)}
+                        />
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {pos.entry_time
+                          ? new Date(pos.entry_time).toLocaleString()
+                          : '-'}
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {pos.exit_time
+                          ? new Date(pos.exit_time).toLocaleString()
+                          : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={isOpen ? 'Open' : 'Closed'}
+                          size="small"
+                          color={isOpen ? 'success' : 'default'}
+                          variant="outlined"
+                          sx={{ height: 20, fontSize: '0.7rem' }}
+                        />
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          color: dir === 'long' ? 'success.main' : 'error.main',
+                        }}
+                      >
+                        {dir.toUpperCase()}
+                      </TableCell>
+                      <TableCell>{pos.layer_index ?? '-'}</TableCell>
+                      <TableCell>{pos.retracement_count ?? '-'}</TableCell>
+                      <TableCell align="right">{pos.units}</TableCell>
+                      <TableCell align="right">
+                        {entryP != null ? `¥${entryP.toFixed(3)}` : '-'}
+                      </TableCell>
+                      <TableCell align="right">
+                        {exitP != null ? `¥${exitP.toFixed(3)}` : '-'}
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          color: (() => {
+                            const pips = computePosPips(
+                              pos,
+                              currentPrice,
+                              pipSize
+                            );
+                            if (!pipSize) return 'text.secondary';
+                            return pips >= 0 ? 'success.main' : 'error.main';
+                          })(),
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        {(() => {
+                          if (!pipSize) return '-';
+                          const hasPrice = isOpen
+                            ? currentPrice != null && entryP != null
+                            : exitP != null && entryP != null;
+                          if (!hasPrice) return '-';
+                          const pips = computePosPips(
+                            pos,
+                            currentPrice,
+                            pipSize
+                          );
+                          return `${pips >= 0 ? '+' : ''}${pips.toFixed(1)}`;
+                        })()}
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          color:
+                            pnl != null
+                              ? pnl >= 0
+                                ? 'success.main'
+                                : 'error.main'
+                              : 'text.secondary',
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        {pnl != null
+                          ? `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`
+                          : '-'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination
+            component="div"
+            count={allPositions.length}
+            page={posPage}
+            onPageChange={(_e, newPage) => setPosPage(newPage)}
+            rowsPerPage={posRowsPerPage}
+            onRowsPerPageChange={(e) => {
+              const newVal = parseInt(e.target.value, 10);
+              setPosRowsPerPage(newVal);
+              setPosPage(0);
+              setRowsPerPage(newVal);
+              setPage(0);
+            }}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+          />
+        </Box>
+      </Box>
     </Box>
   );
 };

@@ -313,6 +313,15 @@ const FLOOR_STRATEGY_SCHEMA: ConfigSchema = {
       minimum: 1,
       group: 'Direction Detection Parameters',
     },
+    layer_direction_mode: {
+      type: 'string',
+      title: 'Layer Direction Mode',
+      default: 'independent',
+      enum: ['independent', 'inherit'],
+      description:
+        'How direction is determined when a new layer is added. "independent" re-evaluates from recent candle data; "inherit" uses the same direction as the previous layer.',
+      group: 'Direction Detection Parameters',
+    },
 
     allow_duplicate_units: {
       type: 'boolean',

@@ -179,7 +179,7 @@ describe('BacktestTaskDetail', () => {
       expect(screen.getByText('Events')).toBeInTheDocument();
       expect(screen.getByText('Logs')).toBeInTheDocument();
       expect(screen.getByText('Positions')).toBeInTheDocument();
-      expect(screen.getByText('Replay')).toBeInTheDocument();
+      expect(screen.getByText('Trend')).toBeInTheDocument();
     });
   });
 
@@ -224,11 +224,11 @@ describe('BacktestTaskDetail', () => {
     });
   });
 
-  it('switches to Replay tab when clicked', async () => {
+  it('switches to Trend tab when clicked', async () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
-    const replayTab = screen.getByText('Replay');
-    fireEvent.click(replayTab);
+    const trendTab = screen.getByText('Trend');
+    fireEvent.click(trendTab);
 
     await waitFor(() => {
       expect(screen.getByText('Replay Panel')).toBeInTheDocument();

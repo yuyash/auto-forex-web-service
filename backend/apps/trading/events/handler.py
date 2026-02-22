@@ -16,7 +16,7 @@ from apps.trading.events import (
     VolatilityHedgeNeutralizeEvent,
     VolatilityLockEvent,
 )
-from apps.trading.models import Position, Trade, TradingEvent
+from apps.trading.models import Order, Position, Trade, TradingEvent
 from apps.trading.order import OrderService, OrderServiceError
 
 logger: Logger = getLogger(name=__name__)
@@ -181,6 +181,8 @@ class EventHandler:
         layer_index: int | None = None,
         retracement_count: int | None = None,
         oanda_trade_id: str | None = None,
+        position: Position | None = None,
+        order: Order | None = None,
     ) -> None:
         Trade.objects.create(
             task_type=self.order_service.task_type.value,
@@ -195,6 +197,8 @@ class EventHandler:
             layer_index=layer_index,
             retracement_count=retracement_count,
             oanda_trade_id=oanda_trade_id,
+            position=position,
+            order=order,
         )
 
     def handle_event(self, trading_event: TradingEvent) -> Decimal:
@@ -245,7 +249,7 @@ class EventHandler:
             OrderServiceError: If order execution fails
         """
         direction = Direction(event.direction)
-        position = self.order_service.open_position(
+        position, order = self.order_service.open_position(
             instrument=self.instrument,
             units=event.units,
             direction=direction,
@@ -253,6 +257,7 @@ class EventHandler:
             merge_with_existing=False,
             override_price=event.price if event.price else None,
             tick_timestamp=event.timestamp,
+            retracement_count=event.retracement_count,
         )
 
         self._cache_position(event.layer_number, position)
@@ -266,6 +271,8 @@ class EventHandler:
             layer_index=event.layer_number,
             retracement_count=event.retracement_count,
             oanda_trade_id=position.oanda_trade_id,
+            position=position,
+            order=order,
         )
 
         logger.info(
@@ -291,7 +298,7 @@ class EventHandler:
             OrderServiceError: If order execution fails
         """
         direction = Direction(event.direction)
-        position = self.order_service.open_position(
+        position, order = self.order_service.open_position(
             instrument=self.instrument,
             units=event.units,
             direction=direction,
@@ -299,6 +306,7 @@ class EventHandler:
             merge_with_existing=False,
             override_price=event.price if event.price else None,
             tick_timestamp=event.timestamp,
+            retracement_count=event.retracement_count,
         )
 
         self._cache_position(event.layer_number, position)
@@ -312,6 +320,8 @@ class EventHandler:
             layer_index=event.layer_number,
             retracement_count=event.retracement_count,
             oanda_trade_id=position.oanda_trade_id,
+            position=position,
+            order=order,
         )
 
         logger.info(
@@ -375,7 +385,7 @@ class EventHandler:
                 units_to_close = min(remaining, pos_units)
                 closed_units = units_to_close
 
-            closed_position, realized_delta = self.order_service.close_position(
+            closed_position, realized_delta, close_order = self.order_service.close_position(
                 position=position,
                 units=units_to_close,
                 override_price=override_price,
@@ -393,6 +403,8 @@ class EventHandler:
                 layer_index=event.layer_number,
                 retracement_count=event.retracement_count,
                 oanda_trade_id=position.oanda_trade_id,
+                position=position,
+                order=close_order,
             )
 
             self._prune_closed_position(event.layer_number, closed_position)
@@ -448,7 +460,7 @@ class EventHandler:
             if not position.is_open:
                 continue
             try:
-                closed, realized_delta = self.order_service.close_position(
+                closed, realized_delta, close_order = self.order_service.close_position(
                     position,
                     tick_timestamp=event.timestamp,
                 )
@@ -464,6 +476,8 @@ class EventHandler:
                     timestamp=event.timestamp,
                     layer_index=position.layer_index,
                     oanda_trade_id=position.oanda_trade_id,
+                    position=position,
+                    order=close_order,
                 )
                 logger.info(
                     "Closed position due to volatility: layer=%s, position_id=%s, pnl=%s",
@@ -514,7 +528,7 @@ class EventHandler:
             if units <= 0:
                 continue
             try:
-                hedged = self.order_service.open_position(
+                hedged, _order = self.order_service.open_position(
                     instrument=self.instrument,
                     units=units,
                     direction=direction,
@@ -588,7 +602,7 @@ class EventHandler:
                 units_to_close = None
                 if remaining_units is not None:
                     units_to_close = min(abs(position.units), remaining_units)
-                closed, realized_delta = self.order_service.close_position(
+                closed, realized_delta, close_order = self.order_service.close_position(
                     position,
                     units=units_to_close,
                     tick_timestamp=event.timestamp,
@@ -605,6 +619,8 @@ class EventHandler:
                     timestamp=event.timestamp,
                     layer_index=position.layer_index,
                     oanda_trade_id=position.oanda_trade_id,
+                    position=position,
+                    order=close_order,
                 )
                 touched_positions += 1
                 if remaining_units is not None:

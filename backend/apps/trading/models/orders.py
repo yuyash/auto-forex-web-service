@@ -140,6 +140,14 @@ class Order(models.Model):
         blank=True,
         help_text="Error message if order was rejected",
     )
+    position = models.ForeignKey(
+        "trading.Position",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="orders",
+        help_text="Position this order belongs to",
+    )
     is_dry_run = models.BooleanField(
         default=False,
         db_index=True,

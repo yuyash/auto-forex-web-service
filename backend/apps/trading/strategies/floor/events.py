@@ -36,7 +36,7 @@ class EventFactory:
             price=entry_price,
             units=int(units),
             entry_time=timestamp,
-            retracement_count=0,
+            retracement_count=1,
         )
 
     @staticmethod

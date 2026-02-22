@@ -479,6 +479,9 @@ const StrategyConfigForm = ({
       multiplicative: 'Doubles each time (e.g. 10 → 20 → 40)',
       divisive: 'Halves each time (e.g. 40 → 20 → 10)',
       inverse: 'Halves each time (e.g. 1.0 → 0.5 → 0.25)',
+      independent:
+        'Re-evaluate direction from recent candle data for each new layer',
+      inherit: 'Use the same direction as the previous layer',
     };
     return descriptions[mode] || '';
   };

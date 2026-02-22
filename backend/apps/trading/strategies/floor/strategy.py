@@ -200,7 +200,7 @@ class FloorStrategy(Strategy):
                 price=entry_price,
                 units=units,
                 entry_time=tick.timestamp,
-                retracement_count=0,
+                retracement_count=1,
                 entry_id=entry_id,
             )
 
@@ -367,12 +367,10 @@ class FloorStrategy(Strategy):
     def _recompute_floor_retracements(self, floor_state: FloorStrategyState) -> None:
         grouped: dict[int, list[dict[str, Any]]] = {}
         for entry in floor_state.open_entries:
-            floor_index = int(entry.get("floor_index", 0))
+            floor_index = int(entry.get("floor_index", 1))
             grouped.setdefault(floor_index, []).append(entry)
         for floor_index, entries in grouped.items():
-            initial_count = sum(1 for item in entries if bool(item.get("is_initial")))
-            retracements = max(0, len(entries) - initial_count)
-            floor_state.floor_retracement_counts[floor_index] = retracements
+            floor_state.floor_retracement_counts[floor_index] = len(entries)
 
     def _apply_margin_protection(self, state, floor_state: FloorStrategyState, tick) -> list[Any]:
         margin_ratio = self._margin_ratio(state, floor_state, tick)
@@ -394,7 +392,7 @@ class FloorStrategy(Strategy):
         ordered_entries = sorted(
             floor_state.open_entries,
             key=lambda item: (
-                int(item.get("floor_index", 0)),
+                int(item.get("floor_index", 1)),
                 str(item.get("opened_at", "")),
                 int(item.get("entry_id", 0)),
             ),
@@ -570,8 +568,8 @@ class FloorStrategy(Strategy):
                         floor_state.floor_retracement_counts = {}
                         floor_state.floor_directions = {}
                         floor_state.return_stack = []
-                        floor_state.active_floor_index = 0
-                        floor_state.home_floor_index = 0
+                        floor_state.active_floor_index = 1
+                        floor_state.home_floor_index = 1
 
                     events.append(
                         GenericStrategyEvent(
@@ -622,7 +620,7 @@ class FloorStrategy(Strategy):
             return StrategyResult(state=state, events=events)
 
         active_floor = floor_state.active_floor_index
-        floor_state.floor_retracement_counts.setdefault(active_floor, 0)
+        floor_state.floor_retracement_counts.setdefault(active_floor, 1)
 
         # If no positions remain and margin ratio is still blown (balance
         # is too low to support even the minimum position), stop the task
@@ -827,7 +825,7 @@ class FloorStrategy(Strategy):
             and current_retracements < self.config.max_retracements_per_layer
             and not self._is_bad_market_condition(tick)
         ):
-            lots = self._retracement_lots(current_retracements)
+            lots = self._retracement_lots(current_retracements - 1)
             units = self._entry_units(floor_state, active_floor, lots)
             floor_state.floor_retracement_counts[active_floor] = current_retracements + 1
             events.append(
@@ -838,7 +836,7 @@ class FloorStrategy(Strategy):
                     direction=direction,
                     units=units,
                     take_profit_pips=self._effective_take_profit(
-                        floor_state, active_floor, current_retracements + 1
+                        floor_state, active_floor, current_retracements
                     ),
                     is_initial=False,
                 )
@@ -860,13 +858,13 @@ class FloorStrategy(Strategy):
         elif (
             adverse_pips >= trigger_threshold
             and current_retracements >= self.config.max_retracements_per_layer
-            and floor_state.active_floor_index < (self.config.max_layers - 1)
+            and floor_state.active_floor_index < self.config.max_layers
         ):
             # 3) Move to new floor and restart from initial lot.
             new_floor = floor_state.active_floor_index + 1
             floor_state.return_stack.append(floor_state.active_floor_index)
             floor_state.active_floor_index = new_floor
-            floor_state.floor_retracement_counts.setdefault(new_floor, 0)
+            floor_state.floor_retracement_counts.setdefault(new_floor, 1)
             events.append(
                 AddLayerEvent(
                     event_type=EventType.ADD_LAYER,

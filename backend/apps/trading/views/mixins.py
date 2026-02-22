@@ -294,6 +294,7 @@ class TaskSubResourceMixin:
             else:
                 queryset = queryset.filter(direction=direction)
         trades_qs = queryset.values(
+            "id",
             "direction",
             "units",
             "instrument",
@@ -302,6 +303,7 @@ class TaskSubResourceMixin:
             "layer_index",
             "retracement_count",
             "timestamp",
+            "position_id",
         )
         normalized: list[dict] = []
         for trade in trades_qs:
@@ -354,10 +356,14 @@ class TaskSubResourceMixin:
         celery_task_id = request.query_params.get("celery_task_id") or getattr(
             task, "celery_task_id", None
         )
-        queryset = Position.objects.filter(
-            task_type=self.task_type_label,
-            task_id=task.pk,
-        ).order_by("-entry_time")
+        queryset = (
+            Position.objects.filter(
+                task_type=self.task_type_label,
+                task_id=task.pk,
+            )
+            .prefetch_related("trades")
+            .order_by("-entry_time")
+        )
 
         if celery_task_id:
             queryset = queryset.filter(celery_task_id=celery_task_id)

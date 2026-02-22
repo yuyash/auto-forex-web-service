@@ -2,7 +2,7 @@
  * BacktestTaskDetail Component
  *
  * Main detail view for backtest tasks using task-based API endpoints.
- * Displays task info and tab navigation for Events, Logs, Trades, and Replay.
+ * Displays task info and tab navigation for Events, Logs, Trades, and Trend.
  *
  */
 
@@ -101,20 +101,21 @@ export const BacktestTaskDetail: React.FC = () => {
   const tabParam = searchParams.get('tab') || 'overview';
   const tabMap: Record<string, number> = {
     overview: 0,
-    positions: 1,
-    trades: 2,
-    orders: 3,
-    replay: 4,
+    trend: 1,
+    positions: 2,
+    trades: 3,
+    orders: 4,
     events: 5,
     logs: 6,
-    equity: 4,
+    equity: 1,
+    replay: 1,
   };
   const tabNames = [
     'overview',
+    'trend',
     'positions',
     'trades',
     'orders',
-    'replay',
     'events',
     'logs',
   ];
@@ -359,10 +360,10 @@ export const BacktestTaskDetail: React.FC = () => {
           sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
         >
           <Tab label="Overview" {...a11yProps(0)} />
-          <Tab label="Positions" {...a11yProps(1)} />
-          <Tab label="Trades" {...a11yProps(2)} />
-          <Tab label="Orders" {...a11yProps(3)} />
-          <Tab label="Replay" {...a11yProps(4)} />
+          <Tab label="Trend" {...a11yProps(1)} />
+          <Tab label="Positions" {...a11yProps(2)} />
+          <Tab label="Trades" {...a11yProps(3)} />
+          <Tab label="Orders" {...a11yProps(4)} />
           <Tab label="Events" {...a11yProps(5)} />
           <Tab label="Logs" {...a11yProps(6)} />
         </Tabs>
@@ -596,8 +597,28 @@ export const BacktestTaskDetail: React.FC = () => {
           </Box>
         </TabPanel>
 
-        {/* Positions Tab */}
+        {/* Trend Tab */}
         <TabPanel value={currentTabValue} index={1}>
+          <TaskReplayPanel
+            taskId={taskId}
+            taskType={TaskType.BACKTEST}
+            instrument={task.instrument}
+            startTime={task.start_time}
+            endTime={task.end_time}
+            latestExecution={task.latest_execution}
+            currentTick={
+              polledStatus?.current_tick ?? task.current_tick ?? null
+            }
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
+            pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
+            configId={task.config_id}
+          />
+        </TabPanel>
+
+        {/* Positions Tab */}
+        <TabPanel value={currentTabValue} index={2}>
           <TaskPositionsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
@@ -616,7 +637,7 @@ export const BacktestTaskDetail: React.FC = () => {
         </TabPanel>
 
         {/* Trades Tab */}
-        <TabPanel value={currentTabValue} index={2}>
+        <TabPanel value={currentTabValue} index={3}>
           <TaskTradesTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
@@ -628,33 +649,13 @@ export const BacktestTaskDetail: React.FC = () => {
         </TabPanel>
 
         {/* Orders Tab */}
-        <TabPanel value={currentTabValue} index={3}>
+        <TabPanel value={currentTabValue} index={4}>
           <TaskOrdersTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
-          />
-        </TabPanel>
-
-        {/* Replay Tab */}
-        <TabPanel value={currentTabValue} index={4}>
-          <TaskReplayPanel
-            taskId={taskId}
-            taskType={TaskType.BACKTEST}
-            instrument={task.instrument}
-            startTime={task.start_time}
-            endTime={task.end_time}
-            latestExecution={task.latest_execution}
-            currentTick={
-              polledStatus?.current_tick ?? task.current_tick ?? null
-            }
-            enableRealTimeUpdates={
-              (polledStatus?.status || task.status) === TaskStatus.RUNNING
-            }
-            pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
-            configId={task.config_id}
           />
         </TabPanel>
 

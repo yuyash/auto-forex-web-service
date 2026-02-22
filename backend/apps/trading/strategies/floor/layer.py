@@ -52,8 +52,8 @@ class LayerManager:
         Returns:
             Created layer index
         """
-        index: int = len(self.layers)
-        layer = Layer(index=index)
+        index: int = len(self.layers) + 1
+        layer = Layer(index=index, retracement_count=1)
         self.layers[index] = layer
         logger.info(msg=f"Created initial layer {index}.")
         return index

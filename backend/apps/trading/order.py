@@ -94,7 +94,8 @@ class OrderService:
         merge_with_existing: bool = True,
         override_price: Decimal | None = None,
         tick_timestamp: datetime | None = None,
-    ) -> Position:
+        retracement_count: int | None = None,
+    ) -> tuple[Position, Order]:
         """
         Open a new position with specified direction.
 
@@ -110,17 +111,17 @@ class OrderService:
             tick_timestamp: Optional tick timestamp to use for position/order times instead of wall clock.
 
         Returns:
-            Position: Created or updated position
+            tuple[Position, Order]: Created or updated position and the order record
 
         Raises:
             OrderServiceError: If order execution fails
 
         Example:
             # Open long position
-            long_pos = service.open_position("EUR_USD", 10000, Direction.LONG)
+            long_pos, order = service.open_position("EUR_USD", 10000, Direction.LONG)
 
             # Open short position
-            short_pos = service.open_position("USD_JPY", 5000, Direction.SHORT)
+            short_pos, order = service.open_position("USD_JPY", 5000, Direction.SHORT)
         """
         if units <= 0:
             raise OrderServiceError("Units must be positive")
@@ -138,6 +139,7 @@ class OrderService:
             merge_with_existing=merge_with_existing,
             override_price=override_price,
             tick_timestamp=tick_timestamp,
+            retracement_count=retracement_count,
         )
 
     def close_position(
@@ -146,7 +148,7 @@ class OrderService:
         units: int | None = None,
         override_price: Decimal | None = None,
         tick_timestamp: datetime | None = None,
-    ) -> tuple[Position, Decimal]:
+    ) -> tuple[Position, Decimal, Order | None]:
         """
         Close an existing position (full or partial).
 
@@ -161,18 +163,18 @@ class OrderService:
             tick_timestamp: Optional tick timestamp to use for position/order times instead of wall clock.
 
         Returns:
-            tuple[Position, Decimal]: Updated position and realized pnl delta for this close
+            tuple[Position, Decimal, Order | None]: Updated position, realized pnl delta, and the order record
 
         Raises:
             OrderServiceError: If position close fails
 
         Example:
             # Close a long position (sells to close)
-            long_position = order_service.buy("EUR_USD", 10000)
+            long_position, _ = order_service.buy("EUR_USD", 10000)
             order_service.close_position(long_position)
 
             # Close a short position (buys to close)
-            short_position = order_service.sell("USD_JPY", 5000)
+            short_position, _ = order_service.sell("USD_JPY", 5000)
             order_service.close_position(short_position)
         """
         if not position.is_open:
@@ -234,6 +236,7 @@ class OrderService:
                 requested_price=override_price,
                 tick_timestamp=tick_timestamp,
                 oanda_trade_id=position.oanda_trade_id,
+                position=position,
             )
 
             # Update position
@@ -298,7 +301,7 @@ class OrderService:
                     self.dry_run,
                 )
 
-            return position, realized_delta
+            return position, realized_delta, order
 
         except Exception as e:
             error_msg = f"Failed to close position: {str(e)}"
@@ -322,6 +325,7 @@ class OrderService:
                     oanda_trade_id=position.oanda_trade_id,
                     status=OrderStatus.PENDING,
                     is_dry_run=self.dry_run,
+                    position=position,
                 )
                 rejected_order.mark_rejected(error_msg)
                 rejected_order.save()
@@ -345,7 +349,8 @@ class OrderService:
         merge_with_existing: bool = True,
         override_price: Decimal | None = None,
         tick_timestamp: datetime | None = None,
-    ) -> Position:
+        retracement_count: int | None = None,
+    ) -> tuple[Position, Order]:
         """
         Execute a market order and create/update position.
 
@@ -357,7 +362,7 @@ class OrderService:
             stop_loss: Optional stop loss price
 
         Returns:
-            Position: Created or updated position
+            tuple[Position, Order]: Created or updated position and the order record
 
         Raises:
             OrderServiceError: If order execution fails
@@ -376,20 +381,7 @@ class OrderService:
                 request, override_price=override_price
             )
 
-            # Create order record
-            order = self._create_order_record(
-                instrument=instrument,
-                order_type=OrderType.MARKET,
-                direction=direction,
-                units=units,
-                oanda_order=oanda_order,
-                requested_price=override_price,
-                stop_loss=stop_loss,
-                tick_timestamp=tick_timestamp,
-                oanda_trade_id=getattr(oanda_order, "trade_id", None),
-            )
-
-            # Create or update position
+            # Create or update position first so we can link the order to it
             entry_time = tick_timestamp or oanda_order.fill_time or timezone.now()
             position = self._create_or_update_position(
                 instrument=instrument,
@@ -400,6 +392,21 @@ class OrderService:
                 layer_index=layer_index,
                 merge_with_existing=merge_with_existing,
                 oanda_trade_id=getattr(oanda_order, "trade_id", None),
+                retracement_count=retracement_count,
+            )
+
+            # Create order record linked to the position
+            order = self._create_order_record(
+                instrument=instrument,
+                order_type=OrderType.MARKET,
+                direction=direction,
+                units=units,
+                oanda_order=oanda_order,
+                requested_price=override_price,
+                stop_loss=stop_loss,
+                tick_timestamp=tick_timestamp,
+                oanda_trade_id=getattr(oanda_order, "trade_id", None),
+                position=position,
             )
 
             logger.info(
@@ -413,7 +420,7 @@ class OrderService:
                 self.dry_run,
             )
 
-            return position
+            return position, order
 
         except Exception as e:
             error_msg = f"Failed to execute market order: {str(e)}"
@@ -462,6 +469,7 @@ class OrderService:
         stop_loss: Decimal | None = None,
         tick_timestamp: datetime | None = None,
         oanda_trade_id: str | None = None,
+        position: Position | None = None,
     ) -> Order:
         """Create order database record."""
         order = Order.objects.create(
@@ -479,6 +487,7 @@ class OrderService:
             filled_at=tick_timestamp or oanda_order.fill_time,
             stop_loss=stop_loss,
             is_dry_run=self.dry_run,
+            position=position,
         )
         return order
 
@@ -493,6 +502,7 @@ class OrderService:
         layer_index: int | None = None,
         merge_with_existing: bool = True,
         oanda_trade_id: str | None = None,
+        retracement_count: int | None = None,
     ) -> Position:
         """Create new position or update existing one."""
         if merge_with_existing:
@@ -523,6 +533,8 @@ class OrderService:
                     existing_position.layer_index = layer_index
                 if oanda_trade_id is not None:
                     existing_position.oanda_trade_id = oanda_trade_id
+                if retracement_count is not None:
+                    existing_position.retracement_count = retracement_count
                 existing_position.celery_task_id = getattr(self.task, "celery_task_id", None)
                 existing_position.save()
 
@@ -548,6 +560,7 @@ class OrderService:
             is_open=True,
             layer_index=layer_index,
             oanda_trade_id=oanda_trade_id,
+            retracement_count=retracement_count,
         )
 
         logger.debug(

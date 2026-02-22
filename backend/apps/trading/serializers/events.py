@@ -48,6 +48,7 @@ class TradingEventSerializer(serializers.ModelSerializer):
 class TradeSerializer(serializers.Serializer):
     """Serializer for trade data from Trades model."""
 
+    id = serializers.UUIDField(required=False)
     direction = serializers.ChoiceField(choices=Direction.choices, allow_null=True)
     units = serializers.IntegerField()
     instrument = serializers.CharField()
@@ -59,6 +60,7 @@ class TradeSerializer(serializers.Serializer):
     layer_index = serializers.IntegerField(required=False, allow_null=True)
     retracement_count = serializers.IntegerField(required=False, allow_null=True)
     timestamp = serializers.DateTimeField()
+    position_id = serializers.UUIDField(required=False, allow_null=True)
 
     def get_execution_method_display(self, obj: object) -> str:
         """Return the human-readable label for the execution method."""
@@ -89,6 +91,15 @@ class PositionSerializer(serializers.Serializer):
     is_open = serializers.BooleanField()
     layer_index = serializers.IntegerField(required=False, allow_null=True)
     retracement_count = serializers.IntegerField(required=False, allow_null=True)
+    trade_ids = serializers.SerializerMethodField()
+
+    def get_trade_ids(self, obj: object) -> list[str]:
+        """Return the IDs of trades linked to this position."""
+        if hasattr(obj, "prefetched_trade_ids"):
+            return obj.prefetched_trade_ids  # type: ignore[return-value]
+        if hasattr(obj, "trades"):
+            return list(obj.trades.values_list("id", flat=True))  # type: ignore[union-attr]
+        return []
 
 
 class OrderSerializer(serializers.Serializer):
@@ -98,6 +109,7 @@ class OrderSerializer(serializers.Serializer):
     celery_task_id = serializers.CharField(required=False, allow_null=True)
     broker_order_id = serializers.CharField(required=False, allow_null=True)
     oanda_trade_id = serializers.CharField(required=False, allow_null=True)
+    position_id = serializers.UUIDField(required=False, allow_null=True)
     instrument = serializers.CharField()
     order_type = serializers.CharField()
     direction = serializers.CharField(required=False, allow_null=True)

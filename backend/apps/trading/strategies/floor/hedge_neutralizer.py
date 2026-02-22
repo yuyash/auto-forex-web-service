@@ -77,7 +77,7 @@ class HedgeNeutralizer:
                 HedgeInstruction(
                     direction=opposite,
                     units=units,
-                    layer_index=int(entry.get("floor_index", 0)),
+                    layer_index=int(entry.get("floor_index", 1)),
                     source_entry_id=int(entry.get("entry_id", 0)),
                 )
             )

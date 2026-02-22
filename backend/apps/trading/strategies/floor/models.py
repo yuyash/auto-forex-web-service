@@ -321,15 +321,18 @@ class FloorStrategyConfig:
 
         If a floor_profile override exists for this index, use it.
         Otherwise apply cross-layer progression to the global take_profit_pips.
+
+        Note: floor_index is 1-based (Layer 1, 2, 3, ...).
         """
-        if 0 <= floor_index < len(self.floor_profiles):
-            return self.floor_profiles[floor_index].get("take_profit_pips", self.take_profit_pips)
+        calc_index = floor_index - 1  # Convert to 0-based for array/progression
+        if 0 <= calc_index < len(self.floor_profiles):
+            return self.floor_profiles[calc_index].get("take_profit_pips", self.take_profit_pips)
         from apps.trading.strategies.floor.enums import Progression
 
         mode = Progression(self.take_profit_trigger_progression)
         return ProgressionCalculator.calculate(
             base=self.take_profit_pips,
-            index=floor_index,
+            index=calc_index,
             mode=mode,
             increment=self.take_profit_trigger_increment,
         )
@@ -339,15 +342,18 @@ class FloorStrategyConfig:
 
         If a floor_profile override exists for this index, use it.
         Otherwise apply cross-layer progression to the global retracement_pips.
+
+        Note: floor_index is 1-based (Layer 1, 2, 3, ...).
         """
-        if 0 <= floor_index < len(self.floor_profiles):
-            return self.floor_profiles[floor_index].get("retracement_pips", self.retracement_pips)
+        calc_index = floor_index - 1  # Convert to 0-based for array/progression
+        if 0 <= calc_index < len(self.floor_profiles):
+            return self.floor_profiles[calc_index].get("retracement_pips", self.retracement_pips)
         from apps.trading.strategies.floor.enums import Progression
 
         mode = Progression(self.retracement_trigger_progression)
         return ProgressionCalculator.calculate(
             base=self.retracement_pips,
-            index=floor_index,
+            index=calc_index,
             mode=mode,
             increment=self.retracement_trigger_increment,
         )
@@ -357,6 +363,9 @@ class FloorStrategyConfig:
 
         The base value comes from floor_take_profit_pips (cross-layer),
         then intra-layer progression is applied based on retracement_index.
+
+        Note: retracement_index is 0-based for progression calculation
+        (0 = initial entry, 1 = first retracement, ...).
         """
         base_tp = self.floor_take_profit_pips(floor_index)
         from apps.trading.strategies.floor.enums import Progression
@@ -418,8 +427,8 @@ class FloorStrategyState:
     last_ask: Decimal | None = None
     account_balance: Decimal = Decimal("0")
     account_nav: Decimal = Decimal("0")
-    active_floor_index: int = 0
-    home_floor_index: int = 0
+    active_floor_index: int = 1
+    home_floor_index: int = 1
     next_entry_id: int = 1
     floor_retracement_counts: dict[int, int] = field(default_factory=dict)
     floor_directions: dict[int, str] = field(default_factory=dict)
@@ -498,8 +507,8 @@ class FloorStrategyState:
             last_ask=_decimal_or_none(data.get("last_ask")),
             account_balance=_to_decimal(data.get("account_balance", "0"), "0"),
             account_nav=_to_decimal(data.get("account_nav", "0"), "0"),
-            active_floor_index=_to_int(data.get("active_floor_index", 0), 0),
-            home_floor_index=_to_int(data.get("home_floor_index", 0), 0),
+            active_floor_index=_to_int(data.get("active_floor_index", 1), 1),
+            home_floor_index=_to_int(data.get("home_floor_index", 1), 1),
             next_entry_id=max(1, _to_int(data.get("next_entry_id", 1), 1)),
             floor_retracement_counts=floor_retracement_counts,
             floor_directions=floor_directions,

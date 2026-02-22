@@ -19,7 +19,7 @@ class ProgressionCalculator:
 
         Args:
             base: Base value
-            index: Current index (0, 1, 2, ...)
+            index: Current index (0, 1, 2, ...) — 0-based for progression calculation
             mode: Progression mode
             increment: Increment value
 

@@ -125,12 +125,12 @@ class InitialEntryEvent(StrategyEvent):
         ... )
     """
 
-    layer_number: int = 0
+    layer_number: int = 1
     direction: str = ""  # Will be Direction enum value
     price: Decimal = Decimal("0")
     units: int = 0
     entry_time: datetime | None = None
-    retracement_count: int = 0
+    retracement_count: int = 1
     entry_id: int | None = None  # Strategy-internal entry ID for position tracking
 
     def __post_init__(self):
@@ -214,12 +214,12 @@ class InitialEntryEvent(StrategyEvent):
         return cls(
             event_type=EventType.INITIAL_ENTRY,
             timestamp=timestamp,
-            layer_number=int(event_dict.get("layer_number", 0)),
+            layer_number=int(event_dict.get("layer_number", 1)),
             direction=str(event_dict.get("direction", "")),
             price=price,
             units=int(event_dict.get("units", 0)),
             entry_time=entry_time,
-            retracement_count=int(event_dict.get("retracement_count", 0)),
+            retracement_count=int(event_dict.get("retracement_count", 1)),
             entry_id=event_dict.get("entry_id"),
         )
 
@@ -249,12 +249,12 @@ class RetracementEvent(StrategyEvent):
         ... )
     """
 
-    layer_number: int = 0
+    layer_number: int = 1
     direction: str = ""  # Will be Direction enum value
     price: Decimal = Decimal("0")
     units: int = 0
     entry_time: datetime | None = None
-    retracement_count: int = 0
+    retracement_count: int = 1
     entry_id: int | None = None  # Strategy-internal entry ID for position tracking
 
     def __post_init__(self):
@@ -339,12 +339,12 @@ class RetracementEvent(StrategyEvent):
         return cls(
             event_type=EventType.RETRACEMENT,
             timestamp=timestamp,
-            layer_number=int(event_dict.get("layer_number", 0)),
+            layer_number=int(event_dict.get("layer_number", 1)),
             direction=str(event_dict.get("direction", "")),
             price=price,
             units=int(event_dict.get("units", 0)),
             entry_time=entry_time,
-            retracement_count=int(event_dict.get("retracement_count", 0)),
+            retracement_count=int(event_dict.get("retracement_count", 1)),
             entry_id=event_dict.get("entry_id"),
         )
 
@@ -381,7 +381,7 @@ class TakeProfitEvent(StrategyEvent):
         ... )
     """
 
-    layer_number: int = 0
+    layer_number: int = 1
     direction: str = ""  # Will be Direction enum value
     entry_price: Decimal = Decimal("0")
     exit_price: Decimal = Decimal("0")
@@ -390,7 +390,7 @@ class TakeProfitEvent(StrategyEvent):
     pips: Decimal = Decimal("0")
     entry_time: datetime | None = None
     exit_time: datetime | None = None
-    retracement_count: int = 0
+    retracement_count: int = 1
     entry_id: int | None = None  # Strategy-internal entry ID
     position_id: str | None = None  # Position UUID for direct targeting
 
@@ -506,7 +506,7 @@ class TakeProfitEvent(StrategyEvent):
         return cls(
             event_type=EventType.TAKE_PROFIT,
             timestamp=timestamp,
-            layer_number=int(event_dict.get("layer_number", 0)),
+            layer_number=int(event_dict.get("layer_number", 1)),
             direction=str(event_dict.get("direction", "")),
             entry_price=entry_price,
             exit_price=exit_price,
@@ -515,7 +515,7 @@ class TakeProfitEvent(StrategyEvent):
             pips=pips,
             entry_time=entry_time,
             exit_time=exit_time,
-            retracement_count=int(event_dict.get("retracement_count", 0)),
+            retracement_count=int(event_dict.get("retracement_count", 1)),
             entry_id=event_dict.get("entry_id"),
             position_id=event_dict.get("position_id"),
         )
@@ -537,7 +537,7 @@ class AddLayerEvent(StrategyEvent):
         ... )
     """
 
-    layer_number: int = 0
+    layer_number: int = 1
     add_time: datetime | None = None
 
     def __post_init__(self):
@@ -603,7 +603,7 @@ class AddLayerEvent(StrategyEvent):
         return cls(
             event_type=EventType.ADD_LAYER,
             timestamp=timestamp,
-            layer_number=int(event_dict.get("layer_number", 0)),
+            layer_number=int(event_dict.get("layer_number", 1)),
             add_time=add_time,
         )
 
@@ -626,7 +626,7 @@ class RemoveLayerEvent(StrategyEvent):
         ... )
     """
 
-    layer_number: int = 0
+    layer_number: int = 1
     add_time: datetime | None = None
     remove_time: datetime | None = None
 
@@ -707,7 +707,7 @@ class RemoveLayerEvent(StrategyEvent):
         return cls(
             event_type=EventType.REMOVE_LAYER,
             timestamp=timestamp,
-            layer_number=int(event_dict.get("layer_number", 0)),
+            layer_number=int(event_dict.get("layer_number", 1)),
             add_time=add_time,
             remove_time=remove_time,
         )
