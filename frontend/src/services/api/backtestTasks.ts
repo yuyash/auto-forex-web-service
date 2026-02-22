@@ -147,7 +147,6 @@ export const backtestTasksApi = {
         initial_balance: original.initial_balance,
         commission_per_trade: original.commission_per_trade,
         instrument: original.instrument,
-        trading_mode: original.trading_mode,
       })
     );
     return toLocal(result);

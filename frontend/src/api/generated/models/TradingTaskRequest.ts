@@ -2,7 +2,6 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { TradingModeEnum } from './TradingModeEnum';
 /**
  * Serializer for TradingTask with execution data.
  */
@@ -31,11 +30,4 @@ export type TradingTaskRequest = {
    * Trading instrument (e.g., EUR_USD, USD_JPY)
    */
   instrument?: string;
-  /**
-   * Trading mode: netting (aggregated positions) or hedging (independent trades)
-   *
-   * * `netting` - Netting Mode
-   * * `hedging` - Hedging Mode
-   */
-  trading_mode?: TradingModeEnum;
 };

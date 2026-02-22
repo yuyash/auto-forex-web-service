@@ -12,11 +12,6 @@ import {
   Alert,
   FormControlLabel,
   Checkbox,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
-  FormHelperText,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
@@ -87,7 +82,6 @@ interface ReviewContentProps {
     commission_per_trade: number;
     pip_size?: number;
     instrument: string;
-    trading_mode?: 'netting' | 'hedging';
     sell_at_completion?: boolean;
   };
 }
@@ -102,7 +96,6 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
     commission_per_trade,
     pip_size,
     instrument,
-    trading_mode,
     sell_at_completion,
   } = formValues;
 
@@ -153,22 +146,11 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
         </Typography>
       </Grid>
 
-      <Grid size={{ xs: 12 }}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <Typography variant="subtitle2" color="text.secondary">
           Instrument
         </Typography>
         <Typography variant="body1">{instrument}</Typography>
-      </Grid>
-
-      <Grid size={{ xs: 12, md: 6 }}>
-        <Typography variant="subtitle2" color="text.secondary">
-          Trading Mode
-        </Typography>
-        <Typography variant="body1">
-          {trading_mode === 'hedging'
-            ? 'Hedging Mode (Independent Trades)'
-            : 'Netting Mode (Aggregated Positions)'}
-        </Typography>
       </Grid>
 
       <Grid size={{ xs: 12, md: 6 }}>
@@ -243,7 +225,6 @@ export default function BacktestTaskForm({
       commission_per_trade: 0,
       pip_size: 0.01,
       instrument: 'USD_JPY',
-      trading_mode: 'netting' as const,
       sell_at_completion: false,
     };
 
@@ -326,7 +307,7 @@ export default function BacktestTaskForm({
       const range = await fetchTickDataRange(instrument);
       setDataRange(range);
     } catch {
-      setDataRangeError('ティックデータの範囲を取得できませんでした');
+      setDataRangeError('Failed to fetch tick data range');
       setDataRange(null);
     } finally {
       setDataRangeLoading(false);
@@ -345,7 +326,7 @@ export default function BacktestTaskForm({
   const dataCoverageWarning = useMemo<string | null>(() => {
     if (!dataRange || !dataRange.has_data) {
       if (dataRange && !dataRange.has_data && watchedInstrument) {
-        return `${watchedInstrument} のティックデータがデータベースに存在しません。`;
+        return `No tick data found for ${watchedInstrument} in the database.`;
       }
       return null;
     }
@@ -355,7 +336,7 @@ export default function BacktestTaskForm({
       const minTs = new Date(dataRange.min_timestamp);
       if (start < minTs) {
         warnings.push(
-          `開始日時がデータの最古のタイムスタンプ (${minTs.toLocaleString()}) より前です。`
+          `Start time is before the earliest data timestamp (${minTs.toLocaleString()}).`
         );
       }
     }
@@ -364,7 +345,7 @@ export default function BacktestTaskForm({
       const maxTs = new Date(dataRange.max_timestamp);
       if (end > maxTs) {
         warnings.push(
-          `終了日時がデータの最新のタイムスタンプ (${maxTs.toLocaleString()}) より後です。`
+          `End time is after the latest data timestamp (${maxTs.toLocaleString()}).`
         );
       }
     }
@@ -623,7 +604,7 @@ export default function BacktestTaskForm({
               {/* Tick data availability info */}
               {dataRangeLoading && (
                 <Grid size={{ xs: 12 }}>
-                  <Alert severity="info">ティックデータの範囲を確認中...</Alert>
+                  <Alert severity="info">Checking tick data range...</Alert>
                 </Grid>
               )}
               {dataRangeError && (
@@ -634,8 +615,8 @@ export default function BacktestTaskForm({
               {dataRange && dataRange.has_data && (
                 <Grid size={{ xs: 12 }}>
                   <Alert severity="info">
-                    {dataRange.instrument} のデータ範囲:{' '}
-                    {new Date(dataRange.min_timestamp!).toLocaleString()} 〜{' '}
+                    {dataRange.instrument} data range:{' '}
+                    {new Date(dataRange.min_timestamp!).toLocaleString()} –{' '}
                     {new Date(dataRange.max_timestamp!).toLocaleString()}
                   </Alert>
                 </Grid>
@@ -726,30 +707,6 @@ export default function BacktestTaskForm({
                 />
               </Grid>
 
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Controller
-                  name="trading_mode"
-                  control={control}
-                  render={({ field }) => (
-                    <FormControl fullWidth error={!!errors.trading_mode}>
-                      <InputLabel>Trading Mode</InputLabel>
-                      <Select {...field} label="Trading Mode">
-                        <MenuItem value="netting">
-                          Netting Mode (Aggregated Positions)
-                        </MenuItem>
-                        <MenuItem value="hedging">
-                          Hedging Mode (Independent Trades)
-                        </MenuItem>
-                      </Select>
-                      <FormHelperText>
-                        {errors.trading_mode?.message ||
-                          'Netting: positions aggregated per instrument (FIFO). Hedging: multiple independent trades per instrument.'}
-                      </FormHelperText>
-                    </FormControl>
-                  )}
-                />
-              </Grid>
-
               <Grid size={{ xs: 12 }}>
                 <Controller
                   name="sell_at_completion"
@@ -801,10 +758,6 @@ export default function BacktestTaskForm({
           commission_per_trade: formData.commission_per_trade as number,
           pip_size: formData.pip_size as number | undefined,
           instrument: formData.instrument as string,
-          trading_mode: formData.trading_mode as
-            | 'netting'
-            | 'hedging'
-            | undefined,
           sell_at_completion: formData.sell_at_completion as boolean,
         };
 

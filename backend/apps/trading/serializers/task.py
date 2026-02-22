@@ -103,7 +103,6 @@ class BacktestTaskSerializer(TaskSerializer):
             "commission_per_trade",
             "pip_size",
             "instrument",
-            "trading_mode",
             "progress",
             "current_tick",
         ]
@@ -215,7 +214,6 @@ class TradingTaskSerializer(TaskSerializer):
             "sell_on_stop",
             "pip_size",
             "instrument",
-            "trading_mode",
             "strategy_state",
             "current_tick",
         ]

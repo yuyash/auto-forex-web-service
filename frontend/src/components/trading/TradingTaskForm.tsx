@@ -270,8 +270,7 @@ export default function TradingTaskForm({
                         </MenuItem>
                         {accounts.map((account) => (
                           <MenuItem key={account.id} value={account.id}>
-                            {account.account_id} ({account.api_type}) - Balance:{' '}
-                            ${parseFloat(account.balance).toFixed(2)}
+                            {account.account_id} ({account.api_type})
                           </MenuItem>
                         ))}
                       </Select>
@@ -319,7 +318,7 @@ export default function TradingTaskForm({
 
               {hasActiveTask && (
                 <Grid size={{ xs: 12 }}>
-                  <Alert severity="warning" icon={<WarningIcon />}>
+                  <Alert severity="error" icon={<WarningIcon />}>
                     <Typography variant="subtitle2" gutterBottom>
                       Active Task Detected
                     </Typography>
@@ -328,8 +327,8 @@ export default function TradingTaskForm({
                       <strong>{existingTasks.results[0].name}</strong>
                     </Typography>
                     <Typography variant="body2" sx={{ mt: 1 }}>
-                      Starting a new task will automatically stop the existing
-                      task.
+                      Only one task can run per account at a time. Please stop
+                      the existing task before starting a new one.
                     </Typography>
                   </Alert>
                 </Grid>
@@ -593,6 +592,9 @@ export default function TradingTaskForm({
         {getStepContent(activeStep)}
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+          <Button onClick={() => navigate(-1)} sx={{ mr: 'auto' }}>
+            Cancel
+          </Button>
           <Button
             disabled={activeStep === 0}
             onClick={handleBack}

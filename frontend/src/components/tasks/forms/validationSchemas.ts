@@ -55,7 +55,6 @@ export const backtestTaskSchema = z
       .string()
       .min(1, 'Instrument is required')
       .max(20, 'Instrument must be less than 20 characters'),
-    trading_mode: z.enum(['netting', 'hedging']).optional().default('netting'),
     sell_at_completion: z.boolean().optional().default(false),
   })
   .refine((data) => data.start_time < data.end_time, {
@@ -160,7 +159,6 @@ export type BacktestTaskSchemaOutput = {
   commission_per_trade?: number;
   pip_size?: number;
   instrument: string;
-  trading_mode?: 'netting' | 'hedging';
   sell_at_completion?: boolean;
 };
 export type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;

@@ -358,18 +358,6 @@ export const TradingTaskDetail: React.FC = () => {
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Trading Mode
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      sx={{ textTransform: 'capitalize' }}
-                    >
-                      {task.trading_mode}
-                    </Typography>
-                  </Box>
-
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
                       Status
                     </Typography>
                     <Box sx={{ mt: 0.5 }}>

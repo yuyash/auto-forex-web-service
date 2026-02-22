@@ -3,7 +3,6 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { StatusEnum } from './StatusEnum';
-import type { TradingModeEnum } from './TradingModeEnum';
 /**
  * Serializer for TradingTask with execution data.
  */
@@ -106,13 +105,6 @@ export type TradingTask = {
    * Trading instrument (e.g., EUR_USD, USD_JPY)
    */
   instrument?: string;
-  /**
-   * Trading mode: netting (aggregated positions) or hedging (independent trades)
-   *
-   * * `netting` - Netting Mode
-   * * `hedging` - Hedging Mode
-   */
-  trading_mode?: TradingModeEnum;
   /**
    * Strategy-specific state for persistence across restarts
    */

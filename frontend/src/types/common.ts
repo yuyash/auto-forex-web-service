@@ -3,7 +3,6 @@
 
 export { StatusEnum as TaskStatus } from '../api/generated';
 export { DataSourceEnum as DataSource } from '../api/generated';
-export { TradingModeEnum as TradingMode } from '../api/generated';
 
 export enum TaskType {
   BACKTEST = 'backtest',

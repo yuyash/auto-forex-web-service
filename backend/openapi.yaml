@@ -2651,14 +2651,6 @@ components:
           type: string
           description: Trading instrument (e.g., EUR_USD, USD_JPY)
           maxLength: 20
-        trading_mode:
-          allOf:
-            - $ref: "#/components/schemas/TradingModeEnum"
-          description: |-
-            Trading mode: netting (aggregated positions) or hedging (independent trades)
-
-            * `netting` - Netting Mode
-            * `hedging` - Hedging Mode
         progress:
           type: integer
           description: |-
@@ -2738,14 +2730,6 @@ components:
           type: string
           description: Trading instrument (e.g., EUR_USD, USD_JPY)
           maxLength: 20
-        trading_mode:
-          allOf:
-            - $ref: "#/components/schemas/TradingModeEnum"
-          description: |-
-            Trading mode: netting (aggregated positions) or hedging (independent trades)
-
-            * `netting` - Netting Mode
-            * `hedging` - Hedging Mode
       required:
         - config
     BacktestTaskCreateRequest:
@@ -2804,14 +2788,6 @@ components:
           minLength: 1
           description: Trading instrument (e.g., EUR_USD, USD_JPY)
           maxLength: 20
-        trading_mode:
-          allOf:
-            - $ref: "#/components/schemas/TradingModeEnum"
-          description: |-
-            Trading mode: netting (aggregated positions) or hedging (independent trades)
-
-            * `netting` - Netting Mode
-            * `hedging` - Hedging Mode
       required:
         - config
     BacktestTaskRequest:
@@ -2862,14 +2838,6 @@ components:
           minLength: 1
           description: Trading instrument (e.g., EUR_USD, USD_JPY)
           maxLength: 20
-        trading_mode:
-          allOf:
-            - $ref: "#/components/schemas/TradingModeEnum"
-          description: |-
-            Trading mode: netting (aggregated positions) or hedging (independent trades)
-
-            * `netting` - Netting Mode
-            * `hedging` - Hedging Mode
       required:
         - config
         - end_time
@@ -3432,14 +3400,6 @@ components:
           minLength: 1
           description: Trading instrument (e.g., EUR_USD, USD_JPY)
           maxLength: 20
-        trading_mode:
-          allOf:
-            - $ref: "#/components/schemas/TradingModeEnum"
-          description: |-
-            Trading mode: netting (aggregated positions) or hedging (independent trades)
-
-            * `netting` - Netting Mode
-            * `hedging` - Hedging Mode
     PatchedTradingTaskCreateRequest:
       type: object
       description: |-
@@ -3850,14 +3810,6 @@ components:
       required:
         - description
         - event_type
-    TradingModeEnum:
-      enum:
-        - netting
-        - hedging
-      type: string
-      description: |-
-        * `netting` - Netting Mode
-        * `hedging` - Hedging Mode
     TradingTask:
       type: object
       description: Serializer for TradingTask with execution data.
@@ -3969,14 +3921,6 @@ components:
           type: string
           description: Trading instrument (e.g., EUR_USD, USD_JPY)
           maxLength: 20
-        trading_mode:
-          allOf:
-            - $ref: "#/components/schemas/TradingModeEnum"
-          description: |-
-            Trading mode: netting (aggregated positions) or hedging (independent trades)
-
-            * `netting` - Netting Mode
-            * `hedging` - Hedging Mode
         strategy_state:
           readOnly: true
           description: Strategy-specific state for persistence across restarts
@@ -4066,14 +4010,6 @@ components:
           minLength: 1
           description: Trading instrument (e.g., EUR_USD, USD_JPY)
           maxLength: 20
-        trading_mode:
-          allOf:
-            - $ref: "#/components/schemas/TradingModeEnum"
-          description: |-
-            Trading mode: netting (aggregated positions) or hedging (independent trades)
-
-            * `netting` - Netting Mode
-            * `hedging` - Hedging Mode
       required:
         - config
         - name

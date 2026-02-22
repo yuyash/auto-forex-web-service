@@ -35,7 +35,6 @@ vi.mock('../../../src/hooks/useTradingTasks', () => ({
       strategy_type: 'floor',
       instrument: 'EUR_USD',
       pip_size: '0.0001',
-      trading_mode: 'live',
       account_name: 'Test Account',
       sell_on_stop: false,
       start_time: '2024-01-01T00:00:00Z',

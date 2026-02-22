@@ -7,7 +7,7 @@ from typing import Any
 from django.db import models
 
 from apps.market.models import OandaAccounts
-from apps.trading.enums import TaskStatus, TradingMode
+from apps.trading.enums import TaskStatus
 from apps.trading.models.base import UUIDModel
 
 
@@ -134,12 +134,6 @@ class TradingTask(UUIDModel):
         blank=True,
         default=Decimal("0.01"),
         help_text="Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account.",
-    )
-    trading_mode = models.CharField(
-        max_length=20,
-        choices=TradingMode.choices,
-        default=TradingMode.HEDGING,
-        help_text="Trading mode: netting (aggregated positions) or hedging (independent trades)",
     )
     strategy_state = models.JSONField(
         default=dict,

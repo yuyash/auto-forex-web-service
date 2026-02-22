@@ -103,20 +103,20 @@ export const BacktestTaskDetail: React.FC = () => {
     overview: 0,
     positions: 1,
     trades: 2,
-    replay: 3,
-    events: 4,
-    logs: 5,
-    orders: 6,
-    equity: 3,
+    orders: 3,
+    replay: 4,
+    events: 5,
+    logs: 6,
+    equity: 4,
   };
   const tabNames = [
     'overview',
     'positions',
     'trades',
+    'orders',
     'replay',
     'events',
     'logs',
-    'orders',
   ];
   const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
 
@@ -361,10 +361,10 @@ export const BacktestTaskDetail: React.FC = () => {
           <Tab label="Overview" {...a11yProps(0)} />
           <Tab label="Positions" {...a11yProps(1)} />
           <Tab label="Trades" {...a11yProps(2)} />
-          <Tab label="Replay" {...a11yProps(3)} />
-          <Tab label="Events" {...a11yProps(4)} />
-          <Tab label="Logs" {...a11yProps(5)} />
-          <Tab label="Orders" {...a11yProps(6)} />
+          <Tab label="Orders" {...a11yProps(3)} />
+          <Tab label="Replay" {...a11yProps(4)} />
+          <Tab label="Events" {...a11yProps(5)} />
+          <Tab label="Logs" {...a11yProps(6)} />
         </Tabs>
 
         {/* Overview Tab */}
@@ -406,18 +406,6 @@ export const BacktestTaskDetail: React.FC = () => {
                       Pip Size
                     </Typography>
                     <Typography variant="body1">{task.pip_size}</Typography>
-                  </Box>
-
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Trading Mode
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      sx={{ textTransform: 'capitalize' }}
-                    >
-                      {task.trading_mode}
-                    </Typography>
                   </Box>
 
                   <Box>
@@ -639,8 +627,19 @@ export const BacktestTaskDetail: React.FC = () => {
           />
         </TabPanel>
 
-        {/* Replay Tab */}
+        {/* Orders Tab */}
         <TabPanel value={currentTabValue} index={3}>
+          <TaskOrdersTable
+            taskId={taskId}
+            taskType={TaskType.BACKTEST}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
+          />
+        </TabPanel>
+
+        {/* Replay Tab */}
+        <TabPanel value={currentTabValue} index={4}>
           <TaskReplayPanel
             taskId={taskId}
             taskType={TaskType.BACKTEST}
@@ -660,7 +659,7 @@ export const BacktestTaskDetail: React.FC = () => {
         </TabPanel>
 
         {/* Events Tab */}
-        <TabPanel value={currentTabValue} index={4}>
+        <TabPanel value={currentTabValue} index={5}>
           <TaskEventsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
@@ -671,22 +670,11 @@ export const BacktestTaskDetail: React.FC = () => {
         </TabPanel>
 
         {/* Logs Tab */}
-        <TabPanel value={currentTabValue} index={5}>
+        <TabPanel value={currentTabValue} index={6}>
           <TaskLogsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
             executionId={task.celery_task_id || undefined}
-            enableRealTimeUpdates={
-              (polledStatus?.status || task.status) === TaskStatus.RUNNING
-            }
-          />
-        </TabPanel>
-
-        {/* Orders Tab */}
-        <TabPanel value={currentTabValue} index={6}>
-          <TaskOrdersTable
-            taskId={taskId}
-            taskType={TaskType.BACKTEST}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }

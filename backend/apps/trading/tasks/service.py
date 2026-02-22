@@ -84,6 +84,29 @@ class TaskService:
                     f"Task must be in CREATED status to submit (current status: {task.status})"
                 )
 
+            # Enforce one-task-per-account constraint for TradingTask
+            if isinstance(task, TradingTask):
+                active_statuses = [TaskStatus.STARTING, TaskStatus.RUNNING]
+                active_task = (
+                    TradingTask.objects.filter(
+                        oanda_account=task.oanda_account,
+                        status__in=active_statuses,
+                    )
+                    .exclude(pk=task.pk)
+                    .first()
+                )
+                if active_task:
+                    logger.warning(
+                        f"[SERVICE:START] ACCOUNT_BUSY - task_id={task.pk}, "
+                        f"account={task.oanda_account.pk}, "
+                        f"active_task_id={active_task.pk}, active_task_name={active_task.name}"
+                    )
+                    raise ValueError(
+                        f"Account already has an active task: '{active_task.name}' "
+                        f"(status: {active_task.status}). "
+                        f"Please stop the existing task before starting a new one."
+                    )
+
             # Validate task configuration
             logger.info(f"[SERVICE:START] Validating configuration - task_id={task.pk}")
             is_valid, error_message = task.validate_configuration()

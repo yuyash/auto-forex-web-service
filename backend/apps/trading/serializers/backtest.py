@@ -38,7 +38,6 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "commission_per_trade",
             "pip_size",
             "instrument",
-            "trading_mode",
             "status",
             "progress",
             "current_tick",
@@ -196,7 +195,6 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
             "account_currency",
             "pip_size",
             "instrument",
-            "trading_mode",
             "status",
             "progress",
             "started_at",
@@ -291,7 +289,6 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "commission_per_trade",
             "pip_size",
             "instrument",
-            "trading_mode",
         ]
         # Make fields optional for partial updates (PATCH)
         extra_kwargs = {
@@ -304,7 +301,6 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "commission_per_trade": {"required": False},
             "pip_size": {"required": False},
             "instrument": {"required": False},
-            "trading_mode": {"required": False},
         }
 
     def validate_config(self, value: StrategyConfiguration) -> StrategyConfiguration:

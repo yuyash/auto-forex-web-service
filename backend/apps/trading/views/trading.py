@@ -150,6 +150,30 @@ class TradingTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Check for active task on the same account
+        active_task = (
+            TradingTask.objects.filter(
+                oanda_account=task.oanda_account,
+                status__in=[TaskStatus.STARTING, TaskStatus.RUNNING],
+            )
+            .exclude(pk=task.pk)
+            .first()
+        )
+        if active_task:
+            return Response(
+                {
+                    "error": "Account already has an active task",
+                    "detail": (
+                        f"Task '{active_task.name}' is currently {active_task.status} "
+                        f"on this account. Please stop it before starting a new task."
+                    ),
+                    "active_task_id": str(active_task.pk),
+                    "active_task_name": active_task.name,
+                    "active_task_status": active_task.status,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         try:
             task = self.task_service.start_task(task)
             serializer = self.get_serializer(task)

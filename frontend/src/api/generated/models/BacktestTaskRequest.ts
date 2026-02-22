@@ -3,7 +3,6 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { DataSourceEnum } from './DataSourceEnum';
-import type { TradingModeEnum } from './TradingModeEnum';
 /**
  * Serializer for BacktestTask with execution data.
  */
@@ -48,11 +47,4 @@ export type BacktestTaskRequest = {
    * Trading instrument (e.g., EUR_USD, USD_JPY)
    */
   instrument?: string;
-  /**
-   * Trading mode: netting (aggregated positions) or hedging (independent trades)
-   *
-   * * `netting` - Netting Mode
-   * * `hedging` - Hedging Mode
-   */
-  trading_mode?: TradingModeEnum;
 };

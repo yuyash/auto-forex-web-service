@@ -45,7 +45,6 @@ export type { TaskLog } from './models/TaskLog';
 export { TaskTypeEnum } from './models/TaskTypeEnum';
 export type { Trade } from './models/Trade';
 export type { TradingEvent } from './models/TradingEvent';
-export { TradingModeEnum } from './models/TradingModeEnum';
 export type { TradingTask } from './models/TradingTask';
 export type { TradingTaskCreate } from './models/TradingTaskCreate';
 export type { TradingTaskCreateRequest } from './models/TradingTaskCreateRequest';

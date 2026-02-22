@@ -117,18 +117,6 @@ class LogLevel(models.TextChoices):
     CRITICAL = "CRITICAL", "Critical"
 
 
-class TradingMode(models.TextChoices):
-    """
-    Trading modes for position management.
-
-    - NETTING: Positions are aggregated per instrument (FIFO for partial closes)
-    - HEDGING: Multiple independent trades can exist per instrument
-    """
-
-    NETTING = "netting", "Netting Mode"
-    HEDGING = "hedging", "Hedging Mode"
-
-
 class Direction(models.TextChoices):
     """
     Trading direction for positions and orders.

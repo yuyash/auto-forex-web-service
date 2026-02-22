@@ -2913,20 +2913,7 @@
             "type": "string",
             "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
             "maxLength": 20
-          },
-          "trading_mode": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TradingModeEnum"
-              }
-            ],
-            "description": "Trading mode: netting (aggregated positions) or hedging (independent trades)\n\n* `netting` - Netting Mode\n* `hedging` - Hedging Mode"
-          },
-          "status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/StatusEnum"
-              }
+          }
             ],
             "readOnly": true,
             "description": "Current task status\n\n* `created` - Created\n* `running` - Running\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
@@ -3025,15 +3012,6 @@
             "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
             "maxLength": 20
           },
-          "trading_mode": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TradingModeEnum"
-              }
-            ],
-            "description": "Trading mode: netting (aggregated positions) or hedging (independent trades)\n\n* `netting` - Netting Mode\n* `hedging` - Hedging Mode"
-          }
-        },
         "required": [
           "pip_size"
         ]
@@ -3091,16 +3069,7 @@
             "minLength": 1,
             "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
             "maxLength": 20
-          },
-          "trading_mode": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TradingModeEnum"
-              }
-            ],
-            "description": "Trading mode: netting (aggregated positions) or hedging (independent trades)\n\n* `netting` - Netting Mode\n* `hedging` - Hedging Mode"
           }
-        }
       },
       "BacktestTaskList": {
         "type": "object",
@@ -3174,21 +3143,7 @@
             "type": "string",
             "readOnly": true,
             "description": "Trading instrument (e.g., EUR_USD, USD_JPY)"
-          },
-          "trading_mode": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TradingModeEnum"
-              }
-            ],
-            "readOnly": true,
-            "description": "Trading mode: netting (aggregated positions) or hedging (independent trades)\n\n* `netting` - Netting Mode\n* `hedging` - Hedging Mode"
-          },
-          "status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/StatusEnum"
-              }
+          }
             ],
             "readOnly": true,
             "description": "Current task status\n\n* `created` - Created\n* `running` - Running\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
@@ -3221,7 +3176,6 @@
           "start_time",
           "status",
           "strategy_type",
-          "trading_mode",
           "updated_at",
           "user_id"
         ]
@@ -3505,16 +3459,7 @@
             "minLength": 1,
             "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
             "maxLength": 20
-          },
-          "trading_mode": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TradingModeEnum"
-              }
-            ],
-            "description": "Trading mode: netting (aggregated positions) or hedging (independent trades)\n\n* `netting` - Netting Mode\n* `hedging` - Hedging Mode"
           }
-        }
       },
       "PatchedTradingTaskCreateRequest": {
         "type": "object",
@@ -3554,14 +3499,6 @@
         ],
         "type": "string",
         "description": "* `created` - Created\n* `running` - Running\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
-      },
-      "TradingModeEnum": {
-        "enum": [
-          "netting",
-          "hedging"
-        ],
-        "type": "string",
-        "description": "* `netting` - Netting Mode\n* `hedging` - Hedging Mode"
       },
       "TradingTask": {
         "type": "object",

@@ -35,7 +35,6 @@ vi.mock('../../../src/hooks/useBacktestTasks', () => ({
       strategy_type: 'floor',
       instrument: 'EUR_USD',
       pip_size: '0.0001',
-      trading_mode: 'backtest',
       data_source: 'oanda',
       initial_balance: '10000.00',
       commission_per_trade: '0.00',
