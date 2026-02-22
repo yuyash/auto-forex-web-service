@@ -2,7 +2,6 @@
 
 from typing import Any
 
-
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework import status
@@ -38,8 +37,7 @@ class TestOandaAccountView:
         response = client.get("/api/market/accounts/")
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["count"] == 2
-        assert len(response.data["results"]) == 2
+        assert len(response.data) == 2
 
     def test_list_accounts_unauthenticated(self) -> None:
         """Test listing accounts without authentication."""

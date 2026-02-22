@@ -61,12 +61,7 @@ class OandaAccountView(APIView):
                 "count": accounts.count(),
             },
         )
-        response_data = {
-            "count": accounts.count(),
-            "next": None,
-            "previous": None,
-            "results": serializer.data,
-        }
+        response_data = serializer.data
         return Response(response_data, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -105,6 +100,17 @@ class OandaAccountView(APIView):
                 },
             )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        logger.warning(
+            "User %s failed to create OANDA account: %s",
+            request.user.email,
+            serializer.errors,
+            extra={
+                "user_id": request.user.id,
+                "email": request.user.email,
+                "errors": serializer.errors,
+                "data_keys": list(request.data.keys()) if hasattr(request.data, "keys") else None,
+            },
+        )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

@@ -226,13 +226,22 @@ class TradingTask(UUIDModel):
     def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:
         """Delete the task.
 
+        Tasks in STOPPING state are allowed to be deleted since the user has already
+        requested a stop. The Celery task will be revoked before deletion.
+
         Raises:
-            ValueError: If task is in an active state (STARTING, RUNNING, STOPPING)
+            ValueError: If task is in STARTING or RUNNING state
         """
-        if self.status in [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.STOPPING]:
+        if self.status in [TaskStatus.STARTING, TaskStatus.RUNNING]:
             raise ValueError(
                 f"Cannot delete task in {self.status} state. Stop the task first before deleting."
             )
+
+        # If task is stuck in STOPPING, revoke Celery task and clean up
+        if self.status == TaskStatus.STOPPING and self.celery_task_id:
+            from celery import current_app
+
+            current_app.control.revoke(self.celery_task_id, terminate=True, signal="SIGKILL")
 
         return super().delete(*args, **kwargs)
 

@@ -234,13 +234,40 @@ const AccountManagement = () => {
       );
       handleDialogClose();
       await fetchAccounts({ showLoading: false });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error saving account:', error);
-      showError(
-        error instanceof Error
-          ? error.message
-          : t('settings:messages.saveError', 'Failed to save account')
-      );
+
+      // Extract validation details from TransformedApiError or ApiError
+      let message = t('settings:messages.saveError', 'Failed to save account');
+      const err = error as Record<string, unknown>;
+
+      if (err.details && typeof err.details === 'object') {
+        // DRF returns field-level errors like { account_id: ["..."], api_token: ["..."] }
+        const details = err.details as Record<string, unknown>;
+        const fieldErrors: Partial<AccountFormData> = {};
+        const messages: string[] = [];
+
+        for (const [key, val] of Object.entries(details)) {
+          const msgs = Array.isArray(val) ? val.map(String) : [String(val)];
+          if (key in formData) {
+            fieldErrors[key as keyof AccountFormData] = msgs.join(', ');
+          }
+          messages.push(...msgs);
+        }
+
+        if (Object.keys(fieldErrors).length > 0) {
+          setFormErrors((prev) => ({ ...prev, ...fieldErrors }));
+        }
+        if (messages.length > 0) {
+          message = messages.join(' ');
+        }
+      } else if (err.message && typeof err.message === 'string') {
+        message = err.message;
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
+
+      showError(message);
     } finally {
       setSubmitting(false);
     }

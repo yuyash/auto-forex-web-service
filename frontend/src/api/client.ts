@@ -206,6 +206,10 @@ export function transformApiError(error: unknown): TransformedApiError {
     let message: string;
 
     switch (statusCode) {
+      case 400:
+        type = ApiErrorType.VALIDATION_ERROR;
+        message = 'Validation error. Please check your input.';
+        break;
       case 401:
         type = ApiErrorType.AUTHENTICATION_ERROR;
         message = 'Authentication required. Please log in.';

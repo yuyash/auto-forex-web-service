@@ -56,4 +56,4 @@ class TestOandaAccountViewUnit:
 
         assert response.status_code == status.HTTP_200_OK
         if response.data:
-            assert response.data["count"] == 0
+            assert len(response.data) == 0

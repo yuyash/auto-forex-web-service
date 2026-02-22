@@ -58,7 +58,7 @@ class TestOandaAccountsAPIIntegration:
         list_response = api_client.get("/api/market/accounts/")
 
         assert list_response.status_code == status.HTTP_200_OK
-        assert list_response.data["count"] == 1
+        assert len(list_response.data) == 1
 
         # 3. Get account detail
         detail_response = api_client.get(f"/api/market/accounts/{account_id}/")
@@ -106,7 +106,7 @@ class TestOandaAccountsAPIIntegration:
         list_response = api_client.get("/api/market/accounts/")
 
         assert list_response.status_code == status.HTTP_200_OK
-        assert list_response.data["count"] == 3
+        assert len(list_response.data) == 3
 
     def test_account_isolation_between_users(
         self, api_client: APIClient, user: Any, db: Any
