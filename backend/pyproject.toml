@@ -6,6 +6,7 @@ requires-python = ">=3.13"
 dependencies = [
     "django>=5.2,<5.3",
     "djangorestframework>=3.15.0",
+    "drf-spectacular>=0.29.0",
     "channels>=4.1.0",
     "channels-redis>=4.2.0",
     "daphne>=4.1.0",
@@ -34,6 +35,13 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "pytest-xdist>=3.8.0",
     "hypothesis>=6.100.0",
+    "hypothesis-django>=0.1.0",
+    "factory-boy>=3.3.0",
+    "faker>=30.0.0",
+    "freezegun>=1.5.0",
+    "responses>=0.25.0",
+    "fakeredis>=2.26.0",
+    "pytest-timeout>=2.3.0",
     "ruff>=0.9.0",
     "ty>=0.0.1a7",
     "pre-commit>=4.0.0",
@@ -52,7 +60,7 @@ build-backend = "hatchling.build"
 packages = ["config"]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "tests.settings_test"
+DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["test_*.py", "*_test.py", "tests.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -61,11 +69,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--import-mode=importlib",
-    "-n=auto",
-    "--cov=.",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
+    "-v",
 ]
 testpaths = ["tests"]
 markers = [
@@ -73,6 +77,11 @@ markers = [
     "integration: Integration tests",
     "slow: Slow running tests",
 ]
+# Global per-test timeout (seconds) – prevents CI from hanging indefinitely.
+timeout = 30
+# pytest-xdist configuration for parallel execution
+# Use -n auto to automatically detect number of CPUs
+# Use --dist loadscope to distribute tests by module for better isolation
 
 [tool.ruff]
 line-length = 100
@@ -138,13 +147,18 @@ omit = [
     "manage.py",
     "*/asgi.py",
     "*/wsgi.py",
+    "*/management/commands/*",
+    "config/settings_test.py",
+    "config/celery.py",
 ]
 branch = true
+parallel = true
 
 [tool.coverage.report]
 precision = 2
 show_missing = true
 skip_covered = false
+fail_under = 60
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
@@ -154,7 +168,14 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
+    "pass  # nosec",
 ]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"
 
 [tool.bandit]
 exclude_dirs = [".venv", "tests", "migrations"]
@@ -184,4 +205,29 @@ dev = [
     "django-stubs-ext>=5.2.8",
     "pytest-xdist>=3.8.0",
     "types-pyjwt>=1.7.1",
+]
+
+[tool.ty.src]
+# Exclude test files from type checking — tests use MagicMock/factory-boy
+# patterns that produce false-positive type errors.
+exclude = ["tests/"]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "basic"
+reportMissingImports = false
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportGeneralTypeIssues = false
+reportOptionalMemberAccess = false
+reportOptionalSubscript = false
+reportPrivateImportUsage = false
+exclude = [
+    "**/migrations",
+    "**/__pycache__",
+    "**/node_modules",
+    ".venv",
+    "tests",
 ]

@@ -14,7 +14,8 @@ class MarketConfig(AppConfig):
     verbose_name = "Market Data"
 
     def ready(self) -> None:
-        # Register signals
-        from . import signals as _signals  # noqa: F401
+        """Initialize app when Django starts."""
+        # Import and connect signal handlers
+        from apps.market.signals import connect_all_handlers
 
-        _ = _signals
+        connect_all_handlers()

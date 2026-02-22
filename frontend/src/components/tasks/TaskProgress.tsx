@@ -19,7 +19,6 @@ export interface TaskProgressProps {
  * - Color-coded by status (blue=running, green=completed, red=failed)
  * - Hidden when task is not running
  *
- * Requirements: 3.1, 3.2, 3.3, 3.4
  */
 export const TaskProgress: React.FC<TaskProgressProps> = React.memo(
   ({ status, progress, compact = false, showPercentage = true }) => {

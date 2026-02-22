@@ -87,7 +87,7 @@ export default function BacktestTaskActions({
       setDeleteDialogOpen(false);
       // Trigger refresh after successful delete
       onRefresh?.();
-      navigate('/backtest-tasks');
+      navigate('/backtest-tasks', { state: { deleted: true } });
     } catch (error) {
       console.error('Failed to delete task:', error);
       const errorMessage =

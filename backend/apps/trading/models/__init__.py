@@ -1,75 +1,65 @@
 """Trading models package.
 
 This package organizes trading models into logical modules:
-- configs: StrategyConfig and related
-- tasks: BacktestTask, TradingTask
-- floor_state: FloorStrategyTaskState, FloorStrategyLayerState
-- execution: TaskExecution, TaskExecutionResult
-- metrics: ExecutionMetrics, ExecutionMetricsCheckpoint
-- events: ExecutionStrategyEvent, ExecutionTradeLogEntry, ExecutionEquityPoint, TradingEvent
-- state: ExecutionStateSnapshot
+- configs: StrategyConfiguration and related
+- backtest: BacktestTask
+- trading: TradingTask
+- state: ExecutionState
+- events: TradingEvent
 - celery: CeleryTaskStatus
+- logs: TaskLog
+- trades: Trades
+- equities: Equities
+
+Note: FloorSide enum has been moved to apps.trading.enums
 """
 
-from apps.trading.models.celery import CeleryTaskStatus
-from apps.trading.models.configs import StrategyConfig, StrategyConfigManager
-from apps.trading.models.events import (
-    ExecutionEquityPoint,
-    ExecutionStrategyEvent,
-    ExecutionTradeLogEntry,
-    TradingEvent,
-)
-from apps.trading.models.execution import (
-    TaskExecution,
-    TaskExecutionManager,
-    TaskExecutionResult,
-)
-from apps.trading.models.floor import (
-    FloorSide,
-    FloorStrategyLayerState,
-    FloorStrategyTaskState,
-)
-from apps.trading.models.metrics import (
-    ExecutionMetrics,
-    ExecutionMetricsCheckpoint,
-    ExecutionMetricsManager,
-)
-from apps.trading.models.state import ExecutionStateSnapshot
-from apps.trading.models.tasks import (
+from apps.trading.models.backtest import (
     BacktestTask,
     BacktestTaskManager,
+)
+from apps.trading.models.celery import CeleryTaskStatus
+from apps.trading.models.configs import (
+    StrategyConfiguration,
+    StrategyConfigurationManager,
+)
+from apps.trading.models.equities import Equity
+from apps.trading.models.events import TradingEvent
+from apps.trading.models.floor import Layer
+from apps.trading.models.logs import TaskLog
+from apps.trading.models.metric_snapshots import MetricSnapshot
+from apps.trading.models.orders import Order
+from apps.trading.models.positions import Position
+from apps.trading.models.state import ExecutionState
+from apps.trading.models.trades import Trade
+from apps.trading.models.trading import (
     TradingTask,
     TradingTaskManager,
 )
 
 __all__ = [
     # Configs
-    "StrategyConfig",
-    "StrategyConfigManager",
+    "StrategyConfiguration",
+    "StrategyConfigurationManager",
     # Tasks
     "BacktestTask",
     "BacktestTaskManager",
     "TradingTask",
     "TradingTaskManager",
-    # Floor State
-    "FloorSide",
-    "FloorStrategyTaskState",
-    "FloorStrategyLayerState",
-    # Execution
-    "TaskExecution",
-    "TaskExecutionManager",
-    "TaskExecutionResult",
-    # Metrics
-    "ExecutionMetrics",
-    "ExecutionMetricsManager",
-    "ExecutionMetricsCheckpoint",
-    # Events
-    "ExecutionStrategyEvent",
-    "ExecutionTradeLogEntry",
-    "ExecutionEquityPoint",
-    "TradingEvent",
     # State
-    "ExecutionStateSnapshot",
+    "ExecutionState",
+    # Events
+    "TradingEvent",
     # Celery
     "CeleryTaskStatus",
+    # Logs
+    "TaskLog",
+    # Execution Data
+    "Order",
+    "Position",
+    "Trade",
+    "Equity",
+    "MetricSnapshot",
+    # Floor Strategy
+    "Layer",
 ]

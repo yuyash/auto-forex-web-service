@@ -7,7 +7,6 @@ export interface Position extends Record<string, unknown> {
   entry_price: number;
   current_price: number;
   unrealized_pnl: number;
-  realized_pnl?: number;
   status: 'OPEN' | 'CLOSED';
   layer?: number;
   opened_at: string;

@@ -30,7 +30,7 @@ interface Position {
 }
 
 interface OpenPositionsTableProps {
-  taskId: number;
+  taskId: string | number;
   executionStartedAt?: string;
 }
 

@@ -21,7 +21,6 @@ export interface TaskProgressBarProps {
  * - Keep at 100% when task completes
  * - Ensure consistent display across all views
  *
- * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
  */
 export const TaskProgressBar: React.FC<TaskProgressBarProps> = React.memo(
   ({

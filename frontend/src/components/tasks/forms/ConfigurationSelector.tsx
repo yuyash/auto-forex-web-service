@@ -18,8 +18,8 @@ import {
 } from '../../../hooks/useStrategies';
 
 interface ConfigurationSelectorProps {
-  value: number | string | undefined;
-  onChange: (value: number) => void;
+  value: string | undefined;
+  onChange: (value: string) => void;
   configurations: StrategyConfig[];
   isLoading?: boolean;
   error?: string;
@@ -86,12 +86,8 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
         label={label}
         onChange={(e) => {
           const val = e.target.value;
-          // MUI Select returns string even though value prop is number
-          if (
-            typeof val === 'number' ||
-            (typeof val === 'string' && val !== '')
-          ) {
-            onChange(typeof val === 'string' ? Number(val) : val);
+          if (typeof val === 'string' && val !== '') {
+            onChange(val);
           }
         }}
         MenuProps={{
@@ -134,11 +130,28 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
           />
         </Box>
 
+        {/* Hidden MenuItem to keep the selected value visible while configurations are loading */}
+        {value &&
+          !isLoading &&
+          !filteredConfigurations.some((c) => c.id === value) && (
+            <MenuItem value={value} sx={{ display: 'none' }}>
+              {selectedConfig?.name || 'Loading...'}
+            </MenuItem>
+          )}
+
         {isLoading ? (
-          <MenuItem disabled>
-            <CircularProgress size={20} sx={{ mr: 1 }} />
-            Loading configurations...
-          </MenuItem>
+          <>
+            {/* Keep selected value visible during loading */}
+            {value && (
+              <MenuItem value={value} sx={{ display: 'none' }}>
+                {selectedConfig?.name || 'Loading...'}
+              </MenuItem>
+            )}
+            <MenuItem disabled>
+              <CircularProgress size={20} sx={{ mr: 1 }} />
+              Loading configurations...
+            </MenuItem>
+          </>
         ) : filteredConfigurations.length === 0 ? (
           <MenuItem disabled>
             {searchTerm

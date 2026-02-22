@@ -1,6 +1,12 @@
 // React Query hooks for accounts
 import { useQuery } from '@tanstack/react-query';
-import { accountsApi, type AccountListParams } from '../services/api/accounts';
+import { accountsApi } from '../services/api/accounts';
+
+export interface AccountListParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+}
 
 // Query keys
 export const accountKeys = {
@@ -16,7 +22,7 @@ export const accountKeys = {
 export function useAccounts(params?: AccountListParams) {
   return useQuery({
     queryKey: accountKeys.list(params),
-    queryFn: () => accountsApi.list(params),
+    queryFn: () => accountsApi.list(),
   });
 }
 

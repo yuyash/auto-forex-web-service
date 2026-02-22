@@ -3,43 +3,36 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Generic
-
-from .protocols import TStrategyState
-from .state import ExecutionState
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from apps.trading.events import StrategyEvent
+    from apps.trading.models.state import ExecutionState
 
 
 @dataclass
-class StrategyResult(Generic[TStrategyState]):
+class StrategyResult:
     """Result returned by strategy lifecycle methods.
 
     This dataclass encapsulates the result of strategy operations,
-    providing a type-safe way to return updated state and events.
-
-    Generic over TStrategyState to maintain type safety with ExecutionState.
+    providing a way to return updated state and events.
 
     Attributes:
         state: Updated execution state after processing
         events: List of strategy events emitted during processing
-
-    Requirements: 3.1, 3.2
-
-    Example:
-        >>> from apps.trading.events import StrategyStartedEvent
-        >>> result: StrategyResult[FloorStrategyState] = StrategyResult(
-        ...     state=updated_state,
-        ...     events=[StrategyStartedEvent(timestamp="2024-01-01T00:00:00Z")]
-        ... )
+        should_stop: If True the executor must stop the task after processing
+            this result. Used by strategies to signal unrecoverable conditions
+            (e.g. margin blow-out with no open positions).
+        stop_reason: Human-readable reason when should_stop is True.
     """
 
-    state: ExecutionState[TStrategyState]
+    state: ExecutionState
     events: list[StrategyEvent] = field(default_factory=list)
+    should_stop: bool = False
+    stop_reason: str = ""
 
     @classmethod
-    def from_state(cls, state: ExecutionState[TStrategyState]) -> "StrategyResult[TStrategyState]":
+    def from_state(cls, state: ExecutionState) -> "StrategyResult":
         """Create a result with only state, no events.
 
         Args:
@@ -51,9 +44,7 @@ class StrategyResult(Generic[TStrategyState]):
         return cls(state=state, events=[])
 
     @classmethod
-    def with_events(
-        cls, state: ExecutionState[TStrategyState], events: list[StrategyEvent]
-    ) -> "StrategyResult[TStrategyState]":
+    def with_events(cls, state: ExecutionState, events: list[StrategyEvent]) -> "StrategyResult":
         """Create a result with state and events.
 
         Args:

@@ -26,7 +26,10 @@ class TaskStatus(models.TextChoices):
     """
 
     CREATED = "created", "Created"
+    STARTING = "starting", "Starting"
     RUNNING = "running", "Running"
+    PAUSED = "paused", "Paused"
+    STOPPING = "stopping", "Stopping"
     STOPPED = "stopped", "Stopped"
     COMPLETED = "completed", "Completed"
     FAILED = "failed", "Failed"
@@ -78,6 +81,7 @@ class EventType(models.TextChoices):
     ADD_LAYER = "add_layer", "Add Layer"
     REMOVE_LAYER = "remove_layer", "Remove Layer"
     VOLATILITY_LOCK = "volatility_lock", "Volatility Lock"
+    VOLATILITY_HEDGE_NEUTRALIZE = "volatility_hedge_neutralize", "Volatility Hedge Neutralize"
     MARGIN_PROTECTION = "margin_protection", "Margin Protection"
 
     # Lifecycle events
@@ -113,13 +117,17 @@ class LogLevel(models.TextChoices):
     CRITICAL = "CRITICAL", "Critical"
 
 
-class TradingMode(models.TextChoices):
+class Direction(models.TextChoices):
     """
-    Trading modes for position management.
+    Trading direction for positions and orders.
 
-    - NETTING: Positions are aggregated per instrument (FIFO for partial closes)
-    - HEDGING: Multiple independent trades can exist per instrument
+    - LONG: Long positions (buy)
+    - SHORT: Short positions (sell)
     """
 
-    NETTING = "netting", "Netting Mode"
-    HEDGING = "hedging", "Hedging Mode"
+    LONG = "long", "Long"
+    SHORT = "short", "Short"
+
+
+# Deprecated: Use Direction instead
+FloorSide = Direction  # Backward compatibility alias
