@@ -150,11 +150,12 @@ export function transformApiError(error: unknown): TransformedApiError {
         message = error.message || 'An unexpected error occurred.';
     }
 
-    // Handle 401 globally
+    // Handle 401 globally — clear credentials and let React Router
+    // redirect via AuthContext state change.  Avoid window.location.href
+    // to prevent race conditions with concurrent React state updates and
+    // a full page reload that depends on systemSettings fetch succeeding.
     if (statusCode === 401) {
-      console.warn(
-        `[API:AUTH] 401 Unauthorized - Clearing auth and redirecting to login`
-      );
+      console.warn(`[API:AUTH] 401 Unauthorized - Clearing auth state`);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       clearAuthToken();
@@ -164,7 +165,6 @@ export function transformApiError(error: unknown): TransformedApiError {
         message: 'Session expired',
         context: 'api_client',
       });
-      window.location.href = '/login';
     }
 
     return {
