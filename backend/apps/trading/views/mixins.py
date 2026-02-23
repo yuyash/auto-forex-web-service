@@ -111,6 +111,7 @@ class TaskSubResourceMixin:
                     "enough for the browser to handle. Default: 10000."
                 ),
             ),
+            _SINCE_PARAM,
         ],
         responses={200: dict},
     )
@@ -137,6 +138,10 @@ class TaskSubResourceMixin:
         ).order_by("timestamp")
         if celery_task_id:
             queryset = queryset.filter(celery_task_id=celery_task_id)
+
+        since = _parse_since(request)
+        if since:
+            queryset = queryset.filter(timestamp__gt=since)
 
         total_count = queryset.count()
 
@@ -195,7 +200,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         summary="Get task logs",
-        description="Get task logs with pagination and filtering.",
+        description="Get task logs with pagination and filtering. Supports incremental fetching via `since`.",
         parameters=[
             OpenApiParameter(
                 name="level", type=str, required=False, description="Filter by log level"
@@ -206,6 +211,7 @@ class TaskSubResourceMixin:
                 required=False,
                 description="Filter by celery task ID",
             ),
+            _SINCE_PARAM,
             *_PAGINATION_PARAMS,
         ],
         responses={200: _task_log_serializer()(many=True)},
@@ -225,6 +231,11 @@ class TaskSubResourceMixin:
             queryset = queryset.none()
         if level:
             queryset = queryset.filter(level=level)
+
+        since = _parse_since(request)
+        if since:
+            queryset = queryset.filter(timestamp__gt=since)
+
         queryset = queryset.order_by("-timestamp")
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)
@@ -233,7 +244,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         summary="Get task events",
-        description="Get task events with pagination and filtering.",
+        description="Get task events with pagination and filtering. Supports incremental fetching via `since`.",
         parameters=[
             OpenApiParameter(
                 name="event_type", type=str, required=False, description="Filter by event type"
@@ -247,6 +258,7 @@ class TaskSubResourceMixin:
                 required=False,
                 description="Filter by celery task ID",
             ),
+            _SINCE_PARAM,
             *_PAGINATION_PARAMS,
         ],
         responses={200: _trading_event_serializer()(many=True)},
@@ -272,6 +284,11 @@ class TaskSubResourceMixin:
             queryset = queryset.filter(celery_task_id=celery_task_id)
         else:
             queryset = queryset.none()
+
+        since = _parse_since(request)
+        if since:
+            queryset = queryset.filter(created_at__gt=since)
+
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = TradingEventSerializer(page, many=True)
@@ -279,7 +296,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         summary="Get task trades",
-        description="Get task trades with pagination.",
+        description="Get task trades with pagination. Supports incremental fetching via `since`.",
         parameters=[
             OpenApiParameter(
                 name="direction",
@@ -293,6 +310,7 @@ class TaskSubResourceMixin:
                 required=False,
                 description="Filter by celery task ID",
             ),
+            _SINCE_PARAM,
             *_PAGINATION_PARAMS,
         ],
         responses={200: _trade_serializer()(many=True)},
@@ -320,6 +338,11 @@ class TaskSubResourceMixin:
                 queryset = queryset.filter(direction="short")
             else:
                 queryset = queryset.filter(direction=direction)
+
+        since = _parse_since(request)
+        if since:
+            queryset = queryset.filter(updated_at__gt=since)
+
         trades_qs = queryset.values(
             "id",
             "direction",
@@ -331,6 +354,7 @@ class TaskSubResourceMixin:
             "retracement_count",
             "timestamp",
             "position_id",
+            "updated_at",
         )
         normalized: list[dict] = []
         for trade in trades_qs:
@@ -350,7 +374,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         summary="Get task positions",
-        description="Get task positions (open and closed) with pagination.",
+        description="Get task positions (open and closed) with pagination. Supports incremental fetching via `since`.",
         parameters=[
             OpenApiParameter(
                 name="position_status",
@@ -370,6 +394,7 @@ class TaskSubResourceMixin:
                 required=False,
                 description="Filter by celery task ID",
             ),
+            _SINCE_PARAM,
             *_PAGINATION_PARAMS,
         ],
         responses={200: _position_serializer()(many=True)},
@@ -404,6 +429,10 @@ class TaskSubResourceMixin:
         direction = (request.query_params.get("direction") or "").lower()
         if direction:
             queryset = queryset.filter(direction=direction)
+
+        since = _parse_since(request)
+        if since:
+            queryset = queryset.filter(updated_at__gt=since)
 
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)

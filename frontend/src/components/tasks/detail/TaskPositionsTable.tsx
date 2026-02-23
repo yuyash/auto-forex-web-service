@@ -6,7 +6,7 @@
  * Reads from the `positions` table (Position model).
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Box, Chip, Typography, Alert, TablePagination } from '@mui/material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
@@ -15,6 +15,7 @@ import {
   useTaskPositions,
   type TaskPosition,
 } from '../../../hooks/useTaskPositions';
+import { useOverviewPnl } from '../../../hooks/useOverviewPnl';
 import { TaskType } from '../../../types/common';
 
 interface TaskPositionsTableProps {
@@ -73,56 +74,31 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     enableRealTimeUpdates,
   });
 
-  // All positions (up to 1000) for PnL summary — matches Replay panel
-  const { positions: allClosedPositions } = useTaskPositions({
-    taskId,
-    taskType,
-    status: 'closed',
-    pageSize: 1000,
-    enableRealTimeUpdates,
-  });
+  // PnL summary from server-side aggregation (no full-fetch needed)
+  const {
+    realizedPnl: totalRealizedPnl,
+    unrealizedPnl: totalUnrealizedPnl,
+    refetch: refetchPnl,
+  } = useOverviewPnl(String(taskId), taskType);
 
-  const { positions: allOpenPositions } = useTaskPositions({
-    taskId,
-    taskType,
-    status: 'open',
-    pageSize: 1000,
-    enableRealTimeUpdates,
-  });
+  // Refetch PnL when real-time updates toggle changes (task finishes)
+  const prevRealTimeRef = React.useRef(enableRealTimeUpdates);
+  React.useEffect(() => {
+    if (prevRealTimeRef.current && !enableRealTimeUpdates) {
+      refetchPnl();
+    }
+    prevRealTimeRef.current = enableRealTimeUpdates;
+  }, [enableRealTimeUpdates, refetchPnl]);
+
+  // Periodic PnL refresh while task is running
+  React.useEffect(() => {
+    if (!enableRealTimeUpdates) return;
+    const interval = setInterval(refetchPnl, 10000);
+    return () => clearInterval(interval);
+  }, [enableRealTimeUpdates, refetchPnl]);
 
   const isLoading = closedLoading || openLoading;
   const error = closedError || openError;
-
-  const totalRealizedPnl = useMemo(
-    () =>
-      allClosedPositions.reduce((sum, p) => {
-        if (!p.exit_price || !p.entry_price) return sum;
-        const exit = parseFloat(p.exit_price);
-        const entry = parseFloat(p.entry_price);
-        const units = Math.abs(p.units ?? 0);
-        const dir = String(p.direction).toLowerCase();
-        const pnl =
-          dir === 'long' ? (exit - entry) * units : (entry - exit) * units;
-        return sum + pnl;
-      }, 0),
-    [allClosedPositions]
-  );
-
-  const totalUnrealizedPnl = useMemo(
-    () =>
-      allOpenPositions.reduce((sum, p) => {
-        if (currentPrice == null || !p.entry_price) return sum;
-        const entryP = parseFloat(p.entry_price);
-        const units = Math.abs(p.units ?? 0);
-        const dir = String(p.direction).toLowerCase();
-        const pnl =
-          dir === 'long'
-            ? (currentPrice - entryP) * units
-            : (entryP - currentPrice) * units;
-        return sum + pnl;
-      }, 0),
-    [allOpenPositions, currentPrice]
-  );
 
   const getRowId = useCallback((row: TaskPosition) => String(row.id), []);
 
