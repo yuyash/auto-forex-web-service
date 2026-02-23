@@ -27,6 +27,7 @@ import {
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useBacktestTask } from '../../hooks/useBacktestTasks';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
+import { useCurrentTickPolling } from '../../hooks/useCurrentTickPolling';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
@@ -102,8 +103,20 @@ export const BacktestTaskDetail: React.FC = () => {
   } = useTaskPolling(taskId, 'backtest', {
     enabled: !!taskId,
     pollStatus: true,
-    interval: 3000, // Poll every 3 seconds for active tasks
+    interval: 3000,
   });
+
+  // Poll for current_tick via lightweight endpoint
+  const { currentTick: polledTick } = useCurrentTickPolling(
+    taskId,
+    'backtest',
+    {
+      enabled:
+        task?.status === TaskStatus.RUNNING ||
+        task?.status === TaskStatus.STARTING,
+      interval: 2000,
+    }
+  );
 
   // Refetch when status changes
   const prevStatusRef = useRef<string | undefined>(undefined);
@@ -575,9 +588,7 @@ export const BacktestTaskDetail: React.FC = () => {
             startTime={task.start_time}
             endTime={task.end_time}
             latestExecution={task.latest_execution}
-            currentTick={
-              polledStatus?.current_tick ?? task.current_tick ?? null
-            }
+            currentTick={polledTick ?? task.current_tick ?? null}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
@@ -596,8 +607,8 @@ export const BacktestTaskDetail: React.FC = () => {
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
             currentPrice={
-              polledStatus?.current_tick?.price != null
-                ? parseFloat(polledStatus.current_tick.price)
+              polledTick?.price != null
+                ? parseFloat(polledTick.price)
                 : task.current_tick?.price != null
                   ? parseFloat(task.current_tick.price)
                   : null

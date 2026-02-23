@@ -2,6 +2,7 @@
 
 from logging import Logger, getLogger
 
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -29,6 +30,7 @@ class OandaAccountView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = OandaAccountsSerializer
 
+    @extend_schema(operation_id="market_accounts_list", tags=["Market"])
     def get(self, request: Request) -> Response:
         if not request.user.is_authenticated:
             return Response(
@@ -50,6 +52,7 @@ class OandaAccountView(APIView):
         response_data = serializer.data
         return Response(response_data, status=status.HTTP_200_OK)
 
+    @extend_schema(operation_id="market_accounts_create", tags=["Market"])
     def post(self, request: Request) -> Response:
         if not request.user.is_authenticated:
             return Response(
@@ -111,6 +114,7 @@ class OandaAccountDetailView(APIView):
         except OandaAccounts.DoesNotExist:
             return None
 
+    @extend_schema(operation_id="market_account_detail", tags=["Market"])
     def get(self, request: Request, account_id: int) -> Response:
         if not request.user.is_authenticated:
             return Response(
@@ -164,6 +168,7 @@ class OandaAccountDetailView(APIView):
         )
         return Response(response_data, status=status.HTTP_200_OK)
 
+    @extend_schema(operation_id="market_account_update", tags=["Market"])
     def put(self, request: Request, account_id: int) -> Response:
         if not request.user.is_authenticated:
             return Response(
@@ -194,6 +199,7 @@ class OandaAccountDetailView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @extend_schema(operation_id="market_account_delete", tags=["Market"])
     def delete(self, request: Request, account_id: int) -> Response:
         if not request.user.is_authenticated:
             return Response(

@@ -3,7 +3,8 @@
 from decimal import Decimal
 from logging import Logger, getLogger
 
-from rest_framework import status
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -42,6 +43,27 @@ class PositionView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="market_positions_list",
+        tags=["Market"],
+        parameters=[
+            OpenApiParameter(name="account_id", type=int, required=False),
+            OpenApiParameter(name="instrument", type=str, required=False),
+            OpenApiParameter(name="status", type=str, required=False, default="open"),
+        ],
+        responses={
+            200: inline_serializer(
+                "PositionListResponse",
+                fields={
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": serializers.ListField(child=serializers.DictField()),
+                },
+            )
+        },
+        description="Retrieve positions directly from OANDA API.",
+    )
     def get(self, request: Request) -> Response:
         """
         Retrieve positions directly from OANDA API.
@@ -54,6 +76,28 @@ class PositionView(APIView):
         """
         return self._get_positions_from_oanda(request)
 
+    @extend_schema(
+        operation_id="market_positions_open",
+        tags=["Market"],
+        request=PositionSerializer,
+        responses={
+            201: inline_serializer(
+                "PositionOpenResponse",
+                fields={
+                    "id": serializers.CharField(),
+                    "instrument": serializers.CharField(),
+                    "type": serializers.CharField(),
+                    "units": serializers.CharField(),
+                    "price": serializers.CharField(allow_null=True),
+                    "state": serializers.CharField(),
+                    "create_time": serializers.DateTimeField(allow_null=True),
+                    "account_name": serializers.CharField(),
+                    "account_db_id": serializers.IntegerField(),
+                },
+            ),
+        },
+        description="Open a new position by submitting a market order via OANDA.",
+    )
     def put(self, request: Request) -> Response:
         """
         Open a new position via OANDA by submitting a market order.
@@ -239,6 +283,31 @@ class PositionDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="market_position_detail",
+        tags=["Market"],
+        parameters=[
+            OpenApiParameter(name="account_id", type=int, required=True, location="query"),
+        ],
+        responses={
+            200: inline_serializer(
+                "PositionDetailResponse",
+                fields={
+                    "id": serializers.CharField(),
+                    "instrument": serializers.CharField(),
+                    "direction": serializers.CharField(),
+                    "units": serializers.CharField(),
+                    "entry_price": serializers.CharField(),
+                    "unrealized_pnl": serializers.CharField(),
+                    "open_time": serializers.DateTimeField(allow_null=True),
+                    "state": serializers.CharField(),
+                    "account_name": serializers.CharField(),
+                    "account_db_id": serializers.IntegerField(),
+                },
+            )
+        },
+        description="Retrieve detailed information for a specific trade/position from OANDA.",
+    )
     def get(self, request: Request, position_id: str) -> Response:
         """
         Retrieve position details from OANDA API.
@@ -307,6 +376,27 @@ class PositionDetailView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @extend_schema(
+        operation_id="market_position_close",
+        tags=["Market"],
+        request=inline_serializer(
+            "PositionCloseRequest",
+            fields={
+                "account_id": serializers.IntegerField(),
+                "units": serializers.DecimalField(max_digits=20, decimal_places=5, required=False),
+            },
+        ),
+        responses={
+            200: inline_serializer(
+                "PositionCloseResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "details": serializers.DictField(),
+                },
+            )
+        },
+        description="Close a position via OANDA API.",
+    )
     def patch(self, request: Request, position_id: str) -> Response:
         """
         Close a position via OANDA API.

@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Third-party apps
     "rest_framework",
+    "drf_spectacular",
     "channels",
     "django_celery_beat",
     # Local apps
@@ -348,6 +349,38 @@ REST_FRAMEWORK = {
     "DATETIME_FORMAT": "%Y-%m-%dT%H:%M:%S.%fZ",
     "DATE_FORMAT": "%Y-%m-%d",
     "TIME_FORMAT": "%H:%M:%S",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+# =============================================================================
+# drf-spectacular (OpenAPI schema generation)
+# =============================================================================
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Auto Forex Trader API",
+    "DESCRIPTION": (
+        "Auto Forex Trader Backend API.\n\n"
+        "## Authentication\n"
+        "Most endpoints require JWT authentication. "
+        "Include the token in the `Authorization: Bearer <token>` header.\n\n"
+        "## Rate Limiting\n"
+        "Authentication endpoints are rate-limited to prevent abuse."
+    ),
+    "VERSION": "0.1.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    # Only serve docs UI in DEBUG mode.
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"] if DEBUG else [],
+    "SCHEMA_PATH_PREFIX": "/api/",
+    "COMPONENT_SPLIT_REQUEST": True,
+    "TAGS": [
+        {"name": "Accounts", "description": "Authentication and user management"},
+        {"name": "Health", "description": "System health checks"},
+        {"name": "Market", "description": "Market data and OANDA integration"},
+        {"name": "Trading", "description": "Trading tasks and strategy management"},
+    ],
+    "EXTENSIONS": [
+        "apps.accounts.openapi.JWTAuthenticationExtension",
+    ],
 }
 
 

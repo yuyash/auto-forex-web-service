@@ -6,7 +6,8 @@ from typing import Any
 
 import v20
 from django.core.exceptions import ObjectDoesNotExist
-from rest_framework import status
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -35,6 +36,43 @@ class CandleDataView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="market_candles",
+        tags=["Market"],
+        parameters=[
+            OpenApiParameter(name="instrument", type=str, required=True),
+            OpenApiParameter(name="granularity", type=str, required=False, default="H1"),
+            OpenApiParameter(name="count", type=int, required=False, default=100),
+            OpenApiParameter(name="from_time", type=str, required=False),
+            OpenApiParameter(name="to_time", type=str, required=False),
+            OpenApiParameter(name="before", type=str, required=False),
+            OpenApiParameter(name="after", type=str, required=False),
+            OpenApiParameter(name="account_id", type=str, required=False),
+        ],
+        responses={
+            200: inline_serializer(
+                "CandleDataResponse",
+                fields={
+                    "instrument": serializers.CharField(),
+                    "granularity": serializers.CharField(),
+                    "candles": serializers.ListField(
+                        child=inline_serializer(
+                            "CandleItem",
+                            fields={
+                                "time": serializers.IntegerField(),
+                                "open": serializers.FloatField(),
+                                "high": serializers.FloatField(),
+                                "low": serializers.FloatField(),
+                                "close": serializers.FloatField(),
+                                "volume": serializers.IntegerField(),
+                            },
+                        )
+                    ),
+                },
+            ),
+        },
+        description="Fetch historical candle data from OANDA.",
+    )
     def get(self, request: Request) -> Response:
         """
         Fetch historical candle data from OANDA.

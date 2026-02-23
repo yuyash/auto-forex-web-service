@@ -3,6 +3,8 @@ from __future__ import annotations
 from logging import Logger, getLogger
 from typing import Any
 
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -36,6 +38,21 @@ class HealthView(APIView):
         super().__init__(**kwargs)
         self.health_service = HealthCheckService()
 
+    @extend_schema(
+        operation_id="health_check",
+        tags=["Health"],
+        responses={
+            200: inline_serializer(
+                "HealthCheckResponse",
+                fields={
+                    "status": serializers.CharField(),
+                    "timestamp": serializers.DateTimeField(),
+                    "components": serializers.DictField(),
+                },
+            ),
+        },
+        description="System health check endpoint.",
+    )
     def get(self, request: Request) -> Response:
         client_ip: str = get_client_ip(request)
         logger.debug(msg=f"Receiving health check request from IP: {client_ip}")

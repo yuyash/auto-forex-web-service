@@ -3,6 +3,8 @@
 from logging import Logger, getLogger
 
 import v20
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -50,6 +52,29 @@ class SupportedGranularitiesView(APIView):
         {"value": "M", "label": "Monthly"},
     ]
 
+    @extend_schema(
+        operation_id="market_granularities",
+        tags=["Market"],
+        responses={
+            200: inline_serializer(
+                "GranularitiesResponse",
+                fields={
+                    "granularities": serializers.ListField(
+                        child=inline_serializer(
+                            "GranularityItem",
+                            fields={
+                                "value": serializers.CharField(),
+                                "label": serializers.CharField(),
+                            },
+                        )
+                    ),
+                    "count": serializers.IntegerField(),
+                    "source": serializers.CharField(),
+                },
+            ),
+        },
+        description="Retrieve supported OANDA granularities/timeframes.",
+    )
     def get(self, _request: Request) -> Response:
         """
         Retrieve list of supported granularities.

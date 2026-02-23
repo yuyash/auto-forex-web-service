@@ -4,7 +4,8 @@ from logging import Logger, getLogger
 from typing import Any
 
 import v20
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -46,6 +47,21 @@ class SupportedInstrumentsView(APIView):
         "EUR_CAD",
     ]
 
+    @extend_schema(
+        operation_id="market_instruments_list",
+        tags=["Market"],
+        responses={
+            200: inline_serializer(
+                "InstrumentsListResponse",
+                fields={
+                    "instruments": serializers.ListField(child=serializers.CharField()),
+                    "count": serializers.IntegerField(),
+                    "source": serializers.CharField(),
+                },
+            ),
+        },
+        description="Retrieve list of supported currency pairs from OANDA.",
+    )
     def get(self, _request: Request) -> Response:
         """
         Retrieve list of supported instruments from OANDA API.
@@ -131,6 +147,36 @@ class InstrumentDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="market_instrument_detail",
+        tags=["Market"],
+        responses={
+            200: inline_serializer(
+                "InstrumentDetailResponse",
+                fields={
+                    "instrument": serializers.CharField(),
+                    "display_name": serializers.CharField(),
+                    "type": serializers.CharField(),
+                    "pip_location": serializers.IntegerField(),
+                    "pip_value": serializers.FloatField(),
+                    "display_precision": serializers.IntegerField(),
+                    "trade_units_precision": serializers.IntegerField(),
+                    "minimum_trade_size": serializers.CharField(),
+                    "maximum_trade_units": serializers.CharField(),
+                    "maximum_position_size": serializers.CharField(),
+                    "maximum_order_units": serializers.CharField(),
+                    "margin_rate": serializers.CharField(),
+                    "leverage": serializers.CharField(),
+                    "source": serializers.CharField(),
+                },
+            ),
+            404: inline_serializer(
+                "InstrumentNotFound",
+                fields={"error": serializers.CharField()},
+            ),
+        },
+        description="Get detailed information about a specific currency pair.",
+    )
     def get(self, request: Request, instrument: str) -> Response:
         """
         Get detailed information about a specific instrument.

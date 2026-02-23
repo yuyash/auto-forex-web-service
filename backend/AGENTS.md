@@ -1,0 +1,511 @@
+# AGENTS.md - Auto Forex Trader Project Guide
+
+This document provides guidance for AI agents working on this project. It covers the project structure, tech stack, development workflow, conventions, and key architectural patterns.
+
+## Project Overview
+
+**Auto Forex Trader** is a full-stack web application for managing algorithmic forex trading operations across multiple OANDA accounts. It provides real-time market data streaming, strategy execution, position tracking, comprehensive risk management, and a responsive admin dashboard.
+
+**Key Capabilities:**
+
+- Multi-account OANDA management
+- Real-time market data streaming via WebSocket
+- Modular trading strategies (Floor Strategy implementation)
+- ATR-based volatility protection
+- Position tracking with real-time P&L
+- Backtesting engine with AWS S3/Athena integration
+- Admin dashboard with system monitoring
+- Complete event logging and audit trail
+- Internationalization (English, Japanese)
+- Responsive design (desktop and mobile)
+
+## Technology Stack
+
+### Backend
+
+- **Framework**: Django 5.2 LTS with Django REST Framework
+- **Real-time**: Django Channels (WebSocket) with Daphne ASGI server
+- **Database**: PostgreSQL 17
+- **Cache/Broker**: Redis 7
+- **Task Queue**: Celery with Django Celery Beat
+- **API Integration**: OANDA v20 Python library
+- **Cloud**: AWS boto3 (S3, Athena for backtesting)
+- **Package Manager**: uv (Python)
+- **Python Version**: 3.13+
+
+### Frontend
+
+- **Framework**: React 19 with TypeScript
+- **Build Tool**: Vite
+- **UI Library**: Material-UI (MUI)
+- **Charts**: react-financial-charts with d3 integration
+- **HTTP Client**: Axios with React Query
+- **Internationalization**: react-i18next
+- **Node Version**: 18+
+- **Package Manager**: npm
+
+### Infrastructure
+
+- **Containerization**: Docker & Docker Compose
+- **Web Server**: Nginx with Let's Encrypt SSL
+- **CI/CD**: GitHub Actions
+- **Deployment**: Docker containers on production server
+
+## Backend Architecture
+
+### Django Apps
+
+#### 1. **accounts** - Authentication & User Management
+
+- User model with custom authentication
+- JWT token generation and validation
+- Session management with Redis backend
+- Security monitoring and IP blocking
+- User settings and preferences
+- Notification preferences
+- HTTP access logging middleware
+
+**Key Files:**
+
+- `models.py` - User, UserSettings, UserSession, BlockedIP models
+- `auth.py` - JWTAuthentication class
+- `views.py` - Login, logout, token refresh endpoints
+- `middlewares/` - Security and logging middleware
+
+#### 2. **health** - System Health Checks
+
+- Database connectivity checks
+- Redis connectivity checks
+- Celery worker status
+- System resource monitoring (CPU, memory)
+- Health check endpoint for load balancers
+
+**Key Files:**
+
+- `views.py` - Health check endpoints
+- `services.py` - Health check logic
+
+#### 3. **market** - Market Data & OANDA Integration
+
+- OANDA API integration (v20)
+- Real-time market data streaming via WebSocket
+- Tick data publishing to Redis pub/sub
+- Market data storage and retrieval
+- Instrument configuration
+- Backtesting data management
+
+**Key Files:**
+
+- `models.py` - Instrument, Tick, MarketData models
+- `services/oanda.py` - OANDA API client
+- `services/celery.py` - Celery task coordination
+- `tasks.py` - Celery tasks for market data processing
+- `consumers.py` - WebSocket consumers for streaming
+
+#### 4. **trading** - Trading Strategies & Execution
+
+- Trading strategy definitions and configurations
+- Strategy execution engine
+- Position management and lifecycle
+- Order execution and tracking
+- Trade history and reconciliation
+- Risk management enforcement
+- Performance metrics calculation
+
+**Key Files:**
+
+- `models.py` - Strategy, StrategyConfig, Position, Order, Trade models
+- `strategies/` - Strategy implementations (Floor Strategy)
+- `services/execution.py` - Strategy execution engine
+- `services/risk.py` - Risk management logic
+- `tasks.py` - Celery tasks for strategy execution
+- `consumers.py` - WebSocket consumers for trading updates
+
+### Configuration
+
+**Django Settings** (`backend/config/settings.py`):
+
+- Database: PostgreSQL with connection pooling
+- Cache: Redis with Django cache framework
+- Session: Redis-backed sessions
+- Celery: Redis broker with task routing
+- Channels: Redis channel layer for WebSocket
+- Logging: Rotating file handlers with per-app loggers
+- Security: HTTPS, HSTS, CSRF, XFrame protection
+- CORS: Configurable allowed origins
+- JWT: HS256 algorithm with 24-hour expiration
+
+**Environment Variables** (`.env`):
+
+- `DB_PASSWORD` - PostgreSQL password
+- `SECRET_KEY` - Django secret key (min 50 chars)
+- `REDIS_PASSWORD` - Redis password (optional)
+- Additional config via environment variables
+
+### API Structure
+
+**Base URL**: `/api/`
+
+**Authentication**: JWT Bearer token in `Authorization` header
+
+**Response Format**: JSON with consistent error structure
+
+**Endpoints**:
+
+- `/api/auth/` - Authentication (login, logout, token refresh)
+- `/api/accounts/` - User account management
+- `/api/oanda/` - OANDA account integration
+- `/api/market/` - Market data queries
+- `/api/strategies/` - Strategy management
+- `/api/positions/` - Position queries
+- `/api/trades/` - Trade history
+- `/api/health/` - System health checks
+- `/api/docs/` - Swagger UI (development only)
+- `/api/redoc/` - ReDoc (development only)
+
+### Celery Task Architecture
+
+**Task Queues**:
+
+- `default` - General tasks
+- `market` - Long-running market data tasks
+- `trading` - Strategy execution and backtesting tasks
+
+**Key Tasks**:
+
+- `market.tasks.ensure_tick_pubsub_running` - Supervise market data streaming
+- `market.tasks.publish_oanda_ticks` - Fetch and publish market ticks
+- `market.tasks.subscribe_ticks_to_db` - Store ticks in database
+- `trading.tasks.run_trading_task` - Execute trading strategy
+- `trading.tasks.stop_trading_task` - Stop strategy execution
+- `trading.tasks.run_backtest_task` - Execute backtest
+
+**Celery Beat Scheduler**: Uses database scheduler for persistent scheduled tasks
+
+---
+
+## Frontend Architecture
+
+### Component Organization
+
+**Pages** - Full page components (routed):
+
+- `LoginPage`, `RegisterPage` - Authentication
+- `DashboardPage` - Main dashboard
+- `TradingTasksPage`, `TradingTaskDetailPage`, `TradingTaskFormPage` - Trading management
+- `BacktestTasksPage`, `BacktestTaskDetailPage`, `BacktestTaskFormPage` - Backtesting
+- `ConfigurationsPage`, `ConfigurationDetailPage`, `ConfigurationFormPage` - Strategy configs
+- `OandaAccountDetailPage` - Account details
+- `SettingsPage`, `ProfilePage` - User settings
+
+**Components** - Reusable UI components:
+
+- `auth/` - Login form, register form
+- `charts/` - Chart components with react-financial-charts
+- `dashboard/` - Dashboard widgets
+- `trading/` - Trading UI components
+- `strategy/` - Strategy configuration UI
+- `backtest/` - Backtest UI
+- `settings/` - Settings UI
+- `layout/` - Header, sidebar, layout
+- `common/` - Buttons, modals, tables, forms
+
+### State Management
+
+**React Query** - Server state management:
+
+- Caching API responses
+- Automatic refetching
+- Mutation handling with optimistic updates
+- Devtools for debugging
+
+**Zustand** - Client state management:
+
+- Task store for trading/backtest task state
+- Lightweight alternative to Redux
+
+**React Context** - Global state:
+
+- `AuthContext` - Authentication state and user info
+- `AccessibilityContext` - Accessibility preferences
+
+### Hooks
+
+**Custom Hooks** for common patterns:
+
+- `useAccounts()` - Fetch user accounts
+- `useStrategies()` - Fetch strategies
+- `useTradingTasks()` - Fetch trading tasks
+- `useBacktestTasks()` - Fetch backtest tasks
+- `useTaskExecutions()` - Fetch task executions
+- `useTaskPositions()` - Fetch positions for task
+- `useTaskTrades()` - Fetch trades for task
+- `useTaskLogs()` - Fetch task logs
+- `useChartPreferences()` - Chart display preferences
+- `useFormValidation()` - Form validation logic
+- `useMutationToast()` - Toast notifications for mutations
+
+### API Client
+
+**Axios-based client** (`src/api/`):
+
+- `apiClient.ts` - Axios instance with interceptors
+- `apiConfig.ts` - API configuration
+- `client.ts` - API methods
+- `types.ts` - TypeScript types for API responses
+
+**Interceptors**:
+
+- Request: Add JWT token to headers
+- Response: Handle errors, refresh token on 401
+
+### Internationalization
+
+**react-i18next** setup:
+
+- Locales: English, Japanese
+- Namespace-based organization
+- Language switcher in settings
+- Timezone-aware date formatting
+
+### Accessibility
+
+**WCAG 2.1 Level AA compliance**:
+
+- Semantic HTML
+- ARIA labels and roles
+- Keyboard navigation
+- High contrast theme option
+- Focus management
+- Screen reader support
+
+---
+
+## Development Workflow
+
+### Local Development Setup
+
+**Option 1: Local Development (Without Docker)**
+
+Prerequisites:
+
+- Python 3.13+
+- Node.js 18+
+- PostgreSQL 17
+- Redis 7
+- uv (Python package manager)
+
+Setup:
+
+```bash
+# Backend
+cd backend
+cp .env.example .env
+uv sync --all-extras
+uv run python manage.py migrate
+uv run python manage.py createsuperuser
+
+# Frontend
+cd frontend
+npm install
+```
+
+Run (4 terminal windows):
+
+```bash
+# Terminal 1: Django
+cd backend && uv run python manage.py runserver 0.0.0.0:8000
+
+# Terminal 2: Celery Worker
+cd backend && uv run celery -A config worker -l info --concurrency=4
+
+# Terminal 3: Celery Beat
+cd backend && uv run celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+
+# Terminal 4: React
+cd frontend && npm run dev
+```
+
+**Option 2: Docker Development**
+
+```bash
+cp .env.example .env
+docker-compose build
+docker-compose up -d
+docker-compose exec backend python manage.py migrate
+docker-compose exec backend python manage.py createsuperuser
+```
+
+Access:
+
+- Frontend: http://localhost:5173 (dev) or http://localhost (Docker)
+- Backend API: http://localhost:8000/api
+- Admin: http://localhost:8000/admin
+- API Docs: http://localhost:8000/api/docs
+
+### Code Quality Tools
+
+**Backend**:
+
+- **Linting**: `ruff check .` - Fast Python linter
+- **Formatting**: `ruff format .` - Code formatter
+- **Type Checking**: `ty check` - Type checker
+- **Security**: `bandit` - Security issue detection
+- **Docstring Coverage**: `interrogate` - Docstring coverage
+
+**Frontend**:
+
+- **Linting**: `npm run lint` - ESLint
+- **Formatting**: `npm run format` - Prettier
+- **Type Checking**: `npm run build` - TypeScript compilation
+
+**Pre-commit Hooks** (`.pre-commit-config.yaml`):
+
+- Trailing whitespace, file endings
+- YAML, JSON, TOML validation
+- Ruff lint and format
+- Type checking (ty)
+- Security checks (bandit)
+- Docstring coverage (interrogate)
+- Prettier formatting
+- Django system checks
+- ESLint and TypeScript checks
+- Pytest and Vitest (on pre-push)
+
+### Testing
+
+**Backend Tests**:
+
+```bash
+# Unit tests
+uv run pytest tests/unit/ -v
+
+# Integration tests
+uv run pytest tests/integration/ -v
+
+# All tests with coverage
+uv run pytest --cov=. --cov-report=html
+
+# Specific test file
+uv run pytest tests/unit/test_auth.py -v
+
+# Tests matching pattern
+uv run pytest -k "test_login" -v
+```
+
+**Frontend Tests**:
+
+```bash
+# Unit tests
+npm run test
+
+# Watch mode
+npm run test:watch
+
+# UI mode
+npm run test:ui
+
+# E2E tests
+npm run test:e2e
+```
+
+**Test Configuration**:
+
+- Backend: pytest with pytest-django, pytest-cov, pytest-xdist
+- Frontend: Vitest with React Testing Library
+- E2E: Playwright
+- Coverage threshold: 60% (backend)
+
+### Database Migrations
+
+```bash
+# Create migrations
+uv run python manage.py makemigrations
+
+# Apply migrations
+uv run python manage.py migrate
+
+# Show migration status
+uv run python manage.py showmigrations
+
+# Reverse migration
+uv run python manage.py migrate app_name 0001
+```
+
+### Django Management Commands
+
+```bash
+# Create superuser
+uv run python manage.py createsuperuser
+
+# Create regular user
+uv run python manage.py create_user --username user1 --email user1@example.com
+
+# Delete user
+uv run python manage.py delete_user --username user1
+
+# Django shell
+uv run python manage.py shell
+
+# Collect static files
+uv run python manage.py collectstatic --noinput
+
+# System checks
+uv run python manage.py check
+```
+
+## CI/CD Pipeline
+
+### GitHub Actions Workflows
+
+**1. Test Workflow** (`.github/workflows/test.yml`)
+
+- Triggers: Pull requests to main/develop
+- Backend tests:
+  - Ruff lint and format check
+  - Type checking (ty)
+  - Unit tests with coverage
+  - Integration tests with parallel execution
+  - Coverage threshold check (60%)
+- Frontend tests:
+  - ESLint
+  - TypeScript type check
+  - Vitest
+- Docker Compose validation
+
+**2. Build and Deploy Workflow** (`.github/workflows/build-and-deploy.yml`)
+
+- Triggers: Push to main/develop, pull requests
+- Build backend Docker image (multi-platform: amd64, arm64)
+- Build frontend Docker image (multi-platform: amd64, arm64)
+- Push to DockerHub
+- Deploy to production (main branch only)
+- Verify deployment health
+
+**3. API Documentation Workflow** (`.github/workflows/api-docs.yml`)
+
+- Generates OpenAPI schema
+- Publishes API documentation
+
+### Deployment Process
+
+**Production Deployment**:
+
+1. Push to main branch triggers build workflow
+2. Docker images built and pushed to DockerHub
+3. SSH into production server
+4. Pull latest images
+5. Run migrations
+6. Restart services
+7. Verify health checks
+
+**Environment Variables** (Production):
+
+- `DEBUG=False`
+- `ALLOWED_HOSTS` - Production domain
+- `SECRET_KEY` - Secure random key
+- `DB_PASSWORD` - Secure database password
+- `REDIS_PASSWORD` - Secure Redis password
+- `OANDA_PRACTICE_API` - OANDA practice endpoint
+- `OANDA_LIVE_API` - OANDA live endpoint
+- AWS credentials for backtesting

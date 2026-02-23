@@ -3,7 +3,8 @@
 from logging import Logger, getLogger
 from typing import Any
 
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -41,6 +42,25 @@ class UserLogoutView(APIView):
             ip = str(request.META.get("REMOTE_ADDR", ""))
         return ip
 
+    @extend_schema(
+        operation_id="auth_logout",
+        tags=["Accounts"],
+        request=None,
+        responses={
+            200: inline_serializer(
+                "LogoutResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "sessions_terminated": serializers.IntegerField(),
+                },
+            ),
+            401: inline_serializer(
+                "LogoutError",
+                fields={"error": serializers.CharField()},
+            ),
+        },
+        description="Invalidate JWT token and terminate user sessions.",
+    )
     def post(self, request: Request) -> Response:
         """Handle user logout."""
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")

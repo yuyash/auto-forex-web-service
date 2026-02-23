@@ -15,6 +15,7 @@ from apps.trading.views import (
     StrategyView,
     TradingTaskViewSet,
 )
+from apps.trading.views.ticks import TickListView
 
 app_name = "trading"
 
@@ -26,6 +27,8 @@ router.register(r"tasks/trading", TradingTaskViewSet, basename="trading-task")
 urlpatterns = [
     # Task-centric API endpoints
     path("", include(router.urls)),
+    # Tick data endpoint
+    path("ticks/", TickListView.as_view(), name="tick_list"),
     # Strategy endpoints
     path("strategies/", StrategyView.as_view(), name="strategy_list"),
     path(

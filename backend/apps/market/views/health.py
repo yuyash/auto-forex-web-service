@@ -1,6 +1,7 @@
 """Health check views."""
 
-from rest_framework import status
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -38,6 +39,23 @@ class OandaApiHealthView(APIView):
             or OandaAccounts.objects.filter(user=request.user.id).first()
         )
 
+    @extend_schema(
+        operation_id="market_oanda_health_status",
+        tags=["Market"],
+        parameters=[
+            OpenApiParameter(name="account_id", type=str, required=False, location="query"),
+        ],
+        responses={
+            200: inline_serializer(
+                "OandaHealthGetResponse",
+                fields={
+                    "account": serializers.DictField(),
+                    "status": OandaApiHealthStatusSerializer(allow_null=True),
+                },
+            )
+        },
+        description="Get latest persisted OANDA API health status.",
+    )
     def get(self, request: Request) -> Response:
         account = self._get_account(request)
         if account is None:
@@ -63,6 +81,23 @@ class OandaApiHealthView(APIView):
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        operation_id="market_oanda_health_check",
+        tags=["Market"],
+        parameters=[
+            OpenApiParameter(name="account_id", type=str, required=False, location="query"),
+        ],
+        responses={
+            200: inline_serializer(
+                "OandaHealthPostResponse",
+                fields={
+                    "account": serializers.DictField(),
+                    "status": OandaApiHealthStatusSerializer(),
+                },
+            )
+        },
+        description="Perform a live OANDA API health check.",
+    )
     def post(self, request: Request) -> Response:
         account = self._get_account(request)
         if account is None:

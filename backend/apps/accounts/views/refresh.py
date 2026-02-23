@@ -2,7 +2,8 @@
 
 from logging import Logger, getLogger
 
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -24,6 +25,35 @@ class TokenRefreshView(APIView):
     permission_classes = [AllowAny]
     authentication_classes: list = []
 
+    @extend_schema(
+        operation_id="auth_token_refresh",
+        tags=["Accounts"],
+        request=None,
+        responses={
+            200: inline_serializer(
+                "TokenRefreshResponse",
+                fields={
+                    "token": serializers.CharField(),
+                    "user": inline_serializer(
+                        "TokenRefreshUser",
+                        fields={
+                            "id": serializers.IntegerField(),
+                            "email": serializers.EmailField(),
+                            "username": serializers.CharField(),
+                            "is_staff": serializers.BooleanField(),
+                            "timezone": serializers.CharField(),
+                            "language": serializers.CharField(),
+                        },
+                    ),
+                },
+            ),
+            401: inline_serializer(
+                "TokenRefreshError",
+                fields={"error": serializers.CharField()},
+            ),
+        },
+        description="Refresh JWT token using Bearer token in Authorization header.",
+    )
     def post(self, request: Request) -> Response:
         """Handle token refresh."""
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")

@@ -2,6 +2,7 @@
 
 from logging import Logger, getLogger
 
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
@@ -129,6 +130,12 @@ class PublicAccountSettingsView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        operation_id="public_account_settings",
+        tags=["Accounts"],
+        responses={200: PublicAccountSettingsSerializer},
+        description="Get public account settings (registration/login enabled flags).",
+    )
     def get(self, request: Request) -> Response:  # pylint: disable=unused-argument
         """Get public account settings."""
         account_settings = PublicAccountSettings.get_settings()

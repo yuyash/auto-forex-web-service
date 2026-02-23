@@ -4,7 +4,8 @@ from datetime import UTC, datetime, timedelta
 from logging import Logger, getLogger
 from typing import Any
 
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -33,6 +34,24 @@ class MarketStatusView(APIView):
         "new_york": {"open": 12, "close": 21},  # 12:00 - 21:00 UTC
     }
 
+    @extend_schema(
+        operation_id="market_status",
+        tags=["Market"],
+        responses={
+            200: inline_serializer(
+                "MarketStatusResponse",
+                fields={
+                    "is_open": serializers.BooleanField(),
+                    "current_time_utc": serializers.DateTimeField(),
+                    "active_sessions": serializers.ListField(child=serializers.CharField()),
+                    "sessions": serializers.DictField(),
+                    "next_event": serializers.DictField(),
+                    "is_weekend": serializers.BooleanField(),
+                },
+            ),
+        },
+        description="Get current forex market open/close status and active sessions.",
+    )
     def get(self, _request: Request) -> Response:
         """
         Get current forex market status.

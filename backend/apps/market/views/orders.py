@@ -3,7 +3,8 @@
 from logging import Logger, getLogger
 from typing import Any
 
-from rest_framework import status
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -49,6 +50,27 @@ class OrderView(APIView):
     permission_classes = [IsAuthenticated]
     pagination_class = StandardPagination
 
+    @extend_schema(
+        operation_id="market_orders_list",
+        tags=["Market"],
+        parameters=[
+            OpenApiParameter(name="account_id", type=int, required=False),
+            OpenApiParameter(name="instrument", type=str, required=False),
+            OpenApiParameter(name="status", type=str, required=False, default="all"),
+        ],
+        responses={
+            200: inline_serializer(
+                "OrderListResponse",
+                fields={
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": serializers.ListField(child=serializers.DictField()),
+                },
+            )
+        },
+        description="List user's orders from OANDA API.",
+    )
     def get(self, request: Request) -> Response:
         """
         List user's orders directly from OANDA API.
@@ -167,6 +189,30 @@ class OrderView(APIView):
         page = paginator.paginate_queryset(all_orders, request)
         return paginator.get_paginated_response(page)
 
+    @extend_schema(
+        operation_id="market_orders_create",
+        tags=["Market"],
+        request=OrderSerializer,
+        responses={
+            201: inline_serializer(
+                "OrderCreateResponse",
+                fields={
+                    "id": serializers.CharField(),
+                    "instrument": serializers.CharField(),
+                    "type": serializers.CharField(),
+                    "direction": serializers.CharField(),
+                    "units": serializers.CharField(),
+                    "price": serializers.CharField(allow_null=True),
+                    "state": serializers.CharField(),
+                    "time_in_force": serializers.CharField(allow_null=True),
+                    "create_time": serializers.DateTimeField(allow_null=True),
+                    "fill_time": serializers.DateTimeField(allow_null=True),
+                    "cancel_time": serializers.DateTimeField(allow_null=True),
+                },
+            ),
+        },
+        description="Submit a new order (market, limit, stop, OCO).",
+    )
     def post(  # pylint: disable=too-many-locals,too-many-return-statements
         self, request: Request
     ) -> Response:
@@ -353,6 +399,32 @@ class OrderDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="market_order_detail",
+        tags=["Market"],
+        parameters=[
+            OpenApiParameter(name="account_id", type=int, required=True, location="query"),
+        ],
+        responses={
+            200: inline_serializer(
+                "OrderDetailResponse",
+                fields={
+                    "id": serializers.CharField(),
+                    "instrument": serializers.CharField(),
+                    "type": serializers.CharField(),
+                    "direction": serializers.CharField(),
+                    "units": serializers.CharField(),
+                    "price": serializers.CharField(allow_null=True),
+                    "state": serializers.CharField(),
+                    "time_in_force": serializers.CharField(allow_null=True),
+                    "create_time": serializers.DateTimeField(allow_null=True),
+                    "fill_time": serializers.DateTimeField(allow_null=True),
+                    "cancel_time": serializers.DateTimeField(allow_null=True),
+                },
+            )
+        },
+        description="Retrieve order details from OANDA API.",
+    )
     def get(self, request: Request, order_id: str) -> Response:
         """
         Retrieve order details from OANDA API.
@@ -407,6 +479,23 @@ class OrderDetailView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @extend_schema(
+        operation_id="market_order_cancel",
+        tags=["Market"],
+        parameters=[
+            OpenApiParameter(name="account_id", type=int, required=True, location="query"),
+        ],
+        responses={
+            200: inline_serializer(
+                "OrderCancelResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "details": serializers.DictField(),
+                },
+            )
+        },
+        description="Cancel a pending order via OANDA API.",
+    )
     def delete(self, request: Request, order_id: str) -> Response:
         """
         Cancel a pending order via OANDA API.
