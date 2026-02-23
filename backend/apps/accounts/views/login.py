@@ -4,7 +4,6 @@ from logging import Logger, getLogger
 from typing import Any
 
 from django.contrib.auth import authenticate
-from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -49,39 +48,6 @@ class UserLoginView(APIView):
         return ip
 
     # pylint: disable=too-many-branches,too-many-statements
-    @extend_schema(
-        summary="POST /api/accounts/auth/login",
-        description="Authenticate user with email and password. Returns JWT token on success. "
-        "Rate limited to 5 attempts per 15 minutes per IP address.",
-        request=UserLoginSerializer,
-        responses={
-            200: OpenApiResponse(
-                description="Login successful",
-                response={
-                    "type": "object",
-                    "properties": {
-                        "token": {"type": "string"},
-                        "user": {
-                            "type": "object",
-                            "properties": {
-                                "id": {"type": "integer"},
-                                "email": {"type": "string"},
-                                "username": {"type": "string"},
-                                "is_staff": {"type": "boolean"},
-                                "timezone": {"type": "string"},
-                                "language": {"type": "string"},
-                            },
-                        },
-                    },
-                },
-            ),
-            401: OpenApiResponse(description="Invalid credentials"),
-            403: OpenApiResponse(description="Account locked or email not whitelisted"),
-            429: OpenApiResponse(description="Too many failed login attempts"),
-            503: OpenApiResponse(description="Login is disabled"),
-        },
-        tags=["Authentication"],
-    )
     def post(self, request: Request) -> Response:
         """Handle user login."""
         system_settings = PublicAccountSettings.get_settings()

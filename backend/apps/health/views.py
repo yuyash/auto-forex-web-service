@@ -3,7 +3,8 @@ from __future__ import annotations
 from logging import Logger, getLogger
 from typing import Any
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -39,67 +40,18 @@ class HealthView(APIView):
 
     @extend_schema(
         operation_id="health_check",
-        summary="GET /api/health/",
-        description="Check the health status of the backend API service. Returns overall system status.",
-        tags=["health"],
+        tags=["Health"],
         responses={
-            200: OpenApiResponse(
-                description="Service is healthy",
-                response={
-                    "type": "object",
-                    "properties": {
-                        "status": {
-                            "type": "string",
-                            "enum": ["healthy"],
-                            "description": "Overall health status",
-                        },
-                        "timestamp": {
-                            "type": "string",
-                            "format": "date-time",
-                            "description": "Timestamp of the health check",
-                        },
-                        "response_time_ms": {
-                            "type": "integer",
-                            "description": "Response time in milliseconds",
-                        },
-                    },
-                    "required": ["status", "timestamp", "response_time_ms"],
-                    "example": {
-                        "status": "healthy",
-                        "timestamp": "2024-01-18T12:00:00Z",
-                        "response_time_ms": 15,
-                    },
-                },
-            ),
-            503: OpenApiResponse(
-                description="Service is unhealthy",
-                response={
-                    "type": "object",
-                    "properties": {
-                        "status": {
-                            "type": "string",
-                            "enum": ["unhealthy"],
-                            "description": "Overall health status",
-                        },
-                        "timestamp": {
-                            "type": "string",
-                            "format": "date-time",
-                            "description": "Timestamp of the health check",
-                        },
-                        "response_time_ms": {
-                            "type": "integer",
-                            "description": "Response time in milliseconds",
-                        },
-                    },
-                    "required": ["status", "timestamp", "response_time_ms"],
-                    "example": {
-                        "status": "unhealthy",
-                        "timestamp": "2024-01-18T12:00:00Z",
-                        "response_time_ms": 20,
-                    },
+            200: inline_serializer(
+                "HealthCheckResponse",
+                fields={
+                    "status": serializers.CharField(),
+                    "timestamp": serializers.DateTimeField(),
+                    "components": serializers.DictField(),
                 },
             ),
         },
+        description="System health check endpoint.",
     )
     def get(self, request: Request) -> Response:
         client_ip: str = get_client_ip(request)

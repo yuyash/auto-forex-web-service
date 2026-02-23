@@ -31,7 +31,7 @@ import {
 import { useToast } from '../common';
 import { backtestTasksApi } from '../../services/api';
 import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
-import { TradingService } from '../../api/generated/services/TradingService';
+import { api } from '../../api/apiClient';
 
 interface BacktestTaskCardProps {
   task: BacktestTask;
@@ -198,7 +198,7 @@ export default function BacktestTaskCard({
   const handleDeleteConfirm = async () => {
     setIsDeleting(true);
     try {
-      await TradingService.tradingTasksBacktestDestroy(String(task.id));
+      await api.delete(`/api/trading/tasks/backtest/${String(task.id)}/`);
       invalidateBacktestTasksCache();
       showSuccess('Backtest task deleted successfully');
       setDeleteDialogOpen(false);

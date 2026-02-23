@@ -1,8 +1,8 @@
 // Common types and enums for task-based strategy configuration
 // Re-export generated types for consistency
 
-export { StatusEnum as TaskStatus } from '../api/generated';
-export { DataSourceEnum as DataSource } from '../api/generated';
+export { StatusEnum as TaskStatus } from '../api/types';
+export { DataSourceEnum as DataSource } from '../api/types';
 
 export enum TaskType {
   BACKTEST = 'backtest',

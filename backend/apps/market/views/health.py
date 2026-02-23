@@ -1,11 +1,7 @@
 """Health check views."""
 
-from drf_spectacular.utils import (
-    OpenApiParameter,
-    OpenApiResponse,
-    extend_schema,
-)
-from rest_framework import status
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -44,26 +40,21 @@ class OandaApiHealthView(APIView):
         )
 
     @extend_schema(
-        summary="GET /api/market/health/oanda/",
-        description="Retrieve the latest health check status for the selected OANDA account",
-        operation_id="get_oanda_health_status",
-        tags=["Market - Health"],
+        operation_id="market_oanda_health_status",
+        tags=["Market"],
         parameters=[
-            OpenApiParameter(
-                name="account_id",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="OANDA account ID (uses default if not provided)",
-            ),
+            OpenApiParameter(name="account_id", type=str, required=False, location="query"),
         ],
         responses={
-            200: OpenApiResponse(
-                description="Health status retrieved successfully",
-                response=OandaApiHealthStatusSerializer,
-            ),
-            400: OpenApiResponse(description="No OANDA account found"),
+            200: inline_serializer(
+                "OandaHealthGetResponse",
+                fields={
+                    "account": serializers.DictField(),
+                    "status": OandaApiHealthStatusSerializer(allow_null=True),
+                },
+            )
         },
+        description="Get latest persisted OANDA API health status.",
     )
     def get(self, request: Request) -> Response:
         account = self._get_account(request)
@@ -91,26 +82,21 @@ class OandaApiHealthView(APIView):
         )
 
     @extend_schema(
-        summary="POST /api/market/health/oanda/",
-        description="Perform a live health check against OANDA API and persist the result",
-        operation_id="check_oanda_health",
-        tags=["Market - Health"],
+        operation_id="market_oanda_health_check",
+        tags=["Market"],
         parameters=[
-            OpenApiParameter(
-                name="account_id",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="OANDA account ID (uses default if not provided)",
-            ),
+            OpenApiParameter(name="account_id", type=str, required=False, location="query"),
         ],
         responses={
-            200: OpenApiResponse(
-                description="Health check performed successfully",
-                response=OandaApiHealthStatusSerializer,
-            ),
-            400: OpenApiResponse(description="No OANDA account found"),
+            200: inline_serializer(
+                "OandaHealthPostResponse",
+                fields={
+                    "account": serializers.DictField(),
+                    "status": OandaApiHealthStatusSerializer(),
+                },
+            )
         },
+        description="Perform a live OANDA API health check.",
     )
     def post(self, request: Request) -> Response:
         account = self._get_account(request)

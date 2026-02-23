@@ -3,8 +3,8 @@
 from typing import Any, cast
 
 from django.conf import settings
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -19,11 +19,6 @@ class StrategyView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = StrategyListSerializer
 
-    @extend_schema(
-        summary="List available strategies",
-        description="Get all available trading strategies with their configuration schemas",
-        responses={200: StrategyListSerializer},
-    )
     def get(self, _request: Request) -> Response:
         from apps.trading.strategies.registry import registry
 
@@ -55,9 +50,22 @@ class StrategyDefaultsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        summary="Get strategy defaults",
-        description="Get default configuration parameters for a specific strategy",
-        responses={200: dict, 404: dict},
+        operation_id="trading_strategy_defaults",
+        tags=["Trading"],
+        responses={
+            200: inline_serializer(
+                "StrategyDefaultsResponse",
+                fields={
+                    "strategy_id": serializers.CharField(),
+                    "defaults": serializers.DictField(),
+                },
+            ),
+            404: inline_serializer(
+                "StrategyDefaultsNotFound",
+                fields={"detail": serializers.CharField()},
+            ),
+        },
+        description="Get default parameters for a strategy.",
     )
     def get(self, _request: Request, strategy_id: str) -> Response:
         from apps.trading.strategies.registry import registry

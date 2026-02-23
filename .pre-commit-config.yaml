@@ -73,6 +73,13 @@ repos:
         pass_filenames: false
         files: ^backend/
 
+      - id: openapi-schema-check
+        name: OpenAPI Schema Check
+        entry: bash scripts/check-openapi-schema.sh
+        language: system
+        pass_filenames: false
+        files: ^backend/
+
       - id: django-migrations-check
         name: Django Migrations Check
         entry: bash -c 'cd backend && source .venv/bin/activate && python manage.py makemigrations --check --dry-run'

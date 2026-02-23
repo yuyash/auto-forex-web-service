@@ -442,7 +442,7 @@ class TaskExecutor:
                     )
 
                 if batch_count % 50 == 0:
-                    logger.info(
+                    logger.debug(
                         "Metric snapshot progress - task_id=%s, batch=%d, "
                         "ticks_processed=%d, metric_buffer_size=%d, "
                         "last_tick_ts=%s",

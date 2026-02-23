@@ -3,7 +3,8 @@
 from logging import Logger, getLogger
 
 import v20
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -52,11 +53,27 @@ class SupportedGranularitiesView(APIView):
     ]
 
     @extend_schema(
-        summary="GET /api/market/granularities/",
-        description="Retrieve list of supported OANDA granularities/timeframes",
-        operation_id="list_supported_granularities",
-        tags=["market"],
-        responses={200: dict},
+        operation_id="market_granularities",
+        tags=["Market"],
+        responses={
+            200: inline_serializer(
+                "GranularitiesResponse",
+                fields={
+                    "granularities": serializers.ListField(
+                        child=inline_serializer(
+                            "GranularityItem",
+                            fields={
+                                "value": serializers.CharField(),
+                                "label": serializers.CharField(),
+                            },
+                        )
+                    ),
+                    "count": serializers.IntegerField(),
+                    "source": serializers.CharField(),
+                },
+            ),
+        },
+        description="Retrieve supported OANDA granularities/timeframes.",
     )
     def get(self, _request: Request) -> Response:
         """

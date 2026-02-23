@@ -26,6 +26,7 @@ import { TaskType } from '../../../types/common';
 export interface UseMetricsOverlayOptions {
   taskId: string;
   taskType: TaskType;
+  celeryTaskId?: string;
   enableRealTimeUpdates?: boolean;
   chart: IChartApi | null;
   candleTimestamps?: number[];
@@ -100,6 +101,7 @@ function attachSeries(chart: IChartApi) {
 export function useMetricsOverlay({
   taskId,
   taskType,
+  celeryTaskId,
   enableRealTimeUpdates = false,
   chart,
   candleTimestamps,
@@ -110,47 +112,71 @@ export function useMetricsOverlay({
 
   const [snapshots, setSnapshots] = useState<MetricSnapshotPoint[]>([]);
 
-  // Fetch snapshots
-  const loadData = useCallback(async () => {
+  // Track the latest timestamp for incremental fetching.
+  const sinceRef = useRef<number | null>(null);
+
+  // Incremental fetch: only get new snapshots since last fetch.
+  const loadIncremental = useCallback(async () => {
     try {
-      const data = await fetchMetricSnapshots(taskId, taskType, 10_000);
-      if (data.length > 0) setSnapshots(data);
+      const sinceIso = sinceRef.current
+        ? new Date(sinceRef.current * 1000).toISOString()
+        : undefined;
+      const data = await fetchMetricSnapshots(
+        taskId,
+        taskType,
+        10_000,
+        sinceIso,
+        celeryTaskId
+      );
+      if (data.length > 0) {
+        setSnapshots((prev) => {
+          // Merge: append new points (they are ordered by timestamp).
+          const existingTs = new Set(prev.map((p) => p.t));
+          const newPoints = data.filter((p) => !existingTs.has(p.t));
+          if (newPoints.length === 0) return prev;
+          return [...prev, ...newPoints];
+        });
+        // Update since to the latest timestamp.
+        const maxT = Math.max(...data.map((p) => p.t));
+        if (!sinceRef.current || maxT > sinceRef.current) {
+          sinceRef.current = maxT;
+        }
+      }
     } catch {
       // silent
     }
-  }, [taskId, taskType]);
+  }, [taskId, taskType, celeryTaskId]);
 
-  // Initial fetch + optional polling.
-  // We avoid calling any setState-containing function directly in the effect
-  // body.  Instead we use inline .then() for the initial fetch (subscription
-  // callback pattern) and wrap setInterval in a ref so the effect body never
-  // references loadData.
+  // Initial full fetch.
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    fetchMetricSnapshots(taskId, taskType, 10_000)
+    fetchMetricSnapshots(taskId, taskType, 10_000, undefined, celeryTaskId)
       .then((data) => {
-        if (!cancelled && data.length > 0) setSnapshots(data);
+        if (!cancelled && data.length > 0) {
+          setSnapshots(data);
+          const maxT = Math.max(...data.map((p) => p.t));
+          sinceRef.current = maxT;
+        }
       })
       .catch(() => {});
 
     return () => {
       cancelled = true;
     };
-  }, [taskId, taskType]);
+  }, [taskId, taskType, celeryTaskId]);
 
-  // Polling effect — setInterval with loadData is a subscription, which the
-  // rule permits.
+  // Incremental polling while task is running.
   useEffect(() => {
     if (!enableRealTimeUpdates) return undefined;
-    intervalRef.current = setInterval(loadData, 5000);
+    intervalRef.current = setInterval(loadIncremental, 5000);
     return () => {
       if (intervalRef.current !== null) clearInterval(intervalRef.current);
       intervalRef.current = null;
     };
-  }, [enableRealTimeUpdates, loadData]);
+  }, [enableRealTimeUpdates, loadIncremental]);
 
   // ── Attach series (once per chart instance) ────────────────────
   useEffect(() => {

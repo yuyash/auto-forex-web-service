@@ -2,12 +2,8 @@
 
 from logging import Logger, getLogger
 
-from drf_spectacular.utils import (
-    OpenApiParameter,
-    OpenApiResponse,
-    extend_schema,
-)
-from rest_framework import status
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -26,38 +22,36 @@ class UserNotificationListView(APIView):
     pagination_class = StandardPagination
 
     @extend_schema(
-        summary="GET /api/accounts/notifications",
-        description="Retrieve list of notifications for the authenticated user. "
-        "Supports filtering by read status and pagination.",
+        operation_id="notifications_list",
+        tags=["Accounts"],
         parameters=[
-            OpenApiParameter(
-                name="page",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                description="Page number",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="page_size",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                description="Number of results per page (default: 50, max: 200)",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="unread_only",
-                type=bool,
-                location=OpenApiParameter.QUERY,
-                description="Filter to show only unread notifications",
-                required=False,
-            ),
+            OpenApiParameter(name="unread_only", type=bool, required=False),
         ],
         responses={
-            200: OpenApiResponse(description="Paginated notifications list"),
-            401: OpenApiResponse(description="Authentication required"),
-            500: OpenApiResponse(description="Failed to retrieve notifications"),
+            200: inline_serializer(
+                "NotificationListResponse",
+                fields={
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": inline_serializer(
+                        "NotificationItem",
+                        fields={
+                            "id": serializers.IntegerField(),
+                            "title": serializers.CharField(),
+                            "message": serializers.CharField(),
+                            "severity": serializers.CharField(),
+                            "timestamp": serializers.DateTimeField(),
+                            "read": serializers.BooleanField(),
+                            "notification_type": serializers.CharField(),
+                            "extra_data": serializers.DictField(allow_null=True),
+                        },
+                        many=True,
+                    ),
+                },
+            ),
         },
-        tags=["Notifications"],
+        description="List notifications for the authenticated user.",
     )
     def get(self, request: Request) -> Response:
         """Get list of notifications for the authenticated user."""
@@ -108,25 +102,20 @@ class UserNotificationMarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        summary="POST /api/accounts/notifications/{notification_id}/read",
-        description="Mark a single notification as read for the authenticated user.",
-        parameters=[
-            OpenApiParameter(
-                name="notification_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                description="ID of the notification to mark as read",
-                required=True,
-            ),
-        ],
+        operation_id="notification_mark_read",
+        tags=["Accounts"],
         request=None,
         responses={
-            200: OpenApiResponse(description="Notification marked as read"),
-            401: OpenApiResponse(description="Authentication required"),
-            404: OpenApiResponse(description="Notification not found"),
-            500: OpenApiResponse(description="Failed to mark notification as read"),
+            200: inline_serializer(
+                "NotificationMarkReadResponse",
+                fields={"message": serializers.CharField()},
+            ),
+            404: inline_serializer(
+                "NotificationNotFound",
+                fields={"error": serializers.CharField()},
+            ),
         },
-        tags=["Notifications"],
+        description="Mark a single notification as read.",
     )
     def post(self, request: Request, notification_id: int) -> Response:
         """Mark a notification as read."""
@@ -167,24 +156,19 @@ class UserNotificationMarkAllReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        summary="POST /api/accounts/notifications/read-all",
-        description="Mark all unread notifications as read for the authenticated user.",
+        operation_id="notifications_mark_all_read",
+        tags=["Accounts"],
         request=None,
         responses={
-            200: OpenApiResponse(
-                description="All notifications marked as read",
-                response={
-                    "type": "object",
-                    "properties": {
-                        "message": {"type": "string"},
-                        "count": {"type": "integer"},
-                    },
+            200: inline_serializer(
+                "NotificationMarkAllReadResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "count": serializers.IntegerField(),
                 },
             ),
-            401: OpenApiResponse(description="Authentication required"),
-            500: OpenApiResponse(description="Failed to mark all notifications as read"),
         },
-        tags=["Notifications"],
+        description="Mark all unread notifications as read.",
     )
     def post(self, request: Request) -> Response:
         """Mark all unread notifications as read."""

@@ -2,11 +2,15 @@
  * useTaskLogs Hook
  *
  * Fetches logs from task-based API endpoints with DRF pagination.
+ * Supports incremental fetching via the `since` parameter — during polling
+ * cycles only new records are fetched and merged into the local cache.
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { TradingService } from '../api/generated/services/TradingService';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import axios from 'axios';
+import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
+import { handleAuthErrorStatus } from '../utils/authEvents';
 
 export interface TaskLog {
   id: string;
@@ -20,6 +24,8 @@ export interface TaskLog {
 interface UseTaskLogsOptions {
   taskId: string;
   taskType: TaskType;
+  /** Filter by celery execution ID. When omitted, returns all executions. */
+  celeryTaskId?: string;
   level?: string;
   page?: number;
   pageSize?: number;
@@ -37,9 +43,29 @@ interface UseTaskLogsResult {
   refetch: () => Promise<void>;
 }
 
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  const token = await resolveToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+function getLatestTimestamp(logs: TaskLog[]): string | null {
+  let latest: string | null = null;
+  for (const l of logs) {
+    if (l.timestamp && (!latest || l.timestamp > latest)) {
+      latest = l.timestamp;
+    }
+  }
+  return latest;
+}
+
 export const useTaskLogs = ({
   taskId,
   taskType,
+  celeryTaskId,
   level,
   page = 1,
   pageSize = 100,
@@ -53,52 +79,125 @@ export const useTaskLogs = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchLogs = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
+  const latestRequestRef = useRef(0);
+  const sinceRef = useRef<string | null>(null);
+  const hasInitialFetchRef = useRef(false);
 
-      const response =
-        taskType === TaskType.BACKTEST
-          ? await TradingService.tradingTasksBacktestLogsList(
-              taskId,
-              undefined, // celeryTaskId
-              level,
-              undefined, // ordering
-              page,
-              pageSize
-            )
-          : await TradingService.tradingTasksTradingLogsList(
-              taskId,
-              undefined, // celeryTaskId
-              level,
-              undefined, // ordering
-              page,
-              pageSize
-            );
+  const paramsKey = `${taskId}-${taskType}-${celeryTaskId}-${level}-${page}-${pageSize}`;
+  const prevParamsKeyRef = useRef(paramsKey);
+  if (paramsKey !== prevParamsKeyRef.current) {
+    prevParamsKeyRef.current = paramsKey;
+    sinceRef.current = null;
+    hasInitialFetchRef.current = false;
+  }
 
-      setLogs((response.results || []) as unknown as TaskLog[]);
-      setTotalCount(response.count ?? 0);
-      setHasNext(Boolean(response.next));
-      setHasPrevious(Boolean(response.previous));
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to load logs';
-      setError(new Error(errorMessage));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [taskId, taskType, level, page, pageSize]);
+  const fetchLogs = useCallback(
+    async (incremental = false) => {
+      if (!taskId) {
+        setIsLoading(false);
+        return;
+      }
+
+      const requestId = ++latestRequestRef.current;
+
+      try {
+        if (!incremental) setIsLoading(true);
+        setError(null);
+
+        const prefix =
+          taskType === TaskType.BACKTEST
+            ? '/api/trading/tasks/backtest'
+            : '/api/trading/tasks/trading';
+
+        const params: Record<string, string> = {
+          page: String(page),
+          page_size: String(pageSize),
+        };
+        if (celeryTaskId) params.celery_task_id = celeryTaskId;
+        if (level) params.level = level;
+        const effectiveSince = incremental ? sinceRef.current : null;
+        if (effectiveSince) params.since = effectiveSince;
+
+        const url = `${apiConfig.BASE}${prefix}/${taskId}/logs/`;
+        const headers = await getAuthHeaders();
+
+        const response = await axios.get(url, {
+          params,
+          headers,
+          withCredentials: apiConfig.WITH_CREDENTIALS,
+        });
+
+        if (requestId !== latestRequestRef.current) return;
+
+        const data = response.data;
+        const incoming = (data.results || []) as TaskLog[];
+
+        if (incremental && incoming.length > 0) {
+          setLogs((prev) => {
+            const map = new Map(prev.map((l) => [l.id, l]));
+            for (const l of incoming) {
+              map.set(l.id, l);
+            }
+            return Array.from(map.values());
+          });
+          setTotalCount(data.count ?? totalCount);
+        } else if (!incremental) {
+          setLogs(incoming);
+          setTotalCount(data.count ?? 0);
+          setHasNext(Boolean(data.next));
+          setHasPrevious(Boolean(data.previous));
+        }
+
+        const latestTs = getLatestTimestamp(incoming);
+        if (latestTs && (!sinceRef.current || latestTs > sinceRef.current)) {
+          sinceRef.current = latestTs;
+        }
+        hasInitialFetchRef.current = true;
+      } catch (err) {
+        if (requestId !== latestRequestRef.current) return;
+
+        if (axios.isAxiosError(err) && err.response) {
+          handleAuthErrorStatus(err.response.status, {
+            source: 'http',
+            status: err.response.status,
+            context: 'task_logs',
+          });
+        }
+        const msg = err instanceof Error ? err.message : 'Failed to load logs';
+        setError(new Error(msg));
+      } finally {
+        if (requestId === latestRequestRef.current) {
+          setIsLoading(false);
+        }
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [taskId, taskType, celeryTaskId, level, page, pageSize]
+  );
 
   useEffect(() => {
-    fetchLogs();
+    fetchLogs(false);
   }, [fetchLogs]);
 
   useEffect(() => {
     if (!enableRealTimeUpdates) return;
-    const interval = setInterval(fetchLogs, refreshInterval);
+    const interval = setInterval(() => {
+      if (hasInitialFetchRef.current) {
+        fetchLogs(true);
+      }
+    }, refreshInterval);
     return () => clearInterval(interval);
   }, [enableRealTimeUpdates, refreshInterval, fetchLogs]);
+
+  const prevRealTimeRef = useRef(enableRealTimeUpdates);
+  useEffect(() => {
+    if (prevRealTimeRef.current && !enableRealTimeUpdates) {
+      sinceRef.current = null;
+      hasInitialFetchRef.current = false;
+      fetchLogs(false);
+    }
+    prevRealTimeRef.current = enableRealTimeUpdates;
+  }, [enableRealTimeUpdates, fetchLogs]);
 
   return {
     logs,
@@ -107,6 +206,6 @@ export const useTaskLogs = ({
     hasPrevious,
     isLoading,
     error,
-    refetch: fetchLogs,
+    refetch: () => fetchLogs(false),
   };
 };

@@ -31,8 +31,7 @@ import {
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
-import { TradingService } from '../../api/generated/services/TradingService';
-import type { TradingTaskRequest } from '../../api/generated/models/TradingTaskRequest';
+import { api } from '../../api/apiClient';
 
 interface TradingTaskCardProps {
   task: TradingTask;
@@ -167,10 +166,7 @@ export default function TradingTaskCard({
   const handleStart = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingTasksTradingStartCreate(
-        String(taskId),
-        {} as TradingTaskRequest
-      );
+      await api.post(`/api/trading/tasks/trading/${String(taskId)}/start/`, {});
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess('Trading task started successfully');
       onRefresh?.();
@@ -191,10 +187,7 @@ export default function TradingTaskCard({
   const handleStop = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingTasksTradingStopCreate(
-        String(taskId),
-        {} as TradingTaskRequest
-      );
+      await api.post(`/api/trading/tasks/trading/${String(taskId)}/stop/`, {});
       setOptimisticStatus(TaskStatus.STOPPED);
       showSuccess('Trading task stopped successfully');
       onRefresh?.();
@@ -212,9 +205,9 @@ export default function TradingTaskCard({
   const handleResume = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingTasksTradingResumeCreate(
-        String(taskId),
-        {} as TradingTaskRequest
+      await api.post(
+        `/api/trading/tasks/trading/${String(taskId)}/resume/`,
+        {}
       );
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess('Trading task resumed successfully');
@@ -236,9 +229,9 @@ export default function TradingTaskCard({
   const handleRestart = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await TradingService.tradingTasksTradingRestartCreate(
-        String(taskId),
-        {} as TradingTaskRequest
+      await api.post(
+        `/api/trading/tasks/trading/${String(taskId)}/restart/`,
+        {}
       );
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess('Trading task restarted successfully');
@@ -264,7 +257,7 @@ export default function TradingTaskCard({
   const handleDeleteConfirm = async () => {
     setIsDeleting(true);
     try {
-      await TradingService.tradingTasksTradingDestroy(String(task.id));
+      await api.delete(`/api/trading/tasks/trading/${String(task.id)}/`);
       invalidateTradingTasksCache();
       showSuccess('Trading task deleted successfully');
       setDeleteDialogOpen(false);

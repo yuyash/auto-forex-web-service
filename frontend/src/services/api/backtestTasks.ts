@@ -1,25 +1,21 @@
 /**
- * Backtest Task API service using generated OpenAPI client
+ * Backtest Task API service using direct axios calls.
  */
 
-import { TradingService } from '../../api/generated/services/TradingService';
+import { api } from '../../api/apiClient';
 import { withRetry } from '../../api/client';
 import type {
   BacktestTaskRequest,
   PatchedBacktestTaskCreateRequest,
-} from '../../api/generated';
-
-// Empty body cast for action endpoints (start/stop/pause/resume/restart)
-// that require BacktestTaskRequest but don't actually need a body.
-const EMPTY_BODY = {} as BacktestTaskRequest;
-
-// Alias for backward compatibility after OpenAPI regeneration
-type PatchedBacktestTaskRequest = PatchedBacktestTaskCreateRequest;
+  PaginatedApiResponse,
+} from '../../api/types';
 import type {
   BacktestTask,
   BacktestTaskListParams,
   PaginatedResponse,
 } from '../../types';
+
+const BASE = '/api/trading/tasks/backtest';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const toLocal = (task: any): BacktestTask => task as BacktestTask;
@@ -29,14 +25,15 @@ export const backtestTasksApi = {
     params?: BacktestTaskListParams
   ): Promise<PaginatedResponse<BacktestTask>> => {
     const result = await withRetry(() =>
-      TradingService.tradingTasksBacktestList(
-        params?.config_id,
-        params?.ordering,
-        params?.page,
-        params?.page_size,
-        params?.search,
-        params?.status
-      )
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      api.get<PaginatedApiResponse<any>>(`${BASE}/`, {
+        config_id: params?.config_id,
+        ordering: params?.ordering,
+        page: params?.page,
+        page_size: params?.page_size,
+        search: params?.search,
+        status: params?.status,
+      })
     );
     return {
       count: result.count,
@@ -47,16 +44,14 @@ export const backtestTasksApi = {
   },
 
   get: async (id: string): Promise<BacktestTask> => {
-    const result = await withRetry(() =>
-      TradingService.tradingTasksBacktestRetrieve(id)
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await withRetry(() => api.get<any>(`${BASE}/${id}/`));
     return toLocal(result);
   },
 
   create: async (data: BacktestTaskRequest): Promise<BacktestTask> => {
-    const result = await withRetry(() =>
-      TradingService.tradingTasksBacktestCreate(data)
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await withRetry(() => api.post<any>(`${BASE}/`, data));
     return toLocal(result);
   },
 
@@ -64,54 +59,48 @@ export const backtestTasksApi = {
     id: string,
     data: BacktestTaskRequest
   ): Promise<BacktestTask> => {
-    const result = await withRetry(() =>
-      TradingService.tradingTasksBacktestUpdate(id, data)
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await withRetry(() => api.put<any>(`${BASE}/${id}/`, data));
     return toLocal(result);
   },
 
   partialUpdate: async (
     id: string,
-    data: PatchedBacktestTaskRequest
+    data: PatchedBacktestTaskCreateRequest
   ): Promise<BacktestTask> => {
     const result = await withRetry(() =>
-      TradingService.tradingTasksBacktestPartialUpdate(id, data)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      api.patch<any>(`${BASE}/${id}/`, data)
     );
     return toLocal(result);
   },
 
   delete: async (id: string): Promise<void> => {
-    return withRetry(() => TradingService.tradingTasksBacktestDestroy(id));
+    return withRetry(() => api.delete(`${BASE}/${id}/`));
   },
 
   start: async (id: string): Promise<BacktestTask> => {
     // Do NOT use withRetry — start is not idempotent (dispatches a Celery task).
-    const result = await TradingService.tradingTasksBacktestStartCreate(
-      id,
-      EMPTY_BODY
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await api.post<any>(`${BASE}/${id}/start/`, {});
     return toLocal(result);
   },
 
   stop: async (id: string): Promise<Record<string, unknown>> => {
     // Do NOT use withRetry — stop dispatches a Celery task.
-    return TradingService.tradingTasksBacktestStopCreate(id, EMPTY_BODY);
+    return api.post<Record<string, unknown>>(`${BASE}/${id}/stop/`, {});
   },
 
   pause: async (id: string): Promise<BacktestTask> => {
-    const result = await TradingService.tradingTasksBacktestPauseCreate(
-      id,
-      EMPTY_BODY
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await api.post<any>(`${BASE}/${id}/pause/`, {});
     return toLocal(result);
   },
 
   resume: async (id: string): Promise<BacktestTask> => {
     // Do NOT use withRetry — resume dispatches a Celery task.
-    const result = await TradingService.tradingTasksBacktestResumeCreate(
-      id,
-      EMPTY_BODY
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await api.post<any>(`${BASE}/${id}/resume/`, {});
     return toLocal(result);
   },
 
@@ -120,25 +109,21 @@ export const backtestTasksApi = {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _clearState?: boolean
   ): Promise<BacktestTask> => {
-    // Do NOT use withRetry for restart — it is not idempotent.
-    // Retrying a restart dispatches duplicate Celery tasks.
-    const result = await TradingService.tradingTasksBacktestRestartCreate(
-      id,
-      EMPTY_BODY
-    );
+    // Do NOT use withRetry — restart is not idempotent.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await api.post<any>(`${BASE}/${id}/restart/`, {});
     return toLocal(result);
   },
 
   copy: async (
     id: string,
-
     _data: { new_name: string }
   ): Promise<BacktestTask> => {
-    const original = await withRetry(() =>
-      TradingService.tradingTasksBacktestRetrieve(id)
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const original = await withRetry(() => api.get<any>(`${BASE}/${id}/`));
     const result = await withRetry(() =>
-      TradingService.tradingTasksBacktestCreate({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      api.post<any>(`${BASE}/`, {
         name: _data.new_name,
         config: original.config,
         start_time: original.start_time,
@@ -159,8 +144,6 @@ export const backtestTasksApi = {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _params?: { page?: number; page_size?: number; include_metrics?: boolean }
   ): Promise<PaginatedResponse<import('../../types').TaskExecution>> => {
-    // Executions are not yet supported in the generated API
-    // Return empty paginated response
     return { count: 0, next: null, previous: null, results: [] };
   },
 };
