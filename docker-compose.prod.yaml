@@ -121,7 +121,7 @@ services:
       # See note in backend service: avoid shadowing the Django `config` package.
       - ./logs:/app/logs
       - ${HOME}/.aws:/root/.aws:ro
-    command: celery -A config worker -l info --concurrency=8
+    command: celery -A config worker -l info --concurrency=8 -Q default,trading,market
     mem_limit: 6g
     memswap_limit: 8g
     oom_score_adj: -500
