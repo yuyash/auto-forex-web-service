@@ -119,7 +119,7 @@ services:
       - ./backend:/app
       - ./logs:/app/logs
       - ${HOME}/.aws:/root/.aws:ro
-    command: celery -A config worker -l info --concurrency=8 --max-tasks-per-child=10
+    command: celery -A config worker -l info --concurrency=8 --max-tasks-per-child=10 -Q default,trading,market
     # Memory limits to prevent OOM killer from killing the process
     mem_limit: 6g
     memswap_limit: 8g
