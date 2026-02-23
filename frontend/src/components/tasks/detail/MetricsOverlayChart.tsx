@@ -113,7 +113,7 @@ export function useMetricsOverlay({
   const [snapshots, setSnapshots] = useState<MetricSnapshotPoint[]>([]);
 
   // Track the latest timestamp for incremental fetching.
-  const sinceRef = useRef<string | null>(null);
+  const sinceRef = useRef<number | null>(null);
 
   // Incremental fetch: only get new snapshots since last fetch.
   const loadIncremental = useCallback(async () => {
