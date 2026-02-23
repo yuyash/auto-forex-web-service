@@ -29,7 +29,8 @@ interface UseOverviewPnlResult extends PnlSummary {
 
 export function useOverviewPnl(
   taskId: string,
-  taskType: TaskType
+  taskType: TaskType,
+  celeryTaskId?: string
 ): UseOverviewPnlResult {
   const [data, setData] = useState<PnlSummary>({
     realizedPnl: 0,
@@ -69,7 +70,11 @@ export function useOverviewPnl(
         }
       }
 
+      const params: Record<string, string> = {};
+      if (celeryTaskId) params.celery_task_id = celeryTaskId;
+
       const response = await axios.get(url, {
+        params,
         headers,
         withCredentials: OpenAPI.WITH_CREDENTIALS,
       });
@@ -97,7 +102,7 @@ export function useOverviewPnl(
     } finally {
       setIsLoading(false);
     }
-  }, [taskId, taskType]);
+  }, [taskId, taskType, celeryTaskId]);
 
   useEffect(() => {
     fetchPnl();

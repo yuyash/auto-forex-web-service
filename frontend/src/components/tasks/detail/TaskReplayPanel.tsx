@@ -116,6 +116,7 @@ interface TaskReplayPanelProps {
   taskId: string | number;
   taskType: TaskType;
   instrument: string;
+  celeryTaskId?: string;
   startTime?: string;
   endTime?: string;
   enableRealTimeUpdates?: boolean;
@@ -310,6 +311,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   taskId,
   taskType,
   instrument,
+  celeryTaskId,
   startTime,
   endTime,
   enableRealTimeUpdates = false,
@@ -344,6 +346,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const { positions: pnlClosedPositions } = useTaskPositions({
     taskId,
     taskType,
+    celeryTaskId,
     status: 'closed',
     pageSize: 1000,
     enableRealTimeUpdates,
@@ -351,6 +354,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const { positions: pnlOpenPositions } = useTaskPositions({
     taskId,
     taskType,
+    celeryTaskId,
     status: 'open',
     pageSize: 1000,
     enableRealTimeUpdates,
@@ -1019,6 +1023,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   useMetricsOverlay({
     taskId: String(taskId),
     taskType,
+    celeryTaskId,
     enableRealTimeUpdates,
     chart: chartInstance,
     candleTimestamps: candleTimestampsMemo,
@@ -1032,7 +1037,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     totalTrades: serverTotalTrades,
     openPositionCount: serverOpenPositionCount,
     refetch: refetchPnl,
-  } = useOverviewPnl(String(taskId), taskType);
+  } = useOverviewPnl(String(taskId), taskType, celeryTaskId);
 
   // Periodic PnL refresh while task is running
   useEffect(() => {
@@ -1232,9 +1237,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           ? await fetchTradesSince(
               String(taskId),
               taskType,
-              tradeSinceRef.current!
+              tradeSinceRef.current!,
+              celeryTaskId
             )
-          : await fetchAllTrades(String(taskId), taskType);
+          : await fetchAllTrades(String(taskId), taskType, celeryTaskId);
 
         // Track latest updated_at for next incremental poll.
         const latestUa = getLatestTradeUpdatedAt(rawTrades);
@@ -1300,7 +1306,15 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [instrument, granularity, startTime, endTime, taskType, taskId]);
+  }, [
+    instrument,
+    granularity,
+    startTime,
+    endTime,
+    taskType,
+    taskId,
+    celeryTaskId,
+  ]);
 
   useEffect(() => {
     fetchReplayData();

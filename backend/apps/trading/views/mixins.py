@@ -120,9 +120,7 @@ class TaskSubResourceMixin:
         from apps.trading.models.metric_snapshots import MetricSnapshot
 
         task = self.get_object()  # type: ignore[attr-defined]
-        celery_task_id = request.query_params.get("celery_task_id") or getattr(
-            task, "celery_task_id", None
-        )
+        celery_task_id = request.query_params.get("celery_task_id")
 
         max_points_raw = request.query_params.get("max_points")
         max_points = 10_000  # sensible default
@@ -223,12 +221,10 @@ class TaskSubResourceMixin:
         task = self.get_object()  # type: ignore[attr-defined]
         level_param = request.query_params.get("level")
         level = LogLevel[level_param.upper()] if level_param else None
-        celery_task_id = request.query_params.get("celery_task_id") or task.celery_task_id
+        celery_task_id = request.query_params.get("celery_task_id")
         queryset = TaskLog.objects.filter(task_type=self.task_type_label, task_id=task.pk)
         if celery_task_id:
             queryset = queryset.filter(celery_task_id=celery_task_id)
-        else:
-            queryset = queryset.none()
         if level:
             queryset = queryset.filter(level=level)
 
@@ -271,7 +267,7 @@ class TaskSubResourceMixin:
         task = self.get_object()  # type: ignore[attr-defined]
         event_type = request.query_params.get("event_type")
         severity = request.query_params.get("severity")
-        celery_task_id = request.query_params.get("celery_task_id") or task.celery_task_id
+        celery_task_id = request.query_params.get("celery_task_id")
         queryset = TradingEvent.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
@@ -282,8 +278,6 @@ class TaskSubResourceMixin:
             queryset = queryset.filter(severity=severity)
         if celery_task_id:
             queryset = queryset.filter(celery_task_id=celery_task_id)
-        else:
-            queryset = queryset.none()
 
         since = _parse_since(request)
         if since:
@@ -322,15 +316,13 @@ class TaskSubResourceMixin:
 
         task = self.get_object()  # type: ignore[attr-defined]
         direction = (request.query_params.get("direction") or "").lower()
-        celery_task_id = request.query_params.get("celery_task_id") or task.celery_task_id
+        celery_task_id = request.query_params.get("celery_task_id")
         queryset = Trade.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
         ).order_by("timestamp")
         if celery_task_id:
             queryset = queryset.filter(celery_task_id=celery_task_id)
-        else:
-            queryset = queryset.none()
         if direction:
             if direction == "buy":
                 queryset = queryset.filter(direction="long")
@@ -405,9 +397,7 @@ class TaskSubResourceMixin:
         from apps.trading.serializers.events import PositionSerializer
 
         task = self.get_object()  # type: ignore[attr-defined]
-        celery_task_id = request.query_params.get("celery_task_id") or getattr(
-            task, "celery_task_id", None
-        )
+        celery_task_id = request.query_params.get("celery_task_id")
         queryset = (
             Position.objects.filter(
                 task_type=self.task_type_label,
@@ -541,9 +531,7 @@ class TaskSubResourceMixin:
         from apps.trading.services.pnl import compute_pnl_summary
 
         task = self.get_object()  # type: ignore[attr-defined]
-        celery_task_id = request.query_params.get("celery_task_id") or getattr(
-            task, "celery_task_id", None
-        )
+        celery_task_id = request.query_params.get("celery_task_id")
 
         summary = compute_pnl_summary(
             task_type=self.task_type_label,

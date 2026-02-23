@@ -23,7 +23,8 @@ export async function fetchMetricSnapshots(
   taskId: string,
   taskType: TaskType,
   maxPoints?: number,
-  since?: string
+  since?: string,
+  celeryTaskId?: string
 ): Promise<MetricSnapshotPoint[]> {
   const prefix =
     taskType === TaskType.BACKTEST
@@ -33,6 +34,7 @@ export async function fetchMetricSnapshots(
   const searchParams = new URLSearchParams();
   if (maxPoints) searchParams.set('max_points', String(maxPoints));
   if (since) searchParams.set('since', since);
+  if (celeryTaskId) searchParams.set('celery_task_id', celeryTaskId);
   const qs = searchParams.toString();
   const url = `${prefix}/${taskId}/metric_snapshots/${qs ? `?${qs}` : ''}`;
 

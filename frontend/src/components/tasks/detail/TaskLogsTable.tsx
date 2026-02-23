@@ -43,6 +43,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   const { logs, totalCount, isLoading, error, refetch } = useTaskLogs({
     taskId,
     taskType,
+    celeryTaskId: executionId,
     level: levelFilter || undefined,
     page: page + 1,
     pageSize: rowsPerPage,

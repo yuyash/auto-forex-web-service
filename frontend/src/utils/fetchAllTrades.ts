@@ -20,7 +20,8 @@ const MAX_PAGES = 50; // safety limit
  */
 export async function fetchAllTrades(
   taskId: string,
-  taskType: TaskType
+  taskType: TaskType,
+  celeryTaskId?: string
 ): Promise<Array<Record<string, unknown>>> {
   const fetcher =
     taskType === TaskType.BACKTEST
@@ -33,7 +34,7 @@ export async function fetchAllTrades(
   while (page <= MAX_PAGES) {
     const response = await fetcher(
       taskId,
-      undefined, // celeryTaskId
+      celeryTaskId, // celeryTaskId
       undefined, // direction
       undefined, // ordering
       page,
@@ -72,7 +73,8 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 export async function fetchTradesSince(
   taskId: string,
   taskType: TaskType,
-  since: string
+  since: string,
+  celeryTaskId?: string
 ): Promise<Array<Record<string, unknown>>> {
   const prefix =
     taskType === TaskType.BACKTEST
@@ -86,12 +88,15 @@ export async function fetchTradesSince(
   let page = 1;
 
   while (page <= MAX_PAGES) {
+    const params: Record<string, string> = {
+      since,
+      page: String(page),
+      page_size: String(MAX_PAGE_SIZE),
+    };
+    if (celeryTaskId) params.celery_task_id = celeryTaskId;
+
     const response = await axios.get(url, {
-      params: {
-        since,
-        page: String(page),
-        page_size: String(MAX_PAGE_SIZE),
-      },
+      params,
       headers,
       withCredentials: OpenAPI.WITH_CREDENTIALS,
     });

@@ -17,6 +17,7 @@ import { TaskType } from '../../../types/common';
 interface TaskTradesTableProps {
   taskId: string | number;
   taskType: TaskType;
+  celeryTaskId?: string;
   enableRealTimeUpdates?: boolean;
   pipSize?: number | null;
 }
@@ -24,6 +25,7 @@ interface TaskTradesTableProps {
 export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   taskId,
   taskType,
+  celeryTaskId,
   enableRealTimeUpdates = false,
 }) => {
   const [page, setPage] = useState(0);
@@ -33,6 +35,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   const { trades, totalCount, isLoading, error, refetch } = useTaskTrades({
     taskId,
     taskType,
+    celeryTaskId,
     page: page + 1,
     pageSize: rowsPerPage,
     enableRealTimeUpdates,
