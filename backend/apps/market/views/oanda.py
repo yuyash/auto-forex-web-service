@@ -2,7 +2,6 @@
 
 from logging import Logger, getLogger
 
-from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -30,19 +29,6 @@ class OandaAccountView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = OandaAccountsSerializer
 
-    @extend_schema(
-        summary="GET /api/market/accounts/",
-        description="Retrieve all OANDA accounts for the authenticated user",
-        operation_id="list_oanda_accounts",
-        tags=["Market - Accounts"],
-        responses={
-            200: OpenApiResponse(
-                description="List of OANDA accounts",
-                response=OandaAccountsSerializer(many=True),
-            ),
-            401: OpenApiResponse(description="Authentication required"),
-        },
-    )
     def get(self, request: Request) -> Response:
         if not request.user.is_authenticated:
             return Response(
@@ -64,21 +50,6 @@ class OandaAccountView(APIView):
         response_data = serializer.data
         return Response(response_data, status=status.HTTP_200_OK)
 
-    @extend_schema(
-        summary="POST /api/market/accounts/",
-        description="Add a new OANDA account for the authenticated user",
-        operation_id="create_oanda_account",
-        tags=["Market - Accounts"],
-        request=OandaAccountsSerializer,
-        responses={
-            201: OpenApiResponse(
-                description="Account created successfully",
-                response=OandaAccountsSerializer,
-            ),
-            400: OpenApiResponse(description="Invalid data"),
-            401: OpenApiResponse(description="Authentication required"),
-        },
-    )
     def post(self, request: Request) -> Response:
         if not request.user.is_authenticated:
             return Response(
@@ -140,29 +111,6 @@ class OandaAccountDetailView(APIView):
         except OandaAccounts.DoesNotExist:
             return None
 
-    @extend_schema(
-        summary="GET /api/market/accounts/{account_id}/",
-        description="Retrieve detailed information about a specific OANDA account including live data from OANDA API",
-        operation_id="get_oanda_account_detail",
-        tags=["Market - Accounts"],
-        parameters=[
-            OpenApiParameter(
-                name="account_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                required=True,
-                description="OANDA account database ID",
-            ),
-        ],
-        responses={
-            200: OpenApiResponse(
-                description="Account details retrieved successfully",
-                response=OandaAccountsSerializer,
-            ),
-            401: OpenApiResponse(description="Authentication required"),
-            404: OpenApiResponse(description="Account not found"),
-        },
-    )
     def get(self, request: Request, account_id: int) -> Response:
         if not request.user.is_authenticated:
             return Response(
@@ -216,31 +164,6 @@ class OandaAccountDetailView(APIView):
         )
         return Response(response_data, status=status.HTTP_200_OK)
 
-    @extend_schema(
-        summary="PUT /api/market/accounts/{account_id}/",
-        description="Update a specific OANDA account",
-        operation_id="update_oanda_account",
-        tags=["Market - Accounts"],
-        parameters=[
-            OpenApiParameter(
-                name="account_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                required=True,
-                description="OANDA account database ID",
-            ),
-        ],
-        request=OandaAccountsSerializer,
-        responses={
-            200: OpenApiResponse(
-                description="Account updated successfully",
-                response=OandaAccountsSerializer,
-            ),
-            400: OpenApiResponse(description="Invalid data"),
-            401: OpenApiResponse(description="Authentication required"),
-            404: OpenApiResponse(description="Account not found"),
-        },
-    )
     def put(self, request: Request, account_id: int) -> Response:
         if not request.user.is_authenticated:
             return Response(
@@ -271,27 +194,6 @@ class OandaAccountDetailView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @extend_schema(
-        summary="DELETE /api/market/accounts/{account_id}/",
-        description="Delete a specific OANDA account",
-        operation_id="delete_oanda_account",
-        tags=["Market - Accounts"],
-        parameters=[
-            OpenApiParameter(
-                name="account_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                required=True,
-                description="OANDA account database ID",
-            ),
-        ],
-        responses={
-            200: OpenApiResponse(description="Account deleted successfully"),
-            400: OpenApiResponse(description="Account is in use"),
-            401: OpenApiResponse(description="Authentication required"),
-            404: OpenApiResponse(description="Account not found"),
-        },
-    )
     def delete(self, request: Request, account_id: int) -> Response:
         if not request.user.is_authenticated:
             return Response(

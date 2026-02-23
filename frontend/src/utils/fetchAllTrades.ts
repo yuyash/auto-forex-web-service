@@ -6,10 +6,11 @@
  * cycles only retrieve new/updated records.
  */
 
-import { TradingService } from '../api/generated/services/TradingService';
+import { api } from '../api/apiClient';
+import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
 import axios from 'axios';
-import { OpenAPI } from '../api/generated/core/OpenAPI';
+import type { PaginatedApiResponse } from '../api/types';
 
 const MAX_PAGE_SIZE = 1000;
 const MAX_PAGES = 50; // safety limit
@@ -23,22 +24,23 @@ export async function fetchAllTrades(
   taskType: TaskType,
   celeryTaskId?: string
 ): Promise<Array<Record<string, unknown>>> {
-  const fetcher =
+  const prefix =
     taskType === TaskType.BACKTEST
-      ? TradingService.tradingTasksBacktestTradesList
-      : TradingService.tradingTasksTradingTradesList;
+      ? '/api/trading/tasks/backtest'
+      : '/api/trading/tasks/trading';
 
   let allResults: Array<Record<string, unknown>> = [];
   let page = 1;
 
   while (page <= MAX_PAGES) {
-    const response = await fetcher(
-      taskId,
-      celeryTaskId, // celeryTaskId
-      undefined, // direction
-      undefined, // ordering
-      page,
-      MAX_PAGE_SIZE
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = await api.get<PaginatedApiResponse<any>>(
+      `${prefix}/${taskId}/trades/`,
+      {
+        celery_task_id: celeryTaskId,
+        page,
+        page_size: MAX_PAGE_SIZE,
+      }
     );
 
     const results = (response.results || []) as Array<Record<string, unknown>>;
@@ -53,14 +55,9 @@ export async function fetchAllTrades(
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (OpenAPI.TOKEN) {
-    const token =
-      typeof OpenAPI.TOKEN === 'function'
-        ? await (OpenAPI.TOKEN as (options: unknown) => Promise<string>)({})
-        : OpenAPI.TOKEN;
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+  const token = await resolveToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
   return headers;
 }
@@ -81,7 +78,7 @@ export async function fetchTradesSince(
       ? '/api/trading/tasks/backtest'
       : '/api/trading/tasks/trading';
 
-  const url = `${OpenAPI.BASE}${prefix}/${taskId}/trades/`;
+  const url = `${apiConfig.BASE}${prefix}/${taskId}/trades/`;
   const headers = await getAuthHeaders();
 
   let allResults: Array<Record<string, unknown>> = [];
@@ -98,7 +95,7 @@ export async function fetchTradesSince(
     const response = await axios.get(url, {
       params,
       headers,
-      withCredentials: OpenAPI.WITH_CREDENTIALS,
+      withCredentials: apiConfig.WITH_CREDENTIALS,
     });
 
     const results = (response.data.results || []) as Array<

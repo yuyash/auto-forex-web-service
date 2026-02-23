@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { OpenAPI } from '../api/generated/core/OpenAPI';
+import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 
@@ -55,19 +55,14 @@ export function useOverviewPnl(
           ? '/api/trading/tasks/backtest'
           : '/api/trading/tasks/trading';
 
-      const url = `${OpenAPI.BASE}${prefix}/${taskId}/pnl-summary/`;
+      const url = `${apiConfig.BASE}${prefix}/${taskId}/pnl-summary/`;
 
       const headers: Record<string, string> = {
         Accept: 'application/json',
       };
-      if (OpenAPI.TOKEN) {
-        const token =
-          typeof OpenAPI.TOKEN === 'function'
-            ? await (OpenAPI.TOKEN as (options: unknown) => Promise<string>)({})
-            : OpenAPI.TOKEN;
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
+      const token = await resolveToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
       }
 
       const params: Record<string, string> = {};
@@ -76,7 +71,7 @@ export function useOverviewPnl(
       const response = await axios.get(url, {
         params,
         headers,
-        withCredentials: OpenAPI.WITH_CREDENTIALS,
+        withCredentials: apiConfig.WITH_CREDENTIALS,
       });
 
       const d = response.data;

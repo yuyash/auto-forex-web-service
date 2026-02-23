@@ -3,7 +3,6 @@
 from decimal import Decimal
 from logging import Logger, getLogger
 
-from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -43,37 +42,6 @@ class PositionView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(
-        summary="GET /api/market/positions/",
-        description="Retrieve positions directly from OANDA API",
-        operation_id="list_positions",
-        tags=["Market - Positions"],
-        parameters=[
-            OpenApiParameter(
-                name="account_id",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="OANDA account database ID",
-            ),
-            OpenApiParameter(
-                name="instrument",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Currency pair filter",
-            ),
-            OpenApiParameter(
-                name="status",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Position status (open/closed/all)",
-                default="open",
-            ),
-        ],
-        responses={200: dict},
-    )
     def get(self, request: Request) -> Response:
         """
         Retrieve positions directly from OANDA API.
@@ -86,14 +54,6 @@ class PositionView(APIView):
         """
         return self._get_positions_from_oanda(request)
 
-    @extend_schema(
-        summary="PUT /api/market/positions/",
-        description="Open a new position by submitting a market order via OANDA",
-        operation_id="open_position",
-        tags=["Market - Positions"],
-        request=PositionSerializer,
-        responses={201: dict},
-    )
     def put(self, request: Request) -> Response:
         """
         Open a new position via OANDA by submitting a market order.
@@ -279,29 +239,6 @@ class PositionDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(
-        summary="GET /api/market/positions/{position_id}/",
-        description="Retrieve detailed information for a specific trade/position from OANDA",
-        operation_id="get_position_detail",
-        tags=["Market - Positions"],
-        parameters=[
-            OpenApiParameter(
-                name="position_id",
-                type=str,
-                location=OpenApiParameter.PATH,
-                required=True,
-                description="OANDA Trade ID",
-            ),
-            OpenApiParameter(
-                name="account_id",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                required=True,
-                description="OANDA account database ID",
-            ),
-        ],
-        responses={200: dict},
-    )
     def get(self, request: Request, position_id: str) -> Response:
         """
         Retrieve position details from OANDA API.
@@ -370,23 +307,6 @@ class PositionDetailView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @extend_schema(
-        summary="PATCH /api/market/positions/{position_id}/",
-        description="Close a position via OANDA API",
-        operation_id="close_position",
-        tags=["Market - Positions"],
-        parameters=[
-            OpenApiParameter(
-                name="position_id",
-                type=str,
-                location=OpenApiParameter.PATH,
-                required=True,
-                description="OANDA Trade ID",
-            ),
-        ],
-        request=dict,
-        responses={200: dict},
-    )
     def patch(self, request: Request, position_id: str) -> Response:
         """
         Close a position via OANDA API.

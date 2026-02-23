@@ -5,7 +5,6 @@ from logging import Logger, getLogger
 
 from django.db.models import Max, Min
 from django.utils import timezone
-from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -22,39 +21,6 @@ class TickDataView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(
-        summary="GET /api/market/ticks/",
-        description="Fetch historical tick data from local DB",
-        operation_id="get_tick_data",
-        tags=["market"],
-        parameters=[
-            OpenApiParameter(
-                name="instrument",
-                type=str,
-                required=True,
-                description="Currency pair (e.g., USD_JPY)",
-            ),
-            OpenApiParameter(
-                name="from_time",
-                type=str,
-                required=False,
-                description="Start time in RFC3339 format",
-            ),
-            OpenApiParameter(
-                name="to_time",
-                type=str,
-                required=False,
-                description="End time in RFC3339 format",
-            ),
-            OpenApiParameter(
-                name="count",
-                type=int,
-                required=False,
-                description="Number of ticks to return (1-20000, default: 5000)",
-            ),
-        ],
-        responses={200: dict},
-    )
     def get(self, request: Request) -> Response:
         instrument = request.query_params.get("instrument")
         from_time = request.query_params.get("from_time")
@@ -136,24 +102,6 @@ class TickDataRangeView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(
-        summary="GET /api/market/ticks/data-range/",
-        description=(
-            "Return the earliest and latest tick timestamps for a given instrument. "
-            "Useful for validating backtest date ranges before task creation."
-        ),
-        operation_id="get_tick_data_range",
-        tags=["market"],
-        parameters=[
-            OpenApiParameter(
-                name="instrument",
-                type=str,
-                required=True,
-                description="Currency pair (e.g., USD_JPY)",
-            ),
-        ],
-        responses={200: dict},
-    )
     def get(self, request: Request) -> Response:
         instrument = request.query_params.get("instrument")
         if not instrument:

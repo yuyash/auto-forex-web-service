@@ -3,7 +3,6 @@
 from logging import Logger, getLogger
 
 from django.conf import settings
-from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -29,16 +28,6 @@ class EmailVerificationView(APIView):
     authentication_classes: list = []
     serializer_class = EmailVerificationSerializer
 
-    @extend_schema(
-        summary="POST /api/accounts/auth/verify-email",
-        description="Verify user email address using the verification token sent via email.",
-        request=EmailVerificationSerializer,
-        responses={
-            200: OpenApiResponse(description="Email verified successfully"),
-            400: OpenApiResponse(description="Invalid or expired token"),
-        },
-        tags=["Authentication"],
-    )
     def post(self, request: Request) -> Response:
         """Verify user email with token."""
         token = request.data.get("token")
@@ -111,16 +100,6 @@ class ResendVerificationEmailView(APIView):
 
         return f"{base_url}/verify-email?token={token}"
 
-    @extend_schema(
-        summary="POST /api/accounts/auth/resend-verification",
-        description="Resend email verification link to the specified email address.",
-        request=ResendVerificationSerializer,
-        responses={
-            200: OpenApiResponse(description="Verification email sent"),
-            400: OpenApiResponse(description="Email is required or already verified"),
-        },
-        tags=["Authentication"],
-    )
     def post(self, request: Request) -> Response:
         """Resend verification email."""
         email = request.data.get("email", "").lower()

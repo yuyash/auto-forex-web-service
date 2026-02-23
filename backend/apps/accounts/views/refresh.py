@@ -2,7 +2,6 @@
 
 from logging import Logger, getLogger
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -25,37 +24,6 @@ class TokenRefreshView(APIView):
     permission_classes = [AllowAny]
     authentication_classes: list = []
 
-    @extend_schema(
-        summary="POST /api/accounts/auth/refresh",
-        description="Refresh an existing JWT token to extend its expiration time. "
-        "Requires valid JWT token in Authorization header.",
-        request=None,
-        responses={
-            200: OpenApiResponse(
-                description="Token refreshed successfully",
-                response={
-                    "type": "object",
-                    "properties": {
-                        "token": {"type": "string"},
-                        "user": {
-                            "type": "object",
-                            "properties": {
-                                "id": {"type": "integer"},
-                                "email": {"type": "string"},
-                                "username": {"type": "string"},
-                                "is_staff": {"type": "boolean"},
-                                "timezone": {"type": "string"},
-                                "language": {"type": "string"},
-                            },
-                        },
-                    },
-                },
-            ),
-            401: OpenApiResponse(description="Invalid or expired token"),
-            500: OpenApiResponse(description="Failed to retrieve user information"),
-        },
-        tags=["Authentication"],
-    )
     def post(self, request: Request) -> Response:
         """Handle token refresh."""
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")

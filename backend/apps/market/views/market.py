@@ -4,7 +4,6 @@ from datetime import UTC, datetime, timedelta
 from logging import Logger, getLogger
 from typing import Any
 
-from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -34,13 +33,6 @@ class MarketStatusView(APIView):
         "new_york": {"open": 12, "close": 21},  # 12:00 - 21:00 UTC
     }
 
-    @extend_schema(
-        summary="GET /api/market/status/",
-        description="Retrieve current forex market open/close status and trading session information",
-        operation_id="get_market_status",
-        tags=["market"],
-        responses={200: dict},
-    )
     def get(self, _request: Request) -> Response:
         """
         Get current forex market status.

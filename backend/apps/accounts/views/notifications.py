@@ -2,11 +2,6 @@
 
 from logging import Logger, getLogger
 
-from drf_spectacular.utils import (
-    OpenApiParameter,
-    OpenApiResponse,
-    extend_schema,
-)
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -25,40 +20,6 @@ class UserNotificationListView(APIView):
     permission_classes = [IsAuthenticated]
     pagination_class = StandardPagination
 
-    @extend_schema(
-        summary="GET /api/accounts/notifications",
-        description="Retrieve list of notifications for the authenticated user. "
-        "Supports filtering by read status and pagination.",
-        parameters=[
-            OpenApiParameter(
-                name="page",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                description="Page number",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="page_size",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                description="Number of results per page (default: 50, max: 200)",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="unread_only",
-                type=bool,
-                location=OpenApiParameter.QUERY,
-                description="Filter to show only unread notifications",
-                required=False,
-            ),
-        ],
-        responses={
-            200: OpenApiResponse(description="Paginated notifications list"),
-            401: OpenApiResponse(description="Authentication required"),
-            500: OpenApiResponse(description="Failed to retrieve notifications"),
-        },
-        tags=["Notifications"],
-    )
     def get(self, request: Request) -> Response:
         """Get list of notifications for the authenticated user."""
         try:
@@ -107,27 +68,6 @@ class UserNotificationMarkReadView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(
-        summary="POST /api/accounts/notifications/{notification_id}/read",
-        description="Mark a single notification as read for the authenticated user.",
-        parameters=[
-            OpenApiParameter(
-                name="notification_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                description="ID of the notification to mark as read",
-                required=True,
-            ),
-        ],
-        request=None,
-        responses={
-            200: OpenApiResponse(description="Notification marked as read"),
-            401: OpenApiResponse(description="Authentication required"),
-            404: OpenApiResponse(description="Notification not found"),
-            500: OpenApiResponse(description="Failed to mark notification as read"),
-        },
-        tags=["Notifications"],
-    )
     def post(self, request: Request, notification_id: int) -> Response:
         """Mark a notification as read."""
         try:
@@ -166,26 +106,6 @@ class UserNotificationMarkAllReadView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(
-        summary="POST /api/accounts/notifications/read-all",
-        description="Mark all unread notifications as read for the authenticated user.",
-        request=None,
-        responses={
-            200: OpenApiResponse(
-                description="All notifications marked as read",
-                response={
-                    "type": "object",
-                    "properties": {
-                        "message": {"type": "string"},
-                        "count": {"type": "integer"},
-                    },
-                },
-            ),
-            401: OpenApiResponse(description="Authentication required"),
-            500: OpenApiResponse(description="Failed to mark all notifications as read"),
-        },
-        tags=["Notifications"],
-    )
     def post(self, request: Request) -> Response:
         """Mark all unread notifications as read."""
         try:

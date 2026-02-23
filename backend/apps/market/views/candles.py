@@ -6,7 +6,6 @@ from typing import Any
 
 import v20
 from django.core.exceptions import ObjectDoesNotExist
-from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -36,65 +35,6 @@ class CandleDataView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(
-        summary="GET /api/market/candles/",
-        description="Fetch historical candle data from OANDA for charting and analysis",
-        operation_id="get_candle_data",
-        tags=["market"],
-        parameters=[
-            OpenApiParameter(
-                name="instrument",
-                type=str,
-                required=True,
-                description="Currency pair (e.g., EUR_USD, GBP_USD)",
-            ),
-            OpenApiParameter(
-                name="granularity",
-                type=str,
-                required=False,
-                description="Candle granularity (S5, M1, H1, D, etc.)",
-                default="H1",
-            ),
-            OpenApiParameter(
-                name="count",
-                type=int,
-                required=False,
-                description="Number of candles to fetch (1-5000)",
-                default=100,
-            ),
-            OpenApiParameter(
-                name="from_time",
-                type=str,
-                required=False,
-                description="Start time in RFC3339 format",
-            ),
-            OpenApiParameter(
-                name="to_time",
-                type=str,
-                required=False,
-                description="End time in RFC3339 format",
-            ),
-            OpenApiParameter(
-                name="before",
-                type=int,
-                required=False,
-                description="Unix timestamp for fetching older data",
-            ),
-            OpenApiParameter(
-                name="after",
-                type=int,
-                required=False,
-                description="Unix timestamp for fetching newer data",
-            ),
-            OpenApiParameter(
-                name="account_id",
-                type=str,
-                required=False,
-                description="OANDA account ID (uses default if not provided)",
-            ),
-        ],
-        responses={200: dict},
-    )
     def get(self, request: Request) -> Response:
         """
         Fetch historical candle data from OANDA.

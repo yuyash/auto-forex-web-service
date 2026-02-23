@@ -3,7 +3,6 @@
 from logging import Logger, getLogger
 
 import v20
-from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -51,13 +50,6 @@ class SupportedGranularitiesView(APIView):
         {"value": "M", "label": "Monthly"},
     ]
 
-    @extend_schema(
-        summary="GET /api/market/granularities/",
-        description="Retrieve list of supported OANDA granularities/timeframes",
-        operation_id="list_supported_granularities",
-        tags=["market"],
-        responses={200: dict},
-    )
     def get(self, _request: Request) -> Response:
         """
         Retrieve list of supported granularities.

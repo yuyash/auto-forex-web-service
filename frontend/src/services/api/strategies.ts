@@ -1,5 +1,5 @@
 // Strategy API service
-import { TradingService } from '../../api/generated/services/TradingService';
+import { api } from '../../api/apiClient';
 import { withRetry } from '../../api/client';
 
 export interface Strategy {
@@ -24,21 +24,16 @@ export const strategiesApi = {
    * List all available strategies
    */
   list: async (): Promise<StrategyListResponse> => {
-    const result = await withRetry(() =>
-      TradingService.tradingStrategiesRetrieve()
+    const data = await withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      api.get<any>('/api/trading/strategies/')
     );
-    // The generated API returns a single StrategyList object.
-    // Wrap it in the expected response shape.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = result as any;
     if (Array.isArray(data)) {
       return { strategies: data, count: data.length };
     }
-    // If it's already in the right shape
     if (data.strategies) {
       return data as StrategyListResponse;
     }
-    // Single strategy object - wrap in array
     return { strategies: [data], count: 1 };
   },
 
@@ -46,11 +41,10 @@ export const strategiesApi = {
    * Fetch default parameters for a strategy
    */
   defaults: async (strategyId: string): Promise<StrategyDefaultsResponse> => {
-    const result = await withRetry(() =>
-      TradingService.tradingStrategiesDefaultsRetrieve(strategyId)
+    const data = await withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      api.get<any>(`/api/trading/strategies/${strategyId}/defaults/`)
     );
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = result as any;
     if (data.strategy_id && data.defaults) {
       return data as StrategyDefaultsResponse;
     }

@@ -1,10 +1,5 @@
 """Health check views."""
 
-from drf_spectacular.utils import (
-    OpenApiParameter,
-    OpenApiResponse,
-    extend_schema,
-)
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -43,28 +38,6 @@ class OandaApiHealthView(APIView):
             or OandaAccounts.objects.filter(user=request.user.id).first()
         )
 
-    @extend_schema(
-        summary="GET /api/market/health/oanda/",
-        description="Retrieve the latest health check status for the selected OANDA account",
-        operation_id="get_oanda_health_status",
-        tags=["Market - Health"],
-        parameters=[
-            OpenApiParameter(
-                name="account_id",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="OANDA account ID (uses default if not provided)",
-            ),
-        ],
-        responses={
-            200: OpenApiResponse(
-                description="Health status retrieved successfully",
-                response=OandaApiHealthStatusSerializer,
-            ),
-            400: OpenApiResponse(description="No OANDA account found"),
-        },
-    )
     def get(self, request: Request) -> Response:
         account = self._get_account(request)
         if account is None:
@@ -90,28 +63,6 @@ class OandaApiHealthView(APIView):
             status=status.HTTP_200_OK,
         )
 
-    @extend_schema(
-        summary="POST /api/market/health/oanda/",
-        description="Perform a live health check against OANDA API and persist the result",
-        operation_id="check_oanda_health",
-        tags=["Market - Health"],
-        parameters=[
-            OpenApiParameter(
-                name="account_id",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="OANDA account ID (uses default if not provided)",
-            ),
-        ],
-        responses={
-            200: OpenApiResponse(
-                description="Health check performed successfully",
-                response=OandaApiHealthStatusSerializer,
-            ),
-            400: OpenApiResponse(description="No OANDA account found"),
-        },
-    )
     def post(self, request: Request) -> Response:
         account = self._get_account(request)
         if account is None:

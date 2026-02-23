@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { OpenAPI } from '../api/generated/core/OpenAPI';
+import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 
@@ -71,14 +71,9 @@ function getLatestUpdatedAt(positions: TaskPosition[]): string | null {
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (OpenAPI.TOKEN) {
-    const token =
-      typeof OpenAPI.TOKEN === 'function'
-        ? await (OpenAPI.TOKEN as (options: unknown) => Promise<string>)({})
-        : OpenAPI.TOKEN;
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+  const token = await resolveToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
   return headers;
 }
@@ -148,13 +143,13 @@ export const useTaskPositions = ({
         const effectiveSince = since ?? (incremental ? sinceRef.current : null);
         if (effectiveSince) params.since = effectiveSince;
 
-        const url = `${OpenAPI.BASE}${prefix}/${taskId}/positions/`;
+        const url = `${apiConfig.BASE}${prefix}/${taskId}/positions/`;
         const headers = await getAuthHeaders();
 
         const response = await axios.get(url, {
           params,
           headers,
-          withCredentials: OpenAPI.WITH_CREDENTIALS,
+          withCredentials: apiConfig.WITH_CREDENTIALS,
         });
 
         // Discard stale responses.

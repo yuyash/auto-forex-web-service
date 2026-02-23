@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { OpenAPI } from '../api/generated/core/OpenAPI';
+import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 
@@ -47,14 +47,9 @@ interface UseTaskEventsResult {
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (OpenAPI.TOKEN) {
-    const token =
-      typeof OpenAPI.TOKEN === 'function'
-        ? await (OpenAPI.TOKEN as (options: unknown) => Promise<string>)({})
-        : OpenAPI.TOKEN;
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+  const token = await resolveToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
   return headers;
 }
@@ -127,13 +122,13 @@ export const useTaskEvents = ({
         const effectiveSince = incremental ? sinceRef.current : null;
         if (effectiveSince) params.since = effectiveSince;
 
-        const url = `${OpenAPI.BASE}${prefix}/${taskId}/events/`;
+        const url = `${apiConfig.BASE}${prefix}/${taskId}/events/`;
         const headers = await getAuthHeaders();
 
         const response = await axios.get(url, {
           params,
           headers,
-          withCredentials: OpenAPI.WITH_CREDENTIALS,
+          withCredentials: apiConfig.WITH_CREDENTIALS,
         });
 
         if (requestId !== latestRequestRef.current) return;

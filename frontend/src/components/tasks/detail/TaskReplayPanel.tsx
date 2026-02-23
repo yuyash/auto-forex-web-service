@@ -1314,6 +1314,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     taskType,
     taskId,
     celeryTaskId,
+    mapRawTrades,
   ]);
 
   useEffect(() => {

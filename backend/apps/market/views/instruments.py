@@ -4,7 +4,6 @@ from logging import Logger, getLogger
 from typing import Any
 
 import v20
-from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -47,13 +46,6 @@ class SupportedInstrumentsView(APIView):
         "EUR_CAD",
     ]
 
-    @extend_schema(
-        summary="GET /api/market/instruments/",
-        description="Retrieve list of supported currency pairs from OANDA API",
-        operation_id="list_supported_instruments",
-        tags=["market"],
-        responses={200: dict},
-    )
     def get(self, _request: Request) -> Response:
         """
         Retrieve list of supported instruments from OANDA API.
@@ -139,22 +131,6 @@ class InstrumentDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(
-        summary="GET /api/market/instruments/{instrument}/",
-        description="Fetch detailed information about a specific currency pair",
-        operation_id="get_instrument_detail",
-        tags=["market"],
-        parameters=[
-            OpenApiParameter(
-                name="instrument",
-                type=str,
-                location=OpenApiParameter.PATH,
-                required=True,
-                description="Currency pair (e.g., EUR_USD)",
-            ),
-        ],
-        responses={200: dict},
-    )
     def get(self, request: Request, instrument: str) -> Response:
         """
         Get detailed information about a specific instrument.

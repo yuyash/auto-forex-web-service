@@ -3,7 +3,6 @@
 from logging import Logger, getLogger
 from typing import Any
 
-from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -50,51 +49,6 @@ class OrderView(APIView):
     permission_classes = [IsAuthenticated]
     pagination_class = StandardPagination
 
-    @extend_schema(
-        summary="GET /api/market/orders/",
-        description="List user's orders directly from OANDA API",
-        operation_id="list_orders",
-        tags=["Market - Orders"],
-        parameters=[
-            OpenApiParameter(
-                name="account_id",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Filter by OANDA account ID",
-            ),
-            OpenApiParameter(
-                name="instrument",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Filter by currency pair",
-            ),
-            OpenApiParameter(
-                name="status",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Filter by order status (pending/all)",
-                default="all",
-            ),
-            OpenApiParameter(
-                name="page",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Page number",
-            ),
-            OpenApiParameter(
-                name="page_size",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Number of results per page (default: 50, max: 200)",
-            ),
-        ],
-        responses={200: dict},
-    )
     def get(self, request: Request) -> Response:
         """
         List user's orders directly from OANDA API.
@@ -213,14 +167,6 @@ class OrderView(APIView):
         page = paginator.paginate_queryset(all_orders, request)
         return paginator.get_paginated_response(page)
 
-    @extend_schema(
-        summary="POST /api/market/orders/",
-        description="Submit new order (market, limit, stop, OCO)",
-        operation_id="create_order",
-        tags=["Market - Orders"],
-        request=OrderSerializer,
-        responses={201: dict},
-    )
     def post(  # pylint: disable=too-many-locals,too-many-return-statements
         self, request: Request
     ) -> Response:
@@ -407,29 +353,6 @@ class OrderDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(
-        summary="GET /api/market/orders/{order_id}/",
-        description="Retrieve order details from OANDA API",
-        operation_id="get_order_detail",
-        tags=["Market - Orders"],
-        parameters=[
-            OpenApiParameter(
-                name="order_id",
-                type=str,
-                location=OpenApiParameter.PATH,
-                required=True,
-                description="OANDA Order ID",
-            ),
-            OpenApiParameter(
-                name="account_id",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                required=True,
-                description="OANDA account database ID",
-            ),
-        ],
-        responses={200: dict},
-    )
     def get(self, request: Request, order_id: str) -> Response:
         """
         Retrieve order details from OANDA API.
@@ -484,29 +407,6 @@ class OrderDetailView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @extend_schema(
-        summary="DELETE /api/market/orders/{order_id}/",
-        description="Cancel a pending order via OANDA API",
-        operation_id="cancel_order",
-        tags=["Market - Orders"],
-        parameters=[
-            OpenApiParameter(
-                name="order_id",
-                type=str,
-                location=OpenApiParameter.PATH,
-                required=True,
-                description="OANDA Order ID",
-            ),
-            OpenApiParameter(
-                name="account_id",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                required=True,
-                description="OANDA account database ID",
-            ),
-        ],
-        responses={200: dict},
-    )
     def delete(self, request: Request, order_id: str) -> Response:
         """
         Cancel a pending order via OANDA API.

@@ -1,6 +1,6 @@
 // Task Polling Service - HTTP polling for task status and details
 
-import { TradingService } from '../../api/generated/services/TradingService';
+import { api } from '../../api/apiClient';
 import type { BacktestTask, TradingTask } from '../../types';
 import type { ExecutionSummary } from '../../types/execution';
 import { TaskStatus } from '../../types/common';
@@ -190,11 +190,15 @@ export class TaskPollingService {
   private async fetchStatus(): Promise<TaskStatusResponse> {
     const task =
       this.taskType === 'backtest'
-        ? await TradingService.tradingTasksBacktestRetrieve(this.taskId)
-        : await TradingService.tradingTasksTradingRetrieve(this.taskId);
+        ? await api.get<Record<string, unknown>>(
+            `/api/trading/tasks/backtest/${this.taskId}/`
+          )
+        : await api.get<Record<string, unknown>>(
+            `/api/trading/tasks/trading/${this.taskId}/`
+          );
 
     return {
-      task_id: task.id ?? '',
+      task_id: (task as { id?: string }).id ?? '',
       task_type: this.taskType,
       status: task.status as TaskStatus,
       progress:
@@ -212,9 +216,13 @@ export class TaskPollingService {
               }
             ).current_tick ?? null)
           : null,
-      started_at: task.started_at || null,
-      completed_at: task.completed_at || null,
-      error_message: task.error_message || null,
+      started_at: (task as Record<string, unknown>).started_at as string | null,
+      completed_at: (task as Record<string, unknown>).completed_at as
+        | string
+        | null,
+      error_message: (task as Record<string, unknown>).error_message as
+        | string
+        | null,
     };
   }
 
@@ -224,8 +232,12 @@ export class TaskPollingService {
   private async fetchDetails(): Promise<TaskDetailsResponse> {
     const task =
       this.taskType === 'backtest'
-        ? await TradingService.tradingTasksBacktestRetrieve(this.taskId)
-        : await TradingService.tradingTasksTradingRetrieve(this.taskId);
+        ? await api.get<Record<string, unknown>>(
+            `/api/trading/tasks/backtest/${this.taskId}/`
+          )
+        : await api.get<Record<string, unknown>>(
+            `/api/trading/tasks/trading/${this.taskId}/`
+          );
 
     return {
       task: task as unknown as BacktestTask | TradingTask,
