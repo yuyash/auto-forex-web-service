@@ -8,7 +8,7 @@ import {
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { MarketService } from '../../api/generated/services/MarketService';
+import { api } from '../../api/apiClient';
 import type { Granularity } from '../../types/chart';
 import { detectMarketGaps } from '../../utils/marketClosedMarkers';
 import { MarketClosedHighlight } from '../../utils/MarketClosedHighlight';
@@ -94,15 +94,13 @@ export default function MarketChart({
 
   const fetchData = useCallback(async () => {
     try {
-      const response = await MarketService.getCandleData(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await api.get<any>('/api/market/candles/', {
         instrument,
-        accountId,
-        undefined,
-        undefined,
-        200,
-        undefined,
-        granularity
-      );
+        account_id: accountId,
+        count: 200,
+        granularity,
+      });
       const candles = parseCandles(response?.candles);
       if (seriesRef.current) {
         seriesRef.current.setData(candles);

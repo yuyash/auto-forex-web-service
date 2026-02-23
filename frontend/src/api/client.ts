@@ -1,15 +1,12 @@
 /**
  * API Client Wrapper
  *
- * Provides a configured wrapper around the generated OpenAPI client with:
- * - Authentication token management
- * - Error handling and transformation
- * - Retry logic for transient failures
- * - Base URL configuration
+ * Provides authentication token management, error handling,
+ * retry logic, and base URL configuration.
  */
 
-import { OpenAPI } from './generated/core/OpenAPI';
-import { ApiError } from './generated/core/ApiError';
+import { apiConfig } from './apiConfig';
+import { ApiError } from './apiClient';
 import { broadcastAuthLogout } from '../utils/authEvents';
 
 /**
@@ -51,95 +48,10 @@ let currentConfig: Required<ApiClientConfig> = { ...DEFAULT_CONFIG };
 export function configureApiClient(config: ApiClientConfig): void {
   currentConfig = { ...currentConfig, ...config };
 
-  // Update OpenAPI configuration
-  OpenAPI.BASE = currentConfig.baseUrl;
-  OpenAPI.WITH_CREDENTIALS = currentConfig.withCredentials;
-  OpenAPI.TOKEN = currentConfig.token;
-
-  // Set up request interceptor for authentication
-  OpenAPI.HEADERS = async () => {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (currentConfig.token) {
-      headers['Authorization'] = `Bearer ${currentConfig.token}`;
-    }
-
-    return headers;
-  };
-
-  // Set up response interceptor for 401 errors
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const originalRequest = (OpenAPI as any).request;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (OpenAPI as any).request = async (options: unknown) => {
-    const requestOptions = options as Record<string, unknown>;
-    const requestId = Math.random().toString(36).substring(7);
-    const timestamp = new Date().toISOString();
-
-    console.log(`[API:REQUEST:${requestId}] ${timestamp}`, {
-      method: requestOptions.method,
-      url: requestOptions.url,
-      body: requestOptions.body,
-      headers: requestOptions.headers,
-    });
-
-    try {
-      const response = await originalRequest(options);
-
-      console.log(`[API:RESPONSE:${requestId}] ${timestamp} SUCCESS`, {
-        method: requestOptions.method,
-        url: requestOptions.url,
-        status: 200,
-        data: response,
-      });
-
-      return response;
-    } catch (error) {
-      if (error instanceof ApiError) {
-        console.error(`[API:RESPONSE:${requestId}] ${timestamp} ERROR`, {
-          method: requestOptions.method,
-          url: requestOptions.url,
-          status: error.status,
-          statusText: error.statusText,
-          body: error.body,
-          message: error.message,
-        });
-
-        if (error.status === 401) {
-          console.warn(
-            `[API:AUTH] 401 Unauthorized - Clearing auth and redirecting to login`
-          );
-          // Clear authentication state
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          clearAuthToken();
-
-          // Broadcast logout event for AuthContext to handle
-          broadcastAuthLogout({
-            source: 'http',
-            status: 401,
-            message: 'Session expired',
-            context: 'api_client',
-          });
-
-          // Redirect to login page
-          window.location.href = '/login';
-        }
-      } else {
-        console.error(
-          `[API:RESPONSE:${requestId}] ${timestamp} NETWORK_ERROR`,
-          {
-            method: requestOptions.method,
-            url: requestOptions.url,
-            error: error,
-          }
-        );
-      }
-      throw error;
-    }
-  };
+  // Sync to apiConfig so all modules share the same state
+  apiConfig.BASE = currentConfig.baseUrl;
+  apiConfig.WITH_CREDENTIALS = currentConfig.withCredentials;
+  apiConfig.TOKEN = currentConfig.token || undefined;
 }
 
 /**
@@ -147,7 +59,7 @@ export function configureApiClient(config: ApiClientConfig): void {
  */
 export function setAuthToken(token: string): void {
   currentConfig.token = token;
-  OpenAPI.TOKEN = token;
+  apiConfig.TOKEN = token;
 }
 
 /**
@@ -155,7 +67,7 @@ export function setAuthToken(token: string): void {
  */
 export function clearAuthToken(): void {
   currentConfig.token = '';
-  OpenAPI.TOKEN = undefined;
+  apiConfig.TOKEN = undefined;
 }
 
 /**
@@ -238,6 +150,23 @@ export function transformApiError(error: unknown): TransformedApiError {
         message = error.message || 'An unexpected error occurred.';
     }
 
+    // Handle 401 globally
+    if (statusCode === 401) {
+      console.warn(
+        `[API:AUTH] 401 Unauthorized - Clearing auth and redirecting to login`
+      );
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      clearAuthToken();
+      broadcastAuthLogout({
+        source: 'http',
+        status: 401,
+        message: 'Session expired',
+        context: 'api_client',
+      });
+      window.location.href = '/login';
+    }
+
     return {
       type,
       message,
@@ -272,8 +201,7 @@ function isRetryableError(error: TransformedApiError): boolean {
     error.type === ApiErrorType.NETWORK_ERROR ||
     error.type === ApiErrorType.SERVER_ERROR ||
     (error.statusCode !== undefined &&
-      (error.statusCode === 429 || // Rate limit
-        error.statusCode >= 500)) // Server errors
+      (error.statusCode === 429 || error.statusCode >= 500))
   );
 }
 
@@ -302,18 +230,15 @@ export async function withRetry<T>(
     } catch (error) {
       lastError = transformApiError(error);
 
-      // Don't retry if error is not retryable or we've exhausted retries
       if (!isRetryableError(lastError) || attempt === maxRetries) {
         throw lastError;
       }
 
-      // Exponential backoff
       const delayMs = retryDelay * Math.pow(2, attempt);
       await delay(delayMs);
     }
   }
 
-  // This should never be reached, but TypeScript needs it
   throw lastError!;
 }
 

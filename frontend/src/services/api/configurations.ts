@@ -1,6 +1,6 @@
 // Strategy Configuration API service
 
-import { TradingService } from '../../api/generated/services/TradingService';
+import { api } from '../../api/apiClient';
 import { withRetry } from '../../api/client';
 import type {
   StrategyConfig,
@@ -10,6 +10,7 @@ import type {
   ConfigurationTask,
   PaginatedResponse,
 } from '../../types';
+import type { PaginatedApiResponse } from '../../api/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const toLocal = (config: any): StrategyConfig => ({
@@ -25,7 +26,11 @@ export const configurationsApi = {
     params?: StrategyConfigListParams
   ): Promise<PaginatedResponse<StrategyConfig>> => {
     const result = await withRetry(() =>
-      TradingService.tradingStrategyConfigsList(params?.page, params?.page_size)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      api.get<PaginatedApiResponse<any>>('/api/trading/strategy-configs/', {
+        page: params?.page,
+        page_size: params?.page_size,
+      })
     );
     return {
       count: result.count,
@@ -43,7 +48,8 @@ export const configurationsApi = {
       return Promise.reject(new Error('Invalid configuration ID'));
     }
     const result = await withRetry(() =>
-      TradingService.tradingStrategyConfigsRetrieve(id)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      api.get<any>(`/api/trading/strategy-configs/${id}/`)
     );
     return toLocal(result);
   },
@@ -53,7 +59,8 @@ export const configurationsApi = {
    */
   create: async (data: StrategyConfigCreateData): Promise<StrategyConfig> => {
     const result = await withRetry(() =>
-      TradingService.tradingStrategyConfigsCreate(data)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      api.post<any>('/api/trading/strategy-configs/', data)
     );
     return toLocal(result);
   },
@@ -70,7 +77,7 @@ export const configurationsApi = {
     }
     const result = await withRetry(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      TradingService.tradingStrategyConfigsUpdate(id, data as any)
+      api.put<any>(`/api/trading/strategy-configs/${id}/`, data)
     );
     return toLocal(result);
   },
@@ -82,7 +89,7 @@ export const configurationsApi = {
     if (!id) {
       return Promise.reject(new Error('Invalid configuration ID'));
     }
-    return withRetry(() => TradingService.tradingStrategyConfigsDestroy(id));
+    return withRetry(() => api.delete(`/api/trading/strategy-configs/${id}/`));
   },
 
   /**
@@ -93,8 +100,14 @@ export const configurationsApi = {
     _id: string
   ): Promise<ConfigurationTask[]> => {
     const [tradingTasks, backtestTasks] = await Promise.all([
-      withRetry(() => TradingService.tradingTasksTradingList()),
-      withRetry(() => TradingService.tradingTasksBacktestList()),
+      withRetry(() =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        api.get<PaginatedApiResponse<any>>('/api/trading/tasks/trading/')
+      ),
+      withRetry(() =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        api.get<PaginatedApiResponse<any>>('/api/trading/tasks/backtest/')
+      ),
     ]);
 
     const trading: ConfigurationTask[] = (tradingTasks.results ?? []).map(

@@ -1,6 +1,10 @@
-// Task Polling Service - HTTP polling for task status and details
+// Task Polling Service - HTTP polling for task status updates
+//
+// Polls the task detail endpoint once per cycle and dispatches
+// both status and detail callbacks from the single response,
+// eliminating the duplicate GET that existed previously.
 
-import { TradingService } from '../../api/generated/services/TradingService';
+import { api } from '../../api/apiClient';
 import type { BacktestTask, TradingTask } from '../../types';
 import type { ExecutionSummary } from '../../types/execution';
 import { TaskStatus } from '../../types/common';
@@ -19,7 +23,7 @@ export interface TaskStatusResponse {
   started_at: string | null;
   completed_at: string | null;
   error_message: string | null;
-  pending_new_execution?: boolean; // True when task is RUNNING but new execution hasn't started
+  pending_new_execution?: boolean;
 }
 
 export interface TaskDetailsResponse {
@@ -34,7 +38,7 @@ export interface PollingCallbacks {
 }
 
 export interface PollingOptions {
-  interval?: number; // milliseconds
+  interval?: number;
   maxRetries?: number;
   backoffMultiplier?: number;
   maxBackoff?: number;
@@ -49,13 +53,10 @@ interface PollingState {
 }
 
 /**
- * TaskPollingService manages HTTP polling for task updates
+ * TaskPollingService manages HTTP polling for task updates.
  *
- * Features:
- * - Configurable polling intervals (2-5 seconds for active tasks)
- * - Exponential backoff on errors
- * - Automatic cleanup on component unmount
- * - Stops polling when task completes or fails
+ * Key improvement: a single GET per cycle feeds both the status
+ * and details callbacks, so we never duplicate the request.
  */
 export class TaskPollingService {
   private taskId: string;
@@ -74,10 +75,10 @@ export class TaskPollingService {
     this.taskType = taskType;
     this.callbacks = callbacks;
     this.options = {
-      interval: options.interval ?? 3000, // Default 3 seconds
+      interval: options.interval ?? 3000,
       maxRetries: options.maxRetries ?? 5,
       backoffMultiplier: options.backoffMultiplier ?? 2,
-      maxBackoff: options.maxBackoff ?? 30000, // Max 30 seconds
+      maxBackoff: options.maxBackoff ?? 30000,
     };
     this.state = {
       intervalId: null,
@@ -88,28 +89,15 @@ export class TaskPollingService {
     };
   }
 
-  /**
-   * Start polling for task updates
-   */
   public startPolling(): void {
-    if (this.state.isPolling) {
-      return;
-    }
-
+    if (this.state.isPolling) return;
     this.state.isPolling = true;
     this.state.retryCount = 0;
     this.state.currentInterval = this.options.interval;
-
-    // Fetch immediately
     this.poll();
-
-    // Then set up interval
     this.scheduleNextPoll();
   }
 
-  /**
-   * Stop polling
-   */
   public stopPolling(): void {
     if (this.state.intervalId !== null) {
       window.clearTimeout(this.state.intervalId);
@@ -118,35 +106,33 @@ export class TaskPollingService {
     this.state.isPolling = false;
   }
 
-  /**
-   * Cleanup resources
-   */
   public cleanup(): void {
     this.stopPolling();
   }
 
-  /**
-   * Check if currently polling
-   */
   public isPolling(): boolean {
     return this.state.isPolling;
   }
 
-  /**
-   * Get current polling interval
-   */
   public getCurrentInterval(): number {
     return this.state.currentInterval;
   }
 
-  /**
-   * Schedule the next poll
-   */
-  private scheduleNextPoll(): void {
-    if (!this.state.isPolling) {
-      return;
-    }
+  public updateCallbacks(callbacks: PollingCallbacks): void {
+    this.callbacks = { ...this.callbacks, ...callbacks };
+  }
 
+  public updateOptions(options: PollingOptions): void {
+    this.options = { ...this.options, ...options };
+    if (options.interval && this.state.isPolling) {
+      this.state.currentInterval = options.interval;
+    }
+  }
+
+  // ── private ──────────────────────────────────────────────
+
+  private scheduleNextPoll(): void {
+    if (!this.state.isPolling) return;
     this.state.intervalId = window.setTimeout(() => {
       this.poll();
       this.scheduleNextPoll();
@@ -154,96 +140,67 @@ export class TaskPollingService {
   }
 
   /**
-   * Perform a single poll operation
+   * Single GET per cycle — extract status fields and forward the
+   * full task object to both callbacks.
    */
   private async poll(): Promise<void> {
     try {
-      // Fetch status
-      const status = await this.fetchStatus();
+      const url =
+        this.taskType === 'backtest'
+          ? `/api/trading/tasks/backtest/${this.taskId}/`
+          : `/api/trading/tasks/trading/${this.taskId}/`;
 
+      const task = await api.get<Record<string, unknown>>(url);
+
+      // Build status response from the task payload
       if (this.callbacks.onStatusUpdate) {
-        this.callbacks.onStatusUpdate(status);
+        const statusResponse: TaskStatusResponse = {
+          task_id: (task as { id?: string }).id ?? '',
+          task_type: this.taskType,
+          status: task.status as TaskStatus,
+          progress:
+            ('progress' in task
+              ? (task as { progress?: number }).progress
+              : undefined) || 0,
+          current_tick:
+            'current_tick' in task
+              ? ((
+                  task as {
+                    current_tick?: {
+                      timestamp: string;
+                      price: string | null;
+                    } | null;
+                  }
+                ).current_tick ?? null)
+              : null,
+          started_at: task.started_at as string | null,
+          completed_at: task.completed_at as string | null,
+          error_message: task.error_message as string | null,
+        };
+        this.callbacks.onStatusUpdate(statusResponse);
       }
 
-      // Update last known status
-      this.state.lastStatus = status.status;
+      // Forward the same object as details (no second request)
+      if (this.callbacks.onDetailsUpdate) {
+        this.callbacks.onDetailsUpdate({
+          task: task as unknown as BacktestTask | TradingTask,
+          current_execution: null,
+        });
+      }
 
-      // Reset retry count on success
+      this.state.lastStatus = task.status as TaskStatus;
       this.state.retryCount = 0;
       this.state.currentInterval = this.options.interval;
-
-      // Continue polling regardless of task status to detect any status changes
-
-      // Optionally fetch details
-      if (this.callbacks.onDetailsUpdate) {
-        const details = await this.fetchDetails();
-        this.callbacks.onDetailsUpdate(details);
-      }
     } catch (error) {
       this.handleError(error as Error);
     }
   }
 
-  /**
-   * Fetch task status
-   */
-  private async fetchStatus(): Promise<TaskStatusResponse> {
-    const task =
-      this.taskType === 'backtest'
-        ? await TradingService.tradingTasksBacktestRetrieve(this.taskId)
-        : await TradingService.tradingTasksTradingRetrieve(this.taskId);
-
-    return {
-      task_id: task.id ?? '',
-      task_type: this.taskType,
-      status: task.status as TaskStatus,
-      progress:
-        ('progress' in task
-          ? (task as { progress?: number }).progress
-          : undefined) || 0,
-      current_tick:
-        'current_tick' in task
-          ? ((
-              task as {
-                current_tick?: {
-                  timestamp: string;
-                  price: string | null;
-                } | null;
-              }
-            ).current_tick ?? null)
-          : null,
-      started_at: task.started_at || null,
-      completed_at: task.completed_at || null,
-      error_message: task.error_message || null,
-    };
-  }
-
-  /**
-   * Fetch task details
-   */
-  private async fetchDetails(): Promise<TaskDetailsResponse> {
-    const task =
-      this.taskType === 'backtest'
-        ? await TradingService.tradingTasksBacktestRetrieve(this.taskId)
-        : await TradingService.tradingTasksTradingRetrieve(this.taskId);
-
-    return {
-      task: task as unknown as BacktestTask | TradingTask,
-      current_execution: null,
-    };
-  }
-
-  /**
-   * Handle polling errors with exponential backoff
-   */
   private handleError(error: Error): void {
     this.state.retryCount++;
-
     if (this.callbacks.onError) {
       this.callbacks.onError(error);
     }
-
-    // Stop polling if max retries exceeded
     if (this.state.retryCount >= this.options.maxRetries) {
       console.error(
         `Max retries (${this.options.maxRetries}) exceeded. Stopping polling.`
@@ -251,35 +208,13 @@ export class TaskPollingService {
       this.stopPolling();
       return;
     }
-
-    // Apply exponential backoff
     this.state.currentInterval = Math.min(
       this.state.currentInterval * this.options.backoffMultiplier,
       this.options.maxBackoff
     );
-
     console.warn(
       `Polling error (retry ${this.state.retryCount}/${this.options.maxRetries}). ` +
         `Next attempt in ${this.state.currentInterval}ms`
     );
-  }
-
-  /**
-   * Update callbacks
-   */
-  public updateCallbacks(callbacks: PollingCallbacks): void {
-    this.callbacks = { ...this.callbacks, ...callbacks };
-  }
-
-  /**
-   * Update polling options
-   */
-  public updateOptions(options: PollingOptions): void {
-    this.options = { ...this.options, ...options };
-
-    // If interval changed and currently polling, restart with new interval
-    if (options.interval && this.state.isPolling) {
-      this.state.currentInterval = options.interval;
-    }
   }
 }

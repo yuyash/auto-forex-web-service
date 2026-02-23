@@ -25,10 +25,8 @@ import {
   Tooltip,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import {
-  useTradingTask,
-  useTradingTaskPolling,
-} from '../../hooks/useTradingTasks';
+import { useTradingTask } from '../../hooks/useTradingTasks';
+import { useCurrentTickPolling } from '../../hooks/useCurrentTickPolling';
 import { useOverviewPnl } from '../../hooks/useOverviewPnl';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
@@ -85,14 +83,13 @@ export const TradingTaskDetail: React.FC = () => {
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
 
   // Poll for current_tick updates while task is running
-  const { data: polledTask } = useTradingTaskPolling(
-    taskId,
-    task?.status === TaskStatus.RUNNING,
-    3000
-  );
+  const { currentTick: polledTick } = useCurrentTickPolling(taskId, 'trading', {
+    enabled: task?.status === TaskStatus.RUNNING,
+    interval: 2000,
+  });
 
   // Use polled current_tick when available (fresher data for running tasks)
-  const currentTick = polledTask?.current_tick ?? task?.current_tick;
+  const currentTick = polledTick ?? task?.current_tick;
 
   const overviewSummary = useOverviewPnl(taskId, TaskType.TRADING);
 

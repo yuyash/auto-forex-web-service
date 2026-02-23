@@ -22,28 +22,32 @@ export interface MetricSnapshotPoint {
 export async function fetchMetricSnapshots(
   taskId: string,
   taskType: TaskType,
-  maxPoints?: number
+  maxPoints?: number,
+  since?: string,
+  celeryTaskId?: string
 ): Promise<MetricSnapshotPoint[]> {
   const prefix =
     taskType === TaskType.BACKTEST
       ? '/api/trading/tasks/backtest'
       : '/api/trading/tasks/trading';
 
-  const params = maxPoints ? `?max_points=${maxPoints}` : '';
+  const searchParams = new URLSearchParams();
+  if (maxPoints) searchParams.set('max_points', String(maxPoints));
+  if (since) searchParams.set('since', since);
+  if (celeryTaskId) searchParams.set('celery_task_id', celeryTaskId);
+  const qs = searchParams.toString();
+  const url = `${prefix}/${taskId}/metric_snapshots/${qs ? `?${qs}` : ''}`;
 
-  const response = await fetch(
-    `${prefix}/${taskId}/metric_snapshots/${params}`,
-    {
-      method: 'GET',
-      credentials: 'include',
-      headers: (() => {
-        const token = getAuthToken();
-        return token
-          ? { Authorization: `Bearer ${token}` }
-          : ({} as Record<string, string>);
-      })(),
-    }
-  );
+  const response = await fetch(url, {
+    method: 'GET',
+    credentials: 'include',
+    headers: (() => {
+      const token = getAuthToken();
+      return token
+        ? { Authorization: `Bearer ${token}` }
+        : ({} as Record<string, string>);
+    })(),
+  });
 
   handleAuthErrorStatus(response.status, {
     source: 'http',

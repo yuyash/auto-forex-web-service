@@ -3,8 +3,8 @@
 from logging import Logger, getLogger
 from typing import Any
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -43,23 +43,23 @@ class UserLogoutView(APIView):
         return ip
 
     @extend_schema(
-        summary="POST /api/accounts/auth/logout",
-        description="Logout user and terminate all active sessions. Requires valid JWT token in Authorization header.",
+        operation_id="auth_logout",
+        tags=["Accounts"],
         request=None,
         responses={
-            200: OpenApiResponse(
-                description="Logout successful",
-                response={
-                    "type": "object",
-                    "properties": {
-                        "message": {"type": "string"},
-                        "sessions_terminated": {"type": "integer"},
-                    },
+            200: inline_serializer(
+                "LogoutResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "sessions_terminated": serializers.IntegerField(),
                 },
             ),
-            401: OpenApiResponse(description="Invalid or expired token"),
+            401: inline_serializer(
+                "LogoutError",
+                fields={"error": serializers.CharField()},
+            ),
         },
-        tags=["Authentication"],
+        description="Invalidate JWT token and terminate user sessions.",
     )
     def post(self, request: Request) -> Response:
         """Handle user logout."""

@@ -2,7 +2,7 @@
 
 from logging import Logger, getLogger
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
@@ -34,37 +34,6 @@ class UserSettingsView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = UserSettingsUpdateSerializer
 
-    @extend_schema(
-        summary="GET /api/accounts/settings/",
-        description="Retrieve user profile and settings including timezone, language, and notification preferences.",
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "user": {
-                        "type": "object",
-                        "properties": {
-                            "id": {"type": "integer"},
-                            "username": {"type": "string"},
-                            "email": {"type": "string"},
-                            "first_name": {"type": "string"},
-                            "last_name": {"type": "string"},
-                        },
-                    },
-                    "settings": {
-                        "type": "object",
-                        "properties": {
-                            "timezone": {"type": "string"},
-                            "language": {"type": "string"},
-                            "notifications_enabled": {"type": "boolean"},
-                        },
-                    },
-                },
-            },
-            401: OpenApiResponse(description="Authentication required"),
-        },
-        tags=["User Settings"],
-    )
     def get(self, request: Request) -> Response:
         """Get user settings."""
         if not request.user.is_authenticated:
@@ -91,17 +60,6 @@ class UserSettingsView(APIView):
 
         return Response(response_data, status=status.HTTP_200_OK)
 
-    @extend_schema(
-        summary="PUT /api/accounts/settings/",
-        description="Update user profile and settings. Can update timezone, language, notification preferences, etc.",
-        request=UserSettingsUpdateSerializer,
-        responses={
-            200: OpenApiResponse(description="Settings updated successfully"),
-            400: OpenApiResponse(description="Validation error"),
-            401: OpenApiResponse(description="Authentication required"),
-        },
-        tags=["User Settings"],
-    )
     def put(self, request: Request) -> Response:
         """Update user settings."""
         if not request.user.is_authenticated:
@@ -173,16 +131,10 @@ class PublicAccountSettingsView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        summary="GET /api/accounts/settings/public",
-        description="Retrieve public account settings including registration and login availability. "
-        "No authentication required.",
-        responses={
-            200: OpenApiResponse(
-                description="Public settings retrieved successfully",
-                response=PublicAccountSettingsSerializer,
-            ),
-        },
-        tags=["Public Settings"],
+        operation_id="public_account_settings",
+        tags=["Accounts"],
+        responses={200: PublicAccountSettingsSerializer},
+        description="Get public account settings (registration/login enabled flags).",
     )
     def get(self, request: Request) -> Response:  # pylint: disable=unused-argument
         """Get public account settings."""

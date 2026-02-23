@@ -346,43 +346,41 @@ REST_FRAMEWORK = {
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ],
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DATETIME_FORMAT": "%Y-%m-%dT%H:%M:%S.%fZ",
     "DATE_FORMAT": "%Y-%m-%d",
     "TIME_FORMAT": "%H:%M:%S",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
-
 # =============================================================================
-# DRF Spectacular (OpenAPI) Configuration
+# drf-spectacular (OpenAPI schema generation)
 # =============================================================================
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Auto Forex Trading API",
-    "DESCRIPTION": "API for managing algorithmic forex trading operations across multiple OANDA accounts",
-    "VERSION": "1.0.0",
+    "TITLE": "Auto Forex Trader API",
+    "DESCRIPTION": (
+        "Auto Forex Trader Backend API.\n\n"
+        "## Authentication\n"
+        "Most endpoints require JWT authentication. "
+        "Include the token in the `Authorization: Bearer <token>` header.\n\n"
+        "## Rate Limiting\n"
+        "Authentication endpoints are rate-limited to prevent abuse."
+    ),
+    "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
-    "COMPONENT_SPLIT_REQUEST": True,
+    # Only serve docs UI in DEBUG mode.
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"] if DEBUG else [],
     "SCHEMA_PATH_PREFIX": "/api/",
-    "SERVERS": [
-        {"url": "http://localhost:8000", "description": "Development server"},
-        {"url": "https://api.autoforex.example.com", "description": "Production server"},
-    ],
+    "COMPONENT_SPLIT_REQUEST": True,
     "TAGS": [
-        {"name": "accounts", "description": "User account management"},
-        {"name": "health", "description": "System health checks"},
-        {"name": "market", "description": "Market data and OANDA account management"},
-        {"name": "trading", "description": "Trading tasks and execution management"},
+        {"name": "Accounts", "description": "Authentication and user management"},
+        {"name": "Health", "description": "System health checks"},
+        {"name": "Market", "description": "Market data and OANDA integration"},
+        {"name": "Trading", "description": "Trading tasks and strategy management"},
     ],
-    "CONTACT": {
-        "name": "Auto Forex Support",
-        "email": "support@autoforex.example.com",
-    },
-    "LICENSE": {
-        "name": "Proprietary",
-    },
-    "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
-    "COMPONENT_NO_READ_ONLY_REQUIRED": True,
+    "EXTENSIONS": [
+        "apps.accounts.openapi.JWTAuthenticationExtension",
+    ],
 }
 
 

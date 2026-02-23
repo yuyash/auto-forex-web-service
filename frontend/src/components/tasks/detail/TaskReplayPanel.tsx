@@ -48,12 +48,16 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import { getAuthToken } from '../../../api/client';
-import { fetchAllTrades } from '../../../utils/fetchAllTrades';
+import {
+  fetchAllTrades,
+  fetchTradesSince,
+} from '../../../utils/fetchAllTrades';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
 import {
   useTaskPositions,
   type TaskPosition,
 } from '../../../hooks/useTaskPositions';
+import { useOverviewPnl } from '../../../hooks/useOverviewPnl';
 import { TaskType } from '../../../types/common';
 import { handleAuthErrorStatus } from '../../../utils/authEvents';
 import { detectMarketGaps } from '../../../utils/marketClosedMarkers';
@@ -112,6 +116,7 @@ interface TaskReplayPanelProps {
   taskId: string | number;
   taskType: TaskType;
   instrument: string;
+  celeryTaskId?: string;
   startTime?: string;
   endTime?: string;
   enableRealTimeUpdates?: boolean;
@@ -306,6 +311,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   taskId,
   taskType,
   instrument,
+  celeryTaskId,
   startTime,
   endTime,
   enableRealTimeUpdates = false,
@@ -340,6 +346,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const { positions: pnlClosedPositions } = useTaskPositions({
     taskId,
     taskType,
+    celeryTaskId,
     status: 'closed',
     pageSize: 1000,
     enableRealTimeUpdates,
@@ -347,6 +354,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const { positions: pnlOpenPositions } = useTaskPositions({
     taskId,
     taskType,
+    celeryTaskId,
     status: 'open',
     pageSize: 1000,
     enableRealTimeUpdates,
@@ -643,21 +651,33 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     currentTick?.price != null ? parseFloat(currentTick.price) : null;
 
   // Merge open + closed positions for the Positions panel in the Trend tab
+  // Merge open + closed positions, de-duplicate by id, and derive _status
+  // from the actual `is_open` field rather than which query returned it.
+  // This prevents a position that was just closed from appearing as "open"
+  // when the open-positions poll returns stale data while the closed-
+  // positions poll already includes the updated record.
   const allPositions = useMemo<
     (TaskPosition & { _status: 'open' | 'closed' })[]
   >(() => {
-    const open = pnlOpenPositions.map((p) => ({
-      ...p,
-      _status: 'open' as const,
-    }));
-    const closed = pnlClosedPositions.map((p) => ({
-      ...p,
-      _status: 'closed' as const,
-    }));
-    return [...open, ...closed].sort(
-      (a, b) =>
-        new Date(b.entry_time).getTime() - new Date(a.entry_time).getTime()
-    );
+    const map = new Map<string, TaskPosition>();
+    // Insert closed first, then open – but if the same id appears in both
+    // lists the closed version (is_open=false) wins because it is the more
+    // up-to-date state.
+    for (const p of pnlOpenPositions) {
+      map.set(p.id, p);
+    }
+    for (const p of pnlClosedPositions) {
+      map.set(p.id, p); // overwrites the open entry if duplicate
+    }
+    return Array.from(map.values())
+      .map((p) => ({
+        ...p,
+        _status: (p.is_open ? 'open' : 'closed') as 'open' | 'closed',
+      }))
+      .sort(
+        (a, b) =>
+          new Date(b.entry_time).getTime() - new Date(a.entry_time).getTime()
+      );
   }, [pnlOpenPositions, pnlClosedPositions]);
 
   const [showOpenPosOnly, setShowOpenPosOnly] = useState(false);
@@ -1003,56 +1023,48 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   useMetricsOverlay({
     taskId: String(taskId),
     taskType,
+    celeryTaskId,
     enableRealTimeUpdates,
     chart: chartInstance,
     candleTimestamps: candleTimestampsMemo,
     currentTickTimestamp: enableRealTimeUpdates ? currentTick?.timestamp : null,
   });
 
+  // PnL summary from server-side aggregation (lightweight endpoint)
+  const {
+    realizedPnl: serverRealizedPnl,
+    unrealizedPnl: serverUnrealizedPnl,
+    totalTrades: serverTotalTrades,
+    openPositionCount: serverOpenPositionCount,
+    refetch: refetchPnl,
+  } = useOverviewPnl(String(taskId), taskType, celeryTaskId);
+
+  // Periodic PnL refresh while task is running
+  useEffect(() => {
+    if (!enableRealTimeUpdates) return;
+    const interval = setInterval(refetchPnl, 10000);
+    return () => clearInterval(interval);
+  }, [enableRealTimeUpdates, refetchPnl]);
+
   const replaySummary = useMemo(() => {
-    // Realized PnL — from closed positions
-    const realizedPnl = pnlClosedPositions.reduce((sum, p) => {
-      if (!p.exit_price || !p.entry_price) return sum;
-      const exit = parseFloat(p.exit_price);
-      const entry = parseFloat(p.entry_price);
-      const units = Math.abs(p.units ?? 0);
-      const dir = String(p.direction).toLowerCase();
-      const pnl =
-        dir === 'long' ? (exit - entry) * units : (entry - exit) * units;
-      return sum + pnl;
-    }, 0);
-
-    // Unrealized PnL — always compute from currentPrice for open positions
-    // (matches TaskPositionsTable calculation exactly)
-    const unrealizedPnl = pnlOpenPositions.reduce((sum, p) => {
-      if (currentPrice == null || !p.entry_price) return sum;
-      const entryP = parseFloat(p.entry_price);
-      const units = Math.abs(p.units ?? 0);
-      const dir = String(p.direction).toLowerCase();
-      const pnl =
-        dir === 'long'
-          ? (currentPrice - entryP) * units
-          : (entryP - currentPrice) * units;
-      return sum + pnl;
-    }, 0);
-
     const totalTradesRaw =
       typeof latestExecution?.total_trades === 'number'
         ? latestExecution.total_trades
-        : trades.length;
-
-    const openPositionsCount = pnlOpenPositions.length;
+        : serverTotalTrades || trades.length;
 
     return {
-      realizedPnl: Number.isFinite(realizedPnl) ? realizedPnl : 0,
-      unrealizedPnl: Number.isFinite(unrealizedPnl) ? unrealizedPnl : 0,
+      realizedPnl: Number.isFinite(serverRealizedPnl) ? serverRealizedPnl : 0,
+      unrealizedPnl: Number.isFinite(serverUnrealizedPnl)
+        ? serverUnrealizedPnl
+        : 0,
       totalTrades: totalTradesRaw,
-      openPositions: openPositionsCount,
+      openPositions: serverOpenPositionCount,
     };
   }, [
-    pnlClosedPositions,
-    pnlOpenPositions,
-    currentPrice,
+    serverRealizedPnl,
+    serverUnrealizedPnl,
+    serverTotalTrades,
+    serverOpenPositionCount,
     latestExecution,
     trades.length,
   ]);
@@ -1062,6 +1074,79 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   }, [recommendedGranularity, instrument, startTime, endTime]);
 
   const hasLoadedOnce = useRef(false);
+  // Track the latest trade updated_at for incremental fetching.
+  const tradeSinceRef = useRef<string | null>(null);
+
+  /** Map raw API trade objects to ReplayTrade rows. */
+  const mapRawTrades = useCallback(
+    (
+      rawTrades: Array<Record<string, unknown>>,
+      startSequence = 0
+    ): ReplayTrade[] =>
+      rawTrades
+        .map((t: Record<string, unknown>, idx: number): ReplayTrade | null => {
+          const timestamp = String(t.timestamp || '');
+          const parsedTime = parseUtcTimestamp(timestamp);
+          if (!timestamp || parsedTime === null) return null;
+          const rawDir = t.direction;
+          let mappedDirection: 'long' | 'short' | '';
+          if (
+            rawDir == null ||
+            rawDir === '' ||
+            String(rawDir).toLowerCase() === 'none'
+          ) {
+            mappedDirection = '';
+          } else {
+            const direction = String(rawDir).toLowerCase();
+            mappedDirection =
+              direction === 'buy'
+                ? 'long'
+                : direction === 'sell'
+                  ? 'short'
+                  : (direction as 'long' | 'short' | '');
+          }
+          return {
+            id: t.id ? String(t.id) : `${timestamp}-${idx}`,
+            sequence: startSequence + idx + 1,
+            timestamp,
+            timeSec: parsedTime,
+            instrument: String(t.instrument || instrument),
+            direction: mappedDirection,
+            units: String(t.units ?? ''),
+            price: String(t.price ?? ''),
+            execution_method: String(t.execution_method || ''),
+            execution_method_display: t.execution_method_display
+              ? String(t.execution_method_display)
+              : undefined,
+            layer_index:
+              t.layer_index === null || t.layer_index === undefined
+                ? null
+                : Number(t.layer_index),
+            retracement_count:
+              t.retracement_count === null || t.retracement_count === undefined
+                ? null
+                : Number(t.retracement_count),
+            position_id:
+              t.position_id === null || t.position_id === undefined
+                ? null
+                : String(t.position_id),
+          };
+        })
+        .filter((v): v is ReplayTrade => v !== null),
+    [instrument]
+  );
+
+  /** Extract the latest updated_at from raw trade records. */
+  const getLatestTradeUpdatedAt = (
+    rawTrades: Array<Record<string, unknown>>
+  ): string | null => {
+    let latest: string | null = null;
+    for (const t of rawTrades) {
+      const ua = t.updated_at as string | undefined;
+      if (ua && (!latest || ua > latest)) latest = ua;
+    }
+    return latest;
+  };
 
   const fetchReplayData = useCallback(async () => {
     const isInitialLoad = !hasLoadedOnce.current;
@@ -1145,79 +1230,67 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
       // Fetch trades — errors here never hide already-loaded candles.
       try {
-        const rawTrades = await fetchAllTrades(String(taskId), taskType);
+        const isIncrementalTrades =
+          !isInitialLoad && tradeSinceRef.current !== null;
 
-        const tradeRows: ReplayTrade[] = rawTrades
-          .map(
-            (t: Record<string, unknown>, idx: number): ReplayTrade | null => {
-              const timestamp = String(t.timestamp || '');
-              const parsedTime = parseUtcTimestamp(timestamp);
-              if (!timestamp || parsedTime === null) {
-                return null;
-              }
-              const rawDir = t.direction;
-              let mappedDirection: 'long' | 'short' | '';
-              if (
-                rawDir == null ||
-                rawDir === '' ||
-                String(rawDir).toLowerCase() === 'none'
-              ) {
-                mappedDirection = '';
-              } else {
-                const direction = String(rawDir).toLowerCase();
-                mappedDirection =
-                  direction === 'buy'
-                    ? 'long'
-                    : direction === 'sell'
-                      ? 'short'
-                      : (direction as 'long' | 'short' | '');
-              }
-              return {
-                id: t.id ? String(t.id) : `${timestamp}-${idx}`,
-                sequence: idx + 1,
-                timestamp,
-                timeSec: parsedTime,
-                instrument: String(t.instrument || instrument),
-                direction: mappedDirection,
-                units: String(t.units ?? ''),
-                price: String(t.price ?? ''),
-                execution_method: String(t.execution_method || ''),
-                execution_method_display: t.execution_method_display
-                  ? String(t.execution_method_display)
-                  : undefined,
-                layer_index:
-                  t.layer_index === null || t.layer_index === undefined
-                    ? null
-                    : Number(t.layer_index),
-                retracement_count:
-                  t.retracement_count === null ||
-                  t.retracement_count === undefined
-                    ? null
-                    : Number(t.retracement_count),
-                position_id:
-                  t.position_id === null || t.position_id === undefined
-                    ? null
-                    : String(t.position_id),
-              };
+        const rawTrades = isIncrementalTrades
+          ? await fetchTradesSince(
+              String(taskId),
+              taskType,
+              tradeSinceRef.current!,
+              celeryTaskId
+            )
+          : await fetchAllTrades(String(taskId), taskType, celeryTaskId);
+
+        // Track latest updated_at for next incremental poll.
+        const latestUa = getLatestTradeUpdatedAt(rawTrades);
+        if (
+          latestUa &&
+          (!tradeSinceRef.current || latestUa > tradeSinceRef.current)
+        ) {
+          tradeSinceRef.current = latestUa;
+        }
+
+        if (isIncrementalTrades && rawTrades.length > 0) {
+          // Merge new trades into existing array.
+          const incoming = mapRawTrades(rawTrades);
+          setTrades((prev) => {
+            const map = new Map(prev.map((t) => [t.id, t]));
+            for (const t of incoming) {
+              map.set(t.id, t);
             }
-          )
-          .filter((v): v is ReplayTrade => v !== null)
-          .sort(
+            const merged = Array.from(map.values()).sort(
+              (a, b) =>
+                new Date(a.timestamp).getTime() -
+                new Date(b.timestamp).getTime()
+            );
+            // Re-sequence after merge.
+            merged.forEach((t, i) => {
+              t.sequence = i + 1;
+            });
+            return merged;
+          });
+        } else if (!isIncrementalTrades) {
+          // Full replace (initial load).
+          const tradeRows = mapRawTrades(rawTrades).sort(
             (a, b) =>
               new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
           );
+          tradeRows.forEach((t, i) => {
+            t.sequence = i + 1;
+          });
 
-        setTrades((prev) => {
-          // Skip update if trade count and last trade ID are identical
-          if (
-            prev.length === tradeRows.length &&
-            prev.length > 0 &&
-            prev[prev.length - 1].id === tradeRows[tradeRows.length - 1].id
-          ) {
-            return prev;
-          }
-          return tradeRows;
-        });
+          setTrades((prev) => {
+            if (
+              prev.length === tradeRows.length &&
+              prev.length > 0 &&
+              prev[prev.length - 1].id === tradeRows[tradeRows.length - 1].id
+            ) {
+              return prev;
+            }
+            return tradeRows;
+          });
+        }
       } catch (tradeError) {
         // On the very first load when candles also failed, propagate.
         // Otherwise keep existing trades and log the warning.
@@ -1233,7 +1306,16 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [instrument, granularity, startTime, endTime, taskType, taskId]);
+  }, [
+    instrument,
+    granularity,
+    startTime,
+    endTime,
+    taskType,
+    taskId,
+    celeryTaskId,
+    mapRawTrades,
+  ]);
 
   useEffect(() => {
     fetchReplayData();
@@ -2281,7 +2363,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                 })}
                 {/* Fill empty rows to keep table height stable */}
                 {paginatedTrades.length < rowsPerPage &&
-                  paginatedTrades.length > 0 &&
                   Array.from({
                     length: rowsPerPage - paginatedTrades.length,
                   }).map((_, i) => (

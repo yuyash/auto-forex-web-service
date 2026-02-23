@@ -34,7 +34,7 @@ import { useToast } from '../common/useToast';
 import ConfirmDialog from '../common/ConfirmDialog';
 import type { Account } from '../../types/strategy';
 import { accountsApi } from '../../services/api/accounts';
-import type { OandaAccounts, OandaAccountsRequest } from '../../api/generated';
+import type { OandaAccounts, OandaAccountsRequest } from '../../api/types';
 
 interface AccountFormData {
   account_id: string;

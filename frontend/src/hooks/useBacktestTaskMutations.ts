@@ -8,7 +8,7 @@ import type {
   BacktestTaskUpdateData,
   BacktestTaskCopyData,
 } from '../types';
-import type { PatchedBacktestTaskCreateRequest } from '../api/generated';
+import type { PatchedBacktestTaskCreateRequest } from '../api/types';
 
 // Alias for backward compatibility after OpenAPI regeneration
 type PatchedBacktestTaskRequest = PatchedBacktestTaskCreateRequest;

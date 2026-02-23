@@ -61,6 +61,7 @@ class TradeSerializer(serializers.Serializer):
     retracement_count = serializers.IntegerField(required=False, allow_null=True)
     timestamp = serializers.DateTimeField()
     position_id = serializers.UUIDField(required=False, allow_null=True)
+    updated_at = serializers.DateTimeField(required=False, allow_null=True)
 
     def get_execution_method_display(self, obj: object) -> str:
         """Return the human-readable label for the execution method."""
@@ -92,6 +93,7 @@ class PositionSerializer(serializers.Serializer):
     layer_index = serializers.IntegerField(required=False, allow_null=True)
     retracement_count = serializers.IntegerField(required=False, allow_null=True)
     trade_ids = serializers.SerializerMethodField()
+    updated_at = serializers.DateTimeField(required=False, allow_null=True)
 
     def get_trade_ids(self, obj: object) -> list[str]:
         """Return the IDs of trades linked to this position."""

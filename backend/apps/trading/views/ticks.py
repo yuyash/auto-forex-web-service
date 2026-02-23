@@ -1,9 +1,8 @@
-"""Tick data views."""
+"""Tick data views for trading app."""
 
+import logging
 from datetime import datetime
-from logging import Logger, getLogger
 
-from django.db.models import Max, Min
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers, status
@@ -14,17 +13,24 @@ from rest_framework.views import APIView
 
 from apps.market.models import TickData
 
-logger: Logger = getLogger(name=__name__)
+logger = logging.getLogger(__name__)
 
 
-class TickDataView(APIView):
-    """API endpoint for fetching historical tick data from DB."""
+class TickListView(APIView):
+    """Return ticks for a given instrument, date range, and count.
+
+    Query parameters:
+        instrument (required): Currency pair, e.g. "USD_JPY"
+        from_time (optional): ISO-8601 start timestamp
+        to_time   (optional): ISO-8601 end timestamp
+        count     (optional): Max number of ticks to return (1-50000, default 5000)
+    """
 
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        operation_id="market_ticks",
-        tags=["Market"],
+        operation_id="trading_ticks_list",
+        tags=["Trading"],
         parameters=[
             OpenApiParameter(name="instrument", type=str, required=True),
             OpenApiParameter(name="from_time", type=str, required=False),
@@ -33,13 +39,13 @@ class TickDataView(APIView):
         ],
         responses={
             200: inline_serializer(
-                "MarketTickDataResponse",
+                "TradingTickDataResponse",
                 fields={
                     "count": serializers.IntegerField(),
                     "instrument": serializers.CharField(),
                     "ticks": serializers.ListField(
                         child=inline_serializer(
-                            "MarketTickItem",
+                            "TradingTickItem",
                             fields={
                                 "instrument": serializers.CharField(),
                                 "timestamp": serializers.CharField(),
@@ -52,25 +58,23 @@ class TickDataView(APIView):
                 },
             ),
         },
-        description="Fetch historical tick data from DB.",
+        description="Return ticks for a given instrument, date range, and count.",
     )
     def get(self, request: Request) -> Response:
         instrument = request.query_params.get("instrument")
-        from_time = request.query_params.get("from_time")
-        to_time = request.query_params.get("to_time")
-        count_raw = request.query_params.get("count", "5000")
-
         if not instrument:
             return Response(
                 {"error": "instrument parameter is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Parse count
+        count_raw = request.query_params.get("count", "5000")
         try:
             count = int(count_raw)
-            if count < 1 or count > 20000:
+            if count < 1 or count > 50000:
                 return Response(
-                    {"error": "count must be between 1 and 20000"},
+                    {"error": "count must be between 1 and 50000"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         except ValueError:
@@ -82,22 +86,23 @@ class TickDataView(APIView):
         try:
             queryset = TickData.objects.filter(instrument=instrument)
 
+            from_time = request.query_params.get("from_time")
             if from_time:
                 from_dt = datetime.fromisoformat(from_time.replace("Z", "+00:00"))
                 if timezone.is_naive(from_dt):
                     from_dt = timezone.make_aware(from_dt)
                 queryset = queryset.filter(timestamp__gte=from_dt)
 
+            to_time = request.query_params.get("to_time")
             if to_time:
                 to_dt = datetime.fromisoformat(to_time.replace("Z", "+00:00"))
                 if timezone.is_naive(to_dt):
                     to_dt = timezone.make_aware(to_dt)
                 queryset = queryset.filter(timestamp__lte=to_dt)
 
-            ticks = queryset.order_by("-timestamp").values(
+            ticks = queryset.order_by("timestamp").values(
                 "instrument", "timestamp", "bid", "ask", "mid"
             )[:count]
-            tick_rows = list(reversed(list(ticks)))
 
             results = [
                 {
@@ -107,7 +112,7 @@ class TickDataView(APIView):
                     "ask": str(row["ask"]),
                     "mid": str(row["mid"]),
                 }
-                for row in tick_rows
+                for row in ticks
             ]
 
             return Response(
@@ -119,79 +124,12 @@ class TickDataView(APIView):
             )
         except ValueError:
             return Response(
-                {"error": "Invalid time format"},
+                {"error": "Invalid time format. Use ISO-8601."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception as exc:
             logger.error("Error fetching ticks: %s", exc, exc_info=True)
             return Response(
-                {"error": f"Failed to fetch ticks: {str(exc)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-
-class TickDataRangeView(APIView):
-    """API endpoint returning the available date range of tick data per instrument."""
-
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        operation_id="market_ticks_range",
-        tags=["Market"],
-        parameters=[
-            OpenApiParameter(name="instrument", type=str, required=True),
-        ],
-        responses={
-            200: inline_serializer(
-                "TickDataRangeResponse",
-                fields={
-                    "instrument": serializers.CharField(),
-                    "has_data": serializers.BooleanField(),
-                    "min_timestamp": serializers.DateTimeField(allow_null=True),
-                    "max_timestamp": serializers.DateTimeField(allow_null=True),
-                },
-            ),
-        },
-        description="Get available date range of tick data per instrument.",
-    )
-    def get(self, request: Request) -> Response:
-        instrument = request.query_params.get("instrument")
-        if not instrument:
-            return Response(
-                {"error": "instrument parameter is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            agg = TickData.objects.filter(instrument=instrument).aggregate(
-                min_timestamp=Min("timestamp"),
-                max_timestamp=Max("timestamp"),
-            )
-
-            min_ts = agg["min_timestamp"]
-            max_ts = agg["max_timestamp"]
-
-            if min_ts is None or max_ts is None:
-                return Response(
-                    {
-                        "instrument": instrument,
-                        "has_data": False,
-                        "min_timestamp": None,
-                        "max_timestamp": None,
-                    }
-                )
-
-            return Response(
-                {
-                    "instrument": instrument,
-                    "has_data": True,
-                    "min_timestamp": min_ts.isoformat().replace("+00:00", "Z"),
-                    "max_timestamp": max_ts.isoformat().replace("+00:00", "Z"),
-                }
-            )
-        except Exception as exc:
-            logger.error("Error fetching tick data range: %s", exc, exc_info=True)
-            return Response(
-                {"error": f"Failed to fetch tick data range: {str(exc)}"},
+                {"error": f"Failed to fetch ticks: {exc}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

@@ -5,7 +5,6 @@ from logging import Logger
 from typing import Any
 
 from django.db.models import Q, QuerySet
-from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -24,31 +23,6 @@ from apps.trading.views.mixins import TaskSubResourceMixin
 logger: Logger = logging.getLogger(name=__name__)
 
 
-@extend_schema_view(
-    list=extend_schema(
-        parameters=[
-            OpenApiParameter(
-                name="status", type=str, required=False, description="Filter by task status"
-            ),
-            OpenApiParameter(
-                name="config_id", type=str, required=False, description="Filter by configuration ID"
-            ),
-            OpenApiParameter(
-                name="search", type=str, required=False, description="Search in name or description"
-            ),
-            OpenApiParameter(
-                name="ordering",
-                type=str,
-                required=False,
-                description="Ordering field (e.g. -created_at)",
-            ),
-            OpenApiParameter(name="page", type=int, required=False, description="Page number"),
-            OpenApiParameter(
-                name="page_size", type=int, required=False, description="Number of results per page"
-            ),
-        ],
-    ),
-)
 class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
     """
     ViewSet for BacktestTask operations with task-centric API.
@@ -125,11 +99,6 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
             logger.error(f"Unexpected error creating backtest task: {type(e).__name__}: {e}")
             raise
 
-    @extend_schema(
-        summary="Submit task for execution",
-        description="Submit a pending task to Celery for execution. Only tasks in CREATED status can be submitted. Use restart or resume for STOPPED tasks.",
-        responses={200: BacktestTaskSerializer, 400: dict, 500: dict},
-    )
     @action(detail=True, methods=["post"])
     def start(self, request: Request, pk: int | None = None) -> Response:
         """Submit task for execution."""
@@ -209,11 +178,6 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @extend_schema(
-        summary="Stop running task",
-        description="Stop a currently running or paused task asynchronously",
-        responses={202: dict, 400: dict, 404: dict, 500: dict},
-    )
     @action(detail=True, methods=["post"])
     def stop(self, request: Request, pk: int | None = None) -> Response:
         """Stop running task asynchronously."""
@@ -267,11 +231,6 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @extend_schema(
-        summary="Pause running task",
-        description="Pause a running task, preserving execution state",
-        responses={200: BacktestTaskSerializer, 400: dict},
-    )
     @action(detail=True, methods=["post"])
     def pause(self, request: Request, pk: int | None = None) -> Response:
         """Pause running task."""
@@ -318,11 +277,50 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-    @extend_schema(
-        summary="Restart task from beginning",
-        description="Restart a task from the beginning, clearing all execution data",
-        responses={200: BacktestTaskSerializer, 400: dict, 404: dict, 500: dict},
-    )
+    @action(detail=True, methods=["get"], url_path="current-tick")
+    def current_tick(self, request: Request, pk: int | None = None) -> Response:
+        """Return the current tick for a running (or recently stopped) task.
+
+        Reads the latest tick from ExecutionState so the frontend can
+        display chart progress without fetching the full task payload.
+        """
+        from apps.trading.models.state import ExecutionState
+
+        task = self.get_object()
+
+        if not task.celery_task_id:
+            return Response(
+                {"error": "Task has no execution state yet"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        state = ExecutionState.objects.filter(
+            task_type="backtest",
+            task_id=task.pk,
+            celery_task_id=task.celery_task_id,
+        ).first()
+
+        if not state or not state.last_tick_timestamp:
+            return Response(
+                {"error": "No tick data available for this task"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "task_id": str(task.pk),
+                "task_type": "backtest",
+                "status": task.status,
+                "current_tick": {
+                    "timestamp": state.last_tick_timestamp.isoformat(),
+                    "price": (
+                        str(state.last_tick_price) if state.last_tick_price is not None else None
+                    ),
+                },
+                "ticks_processed": state.ticks_processed,
+            }
+        )
+
     @action(detail=True, methods=["post"])
     def restart(self, request: Request, pk: int | None = None) -> Response:
         """Restart task from beginning."""
@@ -378,11 +376,6 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @extend_schema(
-        summary="Resume paused task",
-        description="Resume a paused task, continuing execution from where it left off",
-        responses={200: BacktestTaskSerializer, 400: dict, 404: dict, 500: dict},
-    )
     @action(detail=True, methods=["post"])
     def resume(self, request: Request, pk: int | None = None) -> Response:
         """Resume paused task."""

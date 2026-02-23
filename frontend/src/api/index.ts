@@ -1,11 +1,17 @@
 /**
  * API Client Module
  *
- * Exports the generated OpenAPI client and wrapper utilities.
+ * Exports the API client, configuration, and types.
  */
 
-// Export generated client
-export * from './generated';
+// Export API types
+export * from './types';
+
+// Export API client
+export { api, ApiError } from './apiClient';
+
+// Export API config
+export { apiConfig, getAuthHeaders, resolveToken } from './apiConfig';
 
 // Export wrapper utilities
 export {

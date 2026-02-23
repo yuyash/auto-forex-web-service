@@ -13,8 +13,8 @@ import {
   withRetry,
   ApiErrorType,
 } from '../../../src/api/client';
-import { OpenAPI } from '../../../src/api/generated/core/OpenAPI';
-import { ApiError } from '../../../src/api/generated/core/ApiError';
+import { apiConfig } from '../../../src/api/apiConfig';
+import { ApiError } from '../../../src/api/apiClient';
 
 describe('API Client Configuration', () => {
   beforeEach(() => {
@@ -30,22 +30,22 @@ describe('API Client Configuration', () => {
     const baseUrl = 'https://api.example.com';
     configureApiClient({ baseUrl });
 
-    expect(OpenAPI.BASE).toBe(baseUrl);
+    expect(apiConfig.BASE).toBe(baseUrl);
   });
 
   it('should configure credentials', () => {
     configureApiClient({ withCredentials: false });
-    expect(OpenAPI.WITH_CREDENTIALS).toBe(false);
+    expect(apiConfig.WITH_CREDENTIALS).toBe(false);
 
     configureApiClient({ withCredentials: true });
-    expect(OpenAPI.WITH_CREDENTIALS).toBe(true);
+    expect(apiConfig.WITH_CREDENTIALS).toBe(true);
   });
 
   it('should configure authentication token', () => {
     const token = 'test-token-123';
     configureApiClient({ token });
 
-    expect(OpenAPI.TOKEN).toBe(token);
+    expect(apiConfig.TOKEN).toBe(token);
   });
 
   it('should merge configuration with defaults', () => {
@@ -53,7 +53,7 @@ describe('API Client Configuration', () => {
     configureApiClient({ baseUrl });
 
     // Other defaults should remain
-    expect(OpenAPI.WITH_CREDENTIALS).toBe(true);
+    expect(apiConfig.WITH_CREDENTIALS).toBe(true);
   });
 });
 
@@ -67,7 +67,7 @@ describe('Authentication Token Management', () => {
     setAuthToken(token);
 
     expect(getAuthToken()).toBe(token);
-    expect(OpenAPI.TOKEN).toBe(token);
+    expect(apiConfig.TOKEN).toBe(token);
   });
 
   it('should clear authentication token', () => {
@@ -75,7 +75,7 @@ describe('Authentication Token Management', () => {
     clearAuthToken();
 
     expect(getAuthToken()).toBe('');
-    expect(OpenAPI.TOKEN).toBeUndefined();
+    expect(apiConfig.TOKEN).toBeUndefined();
   });
 
   it('should check if user is authenticated', () => {
@@ -96,20 +96,9 @@ describe('Authentication Token Management', () => {
 
 describe('Error Transformation', () => {
   it('should transform 401 authentication error', () => {
-    const apiError = new ApiError(
-      {
-        method: 'GET',
-        url: '/api/test',
-      },
-      {
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized',
-        url: '/api/test',
-        body: { detail: 'Invalid token' },
-      } as Response,
-      'Authentication failed'
-    );
+    const apiError = new ApiError('/api/test', 401, 'Unauthorized', {
+      detail: 'Invalid token',
+    });
 
     const transformed = transformApiError(apiError);
 
@@ -120,20 +109,9 @@ describe('Error Transformation', () => {
   });
 
   it('should transform 403 authorization error', () => {
-    const apiError = new ApiError(
-      {
-        method: 'GET',
-        url: '/api/test',
-      },
-      {
-        ok: false,
-        status: 403,
-        statusText: 'Forbidden',
-        url: '/api/test',
-        body: { detail: 'Permission denied' },
-      } as Response,
-      'Authorization failed'
-    );
+    const apiError = new ApiError('/api/test', 403, 'Forbidden', {
+      detail: 'Permission denied',
+    });
 
     const transformed = transformApiError(apiError);
 
@@ -143,20 +121,9 @@ describe('Error Transformation', () => {
   });
 
   it('should transform 404 not found error', () => {
-    const apiError = new ApiError(
-      {
-        method: 'GET',
-        url: '/api/test/123',
-      },
-      {
-        ok: false,
-        status: 404,
-        statusText: 'Not Found',
-        url: '/api/test/123',
-        body: { detail: 'Resource not found' },
-      } as Response,
-      'Not found'
-    );
+    const apiError = new ApiError('/api/test/123', 404, 'Not Found', {
+      detail: 'Resource not found',
+    });
 
     const transformed = transformApiError(apiError);
 
@@ -166,20 +133,9 @@ describe('Error Transformation', () => {
   });
 
   it('should transform 422 validation error', () => {
-    const apiError = new ApiError(
-      {
-        method: 'POST',
-        url: '/api/test',
-      },
-      {
-        ok: false,
-        status: 422,
-        statusText: 'Unprocessable Entity',
-        url: '/api/test',
-        body: { errors: [{ field: 'name', message: 'Required' }] },
-      } as Response,
-      'Validation failed'
-    );
+    const apiError = new ApiError('/api/test', 422, 'Unprocessable Entity', {
+      errors: [{ field: 'name', message: 'Required' }],
+    });
 
     const transformed = transformApiError(apiError);
 
@@ -190,20 +146,9 @@ describe('Error Transformation', () => {
   });
 
   it('should transform 500 server error', () => {
-    const apiError = new ApiError(
-      {
-        method: 'GET',
-        url: '/api/test',
-      },
-      {
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-        url: '/api/test',
-        body: { detail: 'Server error' },
-      } as Response,
-      'Server error'
-    );
+    const apiError = new ApiError('/api/test', 500, 'Internal Server Error', {
+      detail: 'Server error',
+    });
 
     const transformed = transformApiError(apiError);
 
@@ -259,14 +204,10 @@ describe('Retry Logic', () => {
 
   it('should retry on server error (500)', async () => {
     const serverError = new ApiError(
-      { method: 'GET', url: '/api/test' },
-      {
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-        url: '/api/test',
-      } as Response,
-      'Server error'
+      '/api/test',
+      500,
+      'Internal Server Error',
+      null
     );
 
     const mockFn = vi
@@ -284,16 +225,7 @@ describe('Retry Logic', () => {
   });
 
   it('should not retry on authentication error (401)', async () => {
-    const authError = new ApiError(
-      { method: 'GET', url: '/api/test' },
-      {
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized',
-        url: '/api/test',
-      } as Response,
-      'Authentication failed'
-    );
+    const authError = new ApiError('/api/test', 401, 'Unauthorized', null);
 
     const mockFn = vi.fn().mockRejectedValue(authError);
 
@@ -308,14 +240,10 @@ describe('Retry Logic', () => {
 
   it('should not retry on validation error (422)', async () => {
     const validationError = new ApiError(
-      { method: 'POST', url: '/api/test' },
-      {
-        ok: false,
-        status: 422,
-        statusText: 'Unprocessable Entity',
-        url: '/api/test',
-      } as Response,
-      'Validation failed'
+      '/api/test',
+      422,
+      'Unprocessable Entity',
+      null
     );
 
     const mockFn = vi.fn().mockRejectedValue(validationError);
@@ -371,36 +299,5 @@ describe('Retry Logic', () => {
 
     expect(result).toBe('success');
     expect(mockFn).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('Headers Configuration', () => {
-  it('should include authorization header when token is set', async () => {
-    const token = 'test-token-789';
-    setAuthToken(token);
-
-    // OpenAPI.HEADERS should be a function that returns headers
-    if (typeof OpenAPI.HEADERS === 'function') {
-      const headers = await OpenAPI.HEADERS();
-      expect(headers['Authorization']).toBe(`Bearer ${token}`);
-    }
-  });
-
-  it('should include content-type header', async () => {
-    configureApiClient({});
-
-    if (typeof OpenAPI.HEADERS === 'function') {
-      const headers = await OpenAPI.HEADERS();
-      expect(headers['Content-Type']).toBe('application/json');
-    }
-  });
-
-  it('should not include authorization header when no token', async () => {
-    clearAuthToken();
-
-    if (typeof OpenAPI.HEADERS === 'function') {
-      const headers = await OpenAPI.HEADERS();
-      expect(headers['Authorization']).toBeUndefined();
-    }
   });
 });

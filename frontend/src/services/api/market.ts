@@ -2,27 +2,7 @@
  * Market API service for direct HTTP requests to /api/market/ endpoints.
  */
 
-import { OpenAPI } from '../../api/generated/core/OpenAPI';
-
-async function getHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-
-  if (typeof OpenAPI.TOKEN === 'string' && OpenAPI.TOKEN) {
-    headers['Authorization'] = `Bearer ${OpenAPI.TOKEN}`;
-  } else if (typeof OpenAPI.TOKEN === 'function') {
-    const token = await OpenAPI.TOKEN({
-      method: 'GET',
-      url: '',
-    } as Parameters<Exclude<typeof OpenAPI.TOKEN, string | undefined>>[0]);
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-  }
-
-  return headers;
-}
+import { apiConfig, getAuthHeaders } from '../../api/apiConfig';
 
 export interface TickDataRange {
   instrument: string;
@@ -37,14 +17,14 @@ export interface TickDataRange {
 export async function fetchTickDataRange(
   instrument: string
 ): Promise<TickDataRange> {
-  const base = OpenAPI.BASE || '';
+  const base = apiConfig.BASE || '';
   const url = `${base}/api/market/ticks/data-range/?instrument=${encodeURIComponent(instrument)}`;
-  const headers = await getHeaders();
+  const headers = await getAuthHeaders();
 
   const response = await fetch(url, {
     method: 'GET',
     headers,
-    credentials: OpenAPI.WITH_CREDENTIALS ? 'include' : 'same-origin',
+    credentials: apiConfig.WITH_CREDENTIALS ? 'include' : 'same-origin',
   });
 
   if (!response.ok) {
