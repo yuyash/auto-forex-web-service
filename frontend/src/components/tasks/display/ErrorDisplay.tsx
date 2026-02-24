@@ -120,11 +120,7 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
       onClose={onDismiss}
       action={
         hasDetails ? (
-          <IconButton
-            size="small"
-            onClick={() => setExpanded(!expanded)}
-            sx={{ ml: 1 }}
-          >
+          <IconButton onClick={() => setExpanded(!expanded)} sx={{ ml: 1 }}>
             {expanded ? <ExpandLess /> : <ExpandMore />}
           </IconButton>
         ) : undefined

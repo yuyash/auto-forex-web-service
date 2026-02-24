@@ -59,7 +59,6 @@ const ParametersForm = ({
               label={strategyType
                 .replace(/_/g, ' ')
                 .replace(/\b\w/g, (l) => l.toUpperCase())}
-              size="small"
               color="primary"
               variant="outlined"
             />

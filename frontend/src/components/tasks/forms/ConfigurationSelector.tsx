@@ -110,7 +110,6 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
           }}
         >
           <TextField
-            size="small"
             placeholder="Search configurations..."
             value={searchTerm}
             onChange={(e) => {

@@ -490,7 +490,7 @@ export function TaskPerformanceTab({ task }: TaskPerformanceTabProps) {
             )}
           </Typography>
 
-          <FormControl size="small" sx={{ minWidth: 120 }}>
+          <FormControl sx={{ minWidth: 120 }}>
             <InputLabel id="date-range-label">Date Range</InputLabel>
             <Select
               labelId="date-range-label"

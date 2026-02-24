@@ -6,15 +6,18 @@ import {
   Box,
   Paper,
   Alert,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
   Switch,
-  FormControlLabel,
+  IconButton,
+  Popover,
+  MenuList,
+  ListItemText,
+  Tooltip,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
-import type { SelectChangeEvent } from '@mui/material/Select';
+import CurrencyExchangeIcon from '@mui/icons-material/CurrencyExchange';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import TimerIcon from '@mui/icons-material/Timer';
 import { useTranslation } from 'react-i18next';
 import { useOandaAccounts } from '../hooks/useOandaAccounts';
 import { useChartPreferences } from '../hooks/useChartPreferences';
@@ -23,6 +26,10 @@ import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
 import RecentBacktestsWidget from '../components/dashboard/RecentBacktestsWidget';
 import QuickActionsWidget from '../components/dashboard/QuickActionsWidget';
 import MarketChart from '../components/dashboard/MarketChart';
+import ChartOverlayControls, {
+  DEFAULT_OVERLAY_SETTINGS,
+  type OverlaySettings,
+} from '../components/dashboard/ChartOverlayControls';
 import type { Granularity } from '../types/chart';
 
 const DashboardPage = () => {
@@ -34,6 +41,9 @@ const DashboardPage = () => {
 
   // Data state
   const [error] = useState<string | null>(null);
+  const [overlays, setOverlays] = useState<OverlaySettings>(
+    DEFAULT_OVERLAY_SETTINGS
+  );
 
   // OANDA account state - using shared hook with caching
   const {
@@ -66,9 +76,18 @@ const DashboardPage = () => {
     accountId: oandaAccountId,
   });
 
+  // Popover anchors
+  const [instrumentAnchor, setInstrumentAnchor] =
+    useState<HTMLButtonElement | null>(null);
+  const [granularityAnchor, setGranularityAnchor] =
+    useState<HTMLButtonElement | null>(null);
+  const [intervalAnchor, setIntervalAnchor] =
+    useState<HTMLButtonElement | null>(null);
+
   // Handle refresh interval change
-  const handleRefreshIntervalChange = (event: SelectChangeEvent<number>) => {
-    updatePreference('refreshInterval', Number(event.target.value));
+  const handleRefreshIntervalChange = (val: number) => {
+    updatePreference('refreshInterval', val);
+    setIntervalAnchor(null);
   };
 
   // Handle auto-refresh toggle
@@ -79,13 +98,15 @@ const DashboardPage = () => {
   };
 
   // Handle instrument change
-  const handleInstrumentChange = (event: SelectChangeEvent<string>) => {
-    updatePreference('instrument', event.target.value);
+  const handleInstrumentChange = (val: string) => {
+    updatePreference('instrument', val);
+    setInstrumentAnchor(null);
   };
 
   // Handle granularity change
-  const handleGranularityChange = (event: SelectChangeEvent<string>) => {
-    updatePreference('granularity', event.target.value as Granularity);
+  const handleGranularityChange = (val: string) => {
+    updatePreference('granularity', val as Granularity);
+    setGranularityAnchor(null);
   };
 
   return (
@@ -150,21 +171,27 @@ const DashboardPage = () => {
             Market Chart
           </Typography>
 
-          <FormControl
-            size="small"
-            sx={{
-              minWidth: 110,
-              '& .MuiInputLabel-root': { fontSize: '0.8rem' },
-              '& .MuiSelect-select': { fontSize: '0.8rem', py: 0.5 },
-            }}
+          <ChartOverlayControls settings={overlays} onChange={setOverlays} />
+
+          {/* Instrument */}
+          <Tooltip
+            title={`Instrument: ${preferences.instrument.replace('_', '/')}`}
           >
-            <InputLabel id="instrument-label">Instrument</InputLabel>
-            <Select
-              labelId="instrument-label"
-              value={preferences.instrument}
-              label="Instrument"
-              onChange={handleInstrumentChange}
+            <IconButton
+              size="small"
+              onClick={(e) => setInstrumentAnchor(e.currentTarget)}
+              aria-label="Select instrument"
             >
+              <CurrencyExchangeIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Popover
+            open={Boolean(instrumentAnchor)}
+            anchorEl={instrumentAnchor}
+            onClose={() => setInstrumentAnchor(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+          >
+            <MenuList dense>
               {[
                 'USD_JPY',
                 'EUR_USD',
@@ -173,28 +200,34 @@ const DashboardPage = () => {
                 'EUR_JPY',
                 'GBP_JPY',
               ].map((v) => (
-                <MenuItem key={v} value={v} sx={{ fontSize: '0.8rem' }}>
-                  {v.replace('_', '/')}
+                <MenuItem
+                  key={v}
+                  selected={v === preferences.instrument}
+                  onClick={() => handleInstrumentChange(v)}
+                >
+                  <ListItemText>{v.replace('_', '/')}</ListItemText>
                 </MenuItem>
               ))}
-            </Select>
-          </FormControl>
+            </MenuList>
+          </Popover>
 
-          <FormControl
-            size="small"
-            sx={{
-              minWidth: 100,
-              '& .MuiInputLabel-root': { fontSize: '0.8rem' },
-              '& .MuiSelect-select': { fontSize: '0.8rem', py: 0.5 },
-            }}
-          >
-            <InputLabel id="granularity-label">Granularity</InputLabel>
-            <Select
-              labelId="granularity-label"
-              value={preferences.granularity}
-              label="Granularity"
-              onChange={handleGranularityChange}
+          {/* Granularity */}
+          <Tooltip title={`Granularity: ${preferences.granularity}`}>
+            <IconButton
+              size="small"
+              onClick={(e) => setGranularityAnchor(e.currentTarget)}
+              aria-label="Select granularity"
             >
+              <BarChartIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Popover
+            open={Boolean(granularityAnchor)}
+            anchorEl={granularityAnchor}
+            onClose={() => setGranularityAnchor(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+          >
+            <MenuList dense>
               {(
                 [
                   'M1',
@@ -207,61 +240,62 @@ const DashboardPage = () => {
                   'W',
                 ] as Granularity[]
               ).map((v) => (
-                <MenuItem key={v} value={v} sx={{ fontSize: '0.8rem' }}>
-                  {v}
+                <MenuItem
+                  key={v}
+                  selected={v === preferences.granularity}
+                  onClick={() => handleGranularityChange(v)}
+                >
+                  <ListItemText>{v}</ListItemText>
                 </MenuItem>
               ))}
-            </Select>
-          </FormControl>
+            </MenuList>
+          </Popover>
 
-          <FormControlLabel
-            control={
-              <Switch
-                checked={autoRefreshEnabled}
-                onChange={handleAutoRefreshToggle}
-                size="small"
-              />
-            }
-            label="Auto-refresh"
-            sx={{
-              ml: 0.5,
-              '& .MuiFormControlLabel-label': { fontSize: '0.8rem' },
-            }}
+          {/* Auto-refresh toggle */}
+          <Switch
+            size="small"
+            checked={autoRefreshEnabled}
+            onChange={handleAutoRefreshToggle}
+            inputProps={{ 'aria-label': 'Auto-refresh' }}
           />
 
-          <FormControl
-            size="small"
-            sx={{
-              minWidth: 100,
-              '& .MuiInputLabel-root': { fontSize: '0.8rem' },
-              '& .MuiSelect-select': { fontSize: '0.8rem', py: 0.5 },
-            }}
+          {/* Refresh interval */}
+          <Tooltip title={`Interval: ${refreshInterval}s`}>
+            <span>
+              <IconButton
+                size="small"
+                onClick={(e) => setIntervalAnchor(e.currentTarget)}
+                disabled={!autoRefreshEnabled}
+                aria-label="Select refresh interval"
+              >
+                <TimerIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Popover
+            open={Boolean(intervalAnchor)}
+            anchorEl={intervalAnchor}
+            onClose={() => setIntervalAnchor(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           >
-            <InputLabel id="refresh-interval-label">Interval</InputLabel>
-            <Select
-              labelId="refresh-interval-label"
-              value={refreshInterval}
-              label="Interval"
-              onChange={handleRefreshIntervalChange}
-              disabled={!autoRefreshEnabled}
-            >
-              <MenuItem value={10} sx={{ fontSize: '0.8rem' }}>
-                10s
-              </MenuItem>
-              <MenuItem value={30} sx={{ fontSize: '0.8rem' }}>
-                30s
-              </MenuItem>
-              <MenuItem value={60} sx={{ fontSize: '0.8rem' }}>
-                1min
-              </MenuItem>
-              <MenuItem value={120} sx={{ fontSize: '0.8rem' }}>
-                2min
-              </MenuItem>
-              <MenuItem value={300} sx={{ fontSize: '0.8rem' }}>
-                5min
-              </MenuItem>
-            </Select>
-          </FormControl>
+            <MenuList dense>
+              {[
+                { v: 10, l: '10s' },
+                { v: 30, l: '30s' },
+                { v: 60, l: '1min' },
+                { v: 120, l: '2min' },
+                { v: 300, l: '5min' },
+              ].map(({ v, l }) => (
+                <MenuItem
+                  key={v}
+                  selected={v === refreshInterval}
+                  onClick={() => handleRefreshIntervalChange(v)}
+                >
+                  <ListItemText>{l}</ListItemText>
+                </MenuItem>
+              ))}
+            </MenuList>
+          </Popover>
         </Box>
 
         <Box
@@ -296,6 +330,7 @@ const DashboardPage = () => {
               fillHeight
               autoRefresh={autoRefreshEnabled}
               refreshInterval={refreshInterval}
+              overlays={overlays}
             />
           )}
         </Box>

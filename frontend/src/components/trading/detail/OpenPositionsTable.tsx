@@ -119,7 +119,7 @@ export function OpenPositionsTable({
       </Typography>
 
       <TableContainer>
-        <Table size="small">
+        <Table>
           <TableHead>
             <TableRow>
               <TableCell>Instrument</TableCell>
@@ -146,7 +146,6 @@ export function OpenPositionsTable({
                   <TableCell>
                     <Chip
                       label={position.direction.toUpperCase()}
-                      size="small"
                       color={
                         position.direction === 'long' ? 'success' : 'error'
                       }

@@ -322,11 +322,7 @@ function DataTable<T extends object>({
         <TableContainer
           sx={{ maxHeight: tableMaxHeight ?? 'calc(100vh - 640px)' }}
         >
-          <Table
-            size="small"
-            stickyHeader={stickyHeader}
-            sx={{ tableLayout: 'fixed' }}
-          >
+          <Table stickyHeader={stickyHeader} sx={{ tableLayout: 'fixed' }}>
             <TableHead>
               <TableRow>
                 {selectable && (
@@ -395,11 +391,7 @@ function DataTable<T extends object>({
       <TableContainer
         sx={{ maxHeight: tableMaxHeight ?? 'calc(100vh - 640px)' }}
       >
-        <Table
-          size="small"
-          stickyHeader={stickyHeader}
-          sx={{ tableLayout: 'fixed' }}
-        >
+        <Table stickyHeader={stickyHeader} sx={{ tableLayout: 'fixed' }}>
           <TableHead>
             <TableRow>
               {selectable && (
@@ -408,7 +400,6 @@ function DataTable<T extends object>({
                   sx={{ width: 50, textAlign: 'center' }}
                 >
                   <Checkbox
-                    size="small"
                     checked={allPageSelected}
                     indeterminate={indeterminate}
                     onChange={onToggleAll}
@@ -450,7 +441,6 @@ function DataTable<T extends object>({
                   >
                     {column.filterable && (
                       <TextField
-                        size="small"
                         placeholder={`Filter ${column.label}`}
                         value={filters[String(column.id)] || ''}
                         onChange={(e) =>
@@ -498,7 +488,6 @@ function DataTable<T extends object>({
                     {selectable && (
                       <TableCell padding="none" sx={{ textAlign: 'center' }}>
                         <Checkbox
-                          size="small"
                           checked={isChecked}
                           onChange={() => rowId != null && onToggleRow?.(rowId)}
                           onClick={(e) => e.stopPropagation()}

@@ -168,11 +168,7 @@ const ConfigurationsPage = () => {
           sx={{ mb: 3 }}
           action={
             !error.message.toLowerCase().includes('connection refused') && (
-              <Button
-                color="inherit"
-                size="small"
-                onClick={() => window.location.reload()}
-              >
+              <Button color="inherit" onClick={() => window.location.reload()}>
                 Reload
               </Button>
             )

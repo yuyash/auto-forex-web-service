@@ -306,7 +306,6 @@ export default function BacktestTasksPage() {
                     page={page}
                     onChange={handlePageChange}
                     color="primary"
-                    size="large"
                   />
                 </Box>
               )}
@@ -347,7 +346,6 @@ export default function BacktestTasksPage() {
                     page={page}
                     onChange={handlePageChange}
                     color="primary"
-                    size="large"
                   />
                 </Box>
               )}
@@ -388,7 +386,6 @@ export default function BacktestTasksPage() {
                     page={page}
                     onChange={handlePageChange}
                     color="primary"
-                    size="large"
                   />
                 </Box>
               )}
@@ -429,7 +426,6 @@ export default function BacktestTasksPage() {
                     page={page}
                     onChange={handlePageChange}
                     color="primary"
-                    size="large"
                   />
                 </Box>
               )}

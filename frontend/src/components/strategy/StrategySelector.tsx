@@ -114,7 +114,7 @@ const StrategySelector = ({
                             strategy.name}
                         </Typography>
                         {isSelected && (
-                          <Chip label="Selected" color="primary" size="small" />
+                          <Chip label="Selected" color="primary" />
                         )}
                       </Box>
                       <Typography

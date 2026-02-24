@@ -92,16 +92,17 @@ function AppRoutes() {
   return (
     <Suspense fallback={<PageLoadingFallback />}>
       <Routes>
-        {/* Public routes - conditionally rendered based on system settings */}
-        {systemSettings?.login_enabled && (
+        {/* Public routes - always render login when settings are unavailable
+            or explicitly enabled, so that auth fallback never hits a dead route */}
+        {(!systemSettings || systemSettings.login_enabled) && (
           <Route path="/login" element={<LoginPage />} />
         )}
         {systemSettings?.registration_enabled && (
           <Route path="/register" element={<RegisterPage />} />
         )}
 
-        {/* Redirect to login if routes are disabled */}
-        {!systemSettings?.login_enabled && (
+        {/* Redirect away only when settings are loaded AND login is disabled */}
+        {systemSettings && !systemSettings.login_enabled && (
           <Route
             path="/login"
             element={

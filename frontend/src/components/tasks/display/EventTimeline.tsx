@@ -185,7 +185,6 @@ const EventItem: React.FC<{ event: BacktestStrategyEvent; index: number }> = ({
           </Typography>
           <Chip
             label={config.label}
-            size="small"
             color={
               config.color as
                 | 'default'
@@ -230,7 +229,7 @@ const EventItem: React.FC<{ event: BacktestStrategyEvent; index: number }> = ({
 
         {event.instrument && (
           <Box sx={{ pl: 5, mt: 1 }}>
-            <Chip label={event.instrument} size="small" variant="outlined" />
+            <Chip label={event.instrument} variant="outlined" />
           </Box>
         )}
       </Box>
@@ -321,15 +320,11 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Tooltip title={showFilters ? 'Hide Filters' : 'Show Filters'}>
-              <IconButton
-                onClick={() => setShowFilters(!showFilters)}
-                size="small"
-              >
+              <IconButton onClick={() => setShowFilters(!showFilters)}>
                 <FilterIcon />
                 {activeFiltersCount > 0 && (
                   <Chip
                     label={activeFiltersCount}
-                    size="small"
                     color="primary"
                     sx={{
                       position: 'absolute',
@@ -362,7 +357,6 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                 <Chip
                   key={type}
                   label={`${config.label}: ${count}`}
-                  size="small"
                   color={
                     config.color as
                       | 'default'
@@ -387,7 +381,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
           >
             <Stack spacing={2}>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <FormControl size="small" sx={{ minWidth: 200 }}>
+                <FormControl sx={{ minWidth: 200 }}>
                   <InputLabel>Event Type</InputLabel>
                   <Select
                     value={eventTypeFilter}
@@ -411,7 +405,6 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                     variant="outlined"
                     startIcon={<ClearIcon />}
                     onClick={handleClearFilters}
-                    size="small"
                   >
                     Clear Filters
                   </Button>

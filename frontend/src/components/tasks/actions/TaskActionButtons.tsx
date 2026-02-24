@@ -100,7 +100,6 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
           startIcon={<PlayArrow />}
           onClick={onStart}
           disabled={actionDisabled}
-          size="small"
           aria-label="Start task"
         >
           Start
@@ -116,7 +115,6 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
             startIcon={<PlayCircleOutline />}
             onClick={onResume}
             disabled={actionDisabled}
-            size="small"
             aria-label="Resume task"
           >
             Resume
@@ -140,7 +138,6 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
             startIcon={<RestartAlt />}
             onClick={onRestart}
             disabled={actionDisabled}
-            size="small"
             aria-label="Restart task"
           >
             Restart
@@ -156,7 +153,6 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
           startIcon={<Stop />}
           onClick={onStop}
           disabled={actionDisabled}
-          size="small"
           aria-label="Stop task"
         >
           Stop
@@ -172,7 +168,6 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
             startIcon={<Pause />}
             onClick={onPause}
             disabled={actionDisabled}
-            size="small"
             aria-label="Pause task"
           >
             Pause
@@ -188,7 +183,6 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
           startIcon={<Refresh />}
           onClick={onRerun}
           disabled={actionDisabled}
-          size="small"
           aria-label="Rerun task"
         >
           Rerun
@@ -203,7 +197,6 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
           startIcon={<Delete />}
           onClick={onDelete}
           disabled={deleteDisabled}
-          size="small"
           aria-label="Delete task"
         >
           Delete

@@ -128,7 +128,6 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
               {configuration.name}
             </Typography>
             <IconButton
-              size="small"
               onClick={(e) => {
                 e.stopPropagation();
                 handleMenuOpen(e);
@@ -144,7 +143,6 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
             <Chip
               label={getDisplayName(configuration.strategy_type)}
               color="primary"
-              size="small"
               variant="outlined"
             />
           </Box>
@@ -196,7 +194,6 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
                 <Chip
                   label="In Use"
                   color="success"
-                  size="small"
                   variant="filled"
                   sx={{ fontSize: '0.7rem' }}
                 />
@@ -208,7 +205,6 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
         <CardActions sx={{ px: 2, pb: 2, pt: 0 }}>
           <Tooltip title="Edit Configuration">
             <IconButton
-              size="small"
               color="primary"
               onClick={(e) => {
                 e.stopPropagation();
@@ -221,7 +217,6 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
           </Tooltip>
           <Tooltip title="Delete Configuration">
             <IconButton
-              size="small"
               color="error"
               onClick={(e) => {
                 e.stopPropagation();
