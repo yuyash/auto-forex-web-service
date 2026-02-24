@@ -31,14 +31,14 @@ class TestTickDataView:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_get_invalid_count(self):
-        request = _drf_request(factory.get("/api/market/ticks/?instrument=USD_JPY&count=abc"))
+        request = _drf_request(factory.get("/api/market/ticks/?instrument=USD_JPY&limit=abc"))
         request.user = MagicMock()
         view = TickDataView()
         response = view.get(request)
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_get_count_out_of_range(self):
-        request = _drf_request(factory.get("/api/market/ticks/?instrument=USD_JPY&count=99999"))
+        request = _drf_request(factory.get("/api/market/ticks/?instrument=USD_JPY&limit=99999"))
         request.user = MagicMock()
         view = TickDataView()
         response = view.get(request)
@@ -46,7 +46,7 @@ class TestTickDataView:
 
     @patch("apps.market.views.ticks.TickData")
     def test_get_valid_request(self, mock_tick_data):
-        request = _drf_request(factory.get("/api/market/ticks/?instrument=USD_JPY&count=10"))
+        request = _drf_request(factory.get("/api/market/ticks/?instrument=USD_JPY&limit=10"))
         request.user = MagicMock()
 
         mock_qs = MagicMock()
@@ -54,6 +54,7 @@ class TestTickDataView:
         mock_qs.filter.return_value = mock_qs
         mock_qs.order_by.return_value = mock_qs
         mock_qs.__getitem__ = MagicMock(return_value=[])
+        mock_qs.values.return_value = mock_qs
 
         view = TickDataView()
         response = view.get(request)
@@ -67,7 +68,7 @@ class TestTickDataRangeView:
         assert IsAuthenticated in TickDataRangeView.permission_classes
 
     def test_get_missing_instrument(self):
-        request = _drf_request(factory.get("/api/market/ticks/data-range/"))
+        request = _drf_request(factory.get("/api/market/ticks/range/"))
         request.user = MagicMock()
         view = TickDataRangeView()
         response = view.get(request)
@@ -75,7 +76,7 @@ class TestTickDataRangeView:
 
     @patch("apps.market.views.ticks.TickData")
     def test_get_no_data(self, mock_tick_data):
-        request = _drf_request(factory.get("/api/market/ticks/data-range/?instrument=USD_JPY"))
+        request = _drf_request(factory.get("/api/market/ticks/range/?instrument=USD_JPY"))
         request.user = MagicMock()
 
         mock_tick_data.objects.filter.return_value.aggregate.return_value = {

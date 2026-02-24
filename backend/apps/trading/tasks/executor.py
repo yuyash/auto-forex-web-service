@@ -123,10 +123,9 @@ class TaskExecutor:
     def handle_events(self, state: ExecutionState, events: List[TradingEvent]) -> None:
         """Handle events from strategy execution.
 
-        After processing entry events (initial_entry / retracement), writes
-        the created Position UUID back into the corresponding open_entries
-        record in strategy_state so that subsequent TakeProfitEvents can
-        target the exact position.
+        After processing entry events (initial_entry / retracement), delegates
+        position_id write-back to the strategy via on_position_opened() hook,
+        allowing each strategy to manage its own state structure.
 
         Args:
             events: List of TradingEvent instances that were saved
@@ -137,16 +136,15 @@ class TaskExecutor:
                 self.event_handler._last_entry_result = None
                 realized_delta_total += self.event_handler.handle_event(trading_event)
 
-                # Write position_id back to strategy state for entry events
+                # Delegate position_id write-back to strategy hook
                 entry_result = self.event_handler._last_entry_result
                 if entry_result is not None:
                     entry_id, position_id = entry_result
-                    if entry_id is not None and state.strategy_state:
-                        open_entries = state.strategy_state.get("open_entries", [])
-                        for entry in open_entries:
-                            if int(entry.get("entry_id", -1)) == entry_id:
-                                entry["position_id"] = position_id
-                                break
+                    self.engine.strategy.on_position_opened(
+                        state=state,
+                        entry_id=entry_id,
+                        position_id=position_id,
+                    )
             except OrderServiceError as e:
                 logger.error(
                     "Order execution failed for trading event %s: %s",
@@ -237,31 +235,34 @@ class TaskExecutor:
         state.refresh_from_db()
         logger.debug(f"State saved and verified: ticks_processed={state.ticks_processed}")
 
-    def _flush_metric_snapshots(self, state: ExecutionState) -> None:
-        """Bulk-create buffered metric snapshots and clear the buffer."""
+    def _flush_metrics(self, state: ExecutionState) -> None:
+        """Bulk-create buffered metrics and clear the buffer."""
         if not self._metric_buffer:
             return
 
-        from apps.trading.models.metric_snapshots import MetricSnapshot
+        from apps.trading.models.metrics import Metrics
 
         buffer_size = len(self._metric_buffer)
         first_ts = self._metric_buffer[0].get("timestamp")
         last_ts = self._metric_buffer[-1].get("timestamp")
 
         objs = [
-            MetricSnapshot(
+            Metrics(
                 task_type=self.task_type.value,
                 task_id=self.task.pk,
                 celery_task_id=self.task.celery_task_id,
                 timestamp=m["timestamp"],
+                # Legacy Floor fields (populated from metrics dict for backward compat)
                 margin_ratio=m.get("margin_ratio"),
                 current_atr=m.get("current_atr"),
                 baseline_atr=m.get("baseline_atr"),
                 volatility_threshold=m.get("volatility_threshold"),
+                # Generic metrics JSON (stores all strategy metrics)
+                metrics={k: v for k, v in m.items() if k != "timestamp" and v is not None},
             )
             for m in self._metric_buffer
         ]
-        created = MetricSnapshot.objects.bulk_create(objs, ignore_conflicts=True)
+        created = Metrics.objects.bulk_create(objs, ignore_conflicts=True)
         logger.debug(
             "Flushed metric snapshots - task_id=%s, buffered=%d, created=%d, "
             "first_ts=%s, last_ts=%s",
@@ -405,15 +406,9 @@ class TaskExecutor:
                     # Buffer metric snapshot from strategy state
                     metrics = (state.strategy_state or {}).get("metrics", {})
                     if metrics:
-                        self._metric_buffer.append(
-                            {
-                                "timestamp": tick.timestamp,
-                                "margin_ratio": metrics.get("margin_ratio"),
-                                "current_atr": metrics.get("current_atr"),
-                                "baseline_atr": metrics.get("baseline_atr"),
-                                "volatility_threshold": metrics.get("volatility_threshold"),
-                            }
-                        )
+                        snapshot = {"timestamp": tick.timestamp}
+                        snapshot.update(metrics)
+                        self._metric_buffer.append(snapshot)
                     else:
                         logger.debug(
                             "No metrics in strategy_state at tick %s (ticks_processed=%d)",
@@ -430,7 +425,7 @@ class TaskExecutor:
                     f"batch_count={batch_count}, ticks_processed={state.ticks_processed}"
                 )
                 self.save_state(state)
-                self._flush_metric_snapshots(state)
+                self._flush_metrics(state)
 
                 # Update unrealized PnL for all open positions using latest price
                 if state.last_tick_price is not None:

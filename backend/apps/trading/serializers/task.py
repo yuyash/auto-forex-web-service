@@ -81,8 +81,6 @@ class TaskSerializer(serializers.ModelSerializer):
 class BacktestTaskSerializer(TaskSerializer):
     """Serializer for BacktestTask with execution data."""
 
-    progress = serializers.SerializerMethodField()
-    current_tick = serializers.SerializerMethodField()
     config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
@@ -91,7 +89,6 @@ class BacktestTaskSerializer(TaskSerializer):
         model = BacktestTask
         fields = TaskSerializer.Meta.fields + [
             "user",
-            "config",
             "config_id",
             "config_name",
             "strategy_type",
@@ -99,101 +96,16 @@ class BacktestTaskSerializer(TaskSerializer):
             "start_time",
             "end_time",
             "initial_balance",
-            "account_currency",
             "commission_per_trade",
             "pip_size",
             "instrument",
-            "progress",
-            "current_tick",
         ]
         read_only_fields = TaskSerializer.Meta.read_only_fields + ["user"]
-
-    def get_progress(self, obj: BacktestTask) -> int:
-        """
-        Calculate backtest progress percentage based on current tick timestamp.
-
-        Progress is calculated as:
-        (current_tick_timestamp - start_time) / (end_time - start_time) * 100
-
-        Args:
-            obj: BacktestTask instance
-
-        Returns:
-            int: Progress percentage (0-100)
-        """
-        from apps.trading.models.state import ExecutionState
-
-        # Only calculate progress for running tasks
-        if obj.status != "running":
-            return 0
-
-        # Get the execution state for the current celery task
-        try:
-            # Filter by celery_task_id to get state for current execution only
-            if not obj.celery_task_id:
-                return 0
-
-            execution_state = ExecutionState.objects.filter(
-                task_type="backtest",
-                task_id=obj.pk,
-                celery_task_id=obj.celery_task_id,
-            ).first()
-
-            if not execution_state or not execution_state.last_tick_timestamp:
-                return 0
-
-            # Calculate progress based on time
-            total_duration = (obj.end_time - obj.start_time).total_seconds()
-            if total_duration <= 0:
-                return 0
-
-            elapsed = (execution_state.last_tick_timestamp - obj.start_time).total_seconds()
-            progress = int((elapsed / total_duration) * 100)
-
-            # Clamp between 0 and 100
-            return max(0, min(100, progress))
-
-        except Exception:
-            # If anything goes wrong, return 0
-            return 0
-
-    def get_current_tick(self, obj: BacktestTask) -> dict | None:
-        """Return the current tick position and price.
-
-        For running tasks this returns the live tick from ExecutionState.
-        For stopped/completed tasks it returns the last recorded tick so
-        that Unrealized PnL can still be displayed.
-
-        Returns:
-            dict with 'timestamp' (ISO string) and 'price' (string), or None
-        """
-        from apps.trading.models.state import ExecutionState
-
-        if not obj.celery_task_id:
-            return None
-
-        try:
-            state = ExecutionState.objects.filter(
-                task_type="backtest",
-                task_id=obj.pk,
-                celery_task_id=obj.celery_task_id,
-            ).first()
-
-            if not state or not state.last_tick_timestamp:
-                return None
-
-            return {
-                "timestamp": state.last_tick_timestamp.isoformat(),
-                "price": str(state.last_tick_price) if state.last_tick_price is not None else None,
-            }
-        except Exception:
-            return None
 
 
 class TradingTaskSerializer(TaskSerializer):
     """Serializer for TradingTask with execution data."""
 
-    current_tick = serializers.SerializerMethodField()
     config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
@@ -204,7 +116,6 @@ class TradingTaskSerializer(TaskSerializer):
         model = TradingTask
         fields = TaskSerializer.Meta.fields + [
             "user",
-            "config",
             "config_id",
             "config_name",
             "strategy_type",
@@ -215,41 +126,8 @@ class TradingTaskSerializer(TaskSerializer):
             "pip_size",
             "instrument",
             "strategy_state",
-            "current_tick",
         ]
         read_only_fields = TaskSerializer.Meta.read_only_fields + ["user", "strategy_state"]
-
-    def get_current_tick(self, obj: TradingTask) -> dict | None:
-        """Return the current tick position and price.
-
-        For running tasks this returns the live tick from ExecutionState.
-        For stopped/completed tasks it returns the last recorded tick so
-        that Unrealized PnL can still be displayed.
-
-        Returns:
-            dict with 'timestamp' (ISO string) and 'price' (string), or None
-        """
-        from apps.trading.models.state import ExecutionState
-
-        if not obj.celery_task_id:
-            return None
-
-        try:
-            state = ExecutionState.objects.filter(
-                task_type="trading",
-                task_id=obj.pk,
-                celery_task_id=obj.celery_task_id,
-            ).first()
-
-            if not state or not state.last_tick_timestamp:
-                return None
-
-            return {
-                "timestamp": state.last_tick_timestamp.isoformat(),
-                "price": str(state.last_tick_price) if state.last_tick_price is not None else None,
-            }
-        except Exception:
-            return None
 
 
 class TaskLogSerializer(serializers.ModelSerializer):

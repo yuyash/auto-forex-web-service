@@ -2,7 +2,7 @@
 
 Tests BacktestTaskSerializer, BacktestTaskCreateSerializer,
 TradingTaskSerializer, TradingTaskCreateSerializer, and
-serializer method fields (get_progress, get_current_tick).
+serializer method fields (get_progress).
 """
 
 from datetime import datetime, timedelta, timezone
@@ -61,18 +61,10 @@ class TestBacktestTaskSerializer:
         assert "start_time" in data
         assert "end_time" in data
         assert "created_at" in data
-        assert "progress" in data
-        assert "current_tick" in data
-
-    def test_progress_completed_task(self):
-        task = BacktestTaskFactory(status=TaskStatus.COMPLETED)
-        serializer = BacktestTaskSerializer(task)
-        assert serializer.data["progress"] == 100
-
-    def test_progress_pending_task(self):
-        task = BacktestTaskFactory(status=TaskStatus.CREATED)
-        serializer = BacktestTaskSerializer(task)
-        assert serializer.data["progress"] == 0
+        # progress and current_tick are now served via /summary/ endpoint
+        assert "progress" not in data
+        assert "current_tick" not in data
+        assert "account_currency" not in data
 
 
 @pytest.mark.django_db
@@ -180,7 +172,8 @@ class TestTradingTaskSerializer:
         assert data["status"] == task.status
         assert "has_strategy_state" in data
         assert "can_resume" in data
-        assert "current_tick" in data
+        # current_tick is now served via /summary/ endpoint only
+        assert "current_tick" not in data
 
     def test_instrument_from_config(self):
         user = UserFactory()
@@ -268,9 +261,11 @@ class TestTradingTaskCreateSerializer:
 
 @pytest.mark.django_db
 class TestBacktestTaskSerializerProgress:
-    """Tests for BacktestTaskSerializer.get_progress with ExecutionState."""
+    """Tests for progress via summary service (moved from serializer)."""
 
-    def test_running_task_with_state(self):
+    def test_progress_via_summary_service(self):
+        from apps.trading.services.summary import compute_task_summary
+
         now = datetime.now(timezone.utc)
         start = now - timedelta(days=10)
         end = now - timedelta(days=1)
@@ -294,49 +289,24 @@ class TestBacktestTaskSerializerProgress:
             last_tick_timestamp=midpoint,
         )
 
-        serializer = BacktestTaskSerializer(task)
-        progress = serializer.data["progress"]
+        result = compute_task_summary(
+            task_type="backtest",
+            task_id=str(task.pk),
+            celery_task_id="celery-progress-test",
+        )
         # Midpoint should be ~50%
-        assert 45 <= progress <= 55
+        assert 45 <= result.progress <= 55
 
-    def test_running_task_no_state(self):
+    def test_progress_no_state(self):
+        from apps.trading.services.summary import compute_task_summary
+
         task = BacktestTaskFactory(status=TaskStatus.RUNNING)
         task.celery_task_id = "celery-no-state"
         task.save()
 
-        serializer = BacktestTaskSerializer(task)
-        assert serializer.data["progress"] == 0
-
-
-@pytest.mark.django_db
-class TestBacktestTaskSerializerCurrentTick:
-    """Tests for BacktestTaskSerializer.get_current_tick with ExecutionState."""
-
-    def test_with_execution_state(self):
-        task = BacktestTaskFactory(status=TaskStatus.RUNNING)
-        task.celery_task_id = "celery-tick-test"
-        task.save()
-
-        tick_ts = datetime(2024, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
-        ExecutionState.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=task.pk,
-            celery_task_id="celery-tick-test",
-            strategy_state={},
-            current_balance=Decimal("10000"),
-            ticks_processed=100,
-            last_tick_timestamp=tick_ts,
-            last_tick_price=Decimal("150.500"),
+        result = compute_task_summary(
+            task_type="backtest",
+            task_id=str(task.pk),
+            celery_task_id="celery-no-state",
         )
-
-        serializer = BacktestTaskSerializer(task)
-        current_tick = serializer.data["current_tick"]
-        assert current_tick is not None
-        assert Decimal(current_tick["price"]) == Decimal("150.500")
-        assert "2024-06-15" in current_tick["timestamp"]
-
-    def test_without_celery_task_id(self):
-        task = BacktestTaskFactory(status=TaskStatus.RUNNING)
-        # No celery_task_id set
-        serializer = BacktestTaskSerializer(task)
-        assert serializer.data["current_tick"] is None
+        assert result.progress == 0

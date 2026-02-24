@@ -1,7 +1,7 @@
 """Integration tests for TaskExecutor components with real DB.
 
 Tests handle_events, load_state, save_state, save_events,
-_flush_metric_snapshots, and executor __init__ methods.
+_flush_metrics, and executor __init__ methods.
 External services (Redis, Celery) are mocked.
 """
 
@@ -15,7 +15,7 @@ from apps.trading.enums import TaskType
 from apps.trading.models import (
     BacktestTask,
     ExecutionState,
-    MetricSnapshot,
+    Metrics,
     TradingEvent,
 )
 from apps.trading.order import OrderService
@@ -222,8 +222,8 @@ class TestSaveEvents:
 
 
 @pytest.mark.django_db
-class TestFlushMetricSnapshots:
-    """Tests for TaskExecutor._flush_metric_snapshots."""
+class TestFlushMetrics:
+    """Tests for TaskExecutor._flush_metrics."""
 
     def test_bulk_creates_snapshots(self):
         executor = _make_executor()
@@ -254,17 +254,17 @@ class TestFlushMetricSnapshots:
             },
         ]
 
-        executor._flush_metric_snapshots(state)
+        executor._flush_metrics(state)
 
         assert executor._metric_buffer == []
-        assert MetricSnapshot.objects.filter(task_id=executor.task.pk).count() == 2
+        assert Metrics.objects.filter(task_id=executor.task.pk).count() == 2
 
     def test_empty_buffer(self):
         executor = _make_executor()
         state = MagicMock()
         executor._metric_buffer = []
-        executor._flush_metric_snapshots(state)
-        assert MetricSnapshot.objects.filter(task_id=executor.task.pk).count() == 0
+        executor._flush_metrics(state)
+        assert Metrics.objects.filter(task_id=executor.task.pk).count() == 0
 
 
 @pytest.mark.django_db

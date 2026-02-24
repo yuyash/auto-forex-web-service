@@ -94,6 +94,22 @@ class FloorStrategy(Strategy):
         """Return strategy type."""
         return StrategyType.FLOOR
 
+    def on_position_opened(
+        self,
+        *,
+        state,
+        entry_id: int | None,
+        position_id: str,
+    ) -> None:
+        """Write position_id back into open_entries for exit event targeting."""
+        if entry_id is None or not state.strategy_state:
+            return
+        open_entries = state.strategy_state.get("open_entries", [])
+        for entry in open_entries:
+            if int(entry.get("entry_id", -1)) == entry_id:
+                entry["position_id"] = position_id
+                break
+
     @staticmethod
     def _normalize_direction(value: str | None) -> str:
         val = str(value or "").strip().lower()

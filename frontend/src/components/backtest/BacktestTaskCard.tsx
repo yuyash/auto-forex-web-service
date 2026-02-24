@@ -32,6 +32,8 @@ import { useToast } from '../common';
 import { backtestTasksApi } from '../../services/api';
 import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 import { api } from '../../api/apiClient';
+import { useTaskSummary } from '../../hooks/useTaskSummary';
+import { TaskType } from '../../types/common';
 
 interface BacktestTaskCardProps {
   task: BacktestTask;
@@ -231,8 +233,9 @@ export default function BacktestTaskCard({
     });
   };
 
-  // Get progress from polled status for running tasks
-  const progress = polledStatus?.progress || 0;
+  // Get progress from summary endpoint
+  const summaryData = useTaskSummary(task.id, TaskType.BACKTEST);
+  const progress = summaryData.progress;
 
   return (
     <Card

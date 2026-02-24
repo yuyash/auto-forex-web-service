@@ -6,6 +6,10 @@ on:
       - main
       - develop
 
+permissions:
+  contents: read
+  checks: write
+
 jobs:
   test-backend:
     name: Backend Tests

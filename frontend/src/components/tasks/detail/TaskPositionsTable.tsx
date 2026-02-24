@@ -15,7 +15,7 @@ import {
   useTaskPositions,
   type TaskPosition,
 } from '../../../hooks/useTaskPositions';
-import { useOverviewPnl } from '../../../hooks/useOverviewPnl';
+import { useTaskSummary } from '../../../hooks/useTaskSummary';
 import { TaskType } from '../../../types/common';
 
 interface TaskPositionsTableProps {
@@ -83,7 +83,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     realizedPnl: totalRealizedPnl,
     unrealizedPnl: totalUnrealizedPnl,
     refetch: refetchPnl,
-  } = useOverviewPnl(String(taskId), taskType, celeryTaskId);
+  } = useTaskSummary(String(taskId), taskType, celeryTaskId);
 
   // Refetch PnL when real-time updates toggle changes (task finishes)
   const prevRealTimeRef = React.useRef(enableRealTimeUpdates);

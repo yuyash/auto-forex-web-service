@@ -27,7 +27,6 @@ import {
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useBacktestTask } from '../../hooks/useBacktestTasks';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
-import { useCurrentTickPolling } from '../../hooks/useCurrentTickPolling';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
@@ -37,7 +36,7 @@ import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
 import { TaskReplayPanel } from '../tasks/detail/TaskReplayPanel';
 import { TaskOrdersTable } from '../tasks/detail/TaskOrdersTable';
 import { TaskProgress } from '../tasks/TaskProgress';
-import { useOverviewPnl } from '../../hooks/useOverviewPnl';
+import { useTaskSummary } from '../../hooks/useTaskSummary';
 import { TaskStatus, TaskType } from '../../types/common';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { useDeleteBacktestTask } from '../../hooks/useBacktestTaskMutations';
@@ -89,11 +88,17 @@ export const BacktestTaskDetail: React.FC = () => {
     refetch,
   } = useBacktestTask(taskId || undefined);
 
-  const overviewSummary = useOverviewPnl(
+  const isTaskActive =
+    task?.status === TaskStatus.RUNNING || task?.status === TaskStatus.STARTING;
+
+  const overviewSummary = useTaskSummary(
     taskId,
     TaskType.BACKTEST,
-    task?.celery_task_id || undefined
+    task?.celery_task_id || undefined,
+    { polling: isTaskActive, interval: 2000 }
   );
+
+  const polledTick = overviewSummary.currentTick;
 
   // Use HTTP polling for task status updates
   const {
@@ -105,18 +110,6 @@ export const BacktestTaskDetail: React.FC = () => {
     pollStatus: true,
     interval: 3000,
   });
-
-  // Poll for current_tick via lightweight endpoint
-  const { currentTick: polledTick } = useCurrentTickPolling(
-    taskId,
-    'backtest',
-    {
-      enabled:
-        task?.status === TaskStatus.RUNNING ||
-        task?.status === TaskStatus.STARTING,
-      interval: 2000,
-    }
-  );
 
   // Refetch when status changes
   const prevStatusRef = useRef<string | undefined>(undefined);
@@ -232,7 +225,7 @@ export const BacktestTaskDetail: React.FC = () => {
             <Box sx={{ mt: 2, maxWidth: 600 }}>
               <TaskProgress
                 status={polledStatus?.status || task.status}
-                progress={polledStatus?.progress ?? task.progress ?? 0}
+                progress={overviewSummary.progress}
                 compact={false}
                 showPercentage={true}
               />
@@ -497,7 +490,7 @@ export const BacktestTaskDetail: React.FC = () => {
               <Grid size={{ xs: 12 }}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="h6" gutterBottom>
-                  Results
+                  Summary
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Box>
@@ -532,14 +525,51 @@ export const BacktestTaskDetail: React.FC = () => {
                       {overviewSummary.unrealizedPnl.toFixed(2)} {pnlCurrency}
                     </Typography>
                   </Box>
+                  {overviewSummary.currentBalance != null && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Current Balance
+                      </Typography>
+                      <Typography variant="body1">
+                        {overviewSummary.currentBalance.toFixed(2)}{' '}
+                        {pnlCurrency}
+                      </Typography>
+                    </Box>
+                  )}
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Total Trades (count)
+                      Total Trades
                     </Typography>
                     <Typography variant="body1">
-                      {overviewSummary.totalTrades} trades
+                      {overviewSummary.totalTrades}
                     </Typography>
                   </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Open Positions
+                    </Typography>
+                    <Typography variant="body1">
+                      {overviewSummary.openPositionCount}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Closed Positions
+                    </Typography>
+                    <Typography variant="body1">
+                      {overviewSummary.closedPositionCount}
+                    </Typography>
+                  </Box>
+                  {overviewSummary.ticksProcessed > 0 && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Ticks Processed
+                      </Typography>
+                      <Typography variant="body1">
+                        {overviewSummary.ticksProcessed.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
                 </Box>
               </Grid>
 
@@ -587,7 +617,7 @@ export const BacktestTaskDetail: React.FC = () => {
             startTime={task.start_time}
             endTime={task.end_time}
             latestExecution={task.latest_execution}
-            currentTick={polledTick ?? task.current_tick ?? null}
+            currentTick={polledTick ?? null}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
@@ -606,11 +636,7 @@ export const BacktestTaskDetail: React.FC = () => {
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
             currentPrice={
-              polledTick?.price != null
-                ? parseFloat(polledTick.price)
-                : task.current_tick?.price != null
-                  ? parseFloat(task.current_tick.price)
-                  : null
+              polledTick?.price != null ? parseFloat(polledTick.price) : null
             }
             pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
           />

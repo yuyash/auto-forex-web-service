@@ -18,7 +18,12 @@ logger: Logger = getLogger(name=__name__)
 
 
 class TickDataView(APIView):
-    """API endpoint for fetching historical tick data from DB."""
+    """API endpoint for fetching historical tick data from DB.
+
+    Supports cursor-based pagination using the ``cursor`` parameter.
+    Each response includes a ``next_cursor`` value that can be passed
+    as ``cursor`` in the next request to fetch the following page.
+    """
 
     permission_classes = [IsAuthenticated]
 
@@ -29,7 +34,18 @@ class TickDataView(APIView):
             OpenApiParameter(name="instrument", type=str, required=True),
             OpenApiParameter(name="from_time", type=str, required=False),
             OpenApiParameter(name="to_time", type=str, required=False),
-            OpenApiParameter(name="count", type=int, required=False, default=5000),
+            OpenApiParameter(
+                name="limit",
+                type=int,
+                required=False,
+                description="Page size (1-5000, default 5000)",
+            ),
+            OpenApiParameter(
+                name="cursor",
+                type=str,
+                required=False,
+                description="Cursor returned by previous response for pagination",
+            ),
         ],
         responses={
             200: inline_serializer(
@@ -37,6 +53,7 @@ class TickDataView(APIView):
                 fields={
                     "count": serializers.IntegerField(),
                     "instrument": serializers.CharField(),
+                    "next_cursor": serializers.CharField(allow_null=True),
                     "ticks": serializers.ListField(
                         child=inline_serializer(
                             "MarketTickItem",
@@ -52,13 +69,14 @@ class TickDataView(APIView):
                 },
             ),
         },
-        description="Fetch historical tick data from DB.",
+        description="Fetch historical tick data from DB with cursor-based pagination.",
     )
     def get(self, request: Request) -> Response:
         instrument = request.query_params.get("instrument")
         from_time = request.query_params.get("from_time")
         to_time = request.query_params.get("to_time")
-        count_raw = request.query_params.get("count", "5000")
+        cursor = request.query_params.get("cursor")
+        limit_raw = request.query_params.get("limit", "5000")
 
         if not instrument:
             return Response(
@@ -67,15 +85,15 @@ class TickDataView(APIView):
             )
 
         try:
-            count = int(count_raw)
-            if count < 1 or count > 20000:
+            limit = int(limit_raw)
+            if limit < 1 or limit > 5000:
                 return Response(
-                    {"error": "count must be between 1 and 20000"},
+                    {"error": "limit must be between 1 and 5000"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         except ValueError:
             return Response(
-                {"error": "count must be a valid integer"},
+                {"error": "limit must be a valid integer"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -94,10 +112,26 @@ class TickDataView(APIView):
                     to_dt = timezone.make_aware(to_dt)
                 queryset = queryset.filter(timestamp__lte=to_dt)
 
-            ticks = queryset.order_by("-timestamp").values(
-                "instrument", "timestamp", "bid", "ask", "mid"
-            )[:count]
-            tick_rows = list(reversed(list(ticks)))
+            # Cursor-based pagination: cursor is an ISO-8601 timestamp
+            if cursor:
+                cursor_dt = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
+                if timezone.is_naive(cursor_dt):
+                    cursor_dt = timezone.make_aware(cursor_dt)
+                queryset = queryset.filter(timestamp__gt=cursor_dt)
+
+            # Fetch limit+1 to determine if there is a next page
+            ticks = list(
+                queryset.order_by("timestamp").values(
+                    "instrument", "timestamp", "bid", "ask", "mid"
+                )[: limit + 1]
+            )
+
+            has_next = len(ticks) > limit
+            page = ticks[:limit]
+
+            next_cursor = None
+            if has_next and page:
+                next_cursor = page[-1]["timestamp"].isoformat().replace("+00:00", "Z")
 
             results = [
                 {
@@ -107,13 +141,14 @@ class TickDataView(APIView):
                     "ask": str(row["ask"]),
                     "mid": str(row["mid"]),
                 }
-                for row in tick_rows
+                for row in page
             ]
 
             return Response(
                 {
                     "count": len(results),
                     "instrument": instrument,
+                    "next_cursor": next_cursor,
                     "ticks": results,
                 }
             )

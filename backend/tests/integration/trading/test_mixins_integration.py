@@ -14,7 +14,7 @@ from rest_framework.test import APIClient
 from apps.trading.enums import Direction, LogLevel, TaskType
 from apps.trading.models import (
     BacktestTask,
-    MetricSnapshot,
+    Metrics,
     Order,
     Position,
     TaskLog,
@@ -47,8 +47,8 @@ def _make_task(user=None) -> BacktestTask:
 
 
 @pytest.mark.django_db
-class TestMetricSnapshots:
-    """GET /api/trading/tasks/backtest/{id}/metric_snapshots/"""
+class TestMetrics:
+    """GET /api/trading/tasks/backtest/{id}/metrics/"""
 
     def test_with_data(self):
         task = _make_task()
@@ -56,7 +56,7 @@ class TestMetricSnapshots:
         now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         for i in range(3):
-            MetricSnapshot.objects.create(
+            Metrics.objects.create(
                 task_type=TaskType.BACKTEST,
                 task_id=task.pk,
                 celery_task_id=task.celery_task_id,
@@ -65,21 +65,21 @@ class TestMetricSnapshots:
                 current_atr=Decimal("0.0012"),
             )
 
-        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/metric_snapshots/")
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/metrics/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["total"] == 3
         assert response.data["returned"] == 3
-        assert len(response.data["snapshots"]) == 3
+        assert len(response.data["metrics"]) == 3
 
     def test_without_data(self):
         task = _make_task()
         client = _auth_client(task.user)
 
-        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/metric_snapshots/")
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/metrics/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["total"] == 0
         assert response.data["returned"] == 0
-        assert response.data["snapshots"] == []
+        assert response.data["metrics"] == []
 
 
 @pytest.mark.django_db

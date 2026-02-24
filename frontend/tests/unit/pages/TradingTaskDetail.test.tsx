@@ -54,11 +54,21 @@ vi.mock('../../../src/hooks/useTradingTasks', () => ({
   invalidateTradingTasksCache: vi.fn(),
 }));
 
-vi.mock('../../../src/hooks/useOverviewPnl', () => ({
-  useOverviewPnl: vi.fn(() => ({
+vi.mock('../../../src/hooks/useTaskSummary', () => ({
+  useTaskSummary: vi.fn(() => ({
     realizedPnl: 0,
     unrealizedPnl: 0,
     totalTrades: 0,
+    openPositionCount: 0,
+    closedPositionCount: 0,
+    currentBalance: null,
+    ticksProcessed: 0,
+    lastTickTime: null,
+    lastTickPrice: null,
+    status: '',
+    startedAt: null,
+    completedAt: null,
+    errorMessage: null,
   })),
 }));
 

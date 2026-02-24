@@ -1,16 +1,20 @@
-"""Metric snapshot model for time-series strategy metrics."""
+"""Metrics model for time-series strategy metrics."""
 
 from uuid import uuid4
 
 from django.db import models
 
 
-class MetricSnapshot(models.Model):
+class Metrics(models.Model):
     """
-    Time-series metric snapshot recorded during strategy execution.
+    Time-series metric recorded during strategy execution.
 
-    Stores margin ratio, volatility data, and other per-tick metrics
-    for visualization in the Replay chart.
+    Stores strategy-specific metrics as a generic JSON field, allowing
+    each strategy to define its own metrics without schema changes.
+
+    For backward compatibility, the legacy Floor strategy fields
+    (margin_ratio, current_atr, baseline_atr, volatility_threshold)
+    are accessible via the ``metrics`` JSON field.
     """
 
     id = models.UUIDField(
@@ -22,6 +26,9 @@ class MetricSnapshot(models.Model):
     task_id = models.UUIDField(db_index=True)
     celery_task_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
     timestamp = models.DateTimeField()
+
+    # Legacy Floor strategy fields (kept for backward compatibility with
+    # existing data; new strategies should use the ``metrics`` JSON field).
     margin_ratio = models.DecimalField(
         max_digits=10,
         decimal_places=6,
@@ -51,8 +58,15 @@ class MetricSnapshot(models.Model):
         help_text="baseline_atr * volatility_lock_multiplier",
     )
 
+    # Generic metrics JSON field for any strategy
+    metrics = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Strategy-specific metrics as JSON (e.g., RSI, MACD, custom indicators)",
+    )
+
     class Meta:
-        db_table = "metric_snapshots"
+        db_table = "metrics"
         ordering = ["timestamp"]
         indexes = [
             models.Index(fields=["task_type", "task_id", "timestamp"]),
@@ -61,9 +75,9 @@ class MetricSnapshot(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["task_type", "task_id", "celery_task_id", "timestamp"],
-                name="unique_metric_snapshot_timestamp",
+                name="unique_metric_timestamp",
             ),
         ]
 
     def __str__(self) -> str:
-        return f"MetricSnapshot({self.timestamp}: margin={self.margin_ratio})"
+        return f"Metrics({self.timestamp}: margin={self.margin_ratio})"

@@ -18,7 +18,7 @@ export async function fetchTickDataRange(
   instrument: string
 ): Promise<TickDataRange> {
   const base = apiConfig.BASE || '';
-  const url = `${base}/api/market/ticks/data-range/?instrument=${encodeURIComponent(instrument)}`;
+  const url = `${base}/api/market/ticks/range/?instrument=${encodeURIComponent(instrument)}`;
   const headers = await getAuthHeaders();
 
   const response = await fetch(url, {

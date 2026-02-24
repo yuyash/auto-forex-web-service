@@ -277,50 +277,6 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-    @action(detail=True, methods=["get"], url_path="current-tick")
-    def current_tick(self, request: Request, pk: int | None = None) -> Response:
-        """Return the current tick for a running (or recently stopped) task.
-
-        Reads the latest tick from ExecutionState so the frontend can
-        display chart progress without fetching the full task payload.
-        """
-        from apps.trading.models.state import ExecutionState
-
-        task = self.get_object()
-
-        if not task.celery_task_id:
-            return Response(
-                {"error": "Task has no execution state yet"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        state = ExecutionState.objects.filter(
-            task_type="backtest",
-            task_id=task.pk,
-            celery_task_id=task.celery_task_id,
-        ).first()
-
-        if not state or not state.last_tick_timestamp:
-            return Response(
-                {"error": "No tick data available for this task"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        return Response(
-            {
-                "task_id": str(task.pk),
-                "task_type": "backtest",
-                "status": task.status,
-                "current_tick": {
-                    "timestamp": state.last_tick_timestamp.isoformat(),
-                    "price": (
-                        str(state.last_tick_price) if state.last_tick_price is not None else None
-                    ),
-                },
-                "ticks_processed": state.ticks_processed,
-            }
-        )
-
     @action(detail=True, methods=["post"])
     def restart(self, request: Request, pk: int | None = None) -> Response:
         """Restart task from beginning."""

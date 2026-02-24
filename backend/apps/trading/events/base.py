@@ -19,6 +19,27 @@ if TYPE_CHECKING:
     from apps.trading.dataclasses.context import EventContext
 
 
+# Event class registry: maps EventType value -> event class
+_EVENT_REGISTRY: dict[str, type["StrategyEvent"]] = {}
+
+
+def register_event(event_type: EventType):
+    """Register an event class for automatic deserialization.
+
+    Args:
+        event_type: The EventType this class handles
+
+    Returns:
+        Decorator function
+    """
+
+    def decorator(cls: type["StrategyEvent"]) -> type["StrategyEvent"]:
+        _EVENT_REGISTRY[event_type.value] = cls
+        return cls
+
+    return decorator
+
+
 @dataclass
 class StrategyEvent(ABC):
     """Base class for all strategy events.
@@ -32,6 +53,18 @@ class StrategyEvent(ABC):
 
     event_type: EventType
     timestamp: datetime | None = None
+
+    @property
+    def category(self) -> str:
+        """Return the generic event category for handler dispatch.
+
+        Categories allow the EventHandler to process events from any strategy
+        without needing strategy-specific dispatch logic. Override in subclasses.
+
+        Returns:
+            One of: "entry", "exit", "risk", "info"
+        """
+        return "info"
 
     @abstractmethod
     def activate(self, context: "EventContext") -> None:
@@ -64,7 +97,8 @@ class StrategyEvent(ABC):
     def from_dict(cls, event_dict: dict[str, Any]) -> "StrategyEvent":
         """Create StrategyEvent from dictionary.
 
-        This factory method creates the appropriate subclass based on event_type.
+        This factory method creates the appropriate subclass based on event_type,
+        using the event registry for automatic dispatch.
 
         Args:
             event_dict: Dictionary containing event data
@@ -73,34 +107,14 @@ class StrategyEvent(ABC):
             Appropriate StrategyEvent subclass instance
         """
         event_type_str = event_dict.get("event_type", "")
-        try:
-            event_type = EventType(event_type_str)
-        except ValueError:
-            # Generic event for unknown types
-            return GenericStrategyEvent.from_dict(event_dict)
-
-        # Map event_type to appropriate class
-        if event_type == EventType.INITIAL_ENTRY:
-            return InitialEntryEvent.from_dict(event_dict)
-        elif event_type == EventType.RETRACEMENT:
-            return RetracementEvent.from_dict(event_dict)
-        elif event_type == EventType.TAKE_PROFIT:
-            return TakeProfitEvent.from_dict(event_dict)
-        elif event_type == EventType.ADD_LAYER:
-            return AddLayerEvent.from_dict(event_dict)
-        elif event_type == EventType.REMOVE_LAYER:
-            return RemoveLayerEvent.from_dict(event_dict)
-        elif event_type == EventType.VOLATILITY_LOCK:
-            return VolatilityLockEvent.from_dict(event_dict)
-        elif event_type == EventType.VOLATILITY_HEDGE_NEUTRALIZE:
-            return VolatilityHedgeNeutralizeEvent.from_dict(event_dict)
-        elif event_type == EventType.MARGIN_PROTECTION:
-            return MarginProtectionEvent.from_dict(event_dict)
-        else:
-            # Generic event for unknown types
-            return GenericStrategyEvent.from_dict(event_dict)
+        event_cls = _EVENT_REGISTRY.get(event_type_str)
+        if event_cls is not None:
+            return event_cls.from_dict(event_dict)
+        # Fallback for unknown/custom event types
+        return GenericStrategyEvent.from_dict(event_dict)
 
 
+@register_event(EventType.INITIAL_ENTRY)
 @dataclass
 class InitialEntryEvent(StrategyEvent):
     """Event for opening an initial position layer.
@@ -136,6 +150,10 @@ class InitialEntryEvent(StrategyEvent):
     def __post_init__(self):
         if not self.event_type:
             self.event_type = EventType.INITIAL_ENTRY
+
+    @property
+    def category(self) -> str:
+        return "entry"
 
     def activate(self, context: "EventContext") -> None:
         """Execute initial entry event logic.
@@ -224,6 +242,7 @@ class InitialEntryEvent(StrategyEvent):
         )
 
 
+@register_event(EventType.RETRACEMENT)
 @dataclass
 class RetracementEvent(StrategyEvent):
     """Event for opening a retracement position.
@@ -260,6 +279,10 @@ class RetracementEvent(StrategyEvent):
     def __post_init__(self):
         if not self.event_type:
             self.event_type = EventType.RETRACEMENT
+
+    @property
+    def category(self) -> str:
+        return "entry"
 
     def activate(self, context: "EventContext") -> None:
         """Execute retracement event logic.
@@ -349,6 +372,7 @@ class RetracementEvent(StrategyEvent):
         )
 
 
+@register_event(EventType.TAKE_PROFIT)
 @dataclass
 class TakeProfitEvent(StrategyEvent):
     """Event for closing a position with profit.
@@ -397,6 +421,10 @@ class TakeProfitEvent(StrategyEvent):
     def __post_init__(self):
         if not self.event_type:
             self.event_type = EventType.TAKE_PROFIT
+
+    @property
+    def category(self) -> str:
+        return "exit"
 
     def activate(self, context: "EventContext") -> None:
         """Execute take profit event logic.
@@ -521,6 +549,7 @@ class TakeProfitEvent(StrategyEvent):
         )
 
 
+@register_event(EventType.ADD_LAYER)
 @dataclass
 class AddLayerEvent(StrategyEvent):
     """Event for adding a new layer to the strategy.
@@ -608,6 +637,7 @@ class AddLayerEvent(StrategyEvent):
         )
 
 
+@register_event(EventType.REMOVE_LAYER)
 @dataclass
 class RemoveLayerEvent(StrategyEvent):
     """Event for removing a layer from the strategy.
@@ -713,6 +743,7 @@ class RemoveLayerEvent(StrategyEvent):
         )
 
 
+@register_event(EventType.VOLATILITY_LOCK)
 @dataclass
 class VolatilityLockEvent(StrategyEvent):
     """Event for strategy locked due to high volatility.
@@ -739,6 +770,10 @@ class VolatilityLockEvent(StrategyEvent):
     def __post_init__(self):
         if not self.event_type:
             self.event_type = EventType.VOLATILITY_LOCK
+
+    @property
+    def category(self) -> str:
+        return "risk"
 
     def activate(self, context: "EventContext") -> None:
         """Execute volatility lock event logic.
@@ -805,6 +840,7 @@ class VolatilityLockEvent(StrategyEvent):
         )
 
 
+@register_event(EventType.VOLATILITY_HEDGE_NEUTRALIZE)
 @dataclass
 class VolatilityHedgeNeutralizeEvent(StrategyEvent):
     """Event emitted when hedging-mode volatility lock neutralizes positions.
@@ -830,6 +866,10 @@ class VolatilityHedgeNeutralizeEvent(StrategyEvent):
     def __post_init__(self):
         if not self.event_type:
             self.event_type = EventType.VOLATILITY_HEDGE_NEUTRALIZE
+
+    @property
+    def category(self) -> str:
+        return "risk"
 
     def activate(self, context: "EventContext") -> None:
         import logging
@@ -885,6 +925,7 @@ class VolatilityHedgeNeutralizeEvent(StrategyEvent):
         )
 
 
+@register_event(EventType.MARGIN_PROTECTION)
 @dataclass
 class MarginProtectionEvent(StrategyEvent):
     """Event for margin protection triggered.
@@ -916,6 +957,10 @@ class MarginProtectionEvent(StrategyEvent):
     def __post_init__(self):
         if not self.event_type:
             self.event_type = EventType.MARGIN_PROTECTION
+
+    @property
+    def category(self) -> str:
+        return "risk"
 
     def activate(self, context: "EventContext") -> None:
         """Execute margin protection event logic.

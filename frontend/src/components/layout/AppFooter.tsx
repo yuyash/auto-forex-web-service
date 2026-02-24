@@ -3,7 +3,6 @@ import { Box, Chip, Stack, Tooltip } from '@mui/material';
 import {
   Circle as CircleIcon,
   TrendingUp as TrendingUpIcon,
-  Schedule as ScheduleIcon,
   Info as InfoIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -24,46 +23,11 @@ interface OandaHealthStatus {
 
 const AppFooter = () => {
   const { t } = useTranslation('common');
-  const { user, token } = useAuth();
-  const [currentTime, setCurrentTime] = useState<string>('');
+  const { token } = useAuth();
   const [backendVersion, setBackendVersion] = useState<string>('');
   const [oandaHealth, setOandaHealth] = useState<OandaHealthStatus | null>(
     null
   );
-
-  // Update current time in user's timezone
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      const timezone = user?.timezone || 'UTC';
-
-      try {
-        const timeString = now.toLocaleTimeString('en-US', {
-          timeZone: timezone,
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        });
-        setCurrentTime(timeString);
-      } catch {
-        // Fallback to UTC if timezone is invalid
-        const timeString = now.toLocaleTimeString('en-US', {
-          timeZone: 'UTC',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        });
-        setCurrentTime(timeString);
-      }
-    };
-
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-
-    return () => clearInterval(interval);
-  }, [user?.timezone]);
 
   // Fetch backend version from health endpoint
   useEffect(() => {
@@ -352,12 +316,12 @@ const AppFooter = () => {
       >
         {/* Version Info */}
         <Tooltip
-          title={`Frontend: v${__APP_VERSION__}${backendVersion ? ` / Backend: v${backendVersion}` : ''}`}
+          title={`v${__APP_VERSION__}${backendVersion ? ` / v${backendVersion}` : ''}`}
           arrow
         >
           <Chip
             icon={<InfoIcon />}
-            label={`FE v${__APP_VERSION__}${backendVersion ? ` / BE v${backendVersion}` : ''}`}
+            label={`v${__APP_VERSION__}${backendVersion ? ` / v${backendVersion}` : ''}`}
             variant="outlined"
             size="small"
           />
@@ -402,13 +366,6 @@ const AppFooter = () => {
               : t('status.inactive')
           }
           color={derivedStrategyStatus.isActive ? 'primary' : 'default'}
-        />
-
-        {/* System Time */}
-        <Chip
-          icon={<ScheduleIcon />}
-          label={`${currentTime}`}
-          variant="outlined"
         />
       </Stack>
     </Box>

@@ -58,7 +58,7 @@ import {
   useTaskPositions,
   type TaskPosition,
 } from '../../../hooks/useTaskPositions';
-import { useOverviewPnl } from '../../../hooks/useOverviewPnl';
+import { useTaskSummary } from '../../../hooks/useTaskSummary';
 import { TaskType } from '../../../types/common';
 import { handleAuthErrorStatus } from '../../../utils/authEvents';
 import { detectMarketGaps } from '../../../utils/marketClosedMarkers';
@@ -1058,7 +1058,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     totalTrades: serverTotalTrades,
     openPositionCount: serverOpenPositionCount,
     refetch: refetchPnl,
-  } = useOverviewPnl(String(taskId), taskType, celeryTaskId);
+  } = useTaskSummary(String(taskId), taskType, celeryTaskId);
 
   // Periodic PnL refresh while task is running
   useEffect(() => {

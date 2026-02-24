@@ -26,8 +26,7 @@ import {
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useTradingTask } from '../../hooks/useTradingTasks';
-import { useCurrentTickPolling } from '../../hooks/useCurrentTickPolling';
-import { useOverviewPnl } from '../../hooks/useOverviewPnl';
+import { useTaskSummary } from '../../hooks/useTaskSummary';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
@@ -82,16 +81,13 @@ export const TradingTaskDetail: React.FC = () => {
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
 
-  // Poll for current_tick updates while task is running
-  const { currentTick: polledTick } = useCurrentTickPolling(taskId, 'trading', {
-    enabled: task?.status === TaskStatus.RUNNING,
+  const overviewSummary = useTaskSummary(taskId, TaskType.TRADING, undefined, {
+    polling: task?.status === TaskStatus.RUNNING,
     interval: 2000,
   });
 
-  // Use polled current_tick when available (fresher data for running tasks)
-  const currentTick = polledTick ?? task?.current_tick;
-
-  const overviewSummary = useOverviewPnl(taskId, TaskType.TRADING);
+  // Use summary tick data for running tasks
+  const currentTick = overviewSummary.currentTick;
 
   // Derive tab value from URL parameter (use this for rendering)
   const currentTabValue =
@@ -382,7 +378,7 @@ export const TradingTaskDetail: React.FC = () => {
               <Grid size={{ xs: 12 }}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="h6" gutterBottom>
-                  Results
+                  Summary
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Box>
@@ -417,14 +413,51 @@ export const TradingTaskDetail: React.FC = () => {
                       {overviewSummary.unrealizedPnl.toFixed(2)} {pnlCurrency}
                     </Typography>
                   </Box>
+                  {overviewSummary.currentBalance != null && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Current Balance
+                      </Typography>
+                      <Typography variant="body1">
+                        {overviewSummary.currentBalance.toFixed(2)}{' '}
+                        {pnlCurrency}
+                      </Typography>
+                    </Box>
+                  )}
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Total Trades (count)
+                      Total Trades
                     </Typography>
                     <Typography variant="body1">
-                      {overviewSummary.totalTrades} trades
+                      {overviewSummary.totalTrades}
                     </Typography>
                   </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Open Positions
+                    </Typography>
+                    <Typography variant="body1">
+                      {overviewSummary.openPositionCount}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Closed Positions
+                    </Typography>
+                    <Typography variant="body1">
+                      {overviewSummary.closedPositionCount}
+                    </Typography>
+                  </Box>
+                  {overviewSummary.ticksProcessed > 0 && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Ticks Processed
+                      </Typography>
+                      <Typography variant="body1">
+                        {overviewSummary.ticksProcessed.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
                 </Box>
               </Grid>
 
