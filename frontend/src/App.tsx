@@ -7,6 +7,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import theme from './theme/theme';
+import darkTheme from './theme/darkTheme';
 import highContrastTheme from './theme/highContrastTheme';
 import AppLayout from './components/layout/AppLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -199,8 +200,12 @@ function AppRoutes() {
 }
 
 function ThemedApp() {
-  const { highContrastMode } = useAccessibility();
-  const activeTheme = highContrastMode ? highContrastTheme : theme;
+  const { highContrastMode, darkMode } = useAccessibility();
+  const activeTheme = highContrastMode
+    ? highContrastTheme
+    : darkMode
+      ? darkTheme
+      : theme;
 
   return (
     <ThemeProvider theme={activeTheme}>

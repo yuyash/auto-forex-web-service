@@ -21,9 +21,9 @@ const breakpoints = {
 const palette = {
   mode: 'light' as const,
   primary: {
-    main: '#1976d2',
-    light: '#42a5f5',
-    dark: '#1565c0',
+    main: '#00897b',
+    light: '#4ebaaa',
+    dark: '#005b4f',
     contrastText: '#ffffff',
   },
   secondary: {
@@ -51,9 +51,9 @@ const palette = {
     contrastText: '#000000',
   },
   info: {
-    main: '#2196f3',
-    light: '#64b5f6',
-    dark: '#1976d2',
+    main: '#00acc1',
+    light: '#5ddef4',
+    dark: '#007c91',
     contrastText: '#ffffff',
   },
   background: {
