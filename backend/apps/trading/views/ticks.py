@@ -130,6 +130,6 @@ class TickListView(APIView):
         except Exception as exc:
             logger.error("Error fetching ticks: %s", exc, exc_info=True)
             return Response(
-                {"error": f"Failed to fetch ticks: {exc}"},
+                {"error": "Failed to fetch ticks"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

@@ -155,7 +155,7 @@ class OandaAccountDetailView(APIView):
                 str(e),
             )
             response_data["live_data"] = False
-            response_data["live_data_error"] = str(e)
+            response_data["live_data_error"] = "Failed to fetch live data from OANDA"
         logger.info(
             "User %s retrieved OANDA account %s",
             request.user.email,

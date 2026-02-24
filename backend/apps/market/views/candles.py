@@ -380,7 +380,7 @@ class CandleDataView(APIView):
                 )
 
             return Response(
-                {"error": f"Failed to fetch candles: {str(e)}"},
+                {"error": "Failed to fetch candles"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 

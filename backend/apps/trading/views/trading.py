@@ -185,10 +185,15 @@ class TradingTaskViewSet(TaskSubResourceMixin, ModelViewSet):
             task = self.task_service.start_task(task)
             serializer = self.get_serializer(task)
             return Response({"results": serializer.data})
-        except Exception as e:
+        except Exception:
+            logger.error(
+                "API: Failed to submit trading task",
+                extra={"task_id": task.pk},
+                exc_info=True,
+            )
             return Response(
-                {"error": f"Failed to submit task: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"error": "Failed to submit task"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=True, methods=["post"])
@@ -236,7 +241,7 @@ class TradingTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                 extra={"task_id": task.pk, "error": str(e)},
             )
             return Response(
-                {"error": str(e)},
+                {"error": "Cannot stop task in its current state"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception:
@@ -259,15 +264,20 @@ class TradingTaskViewSet(TaskSubResourceMixin, ModelViewSet):
             task = self.task_service.restart_task(task.pk)
             serializer = self.get_serializer(task)
             return Response({"results": serializer.data})
-        except ValueError as e:
+        except ValueError:
             return Response(
-                {"error": str(e)},
+                {"error": "Cannot restart task in its current state"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except Exception as e:
+        except Exception:
+            logger.error(
+                "API: Failed to restart trading task",
+                extra={"task_id": task.pk},
+                exc_info=True,
+            )
             return Response(
-                {"error": f"Failed to restart task: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"error": "Failed to restart task"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=True, methods=["post"])
@@ -303,8 +313,8 @@ class TradingTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                 exc_info=True,
             )
             return Response(
-                {"error": f"Failed to pause task: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"error": "Failed to pause task"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=True, methods=["post"])
@@ -316,13 +326,18 @@ class TradingTaskViewSet(TaskSubResourceMixin, ModelViewSet):
             task = self.task_service.resume_task(task.pk)
             serializer = self.get_serializer(task)
             return Response({"results": serializer.data})
-        except ValueError as e:
+        except ValueError:
             return Response(
-                {"error": str(e)},
+                {"error": "Cannot resume task in its current state"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except Exception as e:
+        except Exception:
+            logger.error(
+                "API: Failed to resume trading task",
+                extra={"task_id": task.pk},
+                exc_info=True,
+            )
             return Response(
-                {"error": f"Failed to resume task: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"error": "Failed to resume task"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

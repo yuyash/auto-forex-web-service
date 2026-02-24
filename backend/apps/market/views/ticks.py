@@ -125,7 +125,7 @@ class TickDataView(APIView):
         except Exception as exc:
             logger.error("Error fetching ticks: %s", exc, exc_info=True)
             return Response(
-                {"error": f"Failed to fetch ticks: {str(exc)}"},
+                {"error": "Failed to fetch ticks"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -192,6 +192,6 @@ class TickDataRangeView(APIView):
         except Exception as exc:
             logger.error("Error fetching tick data range: %s", exc, exc_info=True)
             return Response(
-                {"error": f"Failed to fetch tick data range: {str(exc)}"},
+                {"error": "Failed to fetch tick data range"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
