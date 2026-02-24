@@ -26,8 +26,11 @@ import {
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useTradingTask } from '../../hooks/useTradingTasks';
-import { useCurrentTickPolling } from '../../hooks/useCurrentTickPolling';
-import { useOverviewPnl } from '../../hooks/useOverviewPnl';
+import { useTaskSummary } from '../../hooks/useTaskSummary';
+import {
+  useStrategies,
+  getStrategyDisplayName,
+} from '../../hooks/useStrategies';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
@@ -81,17 +84,18 @@ export const TradingTaskDetail: React.FC = () => {
   const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
+  const { strategies } = useStrategies();
 
-  // Poll for current_tick updates while task is running
-  const { currentTick: polledTick } = useCurrentTickPolling(taskId, 'trading', {
-    enabled: task?.status === TaskStatus.RUNNING,
-    interval: 2000,
-  });
+  const overviewSummary = useTaskSummary(taskId, TaskType.TRADING);
 
-  // Use polled current_tick when available (fresher data for running tasks)
-  const currentTick = polledTick ?? task?.current_tick;
-
-  const overviewSummary = useOverviewPnl(taskId, TaskType.TRADING);
+  // Use summary tick data for running tasks
+  const { summary: s } = overviewSummary;
+  const currentTick = s.tick.timestamp
+    ? {
+        timestamp: s.tick.timestamp,
+        price: s.tick.mid != null ? String(s.tick.mid) : null,
+      }
+    : null;
 
   // Derive tab value from URL parameter (use this for rendering)
   const currentTabValue =
@@ -171,13 +175,30 @@ export const TradingTaskDetail: React.FC = () => {
               <StatusBadge status={task.status} />
             </Box>
 
-            <Typography variant="body2" color="text.secondary">
-              Configuration: {task.config_name} • Strategy: {task.strategy_type}
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ pl: '8px' }}
+            >
+              Configuration: {task.config_name} • Strategy:{' '}
+              {getStrategyDisplayName(strategies, task.strategy_type)}
             </Typography>
 
             {task.description && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                 {task.description}
+              </Typography>
+            )}
+
+            {/* Progress Percentage */}
+            {task.status === TaskStatus.RUNNING && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 2, fontWeight: 600 }}
+              >
+                {Math.round(Math.min(Math.max(s.task.progress, 0), 100))}%
+                completed
               </Typography>
             )}
           </Box>
@@ -312,7 +333,11 @@ export const TradingTaskDetail: React.FC = () => {
                     <Typography variant="caption" color="text.secondary">
                       Pip Size
                     </Typography>
-                    <Typography variant="body1">{task.pip_size}</Typography>
+                    <Typography variant="body1">
+                      {task.pip_size
+                        ? parseFloat(task.pip_size)
+                        : task.pip_size}
+                    </Typography>
                   </Box>
 
                   <Box>
@@ -355,7 +380,7 @@ export const TradingTaskDetail: React.FC = () => {
                       variant="body1"
                       sx={{ textTransform: 'capitalize' }}
                     >
-                      {task.strategy_type}
+                      {getStrategyDisplayName(strategies, task.strategy_type)}
                     </Typography>
                   </Box>
 
@@ -392,13 +417,11 @@ export const TradingTaskDetail: React.FC = () => {
                     <Typography
                       variant="body1"
                       color={
-                        overviewSummary.realizedPnl >= 0
-                          ? 'success.main'
-                          : 'error.main'
+                        s.pnl.realized >= 0 ? 'success.main' : 'error.main'
                       }
                     >
-                      {overviewSummary.realizedPnl >= 0 ? '+' : ''}
-                      {overviewSummary.realizedPnl.toFixed(2)} {pnlCurrency}
+                      {s.pnl.realized >= 0 ? '+' : ''}
+                      {s.pnl.realized.toFixed(2)} {pnlCurrency}
                     </Typography>
                   </Box>
                   <Box>
@@ -408,23 +431,57 @@ export const TradingTaskDetail: React.FC = () => {
                     <Typography
                       variant="body1"
                       color={
-                        overviewSummary.unrealizedPnl >= 0
-                          ? 'success.main'
-                          : 'error.main'
+                        s.pnl.unrealized >= 0 ? 'success.main' : 'error.main'
                       }
                     >
-                      {overviewSummary.unrealizedPnl >= 0 ? '+' : ''}
-                      {overviewSummary.unrealizedPnl.toFixed(2)} {pnlCurrency}
+                      {s.pnl.unrealized >= 0 ? '+' : ''}
+                      {s.pnl.unrealized.toFixed(2)} {pnlCurrency}
                     </Typography>
                   </Box>
+                  {s.execution.currentBalance != null && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Current Balance
+                      </Typography>
+                      <Typography variant="body1">
+                        {s.execution.currentBalance.toFixed(2)} {pnlCurrency}
+                      </Typography>
+                    </Box>
+                  )}
                   <Box>
                     <Typography variant="caption" color="text.secondary">
                       Total Trades (count)
                     </Typography>
                     <Typography variant="body1">
-                      {overviewSummary.totalTrades} trades
+                      {s.counts.totalTrades}
                     </Typography>
                   </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Open Positions
+                    </Typography>
+                    <Typography variant="body1">
+                      {s.counts.openPositions}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Closed Positions
+                    </Typography>
+                    <Typography variant="body1">
+                      {s.counts.closedPositions}
+                    </Typography>
+                  </Box>
+                  {s.execution.ticksProcessed > 0 && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Ticks Processed
+                      </Typography>
+                      <Typography variant="body1">
+                        {s.execution.ticksProcessed.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
                 </Box>
               </Grid>
 

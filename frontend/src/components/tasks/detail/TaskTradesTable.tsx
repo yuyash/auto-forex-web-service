@@ -29,7 +29,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   enableRealTimeUpdates = false,
 }) => {
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
   const [isReloading, setIsReloading] = useState(false);
 
   const { trades, totalCount, isLoading, error, refetch } = useTaskTrades({

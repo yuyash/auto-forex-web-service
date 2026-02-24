@@ -351,17 +351,39 @@ const AppFooter = () => {
         flexWrap="wrap"
       >
         {/* Version Info */}
-        <Tooltip
-          title={`Frontend: v${__APP_VERSION__}${backendVersion ? ` / Backend: v${backendVersion}` : ''}`}
-          arrow
-        >
-          <Chip
-            icon={<InfoIcon />}
-            label={`FE v${__APP_VERSION__}${backendVersion ? ` / BE v${backendVersion}` : ''}`}
-            variant="outlined"
-            size="small"
-          />
-        </Tooltip>
+        {(() => {
+          const versionMismatch =
+            backendVersion !== '' && backendVersion !== __APP_VERSION__;
+          const versionDetail = backendVersion
+            ? `Frontend v${__APP_VERSION__} / Backend v${backendVersion}`
+            : `Frontend v${__APP_VERSION__}`;
+          const tooltipText = versionMismatch
+            ? t('status.versionMismatch', {
+                frontend: __APP_VERSION__,
+                backend: backendVersion,
+                defaultValue: `Version mismatch: ${versionDetail}`,
+              })
+            : versionDetail;
+          return (
+            <Tooltip title={tooltipText} arrow>
+              <Chip
+                icon={<InfoIcon />}
+                label={`v${__APP_VERSION__}`}
+                variant="outlined"
+                size="small"
+                sx={
+                  versionMismatch
+                    ? {
+                        color: 'error.main',
+                        borderColor: 'error.main',
+                        '& .MuiChip-icon': { color: 'error.main' },
+                      }
+                    : undefined
+                }
+              />
+            </Tooltip>
+          );
+        })()}
 
         {/* Connection Status */}
         <Tooltip title={connectionTooltip} arrow>

@@ -60,7 +60,7 @@ export interface StrategyStatus {
     status: string;
     positions_count: number;
     total_pnl: number;
-    last_tick_time: string | null;
+    timestamp: string | null;
   } | null;
   created_at: string | null;
   updated_at: string | null;
