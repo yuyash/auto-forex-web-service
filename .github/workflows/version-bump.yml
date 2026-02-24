@@ -6,25 +6,38 @@ on:
 
 permissions:
   contents: write
+<<<<<<< chore/pr-based-version-bump
+  pull-requests: write
+=======
+>>>>>>> main
 
 jobs:
   version-bump:
     name: Bump Version from Commit Messages
     runs-on: ubuntu-latest
+<<<<<<< chore/pr-based-version-bump
+=======
     # Skip if the commit was made by this workflow
     if: "!contains(github.event.head_commit.message, 'chore: bump version')"
+>>>>>>> main
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+<<<<<<< chore/pr-based-version-bump
+=======
           token: ${{ secrets.GITHUB_TOKEN }}
+>>>>>>> main
 
       - name: Determine version bump type
         id: bump
         run: |
+<<<<<<< chore/pr-based-version-bump
+=======
           # Get commit messages since last version bump
+>>>>>>> main
           LAST_BUMP=$(git log --oneline --grep="chore: bump version" -1 --format="%H" 2>/dev/null || echo "")
           if [ -z "$LAST_BUMP" ]; then
             COMMITS=$(git log --oneline --format="%s")
@@ -37,6 +50,12 @@ jobs:
 
           BUMP_TYPE="none"
 
+<<<<<<< chore/pr-based-version-bump
+          if echo "$COMMITS" | grep -qiE '^[a-z]+(\(.+\))?!:|BREAKING CHANGE'; then
+            BUMP_TYPE="major"
+          elif echo "$COMMITS" | grep -qiE '^feat(\(.+\))?:'; then
+            BUMP_TYPE="minor"
+=======
           # Check for breaking changes (major bump)
           if echo "$COMMITS" | grep -qiE '^[a-z]+(\(.+\))?!:|BREAKING CHANGE'; then
             BUMP_TYPE="major"
@@ -44,6 +63,7 @@ jobs:
           elif echo "$COMMITS" | grep -qiE '^feat(\(.+\))?:'; then
             BUMP_TYPE="minor"
           # Check for fix, perf, refactor commits (patch bump)
+>>>>>>> main
           elif echo "$COMMITS" | grep -qiE '^(fix|perf|refactor)(\(.+\))?:'; then
             BUMP_TYPE="patch"
           fi
@@ -53,6 +73,10 @@ jobs:
 
       - name: Bump backend version
         if: steps.bump.outputs.bump_type != 'none'
+<<<<<<< chore/pr-based-version-bump
+        id: backend
+=======
+>>>>>>> main
         run: |
           CURRENT=$(grep -oP '(?<=^version = ")[^"]+' backend/pyproject.toml)
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
@@ -66,7 +90,11 @@ jobs:
           NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
           sed -i "s/^version = \"${CURRENT}\"/version = \"${NEW_VERSION}\"/" backend/pyproject.toml
           echo "Backend: ${CURRENT} -> ${NEW_VERSION}"
+<<<<<<< chore/pr-based-version-bump
+          echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+=======
           echo "NEW_VERSION=${NEW_VERSION}" >> "$GITHUB_ENV"
+>>>>>>> main
 
       - name: Bump frontend version
         if: steps.bump.outputs.bump_type != 'none'
@@ -85,6 +113,28 @@ jobs:
           npm version "$NEW_VERSION" --no-git-tag-version
           echo "Frontend: ${CURRENT} -> ${NEW_VERSION}"
 
+<<<<<<< chore/pr-based-version-bump
+      - name: Create pull request
+        if: steps.bump.outputs.bump_type != 'none'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_VERSION: ${{ steps.backend.outputs.new_version }}
+        run: |
+          BRANCH="chore/bump-version-to-${NEW_VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add backend/pyproject.toml frontend/package.json
+          git commit -m "chore: bump version to ${NEW_VERSION}"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: bump version to ${NEW_VERSION}" \
+            --body "Automated version bump to **${NEW_VERSION}** based on conventional commits (${{ steps.bump.outputs.bump_type }})."
+=======
       - name: Commit and push version bump
         if: steps.bump.outputs.bump_type != 'none'
         run: |
@@ -95,3 +145,4 @@ jobs:
           git tag "v${NEW_VERSION}"
           git push
           git push --tags
+>>>>>>> main
