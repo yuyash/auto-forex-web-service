@@ -268,7 +268,6 @@ export const TaskActionMenu: React.FC<TaskActionMenuProps> = ({
         <IconButton
           onClick={handleClick}
           disabled={disabled}
-          size="small"
           sx={{
             '&:hover': {
               bgcolor: 'action.hover',

@@ -171,7 +171,6 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
 
           {/* User Menu */}
           <IconButton
-            size="small"
             edge="end"
             aria-label="account of current user"
             aria-controls="user-menu"

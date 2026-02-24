@@ -193,7 +193,7 @@ export function RecentTradesLog({
       </Typography>
 
       <TableContainer>
-        <Table size="small">
+        <Table>
           <TableHead>
             <TableRow>
               <TableCell>
@@ -245,7 +245,6 @@ export function RecentTradesLog({
                   <TableCell>
                     <Chip
                       label={trade.direction.toUpperCase()}
-                      size="small"
                       color={trade.direction === 'long' ? 'success' : 'error'}
                       icon={
                         trade.direction === 'long' ? (

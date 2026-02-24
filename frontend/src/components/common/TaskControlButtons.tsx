@@ -88,7 +88,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   onDelete,
   isLoading = false,
   disabled = false,
-  size = 'medium',
+  size = 'small',
   variant = 'outlined',
   showLabels = false,
   orientation = 'horizontal',

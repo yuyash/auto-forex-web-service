@@ -154,7 +154,6 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
         <Chip
           label={row.level as string}
           color={getLevelColor(row.level as string)}
-          size="small"
         />
       ),
     },
@@ -230,7 +229,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
         }}
       >
         <Typography variant="h6">Task Logs</Typography>
-        <FormControl size="small" sx={{ minWidth: 150 }}>
+        <FormControl sx={{ minWidth: 150 }}>
           <InputLabel>Level Filter</InputLabel>
           <Select
             value={levelFilter}

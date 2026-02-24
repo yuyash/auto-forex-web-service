@@ -110,7 +110,6 @@ export const ExecutionSummaryCard: React.FC<ExecutionSummaryCardProps> = ({
             label={statusInfo.label}
             color={statusInfo.color}
             icon={statusInfo.icon}
-            size="medium"
           />
         </Box>
 

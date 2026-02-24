@@ -234,7 +234,7 @@ const StrategyConfigForm = ({
       >
         <span>{label}</span>
         <Tooltip title={description} placement="top" arrow>
-          <IconButton size="small" aria-label={`${label} help`}>
+          <IconButton aria-label={`${label} help`}>
             <InfoOutlinedIcon fontSize="inherit" />
           </IconButton>
         </Tooltip>
@@ -299,14 +299,12 @@ const StrategyConfigForm = ({
       return (
         <FormControl
           fullWidth
-          size="small"
           key={fieldName}
           error={!!error}
           disabled={disabled}
         >
           <InputLabel required={isRequired}>{labelNode}</InputLabel>
           <Select
-            size="small"
             value={isNumericEnum ? Number(value) : String(value)}
             label={label}
             onChange={(e) => {
@@ -356,7 +354,6 @@ const StrategyConfigForm = ({
           key={fieldName}
           control={
             <Checkbox
-              size="small"
               checked={Boolean(value)}
               onChange={(e) => handleFieldChange(fieldName, e.target.checked)}
               disabled={disabled}
@@ -385,7 +382,6 @@ const StrategyConfigForm = ({
         <TextField
           key={fieldName}
           fullWidth
-          size="small"
           label={labelNode}
           type="number"
           value={value}
@@ -416,7 +412,6 @@ const StrategyConfigForm = ({
         <TextField
           key={fieldName}
           fullWidth
-          size="small"
           label={labelNode}
           value={arrayValue}
           onChange={(e) => {
@@ -441,7 +436,6 @@ const StrategyConfigForm = ({
       <TextField
         key={fieldName}
         fullWidth
-        size="small"
         label={labelNode}
         value={value}
         onChange={(e) => handleFieldChange(fieldName, e.target.value)}

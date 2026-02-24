@@ -219,7 +219,6 @@ export function ExecutionComparisonView({
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button
-              size="small"
               variant="outlined"
               onClick={() => setShowOnlyDifferences(!showOnlyDifferences)}
             >
@@ -227,7 +226,6 @@ export function ExecutionComparisonView({
             </Button>
             {onClose && (
               <Button
-                size="small"
                 variant="outlined"
                 startIcon={<CloseIcon />}
                 onClick={onClose}
@@ -265,10 +263,9 @@ export function ExecutionComparisonView({
                   <Checkbox
                     checked={selectedExecutionIds.includes(execution.id)}
                     onChange={() => handleToggleExecution(execution.id)}
-                    size="small"
                   />
                 </Box>
-                <StatusBadge status={execution.status} size="small" />
+                <StatusBadge status={execution.status} />
                 <Typography
                   variant="caption"
                   color="text.secondary"
@@ -326,7 +323,7 @@ export function ExecutionComparisonView({
               <TableCell>Status</TableCell>
               {selectedExecutions.map((execution) => (
                 <TableCell key={execution.id} align="center">
-                  <StatusBadge status={execution.status} size="small" />
+                  <StatusBadge status={execution.status} />
                 </TableCell>
               ))}
             </TableRow>
@@ -391,7 +388,6 @@ export function ExecutionComparisonView({
                         {isPositive !== undefined ? (
                           <Chip
                             label={row.format(value)}
-                            size="small"
                             color={isPositive ? 'success' : 'error'}
                           />
                         ) : (

@@ -122,7 +122,6 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
           }}
         >
           <TextField
-            size="small"
             placeholder="Search instrument..."
             value={searchTerm}
             onChange={(e) => {

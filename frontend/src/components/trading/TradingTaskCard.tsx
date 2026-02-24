@@ -340,7 +340,6 @@ export default function TradingTaskCard({
               {currentTask.account_type === 'live' && (
                 <Chip
                   label="LIVE ACCOUNT"
-                  size="small"
                   color="error"
                   sx={{ fontWeight: 'bold' }}
                 />
@@ -350,18 +349,15 @@ export default function TradingTaskCard({
                   strategies,
                   currentTask.strategy_type
                 )}
-                size="small"
                 variant="outlined"
               />
               <Chip
                 label={currentTask.config_name}
-                size="small"
                 variant="outlined"
                 color="primary"
               />
               <Chip
                 label={currentTask.account_name}
-                size="small"
                 variant="outlined"
                 color="secondary"
               />
@@ -382,11 +378,11 @@ export default function TradingTaskCard({
             }}
           >
             <Tooltip title="View Details">
-              <IconButton color="primary" onClick={handleView} size="small">
+              <IconButton color="primary" onClick={handleView}>
                 <ViewIcon />
               </IconButton>
             </Tooltip>
-            <IconButton onClick={handleActionsClick} size="small">
+            <IconButton onClick={handleActionsClick}>
               <MoreVertIcon />
             </IconButton>
           </Box>
@@ -403,7 +399,6 @@ export default function TradingTaskCard({
             onRestart={handleRestart}
             onDelete={handleDelete}
             isLoading={isLoading}
-            size="small"
             showLabels={true}
           />
         </Box>
@@ -510,12 +505,7 @@ export default function TradingTaskCard({
             Created: {formatDateTime(currentTask.created_at)}
           </Typography>
           {displayStatus === TaskStatus.RUNNING && (
-            <Chip
-              label="LIVE"
-              size="small"
-              color="success"
-              sx={{ fontWeight: 'bold' }}
-            />
+            <Chip label="LIVE" color="success" sx={{ fontWeight: 'bold' }} />
           )}
         </Box>
       </CardContent>
