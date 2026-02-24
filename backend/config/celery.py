@@ -3,11 +3,14 @@
 This is intentionally minimal: tasks are discovered from installed Django apps.
 """
 
+import logging
 import os
 
 from celery import Celery
 from celery.signals import worker_ready
 from django.apps import apps
+
+logger = logging.getLogger(__name__)
 
 # Set the default Django settings module for the 'celery' program.
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
@@ -23,6 +26,21 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 # Load task modules from all registered Django apps.
 # Use a callable to ensure Django apps are loaded before discovery
 app.autodiscover_tasks(lambda: [app_config.name for app_config in apps.get_app_configs()])
+
+
+@worker_ready.connect
+def _recover_orphaned_tasks_on_startup(**_kwargs: object) -> None:
+    """Recover tasks that were orphaned by a previous crash (方法1).
+
+    Runs with a short countdown to let Django fully initialise and to give
+    the database connection pool time to warm up.
+    """
+    from apps.trading.tasks.recovery import recover_orphaned_tasks_beat
+
+    try:
+        recover_orphaned_tasks_beat.apply_async(countdown=10, queue="trading")
+    except Exception:
+        logger.exception("Failed to schedule orphaned task recovery on worker startup")
 
 
 @worker_ready.connect
