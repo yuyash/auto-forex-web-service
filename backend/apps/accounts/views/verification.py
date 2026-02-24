@@ -3,6 +3,7 @@
 from logging import Logger, getLogger
 
 from django.conf import settings
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -28,6 +29,7 @@ class EmailVerificationView(APIView):
     authentication_classes: list = []
     serializer_class = EmailVerificationSerializer
 
+    @extend_schema(operation_id="auth_verify_email", tags=["Accounts"])
     def post(self, request: Request) -> Response:
         """Verify user email with token."""
         token = request.data.get("token")
@@ -100,6 +102,7 @@ class ResendVerificationEmailView(APIView):
 
         return f"{base_url}/verify-email?token={token}"
 
+    @extend_schema(operation_id="auth_resend_verification", tags=["Accounts"])
     def post(self, request: Request) -> Response:
         """Resend verification email."""
         email = request.data.get("email", "").lower()

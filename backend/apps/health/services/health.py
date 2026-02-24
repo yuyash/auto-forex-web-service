@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.metadata
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -62,6 +63,7 @@ class HealthCheckService:
             "status": status.value,
             "timestamp": datetime.now(tz=UTC).isoformat(),
             "response_time_ms": response_time_ms,
+            "version": self._get_version(),
         }
 
         logger.info(
@@ -138,6 +140,14 @@ class HealthCheckService:
                 response_time_ms=response_time_ms,
                 error=str(exc),
             )
+
+    @staticmethod
+    def _get_version() -> str:
+        """Return the backend version from package metadata."""
+        try:
+            return importlib.metadata.version("auto-forex")
+        except importlib.metadata.PackageNotFoundError:
+            return "unknown"
 
     @staticmethod
     def _determine_status(

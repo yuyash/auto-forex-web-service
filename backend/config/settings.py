@@ -8,6 +8,7 @@ Configuration is done via environment variables and this settings file.
 - Environment variables: Configuration overrides
 """
 
+import importlib.metadata
 import os
 from pathlib import Path
 from typing import Any
@@ -366,7 +367,7 @@ SPECTACULAR_SETTINGS = {
         "## Rate Limiting\n"
         "Authentication endpoints are rate-limited to prevent abuse."
     ),
-    "VERSION": "0.1.0",
+    "VERSION": importlib.metadata.version("auto-forex"),
     "SERVE_INCLUDE_SCHEMA": False,
     # Only serve docs UI in DEBUG mode.
     "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"] if DEBUG else [],

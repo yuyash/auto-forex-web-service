@@ -34,6 +34,7 @@ class UserSettingsView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = UserSettingsUpdateSerializer
 
+    @extend_schema(operation_id="user_settings_get", tags=["Accounts"])
     def get(self, request: Request) -> Response:
         """Get user settings."""
         if not request.user.is_authenticated:
@@ -60,6 +61,7 @@ class UserSettingsView(APIView):
 
         return Response(response_data, status=status.HTTP_200_OK)
 
+    @extend_schema(operation_id="user_settings_update", tags=["Accounts"])
     def put(self, request: Request) -> Response:
         """Update user settings."""
         if not request.user.is_authenticated:

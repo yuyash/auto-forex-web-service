@@ -58,7 +58,7 @@ jobs:
           mkdir -p ../docs
           uv run python manage.py spectacular --file ../docs/openapi.json --format openapi-json
 
-      - name: Generate ReDoc HTML
+      - name: Generate Swagger UI HTML
         working-directory: .
         run: |
           cat > docs/index.html << 'HEREDOC'
@@ -68,12 +68,24 @@ jobs:
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
             <title>Auto Forex Trader API</title>
-            <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" />
+            <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
             <style>body { margin: 0; padding: 0; }</style>
           </head>
           <body>
-            <redoc spec-url="openapi.json" expand-responses="200,201" hide-loading></redoc>
-            <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+            <div id="swagger-ui"></div>
+            <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+            <script>
+              SwaggerUIBundle({
+                url: "openapi.json",
+                dom_id: "#swagger-ui",
+                presets: [
+                  SwaggerUIBundle.presets.apis,
+                  SwaggerUIBundle.SwaggerUIStandalonePreset
+                ],
+                layout: "BaseLayout",
+                deepLinking: true,
+              });
+            </script>
           </body>
           </html>
           HEREDOC
