@@ -33,6 +33,7 @@ class HealthView(APIView):
     permission_classes = [AllowAny]
     # Public endpoint; avoid SessionAuthentication CSRF enforcement.
     authentication_classes = []
+    throttle_classes: list = []
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)

@@ -14,7 +14,7 @@ import { TaskType } from '../types/common';
 import axios, { AxiosError } from 'axios';
 import type { PaginatedApiResponse } from '../api/types';
 
-const MAX_PAGE_SIZE = 1000;
+const MAX_PAGE_SIZE = 5000;
 const MAX_PAGES = 50; // safety limit
 
 /** Retry config for 429 Too Many Requests */
