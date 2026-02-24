@@ -80,8 +80,9 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
 
   // PnL summary from server-side aggregation (no full-fetch needed)
   const {
-    realizedPnl: totalRealizedPnl,
-    unrealizedPnl: totalUnrealizedPnl,
+    summary: {
+      pnl: { realized: totalRealizedPnl, unrealized: totalUnrealizedPnl },
+    },
     refetch: refetchPnl,
   } = useOverviewPnl(String(taskId), taskType, celeryTaskId);
 

@@ -27,7 +27,10 @@ import {
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useBacktestTask } from '../../hooks/useBacktestTasks';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
-import { useCurrentTickPolling } from '../../hooks/useCurrentTickPolling';
+import {
+  useStrategies,
+  getStrategyDisplayName,
+} from '../../hooks/useStrategies';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
@@ -36,8 +39,7 @@ import { TaskPositionsTable } from '../tasks/detail/TaskPositionsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
 import { TaskReplayPanel } from '../tasks/detail/TaskReplayPanel';
 import { TaskOrdersTable } from '../tasks/detail/TaskOrdersTable';
-import { TaskProgress } from '../tasks/TaskProgress';
-import { useOverviewPnl } from '../../hooks/useOverviewPnl';
+import { useTaskSummary } from '../../hooks/useTaskSummary';
 import { TaskStatus, TaskType } from '../../types/common';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { useDeleteBacktestTask } from '../../hooks/useBacktestTaskMutations';
@@ -88,12 +90,21 @@ export const BacktestTaskDetail: React.FC = () => {
     error,
     refetch,
   } = useBacktestTask(taskId || undefined);
+  const { strategies } = useStrategies();
 
-  const overviewSummary = useOverviewPnl(
+  const overviewSummary = useTaskSummary(
     taskId,
     TaskType.BACKTEST,
     task?.celery_task_id || undefined
   );
+
+  const { summary: s } = overviewSummary;
+  const polledTick = s.tick.timestamp
+    ? {
+        timestamp: s.tick.timestamp,
+        price: s.tick.mid != null ? String(s.tick.mid) : null,
+      }
+    : null;
 
   // Use HTTP polling for task status updates
   const {
@@ -105,18 +116,6 @@ export const BacktestTaskDetail: React.FC = () => {
     pollStatus: true,
     interval: 3000,
   });
-
-  // Poll for current_tick via lightweight endpoint
-  const { currentTick: polledTick } = useCurrentTickPolling(
-    taskId,
-    'backtest',
-    {
-      enabled:
-        task?.status === TaskStatus.RUNNING ||
-        task?.status === TaskStatus.STARTING,
-      interval: 2000,
-    }
-  );
 
   // Refetch when status changes
   const prevStatusRef = useRef<string | undefined>(undefined);
@@ -218,8 +217,12 @@ export const BacktestTaskDetail: React.FC = () => {
               <StatusBadge status={polledStatus?.status || task.status} />
             </Box>
 
-            <Typography variant="body2" color="text.secondary">
-              {task.strategy_type}
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ pl: '4px' }}
+            >
+              {getStrategyDisplayName(strategies, task.strategy_type)}
             </Typography>
 
             {task.description && (
@@ -228,15 +231,17 @@ export const BacktestTaskDetail: React.FC = () => {
               </Typography>
             )}
 
-            {/* Progress Bar */}
-            <Box sx={{ mt: 2, maxWidth: 600 }}>
-              <TaskProgress
-                status={polledStatus?.status || task.status}
-                progress={polledStatus?.progress ?? task.progress ?? 0}
-                compact={false}
-                showPercentage={true}
-              />
-            </Box>
+            {/* Progress Percentage */}
+            {(polledStatus?.status || task.status) === TaskStatus.RUNNING && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 2, fontWeight: 600 }}
+              >
+                {Math.round(Math.min(Math.max(s.task.progress, 0), 100))}%
+                completed
+              </Typography>
+            )}
           </Box>
 
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -387,7 +392,11 @@ export const BacktestTaskDetail: React.FC = () => {
                     <Typography variant="caption" color="text.secondary">
                       Pip Size
                     </Typography>
-                    <Typography variant="body1">{task.pip_size}</Typography>
+                    <Typography variant="body1">
+                      {task.pip_size
+                        ? parseFloat(task.pip_size)
+                        : task.pip_size}
+                    </Typography>
                   </Box>
 
                   <Box>
@@ -433,7 +442,7 @@ export const BacktestTaskDetail: React.FC = () => {
                       variant="body1"
                       sx={{ textTransform: 'capitalize' }}
                     >
-                      {task.strategy_type}
+                      {getStrategyDisplayName(strategies, task.strategy_type)}
                     </Typography>
                   </Box>
 
@@ -507,13 +516,11 @@ export const BacktestTaskDetail: React.FC = () => {
                     <Typography
                       variant="body1"
                       color={
-                        overviewSummary.realizedPnl >= 0
-                          ? 'success.main'
-                          : 'error.main'
+                        s.pnl.realized >= 0 ? 'success.main' : 'error.main'
                       }
                     >
-                      {overviewSummary.realizedPnl >= 0 ? '+' : ''}
-                      {overviewSummary.realizedPnl.toFixed(2)} {pnlCurrency}
+                      {s.pnl.realized >= 0 ? '+' : ''}
+                      {s.pnl.realized.toFixed(2)} {pnlCurrency}
                     </Typography>
                   </Box>
                   <Box>
@@ -523,23 +530,57 @@ export const BacktestTaskDetail: React.FC = () => {
                     <Typography
                       variant="body1"
                       color={
-                        overviewSummary.unrealizedPnl >= 0
-                          ? 'success.main'
-                          : 'error.main'
+                        s.pnl.unrealized >= 0 ? 'success.main' : 'error.main'
                       }
                     >
-                      {overviewSummary.unrealizedPnl >= 0 ? '+' : ''}
-                      {overviewSummary.unrealizedPnl.toFixed(2)} {pnlCurrency}
+                      {s.pnl.unrealized >= 0 ? '+' : ''}
+                      {s.pnl.unrealized.toFixed(2)} {pnlCurrency}
                     </Typography>
                   </Box>
+                  {s.execution.currentBalance != null && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Current Balance
+                      </Typography>
+                      <Typography variant="body1">
+                        {s.execution.currentBalance.toFixed(2)} {pnlCurrency}
+                      </Typography>
+                    </Box>
+                  )}
                   <Box>
                     <Typography variant="caption" color="text.secondary">
                       Total Trades (count)
                     </Typography>
                     <Typography variant="body1">
-                      {overviewSummary.totalTrades} trades
+                      {s.counts.totalTrades}
                     </Typography>
                   </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Open Positions
+                    </Typography>
+                    <Typography variant="body1">
+                      {s.counts.openPositions}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Closed Positions
+                    </Typography>
+                    <Typography variant="body1">
+                      {s.counts.closedPositions}
+                    </Typography>
+                  </Box>
+                  {s.execution.ticksProcessed > 0 && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Ticks Processed
+                      </Typography>
+                      <Typography variant="body1">
+                        {s.execution.ticksProcessed.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
                 </Box>
               </Grid>
 

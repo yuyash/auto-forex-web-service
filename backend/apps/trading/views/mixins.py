@@ -7,12 +7,14 @@ used by both BacktestTaskViewSet and TradingTaskViewSet.
 from __future__ import annotations
 
 from django.utils.dateparse import parse_datetime
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from apps.trading.enums import LogLevel
 from apps.trading.models.logs import TaskLog
+from apps.trading.serializers.summary import TaskSummarySerializer
 from apps.trading.views.pagination import TaskSubResourcePagination
 
 
@@ -297,27 +299,31 @@ class TaskSubResourceMixin:
         serializer = OrderSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
-    # ------------------------------------------------------------------
-    # pnl_summary
-    # ------------------------------------------------------------------
-    @action(detail=True, methods=["get"], url_path="pnl-summary")
-    def pnl_summary(self, request: Request, pk: str | None = None) -> Response:
-        from apps.trading.services.pnl import compute_pnl_summary
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
+        ],
+        responses={200: TaskSummarySerializer},
+        description=(
+            "Retrieve structured task summary including PnL, "
+            "trade/position counts, execution state, tick info, and task status."
+        ),
+    )
+    @action(detail=True, methods=["get"], url_path="summary")
+    def summary(self, request: Request, pk: str | None = None) -> Response:
+        """Retrieve comprehensive task summary."""
+        from dataclasses import asdict
+
+        from apps.trading.services.summary import compute_task_summary
 
         task = self.get_object()  # type: ignore[attr-defined]
         celery_task_id = request.query_params.get("celery_task_id")
 
-        summary = compute_pnl_summary(
+        result = compute_task_summary(
             task_type=self.task_type_label,
             task_id=str(task.pk),
             celery_task_id=celery_task_id,
         )
 
-        return Response(
-            {
-                "realized_pnl": str(summary.realized_pnl),
-                "unrealized_pnl": str(summary.unrealized_pnl),
-                "total_trades": summary.total_trades,
-                "open_position_count": summary.open_position_count,
-            }
-        )
+        serializer = TaskSummarySerializer(asdict(result))
+        return Response(serializer.data)

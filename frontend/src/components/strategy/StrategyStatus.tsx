@@ -351,11 +351,11 @@ const StrategyStatus = ({
         )}
 
         {/* Last Update Time */}
-        {strategyStatus.state?.last_tick_time && (
+        {strategyStatus.state?.timestamp && (
           <Box mt={2}>
             <Typography variant="caption" color="text.secondary">
               {t('status.lastUpdate', { defaultValue: 'Last Update' })}:{' '}
-              {new Date(strategyStatus.state.last_tick_time).toLocaleString()}
+              {new Date(strategyStatus.state.timestamp).toLocaleString()}
             </Typography>
           </Box>
         )}

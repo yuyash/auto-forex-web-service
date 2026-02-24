@@ -90,16 +90,26 @@ vi.mock('../../../src/components/tasks/TaskProgress', () => ({
   TaskProgress: () => <div>Task Progress</div>,
 }));
 
-vi.mock('../../../src/hooks/useOverviewPnl', () => ({
-  useOverviewPnl: vi.fn(() => ({
-    realizedPnl: 0,
-    unrealizedPnl: 0,
-    totalTrades: 0,
+vi.mock('../../../src/hooks/useTaskSummary', () => ({
+  useTaskSummary: vi.fn(() => ({
+    summary: {
+      timestamp: null,
+      pnl: { realized: 0, unrealized: 0 },
+      counts: { totalTrades: 0, openPositions: 0, closedPositions: 0 },
+      execution: { currentBalance: null, ticksProcessed: 0 },
+      tick: { timestamp: null, bid: null, ask: null, mid: null },
+      task: {
+        status: '',
+        startedAt: null,
+        completedAt: null,
+        errorMessage: null,
+        progress: 0,
+      },
+    },
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
   })),
-}));
-
-vi.mock('../../../src/components/tasks/actions/DeleteTaskDialog', () => ({
-  DeleteTaskDialog: () => null,
 }));
 
 vi.mock('../../../src/hooks/useBacktestTaskMutations', () => ({
@@ -107,6 +117,10 @@ vi.mock('../../../src/hooks/useBacktestTaskMutations', () => ({
     mutate: vi.fn(),
     isLoading: false,
   })),
+}));
+
+vi.mock('../../../src/components/tasks/actions/DeleteTaskDialog', () => ({
+  DeleteTaskDialog: () => null,
 }));
 
 // Test wrapper
