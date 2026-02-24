@@ -23,6 +23,7 @@ import {
   createTooltipTimeFormatter,
 } from '../../utils/adaptiveTimeScalePlugin';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '@mui/material/styles';
 import {
   calcSMA,
   calcEMA,
@@ -194,6 +195,8 @@ export default function MarketChart({
   // Keep setOverlays for potential internal use; parent controls take precedence
   void setOverlaysInternal;
   const { user } = useAuth();
+  const muiTheme = useTheme();
+  const isDark = muiTheme.palette.mode === 'dark';
   const timezone = user?.timezone || 'UTC';
 
   // ── Apply overlays whenever settings or data change ──────────────
@@ -522,16 +525,16 @@ export default function MarketChart({
     const chart = createChart(container, {
       height: initialHeight,
       layout: {
-        background: { color: '#ffffff' },
-        textColor: '#334155',
+        background: { color: isDark ? '#131722' : '#ffffff' },
+        textColor: isDark ? '#d1d4dc' : '#334155',
       },
       grid: {
         vertLines: { visible: false },
-        horzLines: { color: '#e2e8f0' },
+        horzLines: { color: isDark ? '#2a2e39' : '#e2e8f0' },
       },
-      rightPriceScale: { borderColor: '#cbd5e1' },
+      rightPriceScale: { borderColor: isDark ? '#2a2e39' : '#cbd5e1' },
       timeScale: {
-        borderColor: '#cbd5e1',
+        borderColor: isDark ? '#2a2e39' : '#cbd5e1',
         timeVisible: true,
         secondsVisible: SECONDS_GRANULARITIES.has(granularity),
         tickMarkFormatter: createSuppressedTickMarkFormatter(),
@@ -672,7 +675,7 @@ export default function MarketChart({
         markersRef.current = null;
       }
     };
-  }, [height, fillHeight, granularity, timezone]);
+  }, [height, fillHeight, granularity, timezone, isDark]);
 
   // Fetch data when instrument/granularity changes
   useEffect(() => {
@@ -723,8 +726,10 @@ export default function MarketChart({
           fontSize: '12px',
           fontFamily:
             '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          color: '#334155',
-          backgroundColor: 'rgba(255,255,255,0.85)',
+          color: isDark ? '#d1d4dc' : '#334155',
+          backgroundColor: isDark
+            ? 'rgba(30,34,45,0.9)'
+            : 'rgba(255,255,255,0.85)',
           padding: '4px 8px',
           borderRadius: '4px',
           pointerEvents: 'none',
@@ -744,7 +749,9 @@ export default function MarketChart({
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 1,
-            backgroundColor: 'rgba(255,255,255,0.7)',
+            backgroundColor: isDark
+              ? 'rgba(19,23,34,0.7)'
+              : 'rgba(255,255,255,0.7)',
           }}
         >
           <CircularProgress size={32} />
