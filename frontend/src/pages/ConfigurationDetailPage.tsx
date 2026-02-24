@@ -207,21 +207,14 @@ export default function ConfigurationDetailPage() {
                   configuration.strategy_type
                 )}
                 color="primary"
-                size="small"
                 variant="outlined"
               />
               <Chip
                 label={`Created ${formatDate(configuration.created_at)}`}
-                size="small"
                 variant="outlined"
               />
               {configuration.is_in_use && (
-                <Chip
-                  label="In Use"
-                  color="success"
-                  size="small"
-                  variant="filled"
-                />
+                <Chip label="In Use" color="success" variant="filled" />
               )}
             </Box>
 

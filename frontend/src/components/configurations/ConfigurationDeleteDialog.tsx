@@ -163,13 +163,11 @@ const ConfigurationDeleteDialog = ({
                       >
                         <Chip
                           label={task.task_type}
-                          size="small"
                           variant="outlined"
                           sx={{ fontSize: '0.7rem' }}
                         />
                         <StatusBadge
                           status={task.status as TaskStatus}
-                          size="small"
                           showIcon={false}
                         />
                       </Box>

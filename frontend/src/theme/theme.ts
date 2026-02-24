@@ -142,16 +142,172 @@ const spacing = 8;
 // Define component overrides
 const components = {
   MuiButton: {
+    defaultProps: {
+      size: 'small' as const,
+    },
     styleOverrides: {
       root: {
         borderRadius: 4,
         textTransform: 'none' as const,
+        fontSize: '0.8rem',
+        padding: '3px 10px',
+        minHeight: 30,
         '&:focus-visible': {
           outline: '2px solid',
           outlineColor: palette.primary.main,
           outlineOffset: '2px',
         },
       },
+    },
+  },
+  MuiIconButton: {
+    defaultProps: {
+      size: 'small' as const,
+    },
+    styleOverrides: {
+      root: {
+        padding: 4,
+        '&:focus-visible': {
+          outline: '2px solid',
+          outlineColor: palette.primary.main,
+          outlineOffset: '2px',
+        },
+      },
+    },
+  },
+  MuiTextField: {
+    defaultProps: {
+      size: 'small' as const,
+    },
+    styleOverrides: {
+      root: {
+        '& .MuiInputBase-input': {
+          fontSize: '0.8rem',
+          padding: '6px 10px',
+        },
+        '& .MuiInputLabel-root': {
+          fontSize: '0.8rem',
+        },
+        '& .MuiOutlinedInput-root': {
+          '&:focus-within': {
+            outline: '2px solid',
+            outlineColor: palette.primary.main,
+            outlineOffset: '2px',
+          },
+        },
+      },
+    },
+  },
+  MuiFormControl: {
+    defaultProps: {
+      size: 'small' as const,
+    },
+  },
+  MuiSelect: {
+    defaultProps: {
+      size: 'small' as const,
+    },
+  },
+  MuiInputLabel: {
+    defaultProps: {
+      size: 'small' as const,
+    },
+    styleOverrides: {
+      root: {
+        fontSize: '0.8rem',
+      },
+    },
+  },
+  MuiMenuItem: {
+    styleOverrides: {
+      root: {
+        fontSize: '0.75rem',
+        minHeight: 28,
+        paddingTop: 2,
+        paddingBottom: 2,
+      },
+    },
+  },
+  MuiListItemText: {
+    styleOverrides: {
+      primary: {
+        fontSize: '0.75rem',
+      },
+      secondary: {
+        fontSize: '0.65rem',
+      },
+    },
+  },
+  MuiListItemIcon: {
+    styleOverrides: {
+      root: {
+        minWidth: 32,
+        '& .MuiSvgIcon-root': {
+          fontSize: '1.1rem',
+        },
+      },
+    },
+  },
+  MuiOutlinedInput: {
+    styleOverrides: {
+      root: {
+        fontSize: '0.8rem',
+      },
+      input: {
+        padding: '6px 10px',
+      },
+    },
+  },
+  MuiAutocomplete: {
+    defaultProps: {
+      size: 'small' as const,
+    },
+  },
+  MuiChip: {
+    defaultProps: {
+      size: 'small' as const,
+    },
+  },
+  MuiSwitch: {
+    defaultProps: {
+      size: 'small' as const,
+    },
+  },
+  MuiCheckbox: {
+    defaultProps: {
+      size: 'small' as const,
+    },
+  },
+  MuiFormControlLabel: {
+    styleOverrides: {
+      label: {
+        fontSize: '0.75rem',
+      },
+    },
+  },
+  MuiRadio: {
+    defaultProps: {
+      size: 'small' as const,
+    },
+  },
+  MuiFab: {
+    defaultProps: {
+      size: 'small' as const,
+    },
+  },
+  MuiToggleButton: {
+    defaultProps: {
+      size: 'small' as const,
+    },
+  },
+  MuiPagination: {
+    defaultProps: {
+      size: 'small' as const,
+    },
+  },
+  MuiTable: {
+    defaultProps: {
+      size: 'small' as const,
     },
   },
   MuiCard: {
@@ -184,30 +340,6 @@ const components = {
           outline: '2px solid',
           outlineColor: palette.primary.main,
           outlineOffset: '-2px',
-        },
-      },
-    },
-  },
-  MuiIconButton: {
-    styleOverrides: {
-      root: {
-        '&:focus-visible': {
-          outline: '2px solid',
-          outlineColor: palette.primary.main,
-          outlineOffset: '2px',
-        },
-      },
-    },
-  },
-  MuiTextField: {
-    styleOverrides: {
-      root: {
-        '& .MuiOutlinedInput-root': {
-          '&:focus-within': {
-            outline: '2px solid',
-            outlineColor: palette.primary.main,
-            outlineOffset: '2px',
-          },
         },
       },
     },

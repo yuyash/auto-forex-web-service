@@ -320,11 +320,7 @@ export const TradingTaskDetail: React.FC = () => {
                       Status
                     </Typography>
                     <Box sx={{ mt: 0.5 }}>
-                      <StatusBadge
-                        status={task.status}
-                        size="small"
-                        showIcon={false}
-                      />
+                      <StatusBadge status={task.status} showIcon={false} />
                     </Box>
                   </Box>
                 </Box>

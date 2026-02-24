@@ -170,7 +170,7 @@ export const EquityOHLCChart: React.FC<EquityOHLCChartProps> = ({
         </Typography>
 
         {showGranularitySelector && (
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+          <FormControl sx={{ minWidth: 150 }}>
             <InputLabel id="granularity-select-label">Granularity</InputLabel>
             <Select
               labelId="granularity-select-label"

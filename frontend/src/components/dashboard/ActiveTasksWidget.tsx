@@ -54,7 +54,6 @@ const ActiveTasksWidget = () => {
       >
         <Typography variant="h6">Active Tasks ({totalActive})</Typography>
         <Button
-          size="small"
           endIcon={<ArrowIcon />}
           onClick={() => navigate('/backtest-tasks')}
         >

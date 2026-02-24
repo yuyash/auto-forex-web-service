@@ -108,7 +108,6 @@ export function LiveTaskTab({ task }: LiveTaskTabProps) {
           }
           onClick={handleManualRefresh}
           disabled={isRefreshing}
-          size="small"
         >
           Refresh
         </Button>

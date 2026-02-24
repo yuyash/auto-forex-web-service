@@ -126,14 +126,13 @@ export function TradingTaskConfigTab({ task }: TradingTaskConfigTabProps) {
         >
           <Typography variant="h6">Strategy Configuration</Typography>
           {isMobile ? (
-            <IconButton onClick={handleMenuOpen} size="small">
+            <IconButton onClick={handleMenuOpen}>
               <MoreVertIcon />
             </IconButton>
           ) : (
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button
                 variant="outlined"
-                size="small"
                 startIcon={<OpenInNewIcon />}
                 onClick={handleViewConfig}
               >
@@ -141,7 +140,6 @@ export function TradingTaskConfigTab({ task }: TradingTaskConfigTabProps) {
               </Button>
               <Button
                 variant="contained"
-                size="small"
                 startIcon={<EditIcon />}
                 onClick={handleEditConfig}
               >
@@ -184,7 +182,6 @@ export function TradingTaskConfigTab({ task }: TradingTaskConfigTabProps) {
                 </Typography>
                 <Chip
                   label={config.strategy_type}
-                  size="small"
                   color="primary"
                   sx={{ mt: 0.5 }}
                 />

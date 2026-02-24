@@ -397,7 +397,6 @@ export const BacktestTaskDetail: React.FC = () => {
                     <Box sx={{ mt: 0.5 }}>
                       <StatusBadge
                         status={polledStatus?.status || task.status}
-                        size="small"
                         showIcon={false}
                       />
                     </Box>

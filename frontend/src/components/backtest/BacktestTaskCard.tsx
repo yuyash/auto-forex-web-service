@@ -270,14 +270,12 @@ export default function BacktestTaskCard({
                     strategies,
                     currentTask.strategy_type
                   )}
-                  size="small"
                   variant="outlined"
                 />
               )}
               {currentTask.config_name && (
                 <Chip
                   label={currentTask.config_name}
-                  size="small"
                   variant="outlined"
                   color="primary"
                 />
@@ -298,11 +296,11 @@ export default function BacktestTaskCard({
             }}
           >
             <Tooltip title="View Details">
-              <IconButton color="primary" onClick={handleView} size="small">
+              <IconButton color="primary" onClick={handleView}>
                 <ViewIcon />
               </IconButton>
             </Tooltip>
-            <IconButton onClick={handleActionsClick} size="small">
+            <IconButton onClick={handleActionsClick}>
               <MoreVertIcon />
             </IconButton>
           </Box>
@@ -319,7 +317,6 @@ export default function BacktestTaskCard({
             onRestart={handleRestart}
             onDelete={handleDelete}
             isLoading={isLoading}
-            size="small"
             showLabels={true}
           />
         </Box>

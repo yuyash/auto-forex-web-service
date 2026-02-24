@@ -297,7 +297,6 @@ export default function TradingTaskForm({
                       <strong>Type:</strong>{' '}
                       <Chip
                         label={selectedAccount.api_type.toUpperCase()}
-                        size="small"
                         color={
                           selectedAccount.api_type === 'live'
                             ? 'error'

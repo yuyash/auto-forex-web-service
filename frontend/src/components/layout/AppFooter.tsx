@@ -352,7 +352,6 @@ const AppFooter = () => {
                     ? 'default'
                     : 'error'
             }
-            size="small"
             sx={{
               '& .MuiChip-icon': {
                 fontSize: '0.75rem',
@@ -370,14 +369,12 @@ const AppFooter = () => {
               : t('status.inactive')
           }
           color={derivedStrategyStatus.isActive ? 'primary' : 'default'}
-          size="small"
         />
 
         {/* System Time */}
         <Chip
           icon={<ScheduleIcon />}
           label={`${currentTime}`}
-          size="small"
           variant="outlined"
         />
       </Stack>

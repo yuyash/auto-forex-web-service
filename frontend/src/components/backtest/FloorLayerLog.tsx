@@ -297,7 +297,7 @@ export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
       />
 
       <TableContainer>
-        <Table size="small">
+        <Table>
           <TableHead>
             <TableRow>
               <TableCell>Event</TableCell>
@@ -395,7 +395,6 @@ export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
                   <TableCell>
                     <Chip
                       label={eventDisplay.label}
-                      size="small"
                       color={eventDisplay.color}
                     />
                   </TableCell>
@@ -405,7 +404,6 @@ export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
                   <TableCell align="center">
                     <Chip
                       label={event.layerNumber}
-                      size="small"
                       variant="outlined"
                       color="default"
                     />
@@ -414,7 +412,6 @@ export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
                     {action !== '-' && (
                       <Chip
                         label={action}
-                        size="small"
                         variant="outlined"
                         color={
                           action === 'LONG'

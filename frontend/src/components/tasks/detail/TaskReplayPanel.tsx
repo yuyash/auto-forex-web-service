@@ -1938,7 +1938,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         </Box>
 
         <FormControl
-          size="small"
           sx={{ minWidth: 110, '& .MuiInputBase-root': { height: 32 } }}
         >
           <InputLabel
@@ -1968,7 +1967,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
         {enableRealTimeUpdates && (
           <Button
-            size="small"
             variant={autoFollow ? 'contained' : 'outlined'}
             onClick={() => {
               setAutoFollow(true);
@@ -1993,7 +1991,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
         <Tooltip title="Reset zoom (show all)">
           <IconButton
-            size="small"
             onClick={() => {
               programmaticScrollRef.current = true;
               chartRef.current?.timeScale().fitContent();
@@ -2076,7 +2073,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             <Tooltip title="Copy selected rows">
               <span>
                 <IconButton
-                  size="small"
                   onClick={copySelectedRows}
                   disabled={selectedRowIds.size === 0}
                 >
@@ -2085,14 +2081,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               </span>
             </Tooltip>
             <Tooltip title="Select all on page">
-              <IconButton size="small" onClick={selectAllOnPage}>
+              <IconButton onClick={selectAllOnPage}>
                 <SelectAllIcon fontSize="small" />
               </IconButton>
             </Tooltip>
             <Tooltip title="Reset selection">
               <span>
                 <IconButton
-                  size="small"
                   onClick={resetSelection}
                   disabled={selectedRowIds.size === 0}
                 >
@@ -2101,23 +2096,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               </span>
             </Tooltip>
             <Tooltip title="Reload data">
-              <IconButton
-                size="small"
-                onClick={fetchReplayData}
-                disabled={isRefreshing}
-              >
+              <IconButton onClick={fetchReplayData} disabled={isRefreshing}>
                 <RefreshIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           </Box>
 
           <TableContainer component={Paper} variant="outlined">
-            <Table stickyHeader size="small" sx={{ tableLayout: 'fixed' }}>
+            <Table stickyHeader sx={{ tableLayout: 'fixed' }}>
               <TableHead>
                 <TableRow>
                   <TableCell padding="checkbox" sx={{ width: 42 }}>
                     <Checkbox
-                      size="small"
                       checked={isAllPageSelected}
                       indeterminate={
                         !isAllPageSelected &&
@@ -2282,7 +2272,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       <TableCell padding="checkbox">
                         <Checkbox
-                          size="small"
                           checked={checked}
                           onClick={(e) => e.stopPropagation()}
                           onChange={() => toggleRowSelection(row.id)}
@@ -2430,7 +2419,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             )}
             <Tooltip title="Show open positions only">
               <ToggleButton
-                size="small"
                 value="openOnly"
                 selected={showOpenPosOnly}
                 onChange={() => {
@@ -2454,7 +2442,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             <Tooltip title="Copy selected positions">
               <span>
                 <IconButton
-                  size="small"
                   onClick={copySelectedPositions}
                   disabled={selectedPosIds.size === 0}
                 >
@@ -2463,14 +2450,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               </span>
             </Tooltip>
             <Tooltip title="Select all on page">
-              <IconButton size="small" onClick={selectAllPosOnPage}>
+              <IconButton onClick={selectAllPosOnPage}>
                 <SelectAllIcon fontSize="small" />
               </IconButton>
             </Tooltip>
             <Tooltip title="Reset selection">
               <span>
                 <IconButton
-                  size="small"
                   onClick={resetPosSelection}
                   disabled={selectedPosIds.size === 0}
                 >
@@ -2479,23 +2465,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               </span>
             </Tooltip>
             <Tooltip title="Reload data">
-              <IconButton
-                size="small"
-                onClick={fetchReplayData}
-                disabled={isRefreshing}
-              >
+              <IconButton onClick={fetchReplayData} disabled={isRefreshing}>
                 <RefreshIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           </Box>
 
           <TableContainer component={Paper} variant="outlined">
-            <Table stickyHeader size="small" sx={{ tableLayout: 'fixed' }}>
+            <Table stickyHeader sx={{ tableLayout: 'fixed' }}>
               <TableHead>
                 <TableRow>
                   <TableCell padding="checkbox" sx={{ width: 42 }}>
                     <Checkbox
-                      size="small"
                       checked={isAllPosPageSelected}
                       indeterminate={
                         !isAllPosPageSelected &&
@@ -2721,7 +2702,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       <TableCell padding="checkbox">
                         <Checkbox
-                          size="small"
                           checked={selectedPosIds.has(pos.id)}
                           onClick={(e) => e.stopPropagation()}
                           onChange={() => togglePosSelection(pos.id)}
@@ -2752,7 +2732,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                       <TableCell>
                         <Chip
                           label={isOpen ? 'Open' : 'Closed'}
-                          size="small"
                           color={isOpen ? 'success' : 'default'}
                           variant="outlined"
                           sx={{ height: 20, fontSize: '0.7rem' }}

@@ -153,7 +153,6 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
         <Chip
           label={row.severity as string}
           color={getSeverityColor(row.severity as string)}
-          size="small"
         />
       ),
     },
@@ -223,7 +222,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
         }}
       >
         <Typography variant="h6">Task Events</Typography>
-        <FormControl size="small" sx={{ minWidth: 150 }}>
+        <FormControl sx={{ minWidth: 150 }}>
           <InputLabel>Severity Filter</InputLabel>
           <Select
             value={severityFilter}

@@ -194,7 +194,6 @@ const StrategyStatus = ({
             icon={statusConfig.icon}
             label={statusConfig.label}
             color={statusConfig.color}
-            size="small"
           />
         </Box>
 
@@ -342,7 +341,6 @@ const StrategyStatus = ({
                     <Chip
                       key={layer}
                       label={`Layer ${layer}: ${formatCurrency(layerPnL)}`}
-                      size="small"
                       color={layerPnL >= 0 ? 'success' : 'error'}
                       variant="outlined"
                     />

@@ -42,7 +42,6 @@ const RecentBacktestsWidget = () => {
       >
         <Typography variant="h6">Recent Backtests</Typography>
         <Button
-          size="small"
           endIcon={<ArrowIcon />}
           onClick={() => navigate('/backtest-tasks')}
         >

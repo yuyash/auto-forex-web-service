@@ -38,33 +38,25 @@ export const TableSelectionToolbar: React.FC<TableSelectionToolbarProps> = ({
       )}
       <Tooltip title="Copy selected rows">
         <span>
-          <IconButton
-            size="small"
-            onClick={onCopy}
-            disabled={selectedCount === 0}
-          >
+          <IconButton onClick={onCopy} disabled={selectedCount === 0}>
             <ContentCopyIcon fontSize="small" />
           </IconButton>
         </span>
       </Tooltip>
       <Tooltip title="Select all on page">
-        <IconButton size="small" onClick={onSelectAll}>
+        <IconButton onClick={onSelectAll}>
           <SelectAllIcon fontSize="small" />
         </IconButton>
       </Tooltip>
       <Tooltip title="Reset selection">
         <span>
-          <IconButton
-            size="small"
-            onClick={onReset}
-            disabled={selectedCount === 0}
-          >
+          <IconButton onClick={onReset} disabled={selectedCount === 0}>
             <DeselectIcon fontSize="small" />
           </IconButton>
         </span>
       </Tooltip>
       <Tooltip title="Reload data">
-        <IconButton size="small" onClick={onReload} disabled={isReloading}>
+        <IconButton onClick={onReload} disabled={isReloading}>
           <RefreshIcon fontSize="small" />
         </IconButton>
       </Tooltip>

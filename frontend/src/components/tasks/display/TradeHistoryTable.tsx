@@ -241,7 +241,6 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
       render: (row) => (
         <Chip
           label={row.direction.toUpperCase()}
-          size="small"
           color={row.direction === 'long' ? 'success' : 'error'}
           sx={{ fontWeight: 'bold', minWidth: 60 }}
         />
@@ -339,15 +338,11 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
 
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Tooltip title={showFilters ? 'Hide Filters' : 'Show Filters'}>
-              <IconButton
-                onClick={() => setShowFilters(!showFilters)}
-                size="small"
-              >
+              <IconButton onClick={() => setShowFilters(!showFilters)}>
                 <FilterIcon />
                 {activeFiltersCount > 0 && (
                   <Chip
                     label={activeFiltersCount}
-                    size="small"
                     color="primary"
                     sx={{
                       position: 'absolute',
@@ -366,7 +361,6 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
               startIcon={<DownloadIcon />}
               onClick={handleExportCSV}
               disabled={filteredTrades.length === 0}
-              size="small"
             >
               Export CSV
             </Button>
@@ -380,7 +374,7 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
           >
             <Stack spacing={2}>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <FormControl size="small" sx={{ minWidth: 150 }}>
+                <FormControl sx={{ minWidth: 150 }}>
                   <InputLabel>Instrument</InputLabel>
                   <Select
                     value={instrumentFilter}
@@ -396,7 +390,7 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                   </Select>
                 </FormControl>
 
-                <FormControl size="small" sx={{ minWidth: 150 }}>
+                <FormControl sx={{ minWidth: 150 }}>
                   <InputLabel>Direction</InputLabel>
                   <Select
                     value={directionFilter}
@@ -414,7 +408,6 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                 <TextField
                   label="From Date"
                   type="date"
-                  size="small"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
                   InputLabelProps={{ shrink: true }}
@@ -424,14 +417,13 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                 <TextField
                   label="To Date"
                   type="date"
-                  size="small"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
                   InputLabelProps={{ shrink: true }}
                   sx={{ minWidth: 150 }}
                 />
 
-                <FormControl size="small" sx={{ minWidth: 150 }}>
+                <FormControl sx={{ minWidth: 150 }}>
                   <InputLabel>Sort By</InputLabel>
                   <Select
                     value={sortField}
@@ -445,7 +437,7 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                   </Select>
                 </FormControl>
 
-                <FormControl size="small" sx={{ minWidth: 120 }}>
+                <FormControl sx={{ minWidth: 120 }}>
                   <InputLabel>Order</InputLabel>
                   <Select
                     value={sortOrder}
@@ -462,7 +454,6 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                     variant="outlined"
                     startIcon={<ClearIcon />}
                     onClick={handleClearFilters}
-                    size="small"
                   >
                     Clear Filters
                   </Button>

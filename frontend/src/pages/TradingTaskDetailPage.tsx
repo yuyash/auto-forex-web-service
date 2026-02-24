@@ -597,7 +597,6 @@ export default function TradingTaskDetailPage() {
                 variant="outlined"
                 startIcon={<ContentCopyIcon />}
                 onClick={handleCopy}
-                size="small"
               >
                 Copy
               </Button>
@@ -606,7 +605,6 @@ export default function TradingTaskDetailPage() {
                   variant="outlined"
                   startIcon={<EditIcon />}
                   onClick={handleEdit}
-                  size="small"
                 >
                   Edit
                 </Button>

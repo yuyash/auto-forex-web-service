@@ -107,11 +107,7 @@ const OpenOrdersPanel: React.FC<OpenOrdersPanelProps> = ({
       sortable: true,
       filterable: true,
       render: (row) => (
-        <Chip
-          label={row.status}
-          color={getStatusColor(row.status)}
-          size="small"
-        />
+        <Chip label={row.status} color={getStatusColor(row.status)} />
       ),
       minWidth: 120,
     },
@@ -123,7 +119,6 @@ const OpenOrdersPanel: React.FC<OpenOrdersPanelProps> = ({
         <Button
           variant="outlined"
           color="error"
-          size="small"
           startIcon={<CancelIcon />}
           onClick={(e) => {
             e.stopPropagation();
@@ -160,11 +155,10 @@ const OpenOrdersPanel: React.FC<OpenOrdersPanelProps> = ({
           <Chip
             label={orders.length}
             color="primary"
-            size="small"
             sx={{ fontWeight: 'bold' }}
           />
         </Box>
-        <IconButton size="small" aria-label="toggle panel">
+        <IconButton aria-label="toggle panel">
           {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
         </IconButton>
       </Box>

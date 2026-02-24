@@ -133,7 +133,6 @@ export const LogPanel: React.FC<LogPanelProps> = ({
                   setAutoScroll(e.target.checked);
                   isUserScrollingRef.current = false;
                 }}
-                size="small"
               />
             }
             label="Auto-scroll"
@@ -141,7 +140,6 @@ export const LogPanel: React.FC<LogPanelProps> = ({
           />
           <Tooltip title="Clear logs">
             <IconButton
-              size="small"
               onClick={handleClearLogs}
               disabled={logs.length === 0}
               aria-label="Clear logs"

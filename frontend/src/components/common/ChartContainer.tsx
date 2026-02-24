@@ -177,7 +177,7 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({
           <Stack direction="row" spacing={1} alignItems="center">
             {/* Granularity Selector */}
             {showGranularitySelector && onGranularityChange && (
-              <FormControl size="small" sx={{ minWidth: 150 }}>
+              <FormControl sx={{ minWidth: 150 }}>
                 <InputLabel id="granularity-select-label">
                   Granularity
                 </InputLabel>
@@ -203,33 +203,21 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({
               <>
                 {onZoomIn && (
                   <Tooltip title="Zoom In">
-                    <IconButton
-                      onClick={onZoomIn}
-                      size="small"
-                      aria-label="Zoom in"
-                    >
+                    <IconButton onClick={onZoomIn} aria-label="Zoom in">
                       <ZoomInIcon />
                     </IconButton>
                   </Tooltip>
                 )}
                 {onZoomOut && (
                   <Tooltip title="Zoom Out">
-                    <IconButton
-                      onClick={onZoomOut}
-                      size="small"
-                      aria-label="Zoom out"
-                    >
+                    <IconButton onClick={onZoomOut} aria-label="Zoom out">
                       <ZoomOutIcon />
                     </IconButton>
                   </Tooltip>
                 )}
                 {onResetZoom && (
                   <Tooltip title="Reset Zoom">
-                    <IconButton
-                      onClick={onResetZoom}
-                      size="small"
-                      aria-label="Reset zoom"
-                    >
+                    <IconButton onClick={onResetZoom} aria-label="Reset zoom">
                       <ResetZoomIcon />
                     </IconButton>
                   </Tooltip>
@@ -238,7 +226,6 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({
                   <Tooltip title="Refresh">
                     <IconButton
                       onClick={onRefresh}
-                      size="small"
                       aria-label="Refresh chart"
                       disabled={isLoading}
                     >

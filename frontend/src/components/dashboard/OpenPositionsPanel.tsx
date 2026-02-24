@@ -93,7 +93,6 @@ const OpenPositionsPanel: React.FC<OpenPositionsPanelProps> = ({
         <Chip
           label={getDirectionLabel(row.direction)}
           color={getDirectionColor(row.direction)}
-          size="small"
         />
       ),
       minWidth: 100,
@@ -148,7 +147,6 @@ const OpenPositionsPanel: React.FC<OpenPositionsPanelProps> = ({
         <Button
           variant="outlined"
           color="error"
-          size="small"
           startIcon={<CloseIcon />}
           onClick={(e) => {
             e.stopPropagation();
@@ -191,19 +189,17 @@ const OpenPositionsPanel: React.FC<OpenPositionsPanelProps> = ({
           <Chip
             label={displayPositions.length}
             color="primary"
-            size="small"
             sx={{ fontWeight: 'bold' }}
           />
           {displayPositions.length > 0 && (
             <Chip
               label={formatPnL(totalPnL)}
               color={totalPnL >= 0 ? 'success' : 'error'}
-              size="small"
               sx={{ fontWeight: 'bold' }}
             />
           )}
         </Box>
-        <IconButton size="small" aria-label="toggle panel">
+        <IconButton aria-label="toggle panel">
           {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
         </IconButton>
       </Box>

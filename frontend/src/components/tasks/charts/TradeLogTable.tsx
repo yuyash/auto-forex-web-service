@@ -252,7 +252,6 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
         <Typography variant="h6">{title}</Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <TextField
-            size="small"
             placeholder="Search trades..."
             value={searchTerm}
             onChange={(e) => {
@@ -269,7 +268,7 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
           />
           {showExport && onExport && (
             <Tooltip title="Export to CSV">
-              <IconButton size="small" onClick={onExport}>
+              <IconButton onClick={onExport}>
                 <DownloadIcon />
               </IconButton>
             </Tooltip>
@@ -313,7 +312,7 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
       </Box>
 
       <TableContainer>
-        <Table size="small">
+        <Table>
           <TableHead>
             <TableRow>
               <TableCell>
@@ -398,7 +397,6 @@ export const TradeLogTable: React.FC<TradeLogTableProps> = ({
                   <TableCell>
                     <Chip
                       label={directionLabel}
-                      size="small"
                       color={
                         direction === 'long'
                           ? 'success'

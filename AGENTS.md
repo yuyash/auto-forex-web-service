@@ -1,55 +1,6 @@
 # AGENTS.md - Auto Forex Trader Project Guide
 
-This document provides guidance for AI agents working on this project. It covers the project structure, tech stack, development workflow, conventions, and key architectural patterns.
-
-## Project Overview
-
-**Auto Forex Trader** is a full-stack web application for managing algorithmic forex trading operations across multiple OANDA accounts. It provides real-time market data streaming, strategy execution, position tracking, comprehensive risk management, and a responsive admin dashboard.
-
-**Key Capabilities:**
-
-- Multi-account OANDA management
-- Real-time market data streaming via WebSocket
-- Modular trading strategies (Floor Strategy implementation)
-- ATR-based volatility protection
-- Position tracking with real-time P&L
-- Backtesting engine with AWS S3/Athena integration
-- Admin dashboard with system monitoring
-- Complete event logging and audit trail
-- Internationalization (English, Japanese)
-- Responsive design (desktop and mobile)
-
-## Technology Stack
-
-### Backend
-
-- **Framework**: Django 5.2 LTS with Django REST Framework
-- **Real-time**: Django Channels (WebSocket) with Daphne ASGI server
-- **Database**: PostgreSQL 17
-- **Cache/Broker**: Redis 7
-- **Task Queue**: Celery with Django Celery Beat
-- **API Integration**: OANDA v20 Python library
-- **Cloud**: AWS boto3 (S3, Athena for backtesting)
-- **Package Manager**: uv (Python)
-- **Python Version**: 3.13+
-
-### Frontend
-
-- **Framework**: React 19 with TypeScript
-- **Build Tool**: Vite
-- **UI Library**: Material-UI (MUI)
-- **Charts**: react-financial-charts with d3 integration
-- **HTTP Client**: Axios with React Query
-- **Internationalization**: react-i18next
-- **Node Version**: 18+
-- **Package Manager**: npm
-
-### Infrastructure
-
-- **Containerization**: Docker & Docker Compose
-- **Web Server**: Nginx with Let's Encrypt SSL
-- **CI/CD**: GitHub Actions
-- **Deployment**: Docker containers on production server
+This document provides guidance for AI agents working on this project.
 
 ## Backend Architecture
 
@@ -65,13 +16,6 @@ This document provides guidance for AI agents working on this project. It covers
 - Notification preferences
 - HTTP access logging middleware
 
-**Key Files:**
-
-- `models.py` - User, UserSettings, UserSession, BlockedIP models
-- `auth.py` - JWTAuthentication class
-- `views.py` - Login, logout, token refresh endpoints
-- `middlewares/` - Security and logging middleware
-
 #### 2. **health** - System Health Checks
 
 - Database connectivity checks
@@ -79,11 +23,6 @@ This document provides guidance for AI agents working on this project. It covers
 - Celery worker status
 - System resource monitoring (CPU, memory)
 - Health check endpoint for load balancers
-
-**Key Files:**
-
-- `views.py` - Health check endpoints
-- `services.py` - Health check logic
 
 #### 3. **market** - Market Data & OANDA Integration
 
@@ -94,14 +33,6 @@ This document provides guidance for AI agents working on this project. It covers
 - Instrument configuration
 - Backtesting data management
 
-**Key Files:**
-
-- `models.py` - Instrument, Tick, MarketData models
-- `services/oanda.py` - OANDA API client
-- `services/celery.py` - Celery task coordination
-- `tasks.py` - Celery tasks for market data processing
-- `consumers.py` - WebSocket consumers for streaming
-
 #### 4. **trading** - Trading Strategies & Execution
 
 - Trading strategy definitions and configurations
@@ -111,15 +42,6 @@ This document provides guidance for AI agents working on this project. It covers
 - Trade history and reconciliation
 - Risk management enforcement
 - Performance metrics calculation
-
-**Key Files:**
-
-- `models.py` - Strategy, StrategyConfig, Position, Order, Trade models
-- `strategies/` - Strategy implementations (Floor Strategy)
-- `services/execution.py` - Strategy execution engine
-- `services/risk.py` - Risk management logic
-- `tasks.py` - Celery tasks for strategy execution
-- `consumers.py` - WebSocket consumers for trading updates
 
 ### Configuration
 
@@ -171,115 +93,67 @@ This document provides guidance for AI agents working on this project. It covers
 - `market` - Long-running market data tasks
 - `trading` - Strategy execution and backtesting tasks
 
-**Key Tasks**:
-
-- `market.tasks.ensure_tick_pubsub_running` - Supervise market data streaming
-- `market.tasks.publish_oanda_ticks` - Fetch and publish market ticks
-- `market.tasks.subscribe_ticks_to_db` - Store ticks in database
-- `trading.tasks.run_trading_task` - Execute trading strategy
-- `trading.tasks.stop_trading_task` - Stop strategy execution
-- `trading.tasks.run_backtest_task` - Execute backtest
-
 **Celery Beat Scheduler**: Uses database scheduler for persistent scheduled tasks
 
 ---
 
 ## Frontend Architecture
 
-### Component Organization
+### Routing (`App.tsx`)
 
-**Pages** - Full page components (routed):
+All page components are lazy-loaded via `React.lazy()`. Uses `react-router-dom`.
 
-- `LoginPage`, `RegisterPage` - Authentication
-- `DashboardPage` - Main dashboard
-- `TradingTasksPage`, `TradingTaskDetailPage`, `TradingTaskFormPage` - Trading management
-- `BacktestTasksPage`, `BacktestTaskDetailPage`, `BacktestTaskFormPage` - Backtesting
-- `ConfigurationsPage`, `ConfigurationDetailPage`, `ConfigurationFormPage` - Strategy configs
-- `OandaAccountDetailPage` - Account details
-- `SettingsPage`, `ProfilePage` - User settings
+**Public routes**: `/login`, `/register` (conditionally enabled via `systemSettings`)
 
-**Components** - Reusable UI components:
+**Protected routes** (wrapped in `ProtectedRoute` + `AppLayout`):
 
-- `auth/` - Login form, register form
-- `charts/` - Chart components with react-financial-charts
-- `dashboard/` - Dashboard widgets
-- `trading/` - Trading UI components
-- `strategy/` - Strategy configuration UI
-- `backtest/` - Backtest UI
-- `settings/` - Settings UI
-- `layout/` - Header, sidebar, layout
-- `common/` - Buttons, modals, tables, forms
+| Path                       | Page                      |
+| -------------------------- | ------------------------- |
+| `/dashboard`               | `DashboardPage`           |
+| `/configurations`          | `ConfigurationsPage`      |
+| `/configurations/:id`      | `ConfigurationDetailPage` |
+| `/configurations/new`      | `ConfigurationFormPage`   |
+| `/configurations/:id/edit` | `ConfigurationFormPage`   |
+| `/backtest-tasks`          | `BacktestTasksPage`       |
+| `/backtest-tasks/new`      | `BacktestTaskFormPage`    |
+| `/backtest-tasks/:id`      | `BacktestTaskDetailPage`  |
+| `/backtest-tasks/:id/edit` | `BacktestTaskFormPage`    |
+| `/trading-tasks`           | `TradingTasksPage`        |
+| `/trading-tasks/new`       | `TradingTaskFormPage`     |
+| `/trading-tasks/:id`       | `TradingTaskDetailPage`   |
+| `/trading-tasks/:id/edit`  | `TradingTaskFormPage`     |
+| `/settings`                | `SettingsPage`            |
+| `/settings/accounts/:id`   | `OandaAccountDetailPage`  |
+| `/profile`                 | `ProfilePage`             |
 
-### State Management
+**Provider hierarchy**: `ErrorBoundary` → `AccessibilityProvider` → `ThemeProvider` → `QueryProvider` → `ToastProvider` → `BrowserRouter` → `AuthProvider`
 
-**React Query** - Server state management:
+### Component Organization (`src/components/`)
 
-- Caching API responses
-- Automatic refetching
-- Mutation handling with optimistic updates
-- Devtools for debugging
+- `auth/` - `ProtectedRoute`
+- `backtest/` - `BacktestTaskCard`, `BacktestTaskForm`, `BacktestTaskDetail`, `FloorLayerLog`, `detail/`
+- `charts/` - `EquityOHLCChart` (react-financial-charts + d3)
+- `common/` - Shared UI: `DataTable`, `VirtualizedTable`, `VirtualizedList`, `ConfirmDialog`, `Toast`, `ErrorBoundary`, `PageErrorBoundary`, `ValidatedTextField`, `FormFieldError`, `FormErrorSummary`, `LoadingSpinner`, `SkeletonLoader`, `Breadcrumbs`, `SkipLinks`, `GlobalKeyboardShortcuts`, `ChartContainer`, `TaskControlButtons`, `ExecutionDataProvider`, `LazyTabPanel`, `LanguageSelector`
+- `configurations/` - `ConfigurationCard`, `ConfigurationForm`, `ParametersForm`, `ConfigurationDeleteDialog`, `strategyConfigSchemas.ts`
+- `dashboard/` - `ActiveTasksWidget`, `MarketChart`, `OpenOrdersPanel`, `OpenPositionsPanel`, `QuickActionsWidget`, `RecentBacktestsWidget`
+- `layout/` - `AppLayout`, `AppHeader`, `AppFooter`, `Sidebar`, `ResponsiveNavigation`
+- `settings/` - `AccountManagement`, `AddAccountModal`, `PreferencesForm`, `StrategyDefaults`
+- `strategy/` - `StrategyConfigForm`, `StrategyControls`, `StrategySelector`, `StrategyStatus`
+- `tasks/` - Shared task components: `actions/`, `charts/`, `detail/`, `display/`, `forms/`, `TaskProgress`
+- `trading/` - `TradingTaskCard`, `TradingTaskForm`, `TradingTaskDetail`, `TradingTaskChart`, `detail/`
 
-**Zustand** - Client state management:
+### API Layer
 
-- Task store for trading/backtest task state
-- Lightweight alternative to Redux
+**Two-layer architecture**:
 
-**React Context** - Global state:
+1. `src/api/` - Low-level Axios client with JWT interceptor (auto-refresh on 401)
+2. `src/services/api/` - Domain-specific API services:
+   - `accounts.ts`, `backtestTasks.ts`, `tradingTasks.ts`, `configurations.ts`, `strategies.ts`, `market.ts`
 
-- `AuthContext` - Authentication state and user info
-- `AccessibilityContext` - Accessibility preferences
+**Polling services** (`src/services/polling/`):
 
-### Hooks
-
-**Custom Hooks** for common patterns:
-
-- `useAccounts()` - Fetch user accounts
-- `useStrategies()` - Fetch strategies
-- `useTradingTasks()` - Fetch trading tasks
-- `useBacktestTasks()` - Fetch backtest tasks
-- `useTaskExecutions()` - Fetch task executions
-- `useTaskPositions()` - Fetch positions for task
-- `useTaskTrades()` - Fetch trades for task
-- `useTaskLogs()` - Fetch task logs
-- `useChartPreferences()` - Chart display preferences
-- `useFormValidation()` - Form validation logic
-- `useMutationToast()` - Toast notifications for mutations
-
-### API Client
-
-**Axios-based client** (`src/api/`):
-
-- `apiClient.ts` - Axios instance with interceptors
-- `apiConfig.ts` - API configuration
-- `client.ts` - API methods
-- `types.ts` - TypeScript types for API responses
-
-**Interceptors**:
-
-- Request: Add JWT token to headers
-- Response: Handle errors, refresh token on 401
-
-### Internationalization
-
-**react-i18next** setup:
-
-- Locales: English, Japanese
-- Namespace-based organization
-- Language switcher in settings
-- Timezone-aware date formatting
-
-### Accessibility
-
-**WCAG 2.1 Level AA compliance**:
-
-- Semantic HTML
-- ARIA labels and roles
-- Keyboard navigation
-- High contrast theme option
-- Focus management
-- Screen reader support
-
----
+- `TaskPollingService` - HTTP polling with exponential backoff (interval: 3s, maxRetries: 5)
+- `TickPollingService` - Market tick polling
 
 ## Development Workflow
 

@@ -194,7 +194,7 @@ export function ExecutionHistoryTable({
             alignItems: 'center',
           }}
         >
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+          <FormControl sx={{ minWidth: 150 }}>
             <InputLabel id="status-filter-label">Status</InputLabel>
             <Select
               labelId="status-filter-label"
@@ -215,7 +215,6 @@ export function ExecutionHistoryTable({
           <TextField
             label="Start Date"
             type="date"
-            size="small"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             InputLabelProps={{ shrink: true }}
@@ -225,7 +224,6 @@ export function ExecutionHistoryTable({
           <TextField
             label="End Date"
             type="date"
-            size="small"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             InputLabelProps={{ shrink: true }}
@@ -235,7 +233,7 @@ export function ExecutionHistoryTable({
           <Box sx={{ flex: 1 }} />
 
           <Tooltip title="Refresh">
-            <IconButton onClick={() => refetch()} size="small">
+            <IconButton onClick={() => refetch()}>
               <RefreshIcon />
             </IconButton>
           </Tooltip>
@@ -290,7 +288,7 @@ export function ExecutionHistoryTable({
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={execution.status} size="small" />
+                    <StatusBadge status={execution.status} />
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2">
@@ -309,7 +307,6 @@ export function ExecutionHistoryTable({
                     {execution.metrics ? (
                       <Chip
                         label={`${formatMetric(execution.metrics.total_return)}%`}
-                        size="small"
                         color={
                           parseFloat(execution.metrics.total_return) >= 0
                             ? 'success'
@@ -366,7 +363,6 @@ export function ExecutionHistoryTable({
                   <TableCell align="center">
                     <Tooltip title="View Details">
                       <IconButton
-                        size="small"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleExecutionClick(execution);

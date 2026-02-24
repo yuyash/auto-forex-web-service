@@ -139,7 +139,6 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
           <Chip
             label={dir === 'long' ? 'LONG' : dir === 'short' ? 'SHORT' : dir}
             color={dir === 'long' ? 'success' : 'error'}
-            size="small"
           />
         );
       },

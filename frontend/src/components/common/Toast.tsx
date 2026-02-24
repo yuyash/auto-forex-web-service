@@ -111,7 +111,6 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
               toast.action ? (
                 <Button
                   color="inherit"
-                  size="small"
                   onClick={() => {
                     toast.action!.onClick();
                     handleClose(toast.id);

@@ -184,7 +184,6 @@ const GlobalKeyboardShortcuts = () => {
           <IconButton
             aria-label="close"
             onClick={() => setHelpDialogOpen(false)}
-            size="small"
           >
             <CloseIcon />
           </IconButton>
@@ -198,7 +197,7 @@ const GlobalKeyboardShortcuts = () => {
                 {category}
               </Typography>
               <TableContainer component={Paper} variant="outlined">
-                <Table size="small">
+                <Table>
                   <TableHead>
                     <TableRow>
                       <TableCell>Shortcut</TableCell>
@@ -214,7 +213,6 @@ const GlobalKeyboardShortcuts = () => {
                               <Chip
                                 key={keyIndex}
                                 label={key.toUpperCase()}
-                                size="small"
                                 sx={{
                                   fontFamily: 'monospace',
                                   fontWeight: 'bold',
@@ -238,13 +236,12 @@ const GlobalKeyboardShortcuts = () => {
             Task-specific shortcuts (when viewing a task):
           </Typography>
           <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }}>
-            <Table size="small">
+            <Table>
               <TableBody>
                 <TableRow>
                   <TableCell>
                     <Chip
                       label={`${getModifierKeyLabel()} + S`}
-                      size="small"
                       sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}
                     />
                   </TableCell>
@@ -254,7 +251,6 @@ const GlobalKeyboardShortcuts = () => {
                   <TableCell>
                     <Chip
                       label={`${getModifierKeyLabel()} + X`}
-                      size="small"
                       sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}
                     />
                   </TableCell>
@@ -264,7 +260,6 @@ const GlobalKeyboardShortcuts = () => {
                   <TableCell>
                     <Chip
                       label={`${getModifierKeyLabel()} + P`}
-                      size="small"
                       sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}
                     />
                   </TableCell>
@@ -274,7 +269,6 @@ const GlobalKeyboardShortcuts = () => {
                   <TableCell>
                     <Chip
                       label={`${getModifierKeyLabel()} + R`}
-                      size="small"
                       sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}
                     />
                   </TableCell>
@@ -284,7 +278,6 @@ const GlobalKeyboardShortcuts = () => {
                   <TableCell>
                     <Chip
                       label={`${getModifierKeyLabel()} + D`}
-                      size="small"
                       sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}
                     />
                   </TableCell>
@@ -294,7 +287,6 @@ const GlobalKeyboardShortcuts = () => {
                   <TableCell>
                     <Chip
                       label={`${getModifierKeyLabel()} + E`}
-                      size="small"
                       sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}
                     />
                   </TableCell>
@@ -304,7 +296,6 @@ const GlobalKeyboardShortcuts = () => {
                   <TableCell>
                     <Chip
                       label="Delete"
-                      size="small"
                       sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}
                     />
                   </TableCell>

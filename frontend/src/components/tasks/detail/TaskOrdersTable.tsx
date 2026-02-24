@@ -137,11 +137,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
       width: 90,
       minWidth: 70,
       render: (row) => (
-        <Chip
-          label={row.order_type.toUpperCase()}
-          size="small"
-          variant="outlined"
-        />
+        <Chip label={row.order_type.toUpperCase()} variant="outlined" />
       ),
     },
     {
@@ -167,7 +163,6 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
                   : row.direction.toUpperCase()
             }
             color={dir === 'long' ? 'success' : 'error'}
-            size="small"
           />
         );
       },
@@ -189,7 +184,6 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
         <Chip
           label={row.status.toUpperCase()}
           color={statusColor(row.status)}
-          size="small"
         />
       ),
     },

@@ -138,7 +138,6 @@ export const ExecutionTimeline: React.FC<ExecutionTimelineProps> = ({
                 </Typography>
                 <Chip
                   label={execution.status}
-                  size="small"
                   color={
                     getStatusColor(execution.status) as
                       | 'primary'

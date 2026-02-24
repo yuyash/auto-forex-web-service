@@ -426,7 +426,6 @@ const AccountManagement = () => {
                             ? 'default'
                             : 'warning'
                         }
-                        size="small"
                       />
                     </Box>
 
@@ -498,13 +497,11 @@ const AccountManagement = () => {
                       <Chip
                         label={account.is_active ? 'Active' : 'Inactive'}
                         color={account.is_active ? 'success' : 'default'}
-                        size="small"
                       />
                       {account.is_default && (
                         <Chip
                           label="Default"
                           color="primary"
-                          size="small"
                           variant="outlined"
                         />
                       )}
@@ -513,7 +510,6 @@ const AccountManagement = () => {
                 </CardActionArea>
                 <CardActions>
                   <IconButton
-                    size="small"
                     color="primary"
                     onClick={(event) => {
                       event.stopPropagation();
@@ -527,7 +523,6 @@ const AccountManagement = () => {
                     <EditIcon />
                   </IconButton>
                   <IconButton
-                    size="small"
                     color="error"
                     onClick={(event) => {
                       event.stopPropagation();
