@@ -37,7 +37,7 @@ class TestHealthViewIntegration:
         response = self.client.get(self.url)
 
         assert response.status_code == status.HTTP_200_OK
-        expected_keys = {"status", "timestamp", "response_time_ms"}
+        expected_keys = {"status", "timestamp", "response_time_ms", "version"}
         assert set(response.data.keys()) == expected_keys
 
     def test_health_check_timestamp_format(self) -> None:
