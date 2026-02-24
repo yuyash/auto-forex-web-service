@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.1.0",
+        "version": "1.1.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -2181,47 +2181,6 @@
                 }
             }
         },
-        "/api/trading/tasks/backtest/{id}/pnl-summary/": {
-            "get": {
-                "operationId": "trading_tasks_backtest_pnl_summary_retrieve",
-                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "description": "Unique identifier for this record"
-                        },
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "trading"
-                ],
-                "security": [
-                    {
-                        "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/BacktestTask"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/api/trading/tasks/backtest/{id}/positions/": {
             "get": {
                 "operationId": "trading_tasks_backtest_positions_retrieve",
@@ -2459,6 +2418,55 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/BacktestTask"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/backtest/{id}/summary/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_summary_retrieve",
+                "description": "Retrieve structured task summary including PnL, trade/position counts, execution state, tick info, and task status.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskSummary"
                                 }
                             }
                         },
@@ -3027,47 +3035,6 @@
                 }
             }
         },
-        "/api/trading/tasks/trading/{id}/pnl-summary/": {
-            "get": {
-                "operationId": "trading_tasks_trading_pnl_summary_retrieve",
-                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "description": "Unique identifier for this record"
-                        },
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "trading"
-                ],
-                "security": [
-                    {
-                        "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TradingTask"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/api/trading/tasks/trading/{id}/positions/": {
             "get": {
                 "operationId": "trading_tasks_trading_positions_retrieve",
@@ -3305,6 +3272,55 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TradingTask"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/trading/{id}/summary/": {
+            "get": {
+                "operationId": "trading_tasks_trading_summary_retrieve",
+                "description": "Retrieve structured task summary including PnL, trade/position counts, execution state, tick info, and task status.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskSummary"
                                 }
                             }
                         },
@@ -3893,6 +3909,26 @@
                     "volume"
                 ]
             },
+            "CountsInfo": {
+                "type": "object",
+                "description": "Serializer for trade/position counts.",
+                "properties": {
+                    "total_trades": {
+                        "type": "integer"
+                    },
+                    "open_positions": {
+                        "type": "integer"
+                    },
+                    "closed_positions": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "closed_positions",
+                    "open_positions",
+                    "total_trades"
+                ]
+            },
             "DataSourceEnum": {
                 "enum": [
                     "postgresql",
@@ -3935,6 +3971,25 @@
                 },
                 "required": [
                     "token"
+                ]
+            },
+            "ExecutionInfo": {
+                "type": "object",
+                "description": "Serializer for execution state.",
+                "properties": {
+                    "current_balance": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "ticks_processed": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "current_balance",
+                    "ticks_processed"
                 ]
             },
             "GranularitiesResponse": {
@@ -4991,6 +5046,26 @@
                     }
                 }
             },
+            "PnlInfo": {
+                "type": "object",
+                "description": "Serializer for PnL information.",
+                "properties": {
+                    "realized": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "unrealized": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    }
+                },
+                "required": [
+                    "realized",
+                    "unrealized"
+                ]
+            },
             "PositionCloseResponse": {
                 "type": "object",
                 "properties": {
@@ -5433,6 +5508,70 @@
                     "name"
                 ]
             },
+            "TaskInfo": {
+                "type": "object",
+                "description": "Serializer for task status information.",
+                "properties": {
+                    "status": {
+                        "type": "string"
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "completed_at": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "error_message": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "progress": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "completed_at",
+                    "error_message",
+                    "progress",
+                    "started_at",
+                    "status"
+                ]
+            },
+            "TaskSummary": {
+                "type": "object",
+                "description": "Serializer for structured task summary response.\n\nReturns comprehensive task summary grouped into logical sections:\n- timestamp: Common timestamp from the last tick\n- pnl: Realized and unrealized PnL\n- counts: Trade and position counts\n- execution: Balance and ticks processed\n- tick: Last tick prices (bid, ask, mid)\n- task: Status, timing, and progress",
+                "properties": {
+                    "timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "pnl": {
+                        "$ref": "#/components/schemas/PnlInfo"
+                    },
+                    "counts": {
+                        "$ref": "#/components/schemas/CountsInfo"
+                    },
+                    "execution": {
+                        "$ref": "#/components/schemas/ExecutionInfo"
+                    },
+                    "tick": {
+                        "$ref": "#/components/schemas/TickInfo"
+                    },
+                    "task": {
+                        "$ref": "#/components/schemas/TaskInfo"
+                    }
+                },
+                "required": [
+                    "counts",
+                    "execution",
+                    "pnl",
+                    "task",
+                    "tick",
+                    "timestamp"
+                ]
+            },
             "TickDataRangeResponse": {
                 "type": "object",
                 "properties": {
@@ -5458,6 +5597,40 @@
                     "instrument",
                     "max_timestamp",
                     "min_timestamp"
+                ]
+            },
+            "TickInfo": {
+                "type": "object",
+                "description": "Serializer for tick information.",
+                "properties": {
+                    "timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "bid": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "ask": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "mid": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "ask",
+                    "bid",
+                    "mid",
+                    "timestamp"
                 ]
             },
             "TokenRefreshError": {

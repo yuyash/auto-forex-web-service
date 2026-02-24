@@ -71,6 +71,20 @@ class ExecutionState(UUIDModel):
         blank=True,
         help_text="Mid price of the last processed tick",
     )
+    last_tick_bid = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        null=True,
+        blank=True,
+        help_text="Bid price of the last processed tick",
+    )
+    last_tick_ask = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        null=True,
+        blank=True,
+        help_text="Ask price of the last processed tick",
+    )
 
     class Meta:
         db_table = "execution_state"

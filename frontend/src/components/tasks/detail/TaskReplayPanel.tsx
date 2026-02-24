@@ -58,7 +58,7 @@ import {
   useTaskPositions,
   type TaskPosition,
 } from '../../../hooks/useTaskPositions';
-import { useOverviewPnl } from '../../../hooks/useOverviewPnl';
+import { useTaskSummary } from '../../../hooks/useTaskSummary';
 import { TaskType } from '../../../types/common';
 import { handleAuthErrorStatus } from '../../../utils/authEvents';
 import { detectMarketGaps } from '../../../utils/marketClosedMarkers';
@@ -562,6 +562,78 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     [handleColResizeStart]
   );
 
+  // ── Positions column resize ──
+  const defaultPosWidths: Record<string, number> = {
+    entry_time: 130,
+    exit_time: 130,
+    _status: 65,
+    direction: 65,
+    layer_index: 50,
+    retracement_count: 50,
+    units: 65,
+    entry_price: 85,
+    exit_price: 85,
+    _pips: 75,
+    _pnl: 90,
+  };
+  const [posColWidths, setPosColWidths] = useState(defaultPosWidths);
+  const posResizeRef = useRef<{
+    col: string;
+    startX: number;
+    startW: number;
+  } | null>(null);
+
+  const handlePosColResizeStart = useCallback(
+    (e: React.MouseEvent, col: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      posResizeRef.current = {
+        col,
+        startX: e.clientX,
+        startW: posColWidths[col] ?? 100,
+      };
+      const onMove = (ev: MouseEvent) => {
+        if (!posResizeRef.current) return;
+        const diff = ev.clientX - posResizeRef.current.startX;
+        const w = Math.max(40, posResizeRef.current.startW + diff);
+        setPosColWidths((prev) => ({
+          ...prev,
+          [posResizeRef.current!.col]: w,
+        }));
+      };
+      const onUp = () => {
+        posResizeRef.current = null;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    },
+    [posColWidths]
+  );
+
+  const posResizeHandle = useCallback(
+    (col: string) => (
+      <Box
+        onMouseDown={(e) => handlePosColResizeStart(e, col)}
+        sx={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
+          cursor: 'col-resize',
+          '&:hover': { backgroundColor: 'primary.main', opacity: 0.4 },
+        }}
+      />
+    ),
+    [handlePosColResizeStart]
+  );
+
   const handleSort = (column: SortableKey) => {
     if (orderBy === column) {
       setOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
@@ -1053,12 +1125,15 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   // PnL summary from server-side aggregation (lightweight endpoint)
   const {
-    realizedPnl: serverRealizedPnl,
-    unrealizedPnl: serverUnrealizedPnl,
-    totalTrades: serverTotalTrades,
-    openPositionCount: serverOpenPositionCount,
+    summary: {
+      pnl: { realized: serverRealizedPnl, unrealized: serverUnrealizedPnl },
+      counts: {
+        totalTrades: serverTotalTrades,
+        openPositions: serverOpenPositionCount,
+      },
+    },
     refetch: refetchPnl,
-  } = useOverviewPnl(String(taskId), taskType, celeryTaskId);
+  } = useTaskSummary(String(taskId), taskType, celeryTaskId);
 
   // Periodic PnL refresh while task is running
   useEffect(() => {
@@ -2059,7 +2134,15 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         />
       </Box>
 
-      <Box sx={{ display: 'flex', gap: 2, mt: 0.5, alignItems: 'flex-start' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', lg: 'row' },
+          gap: 2,
+          mt: 0.5,
+          alignItems: 'flex-start',
+        }}
+      >
         {/* Left column: Trades */}
         <Box
           sx={{
@@ -2124,7 +2207,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           </Box>
 
           <TableContainer component={Paper} variant="outlined">
-            <Table stickyHeader sx={{ tableLayout: 'fixed' }}>
+            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 580 }}>
               <TableHead>
                 <TableRow>
                   <TableCell padding="checkbox" sx={{ width: 42 }}>
@@ -2493,7 +2576,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           </Box>
 
           <TableContainer component={Paper} variant="outlined">
-            <Table stickyHeader sx={{ tableLayout: 'fixed' }}>
+            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 940 }}>
               <TableHead>
                 <TableRow>
                   <TableCell padding="checkbox" sx={{ width: 42 }}>
@@ -2518,7 +2601,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     />
                   </TableCell>
                   <TableCell
-                    sx={{ width: 130 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.entry_time,
+                    }}
                     sortDirection={
                       posOrderBy === 'entry_time' ? posOrder : false
                     }
@@ -2530,9 +2616,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Open Time
                     </TableSortLabel>
+                    {posResizeHandle('entry_time')}
                   </TableCell>
                   <TableCell
-                    sx={{ width: 130 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.exit_time,
+                    }}
                     sortDirection={
                       posOrderBy === 'exit_time' ? posOrder : false
                     }
@@ -2544,9 +2634,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Close Time
                     </TableSortLabel>
+                    {posResizeHandle('exit_time')}
                   </TableCell>
                   <TableCell
-                    sx={{ width: 65 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths._status,
+                    }}
                     sortDirection={posOrderBy === '_status' ? posOrder : false}
                   >
                     <TableSortLabel
@@ -2556,9 +2650,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Status
                     </TableSortLabel>
+                    {posResizeHandle('_status')}
                   </TableCell>
                   <TableCell
-                    sx={{ width: 65 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.direction,
+                    }}
                     sortDirection={
                       posOrderBy === 'direction' ? posOrder : false
                     }
@@ -2570,9 +2668,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Dir
                     </TableSortLabel>
+                    {posResizeHandle('direction')}
                   </TableCell>
                   <TableCell
-                    sx={{ width: 50 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.layer_index,
+                    }}
                     sortDirection={
                       posOrderBy === 'layer_index' ? posOrder : false
                     }
@@ -2586,9 +2688,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Layer
                     </TableSortLabel>
+                    {posResizeHandle('layer_index')}
                   </TableCell>
                   <TableCell
-                    sx={{ width: 50 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.retracement_count,
+                    }}
                     sortDirection={
                       posOrderBy === 'retracement_count' ? posOrder : false
                     }
@@ -2602,10 +2708,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Retrace
                     </TableSortLabel>
+                    {posResizeHandle('retracement_count')}
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ width: 65 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.units,
+                    }}
                     sortDirection={posOrderBy === 'units' ? posOrder : false}
                   >
                     <TableSortLabel
@@ -2615,10 +2725,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Units
                     </TableSortLabel>
+                    {posResizeHandle('units')}
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ width: 85 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.entry_price,
+                    }}
                     sortDirection={
                       posOrderBy === 'entry_price' ? posOrder : false
                     }
@@ -2632,10 +2746,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Entry
                     </TableSortLabel>
+                    {posResizeHandle('entry_price')}
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ width: 85 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.exit_price,
+                    }}
                     sortDirection={
                       posOrderBy === 'exit_price' ? posOrder : false
                     }
@@ -2647,10 +2765,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Exit
                     </TableSortLabel>
+                    {posResizeHandle('exit_price')}
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ width: 75 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths._pips,
+                    }}
                     sortDirection={posOrderBy === '_pips' ? posOrder : false}
                   >
                     <TableSortLabel
@@ -2660,10 +2782,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Pips
                     </TableSortLabel>
+                    {posResizeHandle('_pips')}
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ width: 90 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths._pnl,
+                    }}
                     sortDirection={posOrderBy === '_pnl' ? posOrder : false}
                   >
                     <TableSortLabel
@@ -2673,6 +2799,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       PnL
                     </TableSortLabel>
+                    {posResizeHandle('_pnl')}
                   </TableCell>
                 </TableRow>
               </TableHead>

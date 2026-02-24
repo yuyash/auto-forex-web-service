@@ -54,21 +54,35 @@ vi.mock('../../../src/hooks/useTradingTasks', () => ({
   invalidateTradingTasksCache: vi.fn(),
 }));
 
-vi.mock('../../../src/hooks/useOverviewPnl', () => ({
-  useOverviewPnl: vi.fn(() => ({
-    realizedPnl: 0,
-    unrealizedPnl: 0,
-    totalTrades: 0,
+vi.mock('../../../src/hooks/useTaskSummary', () => ({
+  useTaskSummary: vi.fn(() => ({
+    summary: {
+      timestamp: null,
+      pnl: { realized: 0, unrealized: 0 },
+      counts: { totalTrades: 0, openPositions: 0, closedPositions: 0 },
+      execution: { currentBalance: null, ticksProcessed: 0 },
+      tick: { timestamp: null, bid: null, ask: null, mid: null },
+      task: {
+        status: '',
+        startedAt: null,
+        completedAt: null,
+        errorMessage: null,
+        progress: 0,
+      },
+    },
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
   })),
+}));
+
+vi.mock('../../../src/components/tasks/display/StatusBadge', () => ({
+  StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
 }));
 
 // Mock child components
 vi.mock('../../../src/components/common/TaskControlButtons', () => ({
   TaskControlButtons: () => <div>Task Control Buttons</div>,
-}));
-
-vi.mock('../../../src/components/tasks/display/StatusBadge', () => ({
-  StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
 }));
 
 vi.mock('../../../src/components/tasks/detail/TaskEventsTable', () => ({
