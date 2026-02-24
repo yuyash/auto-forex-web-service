@@ -258,7 +258,12 @@ class TaskExecutor:
                 baseline_atr=m.get("baseline_atr"),
                 volatility_threshold=m.get("volatility_threshold"),
                 # Generic metrics JSON (stores all strategy metrics)
-                metrics={k: v for k, v in m.items() if k != "timestamp" and v is not None},
+                # Convert Decimal values to float for JSON serialization
+                metrics={
+                    k: float(v) if isinstance(v, Decimal) else v
+                    for k, v in m.items()
+                    if k != "timestamp" and v is not None
+                },
             )
             for m in self._metric_buffer
         ]
