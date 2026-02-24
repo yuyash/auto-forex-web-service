@@ -8,12 +8,13 @@ Configuration is done via environment variables and this settings file.
 - Environment variables: Configuration overrides
 """
 
-import importlib.metadata
 import os
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+
+from config.version import get_version
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -367,7 +368,7 @@ SPECTACULAR_SETTINGS = {
         "## Rate Limiting\n"
         "Authentication endpoints are rate-limited to prevent abuse."
     ),
-    "VERSION": importlib.metadata.version("auto-forex"),
+    "VERSION": get_version(),
     "SERVE_INCLUDE_SCHEMA": False,
     # Only serve docs UI in DEBUG mode.
     "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"] if DEBUG else [],
