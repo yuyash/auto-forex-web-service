@@ -32,6 +32,8 @@ class UserLoginView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes: list = []
+    # Uses custom RateLimiter; exempt from DRF throttle.
+    throttle_classes: list = []
     serializer_class = UserLoginSerializer
 
     def __init__(self, **kwargs: Any) -> None:

@@ -369,7 +369,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     taskType,
     celeryTaskId,
     status: 'closed',
-    pageSize: 1000,
+    pageSize: 5000,
     enableRealTimeUpdates,
   });
   const { positions: pnlOpenPositions } = useTaskPositions({
@@ -377,7 +377,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     taskType,
     celeryTaskId,
     status: 'open',
-    pageSize: 1000,
+    pageSize: 5000,
     enableRealTimeUpdates,
   });
 
@@ -1172,6 +1172,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const hasLoadedOnce = useRef(false);
   // Track the latest trade updated_at for incremental fetching.
   const tradeSinceRef = useRef<string | null>(null);
+  // Track when candles were last fetched to throttle OANDA API calls during polling.
+  // Candle data only changes at the latest bar, so refreshing every 60s is sufficient.
+  const lastCandleFetchRef = useRef<number>(0);
+  const CANDLE_REFRESH_INTERVAL_MS = 60_000;
 
   /** Map raw API trade objects to ReplayTrade rows. */
   const mapRawTrades = useCallback(
@@ -1254,74 +1258,100 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       }
       setError(null);
 
-      // Fetch candles — errors here are only fatal on the very first load
-      // (when we have no data to show).  On subsequent fetches we keep the
-      // previously loaded candles visible so that stopping a task does not
-      // wipe the chart.
+      // Fetch candles first — show chart ASAP before loading trades.
+      // Errors here are only fatal on the very first load (when we have
+      // no data to show).  On subsequent fetches we keep the previously
+      // loaded candles visible so that stopping a task does not wipe the chart.
+      //
+      // During polling (non-initial loads), candle data is only refreshed
+      // every CANDLE_REFRESH_INTERVAL_MS (60s) because only the latest bar
+      // changes.  Trades and positions (from local DB) are always fetched.
+      const now = Date.now();
+      const shouldFetchCandles =
+        isInitialLoad ||
+        now - lastCandleFetchRef.current >= CANDLE_REFRESH_INTERVAL_MS;
       let candlesFetched = false;
-      try {
-        const candleResponse = await fetchCandles(
-          instrument,
-          granularity,
-          startTime,
-          endTime
-        );
-        const rawCandles = Array.isArray(candleResponse?.candles)
-          ? candleResponse.candles
-          : [];
-        const candleByTime = new Map<number, CandlePoint>();
-        rawCandles
-          .map((c: Record<string, unknown>) => {
-            const parsedTime = parseUtcTimestamp(c.time);
-            const open = Number(c.open);
-            const high = Number(c.high);
-            const low = Number(c.low);
-            const close = Number(c.close);
-            if (
-              parsedTime === null ||
-              [open, high, low, close].some((v) => Number.isNaN(v))
-            ) {
-              return null;
-            }
-            return {
-              time: parsedTime,
-              open,
-              high,
-              low,
-              close,
-            } as CandlePoint;
-          })
-          .filter((v: CandlePoint | null): v is CandlePoint => v !== null)
-          .forEach((c) => candleByTime.set(Number(c.time), c));
 
-        const candlePoints: CandlePoint[] = Array.from(
-          candleByTime.values()
-        ).sort((a, b) => Number(a.time) - Number(b.time));
-        // Only update candles state when we receive non-empty data so that a
-        // transient empty response (e.g. market API hiccup during polling)
-        // does not wipe out previously loaded candles and destroy the chart.
-        if (candlePoints.length > 0) {
-          setCandles((prev) => {
-            // Skip update if candle count and last candle timestamp are identical
-            if (
-              prev.length === candlePoints.length &&
-              prev.length > 0 &&
-              Number(prev[prev.length - 1].time) ===
-                Number(candlePoints[candlePoints.length - 1].time)
-            ) {
-              return prev;
-            }
-            return candlePoints;
-          });
+      if (shouldFetchCandles) {
+        try {
+          const candleResponse = await fetchCandles(
+            instrument,
+            granularity,
+            startTime,
+            endTime
+          );
+          const rawCandles = Array.isArray(candleResponse?.candles)
+            ? candleResponse.candles
+            : [];
+          const candleByTime = new Map<number, CandlePoint>();
+          rawCandles
+            .map((c: Record<string, unknown>) => {
+              const parsedTime = parseUtcTimestamp(c.time);
+              const open = Number(c.open);
+              const high = Number(c.high);
+              const low = Number(c.low);
+              const close = Number(c.close);
+              if (
+                parsedTime === null ||
+                [open, high, low, close].some((v) => Number.isNaN(v))
+              ) {
+                return null;
+              }
+              return {
+                time: parsedTime,
+                open,
+                high,
+                low,
+                close,
+              } as CandlePoint;
+            })
+            .filter((v: CandlePoint | null): v is CandlePoint => v !== null)
+            .forEach((c) => candleByTime.set(Number(c.time), c));
+
+          const candlePoints: CandlePoint[] = Array.from(
+            candleByTime.values()
+          ).sort((a, b) => Number(a.time) - Number(b.time));
+          // Only update candles state when we receive non-empty data so that a
+          // transient empty response (e.g. market API hiccup during polling)
+          // does not wipe out previously loaded candles and destroy the chart.
+          if (candlePoints.length > 0) {
+            setCandles((prev) => {
+              // Skip update if candle count and last candle timestamp are identical
+              if (
+                prev.length === candlePoints.length &&
+                prev.length > 0 &&
+                Number(prev[prev.length - 1].time) ===
+                  Number(candlePoints[candlePoints.length - 1].time)
+              ) {
+                return prev;
+              }
+              return candlePoints;
+            });
+          }
+          candlesFetched = true;
+          lastCandleFetchRef.current = Date.now();
+        } catch (candleError) {
+          // On the very first load with no existing data, propagate the error
+          // so the user sees feedback.  Otherwise silently keep the old candles.
+          if (isInitialLoad) {
+            throw candleError;
+          }
+          console.warn('Failed to refresh candle data:', candleError);
         }
-        candlesFetched = true;
-      } catch (candleError) {
-        // On the very first load with no existing data, propagate the error
-        // so the user sees feedback.  Otherwise silently keep the old candles.
-        if (isInitialLoad) {
-          throw candleError;
-        }
-        console.warn('Failed to refresh candle data:', candleError);
+      } // end shouldFetchCandles
+
+      // Mark initial load complete and show chart before fetching trades.
+      // This lets the user see candles immediately while trades load lazily.
+      if (isInitialLoad && candlesFetched) {
+        hasLoadedOnce.current = true;
+        setIsLoading(false);
+      }
+
+      // Small delay between candle and trade requests to avoid burst traffic
+      // that can trigger OANDA / backend rate limits.
+      // Only needed when we actually fetched candles this cycle.
+      if (shouldFetchCandles) {
+        await new Promise((r) => setTimeout(r, 300));
       }
 
       // Fetch trades — errors here never hide already-loaded candles.
@@ -1419,7 +1449,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   useEffect(() => {
     if (!enableRealTimeUpdates) return undefined;
-    const id = setInterval(fetchReplayData, 5000);
+    const id = setInterval(fetchReplayData, 10000);
     return () => clearInterval(id);
   }, [enableRealTimeUpdates, fetchReplayData]);
 

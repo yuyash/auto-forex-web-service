@@ -35,6 +35,9 @@ class CandleDataView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    # Exempt from default DRF throttle — OANDA API has its own rate limits
+    # and the frontend already implements exponential backoff for 429 responses.
+    throttle_classes: list = []
 
     @extend_schema(
         operation_id="market_candles",

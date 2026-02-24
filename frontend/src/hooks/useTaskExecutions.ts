@@ -105,7 +105,7 @@ export function useTaskExecution(
   const { data, isLoading, error, refetch } = useQuery({
     queryKey,
     queryFn: async () => {
-      const pageSize = 1000;
+      const pageSize = 5000;
       const response =
         taskType === TaskType.BACKTEST
           ? await backtestTasksApi.getExecutions(taskId, {
