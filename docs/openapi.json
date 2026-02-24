@@ -2,16 +2,16 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "0.1.0",
+        "version": "1.0.0",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
         "/api/accounts/auth/login": {
             "post": {
-                "operationId": "accounts_auth_login_create",
+                "operationId": "auth_login",
                 "description": "Handle user login.",
                 "tags": [
-                    "accounts"
+                    "Accounts"
                 ],
                 "requestBody": {
                     "content": {
@@ -115,10 +115,10 @@
         },
         "/api/accounts/auth/register": {
             "post": {
-                "operationId": "accounts_auth_register_create",
+                "operationId": "auth_register",
                 "description": "Handle user registration.",
                 "tags": [
-                    "accounts"
+                    "Accounts"
                 ],
                 "requestBody": {
                     "content": {
@@ -149,10 +149,10 @@
         },
         "/api/accounts/auth/resend-verification": {
             "post": {
-                "operationId": "accounts_auth_resend_verification_create",
+                "operationId": "auth_resend_verification",
                 "description": "Resend verification email.",
                 "tags": [
-                    "accounts"
+                    "Accounts"
                 ],
                 "requestBody": {
                     "content": {
@@ -183,10 +183,10 @@
         },
         "/api/accounts/auth/verify-email": {
             "post": {
-                "operationId": "accounts_auth_verify_email_create",
+                "operationId": "auth_verify_email",
                 "description": "Verify user email with token.",
                 "tags": [
-                    "accounts"
+                    "Accounts"
                 ],
                 "requestBody": {
                     "content": {
@@ -333,10 +333,10 @@
         },
         "/api/accounts/settings/": {
             "get": {
-                "operationId": "accounts_settings_retrieve",
+                "operationId": "user_settings_get",
                 "description": "Get user settings.",
                 "tags": [
-                    "accounts"
+                    "Accounts"
                 ],
                 "security": [
                     {
@@ -360,10 +360,10 @@
                 }
             },
             "put": {
-                "operationId": "accounts_settings_update",
+                "operationId": "user_settings_update",
                 "description": "Update user settings.",
                 "tags": [
-                    "accounts"
+                    "Accounts"
                 ],
                 "requestBody": {
                     "content": {
@@ -1399,10 +1399,10 @@
         },
         "/api/trading/strategies/": {
             "get": {
-                "operationId": "trading_strategies_retrieve",
+                "operationId": "trading_strategies_list",
                 "description": "API endpoint for listing all available trading strategies.",
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
@@ -3984,6 +3984,9 @@
                         "type": "string",
                         "format": "date-time"
                     },
+                    "version": {
+                        "type": "string"
+                    },
                     "components": {
                         "type": "object",
                         "additionalProperties": {}
@@ -3992,7 +3995,8 @@
                 "required": [
                     "components",
                     "status",
-                    "timestamp"
+                    "timestamp",
+                    "version"
                 ]
             },
             "InstrumentDetailResponse": {

@@ -19,6 +19,7 @@ class StrategyView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = StrategyListSerializer
 
+    @extend_schema(operation_id="trading_strategies_list", tags=["Trading"])
     def get(self, _request: Request) -> Response:
         from apps.trading.strategies.registry import registry
 

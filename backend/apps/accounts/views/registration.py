@@ -4,6 +4,7 @@ from logging import Logger, getLogger
 from typing import Any
 
 from django.conf import settings
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -56,6 +57,7 @@ class UserRegistrationView(APIView):
             ip = str(request.META.get("REMOTE_ADDR", ""))
         return ip
 
+    @extend_schema(operation_id="auth_register", tags=["Accounts"])
     def post(self, request: Request) -> Response:
         """Handle user registration."""
         system_settings = PublicAccountSettings.get_settings()

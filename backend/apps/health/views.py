@@ -47,6 +47,7 @@ class HealthView(APIView):
                 fields={
                     "status": serializers.CharField(),
                     "timestamp": serializers.DateTimeField(),
+                    "version": serializers.CharField(),
                     "components": serializers.DictField(),
                 },
             ),

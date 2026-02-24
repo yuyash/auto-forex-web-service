@@ -19,7 +19,7 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.13
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: ["--fix", "--config=backend/pyproject.toml"]
         files: ^backend/
       - id: ruff-format
@@ -73,9 +73,9 @@ repos:
         pass_filenames: false
         files: ^backend/
 
-      - id: openapi-schema-check
-        name: OpenAPI Schema Check
-        entry: bash scripts/check-openapi-schema.sh
+      - id: openapi-schema-generate
+        name: OpenAPI Schema Generate
+        entry: bash -c 'cd backend && uv run python manage.py spectacular --file ../docs/openapi.json --format openapi-json --validate --fail-on-warn && if [ -s ../docs/openapi.json ] && [ "$(tail -c 1 ../docs/openapi.json | wc -l)" -eq 0 ]; then printf "\n" >> ../docs/openapi.json; fi && cd .. && git add docs/openapi.json'
         language: system
         pass_filenames: false
         files: ^backend/
