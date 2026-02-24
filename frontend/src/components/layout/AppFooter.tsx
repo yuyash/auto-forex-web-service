@@ -4,6 +4,7 @@ import {
   Circle as CircleIcon,
   TrendingUp as TrendingUpIcon,
   Schedule as ScheduleIcon,
+  Info as InfoIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
@@ -25,6 +26,7 @@ const AppFooter = () => {
   const { t } = useTranslation('common');
   const { user, token } = useAuth();
   const [currentTime, setCurrentTime] = useState<string>('');
+  const [backendVersion, setBackendVersion] = useState<string>('');
   const [oandaHealth, setOandaHealth] = useState<OandaHealthStatus | null>(
     null
   );
@@ -62,6 +64,24 @@ const AppFooter = () => {
 
     return () => clearInterval(interval);
   }, [user?.timezone]);
+
+  // Fetch backend version from health endpoint
+  useEffect(() => {
+    const fetchBackendVersion = async () => {
+      try {
+        const response = await fetch('/api/health/');
+        if (response.ok) {
+          const data = await response.json();
+          if (data?.version) {
+            setBackendVersion(data.version);
+          }
+        }
+      } catch {
+        // Silently ignore - version display is non-critical
+      }
+    };
+    fetchBackendVersion();
+  }, []);
 
   // Check OANDA API health periodically
   useEffect(() => {
@@ -330,6 +350,19 @@ const AppFooter = () => {
         justifyContent="space-between"
         flexWrap="wrap"
       >
+        {/* Version Info */}
+        <Tooltip
+          title={`Frontend: v${__APP_VERSION__}${backendVersion ? ` / Backend: v${backendVersion}` : ''}`}
+          arrow
+        >
+          <Chip
+            icon={<InfoIcon />}
+            label={`FE v${__APP_VERSION__}${backendVersion ? ` / BE v${backendVersion}` : ''}`}
+            variant="outlined"
+            size="small"
+          />
+        </Tooltip>
+
         {/* Connection Status */}
         <Tooltip title={connectionTooltip} arrow>
           <Chip
