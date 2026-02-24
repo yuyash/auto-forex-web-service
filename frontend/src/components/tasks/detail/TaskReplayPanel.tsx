@@ -36,6 +36,7 @@ import DeselectIcon from '@mui/icons-material/Deselect';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
 import type { SelectChangeEvent } from '@mui/material/Select';
+import { useTheme } from '@mui/material/styles';
 import {
   CandlestickSeries,
   createChart,
@@ -229,38 +230,56 @@ const fetchCandles = async (
     if (endTime) params.set('to_time', toRfc3339Seconds(endTime));
   }
 
-  const response = await fetch(`/api/market/candles/?${params.toString()}`, {
-    method: 'GET',
-    credentials: 'include',
-    headers: (() => {
-      const token = getAuthToken();
-      return token
-        ? { Authorization: `Bearer ${token}` }
-        : ({} as Record<string, string>);
-    })(),
-  });
+  const MAX_RETRIES = 3;
+  const INITIAL_BACKOFF_MS = 1000;
 
-  handleAuthErrorStatus(response.status, {
-    source: 'http',
-    status: response.status,
-    context: 'task_replay_candles',
-  });
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const response = await fetch(`/api/market/candles/?${params.toString()}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: (() => {
+        const token = getAuthToken();
+        return token
+          ? { Authorization: `Bearer ${token}` }
+          : ({} as Record<string, string>);
+      })(),
+    });
 
-  const body = (await response.json().catch(() => ({}))) as Record<
-    string,
-    unknown
-  >;
-  if (!response.ok) {
-    const errorMessage =
-      typeof body.error === 'string'
-        ? body.error
-        : typeof body.detail === 'string'
-          ? body.detail
-          : `Failed to load candles (HTTP ${response.status})`;
-    throw new Error(errorMessage);
+    // Retry on 429 with exponential backoff
+    if (response.status === 429 && attempt < MAX_RETRIES) {
+      const retryAfter = response.headers.get('retry-after');
+      const delayMs =
+        retryAfter && Number.isFinite(Number(retryAfter))
+          ? Number(retryAfter) * 1000
+          : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+      await new Promise((r) => setTimeout(r, delayMs));
+      continue;
+    }
+
+    handleAuthErrorStatus(response.status, {
+      source: 'http',
+      status: response.status,
+      context: 'task_replay_candles',
+    });
+
+    const body = (await response.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
+    if (!response.ok) {
+      const errorMessage =
+        typeof body.error === 'string'
+          ? body.error
+          : typeof body.detail === 'string'
+            ? body.detail
+            : `Failed to load candles (HTTP ${response.status})`;
+      throw new Error(errorMessage);
+    }
+
+    return body;
   }
 
-  return body;
+  throw new Error('Failed to load candles after retries');
 };
 
 /** Compute PnL for a single position (used for sorting). */
@@ -329,6 +348,8 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const sequenceLineRef = useRef<SequencePositionLine | null>(null);
   const tradesRef = useRef<ReplayTrade[]>([]);
   const { user } = useAuth();
+  const muiTheme = useTheme();
+  const isDark = muiTheme.palette.mode === 'dark';
   const timezone = user?.timezone || 'UTC';
 
   const [candles, setCandles] = useState<CandlePoint[]>([]);
@@ -1348,12 +1369,12 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     const chart = createChart(container, {
       height: dynamicHeight,
       layout: {
-        background: { color: '#ffffff' },
-        textColor: '#334155',
+        background: { color: isDark ? '#131722' : '#ffffff' },
+        textColor: isDark ? '#d1d4dc' : '#334155',
       },
       grid: {
         vertLines: { visible: false },
-        horzLines: { color: '#e2e8f0' },
+        horzLines: { color: isDark ? '#2a2e39' : '#e2e8f0' },
       },
       handleScale: {
         axisPressedMouseMove: true,
@@ -1367,18 +1388,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         horzTouchDrag: true,
       },
       rightPriceScale: {
-        borderColor: '#cbd5e1',
+        borderColor: isDark ? '#2a2e39' : '#cbd5e1',
         minimumWidth: 80,
         scaleMargins: { top: 0.02, bottom: 0.45 },
       },
       leftPriceScale: {
-        borderColor: '#cbd5e1',
+        borderColor: isDark ? '#2a2e39' : '#cbd5e1',
         visible: true,
         minimumWidth: 80,
         ticksVisible: true,
       },
       timeScale: {
-        borderColor: '#cbd5e1',
+        borderColor: isDark ? '#2a2e39' : '#cbd5e1',
         timeVisible: true,
         secondsVisible: false,
         tickMarkFormatter: createSuppressedTickMarkFormatter(),
@@ -1473,7 +1494,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       hasInitialFit.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chartHeight is read once for initial creation; ResizeObserver handles subsequent resizes.  We derive `hasCandles` (boolean) so the effect only re-runs on the false→true transition and never on candle-count changes that would needlessly destroy and recreate the chart.
-  }, [isLoading, hasCandles, timezone]);
+  }, [isLoading, hasCandles, timezone, isDark]);
 
   // Track whether this is the first candle load (for initial fitContent)
   const hasInitialFit = useRef(false);

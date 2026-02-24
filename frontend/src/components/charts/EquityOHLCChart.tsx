@@ -199,6 +199,9 @@ export const EquityOHLCChart: React.FC<EquityOHLCChartProps> = ({
               scaleType: 'time',
               valueFormatter: formatTimestamp,
               label: 'Time',
+              tickLabelStyle: {
+                fill: 'currentColor',
+              },
             },
           ]}
           yAxis={[
