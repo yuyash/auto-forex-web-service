@@ -232,10 +232,17 @@ CELERY_TASK_ROUTES = {
     "trading.tasks.run_trading_task": {"queue": "trading"},
     "trading.tasks.stop_trading_task": {"queue": "trading"},
     "trading.tasks.run_backtest_task": {"queue": "trading"},
+    "trading.tasks.recover_orphaned_tasks": {"queue": "trading"},
 }
 
 # Celery Beat periodic task schedule
-CELERY_BEAT_SCHEDULE = {}
+CELERY_BEAT_SCHEDULE = {
+    "recover-orphaned-tasks": {
+        "task": "trading.tasks.recover_orphaned_tasks",
+        "schedule": 300,  # Every 5 minutes
+        "options": {"queue": "trading"},
+    },
+}
 
 
 # =============================================================================
