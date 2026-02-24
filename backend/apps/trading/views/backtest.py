@@ -152,7 +152,7 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
             # Configuration or validation errors
             logger.warning(f"[API:START] VALIDATION_FAILED - task_id={task.pk}, error={str(e)}")
             return Response(
-                {"error": "Validation error", "detail": str(e)},
+                {"error": "Validation error"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -163,7 +163,7 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                 exc_info=True,
             )
             return Response(
-                {"error": "Failed to submit task", "detail": str(e)},
+                {"error": "Failed to submit task"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -217,7 +217,7 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
             # Task not found or not in stoppable state
             logger.warning(f"[API:STOP] VALIDATION_FAILED - task_id={task.pk}, error={str(e)}")
             return Response(
-                {"error": str(e)},
+                {"error": "Cannot stop task in its current state"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception as e:
@@ -273,8 +273,8 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                 exc_info=True,
             )
             return Response(
-                {"error": f"Failed to pause task: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"error": "Failed to pause task"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=True, methods=["get"], url_path="current-tick")
@@ -344,13 +344,12 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
 
         except ValueError as e:
             # Task not found, retry limit exceeded, or invalid state
-            error_msg = str(e)
             logger.warning(
                 f"[API:RESTART] VALIDATION_FAILED - task_id={task.pk}, "
-                f"current_status={task.status}, error={error_msg}"
+                f"current_status={task.status}, error={str(e)}"
             )
             return Response(
-                {"error": "Validation error", "detail": error_msg},
+                {"error": "Validation error"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -361,7 +360,7 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                 exc_info=True,
             )
             return Response(
-                {"error": "Failed to restart task", "detail": str(e)},
+                {"error": "Failed to restart task"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -412,7 +411,7 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
             if "does not exist" in error_msg:
                 logger.error(f"[API:RESUME] TASK_NOT_FOUND - task_id={task.pk}, error={error_msg}")
                 return Response(
-                    {"error": "Task not found", "detail": error_msg},
+                    {"error": "Task not found"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
             else:
@@ -420,7 +419,7 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                     f"[API:RESUME] VALIDATION_FAILED - task_id={task.pk}, error={error_msg}"
                 )
                 return Response(
-                    {"error": "Validation error", "detail": error_msg},
+                    {"error": "Validation error"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -431,7 +430,7 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                 exc_info=True,
             )
             return Response(
-                {"error": "Failed to resume task", "detail": str(e)},
+                {"error": "Failed to resume task"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 

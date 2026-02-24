@@ -167,7 +167,7 @@ class PositionView(APIView):
         except (OandaAPIError, ComplianceViolationError) as e:
             logger.error("Position open (market order) failed: %s", e)
             return Response(
-                {"error": f"Order execution failed: {str(e)}"},
+                {"error": "Order execution failed"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         except Exception as e:  # pylint: disable=broad-exception-caught
@@ -372,7 +372,7 @@ class PositionDetailView(APIView):
         except OandaAPIError as e:
             logger.error("Failed to fetch position %s: %s", position_id, str(e))
             return Response(
-                {"error": f"Failed to fetch position: {str(e)}"},
+                {"error": "Failed to fetch position"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -472,6 +472,6 @@ class PositionDetailView(APIView):
         except OandaAPIError as e:
             logger.error("Failed to close position %s: %s", position_id, str(e))
             return Response(
-                {"error": f"Failed to close position: {str(e)}"},
+                {"error": "Failed to close position"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
