@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.metadata
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -144,10 +143,9 @@ class HealthCheckService:
     @staticmethod
     def _get_version() -> str:
         """Return the backend version from package metadata."""
-        try:
-            return importlib.metadata.version("auto-forex")
-        except importlib.metadata.PackageNotFoundError:
-            return "unknown"
+        from config.version import get_version
+
+        return get_version()
 
     @staticmethod
     def _determine_status(
