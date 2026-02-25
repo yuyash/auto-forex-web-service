@@ -4,8 +4,8 @@ from uuid import UUID
 
 from django.db import models
 from django.db.models import ProtectedError
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -27,7 +27,21 @@ class StrategyConfigView(APIView):
     pagination_class = StandardPagination
     serializer_class = StrategyConfigListSerializer
 
-    @extend_schema(operation_id="trading_strategy_configs_list", tags=["Trading"])
+    @extend_schema(
+        operation_id="trading_strategy_configs_list",
+        tags=["Trading"],
+        responses={
+            200: inline_serializer(
+                "StrategyConfigPaginatedResponse",
+                fields={
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": StrategyConfigListSerializer(many=True),
+                },
+            ),
+        },
+    )
     def get(self, request: Request) -> Response:
         from apps.trading.models import StrategyConfiguration
 
@@ -52,7 +66,13 @@ class StrategyConfigView(APIView):
         operation_id="trading_strategy_configs_create",
         tags=["Trading"],
         request=StrategyConfigCreateSerializer,
-        responses={201: StrategyConfigDetailSerializer},
+        responses={
+            201: StrategyConfigDetailSerializer,
+            400: inline_serializer(
+                "StrategyConfigCreateError",
+                fields={"detail": serializers.CharField(required=False)},
+            ),
+        },
     )
     def post(self, request: Request) -> Response:
         serializer = StrategyConfigCreateSerializer(data=request.data, context={"request": request})
@@ -79,7 +99,11 @@ class StrategyConfigDetailView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = StrategyConfigDetailSerializer
 
-    @extend_schema(operation_id="trading_strategy_config_detail", tags=["Trading"])
+    @extend_schema(
+        operation_id="trading_strategy_config_detail",
+        tags=["Trading"],
+        responses={200: StrategyConfigDetailSerializer},
+    )
     def get(self, request: Request, config_id: UUID) -> Response:
         from apps.trading.serializers import StrategyConfigDetailSerializer
 
@@ -119,7 +143,11 @@ class StrategyConfigDetailView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @extend_schema(operation_id="trading_strategy_config_delete", tags=["Trading"])
+    @extend_schema(
+        operation_id="trading_strategy_config_delete",
+        tags=["Trading"],
+        responses={204: None},
+    )
     def delete(self, request: Request, config_id: UUID) -> Response:
         try:
             config = StrategyConfiguration.objects.get(id=config_id, user=request.user.pk)
@@ -146,6 +174,4 @@ class StrategyConfigDetailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return Response(
-            {"message": "Configuration deleted successfully"}, status=status.HTTP_204_NO_CONTENT
-        )
+        return Response(status=status.HTTP_204_NO_CONTENT)

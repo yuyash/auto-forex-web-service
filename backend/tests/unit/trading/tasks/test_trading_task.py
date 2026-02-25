@@ -193,7 +193,7 @@ class TestStopTradingTask:
 
         assert task.status == TaskStatus.STOPPED
         task.save.assert_called()
-        mock_app.control.revoke.assert_called_once_with("c-123", terminate=True)
+        mock_app.control.revoke.assert_not_called()
 
     @patch("apps.trading.tasks.trading.TradingTask")
     def test_already_stopped_noop(self, mock_model):
@@ -208,9 +208,12 @@ class TestStopTradingTask:
 
     @patch("apps.trading.tasks.trading.CeleryTaskStatus")
     @patch("apps.trading.tasks.trading.dj_timezone")
+    @patch("apps.trading.tasks.trading._close_open_positions_for_task")
     @patch("celery.current_app")
     @patch("apps.trading.tasks.trading.TradingTask")
-    def test_stop_graceful_mode(self, mock_model, mock_app, mock_tz, mock_celery):
+    def test_stop_graceful_mode(
+        self, mock_model, mock_app, mock_close_positions, mock_tz, mock_celery
+    ):
         from apps.trading.tasks.trading import stop_trading_task
 
         task_id = uuid4()
@@ -222,3 +225,44 @@ class TestStopTradingTask:
         stop_trading_task.__wrapped__(task_id, "graceful")
 
         assert task.status == TaskStatus.STOPPED
+        mock_app.control.revoke.assert_not_called()
+        mock_close_positions.assert_not_called()
+
+    @patch("apps.trading.tasks.trading.CeleryTaskStatus")
+    @patch("apps.trading.tasks.trading.dj_timezone")
+    @patch("apps.trading.tasks.trading._close_open_positions_for_task")
+    @patch("celery.current_app")
+    @patch("apps.trading.tasks.trading.TradingTask")
+    def test_stop_graceful_close_closes_positions(
+        self, mock_model, mock_app, mock_close_positions, mock_tz, mock_celery
+    ):
+        from apps.trading.tasks.trading import stop_trading_task
+
+        task_id = uuid4()
+        task = MagicMock(pk=task_id, status=TaskStatus.STOPPING, celery_task_id="c-789")
+        task.sell_on_stop = False
+        mock_model.objects.get.return_value = task
+        mock_model.DoesNotExist = _DoesNotExist
+        mock_celery.Status.STOPPED = "stopped"
+
+        stop_trading_task.__wrapped__(task_id, "graceful_close")
+
+        mock_app.control.revoke.assert_not_called()
+        mock_close_positions.assert_called_once_with(task)
+
+    @patch("apps.trading.tasks.trading.CeleryTaskStatus")
+    @patch("apps.trading.tasks.trading.dj_timezone")
+    @patch("celery.current_app")
+    @patch("apps.trading.tasks.trading.TradingTask")
+    def test_stop_immediate_mode_revokes(self, mock_model, mock_app, mock_tz, mock_celery):
+        from apps.trading.tasks.trading import stop_trading_task
+
+        task_id = uuid4()
+        task = MagicMock(pk=task_id, status=TaskStatus.STOPPING, celery_task_id="c-000")
+        mock_model.objects.get.return_value = task
+        mock_model.DoesNotExist = _DoesNotExist
+        mock_celery.Status.STOPPED = "stopped"
+
+        stop_trading_task.__wrapped__(task_id, "immediate")
+
+        mock_app.control.revoke.assert_called_once_with("c-000", terminate=True, signal="SIGKILL")

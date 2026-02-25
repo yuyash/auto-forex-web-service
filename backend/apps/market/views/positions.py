@@ -24,6 +24,22 @@ from apps.trading.views.pagination import StandardPagination
 logger: Logger = getLogger(name=__name__)
 
 
+class MarketPositionListItemSerializer(serializers.Serializer):  # pylint: disable=abstract-method
+    """Schema serializer for market position list items."""
+
+    id = serializers.CharField()
+    instrument = serializers.CharField()
+    direction = serializers.CharField()
+    units = serializers.CharField()
+    entry_price = serializers.CharField()
+    unrealized_pnl = serializers.CharField()
+    open_time = serializers.DateTimeField(allow_null=True)
+    state = serializers.CharField()
+    account_name = serializers.CharField()
+    account_db_id = serializers.IntegerField()
+    status = serializers.CharField()
+
+
 class PositionView(APIView):
     """
     API endpoint for position listing directly from OANDA API.
@@ -58,7 +74,7 @@ class PositionView(APIView):
                     "count": serializers.IntegerField(),
                     "next": serializers.CharField(allow_null=True),
                     "previous": serializers.CharField(allow_null=True),
-                    "results": serializers.ListField(child=serializers.DictField()),
+                    "results": MarketPositionListItemSerializer(many=True),
                 },
             )
         },
@@ -211,7 +227,7 @@ class PositionView(APIView):
             accounts = list(OandaAccounts.objects.filter(user=request.user.id, is_active=True))
 
         if not accounts:
-            return Response({"results": [], "count": 0})
+            return Response({"count": 0, "next": None, "previous": None, "results": []})
 
         all_positions = []
 

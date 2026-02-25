@@ -33,7 +33,7 @@ import {
 import {
   DEFAULT_OVERLAY_SETTINGS,
   type OverlaySettings,
-} from './ChartOverlayControls';
+} from './chartOverlaySettings';
 
 /** Granularities where showing seconds on the crosshair makes sense */
 const SECONDS_GRANULARITIES = new Set<string>(['M1', 'M2', 'M4', 'M5']);

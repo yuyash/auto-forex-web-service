@@ -7,6 +7,8 @@ data values.
 """
 
 import factory
+from datetime import UTC
+from django.utils import timezone
 from django.contrib.auth import get_user_model
 from factory.django import DjangoModelFactory
 from faker import Faker
@@ -24,11 +26,17 @@ User = get_user_model()
 fake = Faker()
 
 
+def _aware_datetime_between(start_date, end_date):
+    dt = fake.date_time_between(start_date=start_date, end_date=end_date, tzinfo=UTC)
+    return timezone.make_aware(dt, UTC) if timezone.is_naive(dt) else dt
+
+
 class UserFactory(DjangoModelFactory):
     """Factory for creating test users."""
 
     class Meta:
         model = User
+        skip_postgeneration_save = True
 
     username = factory.Sequence(lambda n: f"testuser{n}")
     email = factory.Sequence(lambda n: f"testuser{n}@example.com")
@@ -46,6 +54,7 @@ class OandaAccountFactory(DjangoModelFactory):
 
     class Meta:
         model = OandaAccounts
+        skip_postgeneration_save = True
 
     user = factory.SubFactory(UserFactory)
     account_id = factory.Sequence(lambda n: f"101-{n:03d}-{fake.random_int(100000, 999999)}")
@@ -91,7 +100,7 @@ class TickDataFactory(DjangoModelFactory):
     instrument = factory.Faker(
         "random_element", elements=["EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "USD_CAD"]
     )
-    timestamp = factory.Faker("date_time_this_month", tzinfo=None)
+    timestamp = factory.LazyFunction(lambda: _aware_datetime_between("-30d", "now"))
     bid = factory.Faker(
         "pydecimal", left_digits=1, right_digits=5, positive=True, min_value=1.0, max_value=2.0
     )
@@ -137,14 +146,12 @@ class BacktestTaskFactory(DjangoModelFactory):
     name = factory.Faker("catch_phrase")
     config = factory.SubFactory(StrategyConfigurationFactory)
     instrument = "USD_JPY"
-    start_time = factory.Faker("date_time_this_year", tzinfo=None)
-    end_time = factory.LazyAttribute(
-        lambda obj: fake.date_time_between(start_date=obj.start_time, end_date="+30d", tzinfo=None)
-    )
+    start_time = factory.LazyFunction(lambda: _aware_datetime_between("-60d", "-1d"))
+    end_time = factory.LazyAttribute(lambda obj: _aware_datetime_between(obj.start_time, "+30d"))
     initial_balance = factory.Faker(
         "pydecimal", left_digits=6, right_digits=2, positive=True, min_value=10000, max_value=100000
     )
-    status = "pending"
+    status = "created"
     data_source = "postgresql"
     celery_task_id = factory.Faker("uuid4")
 

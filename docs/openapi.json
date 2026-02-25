@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.2.1",
+        "version": "1.2.2",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -31,7 +31,47 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/UserLogin"
+                                    "$ref": "#/components/schemas/LoginResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoginUnauthorized"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoginForbidden"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoginRateLimit"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoginServiceUnavailable"
                                 }
                             }
                         },
@@ -134,11 +174,31 @@
                     {}
                 ],
                 "responses": {
-                    "200": {
+                    "201": {
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/UserRegistration"
+                                    "$ref": "#/components/schemas/RegistrationResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RegistrationValidationError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RegistrationServiceUnavailable"
                                 }
                             }
                         },
@@ -172,7 +232,17 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ResendVerification"
+                                    "$ref": "#/components/schemas/ResendVerificationResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ResendVerificationError"
                                 }
                             }
                         },
@@ -206,7 +276,17 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/EmailVerification"
+                                    "$ref": "#/components/schemas/EmailVerificationResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmailVerificationError"
                                 }
                             }
                         },
@@ -351,7 +431,17 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/UserSettingsUpdate"
+                                    "$ref": "#/components/schemas/UserSettingsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserSettingsUnauthorized"
                                 }
                             }
                         },
@@ -387,7 +477,27 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/UserSettingsUpdate"
+                                    "$ref": "#/components/schemas/UserSettingsUpdateResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserSettingsValidationError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserSettingsUpdateUnauthorized"
                                 }
                             }
                         },
@@ -446,6 +556,16 @@
                             }
                         },
                         "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HealthCheckUnavailableResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -470,7 +590,10 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/OandaAccounts"
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/OandaAccounts"
+                                    }
                                 }
                             }
                         },
@@ -503,7 +626,7 @@
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "201": {
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -546,7 +669,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/OandaAccounts"
+                                    "$ref": "#/components/schemas/OandaAccountDetailResponse"
                                 }
                             }
                         },
@@ -574,11 +697,10 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/OandaAccountsRequest"
+                                "$ref": "#/components/schemas/OandaAccountUpdateRequestRequest"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -626,8 +748,15 @@
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No response body"
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OandaAccountDeleteResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -1013,7 +1142,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/OrderCreateResponse"
+                                    "$ref": "#/components/schemas/MarketOrderCreateResponse"
                                 }
                             }
                         },
@@ -1425,7 +1554,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/StrategyList"
+                                    "$ref": "#/components/schemas/StrategyListResponse"
                                 }
                             }
                         },
@@ -1503,7 +1632,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/StrategyConfigList"
+                                    "$ref": "#/components/schemas/StrategyConfigPaginatedResponse"
                                 }
                             }
                         },
@@ -1541,6 +1670,16 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/StrategyConfigDetail"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StrategyConfigCreateError"
                                 }
                             }
                         },
@@ -1936,8 +2075,32 @@
         "/api/trading/tasks/backtest/{id}/events/": {
             "get": {
                 "operationId": "trading_tasks_backtest_events_retrieve",
-                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "Retrieve paginated task events.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "event_type",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Event type filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -1947,6 +2110,36 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "severity",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Severity filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
                     }
                 ],
                 "tags": [
@@ -1965,7 +2158,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTask"
+                                    "$ref": "#/components/schemas/TaskEventPaginatedResponse"
                                 }
                             }
                         },
@@ -1977,8 +2170,24 @@
         "/api/trading/tasks/backtest/{id}/logs/": {
             "get": {
                 "operationId": "trading_tasks_backtest_logs_retrieve",
-                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "Retrieve paginated task logs.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -1988,6 +2197,36 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "level",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Log level filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
                     }
                 ],
                 "tags": [
@@ -2006,7 +2245,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTask"
+                                    "$ref": "#/components/schemas/TaskLogPaginatedResponse"
                                 }
                             }
                         },
@@ -2018,8 +2257,24 @@
         "/api/trading/tasks/backtest/{id}/metrics/": {
             "get": {
                 "operationId": "trading_tasks_backtest_metrics_retrieve",
-                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "Retrieve time-series metrics for the task.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2029,6 +2284,22 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "max_points",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Maximum number of points to return"
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
                     }
                 ],
                 "tags": [
@@ -2047,7 +2318,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTask"
+                                    "$ref": "#/components/schemas/TaskMetricsResponse"
                                 }
                             }
                         },
@@ -2059,8 +2330,32 @@
         "/api/trading/tasks/backtest/{id}/orders/": {
             "get": {
                 "operationId": "trading_tasks_backtest_orders_retrieve",
-                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "Retrieve paginated task orders.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "direction",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Direction filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2070,6 +2365,44 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "order_type",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Order type filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Order status filter"
                     }
                 ],
                 "tags": [
@@ -2088,7 +2421,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTask"
+                                    "$ref": "#/components/schemas/TaskOrderPaginatedResponse"
                                 }
                             }
                         },
@@ -2099,7 +2432,7 @@
         },
         "/api/trading/tasks/backtest/{id}/pause/": {
             "post": {
-                "operationId": "trading_tasks_backtest_pause_create",
+                "operationId": "backtest_tasks_pause",
                 "description": "Pause running task.",
                 "parameters": [
                     {
@@ -2114,7 +2447,7 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -2139,7 +2472,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTask"
+                                    "$ref": "#/components/schemas/BacktestTaskPauseResponse"
                                 }
                             }
                         },
@@ -2151,8 +2484,32 @@
         "/api/trading/tasks/backtest/{id}/positions/": {
             "get": {
                 "operationId": "trading_tasks_backtest_positions_retrieve",
-                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "Retrieve paginated task positions.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "direction",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Direction filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2162,6 +2519,36 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "position_status",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Position status filter (open/closed)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
                     }
                 ],
                 "tags": [
@@ -2180,7 +2567,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTask"
+                                    "$ref": "#/components/schemas/TaskPositionPaginatedResponse"
                                 }
                             }
                         },
@@ -2191,7 +2578,7 @@
         },
         "/api/trading/tasks/backtest/{id}/restart/": {
             "post": {
-                "operationId": "trading_tasks_backtest_restart_create",
+                "operationId": "backtest_tasks_restart",
                 "description": "Restart task from beginning.",
                 "parameters": [
                     {
@@ -2206,7 +2593,7 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -2231,7 +2618,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTask"
+                                    "$ref": "#/components/schemas/BacktestTaskRestartResponse"
                                 }
                             }
                         },
@@ -2242,7 +2629,7 @@
         },
         "/api/trading/tasks/backtest/{id}/resume/": {
             "post": {
-                "operationId": "trading_tasks_backtest_resume_create",
+                "operationId": "backtest_tasks_resume",
                 "description": "Resume paused task.",
                 "parameters": [
                     {
@@ -2257,7 +2644,7 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -2282,7 +2669,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTask"
+                                    "$ref": "#/components/schemas/BacktestTaskResumeResponse"
                                 }
                             }
                         },
@@ -2293,7 +2680,7 @@
         },
         "/api/trading/tasks/backtest/{id}/start/": {
             "post": {
-                "operationId": "trading_tasks_backtest_start_create",
+                "operationId": "backtest_tasks_start",
                 "description": "Submit task for execution.",
                 "parameters": [
                     {
@@ -2308,7 +2695,7 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -2333,7 +2720,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTask"
+                                    "$ref": "#/components/schemas/BacktestTaskActionResponse"
                                 }
                             }
                         },
@@ -2344,7 +2731,7 @@
         },
         "/api/trading/tasks/backtest/{id}/stop/": {
             "post": {
-                "operationId": "trading_tasks_backtest_stop_create",
+                "operationId": "backtest_tasks_stop",
                 "description": "Stop running task asynchronously.",
                 "parameters": [
                     {
@@ -2359,7 +2746,7 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -2380,11 +2767,11 @@
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "202": {
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTask"
+                                    "$ref": "#/components/schemas/BacktestTaskStopResponse"
                                 }
                             }
                         },
@@ -2405,6 +2792,14 @@
                             "type": "string"
                         },
                         "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
                     },
                     {
                         "in": "path",
@@ -2445,8 +2840,32 @@
         "/api/trading/tasks/backtest/{id}/trades/": {
             "get": {
                 "operationId": "trading_tasks_backtest_trades_retrieve",
-                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "Retrieve paginated task trades.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "direction",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Direction filter (buy/sell/long/short)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2456,6 +2875,28 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
                     }
                 ],
                 "tags": [
@@ -2474,7 +2915,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTask"
+                                    "$ref": "#/components/schemas/TaskTradePaginatedResponse"
                                 }
                             }
                         },
@@ -2749,8 +3190,32 @@
         "/api/trading/tasks/trading/{id}/events/": {
             "get": {
                 "operationId": "trading_tasks_trading_events_retrieve",
-                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "Retrieve paginated task events.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "event_type",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Event type filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2760,6 +3225,36 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "severity",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Severity filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
                     }
                 ],
                 "tags": [
@@ -2778,7 +3273,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTask"
+                                    "$ref": "#/components/schemas/TaskEventPaginatedResponse"
                                 }
                             }
                         },
@@ -2790,8 +3285,24 @@
         "/api/trading/tasks/trading/{id}/logs/": {
             "get": {
                 "operationId": "trading_tasks_trading_logs_retrieve",
-                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "Retrieve paginated task logs.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2801,6 +3312,36 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "level",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Log level filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
                     }
                 ],
                 "tags": [
@@ -2819,7 +3360,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTask"
+                                    "$ref": "#/components/schemas/TaskLogPaginatedResponse"
                                 }
                             }
                         },
@@ -2831,8 +3372,24 @@
         "/api/trading/tasks/trading/{id}/metrics/": {
             "get": {
                 "operationId": "trading_tasks_trading_metrics_retrieve",
-                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "Retrieve time-series metrics for the task.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2842,6 +3399,22 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "max_points",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Maximum number of points to return"
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
                     }
                 ],
                 "tags": [
@@ -2860,7 +3433,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTask"
+                                    "$ref": "#/components/schemas/TaskMetricsResponse"
                                 }
                             }
                         },
@@ -2872,8 +3445,32 @@
         "/api/trading/tasks/trading/{id}/orders/": {
             "get": {
                 "operationId": "trading_tasks_trading_orders_retrieve",
-                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "Retrieve paginated task orders.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "direction",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Direction filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2883,6 +3480,44 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "order_type",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Order type filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Order status filter"
                     }
                 ],
                 "tags": [
@@ -2901,7 +3536,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTask"
+                                    "$ref": "#/components/schemas/TaskOrderPaginatedResponse"
                                 }
                             }
                         },
@@ -2912,7 +3547,7 @@
         },
         "/api/trading/tasks/trading/{id}/pause/": {
             "post": {
-                "operationId": "trading_tasks_trading_pause_create",
+                "operationId": "trading_tasks_pause",
                 "description": "Pause running task.",
                 "parameters": [
                     {
@@ -2927,7 +3562,7 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -2952,7 +3587,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTask"
+                                    "$ref": "#/components/schemas/TradingTaskPauseResponse"
                                 }
                             }
                         },
@@ -2964,8 +3599,32 @@
         "/api/trading/tasks/trading/{id}/positions/": {
             "get": {
                 "operationId": "trading_tasks_trading_positions_retrieve",
-                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "Retrieve paginated task positions.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "direction",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Direction filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2975,6 +3634,36 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "position_status",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Position status filter (open/closed)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
                     }
                 ],
                 "tags": [
@@ -2993,7 +3682,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTask"
+                                    "$ref": "#/components/schemas/TaskPositionPaginatedResponse"
                                 }
                             }
                         },
@@ -3004,7 +3693,7 @@
         },
         "/api/trading/tasks/trading/{id}/restart/": {
             "post": {
-                "operationId": "trading_tasks_trading_restart_create",
+                "operationId": "trading_tasks_restart",
                 "description": "Restart task from beginning.",
                 "parameters": [
                     {
@@ -3019,7 +3708,7 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -3044,7 +3733,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTask"
+                                    "$ref": "#/components/schemas/TradingTaskRestartResponse"
                                 }
                             }
                         },
@@ -3055,7 +3744,7 @@
         },
         "/api/trading/tasks/trading/{id}/resume/": {
             "post": {
-                "operationId": "trading_tasks_trading_resume_create",
+                "operationId": "trading_tasks_resume",
                 "description": "Resume cancelled task.",
                 "parameters": [
                     {
@@ -3070,7 +3759,7 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -3095,7 +3784,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTask"
+                                    "$ref": "#/components/schemas/TradingTaskResumeResponse"
                                 }
                             }
                         },
@@ -3106,7 +3795,7 @@
         },
         "/api/trading/tasks/trading/{id}/start/": {
             "post": {
-                "operationId": "trading_tasks_trading_start_create",
+                "operationId": "trading_tasks_start",
                 "description": "Submit task for execution.",
                 "parameters": [
                     {
@@ -3121,7 +3810,7 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -3146,7 +3835,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTask"
+                                    "$ref": "#/components/schemas/TradingTaskActionResponse"
                                 }
                             }
                         },
@@ -3157,7 +3846,7 @@
         },
         "/api/trading/tasks/trading/{id}/stop/": {
             "post": {
-                "operationId": "trading_tasks_trading_stop_create",
+                "operationId": "trading_tasks_stop",
                 "description": "Stop running task asynchronously.",
                 "parameters": [
                     {
@@ -3172,17 +3861,16 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/TradingTaskRequest"
+                                "$ref": "#/components/schemas/TradingTaskStopRequestRequest"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -3193,11 +3881,11 @@
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "202": {
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTask"
+                                    "$ref": "#/components/schemas/TradingTaskStopResponse"
                                 }
                             }
                         },
@@ -3218,6 +3906,14 @@
                             "type": "string"
                         },
                         "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
                     },
                     {
                         "in": "path",
@@ -3258,8 +3954,32 @@
         "/api/trading/tasks/trading/{id}/trades/": {
             "get": {
                 "operationId": "trading_tasks_trading_trades_retrieve",
-                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "Retrieve paginated task trades.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "celery_task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by Celery task ID"
+                    },
+                    {
+                        "in": "query",
+                        "name": "direction",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Direction filter (buy/sell/long/short)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -3269,6 +3989,28 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
                     }
                 ],
                 "tags": [
@@ -3287,7 +4029,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTask"
+                                    "$ref": "#/components/schemas/TaskTradePaginatedResponse"
                                 }
                             }
                         },
@@ -3473,6 +4215,17 @@
                     "user"
                 ]
             },
+            "BacktestTaskActionResponse": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "$ref": "#/components/schemas/BacktestTask"
+                    }
+                },
+                "required": [
+                    "results"
+                ]
+            },
             "BacktestTaskCreate": {
                 "type": "object",
                 "description": "Serializer for creating and updating BacktestTask.",
@@ -3616,6 +4369,17 @@
                     "config"
                 ]
             },
+            "BacktestTaskPauseResponse": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "$ref": "#/components/schemas/BacktestTask"
+                    }
+                },
+                "required": [
+                    "results"
+                ]
+            },
             "BacktestTaskRequest": {
                 "type": "object",
                 "description": "Serializer for BacktestTask with execution data.",
@@ -3678,6 +4442,47 @@
                     "end_time",
                     "name",
                     "start_time"
+                ]
+            },
+            "BacktestTaskRestartResponse": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "$ref": "#/components/schemas/BacktestTask"
+                    }
+                },
+                "required": [
+                    "results"
+                ]
+            },
+            "BacktestTaskResumeResponse": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "$ref": "#/components/schemas/BacktestTask"
+                    }
+                },
+                "required": [
+                    "results"
+                ]
+            },
+            "BacktestTaskStopResponse": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "integer"
+                    },
+                    "status": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "message",
+                    "status",
+                    "task_id"
                 ]
             },
             "CandleDataResponse": {
@@ -3774,17 +4579,15 @@
                 "type": "string",
                 "description": "* `long` - Long\n* `short` - Short"
             },
-            "EmailVerification": {
+            "EmailVerificationError": {
                 "type": "object",
-                "description": "Serializer for email verification request.",
                 "properties": {
-                    "token": {
-                        "type": "string",
-                        "description": "Email verification token"
+                    "error": {
+                        "type": "string"
                     }
                 },
                 "required": [
-                    "token"
+                    "error"
                 ]
             },
             "EmailVerificationRequest": {
@@ -3800,6 +4603,44 @@
                 "required": [
                     "token"
                 ]
+            },
+            "EmailVerificationResponse": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    },
+                    "user": {
+                        "$ref": "#/components/schemas/VerifiedUser"
+                    }
+                },
+                "required": [
+                    "message",
+                    "user"
+                ]
+            },
+            "EventTypeEnum": {
+                "enum": [
+                    "tick_received",
+                    "strategy_signal",
+                    "trade_executed",
+                    "status_changed",
+                    "error_occurred",
+                    "initial_entry",
+                    "retracement",
+                    "take_profit",
+                    "add_layer",
+                    "remove_layer",
+                    "volatility_lock",
+                    "volatility_hedge_neutralize",
+                    "margin_protection",
+                    "strategy_started",
+                    "strategy_paused",
+                    "strategy_resumed",
+                    "strategy_stopped"
+                ],
+                "type": "string",
+                "description": "* `tick_received` - Tick Received\n* `strategy_signal` - Strategy Signal\n* `trade_executed` - Trade Executed\n* `status_changed` - Status Changed\n* `error_occurred` - Error Occurred\n* `initial_entry` - Initial Entry\n* `retracement` - Retracement\n* `take_profit` - Take Profit\n* `add_layer` - Add Layer\n* `remove_layer` - Remove Layer\n* `volatility_lock` - Volatility Lock\n* `volatility_hedge_neutralize` - Volatility Hedge Neutralize\n* `margin_protection` - Margin Protection\n* `strategy_started` - Strategy Started\n* `strategy_paused` - Strategy Paused\n* `strategy_resumed` - Strategy Resumed\n* `strategy_stopped` - Strategy Stopped"
             },
             "ExecutionInfo": {
                 "type": "object",
@@ -3858,6 +4699,31 @@
                 ]
             },
             "HealthCheckResponse": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string"
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "version": {
+                        "type": "string"
+                    },
+                    "components": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                },
+                "required": [
+                    "components",
+                    "status",
+                    "timestamp",
+                    "version"
+                ]
+            },
+            "HealthCheckUnavailableResponse": {
                 "type": "object",
                 "properties": {
                     "status": {
@@ -3988,13 +4854,107 @@
                 "type": "string",
                 "description": "* `US` - United States\n* `JP` - Japan\n* `OTHER` - Other/International"
             },
-            "LanguageEnum": {
+            "LevelEnum": {
                 "enum": [
-                    "en",
-                    "ja"
+                    "DEBUG",
+                    "INFO",
+                    "WARNING",
+                    "ERROR",
+                    "CRITICAL"
                 ],
                 "type": "string",
-                "description": "* `en` - en\n* `ja` - ja"
+                "description": "* `DEBUG` - Debug\n* `INFO` - Info\n* `WARNING` - Warning\n* `ERROR` - Error\n* `CRITICAL` - Critical"
+            },
+            "LoginForbidden": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "LoginRateLimit": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "LoginResponse": {
+                "type": "object",
+                "properties": {
+                    "token": {
+                        "type": "string"
+                    },
+                    "user": {
+                        "$ref": "#/components/schemas/LoginUser"
+                    }
+                },
+                "required": [
+                    "token",
+                    "user"
+                ]
+            },
+            "LoginServiceUnavailable": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "LoginUnauthorized": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "LoginUser": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email"
+                    },
+                    "username": {
+                        "type": "string"
+                    },
+                    "is_staff": {
+                        "type": "boolean"
+                    },
+                    "timezone": {
+                        "type": "string"
+                    },
+                    "language": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "email",
+                    "id",
+                    "is_staff",
+                    "language",
+                    "timezone",
+                    "username"
+                ]
             },
             "LogoutError": {
                 "type": "object",
@@ -4020,6 +4980,130 @@
                 "required": [
                     "message",
                     "sessions_terminated"
+                ]
+            },
+            "MarketOrder": {
+                "type": "object",
+                "description": "Schema serializer for a single market order response item.",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "instrument": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string"
+                    },
+                    "direction": {
+                        "type": "string"
+                    },
+                    "units": {
+                        "type": "string"
+                    },
+                    "price": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "state": {
+                        "type": "string"
+                    },
+                    "time_in_force": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "create_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "fill_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "cancel_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "cancel_time",
+                    "create_time",
+                    "direction",
+                    "fill_time",
+                    "id",
+                    "instrument",
+                    "price",
+                    "state",
+                    "time_in_force",
+                    "type",
+                    "units"
+                ]
+            },
+            "MarketOrderCreateResponse": {
+                "oneOf": [
+                    {
+                        "$ref": "#/components/schemas/MarketOrder"
+                    },
+                    {
+                        "$ref": "#/components/schemas/OcoOrderCreateResponse"
+                    }
+                ]
+            },
+            "MarketPositionListItem": {
+                "type": "object",
+                "description": "Schema serializer for market position list items.",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "instrument": {
+                        "type": "string"
+                    },
+                    "direction": {
+                        "type": "string"
+                    },
+                    "units": {
+                        "type": "string"
+                    },
+                    "entry_price": {
+                        "type": "string"
+                    },
+                    "unrealized_pnl": {
+                        "type": "string"
+                    },
+                    "open_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "state": {
+                        "type": "string"
+                    },
+                    "account_name": {
+                        "type": "string"
+                    },
+                    "account_db_id": {
+                        "type": "integer"
+                    },
+                    "status": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "account_db_id",
+                    "account_name",
+                    "direction",
+                    "entry_price",
+                    "id",
+                    "instrument",
+                    "open_time",
+                    "state",
+                    "status",
+                    "units",
+                    "unrealized_pnl"
                 ]
             },
             "MarketStatusResponse": {
@@ -4219,6 +5303,139 @@
                 "required": [
                     "error"
                 ]
+            },
+            "NullEnum": {
+                "enum": [
+                    null
+                ]
+            },
+            "OandaAccountDeleteResponse": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "message"
+                ]
+            },
+            "OandaAccountDetailResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "account_id": {
+                        "type": "string"
+                    },
+                    "api_type": {
+                        "type": "string"
+                    },
+                    "jurisdiction": {
+                        "type": "string"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "balance": {
+                        "type": "string"
+                    },
+                    "margin_used": {
+                        "type": "string"
+                    },
+                    "margin_available": {
+                        "type": "string"
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "is_default": {
+                        "type": "boolean"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "unrealized_pnl": {
+                        "type": "string"
+                    },
+                    "nav": {
+                        "type": "string"
+                    },
+                    "open_trade_count": {
+                        "type": "integer"
+                    },
+                    "open_position_count": {
+                        "type": "integer"
+                    },
+                    "pending_order_count": {
+                        "type": "integer"
+                    },
+                    "hedging_enabled": {
+                        "type": "boolean"
+                    },
+                    "position_mode": {
+                        "type": "string"
+                    },
+                    "oanda_account": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "live_data": {
+                        "type": "boolean"
+                    },
+                    "live_data_error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "account_id",
+                    "api_type",
+                    "created_at",
+                    "currency",
+                    "id",
+                    "is_active",
+                    "is_default",
+                    "jurisdiction",
+                    "updated_at"
+                ]
+            },
+            "OandaAccountUpdateRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "account_id": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "api_token": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1
+                    },
+                    "api_type": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "jurisdiction": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "currency": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "is_default": {
+                        "type": "boolean"
+                    }
+                }
             },
             "OandaAccounts": {
                 "type": "object",
@@ -4421,12 +5638,31 @@
                     "oanda_account_id"
                 ]
             },
+            "OandaHealthAccount": {
+                "type": "object",
+                "description": "Schema serializer for selected OANDA account metadata.",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "account_id": {
+                        "type": "string"
+                    },
+                    "api_type": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "account_id",
+                    "api_type",
+                    "id"
+                ]
+            },
             "OandaHealthGetResponse": {
                 "type": "object",
                 "properties": {
                     "account": {
-                        "type": "object",
-                        "additionalProperties": {}
+                        "$ref": "#/components/schemas/OandaHealthAccount"
                     },
                     "status": {
                         "allOf": [
@@ -4446,8 +5682,7 @@
                 "type": "object",
                 "properties": {
                     "account": {
-                        "type": "object",
-                        "additionalProperties": {}
+                        "$ref": "#/components/schemas/OandaHealthAccount"
                     },
                     "status": {
                         "$ref": "#/components/schemas/OandaApiHealthStatus"
@@ -4456,6 +5691,126 @@
                 "required": [
                     "account",
                     "status"
+                ]
+            },
+            "OcoOrderCreateResponse": {
+                "type": "object",
+                "properties": {
+                    "oco_order": {
+                        "$ref": "#/components/schemas/MarketOrder"
+                    },
+                    "limit_order": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MarketOrder"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "stop_order": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MarketOrder"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "limit_order",
+                    "oco_order",
+                    "stop_order"
+                ]
+            },
+            "Order": {
+                "type": "object",
+                "description": "Serializer for order data from Order model.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "celery_task_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "broker_order_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "oanda_trade_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "position_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "instrument": {
+                        "type": "string"
+                    },
+                    "order_type": {
+                        "type": "string"
+                    },
+                    "direction": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "units": {
+                        "type": "integer"
+                    },
+                    "requested_price": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "fill_price": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "submitted_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "filled_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "cancelled_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "stop_loss": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "error_message": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "is_dry_run": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "id",
+                    "instrument",
+                    "is_dry_run",
+                    "order_type",
+                    "status",
+                    "submitted_at",
+                    "units"
                 ]
             },
             "OrderCancelResponse": {
@@ -4472,65 +5827,6 @@
                 "required": [
                     "details",
                     "message"
-                ]
-            },
-            "OrderCreateResponse": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string"
-                    },
-                    "instrument": {
-                        "type": "string"
-                    },
-                    "type": {
-                        "type": "string"
-                    },
-                    "direction": {
-                        "type": "string"
-                    },
-                    "units": {
-                        "type": "string"
-                    },
-                    "price": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "state": {
-                        "type": "string"
-                    },
-                    "time_in_force": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "create_time": {
-                        "type": "string",
-                        "format": "date-time",
-                        "nullable": true
-                    },
-                    "fill_time": {
-                        "type": "string",
-                        "format": "date-time",
-                        "nullable": true
-                    },
-                    "cancel_time": {
-                        "type": "string",
-                        "format": "date-time",
-                        "nullable": true
-                    }
-                },
-                "required": [
-                    "cancel_time",
-                    "create_time",
-                    "direction",
-                    "fill_time",
-                    "id",
-                    "instrument",
-                    "price",
-                    "state",
-                    "time_in_force",
-                    "type",
-                    "units"
                 ]
             },
             "OrderDetailResponse": {
@@ -4609,8 +5905,7 @@
                     "results": {
                         "type": "array",
                         "items": {
-                            "type": "object",
-                            "additionalProperties": {}
+                            "$ref": "#/components/schemas/MarketOrder"
                         }
                     }
                 },
@@ -4899,6 +6194,79 @@
                     "unrealized"
                 ]
             },
+            "Position": {
+                "type": "object",
+                "description": "Serializer for position data from Position model.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "instrument": {
+                        "type": "string"
+                    },
+                    "direction": {
+                        "type": "string"
+                    },
+                    "units": {
+                        "type": "integer"
+                    },
+                    "entry_price": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "entry_time": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "exit_price": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "exit_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "is_open": {
+                        "type": "boolean"
+                    },
+                    "layer_index": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "retracement_count": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "trade_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Return the IDs of trades linked to this position.",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "direction",
+                    "entry_price",
+                    "entry_time",
+                    "id",
+                    "instrument",
+                    "is_open",
+                    "trade_ids",
+                    "units"
+                ]
+            },
             "PositionCloseResponse": {
                 "type": "object",
                 "properties": {
@@ -4981,8 +6349,7 @@
                     "results": {
                         "type": "array",
                         "items": {
-                            "type": "object",
-                            "additionalProperties": {}
+                            "$ref": "#/components/schemas/MarketPositionListItem"
                         }
                     }
                 },
@@ -5093,18 +6460,85 @@
                     }
                 }
             },
-            "ResendVerification": {
+            "RegisteredUser": {
                 "type": "object",
-                "description": "Serializer for resend verification email request.",
                 "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
                     "email": {
                         "type": "string",
-                        "format": "email",
-                        "description": "Email address to resend verification to"
+                        "format": "email"
+                    },
+                    "username": {
+                        "type": "string"
+                    },
+                    "first_name": {
+                        "type": "string"
+                    },
+                    "last_name": {
+                        "type": "string"
+                    },
+                    "email_verified": {
+                        "type": "boolean"
                     }
                 },
                 "required": [
-                    "email"
+                    "email",
+                    "email_verified",
+                    "first_name",
+                    "id",
+                    "last_name",
+                    "username"
+                ]
+            },
+            "RegistrationResponse": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    },
+                    "user": {
+                        "$ref": "#/components/schemas/RegisteredUser"
+                    },
+                    "email_sent": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "email_sent",
+                    "message",
+                    "user"
+                ]
+            },
+            "RegistrationServiceUnavailable": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "RegistrationValidationError": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                }
+            },
+            "ResendVerificationError": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
                 ]
             },
             "ResendVerificationRequest": {
@@ -5122,6 +6556,20 @@
                     "email"
                 ]
             },
+            "ResendVerificationResponse": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    },
+                    "email_sent": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "message"
+                ]
+            },
             "StatusEnum": {
                 "enum": [
                     "created",
@@ -5135,6 +6583,14 @@
                 ],
                 "type": "string",
                 "description": "* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
+            },
+            "StrategyConfigCreateError": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                }
             },
             "StrategyConfigCreateRequest": {
                 "type": "object",
@@ -5282,6 +6738,34 @@
                     "user_id"
                 ]
             },
+            "StrategyConfigPaginatedResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/StrategyConfigList"
+                        }
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "previous",
+                    "results"
+                ]
+            },
             "StrategyDefaultsNotFound": {
                 "type": "object",
                 "properties": {
@@ -5341,6 +6825,52 @@
                     "name"
                 ]
             },
+            "StrategyListResponse": {
+                "type": "object",
+                "properties": {
+                    "strategies": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/StrategyList"
+                        }
+                    },
+                    "count": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "count",
+                    "strategies"
+                ]
+            },
+            "TaskEventPaginatedResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TradingEvent"
+                        }
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "previous",
+                    "results"
+                ]
+            },
             "TaskInfo": {
                 "type": "object",
                 "description": "Serializer for task status information.",
@@ -5370,6 +6900,212 @@
                     "progress",
                     "started_at",
                     "status"
+                ]
+            },
+            "TaskLog": {
+                "type": "object",
+                "description": "Serializer for TaskLog model.\n\nProvides access to task execution logs with timestamp, level, and message.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "description": "Unique identifier for this log entry"
+                    },
+                    "task_type": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TaskTypeEnum"
+                            }
+                        ],
+                        "description": "Type of task (backtest or trading)\n\n* `backtest` - Backtest\n* `trading` - Trading"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "UUID of the task this log entry belongs to"
+                    },
+                    "celery_task_id": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Celery task ID for this execution",
+                        "maxLength": 255
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "When this log entry was created"
+                    },
+                    "level": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/LevelEnum"
+                            }
+                        ],
+                        "description": "Log severity level\n\n* `DEBUG` - Debug\n* `INFO` - Info\n* `WARNING` - Warning\n* `ERROR` - Error\n* `CRITICAL` - Critical"
+                    },
+                    "component": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Component/logger name that emitted this log",
+                        "maxLength": 255
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Log message content"
+                    },
+                    "details": {
+                        "description": "Additional structured log details"
+                    }
+                },
+                "required": [
+                    "id",
+                    "message",
+                    "task_id",
+                    "task_type",
+                    "timestamp"
+                ]
+            },
+            "TaskLogPaginatedResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TaskLog"
+                        }
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "previous",
+                    "results"
+                ]
+            },
+            "TaskMetricPoint": {
+                "type": "object",
+                "properties": {
+                    "t": {
+                        "type": "integer"
+                    },
+                    "mr": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "atr": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "base": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "vt": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "atr",
+                    "base",
+                    "mr",
+                    "t",
+                    "vt"
+                ]
+            },
+            "TaskMetricsResponse": {
+                "type": "object",
+                "properties": {
+                    "metrics": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TaskMetricPoint"
+                        }
+                    },
+                    "total": {
+                        "type": "integer"
+                    },
+                    "returned": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "metrics",
+                    "returned",
+                    "total"
+                ]
+            },
+            "TaskOrderPaginatedResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Order"
+                        }
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "previous",
+                    "results"
+                ]
+            },
+            "TaskPositionPaginatedResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Position"
+                        }
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "previous",
+                    "results"
                 ]
             },
             "TaskSummary": {
@@ -5404,6 +7140,42 @@
                     "tick",
                     "timestamp"
                 ]
+            },
+            "TaskTradePaginatedResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Trade"
+                        }
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "previous",
+                    "results"
+                ]
+            },
+            "TaskTypeEnum": {
+                "enum": [
+                    "backtest",
+                    "trading"
+                ],
+                "type": "string",
+                "description": "* `backtest` - Backtest\n* `trading` - Trading"
             },
             "TickDataRangeResponse": {
                 "type": "object",
@@ -5522,6 +7294,143 @@
                     "language",
                     "timezone",
                     "username"
+                ]
+            },
+            "Trade": {
+                "type": "object",
+                "description": "Serializer for trade data from Trades model.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "direction": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/DirectionEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "units": {
+                        "type": "integer"
+                    },
+                    "instrument": {
+                        "type": "string"
+                    },
+                    "price": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "execution_method": {
+                        "$ref": "#/components/schemas/EventTypeEnum"
+                    },
+                    "execution_method_display": {
+                        "type": "string",
+                        "description": "Human-readable display name for the execution method.",
+                        "readOnly": true
+                    },
+                    "layer_index": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "retracement_count": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "position_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "direction",
+                    "execution_method",
+                    "execution_method_display",
+                    "instrument",
+                    "price",
+                    "timestamp",
+                    "units"
+                ]
+            },
+            "TradingEvent": {
+                "type": "object",
+                "description": "Serializer for TradingEvent model.",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "event_type": {
+                        "$ref": "#/components/schemas/EventTypeEnum"
+                    },
+                    "event_type_display": {
+                        "type": "string",
+                        "description": "Human-readable display name for the event type.",
+                        "readOnly": true
+                    },
+                    "severity": {
+                        "type": "string",
+                        "maxLength": 16
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "user": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "account": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "instrument": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 32
+                    },
+                    "task_type": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "celery_task_id": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Celery task ID for tracking specific execution",
+                        "maxLength": 255
+                    },
+                    "details": {},
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "description",
+                    "event_type",
+                    "event_type_display",
+                    "id"
                 ]
             },
             "TradingTask": {
@@ -5682,6 +7591,17 @@
                     "user"
                 ]
             },
+            "TradingTaskActionResponse": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "$ref": "#/components/schemas/TradingTask"
+                    }
+                },
+                "required": [
+                    "results"
+                ]
+            },
             "TradingTaskCreate": {
                 "type": "object",
                 "description": "Serializer for creating and updating TradingTask.\n\nAccepts config_id and account_id from the frontend, mapping them\nto the config and oanda_account FK fields.",
@@ -5737,6 +7657,17 @@
                     }
                 }
             },
+            "TradingTaskPauseResponse": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "$ref": "#/components/schemas/TradingTask"
+                    }
+                },
+                "required": [
+                    "results"
+                ]
+            },
             "TradingTaskRequest": {
                 "type": "object",
                 "description": "Serializer for TradingTask with execution data.",
@@ -5778,18 +7709,60 @@
                     "oanda_account"
                 ]
             },
-            "UserLogin": {
+            "TradingTaskRestartResponse": {
                 "type": "object",
-                "description": "Serializer for user login.",
                 "properties": {
-                    "email": {
-                        "type": "string",
-                        "format": "email",
-                        "description": "User's email address"
+                    "results": {
+                        "$ref": "#/components/schemas/TradingTask"
                     }
                 },
                 "required": [
-                    "email"
+                    "results"
+                ]
+            },
+            "TradingTaskResumeResponse": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "$ref": "#/components/schemas/TradingTask"
+                    }
+                },
+                "required": [
+                    "results"
+                ]
+            },
+            "TradingTaskStopRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "minLength": 1,
+                        "default": "graceful",
+                        "description": "Stop mode. Defaults to graceful."
+                    }
+                }
+            },
+            "TradingTaskStopResponse": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "integer"
+                    },
+                    "mode": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "message",
+                    "mode",
+                    "status",
+                    "task_id"
                 ]
             },
             "UserLoginRequest": {
@@ -5814,15 +7787,19 @@
                     "password"
                 ]
             },
-            "UserRegistration": {
+            "UserProfile": {
                 "type": "object",
-                "description": "Serializer for user registration.",
+                "description": "Serializer for user profile including timezone and language preferences.",
                 "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
                     "email": {
                         "type": "string",
                         "format": "email",
-                        "description": "User's email address (used for login)",
-                        "maxLength": 254
+                        "readOnly": true,
+                        "description": "User's email address (used for login)"
                     },
                     "username": {
                         "type": "string",
@@ -5837,11 +7814,40 @@
                     "last_name": {
                         "type": "string",
                         "maxLength": 150
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "description": "User's preferred timezone (IANA timezone identifier)",
+                        "maxLength": 50
+                    },
+                    "language": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/UserProfileLanguageEnum"
+                            }
+                        ],
+                        "description": "User's preferred language\n\n* `en` - English\n* `ja` - Japanese"
+                    },
+                    "email_verified": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Whether the user's email address has been verified"
                     }
                 },
                 "required": [
-                    "email"
+                    "email",
+                    "email_verified",
+                    "id",
+                    "username"
                 ]
+            },
+            "UserProfileLanguageEnum": {
+                "enum": [
+                    "en",
+                    "ja"
+                ],
+                "type": "string",
+                "description": "* `en` - English\n* `ja` - Japanese"
             },
             "UserRegistrationRequest": {
                 "type": "object",
@@ -5888,15 +7894,92 @@
                     "password_confirm"
                 ]
             },
-            "UserSettingsUpdate": {
+            "UserSettings": {
+                "type": "object",
+                "description": "Serializer for user settings.",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "notification_enabled": {
+                        "type": "boolean",
+                        "description": "Whether notifications are enabled"
+                    },
+                    "notification_email": {
+                        "type": "boolean",
+                        "description": "Whether to send email notifications"
+                    },
+                    "notification_browser": {
+                        "type": "boolean",
+                        "description": "Whether to send browser notifications"
+                    },
+                    "settings_json": {
+                        "description": "Additional settings stored as JSON"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Timestamp when settings were created"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Timestamp when settings were last updated"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "id",
+                    "updated_at"
+                ]
+            },
+            "UserSettingsResponse": {
+                "type": "object",
+                "properties": {
+                    "user": {
+                        "$ref": "#/components/schemas/UserProfile"
+                    },
+                    "settings": {
+                        "$ref": "#/components/schemas/UserSettings"
+                    }
+                },
+                "required": [
+                    "settings",
+                    "user"
+                ]
+            },
+            "UserSettingsUnauthorized": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "UserSettingsUpdateLanguageEnum": {
+                "enum": [
+                    "en",
+                    "ja"
+                ],
+                "type": "string",
+                "description": "* `en` - en\n* `ja` - ja"
+            },
+            "UserSettingsUpdateRequest": {
                 "type": "object",
                 "description": "Serializer for updating user settings.",
                 "properties": {
                     "timezone": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1
                     },
                     "language": {
-                        "$ref": "#/components/schemas/LanguageEnum"
+                        "$ref": "#/components/schemas/UserSettingsUpdateLanguageEnum"
                     },
                     "first_name": {
                         "type": "string"
@@ -5905,7 +7988,8 @@
                         "type": "string"
                     },
                     "username": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1
                     },
                     "notification_enabled": {
                         "type": "boolean"
@@ -5919,38 +8003,63 @@
                     "settings_json": {}
                 }
             },
-            "UserSettingsUpdateRequest": {
+            "UserSettingsUpdateResponse": {
                 "type": "object",
-                "description": "Serializer for updating user settings.",
                 "properties": {
-                    "timezone": {
+                    "user": {
+                        "$ref": "#/components/schemas/UserProfile"
+                    },
+                    "settings": {
+                        "$ref": "#/components/schemas/UserSettings"
+                    }
+                },
+                "required": [
+                    "settings",
+                    "user"
+                ]
+            },
+            "UserSettingsUpdateUnauthorized": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "UserSettingsValidationError": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                }
+            },
+            "VerifiedUser": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "email": {
                         "type": "string",
-                        "minLength": 1
-                    },
-                    "language": {
-                        "$ref": "#/components/schemas/LanguageEnum"
-                    },
-                    "first_name": {
-                        "type": "string"
-                    },
-                    "last_name": {
-                        "type": "string"
+                        "format": "email"
                     },
                     "username": {
-                        "type": "string",
-                        "minLength": 1
+                        "type": "string"
                     },
-                    "notification_enabled": {
+                    "email_verified": {
                         "type": "boolean"
-                    },
-                    "notification_email": {
-                        "type": "boolean"
-                    },
-                    "notification_browser": {
-                        "type": "boolean"
-                    },
-                    "settings_json": {}
-                }
+                    }
+                },
+                "required": [
+                    "email",
+                    "email_verified",
+                    "id",
+                    "username"
+                ]
             }
         },
         "securitySchemes": {

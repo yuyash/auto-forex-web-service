@@ -92,6 +92,12 @@ class TestStateManager:
         mgr = self._make_manager()
         mgr.start()
         mgr.cleanup()
+        assert mgr.redis.exists(mgr.redis_key) == 1
+
+    def test_cleanup_with_delete_key(self):
+        mgr = self._make_manager()
+        mgr.start()
+        mgr.cleanup(delete_key=True)
         assert mgr.redis.exists(mgr.redis_key) == 0
 
     def test_heartbeat_with_meta_update(self):

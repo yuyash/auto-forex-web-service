@@ -11,11 +11,14 @@ from __future__ import annotations
 from decimal import Decimal
 from logging import Logger, getLogger
 
-from apps.trading.dataclasses import StrategyResult, Tick
+from apps.trading.dataclasses import EventExecutionResult, StrategyResult, Tick
 from apps.trading.enums import StrategyType
+from apps.trading.events.handler import EventHandler
 from apps.trading.models import StrategyConfiguration
 from apps.trading.models.state import ExecutionState
+from apps.trading.order import OrderService
 from apps.trading.strategies.base import Strategy
+from apps.trading.strategies.registry import register_all_strategies, registry
 
 logger: Logger = getLogger(name=__name__)
 
@@ -71,8 +74,6 @@ class TradingEngine:
         Raises:
             ValueError: If strategy type is unknown
         """
-        from apps.trading.strategies.registry import register_all_strategies, registry
-
         register_all_strategies()
         return registry.create(
             instrument=self.instrument,
@@ -142,3 +143,22 @@ class TradingEngine:
             Strategy type enum
         """
         return StrategyType(self.strategy_config.strategy_type)
+
+    def apply_event_execution_result(
+        self,
+        *,
+        state: ExecutionState,
+        execution_result: EventExecutionResult,
+    ) -> None:
+        """Apply event execution feedback to strategy state."""
+        self.strategy.apply_event_execution_result(
+            state=state,
+            execution_result=execution_result,
+        )
+
+    def create_event_handler(self, *, order_service: OrderService, instrument: str) -> EventHandler:
+        """Create event handler for this strategy."""
+        return self.strategy.create_event_handler(
+            order_service=order_service,
+            instrument=instrument,
+        )

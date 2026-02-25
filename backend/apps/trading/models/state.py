@@ -43,6 +43,11 @@ class ExecutionState(UUIDModel):
         db_index=True,
         help_text="Celery task ID for tracking execution",
     )
+    execution_run_id = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        help_text="Execution run identifier to isolate state per run",
+    )
 
     # Execution state fields
     strategy_state = models.JSONField(
@@ -91,16 +96,19 @@ class ExecutionState(UUIDModel):
         verbose_name = "Execution State"
         verbose_name_plural = "Execution States"
         indexes = [
+            models.Index(fields=["task_type", "task_id", "execution_run_id"]),
             models.Index(fields=["task_type", "task_id", "celery_task_id"]),
-            models.Index(fields=["task_type", "task_id"]),
             models.Index(fields=["celery_task_id"]),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["task_type", "task_id", "celery_task_id"],
-                name="unique_task_celery_execution_state",
+                fields=["task_type", "task_id", "execution_run_id"],
+                name="unique_task_run_execution_state",
             )
         ]
 
     def __str__(self) -> str:
-        return f"ExecutionState({self.task_type}:{self.task_id}, ticks={self.ticks_processed})"
+        return (
+            f"ExecutionState({self.task_type}:{self.task_id}:run={self.execution_run_id}, "
+            f"ticks={self.ticks_processed})"
+        )

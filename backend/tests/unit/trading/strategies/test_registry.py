@@ -23,14 +23,12 @@ class TestStrategyRegistry:
         with pytest.raises(ValueError, match="non-empty"):
             reg.register(identifier="", strategy_cls=MagicMock())
 
-    def test_register_duplicate_is_noop(self):
+    def test_register_duplicate_raises(self):
         reg = StrategyRegistry()
         cls = MagicMock()
         reg.register(identifier="dup", strategy_cls=cls)
-        reg.register(identifier="dup", strategy_cls=MagicMock())
-        # First registration wins
-        info = reg._strategies["dup"]
-        assert info.strategy_cls is cls
+        with pytest.raises(ValueError, match="already registered"):
+            reg.register(identifier="dup", strategy_cls=MagicMock())
 
     def test_list_strategies(self):
         reg = StrategyRegistry()

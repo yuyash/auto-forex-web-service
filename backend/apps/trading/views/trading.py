@@ -5,7 +5,8 @@ from logging import Logger
 from typing import Any
 
 from django.db.models import Q, QuerySet
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -21,6 +22,73 @@ from apps.trading.views.mixins import TaskSubResourceMixin
 logger: Logger = logging.getLogger(name=__name__)
 
 
+@extend_schema_view(
+    start=extend_schema(
+        operation_id="trading_tasks_start",
+        tags=["Trading"],
+        responses={
+            200: inline_serializer(
+                "TradingTaskActionResponse",
+                fields={"results": TradingTaskSerializer()},
+            ),
+        },
+    ),
+    stop=extend_schema(
+        operation_id="trading_tasks_stop",
+        tags=["Trading"],
+        request=inline_serializer(
+            "TradingTaskStopRequest",
+            fields={
+                "mode": serializers.CharField(
+                    required=False,
+                    default="graceful",
+                    help_text="Stop mode. Defaults to graceful.",
+                ),
+            },
+        ),
+        responses={
+            202: inline_serializer(
+                "TradingTaskStopResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "task_id": serializers.IntegerField(),
+                    "mode": serializers.CharField(),
+                    "status": serializers.CharField(),
+                },
+            ),
+        },
+    ),
+    pause=extend_schema(
+        operation_id="trading_tasks_pause",
+        tags=["Trading"],
+        responses={
+            200: inline_serializer(
+                "TradingTaskPauseResponse",
+                fields={"results": TradingTaskSerializer()},
+            ),
+        },
+    ),
+    resume=extend_schema(
+        operation_id="trading_tasks_resume",
+        tags=["Trading"],
+        responses={
+            200: inline_serializer(
+                "TradingTaskResumeResponse",
+                fields={"results": TradingTaskSerializer()},
+            ),
+        },
+    ),
+    restart=extend_schema(
+        operation_id="trading_tasks_restart",
+        tags=["Trading"],
+        responses={
+            200: inline_serializer(
+                "TradingTaskRestartResponse",
+                fields={"results": TradingTaskSerializer()},
+            ),
+        },
+    ),
+)
 class TradingTaskViewSet(TaskSubResourceMixin, ModelViewSet):
     """
     ViewSet for TradingTask operations with task-centric API.

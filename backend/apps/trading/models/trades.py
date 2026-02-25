@@ -28,6 +28,11 @@ class Trade(models.Model):
         db_index=True,
         help_text="UUID of the task this trade belongs to",
     )
+    execution_run_id = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        help_text="Execution run identifier for run-scoped trade queries",
+    )
     celery_task_id = models.CharField(
         max_length=255,
         db_index=True,
@@ -109,6 +114,7 @@ class Trade(models.Model):
         ordering = ["timestamp"]
         indexes = [
             models.Index(fields=["task_type", "task_id", "-timestamp"]),
+            models.Index(fields=["task_type", "task_id", "execution_run_id", "-timestamp"]),
             models.Index(fields=["task_type", "task_id", "celery_task_id", "-timestamp"]),
             models.Index(fields=["task_type", "task_id", "instrument"]),
             models.Index(fields=["execution_method"]),

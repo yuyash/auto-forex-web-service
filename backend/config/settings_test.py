@@ -17,18 +17,8 @@ from config.settings import *  # noqa: F403
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "test_autoforex",
-        "USER": os.getenv("DB_USER", "postgres"),  # noqa: F405
-        "PASSWORD": os.getenv("DB_PASSWORD", "postgres"),  # noqa: F405
-        "HOST": os.getenv("DB_HOST", "localhost"),  # noqa: F405
-        "PORT": os.getenv("DB_PORT", "5432"),  # noqa: F405
-        "TEST": {
-            "NAME": "test_autoforex_test",
-        },
-        "OPTIONS": {
-            "connect_timeout": 10,
-        },
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": str(BASE_DIR / "test_db.sqlite3"),  # noqa: F405
     }
 }
 

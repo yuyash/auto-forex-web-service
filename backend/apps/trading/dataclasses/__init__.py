@@ -6,6 +6,7 @@ used throughout the trading system.
 
 from apps.trading.dataclasses.context import EventContext
 from apps.trading.dataclasses.control import TaskControl
+from apps.trading.dataclasses.execution import EntryExecutionBinding, EventExecutionResult
 from apps.trading.dataclasses.protocols import StrategyState, TStrategyState
 from apps.trading.dataclasses.result import StrategyResult
 from apps.trading.dataclasses.tick import Tick
@@ -15,6 +16,9 @@ __all__ = [
     "EventContext",
     # Control
     "TaskControl",
+    # Execution
+    "EntryExecutionBinding",
+    "EventExecutionResult",
     # Protocols
     "StrategyState",
     "TStrategyState",

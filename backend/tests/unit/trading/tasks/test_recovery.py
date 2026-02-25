@@ -175,6 +175,33 @@ class TestRecoverOrphanedTasks:
         assert result["backtest"] == 0
         service_instance.start_task.assert_not_called()
 
+    @pytest.mark.usefixtures("_mock_models")
+    def test_recovers_trading_task_in_same_run(self, _mock_models):
+        """Trading orphan recovery must preserve run and call recover_trading_task."""
+        bt, tt, cts, tl, svc_cls = _mock_models
+
+        task = MagicMock()
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+        task.celery_task_id = "old-celery-id"
+        task.execution_run_id = 5
+        bt.objects.filter.return_value = []
+        tt.objects.filter.return_value = [task]
+
+        # No CeleryTaskStatus row -> orphan.
+        cts.objects.filter.return_value.first.return_value = None
+
+        service_instance = MagicMock()
+        svc_cls.return_value = service_instance
+
+        from apps.trading.tasks.recovery import recover_orphaned_tasks
+
+        result = recover_orphaned_tasks(source="test")
+
+        assert result["trading"] == 1
+        service_instance.recover_trading_task.assert_called_once_with(task)
+        service_instance.start_task.assert_not_called()
+
 
 class TestRecoverOrphanedTasksBeat:
     """Tests for the Celery Beat wrapper."""

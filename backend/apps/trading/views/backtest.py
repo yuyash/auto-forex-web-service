@@ -5,7 +5,8 @@ from logging import Logger
 from typing import Any
 
 from django.db.models import Q, QuerySet
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -23,6 +24,62 @@ from apps.trading.views.mixins import TaskSubResourceMixin
 logger: Logger = logging.getLogger(name=__name__)
 
 
+@extend_schema_view(
+    start=extend_schema(
+        operation_id="backtest_tasks_start",
+        tags=["Trading"],
+        responses={
+            200: inline_serializer(
+                "BacktestTaskActionResponse",
+                fields={"results": BacktestTaskSerializer()},
+            ),
+        },
+    ),
+    stop=extend_schema(
+        operation_id="backtest_tasks_stop",
+        tags=["Trading"],
+        responses={
+            202: inline_serializer(
+                "BacktestTaskStopResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "task_id": serializers.IntegerField(),
+                    "status": serializers.CharField(),
+                },
+            ),
+        },
+    ),
+    pause=extend_schema(
+        operation_id="backtest_tasks_pause",
+        tags=["Trading"],
+        responses={
+            200: inline_serializer(
+                "BacktestTaskPauseResponse",
+                fields={"results": BacktestTaskSerializer()},
+            ),
+        },
+    ),
+    resume=extend_schema(
+        operation_id="backtest_tasks_resume",
+        tags=["Trading"],
+        responses={
+            200: inline_serializer(
+                "BacktestTaskResumeResponse",
+                fields={"results": BacktestTaskSerializer()},
+            ),
+        },
+    ),
+    restart=extend_schema(
+        operation_id="backtest_tasks_restart",
+        tags=["Trading"],
+        responses={
+            200: inline_serializer(
+                "BacktestTaskRestartResponse",
+                fields={"results": BacktestTaskSerializer()},
+            ),
+        },
+    ),
+)
 class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
     """
     ViewSet for BacktestTask operations with task-centric API.

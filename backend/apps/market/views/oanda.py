@@ -2,8 +2,8 @@
 
 from logging import Logger, getLogger
 
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -14,6 +14,48 @@ from apps.market.serializers import OandaAccountsSerializer
 from apps.market.services.oanda import OandaService
 
 logger: Logger = getLogger(name=__name__)
+
+
+OandaAccountDetailResponseSerializer = inline_serializer(
+    "OandaAccountDetailResponse",
+    fields={
+        "id": serializers.IntegerField(),
+        "account_id": serializers.CharField(),
+        "api_type": serializers.CharField(),
+        "jurisdiction": serializers.CharField(),
+        "currency": serializers.CharField(),
+        "balance": serializers.CharField(required=False),
+        "margin_used": serializers.CharField(required=False),
+        "margin_available": serializers.CharField(required=False),
+        "is_active": serializers.BooleanField(),
+        "is_default": serializers.BooleanField(),
+        "created_at": serializers.DateTimeField(),
+        "updated_at": serializers.DateTimeField(),
+        "unrealized_pnl": serializers.CharField(required=False),
+        "nav": serializers.CharField(required=False),
+        "open_trade_count": serializers.IntegerField(required=False),
+        "open_position_count": serializers.IntegerField(required=False),
+        "pending_order_count": serializers.IntegerField(required=False),
+        "hedging_enabled": serializers.BooleanField(required=False),
+        "position_mode": serializers.CharField(required=False),
+        "oanda_account": serializers.DictField(required=False),
+        "live_data": serializers.BooleanField(required=False),
+        "live_data_error": serializers.CharField(required=False),
+    },
+)
+
+OandaAccountUpdateRequestSerializer = inline_serializer(
+    "OandaAccountUpdateRequest",
+    fields={
+        "account_id": serializers.CharField(required=False),
+        "api_token": serializers.CharField(required=False, write_only=True),
+        "api_type": serializers.CharField(required=False),
+        "jurisdiction": serializers.CharField(required=False),
+        "currency": serializers.CharField(required=False),
+        "is_active": serializers.BooleanField(required=False),
+        "is_default": serializers.BooleanField(required=False),
+    },
+)
 
 
 class OandaAccountView(APIView):
@@ -30,7 +72,11 @@ class OandaAccountView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = OandaAccountsSerializer
 
-    @extend_schema(operation_id="market_accounts_list", tags=["Market"])
+    @extend_schema(
+        operation_id="market_accounts_list",
+        tags=["Market"],
+        responses={200: OandaAccountsSerializer(many=True)},
+    )
     def get(self, request: Request) -> Response:
         if not request.user.is_authenticated:
             return Response(
@@ -52,7 +98,12 @@ class OandaAccountView(APIView):
         response_data = serializer.data
         return Response(response_data, status=status.HTTP_200_OK)
 
-    @extend_schema(operation_id="market_accounts_create", tags=["Market"])
+    @extend_schema(
+        operation_id="market_accounts_create",
+        tags=["Market"],
+        request=OandaAccountsSerializer,
+        responses={201: OandaAccountsSerializer},
+    )
     def post(self, request: Request) -> Response:
         if not request.user.is_authenticated:
             return Response(
@@ -114,7 +165,11 @@ class OandaAccountDetailView(APIView):
         except OandaAccounts.DoesNotExist:
             return None
 
-    @extend_schema(operation_id="market_account_detail", tags=["Market"])
+    @extend_schema(
+        operation_id="market_account_detail",
+        tags=["Market"],
+        responses={200: OandaAccountDetailResponseSerializer},
+    )
     def get(self, request: Request, account_id: int) -> Response:
         if not request.user.is_authenticated:
             return Response(
@@ -168,7 +223,12 @@ class OandaAccountDetailView(APIView):
         )
         return Response(response_data, status=status.HTTP_200_OK)
 
-    @extend_schema(operation_id="market_account_update", tags=["Market"])
+    @extend_schema(
+        operation_id="market_account_update",
+        tags=["Market"],
+        request=OandaAccountUpdateRequestSerializer,
+        responses={200: OandaAccountsSerializer},
+    )
     def put(self, request: Request, account_id: int) -> Response:
         if not request.user.is_authenticated:
             return Response(
@@ -199,7 +259,16 @@ class OandaAccountDetailView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @extend_schema(operation_id="market_account_delete", tags=["Market"])
+    @extend_schema(
+        operation_id="market_account_delete",
+        tags=["Market"],
+        responses={
+            200: inline_serializer(
+                "OandaAccountDeleteResponse",
+                fields={"message": serializers.CharField()},
+            )
+        },
+    )
     def delete(self, request: Request, account_id: int) -> Response:
         if not request.user.is_authenticated:
             return Response(

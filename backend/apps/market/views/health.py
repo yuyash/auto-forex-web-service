@@ -12,6 +12,14 @@ from apps.market.serializers import OandaApiHealthStatusSerializer
 from apps.market.services.health import OandaHealthCheckService
 
 
+class OandaHealthAccountSerializer(serializers.Serializer):  # pylint: disable=abstract-method
+    """Schema serializer for selected OANDA account metadata."""
+
+    id = serializers.IntegerField()
+    account_id = serializers.CharField()
+    api_type = serializers.CharField()
+
+
 class OandaApiHealthView(APIView):
     """API endpoint for OANDA API health checks.
 
@@ -49,7 +57,7 @@ class OandaApiHealthView(APIView):
             200: inline_serializer(
                 "OandaHealthGetResponse",
                 fields={
-                    "account": serializers.DictField(),
+                    "account": OandaHealthAccountSerializer(),
                     "status": OandaApiHealthStatusSerializer(allow_null=True),
                 },
             )
@@ -91,7 +99,7 @@ class OandaApiHealthView(APIView):
             200: inline_serializer(
                 "OandaHealthPostResponse",
                 fields={
-                    "account": serializers.DictField(),
+                    "account": OandaHealthAccountSerializer(),
                     "status": OandaApiHealthStatusSerializer(),
                 },
             )

@@ -52,6 +52,15 @@ class HealthView(APIView):
                     "components": serializers.DictField(),
                 },
             ),
+            503: inline_serializer(
+                "HealthCheckUnavailableResponse",
+                fields={
+                    "status": serializers.CharField(),
+                    "timestamp": serializers.DateTimeField(),
+                    "version": serializers.CharField(),
+                    "components": serializers.DictField(),
+                },
+            ),
         },
         description="System health check endpoint.",
     )

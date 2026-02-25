@@ -1,9 +1,10 @@
 """Unit tests for RateLimiter."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
 from django.core.cache import cache
+from django.utils import timezone
 
 from apps.accounts.middlewares import RateLimiter
 from apps.accounts.models import BlockedIP, User
@@ -60,7 +61,7 @@ class TestRateLimiter:
     def test_is_ip_blocked_by_database(self) -> None:
         """Test checking if IP is blocked in database."""
         ip = "192.168.1.1"
-        blocked_until = datetime.now() + timedelta(hours=1)
+        blocked_until = timezone.now() + timedelta(hours=1)
         BlockedIP.objects.create(
             ip_address=ip,
             reason="Test block",
