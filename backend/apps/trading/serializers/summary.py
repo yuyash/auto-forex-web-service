@@ -3,29 +3,62 @@
 from rest_framework import serializers
 
 
-class TaskSummarySerializer(serializers.Serializer):
-    """Serializer for task summary response.
+class TickInfoSerializer(serializers.Serializer):
+    """Serializer for tick information."""
 
-    Returns comprehensive task summary including PnL, counts,
-    execution state, and task status information.
-    """
+    timestamp = serializers.CharField(allow_null=True)
+    bid = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)
+    ask = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)
+    mid = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)
 
-    # PnL
-    realized_pnl = serializers.DecimalField(max_digits=20, decimal_places=10)
-    unrealized_pnl = serializers.DecimalField(max_digits=20, decimal_places=10)
-    # Counts
+
+class PnlInfoSerializer(serializers.Serializer):
+    """Serializer for PnL information."""
+
+    realized = serializers.DecimalField(max_digits=20, decimal_places=10)
+    unrealized = serializers.DecimalField(max_digits=20, decimal_places=10)
+
+
+class CountsInfoSerializer(serializers.Serializer):
+    """Serializer for trade/position counts."""
+
     total_trades = serializers.IntegerField()
-    open_position_count = serializers.IntegerField()
-    closed_position_count = serializers.IntegerField()
-    # Execution state
+    open_positions = serializers.IntegerField()
+    closed_positions = serializers.IntegerField()
+
+
+class ExecutionInfoSerializer(serializers.Serializer):
+    """Serializer for execution state."""
+
     current_balance = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)
     ticks_processed = serializers.IntegerField()
-    last_tick_time = serializers.CharField(allow_null=True)
-    last_tick_price = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)
-    # Task info
+
+
+class TaskInfoSerializer(serializers.Serializer):
+    """Serializer for task status information."""
+
     status = serializers.CharField()
     started_at = serializers.CharField(allow_null=True)
     completed_at = serializers.CharField(allow_null=True)
     error_message = serializers.CharField(allow_null=True)
-    # Progress (backtest: 0-100, trading: always 0)
     progress = serializers.IntegerField()
+
+
+class TaskSummarySerializer(serializers.Serializer):
+    """Serializer for structured task summary response.
+
+    Returns comprehensive task summary grouped into logical sections:
+    - timestamp: Common timestamp from the last tick
+    - pnl: Realized and unrealized PnL
+    - counts: Trade and position counts
+    - execution: Balance and ticks processed
+    - tick: Last tick prices (bid, ask, mid)
+    - task: Status, timing, and progress
+    """
+
+    timestamp = serializers.CharField(allow_null=True)
+    pnl = PnlInfoSerializer()
+    counts = CountsInfoSerializer()
+    execution = ExecutionInfoSerializer()
+    tick = TickInfoSerializer()
+    task = TaskInfoSerializer()

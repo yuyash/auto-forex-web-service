@@ -27,6 +27,10 @@ import {
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useBacktestTask } from '../../hooks/useBacktestTasks';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
+import {
+  useStrategies,
+  getStrategyDisplayName,
+} from '../../hooks/useStrategies';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
@@ -35,7 +39,6 @@ import { TaskPositionsTable } from '../tasks/detail/TaskPositionsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
 import { TaskReplayPanel } from '../tasks/detail/TaskReplayPanel';
 import { TaskOrdersTable } from '../tasks/detail/TaskOrdersTable';
-import { TaskProgress } from '../tasks/TaskProgress';
 import { useTaskSummary } from '../../hooks/useTaskSummary';
 import { TaskStatus, TaskType } from '../../types/common';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
@@ -87,18 +90,21 @@ export const BacktestTaskDetail: React.FC = () => {
     error,
     refetch,
   } = useBacktestTask(taskId || undefined);
-
-  const isTaskActive =
-    task?.status === TaskStatus.RUNNING || task?.status === TaskStatus.STARTING;
+  const { strategies } = useStrategies();
 
   const overviewSummary = useTaskSummary(
     taskId,
     TaskType.BACKTEST,
-    task?.celery_task_id || undefined,
-    { polling: isTaskActive, interval: 2000 }
+    task?.celery_task_id || undefined
   );
 
-  const polledTick = overviewSummary.currentTick;
+  const { summary: s } = overviewSummary;
+  const polledTick = s.tick.timestamp
+    ? {
+        timestamp: s.tick.timestamp,
+        price: s.tick.mid != null ? String(s.tick.mid) : null,
+      }
+    : null;
 
   // Use HTTP polling for task status updates
   const {
@@ -211,8 +217,12 @@ export const BacktestTaskDetail: React.FC = () => {
               <StatusBadge status={polledStatus?.status || task.status} />
             </Box>
 
-            <Typography variant="body2" color="text.secondary">
-              {task.strategy_type}
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ pl: '4px' }}
+            >
+              {getStrategyDisplayName(strategies, task.strategy_type)}
             </Typography>
 
             {task.description && (
@@ -221,15 +231,17 @@ export const BacktestTaskDetail: React.FC = () => {
               </Typography>
             )}
 
-            {/* Progress Bar */}
-            <Box sx={{ mt: 2, maxWidth: 600 }}>
-              <TaskProgress
-                status={polledStatus?.status || task.status}
-                progress={overviewSummary.progress}
-                compact={false}
-                showPercentage={true}
-              />
-            </Box>
+            {/* Progress Percentage */}
+            {(polledStatus?.status || task.status) === TaskStatus.RUNNING && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 2, fontWeight: 600 }}
+              >
+                {Math.round(Math.min(Math.max(s.task.progress, 0), 100))}%
+                completed
+              </Typography>
+            )}
           </Box>
 
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -380,7 +392,11 @@ export const BacktestTaskDetail: React.FC = () => {
                     <Typography variant="caption" color="text.secondary">
                       Pip Size
                     </Typography>
-                    <Typography variant="body1">{task.pip_size}</Typography>
+                    <Typography variant="body1">
+                      {task.pip_size
+                        ? parseFloat(task.pip_size)
+                        : task.pip_size}
+                    </Typography>
                   </Box>
 
                   <Box>
@@ -426,7 +442,7 @@ export const BacktestTaskDetail: React.FC = () => {
                       variant="body1"
                       sx={{ textTransform: 'capitalize' }}
                     >
-                      {task.strategy_type}
+                      {getStrategyDisplayName(strategies, task.strategy_type)}
                     </Typography>
                   </Box>
 
@@ -490,7 +506,7 @@ export const BacktestTaskDetail: React.FC = () => {
               <Grid size={{ xs: 12 }}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="h6" gutterBottom>
-                  Summary
+                  Results
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Box>
@@ -500,13 +516,11 @@ export const BacktestTaskDetail: React.FC = () => {
                     <Typography
                       variant="body1"
                       color={
-                        overviewSummary.realizedPnl >= 0
-                          ? 'success.main'
-                          : 'error.main'
+                        s.pnl.realized >= 0 ? 'success.main' : 'error.main'
                       }
                     >
-                      {overviewSummary.realizedPnl >= 0 ? '+' : ''}
-                      {overviewSummary.realizedPnl.toFixed(2)} {pnlCurrency}
+                      {s.pnl.realized >= 0 ? '+' : ''}
+                      {s.pnl.realized.toFixed(2)} {pnlCurrency}
                     </Typography>
                   </Box>
                   <Box>
@@ -516,32 +530,29 @@ export const BacktestTaskDetail: React.FC = () => {
                     <Typography
                       variant="body1"
                       color={
-                        overviewSummary.unrealizedPnl >= 0
-                          ? 'success.main'
-                          : 'error.main'
+                        s.pnl.unrealized >= 0 ? 'success.main' : 'error.main'
                       }
                     >
-                      {overviewSummary.unrealizedPnl >= 0 ? '+' : ''}
-                      {overviewSummary.unrealizedPnl.toFixed(2)} {pnlCurrency}
+                      {s.pnl.unrealized >= 0 ? '+' : ''}
+                      {s.pnl.unrealized.toFixed(2)} {pnlCurrency}
                     </Typography>
                   </Box>
-                  {overviewSummary.currentBalance != null && (
+                  {s.execution.currentBalance != null && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">
                         Current Balance
                       </Typography>
                       <Typography variant="body1">
-                        {overviewSummary.currentBalance.toFixed(2)}{' '}
-                        {pnlCurrency}
+                        {s.execution.currentBalance.toFixed(2)} {pnlCurrency}
                       </Typography>
                     </Box>
                   )}
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Total Trades
+                      Total Trades (count)
                     </Typography>
                     <Typography variant="body1">
-                      {overviewSummary.totalTrades}
+                      {s.counts.totalTrades}
                     </Typography>
                   </Box>
                   <Box>
@@ -549,7 +560,7 @@ export const BacktestTaskDetail: React.FC = () => {
                       Open Positions
                     </Typography>
                     <Typography variant="body1">
-                      {overviewSummary.openPositionCount}
+                      {s.counts.openPositions}
                     </Typography>
                   </Box>
                   <Box>
@@ -557,16 +568,16 @@ export const BacktestTaskDetail: React.FC = () => {
                       Closed Positions
                     </Typography>
                     <Typography variant="body1">
-                      {overviewSummary.closedPositionCount}
+                      {s.counts.closedPositions}
                     </Typography>
                   </Box>
-                  {overviewSummary.ticksProcessed > 0 && (
+                  {s.execution.ticksProcessed > 0 && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">
                         Ticks Processed
                       </Typography>
                       <Typography variant="body1">
-                        {overviewSummary.ticksProcessed.toLocaleString()}
+                        {s.execution.ticksProcessed.toLocaleString()}
                       </Typography>
                     </Box>
                   )}
@@ -617,7 +628,7 @@ export const BacktestTaskDetail: React.FC = () => {
             startTime={task.start_time}
             endTime={task.end_time}
             latestExecution={task.latest_execution}
-            currentTick={polledTick ?? null}
+            currentTick={polledTick ?? task.current_tick ?? null}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
@@ -636,7 +647,11 @@ export const BacktestTaskDetail: React.FC = () => {
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
             currentPrice={
-              polledTick?.price != null ? parseFloat(polledTick.price) : null
+              polledTick?.price != null
+                ? parseFloat(polledTick.price)
+                : task.current_tick?.price != null
+                  ? parseFloat(task.current_tick.price)
+                  : null
             }
             pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
           />

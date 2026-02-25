@@ -1,8 +1,13 @@
 /**
  * Hook for fetching task summary from the backend API.
  *
- * Returns comprehensive task summary including PnL, trade/position counts,
- * execution state, tick info, and task status information.
+ * Returns comprehensive task summary grouped into logical sections:
+ * - pnl: realized/unrealized PnL
+ * - counts: trade/position counts
+ * - execution: balance, ticks processed
+ * - tick: last tick prices (bid, ask, mid) with timestamp
+ * - task: status, timing, progress
+ *
  * Supports optional polling for real-time updates.
  */
 
@@ -12,58 +17,71 @@ import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 
-export interface TaskSummary {
-  // PnL
-  realizedPnl: number;
-  unrealizedPnl: number;
-  // Counts
+export interface TickInfo {
+  timestamp: string | null;
+  bid: number | null;
+  ask: number | null;
+  mid: number | null;
+}
+
+export interface PnlInfo {
+  realized: number;
+  unrealized: number;
+}
+
+export interface CountsInfo {
   totalTrades: number;
-  openPositionCount: number;
-  closedPositionCount: number;
-  // Execution state
+  openPositions: number;
+  closedPositions: number;
+}
+
+export interface ExecutionInfo {
   currentBalance: number | null;
   ticksProcessed: number;
-  lastTickTime: string | null;
-  lastTickPrice: number | null;
-  // Task info
+}
+
+export interface TaskInfo {
   status: string;
   startedAt: string | null;
   completedAt: string | null;
   errorMessage: string | null;
-  // Progress (backtest: 0-100, trading: always 0)
   progress: number;
 }
 
+export interface TaskSummary {
+  timestamp: string | null;
+  pnl: PnlInfo;
+  counts: CountsInfo;
+  execution: ExecutionInfo;
+  tick: TickInfo;
+  task: TaskInfo;
+}
+
 export interface UseTaskSummaryOptions {
-  /** Enable periodic polling (default: false) */
   polling?: boolean;
-  /** Polling interval in ms (default: 2000) */
   interval?: number;
 }
 
-export interface UseTaskSummaryResult extends TaskSummary {
+export interface UseTaskSummaryResult {
+  summary: TaskSummary;
   isLoading: boolean;
   error: Error | null;
   refetch: () => Promise<void>;
-  /** Convenience accessor matching the old currentTick shape */
-  currentTick: { timestamp: string; price: string | null } | null;
 }
 
 const INITIAL_SUMMARY: TaskSummary = {
-  realizedPnl: 0,
-  unrealizedPnl: 0,
-  totalTrades: 0,
-  openPositionCount: 0,
-  closedPositionCount: 0,
-  currentBalance: null,
-  ticksProcessed: 0,
-  lastTickTime: null,
-  lastTickPrice: null,
-  status: '',
-  startedAt: null,
-  completedAt: null,
-  errorMessage: null,
-  progress: 0,
+  timestamp: null,
+  pnl: { realized: 0, unrealized: 0 },
+  counts: { totalTrades: 0, openPositions: 0, closedPositions: 0 },
+  execution: { currentBalance: null, ticksProcessed: 0 },
+  tick: { timestamp: null, bid: null, ask: null, mid: null },
+  task: {
+    status: '',
+    startedAt: null,
+    completedAt: null,
+    errorMessage: null,
+    progress: 0,
+  },
 };
 
 export function useTaskSummary(
@@ -114,22 +132,36 @@ export function useTaskSummary(
 
       const d = response.data;
       setData({
-        realizedPnl: parseFloat(d.realized_pnl) || 0,
-        unrealizedPnl: parseFloat(d.unrealized_pnl) || 0,
-        totalTrades: d.total_trades ?? 0,
-        openPositionCount: d.open_position_count ?? 0,
-        closedPositionCount: d.closed_position_count ?? 0,
-        currentBalance:
-          d.current_balance != null ? parseFloat(d.current_balance) : null,
-        ticksProcessed: d.ticks_processed ?? 0,
-        lastTickTime: d.last_tick_time ?? null,
-        lastTickPrice:
-          d.last_tick_price != null ? parseFloat(d.last_tick_price) : null,
-        status: d.status ?? '',
-        startedAt: d.started_at ?? null,
-        completedAt: d.completed_at ?? null,
-        errorMessage: d.error_message ?? null,
-        progress: d.progress ?? 0,
+        timestamp: d.timestamp ?? null,
+        pnl: {
+          realized: parseFloat(d.pnl?.realized) || 0,
+          unrealized: parseFloat(d.pnl?.unrealized) || 0,
+        },
+        counts: {
+          totalTrades: d.counts?.total_trades ?? 0,
+          openPositions: d.counts?.open_positions ?? 0,
+          closedPositions: d.counts?.closed_positions ?? 0,
+        },
+        execution: {
+          currentBalance:
+            d.execution?.current_balance != null
+              ? parseFloat(d.execution.current_balance)
+              : null,
+          ticksProcessed: d.execution?.ticks_processed ?? 0,
+        },
+        tick: {
+          timestamp: d.tick?.timestamp ?? null,
+          bid: d.tick?.bid != null ? parseFloat(d.tick.bid) : null,
+          ask: d.tick?.ask != null ? parseFloat(d.tick.ask) : null,
+          mid: d.tick?.mid != null ? parseFloat(d.tick.mid) : null,
+        },
+        task: {
+          status: d.task?.status ?? '',
+          startedAt: d.task?.started_at ?? null,
+          completedAt: d.task?.completed_at ?? null,
+          errorMessage: d.task?.error_message ?? null,
+          progress: d.task?.progress ?? 0,
+        },
       });
     } catch (err) {
       if (axios.isAxiosError(err) && err.response) {
@@ -149,12 +181,10 @@ export function useTaskSummary(
     }
   }, [taskId, taskType, celeryTaskId]);
 
-  // Initial fetch
   useEffect(() => {
     fetchSummary();
   }, [fetchSummary]);
 
-  // Polling
   useEffect(() => {
     if (!polling || !taskId) return;
 
@@ -170,20 +200,10 @@ export function useTaskSummary(
     };
   }, [polling, interval, taskId, fetchSummary]);
 
-  // Derive currentTick from summary data
-  const currentTick =
-    data.lastTickTime != null
-      ? {
-          timestamp: data.lastTickTime,
-          price: data.lastTickPrice != null ? String(data.lastTickPrice) : null,
-        }
-      : null;
-
   return {
-    ...data,
+    summary: data,
     isLoading,
     error,
     refetch: fetchSummary,
-    currentTick,
   };
 }

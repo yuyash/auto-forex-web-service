@@ -342,7 +342,7 @@ class OrderView(APIView):
         except (OandaAPIError, ComplianceViolationError) as e:
             logger.error("Order execution failed: %s", e)
             return Response(
-                {"error": f"Order execution failed: {str(e)}"},
+                {"error": "Order execution failed"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         except Exception as e:  # pylint: disable=broad-exception-caught
@@ -475,7 +475,7 @@ class OrderDetailView(APIView):
         except OandaAPIError as e:
             logger.error("Failed to fetch order %s: %s", order_id, str(e))
             return Response(
-                {"error": f"Failed to fetch order: {str(e)}"},
+                {"error": "Failed to fetch order"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -544,6 +544,6 @@ class OrderDetailView(APIView):
         except OandaAPIError as e:
             logger.error("Failed to cancel order %s: %s", order_id, str(e))
             return Response(
-                {"error": f"Failed to cancel order: {str(e)}"},
+                {"error": "Failed to cancel order"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

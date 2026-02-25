@@ -16,7 +16,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import type { BacktestTask } from '../../types/backtestTask';
-import { TaskStatus } from '../../types/common';
+import { TaskStatus, TaskType } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskProgress } from '../tasks/TaskProgress';
 import { StatCard } from '../tasks/display/StatCard';
@@ -24,6 +24,7 @@ import { TaskControlButtons } from '../common/TaskControlButtons';
 import BacktestTaskActions from './BacktestTaskActions';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
+import { useTaskSummary } from '../../hooks/useTaskSummary';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -32,8 +33,6 @@ import { useToast } from '../common';
 import { backtestTasksApi } from '../../services/api';
 import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 import { api } from '../../api/apiClient';
-import { useTaskSummary } from '../../hooks/useTaskSummary';
-import { TaskType } from '../../types/common';
 
 interface BacktestTaskCardProps {
   task: BacktestTask;
@@ -235,7 +234,7 @@ export default function BacktestTaskCard({
 
   // Get progress from summary endpoint
   const summaryData = useTaskSummary(task.id, TaskType.BACKTEST);
-  const progress = summaryData.progress;
+  const progress = summaryData.summary.task.progress;
 
   return (
     <Card

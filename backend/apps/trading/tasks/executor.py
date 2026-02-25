@@ -407,6 +407,8 @@ class TaskExecutor:
                     state.ticks_processed += 1
                     state.last_tick_timestamp = tick.timestamp
                     state.last_tick_price = tick.mid
+                    state.last_tick_bid = tick.bid
+                    state.last_tick_ask = tick.ask
 
                     # Buffer metric snapshot from strategy state
                     metrics = (state.strategy_state or {}).get("metrics", {})

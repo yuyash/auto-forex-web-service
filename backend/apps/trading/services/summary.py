@@ -1,9 +1,10 @@
 """Task summary service.
 
 Computes a comprehensive summary for a given task including:
-- Realized PnL, Unrealized PnL
+- PnL (realized, unrealized)
 - Trade / position counts
-- Execution state (balance, ticks processed, last tick)
+- Execution state (balance, ticks processed)
+- Tick info (timestamp, bid, ask, mid)
 - Task status and timing information
 """
 
@@ -19,28 +20,61 @@ from apps.trading.models.trades import Trade
 
 
 @dataclass(frozen=True)
-class TaskSummary:
-    """Aggregated task summary."""
+class TickInfo:
+    """Last tick information."""
 
-    # PnL
-    realized_pnl: Decimal
-    unrealized_pnl: Decimal
-    # Counts
+    timestamp: str | None
+    bid: Decimal | None
+    ask: Decimal | None
+    mid: Decimal | None
+
+
+@dataclass(frozen=True)
+class PnlInfo:
+    """Profit and loss information."""
+
+    realized: Decimal
+    unrealized: Decimal
+
+
+@dataclass(frozen=True)
+class CountsInfo:
+    """Trade and position counts."""
+
     total_trades: int
-    open_position_count: int
-    closed_position_count: int
-    # Execution state
+    open_positions: int
+    closed_positions: int
+
+
+@dataclass(frozen=True)
+class ExecutionInfo:
+    """Execution state information."""
+
     current_balance: Decimal | None
     ticks_processed: int
-    last_tick_time: str | None
-    last_tick_price: Decimal | None
-    # Task info
+
+
+@dataclass(frozen=True)
+class TaskInfo:
+    """Task status information."""
+
     status: str
     started_at: str | None
     completed_at: str | None
     error_message: str | None
-    # Progress (backtest only, 0-100)
     progress: int
+
+
+@dataclass(frozen=True)
+class TaskSummary:
+    """Aggregated task summary with structured groups."""
+
+    timestamp: str | None
+    pnl: PnlInfo
+    counts: CountsInfo
+    execution: ExecutionInfo
+    tick: TickInfo
+    task: TaskInfo
 
 
 def compute_task_summary(
@@ -63,7 +97,7 @@ def compute_task_summary(
         celery_task_id: Optional celery task ID filter.
 
     Returns:
-        TaskSummary with PnL, counts, execution state, and task info.
+        TaskSummary with structured PnL, counts, execution, tick, and task info.
     """
     base_filter: dict = {"task_type": task_type, "task_id": task_id}
     if celery_task_id:
@@ -109,8 +143,10 @@ def compute_task_summary(
     # Execution state
     current_balance = None
     ticks_processed = 0
-    last_tick_time = None
-    last_tick_price = None
+    tick_timestamp = None
+    tick_bid = None
+    tick_ask = None
+    tick_mid = None
 
     from apps.trading.models.state import ExecutionState
 
@@ -122,8 +158,10 @@ def compute_task_summary(
         current_balance = state.current_balance
         ticks_processed = state.ticks_processed
         if state.last_tick_timestamp:
-            last_tick_time = state.last_tick_timestamp.isoformat()
-        last_tick_price = state.last_tick_price
+            tick_timestamp = state.last_tick_timestamp.isoformat()
+        tick_bid = state.last_tick_bid
+        tick_ask = state.last_tick_ask
+        tick_mid = state.last_tick_price
 
     # Task info
     status = ""
@@ -139,20 +177,30 @@ def compute_task_summary(
         error_message = task_obj.error_message
 
     return TaskSummary(
-        realized_pnl=realized_pnl,
-        unrealized_pnl=unrealized_pnl,
-        total_trades=total_trades,
-        open_position_count=open_position_count,
-        closed_position_count=closed_position_count,
-        current_balance=current_balance,
-        ticks_processed=ticks_processed,
-        last_tick_time=last_tick_time,
-        last_tick_price=last_tick_price,
-        status=status,
-        started_at=started_at,
-        completed_at=completed_at,
-        error_message=error_message,
-        progress=_compute_progress(task_type, task_obj, state),
+        timestamp=tick_timestamp,
+        pnl=PnlInfo(realized=realized_pnl, unrealized=unrealized_pnl),
+        counts=CountsInfo(
+            total_trades=total_trades,
+            open_positions=open_position_count,
+            closed_positions=closed_position_count,
+        ),
+        execution=ExecutionInfo(
+            current_balance=current_balance,
+            ticks_processed=ticks_processed,
+        ),
+        tick=TickInfo(
+            timestamp=tick_timestamp,
+            bid=tick_bid,
+            ask=tick_ask,
+            mid=tick_mid,
+        ),
+        task=TaskInfo(
+            status=status,
+            started_at=started_at,
+            completed_at=completed_at,
+            error_message=error_message,
+            progress=_compute_progress(task_type, task_obj, state),
+        ),
     )
 
 

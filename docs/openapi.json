@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.1.1",
+        "version": "1.2.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -1936,24 +1936,8 @@
         "/api/trading/tasks/backtest/{id}/events/": {
             "get": {
                 "operationId": "trading_tasks_backtest_events_retrieve",
-                "description": "Retrieve task events with pagination.",
+                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
-                    {
-                        "in": "query",
-                        "name": "event_type",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by event type"
-                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -1963,22 +1947,6 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "severity",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by severity"
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "ISO datetime; return only records after this time"
                     }
                 ],
                 "tags": [
@@ -1997,7 +1965,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingEventPaginatedResponse"
+                                    "$ref": "#/components/schemas/BacktestTask"
                                 }
                             }
                         },
@@ -2009,16 +1977,8 @@
         "/api/trading/tasks/backtest/{id}/logs/": {
             "get": {
                 "operationId": "trading_tasks_backtest_logs_retrieve",
-                "description": "Retrieve task logs with pagination.",
+                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2028,22 +1988,6 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "level",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by log level (e.g., INFO, WARNING, ERROR)"
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "ISO datetime; return only records after this time"
                     }
                 ],
                 "tags": [
@@ -2062,7 +2006,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TaskLogPaginatedResponse"
+                                    "$ref": "#/components/schemas/BacktestTask"
                                 }
                             }
                         },
@@ -2071,19 +2015,11 @@
                 }
             }
         },
-        "/api/trading/tasks/backtest/{id}/metrics/": {
+        "/api/trading/tasks/backtest/{id}/metric_snapshots/": {
             "get": {
-                "operationId": "trading_tasks_backtest_metrics_retrieve",
-                "description": "Retrieve time-series strategy metrics with optional downsampling.",
+                "operationId": "trading_tasks_backtest_metric_snapshots_retrieve",
+                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2093,22 +2029,6 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "max_points",
-                        "schema": {
-                            "type": "integer"
-                        },
-                        "description": "Max data points (100-100000, default 10000)"
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "ISO datetime; return only records after this time"
                     }
                 ],
                 "tags": [
@@ -2127,7 +2047,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/MetricsResponse"
+                                    "$ref": "#/components/schemas/BacktestTask"
                                 }
                             }
                         },
@@ -2139,24 +2059,8 @@
         "/api/trading/tasks/backtest/{id}/orders/": {
             "get": {
                 "operationId": "trading_tasks_backtest_orders_retrieve",
-                "description": "Retrieve orders with pagination.",
+                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
-                    {
-                        "in": "query",
-                        "name": "direction",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by direction"
-                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2166,30 +2070,6 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "order_type",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by order type"
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "ISO datetime; return only records after this time"
-                    },
-                    {
-                        "in": "query",
-                        "name": "status",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by order status"
                     }
                 ],
                 "tags": [
@@ -2208,7 +2088,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/OrderPaginatedResponse"
+                                    "$ref": "#/components/schemas/BacktestTask"
                                 }
                             }
                         },
@@ -2271,24 +2151,8 @@
         "/api/trading/tasks/backtest/{id}/positions/": {
             "get": {
                 "operationId": "trading_tasks_backtest_positions_retrieve",
-                "description": "Retrieve positions with pagination.",
+                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
-                    {
-                        "in": "query",
-                        "name": "direction",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by direction"
-                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2298,22 +2162,6 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "position_status",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by status (open/closed)"
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "ISO datetime; return only records after this time"
                     }
                 ],
                 "tags": [
@@ -2332,7 +2180,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/PositionPaginatedResponse"
+                                    "$ref": "#/components/schemas/BacktestTask"
                                 }
                             }
                         },
@@ -2548,7 +2396,7 @@
         "/api/trading/tasks/backtest/{id}/summary/": {
             "get": {
                 "operationId": "trading_tasks_backtest_summary_retrieve",
-                "description": "Retrieve comprehensive task summary including PnL, trade/position counts, execution state, and task status.",
+                "description": "Retrieve structured task summary including PnL, trade/position counts, execution state, tick info, and task status.",
                 "parameters": [
                     {
                         "in": "query",
@@ -2597,24 +2445,8 @@
         "/api/trading/tasks/backtest/{id}/trades/": {
             "get": {
                 "operationId": "trading_tasks_backtest_trades_retrieve",
-                "description": "Retrieve trade history with pagination.",
+                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
-                    {
-                        "in": "query",
-                        "name": "direction",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by direction (buy/sell)"
-                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2624,14 +2456,6 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "ISO datetime; return only records after this time"
                     }
                 ],
                 "tags": [
@@ -2650,7 +2474,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradePaginatedResponse"
+                                    "$ref": "#/components/schemas/BacktestTask"
                                 }
                             }
                         },
@@ -2925,24 +2749,8 @@
         "/api/trading/tasks/trading/{id}/events/": {
             "get": {
                 "operationId": "trading_tasks_trading_events_retrieve",
-                "description": "Retrieve task events with pagination.",
+                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
-                    {
-                        "in": "query",
-                        "name": "event_type",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by event type"
-                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -2952,22 +2760,6 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "severity",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by severity"
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "ISO datetime; return only records after this time"
                     }
                 ],
                 "tags": [
@@ -2986,7 +2778,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingEventPaginatedResponse"
+                                    "$ref": "#/components/schemas/TradingTask"
                                 }
                             }
                         },
@@ -2998,16 +2790,8 @@
         "/api/trading/tasks/trading/{id}/logs/": {
             "get": {
                 "operationId": "trading_tasks_trading_logs_retrieve",
-                "description": "Retrieve task logs with pagination.",
+                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -3017,22 +2801,6 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "level",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by log level (e.g., INFO, WARNING, ERROR)"
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "ISO datetime; return only records after this time"
                     }
                 ],
                 "tags": [
@@ -3051,7 +2819,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TaskLogPaginatedResponse"
+                                    "$ref": "#/components/schemas/TradingTask"
                                 }
                             }
                         },
@@ -3060,19 +2828,11 @@
                 }
             }
         },
-        "/api/trading/tasks/trading/{id}/metrics/": {
+        "/api/trading/tasks/trading/{id}/metric_snapshots/": {
             "get": {
-                "operationId": "trading_tasks_trading_metrics_retrieve",
-                "description": "Retrieve time-series strategy metrics with optional downsampling.",
+                "operationId": "trading_tasks_trading_metric_snapshots_retrieve",
+                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -3082,22 +2842,6 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "max_points",
-                        "schema": {
-                            "type": "integer"
-                        },
-                        "description": "Max data points (100-100000, default 10000)"
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "ISO datetime; return only records after this time"
                     }
                 ],
                 "tags": [
@@ -3116,7 +2860,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/MetricsResponse"
+                                    "$ref": "#/components/schemas/TradingTask"
                                 }
                             }
                         },
@@ -3128,24 +2872,8 @@
         "/api/trading/tasks/trading/{id}/orders/": {
             "get": {
                 "operationId": "trading_tasks_trading_orders_retrieve",
-                "description": "Retrieve orders with pagination.",
+                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
-                    {
-                        "in": "query",
-                        "name": "direction",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by direction"
-                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -3155,30 +2883,6 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "order_type",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by order type"
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "ISO datetime; return only records after this time"
-                    },
-                    {
-                        "in": "query",
-                        "name": "status",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by order status"
                     }
                 ],
                 "tags": [
@@ -3197,7 +2901,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/OrderPaginatedResponse"
+                                    "$ref": "#/components/schemas/TradingTask"
                                 }
                             }
                         },
@@ -3260,24 +2964,8 @@
         "/api/trading/tasks/trading/{id}/positions/": {
             "get": {
                 "operationId": "trading_tasks_trading_positions_retrieve",
-                "description": "Retrieve positions with pagination.",
+                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
-                    {
-                        "in": "query",
-                        "name": "direction",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by direction"
-                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -3287,22 +2975,6 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "position_status",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by status (open/closed)"
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "ISO datetime; return only records after this time"
                     }
                 ],
                 "tags": [
@@ -3321,7 +2993,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/PositionPaginatedResponse"
+                                    "$ref": "#/components/schemas/TradingTask"
                                 }
                             }
                         },
@@ -3537,7 +3209,7 @@
         "/api/trading/tasks/trading/{id}/summary/": {
             "get": {
                 "operationId": "trading_tasks_trading_summary_retrieve",
-                "description": "Retrieve comprehensive task summary including PnL, trade/position counts, execution state, and task status.",
+                "description": "Retrieve structured task summary including PnL, trade/position counts, execution state, tick info, and task status.",
                 "parameters": [
                     {
                         "in": "query",
@@ -3586,24 +3258,8 @@
         "/api/trading/tasks/trading/{id}/trades/": {
             "get": {
                 "operationId": "trading_tasks_trading_trades_retrieve",
-                "description": "Retrieve trade history with pagination.",
+                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
-                    {
-                        "in": "query",
-                        "name": "direction",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by direction (buy/sell)"
-                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -3613,14 +3269,6 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "ISO datetime; return only records after this time"
                     }
                 ],
                 "tags": [
@@ -3639,7 +3287,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradePaginatedResponse"
+                                    "$ref": "#/components/schemas/TradingTask"
                                 }
                             }
                         },
@@ -4089,6 +3737,26 @@
                     "volume"
                 ]
             },
+            "CountsInfo": {
+                "type": "object",
+                "description": "Serializer for trade/position counts.",
+                "properties": {
+                    "total_trades": {
+                        "type": "integer"
+                    },
+                    "open_positions": {
+                        "type": "integer"
+                    },
+                    "closed_positions": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "closed_positions",
+                    "open_positions",
+                    "total_trades"
+                ]
+            },
             "DataSourceEnum": {
                 "enum": [
                     "postgresql",
@@ -4131,6 +3799,25 @@
                 },
                 "required": [
                     "token"
+                ]
+            },
+            "ExecutionInfo": {
+                "type": "object",
+                "description": "Serializer for execution state.",
+                "properties": {
+                    "current_balance": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "ticks_processed": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "current_balance",
+                    "ticks_processed"
                 ]
             },
             "GranularitiesResponse": {
@@ -4424,29 +4111,6 @@
                     "instrument",
                     "mid",
                     "timestamp"
-                ]
-            },
-            "MetricsResponse": {
-                "type": "object",
-                "properties": {
-                    "metrics": {
-                        "type": "array",
-                        "items": {},
-                        "description": "Array of metric data points"
-                    },
-                    "total": {
-                        "type": "integer",
-                        "description": "Total number of metric records"
-                    },
-                    "returned": {
-                        "type": "integer",
-                        "description": "Number of records returned"
-                    }
-                },
-                "required": [
-                    "metrics",
-                    "returned",
-                    "total"
                 ]
             },
             "NotificationItem": {
@@ -4928,107 +4592,6 @@
                     "units"
                 ]
             },
-            "OrderItem": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "celery_task_id": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "broker_order_id": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "oanda_trade_id": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "position_id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "nullable": true
-                    },
-                    "instrument": {
-                        "type": "string"
-                    },
-                    "order_type": {
-                        "type": "string"
-                    },
-                    "direction": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "units": {
-                        "type": "integer"
-                    },
-                    "requested_price": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
-                        "nullable": true
-                    },
-                    "fill_price": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
-                        "nullable": true
-                    },
-                    "status": {
-                        "type": "string"
-                    },
-                    "submitted_at": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "filled_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "nullable": true
-                    },
-                    "cancelled_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "nullable": true
-                    },
-                    "stop_loss": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
-                        "nullable": true
-                    },
-                    "error_message": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "is_dry_run": {
-                        "type": "boolean"
-                    }
-                },
-                "required": [
-                    "broker_order_id",
-                    "cancelled_at",
-                    "celery_task_id",
-                    "direction",
-                    "error_message",
-                    "fill_price",
-                    "filled_at",
-                    "id",
-                    "instrument",
-                    "is_dry_run",
-                    "oanda_trade_id",
-                    "order_type",
-                    "position_id",
-                    "requested_price",
-                    "status",
-                    "stop_loss",
-                    "submitted_at",
-                    "units"
-                ]
-            },
             "OrderListResponse": {
                 "type": "object",
                 "properties": {
@@ -5048,34 +4611,6 @@
                         "items": {
                             "type": "object",
                             "additionalProperties": {}
-                        }
-                    }
-                },
-                "required": [
-                    "count",
-                    "next",
-                    "previous",
-                    "results"
-                ]
-            },
-            "OrderPaginatedResponse": {
-                "type": "object",
-                "properties": {
-                    "count": {
-                        "type": "integer"
-                    },
-                    "next": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "previous": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "results": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/OrderItem"
                         }
                     }
                 },
@@ -5344,6 +4879,26 @@
                     }
                 }
             },
+            "PnlInfo": {
+                "type": "object",
+                "description": "Serializer for PnL information.",
+                "properties": {
+                    "realized": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "unrealized": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    }
+                },
+                "required": [
+                    "realized",
+                    "unrealized"
+                ]
+            },
             "PositionCloseResponse": {
                 "type": "object",
                 "properties": {
@@ -5407,82 +4962,6 @@
                     "state",
                     "units",
                     "unrealized_pnl"
-                ]
-            },
-            "PositionItem": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "instrument": {
-                        "type": "string"
-                    },
-                    "direction": {
-                        "type": "string"
-                    },
-                    "units": {
-                        "type": "integer"
-                    },
-                    "entry_price": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
-                    },
-                    "entry_time": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "exit_price": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
-                        "nullable": true
-                    },
-                    "exit_time": {
-                        "type": "string",
-                        "format": "date-time",
-                        "nullable": true
-                    },
-                    "is_open": {
-                        "type": "boolean"
-                    },
-                    "layer_index": {
-                        "type": "integer",
-                        "nullable": true
-                    },
-                    "retracement_count": {
-                        "type": "integer",
-                        "nullable": true
-                    },
-                    "trade_ids": {
-                        "type": "array",
-                        "items": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    },
-                    "updated_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "nullable": true
-                    }
-                },
-                "required": [
-                    "direction",
-                    "entry_price",
-                    "entry_time",
-                    "exit_price",
-                    "exit_time",
-                    "id",
-                    "instrument",
-                    "is_open",
-                    "layer_index",
-                    "retracement_count",
-                    "trade_ids",
-                    "units",
-                    "updated_at"
                 ]
             },
             "PositionListResponse": {
@@ -5558,34 +5037,6 @@
                     "state",
                     "type",
                     "units"
-                ]
-            },
-            "PositionPaginatedResponse": {
-                "type": "object",
-                "properties": {
-                    "count": {
-                        "type": "integer"
-                    },
-                    "next": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "previous": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "results": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/PositionItem"
-                        }
-                    }
-                },
-                "required": [
-                    "count",
-                    "next",
-                    "previous",
-                    "results"
                 ]
             },
             "PositionRequest": {
@@ -5890,124 +5341,10 @@
                     "name"
                 ]
             },
-            "TaskLogItem": {
+            "TaskInfo": {
                 "type": "object",
+                "description": "Serializer for task status information.",
                 "properties": {
-                    "id": {
-                        "type": "integer"
-                    },
-                    "task_type": {
-                        "type": "string"
-                    },
-                    "task_id": {
-                        "type": "string"
-                    },
-                    "celery_task_id": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "timestamp": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "level": {
-                        "type": "string"
-                    },
-                    "component": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "message": {
-                        "type": "string"
-                    },
-                    "details": {
-                        "type": "object",
-                        "additionalProperties": {},
-                        "nullable": true
-                    }
-                },
-                "required": [
-                    "celery_task_id",
-                    "component",
-                    "details",
-                    "id",
-                    "level",
-                    "message",
-                    "task_id",
-                    "task_type",
-                    "timestamp"
-                ]
-            },
-            "TaskLogPaginatedResponse": {
-                "type": "object",
-                "properties": {
-                    "count": {
-                        "type": "integer"
-                    },
-                    "next": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "previous": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "results": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/TaskLogItem"
-                        }
-                    }
-                },
-                "required": [
-                    "count",
-                    "next",
-                    "previous",
-                    "results"
-                ]
-            },
-            "TaskSummary": {
-                "type": "object",
-                "description": "Serializer for task summary response.\n\nReturns comprehensive task summary including PnL, counts,\nexecution state, and task status information.",
-                "properties": {
-                    "realized_pnl": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
-                    },
-                    "unrealized_pnl": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
-                    },
-                    "total_trades": {
-                        "type": "integer"
-                    },
-                    "open_position_count": {
-                        "type": "integer"
-                    },
-                    "closed_position_count": {
-                        "type": "integer"
-                    },
-                    "current_balance": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
-                        "nullable": true
-                    },
-                    "ticks_processed": {
-                        "type": "integer"
-                    },
-                    "last_tick_time": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "last_tick_price": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
-                        "nullable": true
-                    },
                     "status": {
                         "type": "string"
                     },
@@ -6028,20 +5365,44 @@
                     }
                 },
                 "required": [
-                    "closed_position_count",
                     "completed_at",
-                    "current_balance",
                     "error_message",
-                    "last_tick_price",
-                    "last_tick_time",
-                    "open_position_count",
                     "progress",
-                    "realized_pnl",
                     "started_at",
-                    "status",
-                    "ticks_processed",
-                    "total_trades",
-                    "unrealized_pnl"
+                    "status"
+                ]
+            },
+            "TaskSummary": {
+                "type": "object",
+                "description": "Serializer for structured task summary response.\n\nReturns comprehensive task summary grouped into logical sections:\n- timestamp: Common timestamp from the last tick\n- pnl: Realized and unrealized PnL\n- counts: Trade and position counts\n- execution: Balance and ticks processed\n- tick: Last tick prices (bid, ask, mid)\n- task: Status, timing, and progress",
+                "properties": {
+                    "timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "pnl": {
+                        "$ref": "#/components/schemas/PnlInfo"
+                    },
+                    "counts": {
+                        "$ref": "#/components/schemas/CountsInfo"
+                    },
+                    "execution": {
+                        "$ref": "#/components/schemas/ExecutionInfo"
+                    },
+                    "tick": {
+                        "$ref": "#/components/schemas/TickInfo"
+                    },
+                    "task": {
+                        "$ref": "#/components/schemas/TaskInfo"
+                    }
+                },
+                "required": [
+                    "counts",
+                    "execution",
+                    "pnl",
+                    "task",
+                    "tick",
+                    "timestamp"
                 ]
             },
             "TickDataRangeResponse": {
@@ -6069,6 +5430,40 @@
                     "instrument",
                     "max_timestamp",
                     "min_timestamp"
+                ]
+            },
+            "TickInfo": {
+                "type": "object",
+                "description": "Serializer for tick information.",
+                "properties": {
+                    "timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "bid": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "ask": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "mid": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "ask",
+                    "bid",
+                    "mid",
+                    "timestamp"
                 ]
             },
             "TokenRefreshError": {
@@ -6127,194 +5522,6 @@
                     "language",
                     "timezone",
                     "username"
-                ]
-            },
-            "TradeItem": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "direction": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "units": {
-                        "type": "integer"
-                    },
-                    "instrument": {
-                        "type": "string"
-                    },
-                    "price": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
-                    },
-                    "execution_method": {
-                        "type": "string"
-                    },
-                    "execution_method_display": {
-                        "type": "string"
-                    },
-                    "layer_index": {
-                        "type": "integer",
-                        "nullable": true
-                    },
-                    "retracement_count": {
-                        "type": "integer",
-                        "nullable": true
-                    },
-                    "timestamp": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "position_id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "nullable": true
-                    },
-                    "updated_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "nullable": true
-                    }
-                },
-                "required": [
-                    "direction",
-                    "execution_method",
-                    "execution_method_display",
-                    "id",
-                    "instrument",
-                    "layer_index",
-                    "position_id",
-                    "price",
-                    "retracement_count",
-                    "timestamp",
-                    "units",
-                    "updated_at"
-                ]
-            },
-            "TradePaginatedResponse": {
-                "type": "object",
-                "properties": {
-                    "count": {
-                        "type": "integer"
-                    },
-                    "next": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "previous": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "results": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/TradeItem"
-                        }
-                    }
-                },
-                "required": [
-                    "count",
-                    "next",
-                    "previous",
-                    "results"
-                ]
-            },
-            "TradingEventItem": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "integer"
-                    },
-                    "event_type": {
-                        "type": "string"
-                    },
-                    "event_type_display": {
-                        "type": "string"
-                    },
-                    "severity": {
-                        "type": "string"
-                    },
-                    "description": {
-                        "type": "string"
-                    },
-                    "user": {
-                        "type": "integer",
-                        "nullable": true
-                    },
-                    "account": {
-                        "type": "integer",
-                        "nullable": true
-                    },
-                    "instrument": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "task_type": {
-                        "type": "string"
-                    },
-                    "task_id": {
-                        "type": "string"
-                    },
-                    "celery_task_id": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "details": {
-                        "type": "object",
-                        "additionalProperties": {},
-                        "nullable": true
-                    },
-                    "created_at": {
-                        "type": "string",
-                        "format": "date-time"
-                    }
-                },
-                "required": [
-                    "account",
-                    "celery_task_id",
-                    "created_at",
-                    "description",
-                    "details",
-                    "event_type",
-                    "event_type_display",
-                    "id",
-                    "instrument",
-                    "severity",
-                    "task_id",
-                    "task_type",
-                    "user"
-                ]
-            },
-            "TradingEventPaginatedResponse": {
-                "type": "object",
-                "properties": {
-                    "count": {
-                        "type": "integer"
-                    },
-                    "next": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "previous": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "results": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/TradingEventItem"
-                        }
-                    }
-                },
-                "required": [
-                    "count",
-                    "next",
-                    "previous",
-                    "results"
                 ]
             },
             "TradingTask": {

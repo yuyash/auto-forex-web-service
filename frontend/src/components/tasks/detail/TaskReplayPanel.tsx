@@ -369,7 +369,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     taskType,
     celeryTaskId,
     status: 'closed',
-    pageSize: 1000,
+    pageSize: 5000,
     enableRealTimeUpdates,
   });
   const { positions: pnlOpenPositions } = useTaskPositions({
@@ -377,7 +377,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     taskType,
     celeryTaskId,
     status: 'open',
-    pageSize: 1000,
+    pageSize: 5000,
     enableRealTimeUpdates,
   });
 
@@ -560,6 +560,78 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       />
     ),
     [handleColResizeStart]
+  );
+
+  // ── Positions column resize ──
+  const defaultPosWidths: Record<string, number> = {
+    entry_time: 130,
+    exit_time: 130,
+    _status: 65,
+    direction: 65,
+    layer_index: 50,
+    retracement_count: 50,
+    units: 65,
+    entry_price: 85,
+    exit_price: 85,
+    _pips: 75,
+    _pnl: 90,
+  };
+  const [posColWidths, setPosColWidths] = useState(defaultPosWidths);
+  const posResizeRef = useRef<{
+    col: string;
+    startX: number;
+    startW: number;
+  } | null>(null);
+
+  const handlePosColResizeStart = useCallback(
+    (e: React.MouseEvent, col: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      posResizeRef.current = {
+        col,
+        startX: e.clientX,
+        startW: posColWidths[col] ?? 100,
+      };
+      const onMove = (ev: MouseEvent) => {
+        if (!posResizeRef.current) return;
+        const diff = ev.clientX - posResizeRef.current.startX;
+        const w = Math.max(40, posResizeRef.current.startW + diff);
+        setPosColWidths((prev) => ({
+          ...prev,
+          [posResizeRef.current!.col]: w,
+        }));
+      };
+      const onUp = () => {
+        posResizeRef.current = null;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    },
+    [posColWidths]
+  );
+
+  const posResizeHandle = useCallback(
+    (col: string) => (
+      <Box
+        onMouseDown={(e) => handlePosColResizeStart(e, col)}
+        sx={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
+          cursor: 'col-resize',
+          '&:hover': { backgroundColor: 'primary.main', opacity: 0.4 },
+        }}
+      />
+    ),
+    [handlePosColResizeStart]
   );
 
   const handleSort = (column: SortableKey) => {
@@ -1053,10 +1125,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   // PnL summary from server-side aggregation (lightweight endpoint)
   const {
-    realizedPnl: serverRealizedPnl,
-    unrealizedPnl: serverUnrealizedPnl,
-    totalTrades: serverTotalTrades,
-    openPositionCount: serverOpenPositionCount,
+    summary: {
+      pnl: { realized: serverRealizedPnl, unrealized: serverUnrealizedPnl },
+      counts: {
+        totalTrades: serverTotalTrades,
+        openPositions: serverOpenPositionCount,
+      },
+    },
     refetch: refetchPnl,
   } = useTaskSummary(String(taskId), taskType, celeryTaskId);
 
@@ -1097,6 +1172,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const hasLoadedOnce = useRef(false);
   // Track the latest trade updated_at for incremental fetching.
   const tradeSinceRef = useRef<string | null>(null);
+  // Track when candles were last fetched to throttle OANDA API calls during polling.
+  // Candle data only changes at the latest bar, so refreshing every 60s is sufficient.
+  const lastCandleFetchRef = useRef<number>(0);
+  const CANDLE_REFRESH_INTERVAL_MS = 60_000;
 
   /** Map raw API trade objects to ReplayTrade rows. */
   const mapRawTrades = useCallback(
@@ -1179,74 +1258,100 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       }
       setError(null);
 
-      // Fetch candles — errors here are only fatal on the very first load
-      // (when we have no data to show).  On subsequent fetches we keep the
-      // previously loaded candles visible so that stopping a task does not
-      // wipe the chart.
+      // Fetch candles first — show chart ASAP before loading trades.
+      // Errors here are only fatal on the very first load (when we have
+      // no data to show).  On subsequent fetches we keep the previously
+      // loaded candles visible so that stopping a task does not wipe the chart.
+      //
+      // During polling (non-initial loads), candle data is only refreshed
+      // every CANDLE_REFRESH_INTERVAL_MS (60s) because only the latest bar
+      // changes.  Trades and positions (from local DB) are always fetched.
+      const now = Date.now();
+      const shouldFetchCandles =
+        isInitialLoad ||
+        now - lastCandleFetchRef.current >= CANDLE_REFRESH_INTERVAL_MS;
       let candlesFetched = false;
-      try {
-        const candleResponse = await fetchCandles(
-          instrument,
-          granularity,
-          startTime,
-          endTime
-        );
-        const rawCandles = Array.isArray(candleResponse?.candles)
-          ? candleResponse.candles
-          : [];
-        const candleByTime = new Map<number, CandlePoint>();
-        rawCandles
-          .map((c: Record<string, unknown>) => {
-            const parsedTime = parseUtcTimestamp(c.time);
-            const open = Number(c.open);
-            const high = Number(c.high);
-            const low = Number(c.low);
-            const close = Number(c.close);
-            if (
-              parsedTime === null ||
-              [open, high, low, close].some((v) => Number.isNaN(v))
-            ) {
-              return null;
-            }
-            return {
-              time: parsedTime,
-              open,
-              high,
-              low,
-              close,
-            } as CandlePoint;
-          })
-          .filter((v: CandlePoint | null): v is CandlePoint => v !== null)
-          .forEach((c) => candleByTime.set(Number(c.time), c));
 
-        const candlePoints: CandlePoint[] = Array.from(
-          candleByTime.values()
-        ).sort((a, b) => Number(a.time) - Number(b.time));
-        // Only update candles state when we receive non-empty data so that a
-        // transient empty response (e.g. market API hiccup during polling)
-        // does not wipe out previously loaded candles and destroy the chart.
-        if (candlePoints.length > 0) {
-          setCandles((prev) => {
-            // Skip update if candle count and last candle timestamp are identical
-            if (
-              prev.length === candlePoints.length &&
-              prev.length > 0 &&
-              Number(prev[prev.length - 1].time) ===
-                Number(candlePoints[candlePoints.length - 1].time)
-            ) {
-              return prev;
-            }
-            return candlePoints;
-          });
+      if (shouldFetchCandles) {
+        try {
+          const candleResponse = await fetchCandles(
+            instrument,
+            granularity,
+            startTime,
+            endTime
+          );
+          const rawCandles = Array.isArray(candleResponse?.candles)
+            ? candleResponse.candles
+            : [];
+          const candleByTime = new Map<number, CandlePoint>();
+          rawCandles
+            .map((c: Record<string, unknown>) => {
+              const parsedTime = parseUtcTimestamp(c.time);
+              const open = Number(c.open);
+              const high = Number(c.high);
+              const low = Number(c.low);
+              const close = Number(c.close);
+              if (
+                parsedTime === null ||
+                [open, high, low, close].some((v) => Number.isNaN(v))
+              ) {
+                return null;
+              }
+              return {
+                time: parsedTime,
+                open,
+                high,
+                low,
+                close,
+              } as CandlePoint;
+            })
+            .filter((v: CandlePoint | null): v is CandlePoint => v !== null)
+            .forEach((c) => candleByTime.set(Number(c.time), c));
+
+          const candlePoints: CandlePoint[] = Array.from(
+            candleByTime.values()
+          ).sort((a, b) => Number(a.time) - Number(b.time));
+          // Only update candles state when we receive non-empty data so that a
+          // transient empty response (e.g. market API hiccup during polling)
+          // does not wipe out previously loaded candles and destroy the chart.
+          if (candlePoints.length > 0) {
+            setCandles((prev) => {
+              // Skip update if candle count and last candle timestamp are identical
+              if (
+                prev.length === candlePoints.length &&
+                prev.length > 0 &&
+                Number(prev[prev.length - 1].time) ===
+                  Number(candlePoints[candlePoints.length - 1].time)
+              ) {
+                return prev;
+              }
+              return candlePoints;
+            });
+          }
+          candlesFetched = true;
+          lastCandleFetchRef.current = Date.now();
+        } catch (candleError) {
+          // On the very first load with no existing data, propagate the error
+          // so the user sees feedback.  Otherwise silently keep the old candles.
+          if (isInitialLoad) {
+            throw candleError;
+          }
+          console.warn('Failed to refresh candle data:', candleError);
         }
-        candlesFetched = true;
-      } catch (candleError) {
-        // On the very first load with no existing data, propagate the error
-        // so the user sees feedback.  Otherwise silently keep the old candles.
-        if (isInitialLoad) {
-          throw candleError;
-        }
-        console.warn('Failed to refresh candle data:', candleError);
+      } // end shouldFetchCandles
+
+      // Mark initial load complete and show chart before fetching trades.
+      // This lets the user see candles immediately while trades load lazily.
+      if (isInitialLoad && candlesFetched) {
+        hasLoadedOnce.current = true;
+        setIsLoading(false);
+      }
+
+      // Small delay between candle and trade requests to avoid burst traffic
+      // that can trigger OANDA / backend rate limits.
+      // Only needed when we actually fetched candles this cycle.
+      if (shouldFetchCandles) {
+        await new Promise((r) => setTimeout(r, 300));
       }
 
       // Fetch trades — errors here never hide already-loaded candles.
@@ -1344,7 +1449,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   useEffect(() => {
     if (!enableRealTimeUpdates) return undefined;
-    const id = setInterval(fetchReplayData, 5000);
+    const id = setInterval(fetchReplayData, 10000);
     return () => clearInterval(id);
   }, [enableRealTimeUpdates, fetchReplayData]);
 
@@ -2059,7 +2164,15 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         />
       </Box>
 
-      <Box sx={{ display: 'flex', gap: 2, mt: 0.5, alignItems: 'flex-start' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', lg: 'row' },
+          gap: 2,
+          mt: 0.5,
+          alignItems: 'flex-start',
+        }}
+      >
         {/* Left column: Trades */}
         <Box
           sx={{
@@ -2124,7 +2237,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           </Box>
 
           <TableContainer component={Paper} variant="outlined">
-            <Table stickyHeader sx={{ tableLayout: 'fixed' }}>
+            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 580 }}>
               <TableHead>
                 <TableRow>
                   <TableCell padding="checkbox" sx={{ width: 42 }}>
@@ -2493,7 +2606,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           </Box>
 
           <TableContainer component={Paper} variant="outlined">
-            <Table stickyHeader sx={{ tableLayout: 'fixed' }}>
+            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 940 }}>
               <TableHead>
                 <TableRow>
                   <TableCell padding="checkbox" sx={{ width: 42 }}>
@@ -2518,7 +2631,10 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     />
                   </TableCell>
                   <TableCell
-                    sx={{ width: 130 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.entry_time,
+                    }}
                     sortDirection={
                       posOrderBy === 'entry_time' ? posOrder : false
                     }
@@ -2530,9 +2646,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Open Time
                     </TableSortLabel>
+                    {posResizeHandle('entry_time')}
                   </TableCell>
                   <TableCell
-                    sx={{ width: 130 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.exit_time,
+                    }}
                     sortDirection={
                       posOrderBy === 'exit_time' ? posOrder : false
                     }
@@ -2544,9 +2664,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Close Time
                     </TableSortLabel>
+                    {posResizeHandle('exit_time')}
                   </TableCell>
                   <TableCell
-                    sx={{ width: 65 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths._status,
+                    }}
                     sortDirection={posOrderBy === '_status' ? posOrder : false}
                   >
                     <TableSortLabel
@@ -2556,9 +2680,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Status
                     </TableSortLabel>
+                    {posResizeHandle('_status')}
                   </TableCell>
                   <TableCell
-                    sx={{ width: 65 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.direction,
+                    }}
                     sortDirection={
                       posOrderBy === 'direction' ? posOrder : false
                     }
@@ -2570,9 +2698,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Dir
                     </TableSortLabel>
+                    {posResizeHandle('direction')}
                   </TableCell>
                   <TableCell
-                    sx={{ width: 50 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.layer_index,
+                    }}
                     sortDirection={
                       posOrderBy === 'layer_index' ? posOrder : false
                     }
@@ -2586,9 +2718,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Layer
                     </TableSortLabel>
+                    {posResizeHandle('layer_index')}
                   </TableCell>
                   <TableCell
-                    sx={{ width: 50 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.retracement_count,
+                    }}
                     sortDirection={
                       posOrderBy === 'retracement_count' ? posOrder : false
                     }
@@ -2602,10 +2738,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Retrace
                     </TableSortLabel>
+                    {posResizeHandle('retracement_count')}
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ width: 65 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.units,
+                    }}
                     sortDirection={posOrderBy === 'units' ? posOrder : false}
                   >
                     <TableSortLabel
@@ -2615,10 +2755,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Units
                     </TableSortLabel>
+                    {posResizeHandle('units')}
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ width: 85 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.entry_price,
+                    }}
                     sortDirection={
                       posOrderBy === 'entry_price' ? posOrder : false
                     }
@@ -2632,10 +2776,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Entry
                     </TableSortLabel>
+                    {posResizeHandle('entry_price')}
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ width: 85 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths.exit_price,
+                    }}
                     sortDirection={
                       posOrderBy === 'exit_price' ? posOrder : false
                     }
@@ -2647,10 +2795,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Exit
                     </TableSortLabel>
+                    {posResizeHandle('exit_price')}
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ width: 75 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths._pips,
+                    }}
                     sortDirection={posOrderBy === '_pips' ? posOrder : false}
                   >
                     <TableSortLabel
@@ -2660,10 +2812,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       Pips
                     </TableSortLabel>
+                    {posResizeHandle('_pips')}
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ width: 90 }}
+                    sx={{
+                      position: 'relative',
+                      width: posColWidths._pnl,
+                    }}
                     sortDirection={posOrderBy === '_pnl' ? posOrder : false}
                   >
                     <TableSortLabel
@@ -2673,6 +2829,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       PnL
                     </TableSortLabel>
+                    {posResizeHandle('_pnl')}
                   </TableCell>
                 </TableRow>
               </TableHead>

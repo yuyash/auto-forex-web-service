@@ -35,6 +35,9 @@ class CandleDataView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    # Exempt from default DRF throttle — OANDA API has its own rate limits
+    # and the frontend already implements exponential backoff for 429 responses.
+    throttle_classes: list = []
 
     @extend_schema(
         operation_id="market_candles",
@@ -380,7 +383,7 @@ class CandleDataView(APIView):
                 )
 
             return Response(
-                {"error": f"Failed to fetch candles: {str(e)}"},
+                {"error": "Failed to fetch candles"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 

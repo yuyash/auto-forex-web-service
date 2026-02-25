@@ -311,7 +311,7 @@ class TestPause:
         response = vs.pause(request, pk=1)
         assert response.status_code == http_status.HTTP_500_INTERNAL_SERVER_ERROR
 
-    def test_pause_exception_returns_400(self):
+    def test_pause_exception_returns_500(self):
         task = _make_task(task_status=TaskStatus.RUNNING)
         vs = _build_viewset(action="pause")
         vs.get_object = MagicMock(return_value=task)
@@ -321,7 +321,7 @@ class TestPause:
         vs.request = request
 
         response = vs.pause(request, pk=1)
-        assert response.status_code == http_status.HTTP_400_BAD_REQUEST
+        assert response.status_code == http_status.HTTP_500_INTERNAL_SERVER_ERROR
 
 
 class TestRestart:

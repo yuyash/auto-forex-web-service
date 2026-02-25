@@ -158,17 +158,22 @@ export const useTaskPositions = ({
         const data = response.data;
         const incoming = (data.results || []) as TaskPosition[];
 
-        if (incremental && incoming.length > 0) {
-          // Merge: update existing records, append new ones.
-          setPositions((prev) => {
-            const map = new Map(prev.map((p) => [p.id, p]));
-            for (const p of incoming) {
-              map.set(p.id, p);
-            }
-            return Array.from(map.values());
-          });
-          // Update totalCount from server (it reflects the full count).
-          setTotalCount(data.count ?? totalCount);
+        if (incremental) {
+          // Incremental poll: merge new/updated records into the cache.
+          // When nothing changed (incoming is empty), leave state untouched.
+          if (incoming.length > 0) {
+            setPositions((prev) => {
+              const map = new Map(prev.map((p) => [p.id, p]));
+              for (const p of incoming) {
+                map.set(p.id, p);
+              }
+              return Array.from(map.values());
+            });
+          }
+          // Always update totalCount from server (it reflects the full count).
+          if (data.count != null) {
+            setTotalCount(data.count);
+          }
         } else {
           // Full replace (initial fetch or non-incremental).
           setPositions(incoming);
