@@ -2015,9 +2015,9 @@
                 }
             }
         },
-        "/api/trading/tasks/backtest/{id}/metric_snapshots/": {
+        "/api/trading/tasks/backtest/{id}/metrics/": {
             "get": {
-                "operationId": "trading_tasks_backtest_metric_snapshots_retrieve",
+                "operationId": "trading_tasks_backtest_metrics_retrieve",
                 "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
                     {
@@ -2828,9 +2828,9 @@
                 }
             }
         },
-        "/api/trading/tasks/trading/{id}/metric_snapshots/": {
+        "/api/trading/tasks/trading/{id}/metrics/": {
             "get": {
-                "operationId": "trading_tasks_trading_metric_snapshots_retrieve",
+                "operationId": "trading_tasks_trading_metrics_retrieve",
                 "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
                     {

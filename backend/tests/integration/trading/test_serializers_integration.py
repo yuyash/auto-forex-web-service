@@ -295,7 +295,7 @@ class TestBacktestTaskSerializerProgress:
             celery_task_id="celery-progress-test",
         )
         # Midpoint should be ~50%
-        assert 45 <= result.progress <= 55
+        assert 45 <= result.task.progress <= 55
 
     def test_progress_no_state(self):
         from apps.trading.services.summary import compute_task_summary
@@ -309,4 +309,4 @@ class TestBacktestTaskSerializerProgress:
             task_id=str(task.pk),
             celery_task_id="celery-no-state",
         )
-        assert result.progress == 0
+        assert result.task.progress == 0

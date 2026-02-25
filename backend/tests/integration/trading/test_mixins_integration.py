@@ -69,7 +69,7 @@ class TestMetrics:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["total"] == 3
         assert response.data["returned"] == 3
-        assert len(response.data["metrics"]) == 3
+        assert len(response.data["snapshots"]) == 3
 
     def test_without_data(self):
         task = _make_task()
@@ -79,7 +79,7 @@ class TestMetrics:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["total"] == 0
         assert response.data["returned"] == 0
-        assert response.data["metrics"] == []
+        assert response.data["snapshots"] == []
 
 
 @pytest.mark.django_db

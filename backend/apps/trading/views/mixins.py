@@ -31,7 +31,7 @@ class TaskSubResourceMixin:
 
     task_type_label: str
 
-    @action(detail=True, methods=["get"])
+    @action(detail=True, methods=["get"], url_path="metrics")
     def metric_snapshots(self, request: Request, pk: int | None = None) -> Response:
         from apps.trading.models.metrics import Metrics as MetricSnapshot
 
