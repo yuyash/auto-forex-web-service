@@ -83,11 +83,13 @@ class TestCandleDataView:
     @patch("apps.market.views.candles.v20.Context")
     def test_get_candles_api_error(self, mock_context: Mock, user: Any) -> None:
         """Test handling of OANDA API errors."""
-        OandaAccounts.objects.create(
+        account = OandaAccounts.objects.create(
             user=user,
             account_id="101-001-1234567-002",
             api_type=ApiType.PRACTICE,
         )
+        account.set_api_token("test_token_12345")
+        account.save()
 
         # Mock API error
         mock_response = MagicMock()
@@ -103,7 +105,7 @@ class TestCandleDataView:
 
         response = client.get("/api/market/candles/?instrument=EUR_USD")
 
-        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.status_code == status.HTTP_502_BAD_GATEWAY
 
     def test_get_candles_unauthenticated(self) -> None:
         """Test that unauthenticated users cannot access candles."""

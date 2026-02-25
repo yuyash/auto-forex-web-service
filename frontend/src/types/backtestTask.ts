@@ -20,9 +20,9 @@ export interface BacktestTask {
   status: TaskStatus;
   sell_at_completion: boolean;
   latest_execution?: ExecutionSummary;
+  execution_run_id?: number;
   started_at?: string;
   completed_at?: string;
-  celery_task_id?: string;
   error_message?: string;
   created_at: string;
   updated_at: string;

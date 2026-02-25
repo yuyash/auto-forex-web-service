@@ -165,7 +165,7 @@ class TestCandleDataViewSuccess:
 
     @patch("apps.market.views.candles.v20")
     @patch("apps.market.views.candles.OandaAccounts")
-    def test_oanda_error_returns_500(self, MockAccounts, mock_v20):
+    def test_oanda_bad_request_returns_400(self, MockAccounts, mock_v20):
         account = MagicMock()
         account.api_hostname = "api-fxpractice.oanda.com"
         account.get_api_token.return_value = "token"
@@ -184,7 +184,31 @@ class TestCandleDataViewSuccess:
 
         response = view.get(request)
 
-        assert response.status_code == http_status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.status_code == http_status.HTTP_400_BAD_REQUEST
+
+    @patch("apps.market.views.candles.v20")
+    @patch("apps.market.views.candles.OandaAccounts")
+    def test_oanda_unauthorized_returns_502(self, MockAccounts, mock_v20):
+        account = MagicMock()
+        account.api_hostname = "api-fxpractice.oanda.com"
+        account.get_api_token.return_value = "token"
+        MockAccounts.objects.filter.return_value.first.return_value = account
+
+        mock_response = MagicMock()
+        mock_response.status = 401
+        mock_response.body = {"errorMessage": "Insufficient authorization to perform request."}
+
+        mock_context = MagicMock()
+        mock_context.instrument.candles.return_value = mock_response
+        mock_v20.Context.return_value = mock_context
+
+        view = _build_view()
+        request = _make_request("?instrument=EUR_USD&count=10")
+
+        response = view.get(request)
+
+        assert response.status_code == http_status.HTTP_502_BAD_GATEWAY
+        assert response.data["error_code"] == "OANDA_AUTH_FAILED"
 
     @patch("apps.market.views.candles.v20")
     @patch("apps.market.views.candles.OandaAccounts")

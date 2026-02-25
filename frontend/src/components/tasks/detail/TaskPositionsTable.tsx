@@ -21,7 +21,7 @@ import { TaskType } from '../../../types/common';
 interface TaskPositionsTableProps {
   taskId: string | number;
   taskType: TaskType;
-  celeryTaskId?: string;
+  executionRunId?: number;
   enableRealTimeUpdates?: boolean;
   currentPrice?: number | null;
   pipSize?: number | null;
@@ -30,7 +30,7 @@ interface TaskPositionsTableProps {
 export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   taskId,
   taskType,
-  celeryTaskId,
+  executionRunId,
   enableRealTimeUpdates = false,
   currentPrice,
   pipSize,
@@ -55,7 +55,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   } = useTaskPositions({
     taskId,
     taskType,
-    celeryTaskId,
+    executionRunId,
     status: 'closed',
     page: page + 1,
     pageSize: rowsPerPage,
@@ -71,7 +71,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   } = useTaskPositions({
     taskId,
     taskType,
-    celeryTaskId,
+    executionRunId,
     status: 'open',
     page: openPage + 1,
     pageSize: openRowsPerPage,
@@ -84,7 +84,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       pnl: { realized: totalRealizedPnl, unrealized: totalUnrealizedPnl },
     },
     refetch: refetchPnl,
-  } = useTaskSummary(String(taskId), taskType, celeryTaskId);
+  } = useTaskSummary(String(taskId), taskType, executionRunId);
 
   // Refetch PnL when real-time updates toggle changes (task finishes)
   const prevRealTimeRef = React.useRef(enableRealTimeUpdates);

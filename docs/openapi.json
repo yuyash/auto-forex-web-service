@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.2.2",
+        "version": "1.3.0",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -90,9 +90,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -314,9 +311,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -353,9 +347,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -392,9 +383,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -421,9 +409,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -467,9 +452,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -512,15 +494,6 @@
                 "description": "Get public account settings (registration/login enabled flags).",
                 "tags": [
                     "Accounts"
-                ],
-                "security": [
-                    {
-                        "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    },
-                    {}
                 ],
                 "responses": {
                     "200": {
@@ -580,9 +553,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -620,9 +590,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -659,9 +626,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -705,9 +669,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -742,9 +703,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -832,9 +790,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -861,9 +816,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -899,9 +851,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -935,9 +884,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -964,9 +910,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1003,9 +946,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1042,9 +982,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1095,9 +1032,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1132,9 +1066,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1179,9 +1110,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1224,9 +1152,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1277,9 +1202,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1314,9 +1236,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1361,9 +1280,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1407,9 +1323,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1476,9 +1389,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1515,9 +1425,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1544,9 +1451,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1583,9 +1487,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1622,9 +1523,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1659,9 +1557,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1709,9 +1604,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1757,9 +1649,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1795,9 +1684,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1841,14 +1727,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1868,7 +1751,7 @@
                 "operationId": "trading_tasks_backtest_create",
                 "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -1883,9 +1766,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1919,14 +1799,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -1958,7 +1835,7 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -1973,9 +1850,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2007,7 +1881,7 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -2021,9 +1895,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2055,14 +1926,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2077,14 +1945,6 @@
                 "operationId": "trading_tasks_backtest_events_retrieve",
                 "description": "Retrieve paginated task events.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "query",
                         "name": "event_type",
@@ -2143,14 +2003,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2167,19 +2024,71 @@
                 }
             }
         },
+        "/api/trading/tasks/backtest/{id}/executions/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_executions_retrieve",
+                "description": "Retrieve execution history for a task.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_metrics",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include aggregate metrics"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskExecutionPaginatedResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/backtest/{id}/logs/": {
             "get": {
                 "operationId": "trading_tasks_backtest_logs_retrieve",
                 "description": "Retrieve paginated task logs.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "query",
                         "name": "execution_run_id",
@@ -2230,14 +2139,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2259,14 +2165,6 @@
                 "operationId": "trading_tasks_backtest_metrics_retrieve",
                 "description": "Retrieve time-series metrics for the task.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "query",
                         "name": "execution_run_id",
@@ -2303,14 +2201,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2332,14 +2227,6 @@
                 "operationId": "trading_tasks_backtest_orders_retrieve",
                 "description": "Retrieve paginated task orders.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "query",
                         "name": "direction",
@@ -2406,14 +2293,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2462,9 +2346,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2486,14 +2367,6 @@
                 "operationId": "trading_tasks_backtest_positions_retrieve",
                 "description": "Retrieve paginated task positions.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "query",
                         "name": "direction",
@@ -2552,14 +2425,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2608,9 +2478,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2659,9 +2526,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2710,9 +2574,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2761,9 +2622,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2787,14 +2645,6 @@
                 "parameters": [
                     {
                         "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
-                    {
-                        "in": "query",
                         "name": "execution_run_id",
                         "schema": {
                             "type": "integer"
@@ -2813,14 +2663,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2842,14 +2689,6 @@
                 "operationId": "trading_tasks_backtest_trades_retrieve",
                 "description": "Retrieve paginated task trades.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "query",
                         "name": "direction",
@@ -2900,14 +2739,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2958,14 +2794,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -2985,7 +2818,7 @@
                 "operationId": "trading_tasks_trading_create",
                 "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -2999,9 +2832,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3035,14 +2865,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3074,7 +2901,7 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -3088,9 +2915,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3122,7 +2946,7 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "requestBody": {
                     "content": {
@@ -3136,9 +2960,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3170,14 +2991,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3192,14 +3010,6 @@
                 "operationId": "trading_tasks_trading_events_retrieve",
                 "description": "Retrieve paginated task events.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "query",
                         "name": "event_type",
@@ -3258,14 +3068,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3282,19 +3089,71 @@
                 }
             }
         },
+        "/api/trading/tasks/trading/{id}/executions/": {
+            "get": {
+                "operationId": "trading_tasks_trading_executions_retrieve",
+                "description": "Retrieve execution history for a task.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_metrics",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include aggregate metrics"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskExecutionPaginatedResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/trading/{id}/logs/": {
             "get": {
                 "operationId": "trading_tasks_trading_logs_retrieve",
                 "description": "Retrieve paginated task logs.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "query",
                         "name": "execution_run_id",
@@ -3345,14 +3204,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3374,14 +3230,6 @@
                 "operationId": "trading_tasks_trading_metrics_retrieve",
                 "description": "Retrieve time-series metrics for the task.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "query",
                         "name": "execution_run_id",
@@ -3418,14 +3266,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3447,14 +3292,6 @@
                 "operationId": "trading_tasks_trading_orders_retrieve",
                 "description": "Retrieve paginated task orders.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "query",
                         "name": "direction",
@@ -3521,14 +3358,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3577,9 +3411,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3601,14 +3432,6 @@
                 "operationId": "trading_tasks_trading_positions_retrieve",
                 "description": "Retrieve paginated task positions.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "query",
                         "name": "direction",
@@ -3667,14 +3490,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3723,9 +3543,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3774,9 +3591,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3825,9 +3639,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3875,9 +3686,6 @@
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3901,14 +3709,6 @@
                 "parameters": [
                     {
                         "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
-                    {
-                        "in": "query",
                         "name": "execution_run_id",
                         "schema": {
                             "type": "integer"
@@ -3927,14 +3727,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -3956,14 +3753,6 @@
                 "operationId": "trading_tasks_trading_trades_retrieve",
                 "description": "Retrieve paginated task trades.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "celery_task_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter by Celery task ID"
-                    },
                     {
                         "in": "query",
                         "name": "direction",
@@ -4014,14 +3803,11 @@
                     }
                 ],
                 "tags": [
-                    "trading"
+                    "Trading"
                 ],
                 "security": [
                     {
                         "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
                     }
                 ],
                 "responses": {
@@ -4082,6 +3868,11 @@
                         "readOnly": true,
                         "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
                     },
+                    "execution_run_id": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Monotonic execution run identifier incremented on every start/restart/resume"
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -4114,12 +3905,6 @@
                         "nullable": true,
                         "description": "Calculate task execution duration in seconds.\n\nArgs:\n    obj: Task instance\n\nReturns:\n    float | None: Duration in seconds if both started_at and completed_at are set,\n                 None otherwise",
                         "readOnly": true
-                    },
-                    "celery_task_id": {
-                        "type": "string",
-                        "readOnly": true,
-                        "nullable": true,
-                        "description": "Celery task ID for tracking execution"
                     },
                     "error_message": {
                         "type": "string",
@@ -4195,7 +3980,6 @@
                     }
                 },
                 "required": [
-                    "celery_task_id",
                     "completed_at",
                     "config_id",
                     "config_name",
@@ -4204,6 +3988,7 @@
                     "end_time",
                     "error_message",
                     "error_traceback",
+                    "execution_run_id",
                     "id",
                     "name",
                     "start_time",
@@ -5730,10 +5515,6 @@
                         "type": "string",
                         "format": "uuid"
                     },
-                    "celery_task_id": {
-                        "type": "string",
-                        "nullable": true
-                    },
                     "broker_order_id": {
                         "type": "string",
                         "nullable": true
@@ -6871,6 +6652,136 @@
                     "results"
                 ]
             },
+            "TaskExecution": {
+                "type": "object",
+                "description": "Serializer for task execution history rows.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Execution identifier (execution_run_id as string)."
+                    },
+                    "task_type": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "execution_number": {
+                        "type": "integer",
+                        "description": "Execution run ID."
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "progress": {
+                        "type": "integer"
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "completed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "error_message": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "error_traceback": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "duration": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "metrics": {
+                        "$ref": "#/components/schemas/TaskExecutionMetrics"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "execution_number",
+                    "id",
+                    "progress",
+                    "started_at",
+                    "status",
+                    "task_id",
+                    "task_type"
+                ]
+            },
+            "TaskExecutionMetrics": {
+                "type": "object",
+                "description": "Serializer for execution-level aggregate metrics.",
+                "properties": {
+                    "total_return": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "total_pnl": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "unrealized_pnl": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "total_trades": {
+                        "type": "integer"
+                    },
+                    "winning_trades": {
+                        "type": "integer"
+                    },
+                    "losing_trades": {
+                        "type": "integer"
+                    },
+                    "win_rate": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,6}(?:\\.\\d{0,4})?$"
+                    }
+                }
+            },
+            "TaskExecutionPaginatedResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TaskExecution"
+                        }
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "previous",
+                    "results"
+                ]
+            },
             "TaskInfo": {
                 "type": "object",
                 "description": "Serializer for task status information.",
@@ -6925,11 +6836,11 @@
                         "format": "uuid",
                         "description": "UUID of the task this log entry belongs to"
                     },
-                    "celery_task_id": {
-                        "type": "string",
-                        "nullable": true,
-                        "description": "Celery task ID for this execution",
-                        "maxLength": 255
+                    "execution_run_id": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Execution run identifier for run-scoped log queries"
                     },
                     "timestamp": {
                         "type": "string",
@@ -7412,11 +7323,11 @@
                         "format": "uuid",
                         "nullable": true
                     },
-                    "celery_task_id": {
-                        "type": "string",
-                        "nullable": true,
-                        "description": "Celery task ID for tracking specific execution",
-                        "maxLength": 255
+                    "execution_run_id": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Execution run identifier for run-scoped event queries"
                     },
                     "details": {},
                     "created_at": {
@@ -7466,6 +7377,11 @@
                         "readOnly": true,
                         "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
                     },
+                    "execution_run_id": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Monotonic execution run identifier incremented on every start/restart/resume"
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -7498,12 +7414,6 @@
                         "nullable": true,
                         "description": "Calculate task execution duration in seconds.\n\nArgs:\n    obj: Task instance\n\nReturns:\n    float | None: Duration in seconds if both started_at and completed_at are set,\n                 None otherwise",
                         "readOnly": true
-                    },
-                    "celery_task_id": {
-                        "type": "string",
-                        "readOnly": true,
-                        "nullable": true,
-                        "description": "Celery task ID for tracking execution"
                     },
                     "error_message": {
                         "type": "string",
@@ -7571,7 +7481,6 @@
                 "required": [
                     "account_name",
                     "account_type",
-                    "celery_task_id",
                     "completed_at",
                     "config_id",
                     "config_name",
@@ -7579,6 +7488,7 @@
                     "duration",
                     "error_message",
                     "error_traceback",
+                    "execution_run_id",
                     "id",
                     "name",
                     "oanda_account",
@@ -8067,11 +7977,6 @@
                 "type": "http",
                 "scheme": "bearer",
                 "bearerFormat": "JWT"
-            },
-            "cookieAuth": {
-                "type": "apiKey",
-                "in": "cookie",
-                "name": "sessionid"
             }
         }
     },

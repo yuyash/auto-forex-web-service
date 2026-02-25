@@ -25,6 +25,12 @@ logger: Logger = logging.getLogger(name=__name__)
 
 
 @extend_schema_view(
+    list=extend_schema(tags=["Trading"]),
+    create=extend_schema(tags=["Trading"]),
+    retrieve=extend_schema(tags=["Trading"]),
+    update=extend_schema(tags=["Trading"]),
+    partial_update=extend_schema(tags=["Trading"]),
+    destroy=extend_schema(tags=["Trading"]),
     start=extend_schema(
         operation_id="backtest_tasks_start",
         tags=["Trading"],
@@ -80,6 +86,7 @@ logger: Logger = logging.getLogger(name=__name__)
         },
     ),
 )
+@extend_schema(tags=["Trading"])
 class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
     """
     ViewSet for BacktestTask operations with task-centric API.

@@ -24,8 +24,8 @@ export interface TaskLog {
 interface UseTaskLogsOptions {
   taskId: string;
   taskType: TaskType;
-  /** Filter by celery execution ID. When omitted, returns all executions. */
-  celeryTaskId?: string;
+  /** Filter by execution run ID. When omitted, uses the latest execution run. */
+  executionRunId?: number;
   level?: string;
   page?: number;
   pageSize?: number;
@@ -65,7 +65,7 @@ function getLatestTimestamp(logs: TaskLog[]): string | null {
 export const useTaskLogs = ({
   taskId,
   taskType,
-  celeryTaskId,
+  executionRunId,
   level,
   page = 1,
   pageSize = 100,
@@ -83,7 +83,7 @@ export const useTaskLogs = ({
   const sinceRef = useRef<string | null>(null);
   const hasInitialFetchRef = useRef(false);
 
-  const paramsKey = `${taskId}-${taskType}-${celeryTaskId}-${level}-${page}-${pageSize}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${level}-${page}-${pageSize}`;
   const prevParamsKeyRef = useRef(paramsKey);
   if (paramsKey !== prevParamsKeyRef.current) {
     prevParamsKeyRef.current = paramsKey;
@@ -113,7 +113,9 @@ export const useTaskLogs = ({
           page: String(page),
           page_size: String(pageSize),
         };
-        if (celeryTaskId) params.celery_task_id = celeryTaskId;
+        if (executionRunId != null) {
+          params.execution_run_id = String(executionRunId);
+        }
         if (level) params.level = level;
         const effectiveSince = incremental ? sinceRef.current : null;
         if (effectiveSince) params.since = effectiveSince;
@@ -172,7 +174,7 @@ export const useTaskLogs = ({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [taskId, taskType, celeryTaskId, level, page, pageSize]
+    [taskId, taskType, executionRunId, level, page, pageSize]
   );
 
   useEffect(() => {
