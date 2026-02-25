@@ -281,7 +281,7 @@ class TestSaveState:
         executor.save_state(state)
 
         state.save.assert_called_once()
-        state.refresh_from_db.assert_called_once()
+        state.refresh_from_db.assert_not_called()
 
 
 class TestSaveEvents:

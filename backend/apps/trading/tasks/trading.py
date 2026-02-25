@@ -11,7 +11,7 @@ from celery import shared_task
 from django.utils import timezone as dj_timezone
 
 from apps.trading.engine import TradingEngine
-from apps.trading.enums import LogLevel, TaskStatus, TaskType
+from apps.trading.enums import LogLevel, StopMode, TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import CeleryTaskStatus, TaskLog, TradingTask
 from apps.trading.tasks.executor import TradingExecutor
@@ -231,28 +231,30 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
         task_id: UUID of the trading task to stop
         mode: Stop mode ('immediate', 'graceful', 'graceful_close')
     """
-    from apps.trading.enums import TaskStatus
-
     try:
         logger.info(f"Stop task started - task_id={task_id}, mode={mode}")
+        stop_mode = StopMode(mode)
         task = TradingTask.objects.get(pk=task_id)
         logger.info(f"Task loaded - task_id={task_id}, status={task.status}")
 
         # Handle STOPPING state (normal case)
         if task.status == TaskStatus.STOPPING:
             logger.info(f"Current: STOPPING, proceeding with stop - task_id={task_id}")
-            # Revoke the Celery task if it exists
-            if task.celery_task_id:
+            # Only IMMEDIATE mode force-revokes worker process.
+            if stop_mode == StopMode.IMMEDIATE and task.celery_task_id:
                 from celery import current_app
 
                 logger.info(
                     f"Revoking Celery task - task_id={task_id}, "
                     f"celery_task_id={task.celery_task_id}"
                 )
-                current_app.control.revoke(task.celery_task_id, terminate=True)
+                current_app.control.revoke(task.celery_task_id, terminate=True, signal="SIGKILL")
                 logger.info(
                     f"Celery task revoked - task_id={task_id}, celery_task_id={task.celery_task_id}"
                 )
+
+            if stop_mode == StopMode.GRACEFUL_CLOSE or getattr(task, "sell_on_stop", False) is True:
+                _close_open_positions_for_task(task)
 
             # Update task status to STOPPED (without completed_at since it didn't complete)
             logger.info(f"Transitioning: {task.status} -> STOPPED - task_id={task_id}")
@@ -280,3 +282,21 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
     except TradingTask.DoesNotExist:
         logger.error(f"Trading task {task_id} not found")
         raise
+
+
+def _close_open_positions_for_task(task: TradingTask) -> None:
+    """Best-effort close of open positions before stopping."""
+    from apps.trading.order import OrderService, OrderServiceError
+
+    service = OrderService(account=task.oanda_account, task=task, dry_run=False)
+    open_positions = service.get_open_positions(instrument=task.instrument)
+    for position in open_positions:
+        try:
+            service.close_position(position=position)
+        except OrderServiceError as exc:
+            logger.warning(
+                "Failed to close position during graceful_close - task_id=%s, position_id=%s, error=%s",
+                task.pk,
+                position.pk,
+                exc,
+            )

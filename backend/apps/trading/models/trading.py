@@ -154,12 +154,13 @@ class TradingTask(UUIDModel):
                 condition=models.Q(
                     status__in=[
                         TaskStatus.CREATED,
-                        TaskStatus.CREATED,
+                        TaskStatus.STARTING,
                         TaskStatus.RUNNING,
+                        TaskStatus.PAUSED,
+                        TaskStatus.STOPPING,
                         TaskStatus.STOPPED,
                         TaskStatus.COMPLETED,
                         TaskStatus.FAILED,
-                        TaskStatus.STOPPED,
                     ]
                 ),
                 name="valid_trading_task_status",

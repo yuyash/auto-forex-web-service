@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import logging
 from logging import Logger
+from typing import cast
 from uuid import UUID, uuid4
 
 from celery.result import AsyncResult
 from django.utils import timezone
 
-from apps.trading.enums import TaskStatus
+from apps.trading.enums import StopMode, TaskStatus
 from apps.trading.models import BacktestTask, TradingEvent, TradingTask
 from apps.trading.tasks import (
     run_backtest_task,
@@ -227,6 +228,11 @@ class TaskService:
         logger.info(f"[SERVICE:STOP] Stopping task - task_id={task_id}, mode={mode}")
 
         try:
+            try:
+                stop_mode = StopMode(mode)
+            except ValueError as e:
+                raise ValueError(f"Invalid stop mode: {mode}") from e
+
             # Try to find the task in either BacktestTask or TradingTask
             task = None
             is_backtest = False
@@ -265,7 +271,12 @@ class TaskService:
                 f"task_type={task_type}"
             )
             task.status = TaskStatus.STOPPING
-            task.save(update_fields=["status", "updated_at"])
+            update_fields = ["status", "updated_at"]
+            if not is_backtest and stop_mode == StopMode.GRACEFUL_CLOSE:
+                trading_task = cast(TradingTask, task)
+                trading_task.sell_on_stop = True
+                update_fields.append("sell_on_stop")
+            task.save(update_fields=update_fields)
             logger.info(
                 f"[SERVICE:STOP] Current: STOPPING - task_id={task_id}, task_type={task_type}"
             )
@@ -291,11 +302,11 @@ class TaskService:
                     f"[SERVICE:STOP] Redis signal failed (non-fatal) - task_id={task_id}, error={str(e)}"
                 )
 
-            # Revoke Celery task if it exists
-            if task.celery_task_id:
+            # IMMEDIATE mode force-revokes running Celery task.
+            if stop_mode == StopMode.IMMEDIATE and task.celery_task_id:
                 try:
                     logger.info(
-                        f"[SERVICE:STOP] Revoking Celery task - task_id={task_id}, "
+                        f"[SERVICE:STOP] Immediate revoke Celery task - task_id={task_id}, "
                         f"celery_task_id={task.celery_task_id}"
                     )
                     from celery import current_app
@@ -316,7 +327,7 @@ class TaskService:
                 if is_backtest:
                     stop_backtest_task.delay(task_id)
                 else:
-                    stop_trading_task.delay(task_id, mode)
+                    stop_trading_task.delay(task_id, stop_mode.value)
             except Exception as e:
                 logger.warning(
                     f"[SERVICE:STOP] Stop task trigger failed (non-fatal) - task_id={task_id}, "

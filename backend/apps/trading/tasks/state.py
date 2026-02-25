@@ -36,6 +36,7 @@ class StateManager:
         task_id: int,
         redis_url: str | None = None,
         stop_check_interval_seconds: float = 1.0,
+        db_fallback_interval_seconds: float = 30.0,
         heartbeat_interval_seconds: float = 5.0,
         ttl_seconds: int = 3600,
     ) -> None:
@@ -54,6 +55,7 @@ class StateManager:
         self.instance_key = instance_key
         self.task_id = task_id
         self.stop_check_interval_seconds = float(stop_check_interval_seconds)
+        self.db_fallback_interval_seconds = float(db_fallback_interval_seconds)
         self.heartbeat_interval_seconds = float(heartbeat_interval_seconds)
         self.ttl_seconds = int(ttl_seconds)
 
@@ -67,6 +69,8 @@ class StateManager:
         # Throttling state
         self._last_stop_check = 0.0
         self._cached_should_stop = False
+        self._last_db_stop_check = 0.0
+        self._cached_should_stop_db = False
         self._last_heartbeat = 0.0
 
     def start(
@@ -148,11 +152,28 @@ class StateManager:
         if not force and (now - self._last_stop_check) < self.stop_check_interval_seconds:
             return TaskControl(should_stop=self._cached_should_stop)
 
-        # Check Redis
-        redis_status = self.redis.hget(self.redis_key, "status")
-        should_stop_redis = redis_status == "stopping"
+        should_stop_redis = False
+        redis_available = True
+        try:
+            redis_status = self.redis.hget(self.redis_key, "status")
+            should_stop_redis = redis_status == "stopping"
+        except Exception:
+            redis_available = False
 
-        # Check database (fallback)
+        should_check_db = force or not redis_available or (
+            (now - self._last_db_stop_check) >= self.db_fallback_interval_seconds
+        )
+        if should_check_db and not should_stop_redis:
+            self._cached_should_stop_db = self._check_db_should_stop()
+            self._last_db_stop_check = now
+
+        self._cached_should_stop = should_stop_redis or self._cached_should_stop_db
+        self._last_stop_check = now
+
+        return TaskControl(should_stop=self._cached_should_stop)
+
+    def _check_db_should_stop(self) -> bool:
+        """Check DB fallback stop flag."""
         try:
             from apps.trading.models import BacktestTask, TradingTask
 
@@ -168,14 +189,9 @@ class StateManager:
                     .first()
                 )
 
-            should_stop_db = task == TaskStatus.STOPPING
+            return task == TaskStatus.STOPPING
         except Exception:
-            should_stop_db = False
-
-        self._cached_should_stop = should_stop_redis or should_stop_db
-        self._last_stop_check = now
-
-        return TaskControl(should_stop=self._cached_should_stop)
+            return False
 
     def stop(
         self,
@@ -212,10 +228,15 @@ class StateManager:
         self.redis.hset(self.redis_key, mapping=updates)  # type: ignore[arg-type]
         self.redis.expire(self.redis_key, 300)  # 5 min cleanup
 
-    def cleanup(self) -> None:
-        """Cleanup Redis resources."""
+    def cleanup(self, *, delete_key: bool = False) -> None:
+        """Cleanup Redis resources.
+
+        Args:
+            delete_key: If True, delete redis coordination key immediately.
+        """
         try:
-            self.redis.delete(self.redis_key)
+            if delete_key:
+                self.redis.delete(self.redis_key)
         except Exception:  # nosec
             pass
         finally:

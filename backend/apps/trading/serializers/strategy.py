@@ -1,5 +1,7 @@
 """Serializers for strategy configuration."""
 
+from typing import Any
+
 from rest_framework import serializers
 from rest_framework.request import Request
 
@@ -96,34 +98,41 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs: dict) -> dict:
         """Validate parameters against strategy schema."""
-        strategy_type = attrs.get("strategy_type")
-        parameters = attrs.get("parameters", {})
+        from apps.trading.strategies.registry import registry
 
-        normalized_parameters = parameters
-        if strategy_type == "floor":
-            normalized_parameters = self._normalize_floor_parameters(parameters)
+        instance = getattr(self, "instance", None)
+        strategy_type = attrs.get("strategy_type") or (
+            instance.strategy_type if instance is not None else None
+        )
+        has_parameters = "parameters" in attrs
+        parameters_raw = attrs.get("parameters") if has_parameters else (
+            instance.parameters if instance is not None else {}
+        )
+        if parameters_raw is None:
+            parameters: dict[str, Any] = {}
+        elif isinstance(parameters_raw, dict):
+            parameters = dict(parameters_raw)
+        else:
+            raise serializers.ValidationError({"parameters": "Parameters must be a JSON object"})
+
+        normalized_parameters: dict[str, Any] = parameters
 
         if strategy_type:
-            # Create temporary config for validation
-            temp_config = StrategyConfiguration(
-                strategy_type=strategy_type,
-                parameters=normalized_parameters,
-            )
+            try:
+                normalized_parameters = registry.normalize_parameters(
+                    identifier=strategy_type,
+                    parameters=parameters,
+                )
+                registry.validate_parameters(
+                    identifier=strategy_type,
+                    parameters=normalized_parameters,
+                )
+            except ValueError as exc:
+                raise serializers.ValidationError({"parameters": str(exc)}) from exc
 
-            is_valid, error_message = temp_config.validate_parameters()
-            if not is_valid:
-                raise serializers.ValidationError({"parameters": error_message})
-
-        attrs["parameters"] = normalized_parameters
+        if has_parameters:
+            attrs["parameters"] = normalized_parameters
         return attrs
-
-    @staticmethod
-    def _normalize_floor_parameters(parameters: dict) -> dict:
-        """Normalize floor strategy parameters through typed config model."""
-        from apps.trading.strategies.floor.models import FloorStrategyConfig
-
-        config = FloorStrategyConfig.from_dict(dict(parameters))
-        return config.to_dict()
 
     def create(self, validated_data: dict) -> StrategyConfiguration:
         """Create strategy configuration with user from context."""

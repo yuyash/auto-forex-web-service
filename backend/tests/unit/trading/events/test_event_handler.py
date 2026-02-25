@@ -67,11 +67,6 @@ class TestEventHandlerInit:
         assert handler._position_cache == {}
         assert handler.layer_position_ids == {}
 
-    def test_last_entry_result_starts_none(self):
-        handler = EventHandler(order_service=_make_order_service(), instrument="EUR_USD")
-        assert handler._last_entry_result is None
-
-
 class TestHandleInitialEntry:
     """Tests for handle_initial_entry."""
 
@@ -485,8 +480,8 @@ class TestHandleEvent:
 
         result = handler.handle_event(trading_event)
 
-        assert result == Decimal("0")
-        assert handler._last_entry_result is not None
+        assert result.realized_pnl_delta == Decimal("0")
+        assert result.entry_binding is not None
 
     def test_dispatches_take_profit(self):
         svc = _make_order_service()
@@ -502,7 +497,8 @@ class TestHandleEvent:
         }
 
         result = handler.handle_event(trading_event)
-        assert result == Decimal("0")
+        assert result.realized_pnl_delta == Decimal("0")
+        assert result.entry_binding is None
 
     def test_unknown_event_returns_zero(self):
         svc = _make_order_service()
@@ -515,4 +511,5 @@ class TestHandleEvent:
         }
 
         result = handler.handle_event(trading_event)
-        assert result == Decimal("0")
+        assert result.realized_pnl_delta == Decimal("0")
+        assert result.entry_binding is None

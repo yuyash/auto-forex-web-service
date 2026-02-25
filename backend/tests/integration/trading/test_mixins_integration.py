@@ -1,11 +1,12 @@
 """Integration tests for TaskSubResourceMixin via BacktestTaskViewSet endpoints.
 
-Tests the paginated sub-resource actions (metric-snapshots, logs, events,
+Tests the paginated sub-resource actions (metrics, logs, events,
 trades, positions, orders) using real DB records and authenticated API calls.
 """
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from typing import cast
 
 import pytest
 from rest_framework import status
@@ -40,7 +41,7 @@ def _make_task(user=None) -> BacktestTask:
     if user is None:
         user = UserFactory()
     config = StrategyConfigurationFactory(user=user)
-    task = BacktestTaskFactory(user=user, config=config, status="running")
+    task = cast(BacktestTask, BacktestTaskFactory(user=user, config=config, status="running"))
     task.celery_task_id = "celery-test-id-123"
     task.save()
     return task
@@ -69,7 +70,7 @@ class TestMetrics:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["total"] == 3
         assert response.data["returned"] == 3
-        assert len(response.data["snapshots"]) == 3
+        assert len(response.data["metrics"]) == 3
 
     def test_without_data(self):
         task = _make_task()
@@ -79,7 +80,7 @@ class TestMetrics:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["total"] == 0
         assert response.data["returned"] == 0
-        assert response.data["snapshots"] == []
+        assert response.data["metrics"] == []
 
 
 @pytest.mark.django_db

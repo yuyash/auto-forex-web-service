@@ -180,6 +180,17 @@ class TestStopTask:
             TaskService().stop_task(task_id)
 
     @patch("apps.trading.tasks.service.BacktestTask")
+    def test_invalid_mode_raises(self, mock_bt):
+        from apps.trading.tasks.service import TaskService
+
+        task = MagicMock(pk=uuid4(), status=TaskStatus.RUNNING)
+        mock_bt.objects.get.return_value = task
+        mock_bt.DoesNotExist = _DoesNotExist
+
+        with pytest.raises(ValueError, match="Invalid stop mode"):
+            TaskService().stop_task(task.pk, mode="invalid")
+
+    @patch("apps.trading.tasks.service.BacktestTask")
     def test_already_stopped_returns_true(self, mock_bt):
         from apps.trading.tasks.service import TaskService
 
@@ -189,6 +200,50 @@ class TestStopTask:
 
         assert TaskService().stop_task(task.pk) is True
         task.save.assert_not_called()
+
+    @patch("apps.trading.tasks.service.stop_trading_task")
+    @patch("celery.current_app")
+    @patch("redis.Redis")
+    @patch("apps.trading.tasks.service.BacktestTask")
+    @patch("apps.trading.tasks.service.TradingTask")
+    def test_stop_trading_immediate_revokes(
+        self, mock_tt, mock_bt, mock_redis_cls, mock_app, mock_stop
+    ):
+        from apps.trading.tasks.service import TaskService
+
+        task_id = uuid4()
+        task = MagicMock(pk=task_id, status=TaskStatus.RUNNING, celery_task_id="c-123")
+        mock_bt.DoesNotExist = _DoesNotExist
+        mock_bt.objects.get.side_effect = _DoesNotExist
+        mock_tt.objects.get.return_value = task
+        mock_redis_cls.from_url.return_value = MagicMock()
+
+        assert TaskService().stop_task(task_id, mode="immediate") is True
+        mock_app.control.revoke.assert_called_once_with("c-123", terminate=True, signal="SIGKILL")
+        mock_stop.delay.assert_called_once_with(task_id, "immediate")
+
+    @patch("apps.trading.tasks.service.stop_trading_task")
+    @patch("celery.current_app")
+    @patch("redis.Redis")
+    @patch("apps.trading.tasks.service.BacktestTask")
+    @patch("apps.trading.tasks.service.TradingTask")
+    def test_stop_trading_graceful_close_sets_sell_on_stop(
+        self, mock_tt, mock_bt, mock_redis_cls, mock_app, mock_stop
+    ):
+        from apps.trading.tasks.service import TaskService
+
+        task_id = uuid4()
+        task = MagicMock(pk=task_id, status=TaskStatus.RUNNING, celery_task_id="c-123")
+        task.sell_on_stop = False
+        mock_bt.DoesNotExist = _DoesNotExist
+        mock_bt.objects.get.side_effect = _DoesNotExist
+        mock_tt.objects.get.return_value = task
+        mock_redis_cls.from_url.return_value = MagicMock()
+
+        assert TaskService().stop_task(task_id, mode="graceful_close") is True
+        assert task.sell_on_stop is True
+        mock_app.control.revoke.assert_not_called()
+        mock_stop.delay.assert_called_once_with(task_id, "graceful_close")
 
 
 class TestPauseTask:

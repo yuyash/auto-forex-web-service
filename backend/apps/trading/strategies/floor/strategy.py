@@ -5,10 +5,12 @@ This is the main component that orchestrates all trading operations.
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from decimal import Decimal
 from logging import Logger, getLogger
 from typing import Any
 
+from apps.trading.dataclasses import EventExecutionResult
 from apps.trading.enums import EventType, StrategyType
 from apps.trading.events import (
     AddLayerEvent,
@@ -88,6 +90,35 @@ class FloorStrategy(Strategy):
             Parsed FloorStrategyConfig
         """
         return FloorStrategyConfig.from_dict(strategy_config.config_dict)
+
+    @classmethod
+    def normalize_parameters(cls, parameters: dict[str, Any]) -> dict[str, Any]:
+        """Normalize raw parameters into canonical floor configuration."""
+        return FloorStrategyConfig.from_dict(dict(parameters)).to_dict()
+
+    @classmethod
+    def default_parameters(cls) -> dict[str, Any]:
+        """Return floor strategy defaults."""
+        return FloorStrategyConfig.from_dict({}).to_dict()
+
+    @classmethod
+    def validate_parameters(
+        cls,
+        *,
+        parameters: dict[str, Any],
+        config_schema: dict[str, Any] | None = None,
+    ) -> None:
+        """Validate floor parameters by parsing into typed config."""
+        parsed = FloorStrategyConfig.from_dict(dict(parameters))
+
+        if config_schema:
+            from jsonschema import ValidationError as JsonSchemaValidationError
+            from jsonschema import validate
+
+            try:
+                validate(instance=asdict(parsed), schema=config_schema)
+            except JsonSchemaValidationError as exc:
+                raise ValueError(exc.message) from exc
 
     @property
     def strategy_type(self) -> StrategyType:
@@ -919,3 +950,24 @@ class FloorStrategy(Strategy):
 
         state.strategy_state = floor_state.to_dict()
         return StrategyResult(state=state, events=events)
+
+    def apply_event_execution_result(
+        self,
+        *,
+        state,
+        execution_result: EventExecutionResult,
+    ) -> None:
+        """Apply order execution feedback to floor strategy state."""
+        binding = execution_result.entry_binding
+        if binding is None or binding.entry_id is None:
+            return
+
+        strategy_state = state.strategy_state or {}
+        open_entries = strategy_state.get("open_entries")
+        if not isinstance(open_entries, list):
+            return
+
+        for entry in open_entries:
+            if int(entry.get("entry_id", -1)) == int(binding.entry_id):
+                entry["position_id"] = binding.position_id
+                break

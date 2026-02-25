@@ -32,8 +32,8 @@ class TaskSubResourceMixin:
     task_type_label: str
 
     @action(detail=True, methods=["get"], url_path="metrics")
-    def metric_snapshots(self, request: Request, pk: int | None = None) -> Response:
-        from apps.trading.models.metrics import Metrics as MetricSnapshot
+    def metrics(self, request: Request, pk: int | None = None) -> Response:
+        from apps.trading.models.metrics import Metrics
 
         task = self.get_object()  # type: ignore[attr-defined]
         celery_task_id = request.query_params.get("celery_task_id")
@@ -46,7 +46,7 @@ class TaskSubResourceMixin:
             except (ValueError, TypeError):
                 pass
 
-        queryset = MetricSnapshot.objects.filter(
+        queryset = Metrics.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
         ).order_by("timestamp")
@@ -110,7 +110,7 @@ class TaskSubResourceMixin:
             }
             for ts, mr, atr, base, vt in rows
         ]
-        return Response({"snapshots": data, "total": total_count, "returned": len(data)})
+        return Response({"metrics": data, "total": total_count, "returned": len(data)})
 
     @action(detail=True, methods=["get"])
     def logs(self, request: Request, pk: int | None = None) -> Response:
