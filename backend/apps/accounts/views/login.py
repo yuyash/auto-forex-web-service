@@ -4,8 +4,8 @@ from logging import Logger, getLogger
 from typing import Any
 
 from django.contrib.auth import authenticate
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -51,7 +51,36 @@ class UserLoginView(APIView):
         return ip
 
     # pylint: disable=too-many-branches,too-many-statements
-    @extend_schema(operation_id="auth_login", tags=["Accounts"])
+    @extend_schema(
+        operation_id="auth_login",
+        tags=["Accounts"],
+        request=UserLoginSerializer,
+        responses={
+            200: inline_serializer(
+                "LoginResponse",
+                fields={
+                    "token": serializers.CharField(),
+                    "user": inline_serializer(
+                        "LoginUser",
+                        fields={
+                            "id": serializers.IntegerField(),
+                            "email": serializers.EmailField(),
+                            "username": serializers.CharField(),
+                            "is_staff": serializers.BooleanField(),
+                            "timezone": serializers.CharField(),
+                            "language": serializers.CharField(),
+                        },
+                    ),
+                },
+            ),
+            401: inline_serializer("LoginUnauthorized", fields={"error": serializers.CharField()}),
+            403: inline_serializer("LoginForbidden", fields={"error": serializers.CharField()}),
+            429: inline_serializer("LoginRateLimit", fields={"error": serializers.CharField()}),
+            503: inline_serializer(
+                "LoginServiceUnavailable", fields={"error": serializers.CharField()}
+            ),
+        },
+    )
     def post(self, request: Request) -> Response:
         """Handle user login."""
         system_settings = PublicAccountSettings.get_settings()

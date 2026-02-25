@@ -86,6 +86,23 @@ class TestStrategyConfigCreateSerializer:
         result = serializer.validate_parameters({"key": "value"})
         assert result == {"key": "value"}
 
+    @patch("apps.trading.strategies.registry.registry")
+    def test_validate_hides_internal_value_error_details(self, mock_registry):
+        mock_registry.normalize_parameters.side_effect = ValueError(
+            "internal details should not be exposed"
+        )
+        serializer = StrategyConfigCreateSerializer()
+
+        with pytest.raises(ValidationError) as exc_info:
+            serializer.validate(
+                {
+                    "strategy_type": "floor",
+                    "parameters": {"foo": "bar"},
+                }
+            )
+
+        assert str(exc_info.value.detail["parameters"]) == "Invalid strategy parameters."
+
 
 class TestStrategyListSerializer:
     """Test StrategyListSerializer."""

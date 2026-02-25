@@ -5,7 +5,9 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from apps.trading.dataclasses import StrategyResult, Tick
+    from apps.trading.dataclasses import EventExecutionResult, StrategyResult, Tick
+    from apps.trading.events.handler import EventHandler
+    from apps.trading.order import OrderService
     from apps.trading.enums import StrategyType as StrategyTypeEnum
     from apps.trading.models import StrategyConfiguration
     from apps.trading.models.state import ExecutionState
@@ -52,6 +54,55 @@ class Strategy(ABC):
             >>>     return FloorStrategyConfig.from_dict(strategy_config.config_dict)
         """
         raise NotImplementedError
+
+    @classmethod
+    def normalize_parameters(cls, parameters: dict[str, Any]) -> dict[str, Any]:
+        """Normalize untrusted API payload into canonical strategy parameters."""
+        return dict(parameters)
+
+    @classmethod
+    def default_parameters(cls) -> dict[str, Any]:
+        """Return default strategy parameters."""
+        return {}
+
+    @classmethod
+    def validate_parameters(
+        cls,
+        *,
+        parameters: dict[str, Any],
+        config_schema: dict[str, Any] | None = None,
+    ) -> None:
+        """Validate parameters against schema and strategy rules.
+
+        Raises:
+            ValueError: If parameters are invalid.
+        """
+        if not isinstance(parameters, dict):
+            raise ValueError("Parameters must be a JSON object")
+
+        if config_schema:
+            from jsonschema import ValidationError as JsonSchemaValidationError
+            from jsonschema import validate
+
+            payload = cls._to_schema_primitives(parameters)
+            try:
+                validate(instance=payload, schema=config_schema)
+            except JsonSchemaValidationError as exc:
+                raise ValueError(exc.message) from exc
+
+    @classmethod
+    def _to_schema_primitives(cls, value: Any) -> Any:
+        """Convert rich Python types into JSON-schema friendly primitives."""
+        if isinstance(value, Decimal):
+            integral = value.to_integral_value()
+            return int(integral) if value == integral else float(value)
+        if isinstance(value, dict):
+            return {k: cls._to_schema_primitives(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [cls._to_schema_primitives(v) for v in value]
+        if isinstance(value, tuple):
+            return [cls._to_schema_primitives(v) for v in value]
+        return value
 
     @property
     @abstractmethod
@@ -144,24 +195,20 @@ class Strategy(ABC):
 
         return StrategyResult(state=state, events=[])
 
-    def on_position_opened(
+    def create_event_handler(
+        self, *, order_service: "OrderService", instrument: str
+    ) -> "EventHandler":
+        """Create event handler used by the executor."""
+        from apps.trading.events.handler import EventHandler
+
+        return EventHandler(order_service, instrument)
+
+    def apply_event_execution_result(
         self,
         *,
         state: "ExecutionState",
-        entry_id: int | None,
-        position_id: str,
+        execution_result: "EventExecutionResult",
     ) -> None:
-        """Called after an entry event creates a position.
-
-        Allows strategies to write the position_id back into their
-        strategy_state for subsequent exit event targeting.
-
-        The default implementation is a no-op. Override in strategies
-        that need to track position IDs (e.g., Floor strategy).
-
-        Args:
-            state: Current execution state (strategy_state is mutable)
-            entry_id: Strategy-internal entry ID (None if not applicable)
-            position_id: UUID string of the created Position
-        """
-        pass
+        """Apply order execution feedback to strategy state."""
+        _ = state
+        _ = execution_result

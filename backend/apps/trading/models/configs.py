@@ -166,7 +166,7 @@ class StrategyConfiguration(UUIDModel):
         )
 
     def validate_parameters(self) -> tuple[bool, str | None]:
-        """Validate parameters against the strategy registry schema (best-effort).
+        """Validate parameters through strategy registry plugins.
 
         Returns:
             Tuple of (is_valid, error_message)
@@ -178,5 +178,17 @@ class StrategyConfiguration(UUIDModel):
 
         if not isinstance(self.parameters, dict):
             return False, "Parameters must be a JSON object"
+
+        try:
+            normalized = registry.normalize_parameters(
+                identifier=self.strategy_type,
+                parameters=self.parameters,
+            )
+            registry.validate_parameters(
+                identifier=self.strategy_type,
+                parameters=normalized,
+            )
+        except ValueError as exc:
+            return False, str(exc)
 
         return True, None

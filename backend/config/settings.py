@@ -290,45 +290,6 @@ MARKET_BACKTEST_TICK_CHANNEL_PREFIX = os.getenv(
 # Controls how many rows Django fetches from DB per chunk during publishing.
 
 
-# =============================================================================
-# Trading Strategy Defaults
-# =============================================================================
-
-# Centralized defaults for Floor Strategy.
-# Strategy configs (StrategyConfig.parameters) can override any of these.
-TRADING_FLOOR_STRATEGY_DEFAULTS = {
-    "instrument": os.getenv("TRADING_FLOOR_INSTRUMENT", "USD_JPY"),
-    "base_lot_size": float(os.getenv("TRADING_FLOOR_BASE_LOT_SIZE", "1.0")),
-    "retracement_lot_mode": os.getenv("TRADING_FLOOR_RETRACEMENT_LOT_MODE", "additive"),
-    "retracement_lot_amount": float(os.getenv("TRADING_FLOOR_RETRACEMENT_LOT_AMOUNT", "1.0")),
-    "retracement_pips": float(os.getenv("TRADING_FLOOR_RETRACEMENT_PIPS", "30")),
-    "take_profit_pips": float(os.getenv("TRADING_FLOOR_TAKE_PROFIT_PIPS", "25")),
-    "max_layers": int(os.getenv("TRADING_FLOOR_MAX_LAYERS", "3")),
-    "max_retracements_per_layer": int(os.getenv("TRADING_FLOOR_MAX_RETRACEMENTS_PER_LAYER", "10")),
-    "volatility_lock_multiplier": float(
-        os.getenv("TRADING_FLOOR_VOLATILITY_LOCK_MULTIPLIER", "5.0")
-    ),
-    "retracement_trigger_progression": os.getenv(
-        "TRADING_FLOOR_RETRACEMENT_TRIGGER_PROGRESSION", "constant"
-    ),
-    "retracement_trigger_increment": float(
-        os.getenv("TRADING_FLOOR_RETRACEMENT_TRIGGER_INCREMENT", "5")
-    ),
-    "take_profit_trigger_progression": os.getenv(
-        "TRADING_FLOOR_TAKE_PROFIT_TRIGGER_PROGRESSION", "constant"
-    ),
-    "take_profit_trigger_increment": float(
-        os.getenv("TRADING_FLOOR_TAKE_PROFIT_TRIGGER_INCREMENT", "5")
-    ),
-    "take_profit_pips_mode": os.getenv("TRADING_FLOOR_TAKE_PROFIT_PIPS_MODE", "constant"),
-    "take_profit_pips_amount": float(os.getenv("TRADING_FLOOR_TAKE_PROFIT_PIPS_AMOUNT", "5")),
-    "entry_signal_lookback_candles": int(
-        os.getenv("TRADING_FLOOR_ENTRY_SIGNAL_LOOKBACK_CANDLES", "50")
-    ),
-    "entry_signal_candle_granularity_seconds": int(
-        os.getenv("TRADING_FLOOR_ENTRY_SIGNAL_CANDLE_GRANULARITY_SECONDS", "60")
-    ),
-}
 MARKET_BACKTEST_PUBLISH_BATCH_SIZE = int(os.getenv("MARKET_BACKTEST_PUBLISH_BATCH_SIZE", "1000"))
 
 
@@ -396,6 +357,9 @@ SPECTACULAR_SETTINGS = {
     "EXTENSIONS": [
         "apps.accounts.openapi.JWTAuthenticationExtension",
     ],
+    "ENUM_NAME_OVERRIDES": {
+        "EventTypeEnum": "apps.trading.enums.EventType.choices",
+    },
 }
 
 

@@ -26,10 +26,11 @@ import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
 import RecentBacktestsWidget from '../components/dashboard/RecentBacktestsWidget';
 import QuickActionsWidget from '../components/dashboard/QuickActionsWidget';
 import MarketChart from '../components/dashboard/MarketChart';
-import ChartOverlayControls, {
+import ChartOverlayControls from '../components/dashboard/ChartOverlayControls';
+import {
   DEFAULT_OVERLAY_SETTINGS,
   type OverlaySettings,
-} from '../components/dashboard/ChartOverlayControls';
+} from '../components/dashboard/chartOverlaySettings';
 import type { Granularity } from '../types/chart';
 
 const DashboardPage = () => {

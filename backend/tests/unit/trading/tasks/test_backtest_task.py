@@ -146,7 +146,7 @@ class TestHandleExceptionBacktest:
             handle_exception(task_id, task, RuntimeError("fail"))
             mock_cs.objects.filter.assert_called_once_with(
                 task_name="trading.tasks.run_backtest_task",
-                instance_key=str(task_id),
+                instance_key=f"{task_id}:1",
             )
 
 
@@ -174,10 +174,9 @@ class TestTriggerBacktestPublisher:
         task.start_time.isoformat.return_value = "2024-01-01T00:00:00"
         task.end_time.isoformat.return_value = "2024-01-02T00:00:00"
         mock_app.control.inspect.return_value.active_queues.return_value = None
-        with patch("threading.Thread") as mock_thread:
+        with pytest.raises(RuntimeError, match="No active market worker"):
             trigger_backtest_publisher(task)
-            mock_publish.delay.assert_not_called()
-            mock_thread.return_value.start.assert_called_once()
+        mock_publish.delay.assert_not_called()
 
 
 class TestStopBacktestTask:
@@ -191,11 +190,20 @@ class TestStopBacktestTask:
             stop_backtest_task.__wrapped__(uuid4())
 
     @patch("apps.trading.models.CeleryTaskStatus")
+    @patch("apps.market.models.CeleryTaskStatus")
     @patch("apps.trading.tasks.backtest.dj_timezone")
     @patch("celery.current_app")
     @patch("apps.market.signals.management.task_management_handler")
     @patch("apps.trading.tasks.backtest.BacktestTask")
-    def test_stopping_state(self, mock_model, mock_handler, mock_app, mock_tz, mock_celery):
+    def test_stopping_state(
+        self,
+        mock_model,
+        mock_handler,
+        mock_app,
+        mock_tz,
+        mock_market_celery,
+        mock_trading_celery,
+    ):
         from apps.trading.tasks.backtest import stop_backtest_task
 
         task_id = uuid4()
@@ -203,11 +211,13 @@ class TestStopBacktestTask:
         task.refresh_from_db = MagicMock()
         mock_model.objects.get.return_value = task
         mock_model.DoesNotExist = _DoesNotExist
-        mock_celery.objects.filter.return_value.first.return_value = MagicMock(
+        mock_market_celery.objects.filter.return_value.first.return_value = MagicMock(
             celery_task_id="pub-123"
         )
-        mock_celery.objects.filter.return_value.update.return_value = 1
-        mock_celery.Status.STOPPED = "stopped"
+        mock_market_celery.objects.filter.return_value.update.return_value = 1
+        mock_market_celery.Status.STOPPED = "stopped"
+        mock_trading_celery.objects.filter.return_value.update.return_value = 1
+        mock_trading_celery.Status.STOPPED = "stopped"
         with patch("time.sleep"):
             stop_backtest_task.__wrapped__(task_id)
         task.save.assert_called()

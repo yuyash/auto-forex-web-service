@@ -24,6 +24,9 @@ logger: Logger = getLogger(name=__name__)
 @shared_task(
     bind=True,
     name="trading.tasks.run_backtest_task",
+    acks_late=True,
+    reject_on_worker_lost=True,
+    track_started=True,
 )
 def run_backtest_task(self: Any, task_id: UUID) -> None:
     """Celery task wrapper for running backtest tasks.
@@ -52,10 +55,10 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
         # Guard: only allow execution from STARTING status.
         # This prevents duplicate Celery dispatches or retries from
         # re-running a task that has already completed/failed/stopped.
-        if task.status not in [TaskStatus.STARTING, TaskStatus.CREATED]:
+        if task.status != TaskStatus.STARTING:
             logger.warning(
                 f"SKIPPING execution - task_id={task_id}, status={task.status} "
-                f"is not STARTING/CREATED. Another worker may have already processed this task."
+                f"is not STARTING. Another worker may have already processed this task."
             )
             return
 
@@ -64,7 +67,7 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
         now = dj_timezone.now()
         rows_updated = BacktestTask.objects.filter(
             pk=task_id,
-            status__in=[TaskStatus.STARTING, TaskStatus.CREATED],
+            status=TaskStatus.STARTING,
         ).update(
             status=TaskStatus.RUNNING,
             started_at=now,
@@ -88,6 +91,7 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
         TaskLog.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
+            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
             celery_task_id=self.request.id,
             level=LogLevel.INFO,
             component=__name__,
@@ -139,6 +143,7 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
         TaskLog.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
+            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
             celery_task_id=task.celery_task_id,
             level=LogLevel.INFO,
             component=__name__,
@@ -252,7 +257,7 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
 
         CeleryTaskStatus.objects.filter(
             task_name="trading.tasks.run_backtest_task",
-            instance_key=str(task_id),
+            instance_key=f"{task_id}:{int(getattr(task, 'execution_run_id', 0) or 0)}",
         ).update(
             status=CeleryTaskStatus.Status.FAILED,
             status_message=f"Task failed: {type(error).__name__}: {error_message}",
@@ -264,6 +269,7 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
         TaskLog.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
+            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
             celery_task_id=task.celery_task_id,
             level=LogLevel.ERROR,
             component=__name__,
@@ -304,34 +310,14 @@ def trigger_backtest_publisher(task: BacktestTask) -> None:
                     break
 
     if not market_worker_available:
-        logger.warning(
-            f"NO_MARKET_WORKER - Running publisher in background thread as fallback - "
-            f"task_id={task.pk}"
+        logger.error(
+            "NO_MARKET_WORKER - cannot start backtest publisher without market queue worker "
+            "- task_id=%s",
+            task.pk,
         )
-        # Run in background thread to avoid blocking the executor
-        import threading
-
-        from apps.market.tasks.backtest import BacktestTickPublisherRunner
-
-        def run_publisher_in_thread():
-            try:
-                runner = BacktestTickPublisherRunner()
-                runner.run(
-                    instrument=task.instrument,
-                    start=task.start_time.isoformat(),
-                    end=task.end_time.isoformat(),
-                    request_id=request_id,
-                )
-                logger.info(f"Background thread publisher completed - task_id={task.pk}")
-            except Exception as e:
-                logger.error(
-                    f"Background thread publisher failed - task_id={task.pk}, error={e}",
-                    exc_info=True,
-                )
-
-        publisher_thread = threading.Thread(target=run_publisher_in_thread, daemon=True)
-        publisher_thread.start()
-        logger.info(f"Publisher thread started - task_id={task.pk}")
+        raise RuntimeError(
+            "No active market worker detected. Start a worker that consumes the 'market' queue."
+        )
     else:
         # Trigger async task
         result = publish_ticks_for_backtest.delay(
@@ -407,9 +393,9 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
             # Force terminate publisher Celery task
             from celery import current_app
 
-            from apps.trading.models import CeleryTaskStatus
+            from apps.market.models import CeleryTaskStatus as MarketCeleryTaskStatus
 
-            publisher_celery_status = CeleryTaskStatus.objects.filter(
+            publisher_celery_status = MarketCeleryTaskStatus.objects.filter(
                 task_name="market.tasks.publish_ticks_for_backtest",
                 instance_key=str(task_id),
             ).first()
@@ -453,7 +439,7 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
             from apps.trading.models import CeleryTaskStatus
 
             task_name = "trading.tasks.run_backtest_task"
-            instance_key = str(task_id)
+            instance_key = f"{task_id}:{int(getattr(task, 'execution_run_id', 0) or 0)}"
             CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
                 status=CeleryTaskStatus.Status.STOPPED,
                 stopped_at=dj_timezone.now(),

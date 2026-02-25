@@ -3,6 +3,44 @@
 from django.db import migrations, models
 
 
+def _rename_metric_constraint_forward(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(
+        'ALTER TABLE metrics RENAME CONSTRAINT "unique_metric_snapshot_timestamp" TO "unique_metric_timestamp"'
+    )
+
+
+def _rename_metric_constraint_backward(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(
+        'ALTER TABLE metrics RENAME CONSTRAINT "unique_metric_timestamp" TO "unique_metric_snapshot_timestamp"'
+    )
+
+
+def _rename_metric_indexes_forward(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(
+        'ALTER INDEX "metric_snap_task_ty_3909a0_idx" RENAME TO "metrics_task_ty_62aaf4_idx"'
+    )
+    schema_editor.execute(
+        'ALTER INDEX "metric_snap_task_ty_cc1ce9_idx" RENAME TO "metrics_task_ty_309c89_idx"'
+    )
+
+
+def _rename_metric_indexes_backward(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(
+        'ALTER INDEX "metrics_task_ty_62aaf4_idx" RENAME TO "metric_snap_task_ty_3909a0_idx"'
+    )
+    schema_editor.execute(
+        'ALTER INDEX "metrics_task_ty_309c89_idx" RENAME TO "metric_snap_task_ty_cc1ce9_idx"'
+    )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -19,9 +57,9 @@ class Migration(migrations.Migration):
         # real DB constraint AND Django's internal state are updated.
         migrations.SeparateDatabaseAndState(
             database_operations=[
-                migrations.RunSQL(
-                    sql='ALTER TABLE metrics RENAME CONSTRAINT "unique_metric_snapshot_timestamp" TO "unique_metric_timestamp"',
-                    reverse_sql='ALTER TABLE metrics RENAME CONSTRAINT "unique_metric_timestamp" TO "unique_metric_snapshot_timestamp"',
+                migrations.RunPython(
+                    _rename_metric_constraint_forward,
+                    _rename_metric_constraint_backward,
                 ),
             ],
             state_operations=[
@@ -42,13 +80,9 @@ class Migration(migrations.Migration):
         # the db_table changed from metric_snapshots to metrics.
         migrations.SeparateDatabaseAndState(
             database_operations=[
-                migrations.RunSQL(
-                    sql='ALTER INDEX "metric_snap_task_ty_3909a0_idx" RENAME TO "metrics_task_ty_62aaf4_idx"',
-                    reverse_sql='ALTER INDEX "metrics_task_ty_62aaf4_idx" RENAME TO "metric_snap_task_ty_3909a0_idx"',
-                ),
-                migrations.RunSQL(
-                    sql='ALTER INDEX "metric_snap_task_ty_cc1ce9_idx" RENAME TO "metrics_task_ty_309c89_idx"',
-                    reverse_sql='ALTER INDEX "metrics_task_ty_309c89_idx" RENAME TO "metric_snap_task_ty_cc1ce9_idx"',
+                migrations.RunPython(
+                    _rename_metric_indexes_forward,
+                    _rename_metric_indexes_backward,
                 ),
             ],
             state_operations=[

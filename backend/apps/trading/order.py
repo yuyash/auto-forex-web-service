@@ -62,6 +62,7 @@ class OrderService:
         self.task = task
         self.dry_run = dry_run
         self.oanda_service = OandaService(account=account, dry_run=dry_run)
+        self.execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
 
         # celery_task_id is required for all Position/Order/Trade records
         self.celery_task_id: str = getattr(task, "celery_task_id", None) or ""
@@ -324,6 +325,7 @@ class OrderService:
                 rejected_order = Order.objects.create(
                     task_type=self.task_type,
                     task_id=self.task.id,
+                    execution_run_id=self.execution_run_id,
                     celery_task_id=self.celery_task_id,
                     instrument=position.instrument,
                     order_type=OrderType.MARKET,
@@ -445,6 +447,7 @@ class OrderService:
                 rejected_order = Order.objects.create(
                     task_type=self.task_type,
                     task_id=self.task.id,
+                    execution_run_id=self.execution_run_id,
                     celery_task_id=self.celery_task_id,
                     instrument=instrument,
                     order_type=OrderType.MARKET,
@@ -484,6 +487,7 @@ class OrderService:
         order = Order.objects.create(
             task_type=self.task_type,
             task_id=self.task.id,
+            execution_run_id=self.execution_run_id,
             celery_task_id=self.celery_task_id,
             broker_order_id=oanda_order.order_id,
             oanda_trade_id=oanda_trade_id,
@@ -521,6 +525,7 @@ class OrderService:
                 Position.objects.filter(
                     task_type=self.task_type,
                     task_id=self.task.id,
+                    execution_run_id=self.execution_run_id,
                     instrument=instrument,
                     direction=direction,
                     is_open=True,
@@ -561,6 +566,7 @@ class OrderService:
         position = Position.objects.create(
             task_type=self.task_type,
             task_id=self.task.id,
+            execution_run_id=self.execution_run_id,
             celery_task_id=self.celery_task_id,
             instrument=instrument,
             direction=direction,
@@ -616,6 +622,7 @@ class OrderService:
         queryset = Position.objects.filter(
             task_type=self.task_type,
             task_id=self.task.id,
+            execution_run_id=self.execution_run_id,
             is_open=True,
         )
 
@@ -638,6 +645,7 @@ class OrderService:
         queryset = Order.objects.filter(
             task_type=self.task_type,
             task_id=self.task.id,
+            execution_run_id=self.execution_run_id,
         )
 
         if instrument:

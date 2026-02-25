@@ -6,15 +6,18 @@ strategies, manages state, and handles lifecycle events.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
 from logging import Logger, getLogger
-from typing import List
+from typing import List, cast
 
-from apps.trading.dataclasses import EventContext, StrategyResult
+from django.utils import timezone as dj_timezone
+
+from apps.trading.dataclasses import EventContext, EventExecutionResult, StrategyResult
 from apps.trading.engine import TradingEngine
 from apps.trading.enums import TaskType
 from apps.trading.events import StrategyEvent
-from apps.trading.events.handler import EventHandler
+from apps.trading.events.handler import EventHandler as _EventHandlerCompat
 from apps.trading.models import BacktestTask, TradingEvent, TradingTask
 from apps.trading.models.state import ExecutionState
 from apps.trading.order import OrderService, OrderServiceError
@@ -23,6 +26,9 @@ from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
 
 logger: Logger = getLogger(name=__name__)
+
+# Backward-compatible export for tests patching this symbol.
+EventHandler = _EventHandlerCompat
 
 
 def is_forex_market_closed() -> bool:
@@ -40,6 +46,17 @@ def is_forex_market_closed() -> bool:
         or weekday == 5  # Saturday
         or (weekday == 6 and hour < 21)  # Sunday before 21:00
     )
+
+
+@dataclass(slots=True)
+class ExecutionLoopState:
+    """Mutable loop state for executor runtime."""
+
+    state: ExecutionState
+    batch_count: int = 0
+    no_tick_batches: int = 0
+    max_no_tick_batches: int = 60
+    stopped_early: bool = False
 
 
 class TaskExecutor:
@@ -82,7 +99,10 @@ class TaskExecutor:
         self.pip_size = task.pip_size
         self.initial_balance = self._get_initial_balance()
 
-        self.event_handler = EventHandler(order_service, self.instrument)
+        self.event_handler = self.engine.create_event_handler(
+            order_service=order_service,
+            instrument=self.instrument,
+        )
 
         self._metric_buffer: list[dict] = []
 
@@ -123,28 +143,37 @@ class TaskExecutor:
     def handle_events(self, state: ExecutionState, events: List[TradingEvent]) -> None:
         """Handle events from strategy execution.
 
-        After processing entry events (initial_entry / retracement), delegates
-        position_id write-back to the strategy via on_position_opened() hook,
-        allowing each strategy to manage its own state structure.
-
         Args:
             events: List of TradingEvent instances that were saved
         """
-        realized_delta_total = Decimal("0")
         for trading_event in events:
-            try:
-                self.event_handler._last_entry_result = None
-                realized_delta_total += self.event_handler.handle_event(trading_event)
+            if getattr(trading_event, "is_processed", False):
+                continue
 
-                # Delegate position_id write-back to strategy hook
-                entry_result = self.event_handler._last_entry_result
-                if entry_result is not None:
-                    entry_id, position_id = entry_result
-                    self.engine.strategy.on_position_opened(
-                        state=state,
-                        entry_id=entry_id,
-                        position_id=position_id,
+            if self.task_type == TaskType.TRADING and self._event_already_applied(
+                trading_event=trading_event,
+                state=state,
+            ):
+                self._mark_event_processed(trading_event)
+                continue
+
+            try:
+                execution_result: EventExecutionResult = self.event_handler.handle_event(
+                    trading_event
+                )
+                if execution_result.realized_pnl_delta != Decimal("0"):
+                    state.current_balance = (
+                        Decimal(str(state.current_balance)) + execution_result.realized_pnl_delta
                     )
+                self.engine.apply_event_execution_result(
+                    state=state,
+                    execution_result=execution_result,
+                )
+                self._mark_event_processed(trading_event)
+
+                # Trading resume requires state durability at event granularity.
+                if self.task_type == TaskType.TRADING:
+                    self.save_state(state)
             except OrderServiceError as e:
                 logger.error(
                     "Order execution failed for trading event %s: %s",
@@ -152,14 +181,7 @@ class TaskExecutor:
                     e,
                     exc_info=True,
                 )
-
-        if realized_delta_total != Decimal("0"):
-            state.current_balance = Decimal(str(state.current_balance)) + realized_delta_total
-            logger.info(
-                "Applied realized pnl to balance: delta=%s, new_balance=%s",
-                realized_delta_total,
-                state.current_balance,
-            )
+                self._mark_event_processing_error(trading_event, str(e))
 
         logger.debug(
             "Processed %s events for trading task %s (open positions: %s)",
@@ -174,41 +196,39 @@ class TaskExecutor:
         Returns:
             ExecutionState: Current execution state
         """
-        # Refresh task from database
-        self.task.refresh_from_db()
+        state, _ = self._load_state_with_metadata()
+        return state
 
-        # Try to load from ExecutionState model
+    def _load_state_with_metadata(self) -> tuple[ExecutionState, bool]:
+        """Load state and indicate whether this execution is a resume."""
+        self.task.refresh_from_db()
+        execution_run_id = int(getattr(self.task, "execution_run_id", 0) or 0)
+
         try:
             state = ExecutionState.objects.get(
                 task_type=self.task_type.value,
                 task_id=self.task.pk,
-                celery_task_id=self.task.celery_task_id or "",
+                execution_run_id=execution_run_id,
             )
-            return state
-
+            return state, True
         except ExecutionState.DoesNotExist:
             pass
 
-        # Create initial state if not found
-        # For BacktestTask, use start_time; for TradingTask, use current time
         from apps.trading.models import BacktestTask
 
-        initial_timestamp = (
-            self.task.start_time
-            if isinstance(self.task, BacktestTask) and hasattr(self.task, "start_time")
-            else None
-        )
+        initial_timestamp = self.task.start_time if isinstance(self.task, BacktestTask) else None
 
         state = ExecutionState.objects.create(
             task_type=self.task_type.value,
             task_id=self.task.pk,
+            execution_run_id=execution_run_id,
             celery_task_id=self.task.celery_task_id or "",
             strategy_state={},
             current_balance=self.initial_balance,
             ticks_processed=0,
-            last_tick_timestamp=initial_timestamp,  # Initialize with start_time for progress calculation
+            last_tick_timestamp=initial_timestamp,
         )
-        return state
+        return state, False
 
     def save_state(self, state: ExecutionState) -> None:
         """Save execution state to ExecutionState model.
@@ -216,10 +236,6 @@ class TaskExecutor:
         Args:
             state: Execution state to save
         """
-        import logging
-
-        logger = logging.getLogger(__name__)
-
         # Log what we're saving
         logger.debug(
             f"Saving state: task_id={state.task_id}, "
@@ -230,10 +246,6 @@ class TaskExecutor:
 
         # Save the model instance
         state.save()
-
-        # Verify it was saved
-        state.refresh_from_db()
-        logger.debug(f"State saved and verified: ticks_processed={state.ticks_processed}")
 
     def _flush_metrics(self, state: ExecutionState) -> None:
         """Bulk-create buffered metrics and clear the buffer."""
@@ -250,6 +262,7 @@ class TaskExecutor:
             Metrics(
                 task_type=self.task_type.value,
                 task_id=self.task.pk,
+                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
                 celery_task_id=self.task.celery_task_id,
                 timestamp=m["timestamp"],
                 # Legacy Floor fields (populated from metrics dict for backward compat)
@@ -269,8 +282,7 @@ class TaskExecutor:
         ]
         created = Metrics.objects.bulk_create(objs, ignore_conflicts=True)
         logger.debug(
-            "Flushed metric snapshots - task_id=%s, buffered=%d, created=%d, "
-            "first_ts=%s, last_ts=%s",
+            "Flushed metrics - task_id=%s, buffered=%d, created=%d, first_ts=%s, last_ts=%s",
             self.task.pk,
             buffer_size,
             len(created),
@@ -296,6 +308,7 @@ class TaskExecutor:
                 event=event,
                 context=self.event_context,
                 celery_task_id=self.task.celery_task_id,
+                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
             )
             for event in events
         ]
@@ -307,206 +320,397 @@ class TaskExecutor:
     def execute(self) -> None:
         """Execute the task."""
         try:
-            # Start coordination
-            logger.info("Starting task execution")
-            self.state_manager.start()
-
-            # Load state
-            state = self.load_state()
-            logger.info(
-                "State loaded: balance=%s, ticks_processed=%d",
-                state.current_balance,
-                state.ticks_processed,
-            )
-
-            # Call on_start
-            logger.info("Starting trading engine...")
-            result = self.engine.on_start(state=state)
-            state = result.state
-            self.save_events(result.events)
-            self.save_state(state)
-            logger.info("Engine started, events_count=%d", len(result.events))
-
-            # Process ticks
-            batch_count = 0
-            no_tick_batches = 0
-            max_no_tick_batches = 60  # 60 empty batches = ~60 seconds without ticks
-            stopped_early = False  # Track if we stopped before completion
-
-            logger.info("Starting tick processing loop")
-
-            for tick_batch in self.data_source:
-                # Check for stop signal
-                control = self.state_manager.check_control()
-                if control.should_stop:
-                    logger.info(
-                        "Stop signal received - ticks_processed=%d",
-                        state.ticks_processed,
-                    )
-                    stopped_early = True
-                    break
-
-                # Check if we received an empty batch
-                if not tick_batch:
-                    # During market close, empty batches are expected for live
-                    # trading — don't count them toward the timeout.
-                    if self.task_type == TaskType.TRADING and is_forex_market_closed():
-                        if no_tick_batches == 0:
-                            logger.info("Market is closed, tolerating empty batches")
-                        no_tick_batches = 0
-                    else:
-                        no_tick_batches += 1
-                        if no_tick_batches >= max_no_tick_batches:
-                            logger.warning(
-                                f"No ticks received for {no_tick_batches} consecutive batches. "
-                                f"Data source may have ended without EOF signal."
-                            )
-                            break
-                    continue
-
-                # Reset no-tick counter when we receive ticks
-                no_tick_batches = 0
-
-                # Break out of batch loop if stopped during tick processing
-                if stopped_early:
-                    break
-
-                # Process each tick in batch
-                for tick_idx, tick in enumerate(tick_batch):
-                    # Check for stop signal every 100 ticks within a batch
-                    if tick_idx % 100 == 0:
-                        control = self.state_manager.check_control()
-                        if control.should_stop:
-                            logger.info(
-                                f"Stop signal received during batch processing - "
-                                f"task_id={self.task.pk}, task_type={self.task_type.value}, "
-                                f"ticks_processed={state.ticks_processed}, tick_idx={tick_idx}"
-                            )
-                            stopped_early = True
-                            break
-
-                    result: StrategyResult = self.engine.on_tick(tick=tick, state=state)
-                    state: ExecutionState = result.state
-                    events: List[TradingEvent] = self.save_events(result.events)
-
-                    # Update metrics and trades from events
-                    if events:
-                        self.handle_events(state, events)
-
-                    # Strategy requested task stop (e.g. margin blow-out)
-                    if result.should_stop:
-                        logger.warning(
-                            "Strategy requested stop: %s — ticks_processed=%d",
-                            result.stop_reason,
-                            state.ticks_processed,
-                        )
-                        stopped_early = True
-                        break
-
-                    # Update tick count and timestamp
-                    state.ticks_processed += 1
-                    state.last_tick_timestamp = tick.timestamp
-                    state.last_tick_price = tick.mid
-                    state.last_tick_bid = tick.bid
-                    state.last_tick_ask = tick.ask
-
-                    # Buffer metric snapshot from strategy state
-                    metrics = (state.strategy_state or {}).get("metrics", {})
-                    if metrics:
-                        snapshot = {"timestamp": tick.timestamp}
-                        snapshot.update(metrics)
-                        self._metric_buffer.append(snapshot)
-                    else:
-                        logger.debug(
-                            "No metrics in strategy_state at tick %s (ticks_processed=%d)",
-                            tick.timestamp,
-                            state.ticks_processed,
-                        )
-
-                # Increment batch counter
-                batch_count += 1
-
-                # Save state after every batch for real-time progress updates
-                logger.debug(
-                    f"Saving state after batch - task_id={self.task.pk}, "
-                    f"batch_count={batch_count}, ticks_processed={state.ticks_processed}"
-                )
-                self.save_state(state)
-                self._flush_metrics(state)
-
-                # Update unrealized PnL for all open positions using latest price
-                if state.last_tick_price is not None:
-                    update_unrealized_pnl(
-                        task_type=self.task_type.value,
-                        task_id=str(self.task.pk),
-                        current_price=Decimal(str(state.last_tick_price)),
-                        celery_task_id=getattr(self.task, "celery_task_id", None),
-                    )
-
-                if batch_count % 50 == 0:
-                    logger.debug(
-                        "Metric snapshot progress - task_id=%s, batch=%d, "
-                        "ticks_processed=%d, metric_buffer_size=%d, "
-                        "last_tick_ts=%s",
-                        self.task.pk,
-                        batch_count,
-                        state.ticks_processed,
-                        len(self._metric_buffer),
-                        state.last_tick_timestamp,
-                    )
-
-                # Send heartbeat every 10 batches
-                if batch_count % 10 == 0:
-                    logger.debug(
-                        f"Sending heartbeat - task_id={self.task.pk}, "
-                        f"batch_count={batch_count}, ticks_processed={state.ticks_processed}"
-                    )
-                    self.state_manager.heartbeat(
-                        status_message=f"Processed {state.ticks_processed} ticks"
-                    )
-
-            logger.info(
-                f"Exited tick processing loop - task_id={self.task.pk}, "
-                f"stopped_early={stopped_early}, ticks_processed={state.ticks_processed}"
-            )
-
-            # Call on_stop
-            logger.info("Calling engine.on_stop")
-            result = self.engine.on_stop(state=state)
-            state = result.state
-            self.save_events(result.events)
-            self.save_state(state)
-            logger.info("Engine stopped, events_count=%d", len(result.events))
-
-            # Mark as stopped with appropriate status
-            if stopped_early:
-                logger.info(
-                    "Execution stopped by user - ticks_processed=%d, final_balance=%s",
-                    state.ticks_processed,
-                    state.current_balance,
-                )
-                self.state_manager.stop(status_message="Execution stopped by user")
-            else:
-                logger.info(
-                    "Execution completed successfully - ticks_processed=%d, final_balance=%s",
-                    state.ticks_processed,
-                    state.current_balance,
-                )
-                self.state_manager.stop(
-                    status_message="Execution completed successfully", completed=True
-                )
+            loop = ExecutionLoopState(state=self._start_execution())
+            self._run_tick_loop(loop)
+            self._finalize_execution(loop)
         except Exception as e:
-            logger.error("Execution failed: %s", e, exc_info=True)
-            self.state_manager.stop(status_message=f"Execution failed: {e}", failed=True)
+            self._handle_execution_failure(e)
             raise
         finally:
-            # Clean up data source
-            try:
-                self.data_source.close()
-            except Exception as e:
-                logger.warning(f"Failed to close data source: {e}")
-            # Clean up state manager
-            self.state_manager.cleanup()
+            self._cleanup_execution()
+
+    def prepare_state_for_execution(
+        self,
+        *,
+        state: ExecutionState,
+        resumed: bool,
+    ) -> ExecutionState:
+        """Hook for executor-specific state preparation before start/resume."""
+        _ = resumed
+        return state
+
+    def _run_start_hook(
+        self,
+        *,
+        state: ExecutionState,
+        resumed: bool,
+    ) -> StrategyResult:
+        if resumed:
+            return self.engine.on_resume(state=state)
+        return self.engine.on_start(state=state)
+
+    def _start_execution(self) -> ExecutionState:
+        """Initialize coordinator/state and run strategy start hook."""
+        logger.info("Starting task execution")
+        self.state_manager.start(
+            celery_task_id=self.task.celery_task_id,
+            meta={"execution_run_id": int(getattr(self.task, "execution_run_id", 0) or 0)},
+        )
+
+        state, resumed = self._load_state_with_metadata()
+        state = self.prepare_state_for_execution(state=state, resumed=resumed)
+        logger.info(
+            "State loaded: balance=%s, ticks_processed=%d, resumed=%s",
+            state.current_balance,
+            state.ticks_processed,
+            resumed,
+        )
+
+        if resumed and self.task_type == TaskType.TRADING:
+            self._replay_unprocessed_events(state)
+
+        logger.info("Starting trading engine lifecycle hook...")
+        result = self._run_start_hook(state=state, resumed=resumed)
+        state = result.state
+        self.save_events(result.events)
+        self.save_state(state)
+        logger.info("Engine started, events_count=%d", len(result.events))
+        return state
+
+    def _run_tick_loop(self, loop: ExecutionLoopState) -> None:
+        """Run batch/tick processing loop."""
+        logger.info("Starting tick processing loop")
+
+        for tick_batch in self.data_source:
+            if self._should_stop_before_batch(loop):
+                break
+
+            if not tick_batch:
+                if self._handle_empty_batch(loop):
+                    break
+                continue
+
+            loop.no_tick_batches = 0
+            self._process_tick_batch(loop, tick_batch)
+            loop.batch_count += 1
+            self._persist_batch_progress(loop)
+
+            if loop.stopped_early:
+                break
+
+        logger.info(
+            "Exited tick processing loop - task_id=%s, stopped_early=%s, ticks_processed=%d",
+            self.task.pk,
+            loop.stopped_early,
+            loop.state.ticks_processed,
+        )
+
+    def _should_stop_before_batch(self, loop: ExecutionLoopState) -> bool:
+        """Check external stop signal before processing a batch."""
+        control = self.state_manager.check_control()
+        if not control.should_stop:
+            return False
+
+        logger.info("Stop signal received - ticks_processed=%d", loop.state.ticks_processed)
+        loop.stopped_early = True
+        return True
+
+    def _handle_empty_batch(self, loop: ExecutionLoopState) -> bool:
+        """Handle empty tick batch; return True when loop should terminate."""
+        if self.task_type == TaskType.TRADING and is_forex_market_closed():
+            if loop.no_tick_batches == 0:
+                logger.info("Market is closed, tolerating empty batches")
+            loop.no_tick_batches = 0
+            return False
+
+        loop.no_tick_batches += 1
+        if loop.no_tick_batches < loop.max_no_tick_batches:
+            return False
+
+        logger.warning(
+            "No ticks received for %d consecutive batches. Data source may have ended without EOF signal.",
+            loop.no_tick_batches,
+        )
+        return True
+
+    def _process_tick_batch(self, loop: ExecutionLoopState, tick_batch: list) -> None:
+        """Process one non-empty batch."""
+        for tick_idx, tick in enumerate(tick_batch):
+            if tick_idx % 100 == 0 and self._should_stop_during_batch(loop, tick_idx):
+                break
+            if self._process_single_tick(loop, tick):
+                break
+
+    def _should_stop_during_batch(self, loop: ExecutionLoopState, tick_idx: int) -> bool:
+        """Check stop signal during long batch processing."""
+        control = self.state_manager.check_control()
+        if not control.should_stop:
+            return False
+
+        logger.info(
+            "Stop signal received during batch processing - task_id=%s, task_type=%s, ticks_processed=%d, tick_idx=%d",
+            self.task.pk,
+            self.task_type.value,
+            loop.state.ticks_processed,
+            tick_idx,
+        )
+        loop.stopped_early = True
+        return True
+
+    def _process_single_tick(self, loop: ExecutionLoopState, tick) -> bool:
+        """Process one tick; return True when execution should stop."""
+        result: StrategyResult = self.engine.on_tick(tick=tick, state=loop.state)
+        loop.state = result.state
+        events: List[TradingEvent] = self.save_events(result.events)
+
+        if self.task_type == TaskType.TRADING and events:
+            # Persist exact strategy state at event emission time.
+            self.save_state(loop.state)
+
+        if events:
+            self.handle_events(loop.state, events)
+
+        if result.should_stop:
+            logger.warning(
+                "Strategy requested stop: %s — ticks_processed=%d",
+                result.stop_reason,
+                loop.state.ticks_processed,
+            )
+            loop.stopped_early = True
+            return True
+
+        loop.state.ticks_processed += 1
+        loop.state.last_tick_timestamp = tick.timestamp
+        loop.state.last_tick_price = tick.mid
+        loop.state.last_tick_bid = tick.bid
+        loop.state.last_tick_ask = tick.ask
+        self._buffer_tick_metrics(loop.state, tick)
+        return False
+
+    def _replay_unprocessed_events(self, state: ExecutionState) -> None:
+        """Replay pending events that were persisted before a crash."""
+        pending_events = list(
+            TradingEvent.objects.filter(
+                task_type=self.task_type.value,
+                task_id=self.task.pk,
+                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+                is_processed=False,
+            ).order_by("created_at", "id")
+        )
+
+        if not pending_events:
+            return
+
+        logger.warning(
+            "Replaying %d unprocessed event(s) before resume - task_id=%s",
+            len(pending_events),
+            self.task.pk,
+        )
+        self.handle_events(state, pending_events)
+        self.save_state(state)
+
+    def _event_already_applied(
+        self,
+        *,
+        trading_event: TradingEvent,
+        state: ExecutionState,
+    ) -> bool:
+        """Best-effort idempotency guard for resumed event replay."""
+        from apps.trading.events import (
+            InitialEntryEvent,
+            MarginProtectionEvent,
+            RetracementEvent,
+            StrategyEvent,
+            TakeProfitEvent,
+            VolatilityHedgeNeutralizeEvent,
+            VolatilityLockEvent,
+        )
+        from apps.trading.models import Position
+
+        strategy_event = StrategyEvent.from_dict(trading_event.details)
+        strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
+
+        if isinstance(strategy_event, (InitialEntryEvent, RetracementEvent)):
+            entry_id = strategy_event.entry_id
+            if entry_id is None:
+                return False
+            open_entries = strategy_state.get("open_entries")
+            if not isinstance(open_entries, list):
+                return False
+            for entry in open_entries:
+                if not isinstance(entry, dict):
+                    continue
+                try:
+                    current_entry_id = int(entry.get("entry_id", -1))
+                except (TypeError, ValueError):
+                    continue
+                if current_entry_id != int(entry_id):
+                    continue
+                position_id = str(entry.get("position_id") or "").strip()
+                if not position_id:
+                    return False
+                exists = Position.objects.filter(
+                    id=position_id,
+                    task_type=self.task_type.value,
+                    task_id=self.task.pk,
+                    execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+                    is_open=True,
+                ).exists()
+                return bool(exists)
+            return False
+
+        if isinstance(strategy_event, TakeProfitEvent):
+            position_id = str(strategy_event.position_id or "").strip()
+            if not position_id:
+                return False
+            return not Position.objects.filter(
+                id=position_id,
+                task_type=self.task_type.value,
+                task_id=self.task.pk,
+                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+                is_open=True,
+            ).exists()
+
+        if isinstance(strategy_event, (VolatilityLockEvent, MarginProtectionEvent)):
+            return not Position.objects.filter(
+                task_type=self.task_type.value,
+                task_id=self.task.pk,
+                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+                instrument=self.instrument,
+                is_open=True,
+            ).exists()
+
+        if isinstance(strategy_event, VolatilityHedgeNeutralizeEvent):
+            return False
+
+        return False
+
+    @staticmethod
+    def _mark_event_processed(trading_event: TradingEvent) -> None:
+        update_data = {
+            "is_processed": True,
+            "processed_at": dj_timezone.now(),
+            "processing_error": "",
+        }
+        type(trading_event).objects.filter(pk=trading_event.pk).update(**update_data)
+        trading_event.is_processed = True
+        trading_event.processed_at = update_data["processed_at"]
+        trading_event.processing_error = ""
+
+    @staticmethod
+    def _mark_event_processing_error(trading_event: TradingEvent, message: str) -> None:
+        type(trading_event).objects.filter(pk=trading_event.pk).update(
+            processing_error=str(message)[:4000]
+        )
+        trading_event.processing_error = str(message)[:4000]
+
+    def _buffer_tick_metrics(self, state: ExecutionState, tick) -> None:
+        """Buffer strategy metrics from current state for time-series persistence."""
+        metrics = (state.strategy_state or {}).get("metrics", {})
+        if metrics:
+            self._metric_buffer.append(
+                {
+                    "timestamp": tick.timestamp,
+                    "margin_ratio": metrics.get("margin_ratio"),
+                    "current_atr": metrics.get("current_atr"),
+                    "baseline_atr": metrics.get("baseline_atr"),
+                    "volatility_threshold": metrics.get("volatility_threshold"),
+                }
+            )
+            return
+
+        logger.debug(
+            "No metrics in strategy_state at tick %s (ticks_processed=%d)",
+            tick.timestamp,
+            state.ticks_processed,
+        )
+
+    def _persist_batch_progress(self, loop: ExecutionLoopState) -> None:
+        """Persist state/metrics and emit periodic telemetry."""
+        logger.debug(
+            "Saving state after batch - task_id=%s, batch_count=%d, ticks_processed=%d",
+            self.task.pk,
+            loop.batch_count,
+            loop.state.ticks_processed,
+        )
+        self.save_state(loop.state)
+        self._flush_metrics(loop.state)
+        self._update_unrealized_pnl(loop.state)
+        self._emit_batch_telemetry(loop)
+
+    def _update_unrealized_pnl(self, state: ExecutionState) -> None:
+        """Recalculate unrealized pnl for open positions from latest tick."""
+        if state.last_tick_price is None:
+            return
+
+        update_unrealized_pnl(
+            task_type=self.task_type.value,
+            task_id=str(self.task.pk),
+            current_price=Decimal(str(state.last_tick_price)),
+            execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+            celery_task_id=getattr(self.task, "celery_task_id", None),
+        )
+
+    def _emit_batch_telemetry(self, loop: ExecutionLoopState) -> None:
+        """Emit periodic progress logs and heartbeat updates."""
+        if loop.batch_count % 50 == 0:
+            logger.debug(
+                "Metrics progress - task_id=%s, batch=%d, ticks_processed=%d, metric_buffer_size=%d, last_tick_ts=%s",
+                self.task.pk,
+                loop.batch_count,
+                loop.state.ticks_processed,
+                len(self._metric_buffer),
+                loop.state.last_tick_timestamp,
+            )
+
+        if loop.batch_count % 10 == 0:
+            logger.debug(
+                "Sending heartbeat - task_id=%s, batch_count=%d, ticks_processed=%d",
+                self.task.pk,
+                loop.batch_count,
+                loop.state.ticks_processed,
+            )
+            self.state_manager.heartbeat(
+                status_message=f"Processed {loop.state.ticks_processed} ticks"
+            )
+
+    def _finalize_execution(self, loop: ExecutionLoopState) -> None:
+        """Run stop hook and persist final stop state."""
+        logger.info("Calling engine.on_stop")
+        result = self.engine.on_stop(state=loop.state)
+        loop.state = result.state
+        self.save_events(result.events)
+        self.save_state(loop.state)
+        logger.info("Engine stopped, events_count=%d", len(result.events))
+
+        if loop.stopped_early:
+            logger.info(
+                "Execution stopped by user - ticks_processed=%d, final_balance=%s",
+                loop.state.ticks_processed,
+                loop.state.current_balance,
+            )
+            self.state_manager.stop(status_message="Execution stopped by user")
+            return
+
+        logger.info(
+            "Execution completed successfully - ticks_processed=%d, final_balance=%s",
+            loop.state.ticks_processed,
+            loop.state.current_balance,
+        )
+        self.state_manager.stop(status_message="Execution completed successfully", completed=True)
+
+    def _handle_execution_failure(self, error: Exception) -> None:
+        """Record failed execution outcome."""
+        logger.error("Execution failed: %s", error, exc_info=True)
+        self.state_manager.stop(status_message=f"Execution failed: {error}", failed=True)
+
+    def _cleanup_execution(self) -> None:
+        """Release runtime resources."""
+        try:
+            self.data_source.close()
+        except Exception as e:
+            logger.warning("Failed to close data source: %s", e)
+        self.state_manager.cleanup()
 
 
 class BacktestExecutor(TaskExecutor):
@@ -532,6 +736,7 @@ class BacktestExecutor(TaskExecutor):
             account=None,  # No account for backtests
             instrument=task.instrument,
             task_id=task.pk,
+            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
             task_type=TaskType.BACKTEST,
         )
 
@@ -546,8 +751,8 @@ class BacktestExecutor(TaskExecutor):
         # Create state manager
         state_manager = StateManager(
             task_name="trading.tasks.run_backtest_task",
-            instance_key=str(task.pk),
-            task_id=int(task.pk),
+            instance_key=f"{task.pk}:{int(getattr(task, 'execution_run_id', 0) or 0)}",
+            task_id=str(task.pk),
         )
 
         super().__init__(
@@ -562,6 +767,41 @@ class BacktestExecutor(TaskExecutor):
 
 class TradingExecutor(TaskExecutor):
     """Executor for live trading tasks."""
+
+    def prepare_state_for_execution(
+        self,
+        *,
+        state: ExecutionState,
+        resumed: bool,
+    ) -> ExecutionState:
+        """Reconcile broker/local state before resuming a recovered run."""
+        if not resumed:
+            return state
+
+        from apps.trading.services.reconciliation import TradingResumeReconciler
+
+        trading_task = cast(TradingTask, self.task)
+        reconciler = TradingResumeReconciler(
+            task=trading_task,
+            state=state,
+            celery_task_id=trading_task.celery_task_id or "",
+        )
+        report = reconciler.reconcile()
+        logger.info(
+            "Trading resume reconciliation complete - task_id=%s, run=%s, "
+            "account=%s, closed_local=%d, created_local=%d, updated_local=%d, "
+            "removed_entries=%d, synthesized_entries=%d, relinked_entries=%d",
+            self.task.pk,
+            int(getattr(self.task, "execution_run_id", 0) or 0),
+            report.updated_account_snapshot,
+            report.closed_local_positions,
+            report.created_local_positions,
+            report.updated_local_positions,
+            report.removed_open_entries,
+            report.synthesized_open_entries,
+            report.relinked_open_entries,
+        )
+        return state
 
     def __init__(
         self,
@@ -583,6 +823,7 @@ class TradingExecutor(TaskExecutor):
             account=task.oanda_account,
             instrument=task.instrument,
             task_id=task.pk,
+            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
             task_type=TaskType.TRADING,
         )
 
@@ -596,8 +837,8 @@ class TradingExecutor(TaskExecutor):
         # Create state manager
         state_manager = StateManager(
             task_name="trading.tasks.run_trading_task",
-            instance_key=str(task.pk),
-            task_id=int(task.pk),
+            instance_key=f"{task.pk}:{int(getattr(task, 'execution_run_id', 0) or 0)}",
+            task_id=str(task.pk),
         )
 
         super().__init__(

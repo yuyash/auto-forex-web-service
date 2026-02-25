@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -281,7 +282,7 @@ class TestSaveState:
         executor.save_state(state)
 
         state.save.assert_called_once()
-        state.refresh_from_db.assert_called_once()
+        state.refresh_from_db.assert_not_called()
 
 
 class TestSaveEvents:
@@ -341,6 +342,229 @@ class TestSaveEvents:
                 event=mock_event,
                 context=executor.event_context,
                 celery_task_id="celery-123",
+                execution_run_id=1,
             )
             mock_te.objects.bulk_create.assert_called_once_with([mock_record])
             assert result == [mock_record]
+
+
+class TestResumeLifecycle:
+    """Tests for resume lifecycle behavior in TaskExecutor."""
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_start_execution_uses_on_resume_for_resumed_trading_state(self, mock_handler):
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import TaskExecutor
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.celery_task_id = "celery-resume"
+        task.execution_run_id = 3
+        task.oanda_account.balance = Decimal("10000")
+
+        state = MagicMock()
+        state.current_balance = Decimal("12345")
+        state.ticks_processed = 500
+
+        resume_result = MagicMock()
+        resume_result.state = state
+        resume_result.events = []
+
+        engine = MagicMock()
+        engine.on_resume.return_value = resume_result
+
+        executor = TaskExecutor(
+            task=task,
+            engine=engine,
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+
+        with (
+            patch.object(
+                executor,
+                "_load_state_with_metadata",
+                return_value=(state, True),
+            ),
+            patch.object(executor, "_replay_unprocessed_events") as mock_replay,
+            patch.object(executor, "save_events"),
+            patch.object(executor, "save_state"),
+        ):
+            executor._start_execution()
+
+        engine.on_resume.assert_called_once_with(state=state)
+        engine.on_start.assert_not_called()
+        mock_replay.assert_called_once_with(state)
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_start_execution_replays_pending_events_before_on_resume(self, mock_handler):
+        from apps.trading.dataclasses.result import StrategyResult
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import TaskExecutor
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.celery_task_id = "celery-resume"
+        task.execution_run_id = 7
+        task.oanda_account.balance = Decimal("10000")
+
+        state = MagicMock()
+        state.current_balance = Decimal("12345")
+        state.ticks_processed = 500
+
+        order: list[str] = []
+
+        def replay_side_effect(_state):
+            order.append("replay")
+
+        def on_resume_side_effect(*, state):
+            _ = state
+            order.append("resume")
+            return StrategyResult.from_state(state)
+
+        engine = MagicMock()
+        engine.on_resume.side_effect = on_resume_side_effect
+
+        executor = TaskExecutor(
+            task=task,
+            engine=engine,
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+
+        with (
+            patch.object(
+                executor,
+                "_load_state_with_metadata",
+                return_value=(state, True),
+            ),
+            patch.object(
+                executor,
+                "_replay_unprocessed_events",
+                side_effect=replay_side_effect,
+            ) as mock_replay,
+            patch.object(executor, "save_events"),
+            patch.object(executor, "save_state"),
+        ):
+            executor._start_execution()
+
+        assert order == ["replay", "resume"]
+        mock_replay.assert_called_once_with(state)
+
+
+class TestTradingDurability:
+    """Tests for trading-specific durability behavior."""
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_handle_events_persists_state_per_processed_event(self, mock_handler):
+        from apps.trading.dataclasses.execution import EventExecutionResult
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import TaskExecutor
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.celery_task_id = "celery-123"
+        task.execution_run_id = 3
+        task.oanda_account.balance = Decimal("10000")
+
+        engine = MagicMock()
+        executor = TaskExecutor(
+            task=task,
+            engine=engine,
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+
+        state = MagicMock()
+        state.current_balance = Decimal("100")
+
+        event = MagicMock()
+        event.is_processed = False
+        event.pk = 1
+
+        with (
+            patch.object(executor, "_event_already_applied", return_value=False),
+            patch.object(executor, "_mark_event_processed") as mark_processed,
+            patch.object(executor, "save_state") as save_state,
+            patch.object(
+                executor.event_handler,
+                "handle_event",
+                return_value=EventExecutionResult(realized_pnl_delta=Decimal("5")),
+            ),
+        ):
+            executor.handle_events(state, [event])
+
+        assert state.current_balance == Decimal("105")
+        engine.apply_event_execution_result.assert_called_once()
+        mark_processed.assert_called_once_with(event)
+        save_state.assert_called_once_with(state)
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_process_single_tick_persists_state_before_handling_events(self, mock_handler):
+        from apps.trading.dataclasses.result import StrategyResult
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.celery_task_id = "celery-123"
+        task.execution_run_id = 4
+        task.oanda_account.balance = Decimal("10000")
+
+        engine = MagicMock()
+        executor = TaskExecutor(
+            task=task,
+            engine=engine,
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+
+        state = MagicMock()
+        state.ticks_processed = 0
+        state.strategy_state = {}
+
+        strategy_event = MagicMock()
+        persisted_event = MagicMock()
+        tick = SimpleNamespace(
+            timestamp="2026-02-25T00:00:00Z",
+            mid=1.1,
+            bid=1.0999,
+            ask=1.1001,
+        )
+
+        engine.on_tick.return_value = StrategyResult.with_events(state, [strategy_event])
+
+        call_order: list[str] = []
+
+        def save_state_side_effect(_state):
+            call_order.append("save_state")
+
+        def handle_events_side_effect(_state, _events):
+            call_order.append("handle_events")
+
+        with (
+            patch.object(executor, "save_events", return_value=[persisted_event]),
+            patch.object(executor, "save_state", side_effect=save_state_side_effect),
+            patch.object(executor, "handle_events", side_effect=handle_events_side_effect),
+        ):
+            loop = ExecutionLoopState(state=state)
+            should_stop = executor._process_single_tick(loop, tick)
+
+        assert should_stop is False
+        assert call_order[:2] == ["save_state", "handle_events"]

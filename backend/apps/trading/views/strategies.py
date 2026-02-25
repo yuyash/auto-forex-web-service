@@ -2,7 +2,6 @@
 
 from typing import Any, cast
 
-from django.conf import settings
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
@@ -19,7 +18,19 @@ class StrategyView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = StrategyListSerializer
 
-    @extend_schema(operation_id="trading_strategies_list", tags=["Trading"])
+    @extend_schema(
+        operation_id="trading_strategies_list",
+        tags=["Trading"],
+        responses={
+            200: inline_serializer(
+                "StrategyListResponse",
+                fields={
+                    "strategies": StrategyListSerializer(many=True),
+                    "count": serializers.IntegerField(),
+                },
+            ),
+        },
+    )
     def get(self, _request: Request) -> Response:
         from apps.trading.strategies.registry import registry
 
@@ -33,6 +44,7 @@ class StrategyView(APIView):
                 {
                     "id": strategy_id,
                     "name": display_name,
+                    "class_name": info.get("strategy_class", ""),
                     "description": (info.get("description") or "").strip(),
                     "config_schema": config_schema,
                 }
@@ -83,21 +95,7 @@ class StrategyDefaultsView(APIView):
         properties = config_schema.get("properties")
         schema_keys: set[str] = set(properties.keys()) if isinstance(properties, dict) else set()
 
-        defaults: dict[str, Any] = {}
-
-        # Strategy-specific defaults
-        if strategy_key == "floor":
-            raw = getattr(settings, "TRADING_FLOOR_STRATEGY_DEFAULTS", {})
-            if isinstance(raw, dict):
-                defaults.update(raw)
-
-        # If schema includes defaults, include them as a fallback.
-        if isinstance(properties, dict):
-            for key, prop in properties.items():
-                if not isinstance(prop, dict):
-                    continue
-                if "default" in prop and prop.get("default") is not None:
-                    defaults.setdefault(key, prop.get("default"))
+        defaults = registry.get_defaults(identifier=strategy_key)
 
         # Only return keys that are part of the schema (if schema keys are known).
         if schema_keys:

@@ -6,6 +6,7 @@ from collections import defaultdict
 from decimal import Decimal
 from logging import Logger, getLogger
 
+from apps.trading.dataclasses import EntryExecutionBinding, EventExecutionResult
 from apps.trading.enums import Direction
 from apps.trading.events import (
     InitialEntryEvent,
@@ -46,11 +47,14 @@ class EventHandler:
         self.position_map: dict[int, Position] = {}  # layer_number -> Position
         self.layer_position_ids: dict[int, list[str]] = defaultdict(list)
         self._position_cache: dict[str, Position] = {}
-        self._last_entry_result: tuple[int | None, str] | None = None  # (entry_id, position_id)
 
     @property
     def _task_pk(self):
         return self.order_service.task.id
+
+    @property
+    def _execution_run_id(self) -> int:
+        return int(getattr(self.order_service, "execution_run_id", 0) or 0)
 
     def _cache_position(self, layer_number: int, position: Position) -> None:
         pos_id = str(position.id)
@@ -68,6 +72,7 @@ class EventHandler:
                 id=position_id,
                 task_type=self.order_service.task_type,
                 task_id=self._task_pk,
+                execution_run_id=self._execution_run_id,
                 is_open=True,
             )
             .order_by("-entry_time")
@@ -84,6 +89,7 @@ class EventHandler:
             Position.objects.filter(
                 task_type=self.order_service.task_type,
                 task_id=self._task_pk,
+                execution_run_id=self._execution_run_id,
                 instrument=self.instrument,
                 is_open=True,
                 layer_index=layer_number,
@@ -126,6 +132,7 @@ class EventHandler:
             Position.objects.filter(
                 task_type=self.order_service.task_type,
                 task_id=self._task_pk,
+                execution_run_id=self._execution_run_id,
                 instrument=self.instrument,
                 direction=direction,
                 is_open=True,
@@ -161,6 +168,7 @@ class EventHandler:
             Position.objects.filter(
                 task_type=self.order_service.task_type,
                 task_id=self._task_pk,
+                execution_run_id=self._execution_run_id,
                 instrument=self.instrument,
                 is_open=True,
             ).order_by("layer_index", "entry_time", "created_at")
@@ -187,6 +195,7 @@ class EventHandler:
         Trade.objects.create(
             task_type=self.order_service.task_type.value,
             task_id=self._task_pk,
+            execution_run_id=self._execution_run_id,
             celery_task_id=self.order_service.task.celery_task_id,
             timestamp=timestamp,
             direction=direction.value if direction else None,
@@ -201,14 +210,14 @@ class EventHandler:
             order=order,
         )
 
-    def handle_event(self, trading_event: TradingEvent) -> Decimal:
+    def handle_event(self, trading_event: TradingEvent) -> EventExecutionResult:
         """Handle a single trading event by executing appropriate order.
 
         Args:
             trading_event: TradingEvent instance from database
 
         Returns:
-            Decimal: Realized pnl delta (0 for entry events)
+            EventExecutionResult: Realized pnl and optional entry-position binding
 
         Raises:
             OrderServiceError: If order execution fails
@@ -219,22 +228,42 @@ class EventHandler:
         # Dispatch to appropriate handler based on event type
         if isinstance(strategy_event, InitialEntryEvent):
             position = self.handle_initial_entry(strategy_event)
-            self._last_entry_result = (strategy_event.entry_id, str(position.id))
-            return Decimal("0")
+            binding = EntryExecutionBinding(
+                entry_id=strategy_event.entry_id,
+                position_id=str(position.id),
+            )
+            return EventExecutionResult(
+                realized_pnl_delta=Decimal("0"),
+                entry_binding=binding,
+            )
         if isinstance(strategy_event, RetracementEvent):
             position = self.handle_retracement(strategy_event)
-            self._last_entry_result = (strategy_event.entry_id, str(position.id))
-            return Decimal("0")
+            binding = EntryExecutionBinding(
+                entry_id=strategy_event.entry_id,
+                position_id=str(position.id),
+            )
+            return EventExecutionResult(
+                realized_pnl_delta=Decimal("0"),
+                entry_binding=binding,
+            )
         if isinstance(strategy_event, TakeProfitEvent):
-            return self.handle_take_profit(strategy_event)
+            return EventExecutionResult(
+                realized_pnl_delta=self.handle_take_profit(strategy_event),
+            )
         if isinstance(strategy_event, VolatilityLockEvent):
-            return self.handle_volatility_lock(strategy_event)
+            return EventExecutionResult(
+                realized_pnl_delta=self.handle_volatility_lock(strategy_event),
+            )
         if isinstance(strategy_event, VolatilityHedgeNeutralizeEvent):
-            return self.handle_volatility_hedge_neutralize(strategy_event)
+            return EventExecutionResult(
+                realized_pnl_delta=self.handle_volatility_hedge_neutralize(strategy_event),
+            )
         if isinstance(strategy_event, MarginProtectionEvent):
-            return self.handle_margin_protection(strategy_event)
+            return EventExecutionResult(
+                realized_pnl_delta=self.handle_margin_protection(strategy_event),
+            )
         # ADD_LAYER and REMOVE_LAYER are informational only, no pnl impact.
-        return Decimal("0")
+        return EventExecutionResult(realized_pnl_delta=Decimal("0"))
 
     def handle_initial_entry(self, event: InitialEntryEvent) -> Position:
         """Open initial position for a layer.

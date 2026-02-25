@@ -3,8 +3,8 @@
 from logging import Logger, getLogger
 
 from django.conf import settings
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -29,7 +29,32 @@ class EmailVerificationView(APIView):
     authentication_classes: list = []
     serializer_class = EmailVerificationSerializer
 
-    @extend_schema(operation_id="auth_verify_email", tags=["Accounts"])
+    @extend_schema(
+        operation_id="auth_verify_email",
+        tags=["Accounts"],
+        request=EmailVerificationSerializer,
+        responses={
+            200: inline_serializer(
+                "EmailVerificationResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "user": inline_serializer(
+                        "VerifiedUser",
+                        fields={
+                            "id": serializers.IntegerField(),
+                            "email": serializers.EmailField(),
+                            "username": serializers.CharField(),
+                            "email_verified": serializers.BooleanField(),
+                        },
+                    ),
+                },
+            ),
+            400: inline_serializer(
+                "EmailVerificationError",
+                fields={"error": serializers.CharField()},
+            ),
+        },
+    )
     def post(self, request: Request) -> Response:
         """Verify user email with token."""
         token = request.data.get("token")
@@ -102,7 +127,24 @@ class ResendVerificationEmailView(APIView):
 
         return f"{base_url}/verify-email?token={token}"
 
-    @extend_schema(operation_id="auth_resend_verification", tags=["Accounts"])
+    @extend_schema(
+        operation_id="auth_resend_verification",
+        tags=["Accounts"],
+        request=ResendVerificationSerializer,
+        responses={
+            200: inline_serializer(
+                "ResendVerificationResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "email_sent": serializers.BooleanField(required=False),
+                },
+            ),
+            400: inline_serializer(
+                "ResendVerificationError",
+                fields={"error": serializers.CharField()},
+            ),
+        },
+    )
     def post(self, request: Request) -> Response:
         """Resend verification email."""
         email = request.data.get("email", "").lower()

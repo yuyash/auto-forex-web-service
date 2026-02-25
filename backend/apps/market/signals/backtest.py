@@ -7,6 +7,7 @@ from logging import Logger, getLogger
 from uuid import uuid4
 
 from celery import current_app
+from django.conf import settings
 
 from apps.market.signals.base import (
     SignalHandler,
@@ -88,15 +89,20 @@ class BacktestSignalHandler(SignalHandler):
             end_utc.isoformat(),
         )
 
-        current_app.send_task(
-            "market.tasks.publish_ticks_for_backtest",
-            kwargs={
-                "instrument": str(instrument),
-                "start": start_utc.isoformat().replace("+00:00", "Z"),
-                "end": end_utc.isoformat().replace("+00:00", "Z"),
-                "request_id": str(request_id),
-            },
-        )
+        task_kwargs = {
+            "instrument": str(instrument),
+            "start": start_utc.isoformat().replace("+00:00", "Z"),
+            "end": end_utc.isoformat().replace("+00:00", "Z"),
+            "request_id": str(request_id),
+        }
+
+        if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
+            from apps.market.tasks import publish_ticks_for_backtest
+
+            publish_ticks_for_backtest.delay(**task_kwargs)
+            return
+
+        current_app.send_task("market.tasks.publish_ticks_for_backtest", kwargs=task_kwargs)
 
 
 # Create singleton instance

@@ -4,8 +4,8 @@ from logging import Logger, getLogger
 from typing import Any
 
 from django.conf import settings
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -57,7 +57,39 @@ class UserRegistrationView(APIView):
             ip = str(request.META.get("REMOTE_ADDR", ""))
         return ip
 
-    @extend_schema(operation_id="auth_register", tags=["Accounts"])
+    @extend_schema(
+        operation_id="auth_register",
+        tags=["Accounts"],
+        request=UserRegistrationSerializer,
+        responses={
+            201: inline_serializer(
+                "RegistrationResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "user": inline_serializer(
+                        "RegisteredUser",
+                        fields={
+                            "id": serializers.IntegerField(),
+                            "email": serializers.EmailField(),
+                            "username": serializers.CharField(),
+                            "first_name": serializers.CharField(),
+                            "last_name": serializers.CharField(),
+                            "email_verified": serializers.BooleanField(),
+                        },
+                    ),
+                    "email_sent": serializers.BooleanField(),
+                },
+            ),
+            400: inline_serializer(
+                "RegistrationValidationError",
+                fields={"detail": serializers.CharField(required=False)},
+            ),
+            503: inline_serializer(
+                "RegistrationServiceUnavailable",
+                fields={"error": serializers.CharField()},
+            ),
+        },
+    )
     def post(self, request: Request) -> Response:
         """Handle user registration."""
         system_settings = PublicAccountSettings.get_settings()

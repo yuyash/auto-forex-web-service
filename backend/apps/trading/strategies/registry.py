@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import importlib
+import pkgutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from apps.trading.strategies.base import Strategy
@@ -37,7 +40,7 @@ class StrategyRegistry:
         if not key:
             raise ValueError("Strategy identifier must be non-empty")
         if key in self._strategies:
-            return
+            raise ValueError(f"Strategy '{key}' is already registered")
 
         schema = dict(config_schema or {})
         schema.setdefault("display_name", display_name or key)
@@ -53,6 +56,13 @@ class StrategyRegistry:
     def is_registered(self, identifier: str) -> bool:
         return str(identifier) in self._strategies
 
+    def get(self, identifier: str) -> StrategyInfo:
+        key = str(identifier).strip()
+        info = self._strategies.get(key)
+        if info is None:
+            raise ValueError(f"Unknown strategy '{key}'")
+        return info
+
     def list_strategies(self) -> list[str]:
         return sorted(self._strategies.keys())
 
@@ -63,8 +73,39 @@ class StrategyRegistry:
                 "config_schema": dict(item.config_schema),
                 "display_name": item.display_name,
                 "description": item.description,
+                "strategy_class": getattr(
+                    item.strategy_cls,
+                    "__name__",
+                    item.strategy_cls.__class__.__name__,
+                ),
             }
         return info
+
+    def normalize_parameters(
+        self, *, identifier: str, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
+        strategy_info = self.get(identifier)
+        return strategy_info.strategy_cls.normalize_parameters(dict(parameters))
+
+    def validate_parameters(self, *, identifier: str, parameters: dict[str, Any]) -> None:
+        strategy_info = self.get(identifier)
+        strategy_info.strategy_cls.validate_parameters(
+            parameters=parameters,
+            config_schema=strategy_info.config_schema,
+        )
+
+    def get_defaults(self, *, identifier: str) -> dict[str, Any]:
+        strategy_info = self.get(identifier)
+        defaults: dict[str, Any] = {}
+        properties = strategy_info.config_schema.get("properties")
+        if isinstance(properties, dict):
+            for key, prop in properties.items():
+                if isinstance(prop, dict) and "default" in prop and prop.get("default") is not None:
+                    defaults[key] = prop["default"]
+
+        class_defaults = strategy_info.strategy_cls.default_parameters()
+        defaults.update(class_defaults)
+        return defaults
 
     def create(
         self,
@@ -86,11 +127,8 @@ class StrategyRegistry:
         Raises:
             ValueError: If strategy identifier is unknown
         """
-        key = str(strategy_config.strategy_type)
-        if key not in self._strategies:
-            raise ValueError(f"Unknown strategy '{key}'")
-
-        strategy_cls = self._strategies[key].strategy_cls
+        strategy_info = self.get(str(strategy_config.strategy_type))
+        strategy_cls = strategy_info.strategy_cls
 
         # Parse StrategyConfig to strategy-specific config object
         parsed_config = strategy_cls.parse_config(strategy_config)
@@ -166,19 +204,20 @@ def register_all_strategies() -> None:
     creating ``strategies/<name>/strategy.py`` with the decorator — no
     manual import list to maintain.
     """
-    import importlib
-    import pkgutil
-    from pathlib import Path
+    strategies_dir = Path(__file__).resolve().parent
+    package_prefix = "apps.trading.strategies"
 
-    strategies_dir = Path(__file__).parent
-    for _finder, name, is_pkg in pkgutil.iter_modules([str(strategies_dir)]):
-        if is_pkg and name not in ("__pycache__",):
-            module_name = f"apps.trading.strategies.{name}.strategy"
-            try:
-                importlib.import_module(module_name)
-            except ImportError:
-                # Package exists but has no strategy.py — skip silently
-                pass
+    for module_info in pkgutil.iter_modules([str(strategies_dir)]):
+        name = module_info.name
+        if name.startswith("_") or name in {"base", "registry"}:
+            continue
+        try:
+            importlib.import_module(f"{package_prefix}.{name}.strategy")
+        except ModuleNotFoundError as exc:
+            expected = f"{package_prefix}.{name}.strategy"
+            if exc.name != expected:
+                raise
+            importlib.import_module(f"{package_prefix}.{name}")
 
 
 __all__ = [

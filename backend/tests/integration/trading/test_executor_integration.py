@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from apps.trading.enums import TaskType
+from apps.trading.dataclasses import EventExecutionResult
 from apps.trading.models import (
     BacktestTask,
     ExecutionState,
@@ -95,7 +96,11 @@ class TestHandleEvents:
         )
 
         # Mock the event handler to avoid complex order execution
-        with patch.object(executor.event_handler, "handle_event", return_value=Decimal("0")):
+        with patch.object(
+            executor.event_handler,
+            "handle_event",
+            return_value=EventExecutionResult(realized_pnl_delta=Decimal("0")),
+        ):
             executor.handle_events(state, [event])
 
         # Balance should remain unchanged since realized_delta is 0
@@ -125,7 +130,11 @@ class TestHandleEvents:
         )
 
         # Simulate a realized PnL of +250
-        with patch.object(executor.event_handler, "handle_event", return_value=Decimal("250")):
+        with patch.object(
+            executor.event_handler,
+            "handle_event",
+            return_value=EventExecutionResult(realized_pnl_delta=Decimal("250")),
+        ):
             executor.handle_events(state, [event])
 
         assert state.current_balance == Decimal("10250")
