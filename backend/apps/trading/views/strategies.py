@@ -18,7 +18,19 @@ class StrategyView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = StrategyListSerializer
 
-    @extend_schema(operation_id="trading_strategies_list", tags=["Trading"])
+    @extend_schema(
+        operation_id="trading_strategies_list",
+        tags=["Trading"],
+        responses={
+            200: inline_serializer(
+                "StrategyListResponse",
+                fields={
+                    "strategies": StrategyListSerializer(many=True),
+                    "count": serializers.IntegerField(),
+                },
+            ),
+        },
+    )
     def get(self, _request: Request) -> Response:
         from apps.trading.strategies.registry import registry
 

@@ -144,6 +144,71 @@ class TestStartTask:
                 TaskService().start_task(task)
 
 
+class TestRecoverTradingTask:
+    @patch("apps.trading.tasks.service.transaction.atomic")
+    @patch("apps.trading.tasks.service.run_trading_task")
+    @patch("apps.trading.tasks.service.uuid4")
+    @patch("apps.trading.tasks.service.TradingTask")
+    def test_requeues_without_changing_run_id(
+        self,
+        mock_tt,
+        mock_uuid,
+        mock_run_trading_task,
+        mock_atomic,
+    ):
+        from apps.trading.tasks.service import TaskService
+
+        mock_atomic.return_value.__enter__.return_value = None
+        mock_atomic.return_value.__exit__.return_value = None
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+        task.execution_run_id = 7
+        task.celery_task_id = "old-celery-id"
+
+        locked = MagicMock(spec=TradingTask)
+        locked.pk = task.pk
+        locked.status = TaskStatus.RUNNING
+        locked.execution_run_id = 7
+        locked.celery_task_id = "old-celery-id"
+
+        mock_tt.objects.select_for_update.return_value.get.return_value = locked
+        mock_uuid.return_value = "new-celery-id"
+
+        result = TaskService().recover_trading_task(task)
+
+        assert result is locked
+        assert locked.execution_run_id == 7
+        assert locked.status == TaskStatus.STARTING
+        assert locked.celery_task_id == "new-celery-id"
+        mock_run_trading_task.apply_async.assert_called_once_with(
+            args=[locked.pk],
+            task_id="new-celery-id",
+        )
+
+    @patch("apps.trading.tasks.service.transaction.atomic")
+    @patch("apps.trading.tasks.service.TradingTask")
+    def test_recover_requires_active_status(self, mock_tt, mock_atomic):
+        from apps.trading.tasks.service import TaskService
+
+        mock_atomic.return_value.__enter__.return_value = None
+        mock_atomic.return_value.__exit__.return_value = None
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.status = TaskStatus.STOPPED
+        task.execution_run_id = 3
+
+        locked = MagicMock(spec=TradingTask)
+        locked.pk = task.pk
+        locked.status = TaskStatus.STOPPED
+        mock_tt.objects.select_for_update.return_value.get.return_value = locked
+
+        with pytest.raises(ValueError, match="STARTING/RUNNING"):
+            TaskService().recover_trading_task(task)
+
+
 class TestStopTask:
     @patch("apps.trading.tasks.service.stop_backtest_task")
     @patch("celery.current_app")

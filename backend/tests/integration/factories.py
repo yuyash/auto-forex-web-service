@@ -147,9 +147,7 @@ class BacktestTaskFactory(DjangoModelFactory):
     config = factory.SubFactory(StrategyConfigurationFactory)
     instrument = "USD_JPY"
     start_time = factory.LazyFunction(lambda: _aware_datetime_between("-60d", "-1d"))
-    end_time = factory.LazyAttribute(
-        lambda obj: _aware_datetime_between(obj.start_time, "+30d")
-    )
+    end_time = factory.LazyAttribute(lambda obj: _aware_datetime_between(obj.start_time, "+30d"))
     initial_balance = factory.Faker(
         "pydecimal", left_digits=6, right_digits=2, positive=True, min_value=10000, max_value=100000
     )

@@ -174,9 +174,9 @@ class TaskService:
                     if active_task:
                         raise ValueError(
                             f"Account already has an active task: '{active_task.name}' "
-                                f"(status: {active_task.status}). "
-                                f"Please stop the existing task before starting a new one."
-                            )
+                            f"(status: {active_task.status}). "
+                            f"Please stop the existing task before starting a new one."
+                        )
                 elif not is_backtest_task:
                     oanda_account = getattr(task, "oanda_account", None)
                     if oanda_account is not None:
@@ -296,6 +296,59 @@ class TaskService:
                     task.save()
             raise RuntimeError(f"Failed to submit task to Celery: {str(e)}") from e
 
+    def recover_trading_task(self, task: TradingTask) -> TradingTask:
+        """Requeue an orphaned trading task without changing execution_run_id.
+
+        Unlike ``start_task``, this method preserves the current run so the
+        executor can load persisted state and resume execution from the same run.
+        """
+
+        previous_status = task.status
+        previous_celery_task_id = task.celery_task_id
+
+        with transaction.atomic():
+            locked_task = TradingTask.objects.select_for_update().get(pk=task.pk)
+
+            if locked_task.status not in (TaskStatus.STARTING, TaskStatus.RUNNING):
+                raise ValueError(
+                    "Orphan recovery requires task in STARTING/RUNNING state; "
+                    f"got {locked_task.status}"
+                )
+
+            locked_task.status = TaskStatus.STARTING
+            locked_task.celery_task_id = str(uuid4())
+            locked_task.completed_at = None
+            locked_task.error_message = None
+            locked_task.error_traceback = None
+            locked_task.save(
+                update_fields=[
+                    "status",
+                    "celery_task_id",
+                    "completed_at",
+                    "error_message",
+                    "error_traceback",
+                    "updated_at",
+                ]
+            )
+            task = locked_task
+
+        try:
+            run_trading_task.apply_async(
+                args=[task.pk],
+                task_id=task.celery_task_id,
+            )
+            return task
+        except Exception as exc:
+            TradingTask.objects.filter(pk=task.pk).update(
+                status=TaskStatus.FAILED,
+                error_message=f"Failed to requeue orphaned trading task: {exc}",
+            )
+            task.refresh_from_db()
+            raise RuntimeError(
+                "Failed to requeue orphaned trading task "
+                f"(prev_status={previous_status}, prev_celery_task_id={previous_celery_task_id})"
+            ) from exc
+
     def stop_task(self, task_id: UUID, mode: str = "graceful") -> bool:
         """Stop a running task.
 
@@ -378,9 +431,7 @@ class TaskService:
                 redis_client = redis.Redis.from_url(
                     settings.MARKET_REDIS_URL, decode_responses=True
                 )
-                redis_instance_key = (
-                    f"{task_id}:{int(getattr(task, 'execution_run_id', 0) or 0)}"
-                )
+                redis_instance_key = f"{task_id}:{int(getattr(task, 'execution_run_id', 0) or 0)}"
                 redis_key = f"task:coord:{task_name}:{redis_instance_key}"
                 redis_client.hset(redis_key, "status", "stopping")
                 redis_client.expire(redis_key, 3600)

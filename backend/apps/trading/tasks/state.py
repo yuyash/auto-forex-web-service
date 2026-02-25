@@ -189,8 +189,10 @@ class StateManager:
         except Exception:
             redis_available = False
 
-        should_check_db = force or not redis_available or (
-            (now - self._last_db_stop_check) >= self.db_fallback_interval_seconds
+        should_check_db = (
+            force
+            or not redis_available
+            or ((now - self._last_db_stop_check) >= self.db_fallback_interval_seconds)
         )
         if should_check_db and not should_stop_redis:
             self._cached_should_stop_db = self._check_db_should_stop()

@@ -3,7 +3,12 @@
 from logging import Logger, getLogger
 from typing import Any
 
-from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    PolymorphicProxySerializer,
+    extend_schema,
+    inline_serializer,
+)
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -25,6 +30,22 @@ from apps.market.services.oanda import (
 from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
+
+
+class MarketOrderSerializer(serializers.Serializer):  # pylint: disable=abstract-method
+    """Schema serializer for a single market order response item."""
+
+    id = serializers.CharField()
+    instrument = serializers.CharField()
+    type = serializers.CharField()
+    direction = serializers.CharField()
+    units = serializers.CharField()
+    price = serializers.CharField(allow_null=True)
+    state = serializers.CharField()
+    time_in_force = serializers.CharField(allow_null=True)
+    create_time = serializers.DateTimeField(allow_null=True)
+    fill_time = serializers.DateTimeField(allow_null=True)
+    cancel_time = serializers.DateTimeField(allow_null=True)
 
 
 class OrderView(APIView):
@@ -65,7 +86,7 @@ class OrderView(APIView):
                     "count": serializers.IntegerField(),
                     "next": serializers.CharField(allow_null=True),
                     "previous": serializers.CharField(allow_null=True),
-                    "results": serializers.ListField(child=serializers.DictField()),
+                    "results": MarketOrderSerializer(many=True),
                 },
             )
         },
@@ -194,21 +215,20 @@ class OrderView(APIView):
         tags=["Market"],
         request=OrderSerializer,
         responses={
-            201: inline_serializer(
-                "OrderCreateResponse",
-                fields={
-                    "id": serializers.CharField(),
-                    "instrument": serializers.CharField(),
-                    "type": serializers.CharField(),
-                    "direction": serializers.CharField(),
-                    "units": serializers.CharField(),
-                    "price": serializers.CharField(allow_null=True),
-                    "state": serializers.CharField(),
-                    "time_in_force": serializers.CharField(allow_null=True),
-                    "create_time": serializers.DateTimeField(allow_null=True),
-                    "fill_time": serializers.DateTimeField(allow_null=True),
-                    "cancel_time": serializers.DateTimeField(allow_null=True),
-                },
+            201: PolymorphicProxySerializer(
+                component_name="MarketOrderCreateResponse",
+                serializers=[
+                    MarketOrderSerializer,
+                    inline_serializer(
+                        "OcoOrderCreateResponse",
+                        fields={
+                            "oco_order": MarketOrderSerializer(),
+                            "limit_order": MarketOrderSerializer(allow_null=True),
+                            "stop_order": MarketOrderSerializer(allow_null=True),
+                        },
+                    ),
+                ],
+                resource_type_field_name=None,
             ),
         },
         description="Submit a new order (market, limit, stop, OCO).",

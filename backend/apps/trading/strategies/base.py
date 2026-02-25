@@ -195,7 +195,9 @@ class Strategy(ABC):
 
         return StrategyResult(state=state, events=[])
 
-    def create_event_handler(self, *, order_service: "OrderService", instrument: str) -> "EventHandler":
+    def create_event_handler(
+        self, *, order_service: "OrderService", instrument: str
+    ) -> "EventHandler":
         """Create event handler used by the executor."""
         from apps.trading.events.handler import EventHandler
 

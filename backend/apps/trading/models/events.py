@@ -53,6 +53,22 @@ class TradingEvent(models.Model):
     )
 
     details = models.JSONField(default=dict, blank=True)
+    is_processed = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Whether this event has been fully executed by the event handler",
+    )
+    processed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Timestamp when event execution was completed",
+    )
+    processing_error = models.TextField(
+        blank=True,
+        default="",
+        help_text="Last processing error for retry diagnostics",
+    )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:

@@ -357,6 +357,9 @@ SPECTACULAR_SETTINGS = {
     "EXTENSIONS": [
         "apps.accounts.openapi.JWTAuthenticationExtension",
     ],
+    "ENUM_NAME_OVERRIDES": {
+        "EventTypeEnum": "apps.trading.enums.EventType.choices",
+    },
 }
 
 

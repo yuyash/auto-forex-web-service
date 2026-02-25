@@ -7,8 +7,8 @@ replacing the sync-based approach with real-time API queries.
 
 from __future__ import annotations
 
+import secrets
 import time
-import random
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -1386,7 +1386,8 @@ class OandaService:
 
             if attempt < self.max_retries:
                 base_delay = min(self.retry_delay * (2 ** (attempt - 1)), self.max_retry_delay)
-                jitter = random.uniform(0, base_delay * 0.2)
+                # Use secure random jitter to satisfy security scanning policy.
+                jitter = (secrets.randbelow(10_000) / 10_000) * (base_delay * 0.2)
                 time.sleep(base_delay + jitter)
 
         error_msg = f"Order submission failed after {self.max_retries} attempts: {last_error}"

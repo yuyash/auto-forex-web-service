@@ -2,8 +2,8 @@
 
 from logging import Logger, getLogger
 
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -34,7 +34,22 @@ class UserSettingsView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = UserSettingsUpdateSerializer
 
-    @extend_schema(operation_id="user_settings_get", tags=["Accounts"])
+    @extend_schema(
+        operation_id="user_settings_get",
+        tags=["Accounts"],
+        responses={
+            200: inline_serializer(
+                "UserSettingsResponse",
+                fields={
+                    "user": UserProfileSerializer(),
+                    "settings": UserSettingsSerializer(),
+                },
+            ),
+            401: inline_serializer(
+                "UserSettingsUnauthorized", fields={"error": serializers.CharField()}
+            ),
+        },
+    )
     def get(self, request: Request) -> Response:
         """Get user settings."""
         if not request.user.is_authenticated:
@@ -61,7 +76,27 @@ class UserSettingsView(APIView):
 
         return Response(response_data, status=status.HTTP_200_OK)
 
-    @extend_schema(operation_id="user_settings_update", tags=["Accounts"])
+    @extend_schema(
+        operation_id="user_settings_update",
+        tags=["Accounts"],
+        request=UserSettingsUpdateSerializer,
+        responses={
+            200: inline_serializer(
+                "UserSettingsUpdateResponse",
+                fields={
+                    "user": UserProfileSerializer(),
+                    "settings": UserSettingsSerializer(),
+                },
+            ),
+            400: inline_serializer(
+                "UserSettingsValidationError",
+                fields={"detail": serializers.CharField(required=False)},
+            ),
+            401: inline_serializer(
+                "UserSettingsUpdateUnauthorized", fields={"error": serializers.CharField()}
+            ),
+        },
+    )
     def put(self, request: Request) -> Response:
         """Update user settings."""
         if not request.user.is_authenticated:

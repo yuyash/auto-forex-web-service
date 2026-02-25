@@ -7,14 +7,22 @@ used by both BacktestTaskViewSet and TradingTaskViewSet.
 from __future__ import annotations
 
 from django.utils.dateparse import parse_datetime
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from apps.trading.enums import LogLevel
 from apps.trading.models.logs import TaskLog
+from apps.trading.serializers.events import (
+    OrderSerializer,
+    PositionSerializer,
+    TradeSerializer,
+    TradingEventSerializer,
+)
 from apps.trading.serializers.summary import TaskSummarySerializer
+from apps.trading.serializers.task import TaskLogSerializer
 from apps.trading.views.pagination import TaskSubResourcePagination
 
 
@@ -43,6 +51,36 @@ class TaskSubResourceMixin:
 
     task_type_label: str
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
+            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
+            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("max_points", int, description="Maximum number of points to return"),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskMetricsResponse",
+                fields={
+                    "metrics": serializers.ListField(
+                        child=inline_serializer(
+                            "TaskMetricPoint",
+                            fields={
+                                "t": serializers.IntegerField(),
+                                "mr": serializers.FloatField(allow_null=True),
+                                "atr": serializers.FloatField(allow_null=True),
+                                "base": serializers.FloatField(allow_null=True),
+                                "vt": serializers.FloatField(allow_null=True),
+                            },
+                        )
+                    ),
+                    "total": serializers.IntegerField(),
+                    "returned": serializers.IntegerField(),
+                },
+            )
+        },
+        description="Retrieve time-series metrics for the task.",
+    )
     @action(detail=True, methods=["get"], url_path="metrics")
     def metrics(self, request: Request, pk: int | None = None) -> Response:
         from apps.trading.models.metrics import Metrics
@@ -130,10 +168,30 @@ class TaskSubResourceMixin:
         ]
         return Response({"metrics": data, "total": total_count, "returned": len(data)})
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
+            OpenApiParameter("level", str, description="Log level filter"),
+            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
+            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("page", int),
+            OpenApiParameter("page_size", int),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskLogPaginatedResponse",
+                fields={
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": TaskLogSerializer(many=True),
+                },
+            )
+        },
+        description="Retrieve paginated task logs.",
+    )
     @action(detail=True, methods=["get"])
     def logs(self, request: Request, pk: int | None = None) -> Response:
-        from apps.trading.serializers.task import TaskLogSerializer
-
         task = self.get_object()  # type: ignore[attr-defined]
         execution_run_id = _parse_execution_run_id(request)
         if execution_run_id is None:
@@ -161,10 +219,32 @@ class TaskSubResourceMixin:
         serializer = TaskLogSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
+            OpenApiParameter("event_type", str, description="Event type filter"),
+            OpenApiParameter("severity", str, description="Severity filter"),
+            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
+            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("page", int),
+            OpenApiParameter("page_size", int),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskEventPaginatedResponse",
+                fields={
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": TradingEventSerializer(many=True),
+                },
+            )
+        },
+        description="Retrieve paginated task events.",
+    )
     @action(detail=True, methods=["get"])
     def events(self, request: Request, pk: int | None = None) -> Response:
         from apps.trading.models import TradingEvent
-        from apps.trading.serializers.events import TradingEventSerializer
 
         task = self.get_object()  # type: ignore[attr-defined]
         execution_run_id = _parse_execution_run_id(request)
@@ -194,10 +274,33 @@ class TaskSubResourceMixin:
         serializer = TradingEventSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
+            OpenApiParameter(
+                "direction", str, description="Direction filter (buy/sell/long/short)"
+            ),
+            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
+            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("page", int),
+            OpenApiParameter("page_size", int),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskTradePaginatedResponse",
+                fields={
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": TradeSerializer(many=True),
+                },
+            )
+        },
+        description="Retrieve paginated task trades.",
+    )
     @action(detail=True, methods=["get"])
     def trades(self, request: Request, pk: str | None = None) -> Response:
         from apps.trading.models.trades import Trade
-        from apps.trading.serializers.events import TradeSerializer
 
         task = self.get_object()  # type: ignore[attr-defined]
         execution_run_id = _parse_execution_run_id(request)
@@ -253,10 +356,34 @@ class TaskSubResourceMixin:
         serializer = TradeSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
+            OpenApiParameter(
+                "position_status", str, description="Position status filter (open/closed)"
+            ),
+            OpenApiParameter("direction", str, description="Direction filter"),
+            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
+            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("page", int),
+            OpenApiParameter("page_size", int),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskPositionPaginatedResponse",
+                fields={
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": PositionSerializer(many=True),
+                },
+            )
+        },
+        description="Retrieve paginated task positions.",
+    )
     @action(detail=True, methods=["get"])
     def positions(self, request: Request, pk: str | None = None) -> Response:
         from apps.trading.models.positions import Position
-        from apps.trading.serializers.events import PositionSerializer
 
         task = self.get_object()  # type: ignore[attr-defined]
         execution_run_id = _parse_execution_run_id(request)
@@ -298,10 +425,33 @@ class TaskSubResourceMixin:
     # ------------------------------------------------------------------
     # orders (with incremental fetching via `since`)
     # ------------------------------------------------------------------
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
+            OpenApiParameter("status", str, description="Order status filter"),
+            OpenApiParameter("order_type", str, description="Order type filter"),
+            OpenApiParameter("direction", str, description="Direction filter"),
+            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
+            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("page", int),
+            OpenApiParameter("page_size", int),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskOrderPaginatedResponse",
+                fields={
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": OrderSerializer(many=True),
+                },
+            )
+        },
+        description="Retrieve paginated task orders.",
+    )
     @action(detail=True, methods=["get"])
     def orders(self, request: Request, pk: str | None = None) -> Response:
         from apps.trading.models.orders import Order
-        from apps.trading.serializers.events import OrderSerializer
 
         task = self.get_object()  # type: ignore[attr-defined]
         execution_run_id = _parse_execution_run_id(request)

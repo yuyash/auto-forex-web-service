@@ -105,8 +105,10 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
             instance.strategy_type if instance is not None else None
         )
         has_parameters = "parameters" in attrs
-        parameters_raw = attrs.get("parameters") if has_parameters else (
-            instance.parameters if instance is not None else {}
+        parameters_raw = (
+            attrs.get("parameters")
+            if has_parameters
+            else (instance.parameters if instance is not None else {})
         )
         if parameters_raw is None:
             parameters: dict[str, Any] = {}

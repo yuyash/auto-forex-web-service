@@ -337,7 +337,9 @@ class LiveTickDataSource(TickDataSource):
                     except Exception:  # nosec
                         pass
 
-                    self.client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
+                    self.client = redis.Redis.from_url(
+                        settings.MARKET_REDIS_URL, decode_responses=True
+                    )
                     self.pubsub = self.client.pubsub(ignore_subscribe_messages=True)
                     self.pubsub.subscribe(self.channel)
                     continue

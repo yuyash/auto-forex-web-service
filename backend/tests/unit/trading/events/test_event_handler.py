@@ -67,6 +67,7 @@ class TestEventHandlerInit:
         assert handler._position_cache == {}
         assert handler.layer_position_ids == {}
 
+
 class TestHandleInitialEntry:
     """Tests for handle_initial_entry."""
 

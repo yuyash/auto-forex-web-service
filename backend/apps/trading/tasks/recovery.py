@@ -48,8 +48,10 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
        ``ORPHAN_HEARTBEAT_THRESHOLD``, **or** no ``CeleryTaskStatus`` row
        exists at all.
 
-    Orphaned tasks are reset to CREATED and re-submitted via
+    Backtest tasks are reset to CREATED and re-submitted via
     ``TaskService.start_task``.
+    Trading tasks are resumed in the same execution run via
+    ``TaskService.recover_trading_task``.
 
     Args:
         source: Label for log messages (e.g. "worker_ready", "celery_beat").
@@ -147,7 +149,10 @@ def _recover_task(
 
     model_class = type(task)
 
-    # Atomically reset to CREATED.
+    if task_type == TaskType.TRADING:
+        return _recover_trading_task(task=task, service=service, source=source)
+
+    # Backtest recovery: reset to CREATED and submit as a fresh run.
     rows = model_class.objects.filter(
         pk=task.pk,
         status__in=_ACTIVE_STATUSES,
@@ -161,22 +166,14 @@ def _recover_task(
     )
 
     if rows == 0:
-        # Another process already handled this task.
         logger.info(f"[RECOVERY:{source}] Task already transitioned - task_id={task.pk}")
         return False
 
-    # Clean up stale CeleryTaskStatus row.
-    celery_task_name = (
-        "trading.tasks.run_backtest_task"
-        if task_type == TaskType.BACKTEST
-        else "trading.tasks.run_trading_task"
-    )
     CeleryTaskStatus.objects.filter(
-        task_name=celery_task_name,
+        task_name="trading.tasks.run_backtest_task",
         instance_key=_instance_key(task),
     ).delete()
 
-    # Log the recovery event.
     TaskLog.objects.create(
         task_type=task_type,
         task_id=task.pk,
@@ -189,15 +186,55 @@ def _recover_task(
         ),
     )
 
-    # Re-submit.
     task.refresh_from_db()
     try:
         service.start_task(task)
         logger.info(f"[RECOVERY:{source}] Task re-submitted - task_id={task.pk}")
     except Exception:
         logger.exception(f"[RECOVERY:{source}] Failed to re-submit task - task_id={task.pk}")
-        # Mark as FAILED so it doesn't get retried endlessly.
         model_class.objects.filter(pk=task.pk).update(
+            status=TaskStatus.FAILED,
+            error_message=f"Recovery failed after crash (source={source})",
+        )
+
+    return True
+
+
+def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, source: str) -> bool:
+    """Resume an orphaned trading task in the same execution run."""
+    # Ensure stale heartbeat rows from the dead worker do not affect the resumed run.
+    CeleryTaskStatus.objects.filter(
+        task_name="trading.tasks.run_trading_task",
+        instance_key=_instance_key(task),
+    ).delete()
+
+    TaskLog.objects.create(
+        task_type=TaskType.TRADING,
+        task_id=task.pk,
+        execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
+        level="WARNING",
+        component=__name__,
+        message=(
+            f"Trading task recovered from orphaned {task.status} state "
+            f"(source={source}). Resuming same execution run."
+        ),
+    )
+
+    try:
+        service.recover_trading_task(task)
+        logger.info(
+            "[RECOVERY:%s] Trading task resumed in same run - task_id=%s, run=%s",
+            source,
+            task.pk,
+            int(getattr(task, "execution_run_id", 0) or 0),
+        )
+    except Exception:
+        logger.exception(
+            "[RECOVERY:%s] Failed to resume trading task - task_id=%s",
+            source,
+            task.pk,
+        )
+        TradingTask.objects.filter(pk=task.pk).update(
             status=TaskStatus.FAILED,
             error_message=f"Recovery failed after crash (source={source})",
         )

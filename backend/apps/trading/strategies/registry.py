@@ -81,7 +81,9 @@ class StrategyRegistry:
             }
         return info
 
-    def normalize_parameters(self, *, identifier: str, parameters: dict[str, Any]) -> dict[str, Any]:
+    def normalize_parameters(
+        self, *, identifier: str, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
         strategy_info = self.get(identifier)
         return strategy_info.strategy_cls.normalize_parameters(dict(parameters))
 

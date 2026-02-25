@@ -207,7 +207,6 @@ export const useTaskPositions = ({
         }
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [taskId, taskType, celeryTaskId, status, direction, page, pageSize, since]
   );
 

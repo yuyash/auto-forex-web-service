@@ -9,7 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 from logging import Logger, getLogger
-from typing import List
+from typing import List, cast
+
+from django.utils import timezone as dj_timezone
 
 from apps.trading.dataclasses import EventContext, EventExecutionResult, StrategyResult
 from apps.trading.engine import TradingEngine
@@ -144,17 +146,34 @@ class TaskExecutor:
         Args:
             events: List of TradingEvent instances that were saved
         """
-        realized_delta_total = Decimal("0")
         for trading_event in events:
+            if getattr(trading_event, "is_processed", False):
+                continue
+
+            if self.task_type == TaskType.TRADING and self._event_already_applied(
+                trading_event=trading_event,
+                state=state,
+            ):
+                self._mark_event_processed(trading_event)
+                continue
+
             try:
                 execution_result: EventExecutionResult = self.event_handler.handle_event(
                     trading_event
                 )
-                realized_delta_total += execution_result.realized_pnl_delta
+                if execution_result.realized_pnl_delta != Decimal("0"):
+                    state.current_balance = (
+                        Decimal(str(state.current_balance)) + execution_result.realized_pnl_delta
+                    )
                 self.engine.apply_event_execution_result(
                     state=state,
                     execution_result=execution_result,
                 )
+                self._mark_event_processed(trading_event)
+
+                # Trading resume requires state durability at event granularity.
+                if self.task_type == TaskType.TRADING:
+                    self.save_state(state)
             except OrderServiceError as e:
                 logger.error(
                     "Order execution failed for trading event %s: %s",
@@ -162,14 +181,7 @@ class TaskExecutor:
                     e,
                     exc_info=True,
                 )
-
-        if realized_delta_total != Decimal("0"):
-            state.current_balance = Decimal(str(state.current_balance)) + realized_delta_total
-            logger.info(
-                "Applied realized pnl to balance: delta=%s, new_balance=%s",
-                realized_delta_total,
-                state.current_balance,
-            )
+                self._mark_event_processing_error(trading_event, str(e))
 
         logger.debug(
             "Processed %s events for trading task %s (open positions: %s)",
@@ -184,42 +196,39 @@ class TaskExecutor:
         Returns:
             ExecutionState: Current execution state
         """
-        # Refresh task from database
-        self.task.refresh_from_db()
+        state, _ = self._load_state_with_metadata()
+        return state
 
-        # Try to load from ExecutionState model
+    def _load_state_with_metadata(self) -> tuple[ExecutionState, bool]:
+        """Load state and indicate whether this execution is a resume."""
+        self.task.refresh_from_db()
+        execution_run_id = int(getattr(self.task, "execution_run_id", 0) or 0)
+
         try:
             state = ExecutionState.objects.get(
                 task_type=self.task_type.value,
                 task_id=self.task.pk,
-                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+                execution_run_id=execution_run_id,
             )
-            return state
-
+            return state, True
         except ExecutionState.DoesNotExist:
             pass
 
-        # Create initial state if not found
-        # For BacktestTask, use start_time; for TradingTask, use current time
         from apps.trading.models import BacktestTask
 
-        initial_timestamp = (
-            self.task.start_time
-            if isinstance(self.task, BacktestTask)
-            else None
-        )
+        initial_timestamp = self.task.start_time if isinstance(self.task, BacktestTask) else None
 
         state = ExecutionState.objects.create(
             task_type=self.task_type.value,
             task_id=self.task.pk,
-            execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+            execution_run_id=execution_run_id,
             celery_task_id=self.task.celery_task_id or "",
             strategy_state={},
             current_balance=self.initial_balance,
             ticks_processed=0,
-            last_tick_timestamp=initial_timestamp,  # Initialize with start_time for progress calculation
+            last_tick_timestamp=initial_timestamp,
         )
-        return state
+        return state, False
 
     def save_state(self, state: ExecutionState) -> None:
         """Save execution state to ExecutionState model.
@@ -320,6 +329,26 @@ class TaskExecutor:
         finally:
             self._cleanup_execution()
 
+    def prepare_state_for_execution(
+        self,
+        *,
+        state: ExecutionState,
+        resumed: bool,
+    ) -> ExecutionState:
+        """Hook for executor-specific state preparation before start/resume."""
+        _ = resumed
+        return state
+
+    def _run_start_hook(
+        self,
+        *,
+        state: ExecutionState,
+        resumed: bool,
+    ) -> StrategyResult:
+        if resumed:
+            return self.engine.on_resume(state=state)
+        return self.engine.on_start(state=state)
+
     def _start_execution(self) -> ExecutionState:
         """Initialize coordinator/state and run strategy start hook."""
         logger.info("Starting task execution")
@@ -328,15 +357,20 @@ class TaskExecutor:
             meta={"execution_run_id": int(getattr(self.task, "execution_run_id", 0) or 0)},
         )
 
-        state = self.load_state()
+        state, resumed = self._load_state_with_metadata()
+        state = self.prepare_state_for_execution(state=state, resumed=resumed)
         logger.info(
-            "State loaded: balance=%s, ticks_processed=%d",
+            "State loaded: balance=%s, ticks_processed=%d, resumed=%s",
             state.current_balance,
             state.ticks_processed,
+            resumed,
         )
 
-        logger.info("Starting trading engine...")
-        result = self.engine.on_start(state=state)
+        if resumed and self.task_type == TaskType.TRADING:
+            self._replay_unprocessed_events(state)
+
+        logger.info("Starting trading engine lifecycle hook...")
+        result = self._run_start_hook(state=state, resumed=resumed)
         state = result.state
         self.save_events(result.events)
         self.save_state(state)
@@ -429,6 +463,10 @@ class TaskExecutor:
         loop.state = result.state
         events: List[TradingEvent] = self.save_events(result.events)
 
+        if self.task_type == TaskType.TRADING and events:
+            # Persist exact strategy state at event emission time.
+            self.save_state(loop.state)
+
         if events:
             self.handle_events(loop.state, events)
 
@@ -448,6 +486,123 @@ class TaskExecutor:
         loop.state.last_tick_ask = tick.ask
         self._buffer_tick_metrics(loop.state, tick)
         return False
+
+    def _replay_unprocessed_events(self, state: ExecutionState) -> None:
+        """Replay pending events that were persisted before a crash."""
+        pending_events = list(
+            TradingEvent.objects.filter(
+                task_type=self.task_type.value,
+                task_id=self.task.pk,
+                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+                is_processed=False,
+            ).order_by("created_at", "id")
+        )
+
+        if not pending_events:
+            return
+
+        logger.warning(
+            "Replaying %d unprocessed event(s) before resume - task_id=%s",
+            len(pending_events),
+            self.task.pk,
+        )
+        self.handle_events(state, pending_events)
+        self.save_state(state)
+
+    def _event_already_applied(
+        self,
+        *,
+        trading_event: TradingEvent,
+        state: ExecutionState,
+    ) -> bool:
+        """Best-effort idempotency guard for resumed event replay."""
+        from apps.trading.events import (
+            InitialEntryEvent,
+            MarginProtectionEvent,
+            RetracementEvent,
+            StrategyEvent,
+            TakeProfitEvent,
+            VolatilityHedgeNeutralizeEvent,
+            VolatilityLockEvent,
+        )
+        from apps.trading.models import Position
+
+        strategy_event = StrategyEvent.from_dict(trading_event.details)
+        strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
+
+        if isinstance(strategy_event, (InitialEntryEvent, RetracementEvent)):
+            entry_id = strategy_event.entry_id
+            if entry_id is None:
+                return False
+            open_entries = strategy_state.get("open_entries")
+            if not isinstance(open_entries, list):
+                return False
+            for entry in open_entries:
+                if not isinstance(entry, dict):
+                    continue
+                try:
+                    current_entry_id = int(entry.get("entry_id", -1))
+                except (TypeError, ValueError):
+                    continue
+                if current_entry_id != int(entry_id):
+                    continue
+                position_id = str(entry.get("position_id") or "").strip()
+                if not position_id:
+                    return False
+                exists = Position.objects.filter(
+                    id=position_id,
+                    task_type=self.task_type.value,
+                    task_id=self.task.pk,
+                    execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+                    is_open=True,
+                ).exists()
+                return bool(exists)
+            return False
+
+        if isinstance(strategy_event, TakeProfitEvent):
+            position_id = str(strategy_event.position_id or "").strip()
+            if not position_id:
+                return False
+            return not Position.objects.filter(
+                id=position_id,
+                task_type=self.task_type.value,
+                task_id=self.task.pk,
+                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+                is_open=True,
+            ).exists()
+
+        if isinstance(strategy_event, (VolatilityLockEvent, MarginProtectionEvent)):
+            return not Position.objects.filter(
+                task_type=self.task_type.value,
+                task_id=self.task.pk,
+                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+                instrument=self.instrument,
+                is_open=True,
+            ).exists()
+
+        if isinstance(strategy_event, VolatilityHedgeNeutralizeEvent):
+            return False
+
+        return False
+
+    @staticmethod
+    def _mark_event_processed(trading_event: TradingEvent) -> None:
+        update_data = {
+            "is_processed": True,
+            "processed_at": dj_timezone.now(),
+            "processing_error": "",
+        }
+        type(trading_event).objects.filter(pk=trading_event.pk).update(**update_data)
+        trading_event.is_processed = True
+        trading_event.processed_at = update_data["processed_at"]
+        trading_event.processing_error = ""
+
+    @staticmethod
+    def _mark_event_processing_error(trading_event: TradingEvent, message: str) -> None:
+        type(trading_event).objects.filter(pk=trading_event.pk).update(
+            processing_error=str(message)[:4000]
+        )
+        trading_event.processing_error = str(message)[:4000]
 
     def _buffer_tick_metrics(self, state: ExecutionState, tick) -> None:
         """Buffer strategy metrics from current state for time-series persistence."""
@@ -612,6 +767,41 @@ class BacktestExecutor(TaskExecutor):
 
 class TradingExecutor(TaskExecutor):
     """Executor for live trading tasks."""
+
+    def prepare_state_for_execution(
+        self,
+        *,
+        state: ExecutionState,
+        resumed: bool,
+    ) -> ExecutionState:
+        """Reconcile broker/local state before resuming a recovered run."""
+        if not resumed:
+            return state
+
+        from apps.trading.services.reconciliation import TradingResumeReconciler
+
+        trading_task = cast(TradingTask, self.task)
+        reconciler = TradingResumeReconciler(
+            task=trading_task,
+            state=state,
+            celery_task_id=trading_task.celery_task_id or "",
+        )
+        report = reconciler.reconcile()
+        logger.info(
+            "Trading resume reconciliation complete - task_id=%s, run=%s, "
+            "account=%s, closed_local=%d, created_local=%d, updated_local=%d, "
+            "removed_entries=%d, synthesized_entries=%d, relinked_entries=%d",
+            self.task.pk,
+            int(getattr(self.task, "execution_run_id", 0) or 0),
+            report.updated_account_snapshot,
+            report.closed_local_positions,
+            report.created_local_positions,
+            report.updated_local_positions,
+            report.removed_open_entries,
+            report.synthesized_open_entries,
+            report.relinked_open_entries,
+        )
+        return state
 
     def __init__(
         self,
