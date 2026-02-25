@@ -120,6 +120,14 @@ repos:
         files: ^frontend/.*\.(ts|tsx|js|jsx|css|html)$
         stages: [pre-push]
 
+      - id: frontend-npm-ci
+        name: Frontend npm ci Check
+        entry: bash -c 'cd frontend && npm ci --ignore-scripts --no-audit --no-fund'
+        language: system
+        pass_filenames: false
+        files: ^frontend/(package\.json|package-lock\.json|\.npmrc|Dockerfile)$
+        stages: [pre-push]
+
       - id: vitest
         name: Run Vitest
         entry: bash -c 'cd frontend && npm run test'
