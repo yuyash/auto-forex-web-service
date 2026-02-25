@@ -8,6 +8,7 @@ replacing the sync-based approach with real-time API queries.
 from __future__ import annotations
 
 import time
+import random
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -222,6 +223,7 @@ class OandaService:
         self.dry_run = dry_run
         self.max_retries = 3
         self.retry_delay = 0.5  # seconds
+        self.max_retry_delay = 5.0  # seconds
         self.event_service = MarketEventService()
         self._account_resource_cache: dict[str, Any] | None = None
 
@@ -1350,7 +1352,7 @@ class OandaService:
 
         last_error: str | None = None
 
-        for attempt in range(self.max_retries):
+        for attempt in range(1, self.max_retries + 1):
             try:
                 response = self.api.order.create(self.account.account_id, order=order_data)
 
@@ -1365,18 +1367,27 @@ class OandaService:
 
                 logger.warning(
                     "Order submission attempt %s failed: status %s%s",
-                    attempt + 1,
+                    attempt,
                     response.status,
                     error_details,
                 )
                 last_error = f"API returned status {response.status}{error_details}"
 
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                logger.warning("Order submission attempt %s failed: %s", attempt + 1, exc)
-                last_error = str(exc)
+                retryable_status = response.status == 429 or 500 <= int(response.status) <= 599
+                if not retryable_status:
+                    break
 
-            if attempt < self.max_retries - 1:
-                time.sleep(self.retry_delay)
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.warning("Order submission attempt %s failed: %s", attempt, exc)
+                last_error = str(exc)
+                retryable_exception = isinstance(exc, (ConnectionError, TimeoutError, OSError))
+                if not retryable_exception:
+                    break
+
+            if attempt < self.max_retries:
+                base_delay = min(self.retry_delay * (2 ** (attempt - 1)), self.max_retry_delay)
+                jitter = random.uniform(0, base_delay * 0.2)
+                time.sleep(base_delay + jitter)
 
         error_msg = f"Order submission failed after {self.max_retries} attempts: {last_error}"
         logger.error("Order submission failed after %s attempts: %s", self.max_retries, last_error)

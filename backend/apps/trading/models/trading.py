@@ -93,6 +93,11 @@ class TradingTask(UUIDModel):
         db_index=True,
         help_text="Celery task ID for tracking execution",
     )
+    execution_run_id = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        help_text="Monotonic execution run identifier incremented on every start/restart/resume",
+    )
 
     # Execution State
     started_at = models.DateTimeField(
@@ -149,6 +154,17 @@ class TradingTask(UUIDModel):
             models.UniqueConstraint(
                 fields=["user", "name"],
                 name="unique_user_trading_task_name",
+            ),
+            models.UniqueConstraint(
+                fields=["oanda_account"],
+                condition=models.Q(
+                    status__in=[
+                        TaskStatus.STARTING,
+                        TaskStatus.RUNNING,
+                        TaskStatus.STOPPING,
+                    ]
+                ),
+                name="uniq_active_trading_task_per_account",
             ),
             models.CheckConstraint(
                 condition=models.Q(

@@ -122,6 +122,11 @@ class BacktestTask(UUIDModel):
         db_index=True,
         help_text="Celery task ID for tracking execution",
     )
+    execution_run_id = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        help_text="Monotonic execution run identifier incremented on every start/restart/resume",
+    )
 
     # Execution State
     started_at = models.DateTimeField(

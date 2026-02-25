@@ -341,6 +341,7 @@ class TestSaveEvents:
                 event=mock_event,
                 context=executor.event_context,
                 celery_task_id="celery-123",
+                execution_run_id=1,
             )
             mock_te.objects.bulk_create.assert_called_once_with([mock_record])
             assert result == [mock_record]

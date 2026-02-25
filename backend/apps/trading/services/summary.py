@@ -81,6 +81,7 @@ def compute_task_summary(
     task_type: str,
     task_id: str,
     celery_task_id: str | None = None,
+    execution_run_id: int | None = None,
 ) -> TaskSummary:
     """Compute comprehensive task summary using DB aggregation.
 
@@ -100,6 +101,8 @@ def compute_task_summary(
         TaskSummary with structured PnL, counts, execution, tick, and task info.
     """
     base_filter: dict = {"task_type": task_type, "task_id": task_id}
+    if execution_run_id is not None:
+        base_filter["execution_run_id"] = execution_run_id
     if celery_task_id:
         base_filter["celery_task_id"] = celery_task_id
 
@@ -136,6 +139,8 @@ def compute_task_summary(
 
     # Total trade count
     trade_filter: dict = {"task_type": task_type, "task_id": task_id}
+    if execution_run_id is not None:
+        trade_filter["execution_run_id"] = execution_run_id
     if celery_task_id:
         trade_filter["celery_task_id"] = celery_task_id
     total_trades = Trade.objects.filter(**trade_filter).count()
@@ -151,6 +156,8 @@ def compute_task_summary(
     from apps.trading.models.state import ExecutionState
 
     state_filter: dict = {"task_type": task_type, "task_id": task_id}
+    if execution_run_id is not None:
+        state_filter["execution_run_id"] = execution_run_id
     if celery_task_id:
         state_filter["celery_task_id"] = celery_task_id
     state = ExecutionState.objects.filter(**state_filter).order_by("-updated_at").first()

@@ -51,6 +51,11 @@ class Order(models.Model):
         db_index=True,
         help_text="UUID of the task this order belongs to",
     )
+    execution_run_id = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        help_text="Execution run identifier for run-scoped order queries",
+    )
     celery_task_id = models.CharField(
         max_length=255,
         db_index=True,
@@ -168,6 +173,7 @@ class Order(models.Model):
         ordering = ["-submitted_at"]
         indexes = [
             models.Index(fields=["task_type", "task_id", "-submitted_at"]),
+            models.Index(fields=["task_type", "task_id", "execution_run_id", "-submitted_at"]),
             models.Index(fields=["task_type", "task_id", "instrument", "status"]),
             models.Index(fields=["status", "-submitted_at"]),
             models.Index(fields=["broker_order_id"]),

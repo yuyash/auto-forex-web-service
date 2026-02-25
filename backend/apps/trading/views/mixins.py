@@ -26,6 +26,18 @@ def _parse_since(request: Request):
     return None
 
 
+def _parse_execution_run_id(request: Request) -> int | None:
+    """Return execution_run_id from query param when valid."""
+    raw = request.query_params.get("execution_run_id")
+    if raw is None:
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value >= 0 else None
+
+
 class TaskSubResourceMixin:
     """Mixin providing paginated logs / events / trades actions."""
 
@@ -37,6 +49,9 @@ class TaskSubResourceMixin:
 
         task = self.get_object()  # type: ignore[attr-defined]
         celery_task_id = request.query_params.get("celery_task_id")
+        execution_run_id = _parse_execution_run_id(request)
+        if execution_run_id is None:
+            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
 
         max_points_raw = request.query_params.get("max_points")
         max_points = 10_000  # sensible default
@@ -49,6 +64,7 @@ class TaskSubResourceMixin:
         queryset = Metrics.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
+            execution_run_id=execution_run_id,
         ).order_by("timestamp")
         if celery_task_id:
             queryset = queryset.filter(celery_task_id=celery_task_id)
@@ -78,7 +94,7 @@ class TaskSubResourceMixin:
             stride = total_count // max_points
 
             # Build the filtered WHERE clause
-            params: list = [self.task_type_label, str(task.pk)]
+            params: list = [self.task_type_label, str(task.pk), execution_run_id]
             celery_filter = ""
             if celery_task_id:
                 celery_filter = " AND celery_task_id = %s"
@@ -90,7 +106,9 @@ class TaskSubResourceMixin:
                 "  SELECT timestamp, margin_ratio, current_atr, baseline_atr, volatility_threshold, "
                 "         ROW_NUMBER() OVER (ORDER BY timestamp) AS rn "
                 "  FROM metrics "
-                "  WHERE task_type = %s AND task_id = %s" + celery_filter + ") sub "
+                "  WHERE task_type = %s AND task_id = %s AND execution_run_id = %s"
+                + celery_filter
+                + ") sub "
                 "WHERE rn %% %s = 1 "
                 "ORDER BY timestamp"
             )
@@ -117,10 +135,17 @@ class TaskSubResourceMixin:
         from apps.trading.serializers.task import TaskLogSerializer
 
         task = self.get_object()  # type: ignore[attr-defined]
+        execution_run_id = _parse_execution_run_id(request)
+        if execution_run_id is None:
+            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
         level_param = request.query_params.get("level")
         level = LogLevel[level_param.upper()] if level_param else None
         celery_task_id = request.query_params.get("celery_task_id")
-        queryset = TaskLog.objects.filter(task_type=self.task_type_label, task_id=task.pk)
+        queryset = TaskLog.objects.filter(
+            task_type=self.task_type_label,
+            task_id=task.pk,
+            execution_run_id=execution_run_id,
+        )
         if celery_task_id:
             queryset = queryset.filter(celery_task_id=celery_task_id)
         if level:
@@ -142,12 +167,16 @@ class TaskSubResourceMixin:
         from apps.trading.serializers.events import TradingEventSerializer
 
         task = self.get_object()  # type: ignore[attr-defined]
+        execution_run_id = _parse_execution_run_id(request)
+        if execution_run_id is None:
+            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
         event_type = request.query_params.get("event_type")
         severity = request.query_params.get("severity")
         celery_task_id = request.query_params.get("celery_task_id")
         queryset = TradingEvent.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
+            execution_run_id=execution_run_id,
         ).order_by("-created_at")
         if event_type:
             queryset = queryset.filter(event_type=event_type)
@@ -171,11 +200,15 @@ class TaskSubResourceMixin:
         from apps.trading.serializers.events import TradeSerializer
 
         task = self.get_object()  # type: ignore[attr-defined]
+        execution_run_id = _parse_execution_run_id(request)
+        if execution_run_id is None:
+            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
         direction = (request.query_params.get("direction") or "").lower()
         celery_task_id = request.query_params.get("celery_task_id")
         queryset = Trade.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
+            execution_run_id=execution_run_id,
         ).order_by("timestamp")
         if celery_task_id:
             queryset = queryset.filter(celery_task_id=celery_task_id)
@@ -226,11 +259,15 @@ class TaskSubResourceMixin:
         from apps.trading.serializers.events import PositionSerializer
 
         task = self.get_object()  # type: ignore[attr-defined]
+        execution_run_id = _parse_execution_run_id(request)
+        if execution_run_id is None:
+            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
         celery_task_id = request.query_params.get("celery_task_id")
         queryset = (
             Position.objects.filter(
                 task_type=self.task_type_label,
                 task_id=task.pk,
+                execution_run_id=execution_run_id,
             )
             .prefetch_related("trades")
             .order_by("-entry_time")
@@ -267,16 +304,18 @@ class TaskSubResourceMixin:
         from apps.trading.serializers.events import OrderSerializer
 
         task = self.get_object()  # type: ignore[attr-defined]
+        execution_run_id = _parse_execution_run_id(request)
+        if execution_run_id is None:
+            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
         celery_task_id = request.query_params.get("celery_task_id")
         queryset = Order.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
+            execution_run_id=execution_run_id,
         ).order_by("-submitted_at")
 
-        # Filter by celery execution ID: use explicit param, fall back to task's current ID.
-        effective_celery_id = celery_task_id or getattr(task, "celery_task_id", None)
-        if effective_celery_id:
-            queryset = queryset.filter(celery_task_id=effective_celery_id)
+        if celery_task_id:
+            queryset = queryset.filter(celery_task_id=celery_task_id)
 
         status_param = (request.query_params.get("status") or "").lower()
         if status_param:
@@ -302,6 +341,7 @@ class TaskSubResourceMixin:
     @extend_schema(
         parameters=[
             OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
+            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
         ],
         responses={200: TaskSummarySerializer},
         description=(
@@ -318,11 +358,15 @@ class TaskSubResourceMixin:
 
         task = self.get_object()  # type: ignore[attr-defined]
         celery_task_id = request.query_params.get("celery_task_id")
+        execution_run_id = _parse_execution_run_id(request)
+        if execution_run_id is None:
+            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
 
         result = compute_task_summary(
             task_type=self.task_type_label,
             task_id=str(task.pk),
             celery_task_id=celery_task_id,
+            execution_run_id=execution_run_id,
         )
 
         serializer = TaskSummarySerializer(asdict(result))

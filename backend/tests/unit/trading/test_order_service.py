@@ -50,6 +50,7 @@ class TestOrderServiceInit:
         task = MagicMock()
         task.id = uuid4()
         task.__class__.__name__ = "BacktestTask"
+        task.execution_run_id = 0
 
         service = OrderService(account=None, task=task, dry_run=True)
 
@@ -100,6 +101,7 @@ class TestGetOpenPositions:
         task = MagicMock()
         task.id = uuid4()
         task.__class__.__name__ = "BacktestTask"
+        task.execution_run_id = 0
 
         service = OrderService(account=None, task=task, dry_run=True)
 
@@ -112,6 +114,7 @@ class TestGetOpenPositions:
         mock_position.objects.filter.assert_called_once_with(
             task_type=TaskType.BACKTEST,
             task_id=task.id,
+            execution_run_id=0,
             is_open=True,
         )
         assert len(result) == 2
@@ -122,6 +125,7 @@ class TestGetOpenPositions:
         task = MagicMock()
         task.id = uuid4()
         task.__class__.__name__ = "BacktestTask"
+        task.execution_run_id = 0
 
         service = OrderService(account=None, task=task, dry_run=True)
 
@@ -146,6 +150,7 @@ class TestGetOrderHistory:
         task = MagicMock()
         task.id = uuid4()
         task.__class__.__name__ = "TradingTask"
+        task.execution_run_id = 0
 
         account = MagicMock()
         account.account_id = "001-001-123"
@@ -163,6 +168,7 @@ class TestGetOrderHistory:
         mock_order.objects.filter.assert_called_once_with(
             task_type=TaskType.TRADING,
             task_id=task.id,
+            execution_run_id=0,
         )
 
     @patch("apps.trading.order.OandaService")

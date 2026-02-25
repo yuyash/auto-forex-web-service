@@ -31,4 +31,5 @@ class EventContext:
     account: "OandaAccounts | None"  # Forward reference to avoid circular import
     instrument: str
     task_id: UUID
+    execution_run_id: int
     task_type: "TaskType"  # Forward reference to avoid circular import

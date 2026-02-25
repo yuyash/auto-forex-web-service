@@ -39,6 +39,11 @@ class TradingEvent(models.Model):
 
     task_type = models.CharField(max_length=32, blank=True, default="", db_index=True)
     task_id = models.UUIDField(null=True, blank=True, db_index=True)
+    execution_run_id = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        help_text="Execution run identifier for run-scoped event queries",
+    )
     celery_task_id = models.CharField(
         max_length=255,
         null=True,
@@ -57,6 +62,7 @@ class TradingEvent(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["task_type", "task_id", "-created_at"]),
+            models.Index(fields=["task_type", "task_id", "execution_run_id", "-created_at"]),
             models.Index(fields=["task_type", "task_id", "celery_task_id", "-created_at"]),
             models.Index(fields=["event_type", "-created_at"]),
         ]
@@ -71,6 +77,7 @@ class TradingEvent(models.Model):
         event: "StrategyEvent",
         context: "EventContext",
         celery_task_id: str | None = None,
+        execution_run_id: int = 0,
     ) -> "TradingEvent":
         """Create a TradingEvent instance from a StrategyEvent.
 
@@ -85,6 +92,7 @@ class TradingEvent(models.Model):
         return cls(
             task_type=context.task_type.value,
             task_id=context.task_id,
+            execution_run_id=execution_run_id,
             celery_task_id=celery_task_id,
             event_type=event.event_type,
             severity="info",

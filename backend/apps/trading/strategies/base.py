@@ -84,10 +84,25 @@ class Strategy(ABC):
             from jsonschema import ValidationError as JsonSchemaValidationError
             from jsonschema import validate
 
+            payload = cls._to_schema_primitives(parameters)
             try:
-                validate(instance=parameters, schema=config_schema)
+                validate(instance=payload, schema=config_schema)
             except JsonSchemaValidationError as exc:
                 raise ValueError(exc.message) from exc
+
+    @classmethod
+    def _to_schema_primitives(cls, value: Any) -> Any:
+        """Convert rich Python types into JSON-schema friendly primitives."""
+        if isinstance(value, Decimal):
+            integral = value.to_integral_value()
+            return int(integral) if value == integral else float(value)
+        if isinstance(value, dict):
+            return {k: cls._to_schema_primitives(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [cls._to_schema_primitives(v) for v in value]
+        if isinstance(value, tuple):
+            return [cls._to_schema_primitives(v) for v in value]
+        return value
 
     @property
     @abstractmethod

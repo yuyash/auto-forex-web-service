@@ -192,7 +192,7 @@ class TaskExecutor:
             state = ExecutionState.objects.get(
                 task_type=self.task_type.value,
                 task_id=self.task.pk,
-                celery_task_id=self.task.celery_task_id or "",
+                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
             )
             return state
 
@@ -212,6 +212,7 @@ class TaskExecutor:
         state = ExecutionState.objects.create(
             task_type=self.task_type.value,
             task_id=self.task.pk,
+            execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
             celery_task_id=self.task.celery_task_id or "",
             strategy_state={},
             current_balance=self.initial_balance,
@@ -252,6 +253,7 @@ class TaskExecutor:
             Metrics(
                 task_type=self.task_type.value,
                 task_id=self.task.pk,
+                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
                 celery_task_id=self.task.celery_task_id,
                 timestamp=m["timestamp"],
                 # Legacy Floor fields (populated from metrics dict for backward compat)
@@ -297,6 +299,7 @@ class TaskExecutor:
                 event=event,
                 context=self.event_context,
                 celery_task_id=self.task.celery_task_id,
+                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
             )
             for event in events
         ]
@@ -320,7 +323,10 @@ class TaskExecutor:
     def _start_execution(self) -> ExecutionState:
         """Initialize coordinator/state and run strategy start hook."""
         logger.info("Starting task execution")
-        self.state_manager.start()
+        self.state_manager.start(
+            celery_task_id=self.task.celery_task_id,
+            meta={"execution_run_id": int(getattr(self.task, "execution_run_id", 0) or 0)},
+        )
 
         state = self.load_state()
         logger.info(
@@ -486,6 +492,7 @@ class TaskExecutor:
             task_type=self.task_type.value,
             task_id=str(self.task.pk),
             current_price=Decimal(str(state.last_tick_price)),
+            execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
             celery_task_id=getattr(self.task, "celery_task_id", None),
         )
 
@@ -574,6 +581,7 @@ class BacktestExecutor(TaskExecutor):
             account=None,  # No account for backtests
             instrument=task.instrument,
             task_id=task.pk,
+            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
             task_type=TaskType.BACKTEST,
         )
 
@@ -588,8 +596,8 @@ class BacktestExecutor(TaskExecutor):
         # Create state manager
         state_manager = StateManager(
             task_name="trading.tasks.run_backtest_task",
-            instance_key=str(task.pk),
-            task_id=int(task.pk),
+            instance_key=f"{task.pk}:{int(getattr(task, 'execution_run_id', 0) or 0)}",
+            task_id=str(task.pk),
         )
 
         super().__init__(
@@ -625,6 +633,7 @@ class TradingExecutor(TaskExecutor):
             account=task.oanda_account,
             instrument=task.instrument,
             task_id=task.pk,
+            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
             task_type=TaskType.TRADING,
         )
 
@@ -638,8 +647,8 @@ class TradingExecutor(TaskExecutor):
         # Create state manager
         state_manager = StateManager(
             task_name="trading.tasks.run_trading_task",
-            instance_key=str(task.pk),
-            task_id=int(task.pk),
+            instance_key=f"{task.pk}:{int(getattr(task, 'execution_run_id', 0) or 0)}",
+            task_id=str(task.pk),
         )
 
         super().__init__(

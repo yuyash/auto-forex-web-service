@@ -52,6 +52,10 @@ class EventHandler:
     def _task_pk(self):
         return self.order_service.task.id
 
+    @property
+    def _execution_run_id(self) -> int:
+        return int(getattr(self.order_service, "execution_run_id", 0) or 0)
+
     def _cache_position(self, layer_number: int, position: Position) -> None:
         pos_id = str(position.id)
         if pos_id not in self.layer_position_ids[layer_number]:
@@ -68,6 +72,7 @@ class EventHandler:
                 id=position_id,
                 task_type=self.order_service.task_type,
                 task_id=self._task_pk,
+                execution_run_id=self._execution_run_id,
                 is_open=True,
             )
             .order_by("-entry_time")
@@ -84,6 +89,7 @@ class EventHandler:
             Position.objects.filter(
                 task_type=self.order_service.task_type,
                 task_id=self._task_pk,
+                execution_run_id=self._execution_run_id,
                 instrument=self.instrument,
                 is_open=True,
                 layer_index=layer_number,
@@ -126,6 +132,7 @@ class EventHandler:
             Position.objects.filter(
                 task_type=self.order_service.task_type,
                 task_id=self._task_pk,
+                execution_run_id=self._execution_run_id,
                 instrument=self.instrument,
                 direction=direction,
                 is_open=True,
@@ -161,6 +168,7 @@ class EventHandler:
             Position.objects.filter(
                 task_type=self.order_service.task_type,
                 task_id=self._task_pk,
+                execution_run_id=self._execution_run_id,
                 instrument=self.instrument,
                 is_open=True,
             ).order_by("layer_index", "entry_time", "created_at")
@@ -187,6 +195,7 @@ class EventHandler:
         Trade.objects.create(
             task_type=self.order_service.task_type.value,
             task_id=self._task_pk,
+            execution_run_id=self._execution_run_id,
             celery_task_id=self.order_service.task.celery_task_id,
             timestamp=timestamp,
             direction=direction.value if direction else None,

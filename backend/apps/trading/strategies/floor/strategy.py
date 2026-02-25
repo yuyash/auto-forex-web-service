@@ -110,15 +110,10 @@ class FloorStrategy(Strategy):
     ) -> None:
         """Validate floor parameters by parsing into typed config."""
         parsed = FloorStrategyConfig.from_dict(dict(parameters))
-
-        if config_schema:
-            from jsonschema import ValidationError as JsonSchemaValidationError
-            from jsonschema import validate
-
-            try:
-                validate(instance=asdict(parsed), schema=config_schema)
-            except JsonSchemaValidationError as exc:
-                raise ValueError(exc.message) from exc
+        super().validate_parameters(
+            parameters=asdict(parsed),
+            config_schema=config_schema,
+        )
 
     @property
     def strategy_type(self) -> StrategyType:

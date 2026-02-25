@@ -88,6 +88,7 @@ class JSONLoggingHandler(logging.Handler):
                 "level": record.levelname,
                 "message": record.getMessage(),
                 "task_id": str(self.task.pk),
+                "execution_run_id": int(getattr(self.task, "execution_run_id", 0) or 0),
                 "task_type": task_type,
                 "logger": record.name,
                 "context": context,
@@ -97,6 +98,7 @@ class JSONLoggingHandler(logging.Handler):
             TaskLog.objects.create(
                 task_type=task_type,
                 task_id=self.task.pk,
+                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
                 celery_task_id=self.task.celery_task_id,
                 level=record.levelname,
                 component=record.name or "unknown",

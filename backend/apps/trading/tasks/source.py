@@ -307,8 +307,40 @@ class LiveTickDataSource(TickDataSource):
 
         try:
             idle_seconds = 0
+            reconnect_attempts = 0
+            max_reconnect_attempts = 5
             while True:
-                message = self.pubsub.get_message(timeout=1.0)
+                try:
+                    message = self.pubsub.get_message(timeout=1.0)
+                    reconnect_attempts = 0
+                except (redis.ConnectionError, ConnectionError) as exc:
+                    reconnect_attempts += 1
+                    if reconnect_attempts > max_reconnect_attempts:
+                        raise RuntimeError(
+                            f"LiveTickDataSource failed to reconnect after {max_reconnect_attempts} attempts"
+                        ) from exc
+
+                    # Exponential backoff capped at 5 seconds.
+                    import time
+
+                    backoff = min(2 ** (reconnect_attempts - 1), 5)
+                    logger.warning(
+                        "LiveTickDataSource reconnecting (%s/%s) after error: %s",
+                        reconnect_attempts,
+                        max_reconnect_attempts,
+                        exc,
+                    )
+                    time.sleep(backoff)
+
+                    try:
+                        self.close()
+                    except Exception:  # nosec
+                        pass
+
+                    self.client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
+                    self.pubsub = self.client.pubsub(ignore_subscribe_messages=True)
+                    self.pubsub.subscribe(self.channel)
+                    continue
                 if not message:
                     idle_seconds += 1
                     # Yield empty batch every 5 seconds so the executor can

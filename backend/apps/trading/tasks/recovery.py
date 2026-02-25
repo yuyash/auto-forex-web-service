@@ -35,6 +35,10 @@ ORPHAN_HEARTBEAT_THRESHOLD = timedelta(minutes=5)
 _ACTIVE_STATUSES = [TaskStatus.RUNNING, TaskStatus.STARTING]
 
 
+def _instance_key(task: BacktestTask | TradingTask) -> str:
+    return f"{task.pk}:{int(getattr(task, 'execution_run_id', 0) or 0)}"
+
+
 def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
     """Detect and re-queue orphaned backtest and trading tasks.
 
@@ -100,7 +104,7 @@ def _is_orphaned(
     """Return True if the task has no recent heartbeat."""
     cts = CeleryTaskStatus.objects.filter(
         task_name=celery_task_name,
-        instance_key=str(task.pk),
+        instance_key=_instance_key(task),
     ).first()
 
     if cts is None:
@@ -169,13 +173,14 @@ def _recover_task(
     )
     CeleryTaskStatus.objects.filter(
         task_name=celery_task_name,
-        instance_key=str(task.pk),
+        instance_key=_instance_key(task),
     ).delete()
 
     # Log the recovery event.
     TaskLog.objects.create(
         task_type=task_type,
         task_id=task.pk,
+        execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
         level="WARNING",
         component=__name__,
         message=(

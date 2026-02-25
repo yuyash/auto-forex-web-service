@@ -14,6 +14,7 @@ from typing import Any
 
 import redis
 from django.conf import settings
+from django.utils import timezone as dj_timezone
 
 from apps.trading.dataclasses import TaskControl
 from apps.trading.enums import TaskStatus
@@ -33,7 +34,7 @@ class StateManager:
         *,
         task_name: str,
         instance_key: str,
-        task_id: int,
+        task_id: str | int,
         redis_url: str | None = None,
         stop_check_interval_seconds: float = 1.0,
         db_fallback_interval_seconds: float = 30.0,
@@ -53,7 +54,7 @@ class StateManager:
         """
         self.task_name = task_name
         self.instance_key = instance_key
-        self.task_id = task_id
+        self.task_id = str(task_id)
         self.stop_check_interval_seconds = float(stop_check_interval_seconds)
         self.db_fallback_interval_seconds = float(db_fallback_interval_seconds)
         self.heartbeat_interval_seconds = float(heartbeat_interval_seconds)
@@ -102,6 +103,19 @@ class StateManager:
         self.redis.hset(self.redis_key, mapping=state)
         self.redis.expire(self.redis_key, self.ttl_seconds)
 
+        try:
+            from apps.trading.models.celery import CeleryTaskStatus
+
+            CeleryTaskStatus.objects.start_task(
+                task_name=self.task_name,
+                instance_key=self.instance_key,
+                celery_task_id=celery_task_id,
+                worker=worker,
+                meta=meta or {},
+            )
+        except Exception:
+            logger.exception("Failed to upsert CeleryTaskStatus on start")
+
     def heartbeat(
         self,
         *,
@@ -138,6 +152,21 @@ class StateManager:
         self.redis.hset(self.redis_key, mapping=updates)  # type: ignore[arg-type]
         self.redis.expire(self.redis_key, self.ttl_seconds)
         self._last_heartbeat = now
+
+        try:
+            from apps.trading.models.celery import CeleryTaskStatus
+
+            cts = CeleryTaskStatus.objects.filter(
+                task_name=self.task_name,
+                instance_key=self.instance_key,
+            ).first()
+            if cts:
+                cts.heartbeat(
+                    status_message=status_message,
+                    meta_update=meta_update,
+                )
+        except Exception:
+            logger.exception("Failed to persist CeleryTaskStatus heartbeat")
 
     def check_control(self, *, force: bool = False) -> TaskControl:
         """Check for stop signals (throttled).
@@ -227,6 +256,31 @@ class StateManager:
         # Type ignore for Redis stubs - our dict is compatible
         self.redis.hset(self.redis_key, mapping=updates)  # type: ignore[arg-type]
         self.redis.expire(self.redis_key, 300)  # 5 min cleanup
+
+        try:
+            from apps.trading.models.celery import CeleryTaskStatus
+
+            now_dt = dj_timezone.now()
+            status_map = {
+                "stopped": CeleryTaskStatus.Status.STOPPED,
+                "completed": CeleryTaskStatus.Status.COMPLETED,
+                "failed": CeleryTaskStatus.Status.FAILED,
+            }
+            db_status = status_map.get(status, CeleryTaskStatus.Status.STOPPED)
+            db_updates: dict[str, Any] = {
+                "status": db_status,
+                "stopped_at": now_dt,
+                "last_heartbeat_at": now_dt,
+            }
+            if status_message is not None:
+                db_updates["status_message"] = status_message
+
+            CeleryTaskStatus.objects.filter(
+                task_name=self.task_name,
+                instance_key=self.instance_key,
+            ).update(**db_updates)
+        except Exception:
+            logger.exception("Failed to persist CeleryTaskStatus stop state")
 
     def cleanup(self, *, delete_key: bool = False) -> None:
         """Cleanup Redis resources.
