@@ -23,7 +23,7 @@ import { TaskType } from '../../../types/common';
 export interface UseMetricsOverlayOptions {
   taskId: string;
   taskType: TaskType;
-  celeryTaskId?: string;
+  executionRunId?: number;
   enableRealTimeUpdates?: boolean;
   chart: IChartApi | null;
   candleTimestamps?: number[];
@@ -98,7 +98,7 @@ function attachSeries(chart: IChartApi) {
 export function useMetricsOverlay({
   taskId,
   taskType,
-  celeryTaskId,
+  executionRunId,
   enableRealTimeUpdates = false,
   chart,
   candleTimestamps,
@@ -123,7 +123,7 @@ export function useMetricsOverlay({
         taskType,
         10_000,
         sinceIso,
-        celeryTaskId
+        executionRunId
       );
       if (data.length > 0) {
         setSnapshots((prev) => {
@@ -142,7 +142,7 @@ export function useMetricsOverlay({
     } catch {
       // silent
     }
-  }, [taskId, taskType, celeryTaskId]);
+  }, [taskId, taskType, executionRunId]);
 
   // Initial full fetch.
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -150,7 +150,7 @@ export function useMetricsOverlay({
   useEffect(() => {
     let cancelled = false;
 
-    fetchMetrics(taskId, taskType, 10_000, undefined, celeryTaskId)
+    fetchMetrics(taskId, taskType, 10_000, undefined, executionRunId)
       .then((data) => {
         if (!cancelled && data.length > 0) {
           setSnapshots(data);
@@ -163,7 +163,7 @@ export function useMetricsOverlay({
     return () => {
       cancelled = true;
     };
-  }, [taskId, taskType, celeryTaskId]);
+  }, [taskId, taskType, executionRunId]);
 
   // Incremental polling while task is running.
   useEffect(() => {

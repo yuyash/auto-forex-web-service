@@ -25,14 +25,14 @@ import { TaskType } from '../../../types/common';
 interface TaskLogsTableProps {
   taskId: string;
   taskType: TaskType;
-  executionId?: string;
+  executionRunId?: number;
   enableRealTimeUpdates?: boolean;
 }
 
 export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   taskId,
   taskType,
-  executionId,
+  executionRunId,
   enableRealTimeUpdates = false,
 }) => {
   const [levelFilter, setLevelFilter] = useState<string>('');
@@ -43,7 +43,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   const { logs, totalCount, isLoading, error, refetch } = useTaskLogs({
     taskId,
     taskType,
-    celeryTaskId: executionId,
+    executionRunId,
     level: levelFilter || undefined,
     page: page + 1,
     pageSize: rowsPerPage,
@@ -92,10 +92,10 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     setPage(0);
   };
 
-  // Reset page when executionId changes
-  const [prevExecutionId, setPrevExecutionId] = useState(executionId);
-  if (prevExecutionId !== executionId) {
-    setPrevExecutionId(executionId);
+  // Reset page when executionRunId changes
+  const [prevExecutionRunId, setPrevExecutionRunId] = useState(executionRunId);
+  if (prevExecutionRunId !== executionRunId) {
+    setPrevExecutionRunId(executionRunId);
     if (page !== 0) setPage(0);
   }
 

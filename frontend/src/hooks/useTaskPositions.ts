@@ -36,8 +36,8 @@ export interface TaskPosition {
 interface UseTaskPositionsOptions {
   taskId: string | number;
   taskType: TaskType;
-  /** Filter by celery execution ID. When omitted, returns all executions. */
-  celeryTaskId?: string;
+  /** Filter by execution run ID. When omitted, uses the latest execution run. */
+  executionRunId?: number;
   status?: 'open' | 'closed';
   direction?: 'long' | 'short';
   page?: number;
@@ -81,7 +81,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 export const useTaskPositions = ({
   taskId,
   taskType,
-  celeryTaskId,
+  executionRunId,
   status,
   direction,
   page = 1,
@@ -106,7 +106,7 @@ export const useTaskPositions = ({
   const hasInitialFetchRef = useRef(false);
 
   // Reset incremental state when key params change.
-  const paramsKey = `${taskId}-${taskType}-${celeryTaskId}-${status}-${direction}-${page}-${pageSize}-${since ?? ''}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${direction}-${page}-${pageSize}-${since ?? ''}`;
   const prevParamsKeyRef = useRef(paramsKey);
   if (paramsKey !== prevParamsKeyRef.current) {
     prevParamsKeyRef.current = paramsKey;
@@ -136,7 +136,9 @@ export const useTaskPositions = ({
           page: String(page),
           page_size: String(pageSize),
         };
-        if (celeryTaskId) params.celery_task_id = celeryTaskId;
+        if (executionRunId != null) {
+          params.execution_run_id = String(executionRunId);
+        }
         if (status) params.position_status = status;
         if (direction) params.direction = direction;
         // Use caller-provided `since` OR our tracked incremental timestamp.
@@ -207,7 +209,7 @@ export const useTaskPositions = ({
         }
       }
     },
-    [taskId, taskType, celeryTaskId, status, direction, page, pageSize, since]
+    [taskId, taskType, executionRunId, status, direction, page, pageSize, since]
   );
 
   // Initial full fetch.

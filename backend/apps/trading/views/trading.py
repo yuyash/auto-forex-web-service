@@ -23,6 +23,12 @@ logger: Logger = logging.getLogger(name=__name__)
 
 
 @extend_schema_view(
+    list=extend_schema(tags=["Trading"]),
+    create=extend_schema(tags=["Trading"]),
+    retrieve=extend_schema(tags=["Trading"]),
+    update=extend_schema(tags=["Trading"]),
+    partial_update=extend_schema(tags=["Trading"]),
+    destroy=extend_schema(tags=["Trading"]),
     start=extend_schema(
         operation_id="trading_tasks_start",
         tags=["Trading"],
@@ -89,6 +95,7 @@ logger: Logger = logging.getLogger(name=__name__)
         },
     ),
 )
+@extend_schema(tags=["Trading"])
 class TradingTaskViewSet(TaskSubResourceMixin, ModelViewSet):
     """
     ViewSet for TradingTask operations with task-centric API.

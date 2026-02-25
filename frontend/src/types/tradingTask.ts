@@ -22,9 +22,9 @@ export interface TradingTask {
   has_open_positions: boolean;
   open_positions_count: number;
   can_resume: boolean;
+  execution_run_id?: number;
   started_at?: string;
   completed_at?: string;
-  celery_task_id?: string;
   error_message?: string;
   pip_size?: string;
   created_at: string;

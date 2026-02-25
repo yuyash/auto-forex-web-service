@@ -25,14 +25,14 @@ import { TaskType } from '../../../types/common';
 interface TaskEventsTableProps {
   taskId: string | number;
   taskType: TaskType;
-  celeryTaskId?: string;
+  executionRunId?: number;
   enableRealTimeUpdates?: boolean;
 }
 
 export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
   taskId,
   taskType,
-  celeryTaskId,
+  executionRunId,
   enableRealTimeUpdates = false,
 }) => {
   const [severityFilter, setSeverityFilter] = useState<string>('');
@@ -43,7 +43,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
   const { events, totalCount, isLoading, error, refetch } = useTaskEvents({
     taskId,
     taskType,
-    celeryTaskId,
+    executionRunId,
     severity: severityFilter || undefined,
     page: page + 1,
     pageSize: rowsPerPage,

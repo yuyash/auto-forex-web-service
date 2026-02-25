@@ -95,7 +95,7 @@ export const BacktestTaskDetail: React.FC = () => {
   const overviewSummary = useTaskSummary(
     taskId,
     TaskType.BACKTEST,
-    task?.celery_task_id || undefined
+    task?.execution_run_id
   );
 
   const { summary: s } = overviewSummary;
@@ -624,7 +624,7 @@ export const BacktestTaskDetail: React.FC = () => {
             taskId={taskId}
             taskType={TaskType.BACKTEST}
             instrument={task.instrument}
-            celeryTaskId={task.celery_task_id || undefined}
+            executionRunId={task.execution_run_id}
             startTime={task.start_time}
             endTime={task.end_time}
             latestExecution={task.latest_execution}
@@ -642,7 +642,7 @@ export const BacktestTaskDetail: React.FC = () => {
           <TaskPositionsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
-            celeryTaskId={task.celery_task_id || undefined}
+            executionRunId={task.execution_run_id}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
@@ -658,7 +658,7 @@ export const BacktestTaskDetail: React.FC = () => {
           <TaskTradesTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
-            celeryTaskId={task.celery_task_id || undefined}
+            executionRunId={task.execution_run_id}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
@@ -671,7 +671,7 @@ export const BacktestTaskDetail: React.FC = () => {
           <TaskOrdersTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
-            celeryTaskId={task.celery_task_id || undefined}
+            executionRunId={task.execution_run_id}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
@@ -683,7 +683,7 @@ export const BacktestTaskDetail: React.FC = () => {
           <TaskEventsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
-            celeryTaskId={task.celery_task_id || undefined}
+            executionRunId={task.execution_run_id}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
@@ -695,7 +695,7 @@ export const BacktestTaskDetail: React.FC = () => {
           <TaskLogsTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
-            executionId={task.celery_task_id || undefined}
+            executionRunId={task.execution_run_id}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
