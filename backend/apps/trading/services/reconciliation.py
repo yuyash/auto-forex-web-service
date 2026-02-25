@@ -143,9 +143,7 @@ class TradingResumeReconciler:
             updated_fields: list[str] = []
             expected_units = int(abs(broker_trade.units))
             signed_units = (
-                expected_units
-                if local_position.direction == Direction.LONG
-                else -expected_units
+                expected_units if local_position.direction == Direction.LONG else -expected_units
             )
             if local_position.units != signed_units:
                 local_position.units = signed_units
@@ -169,9 +167,7 @@ class TradingResumeReconciler:
                 continue
 
             direction = (
-                Direction.LONG
-                if broker_trade.direction == OrderDirection.LONG
-                else Direction.SHORT
+                Direction.LONG if broker_trade.direction == OrderDirection.LONG else Direction.SHORT
             )
             units_abs = int(abs(broker_trade.units))
             signed_units = units_abs if direction == Direction.LONG else -units_abs
@@ -207,7 +203,9 @@ class TradingResumeReconciler:
             (_safe_decimal(position.unrealized_pnl) for position in refreshed_open_positions),
             Decimal("0"),
         )
-        strategy_state = self.state.strategy_state if isinstance(self.state.strategy_state, dict) else {}
+        strategy_state = (
+            self.state.strategy_state if isinstance(self.state.strategy_state, dict) else {}
+        )
         strategy_state["broker_reconciled_at"] = dj_timezone.now().isoformat()
         strategy_state["broker_unrealized_pnl"] = str(unrealized_total)
         self.state.strategy_state = strategy_state
@@ -259,7 +257,9 @@ class TradingResumeReconciler:
             entry["direction"] = str(matched.direction)
             entry["units"] = abs(int(matched.units))
             entry["entry_price"] = str(matched.entry_price)
-            entry["floor_index"] = int(matched.layer_index or _safe_int(entry.get("floor_index"), 1))
+            entry["floor_index"] = int(
+                matched.layer_index or _safe_int(entry.get("floor_index"), 1)
+            )
             entry["retracement_count"] = int(
                 matched.retracement_count or _safe_int(entry.get("retracement_count"), 1) or 1
             )
@@ -361,9 +361,10 @@ class TradingResumeReconciler:
                 continue
             if entry_floor > 0 and int(candidate.layer_index or 0) != entry_floor:
                 continue
-            if entry_direction in {Direction.LONG, Direction.SHORT} and str(
-                candidate.direction
-            ) != entry_direction:
+            if (
+                entry_direction in {Direction.LONG, Direction.SHORT}
+                and str(candidate.direction) != entry_direction
+            ):
                 continue
             if entry_units > 0 and abs(int(candidate.units)) != entry_units:
                 continue

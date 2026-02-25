@@ -1,11 +1,14 @@
 """Serializers for strategy configuration."""
 
+import logging
 from typing import Any
 
 from rest_framework import serializers
 from rest_framework.request import Request
 
 from apps.trading.models import StrategyConfiguration
+
+logger = logging.getLogger(__name__)
 
 
 class StrategyConfigDetailSerializer(serializers.ModelSerializer):
@@ -130,7 +133,14 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
                     parameters=normalized_parameters,
                 )
             except ValueError as exc:
-                raise serializers.ValidationError({"parameters": str(exc)}) from exc
+                logger.warning(
+                    "Strategy configuration parameter validation failed",
+                    extra={"strategy_type": strategy_type},
+                    exc_info=True,
+                )
+                raise serializers.ValidationError(
+                    {"parameters": "Invalid strategy parameters."}
+                ) from exc
 
         if has_parameters:
             attrs["parameters"] = normalized_parameters
