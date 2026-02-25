@@ -166,10 +166,12 @@ class PublicAccountSettingsView(APIView):
     """
 
     permission_classes = [AllowAny]
+    authentication_classes: list = []
 
     @extend_schema(
         operation_id="public_account_settings",
         tags=["Accounts"],
+        auth=[],
         responses={200: PublicAccountSettingsSerializer},
         description="Get public account settings (registration/login enabled flags).",
     )

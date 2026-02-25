@@ -31,7 +31,7 @@ class TradingEventSerializer(serializers.ModelSerializer):
             "instrument",
             "task_type",
             "task_id",
-            "celery_task_id",
+            "execution_run_id",
             "details",
             "created_at",
         ]
@@ -108,7 +108,6 @@ class OrderSerializer(serializers.Serializer):
     """Serializer for order data from Order model."""
 
     id = serializers.UUIDField()
-    celery_task_id = serializers.CharField(required=False, allow_null=True)
     broker_order_id = serializers.CharField(required=False, allow_null=True)
     oanda_trade_id = serializers.CharField(required=False, allow_null=True)
     position_id = serializers.UUIDField(required=False, allow_null=True)

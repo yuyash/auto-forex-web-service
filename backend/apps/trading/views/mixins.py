@@ -21,6 +21,7 @@ from apps.trading.serializers.events import (
     TradeSerializer,
     TradingEventSerializer,
 )
+from apps.trading.serializers.execution import TaskExecutionSerializer
 from apps.trading.serializers.summary import TaskSummarySerializer
 from apps.trading.serializers.task import TaskLogSerializer
 from apps.trading.views.pagination import TaskSubResourcePagination
@@ -52,9 +53,9 @@ class TaskSubResourceMixin:
     task_type_label: str
 
     @extend_schema(
+        tags=["Trading"],
         parameters=[
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
             OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
             OpenApiParameter("max_points", int, description="Maximum number of points to return"),
         ],
@@ -86,7 +87,6 @@ class TaskSubResourceMixin:
         from apps.trading.models.metrics import Metrics
 
         task = self.get_object()  # type: ignore[attr-defined]
-        celery_task_id = request.query_params.get("celery_task_id")
         execution_run_id = _parse_execution_run_id(request)
         if execution_run_id is None:
             execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
@@ -104,8 +104,6 @@ class TaskSubResourceMixin:
             task_id=task.pk,
             execution_run_id=execution_run_id,
         ).order_by("timestamp")
-        if celery_task_id:
-            queryset = queryset.filter(celery_task_id=celery_task_id)
 
         since = _parse_since(request)
         if since:
@@ -133,10 +131,6 @@ class TaskSubResourceMixin:
 
             # Build the filtered WHERE clause
             params: list = [self.task_type_label, str(task.pk), execution_run_id]
-            celery_filter = ""
-            if celery_task_id:
-                celery_filter = " AND celery_task_id = %s"
-                params.append(celery_task_id)
 
             sql = (
                 "SELECT timestamp, margin_ratio, current_atr, baseline_atr, volatility_threshold "  # nosec B608
@@ -144,9 +138,7 @@ class TaskSubResourceMixin:
                 "  SELECT timestamp, margin_ratio, current_atr, baseline_atr, volatility_threshold, "
                 "         ROW_NUMBER() OVER (ORDER BY timestamp) AS rn "
                 "  FROM metrics "
-                "  WHERE task_type = %s AND task_id = %s AND execution_run_id = %s"
-                + celery_filter
-                + ") sub "
+                "  WHERE task_type = %s AND task_id = %s AND execution_run_id = %s" + ") sub "
                 "WHERE rn %% %s = 1 "
                 "ORDER BY timestamp"
             )
@@ -169,10 +161,10 @@ class TaskSubResourceMixin:
         return Response({"metrics": data, "total": total_count, "returned": len(data)})
 
     @extend_schema(
+        tags=["Trading"],
         parameters=[
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
             OpenApiParameter("level", str, description="Log level filter"),
-            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
             OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
@@ -198,14 +190,11 @@ class TaskSubResourceMixin:
             execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
         level_param = request.query_params.get("level")
         level = LogLevel[level_param.upper()] if level_param else None
-        celery_task_id = request.query_params.get("celery_task_id")
         queryset = TaskLog.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
             execution_run_id=execution_run_id,
         )
-        if celery_task_id:
-            queryset = queryset.filter(celery_task_id=celery_task_id)
         if level:
             queryset = queryset.filter(level=level)
 
@@ -220,11 +209,11 @@ class TaskSubResourceMixin:
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Trading"],
         parameters=[
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
             OpenApiParameter("event_type", str, description="Event type filter"),
             OpenApiParameter("severity", str, description="Severity filter"),
-            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
             OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
@@ -252,7 +241,6 @@ class TaskSubResourceMixin:
             execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
         event_type = request.query_params.get("event_type")
         severity = request.query_params.get("severity")
-        celery_task_id = request.query_params.get("celery_task_id")
         queryset = TradingEvent.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
@@ -262,8 +250,6 @@ class TaskSubResourceMixin:
             queryset = queryset.filter(event_type=event_type)
         if severity:
             queryset = queryset.filter(severity=severity)
-        if celery_task_id:
-            queryset = queryset.filter(celery_task_id=celery_task_id)
 
         since = _parse_since(request)
         if since:
@@ -275,12 +261,12 @@ class TaskSubResourceMixin:
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Trading"],
         parameters=[
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
             OpenApiParameter(
                 "direction", str, description="Direction filter (buy/sell/long/short)"
             ),
-            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
             OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
@@ -307,14 +293,11 @@ class TaskSubResourceMixin:
         if execution_run_id is None:
             execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
         direction = (request.query_params.get("direction") or "").lower()
-        celery_task_id = request.query_params.get("celery_task_id")
         queryset = Trade.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
             execution_run_id=execution_run_id,
         ).order_by("timestamp")
-        if celery_task_id:
-            queryset = queryset.filter(celery_task_id=celery_task_id)
         if direction:
             if direction == "buy":
                 queryset = queryset.filter(direction="long")
@@ -357,13 +340,13 @@ class TaskSubResourceMixin:
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Trading"],
         parameters=[
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
             OpenApiParameter(
                 "position_status", str, description="Position status filter (open/closed)"
             ),
             OpenApiParameter("direction", str, description="Direction filter"),
-            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
             OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
@@ -389,7 +372,6 @@ class TaskSubResourceMixin:
         execution_run_id = _parse_execution_run_id(request)
         if execution_run_id is None:
             execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
-        celery_task_id = request.query_params.get("celery_task_id")
         queryset = (
             Position.objects.filter(
                 task_type=self.task_type_label,
@@ -399,9 +381,6 @@ class TaskSubResourceMixin:
             .prefetch_related("trades")
             .order_by("-entry_time")
         )
-
-        if celery_task_id:
-            queryset = queryset.filter(celery_task_id=celery_task_id)
 
         status_param = (request.query_params.get("position_status") or "").lower()
         if status_param == "open":
@@ -426,12 +405,12 @@ class TaskSubResourceMixin:
     # orders (with incremental fetching via `since`)
     # ------------------------------------------------------------------
     @extend_schema(
+        tags=["Trading"],
         parameters=[
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
             OpenApiParameter("status", str, description="Order status filter"),
             OpenApiParameter("order_type", str, description="Order type filter"),
             OpenApiParameter("direction", str, description="Direction filter"),
-            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
             OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
@@ -457,15 +436,11 @@ class TaskSubResourceMixin:
         execution_run_id = _parse_execution_run_id(request)
         if execution_run_id is None:
             execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
-        celery_task_id = request.query_params.get("celery_task_id")
         queryset = Order.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
             execution_run_id=execution_run_id,
         ).order_by("-submitted_at")
-
-        if celery_task_id:
-            queryset = queryset.filter(celery_task_id=celery_task_id)
 
         status_param = (request.query_params.get("status") or "").lower()
         if status_param:
@@ -489,8 +464,8 @@ class TaskSubResourceMixin:
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Trading"],
         parameters=[
-            OpenApiParameter("celery_task_id", str, description="Filter by Celery task ID"),
             OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
         ],
         responses={200: TaskSummarySerializer},
@@ -507,7 +482,6 @@ class TaskSubResourceMixin:
         from apps.trading.services.summary import compute_task_summary
 
         task = self.get_object()  # type: ignore[attr-defined]
-        celery_task_id = request.query_params.get("celery_task_id")
         execution_run_id = _parse_execution_run_id(request)
         if execution_run_id is None:
             execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
@@ -515,9 +489,50 @@ class TaskSubResourceMixin:
         result = compute_task_summary(
             task_type=self.task_type_label,
             task_id=str(task.pk),
-            celery_task_id=celery_task_id,
             execution_run_id=execution_run_id,
         )
 
         serializer = TaskSummarySerializer(asdict(result))
         return Response(serializer.data)
+
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[
+            OpenApiParameter("include_metrics", bool, description="Include aggregate metrics"),
+            OpenApiParameter("page", int),
+            OpenApiParameter("page_size", int),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskExecutionPaginatedResponse",
+                fields={
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": TaskExecutionSerializer(many=True),
+                },
+            )
+        },
+        description="Retrieve execution history for a task.",
+    )
+    @action(detail=True, methods=["get"])
+    def executions(self, request: Request, pk: str | None = None) -> Response:
+        from apps.trading.services.executions import list_task_executions
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        include_metrics = str(request.query_params.get("include_metrics", "false")).lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        rows = list_task_executions(
+            task=task,
+            task_type=self.task_type_label,
+            include_metrics=include_metrics,
+        )
+
+        paginator = TaskSubResourcePagination()
+        page = paginator.paginate_queryset(rows, request)
+        serializer = TaskExecutionSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)

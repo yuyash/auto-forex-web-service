@@ -35,8 +35,8 @@ export interface TaskTrade {
 interface UseTaskTradesOptions {
   taskId: string | number;
   taskType: TaskType;
-  /** Filter by celery execution ID. When omitted, returns all executions. */
-  celeryTaskId?: string;
+  /** Filter by execution run ID. When omitted, uses the latest execution run. */
+  executionRunId?: number;
   direction?: 'long' | 'short';
   page?: number;
   pageSize?: number;
@@ -104,7 +104,7 @@ function mapTradeResults(
 export const useTaskTrades = ({
   taskId,
   taskType,
-  celeryTaskId,
+  executionRunId,
   direction,
   page = 1,
   pageSize = 100,
@@ -124,7 +124,7 @@ export const useTaskTrades = ({
   const hasInitialFetchRef = useRef(false);
 
   // Reset incremental state when key params change.
-  const paramsKey = `${taskId}-${taskType}-${celeryTaskId}-${direction}-${page}-${pageSize}-${since ?? ''}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${direction}-${page}-${pageSize}-${since ?? ''}`;
   const prevParamsKeyRef = useRef(paramsKey);
   if (paramsKey !== prevParamsKeyRef.current) {
     prevParamsKeyRef.current = paramsKey;
@@ -161,7 +161,9 @@ export const useTaskTrades = ({
           page: String(page),
           page_size: String(pageSize),
         };
-        if (celeryTaskId) params.celery_task_id = celeryTaskId;
+        if (executionRunId != null) {
+          params.execution_run_id = String(executionRunId);
+        }
         if (apiDirection) params.direction = apiDirection;
         const effectiveSince = since ?? (incremental ? sinceRef.current : null);
         if (effectiveSince) params.since = effectiveSince;
@@ -224,7 +226,7 @@ export const useTaskTrades = ({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [taskId, taskType, celeryTaskId, direction, page, pageSize, since]
+    [taskId, taskType, executionRunId, direction, page, pageSize, since]
   );
 
   useEffect(() => {

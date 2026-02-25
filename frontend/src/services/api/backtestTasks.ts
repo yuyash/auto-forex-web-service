@@ -139,11 +139,24 @@ export const backtestTasksApi = {
   },
 
   getExecutions: async (
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _id: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _params?: { page?: number; page_size?: number; include_metrics?: boolean }
+    id: string,
+    params?: { page?: number; page_size?: number; include_metrics?: boolean }
   ): Promise<PaginatedResponse<import('../../types').TaskExecution>> => {
-    return { count: 0, next: null, previous: null, results: [] };
+    const result = await withRetry(() =>
+      api.get<PaginatedApiResponse<import('../../types').TaskExecution>>(
+        `${BASE}/${id}/executions/`,
+        {
+          page: params?.page,
+          page_size: params?.page_size,
+          include_metrics: params?.include_metrics,
+        }
+      )
+    );
+    return {
+      count: result.count,
+      next: result.next ?? null,
+      previous: result.previous ?? null,
+      results: result.results ?? [],
+    };
   },
 };

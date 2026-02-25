@@ -51,7 +51,7 @@ function getBackoffMs(
 export async function fetchAllTrades(
   taskId: string,
   taskType: TaskType,
-  celeryTaskId?: string
+  executionRunId?: number
 ): Promise<Array<Record<string, unknown>>> {
   const prefix =
     taskType === TaskType.BACKTEST
@@ -70,7 +70,7 @@ export async function fetchAllTrades(
         response = await api.get<PaginatedApiResponse<any>>(
           `${prefix}/${taskId}/trades/`,
           {
-            celery_task_id: celeryTaskId,
+            execution_run_id: executionRunId,
             page,
             page_size: MAX_PAGE_SIZE,
           }
@@ -121,7 +121,7 @@ export async function fetchTradesSince(
   taskId: string,
   taskType: TaskType,
   since: string,
-  celeryTaskId?: string
+  executionRunId?: number
 ): Promise<Array<Record<string, unknown>>> {
   const prefix =
     taskType === TaskType.BACKTEST
@@ -140,7 +140,9 @@ export async function fetchTradesSince(
       page: String(page),
       page_size: String(MAX_PAGE_SIZE),
     };
-    if (celeryTaskId) params.celery_task_id = celeryTaskId;
+    if (executionRunId != null) {
+      params.execution_run_id = String(executionRunId);
+    }
 
     let responseData: Record<string, unknown> | null = null;
 

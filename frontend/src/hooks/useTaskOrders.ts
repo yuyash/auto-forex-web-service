@@ -14,7 +14,6 @@ import { handleAuthErrorStatus } from '../utils/authEvents';
 
 export interface TaskOrder {
   id: string;
-  celery_task_id?: string | null;
   broker_order_id?: string | null;
   oanda_trade_id?: string | null;
   instrument: string;
@@ -36,8 +35,8 @@ export interface TaskOrder {
 interface UseTaskOrdersOptions {
   taskId: string | number;
   taskType: TaskType;
-  /** Filter orders by a specific Celery execution ID. */
-  celeryTaskId?: string;
+  /** Filter orders by execution run ID. */
+  executionRunId?: number;
   status?: string;
   orderType?: string;
   direction?: string;
@@ -81,7 +80,7 @@ function getLatestUpdatedAt(orders: TaskOrder[]): string | null {
 export const useTaskOrders = ({
   taskId,
   taskType,
-  celeryTaskId,
+  executionRunId,
   status,
   orderType,
   direction,
@@ -102,7 +101,7 @@ export const useTaskOrders = ({
   const sinceRef = useRef<string | null>(null);
   const hasInitialFetchRef = useRef(false);
 
-  const paramsKey = `${taskId}-${taskType}-${celeryTaskId}-${status}-${orderType}-${direction}-${page}-${pageSize}-${since ?? ''}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${orderType}-${direction}-${page}-${pageSize}-${since ?? ''}`;
   const prevParamsKeyRef = useRef(paramsKey);
   if (paramsKey !== prevParamsKeyRef.current) {
     prevParamsKeyRef.current = paramsKey;
@@ -135,7 +134,9 @@ export const useTaskOrders = ({
         if (status) params.status = status;
         if (orderType) params.order_type = orderType;
         if (direction) params.direction = direction;
-        if (celeryTaskId) params.celery_task_id = celeryTaskId;
+        if (executionRunId != null) {
+          params.execution_run_id = String(executionRunId);
+        }
         const effectiveSince = since ?? (incremental ? sinceRef.current : null);
         if (effectiveSince) params.since = effectiveSince;
 
@@ -197,7 +198,7 @@ export const useTaskOrders = ({
     [
       taskId,
       taskType,
-      celeryTaskId,
+      executionRunId,
       status,
       orderType,
       direction,

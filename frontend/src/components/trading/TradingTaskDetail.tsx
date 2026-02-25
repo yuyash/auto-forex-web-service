@@ -570,7 +570,7 @@ export const TradingTaskDetail: React.FC = () => {
           <TaskLogsTable
             taskId={taskId}
             taskType={TaskType.TRADING}
-            executionId={task.celery_task_id || undefined}
+            executionRunId={task.execution_run_id}
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
           />
         </LazyTabPanel>
@@ -580,7 +580,7 @@ export const TradingTaskDetail: React.FC = () => {
           <TaskOrdersTable
             taskId={taskId}
             taskType={TaskType.TRADING}
-            celeryTaskId={task.celery_task_id || undefined}
+            executionRunId={task.execution_run_id}
             enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
           />
         </LazyTabPanel>

@@ -15,14 +15,14 @@ import { TaskType } from '../../../types/common';
 interface TaskOrdersTableProps {
   taskId: string | number;
   taskType: TaskType;
-  celeryTaskId?: string;
+  executionRunId?: number;
   enableRealTimeUpdates?: boolean;
 }
 
 export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
   taskId,
   taskType,
-  celeryTaskId,
+  executionRunId,
   enableRealTimeUpdates = false,
 }) => {
   const [page, setPage] = useState(0);
@@ -33,7 +33,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
   const { orders, totalCount, isLoading, error, refetch } = useTaskOrders({
     taskId,
     taskType,
-    celeryTaskId,
+    executionRunId,
     page: page + 1,
     pageSize: rowsPerPage,
     enableRealTimeUpdates,

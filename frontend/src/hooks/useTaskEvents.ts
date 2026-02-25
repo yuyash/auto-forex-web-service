@@ -25,8 +25,8 @@ export interface TaskEvent {
 interface UseTaskEventsOptions {
   taskId: string | number;
   taskType: TaskType;
-  /** Filter by celery execution ID. When omitted, returns all executions. */
-  celeryTaskId?: string;
+  /** Filter by execution run ID. When omitted, uses the latest execution run. */
+  executionRunId?: number;
   eventType?: string;
   severity?: string;
   page?: number;
@@ -67,7 +67,7 @@ function getLatestCreatedAt(events: TaskEvent[]): string | null {
 export const useTaskEvents = ({
   taskId,
   taskType,
-  celeryTaskId,
+  executionRunId,
   eventType,
   severity,
   page = 1,
@@ -86,7 +86,7 @@ export const useTaskEvents = ({
   const sinceRef = useRef<string | null>(null);
   const hasInitialFetchRef = useRef(false);
 
-  const paramsKey = `${taskId}-${taskType}-${celeryTaskId}-${eventType}-${severity}-${page}-${pageSize}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${eventType}-${severity}-${page}-${pageSize}`;
   const prevParamsKeyRef = useRef(paramsKey);
   if (paramsKey !== prevParamsKeyRef.current) {
     prevParamsKeyRef.current = paramsKey;
@@ -116,7 +116,9 @@ export const useTaskEvents = ({
           page: String(page),
           page_size: String(pageSize),
         };
-        if (celeryTaskId) params.celery_task_id = celeryTaskId;
+        if (executionRunId != null) {
+          params.execution_run_id = String(executionRunId);
+        }
         if (eventType) params.event_type = eventType;
         if (severity) params.severity = severity;
         const effectiveSince = incremental ? sinceRef.current : null;
@@ -177,7 +179,7 @@ export const useTaskEvents = ({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [taskId, taskType, celeryTaskId, eventType, severity, page, pageSize]
+    [taskId, taskType, executionRunId, eventType, severity, page, pageSize]
   );
 
   useEffect(() => {

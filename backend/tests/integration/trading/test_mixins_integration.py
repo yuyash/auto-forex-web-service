@@ -15,6 +15,7 @@ from rest_framework.test import APIClient
 from apps.trading.enums import Direction, LogLevel, TaskType
 from apps.trading.models import (
     BacktestTask,
+    CeleryTaskStatus,
     Metrics,
     Order,
     Position,
@@ -105,6 +106,7 @@ class TestLogs:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 3
         assert len(response.data["results"]) == 3
+        assert "celery_task_id" not in response.data["results"][0]
 
     def test_without_logs(self):
         task = _make_task()
@@ -139,6 +141,7 @@ class TestEvents:
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/events/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 2
+        assert "celery_task_id" not in response.data["results"][0]
 
     def test_without_events(self):
         task = _make_task()
@@ -251,6 +254,7 @@ class TestOrders:
         order = response.data["results"][0]
         assert order["instrument"] == "USD_JPY"
         assert order["status"] == "filled"
+        assert "celery_task_id" not in order
 
     def test_without_orders(self):
         task = _make_task()
@@ -259,3 +263,32 @@ class TestOrders:
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/orders/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 0
+
+
+@pytest.mark.django_db
+class TestExecutions:
+    """GET /api/trading/tasks/backtest/{id}/executions/"""
+
+    def test_with_execution_history(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        task.execution_run_id = 2
+        task.status = "running"
+        task.save(update_fields=["execution_run_id", "status", "updated_at"])
+
+        CeleryTaskStatus.objects.create(
+            task_name="trading.tasks.run_backtest_task",
+            instance_key=f"{task.pk}:1",
+            status=CeleryTaskStatus.Status.COMPLETED,
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/executions/?include_metrics=true"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 2
+        latest = response.data["results"][0]
+        assert latest["execution_number"] == 2
+        assert latest["status"] == "running"
+        assert latest["id"] == "2"
+        assert "metrics" in latest

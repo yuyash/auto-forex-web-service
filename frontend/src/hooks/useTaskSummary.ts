@@ -87,7 +87,7 @@ const INITIAL_SUMMARY: TaskSummary = {
 export function useTaskSummary(
   taskId: string,
   taskType: TaskType,
-  celeryTaskId?: string,
+  executionRunId?: number,
   options: UseTaskSummaryOptions = {}
 ): UseTaskSummaryResult {
   const { polling = false, interval = 2000 } = options;
@@ -122,7 +122,9 @@ export function useTaskSummary(
       }
 
       const params: Record<string, string> = {};
-      if (celeryTaskId) params.celery_task_id = celeryTaskId;
+      if (executionRunId != null) {
+        params.execution_run_id = String(executionRunId);
+      }
 
       const response = await axios.get(url, {
         params,
@@ -179,7 +181,7 @@ export function useTaskSummary(
     } finally {
       setIsLoading(false);
     }
-  }, [taskId, taskType, celeryTaskId]);
+  }, [taskId, taskType, executionRunId]);
 
   useEffect(() => {
     fetchSummary();

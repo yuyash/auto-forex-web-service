@@ -18,6 +18,15 @@ from apps.market.models import OandaAccounts
 logger: Logger = getLogger(name=__name__)
 
 
+class OandaCandleFetchError(Exception):
+    """Raised when OANDA candle API returns a non-success status."""
+
+    def __init__(self, status_code: int, body: Any = None):
+        super().__init__(f"OANDA candles request failed (status={status_code})")
+        self.status_code = status_code
+        self.body = body
+
+
 class CandleDataView(APIView):
     """
     API endpoint for fetching candle data.
@@ -240,14 +249,9 @@ class CandleDataView(APIView):
                         )
 
                         if oanda_response.status != 200:
-                            logger.error(
-                                "Failed to fetch candles: status=%d, body=%s",
-                                oanda_response.status,
-                                oanda_response.body,
-                            )
-                            return Response(
-                                {"error": "Failed to fetch candles from OANDA"},
-                                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            raise OandaCandleFetchError(
+                                status_code=int(oanda_response.status),
+                                body=oanda_response.body,
                             )
 
                         all_candles = (
@@ -268,14 +272,9 @@ class CandleDataView(APIView):
                 oanda_response = api_context.instrument.candles(instrument=instrument, **params)
 
                 if oanda_response.status != 200:
-                    logger.error(
-                        "Failed to fetch candles: status=%d, body=%s",
-                        oanda_response.status,
-                        oanda_response.body,
-                    )
-                    return Response(
-                        {"error": "Failed to fetch candles from OANDA"},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    raise OandaCandleFetchError(
+                        status_code=int(oanda_response.status),
+                        body=oanda_response.body,
                     )
 
                 all_candles = oanda_response.body.get("candles", []) if oanda_response.body else []
@@ -287,14 +286,9 @@ class CandleDataView(APIView):
                 oanda_response = api_context.instrument.candles(instrument=instrument, **params)
 
                 if oanda_response.status != 200:
-                    logger.error(
-                        "Failed to fetch candles: status=%d, body=%s",
-                        oanda_response.status,
-                        oanda_response.body,
-                    )
-                    return Response(
-                        {"error": "Failed to fetch candles from OANDA"},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    raise OandaCandleFetchError(
+                        status_code=int(oanda_response.status),
+                        body=oanda_response.body,
                     )
 
                 all_candles = oanda_response.body.get("candles", []) if oanda_response.body else []
@@ -304,14 +298,9 @@ class CandleDataView(APIView):
                 oanda_response = api_context.instrument.candles(instrument=instrument, **params)
 
                 if oanda_response.status != 200:
-                    logger.error(
-                        "Failed to fetch candles: status=%d, body=%s",
-                        oanda_response.status,
-                        oanda_response.body,
-                    )
-                    return Response(
-                        {"error": "Failed to fetch candles from OANDA"},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    raise OandaCandleFetchError(
+                        status_code=int(oanda_response.status),
+                        body=oanda_response.body,
                     )
 
                 all_candles = oanda_response.body.get("candles", []) if oanda_response.body else []
@@ -372,6 +361,16 @@ class CandleDataView(APIView):
                 },
             )
 
+        except OandaCandleFetchError as e:
+            logger.error(
+                "Failed to fetch candles: status=%d, body=%s",
+                e.status_code,
+                e.body,
+            )
+            return self._build_oanda_error_response(
+                oanda_status=e.status_code,
+                body=e.body,
+            )
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error fetching candles: %s", e, exc_info=True)
             is_rate_limit = "429" in str(e) or "rate limit" in str(e).lower()
@@ -386,6 +385,46 @@ class CandleDataView(APIView):
                 {"error": "Failed to fetch candles"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    def _build_oanda_error_response(self, *, oanda_status: int, body: Any) -> Response:
+        """Translate OANDA error status to API response."""
+        upstream_message = ""
+        if isinstance(body, dict):
+            upstream_message = str(body.get("errorMessage") or body.get("message") or "")
+
+        if oanda_status in (401, 403):
+            return Response(
+                {
+                    "error": "OANDA authentication/authorization failed",
+                    "error_code": "OANDA_AUTH_FAILED",
+                    "oanda_status": oanda_status,
+                    "details": upstream_message or None,
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        if oanda_status == 429:
+            return Response(
+                {"error": "Rate limit exceeded. Please try again later."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        if 400 <= oanda_status < 500:
+            return Response(
+                {
+                    "error": "Invalid request to OANDA candles endpoint",
+                    "error_code": "OANDA_BAD_REQUEST",
+                    "oanda_status": oanda_status,
+                    "details": upstream_message or None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(
+            {
+                "error": "Failed to fetch candles from OANDA",
+                "error_code": "OANDA_UPSTREAM_ERROR",
+                "oanda_status": oanda_status,
+            },
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
 
     def _get_granularity_seconds(self, granularity: str) -> int:
         """
@@ -482,12 +521,10 @@ class CandleDataView(APIView):
                 )
 
                 if response.status != 200:
-                    logger.error(
-                        "Failed to fetch candle batch: status=%d, body=%s",
-                        response.status,
-                        response.body,
+                    raise OandaCandleFetchError(
+                        status_code=int(response.status),
+                        body=response.body,
                     )
-                    break
 
                 batch_candles = response.body.get("candles", []) if response.body else []
 
@@ -512,6 +549,8 @@ class CandleDataView(APIView):
                 )
 
             except Exception as e:  # pylint: disable=broad-exception-caught
+                if isinstance(e, OandaCandleFetchError):
+                    raise
                 logger.error("Error fetching candle batch: %s", e, exc_info=True)
                 break
 
