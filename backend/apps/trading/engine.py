@@ -61,30 +61,24 @@ class TradingEngine:
     def _create_strategy(self) -> Strategy:
         """Create strategy instance based on configuration.
 
+        Uses the StrategyRegistry to instantiate the correct strategy class.
+        New strategies only need to use the @register_strategy decorator
+        to be automatically available here.
+
         Returns:
             Strategy instance
 
         Raises:
             ValueError: If strategy type is unknown
         """
-        strategy_type = self.strategy_config.strategy_type
+        from apps.trading.strategies.registry import register_all_strategies, registry
 
-        if strategy_type == StrategyType.FLOOR.value:
-            from apps.trading.strategies.floor.models import (
-                FloorStrategyConfig,
-            )
-            from apps.trading.strategies.floor.strategy import (
-                FloorStrategy,
-            )
-
-            config = FloorStrategyConfig.from_dict(self.strategy_config.config_dict)
-            return FloorStrategy(
-                instrument=self.instrument,
-                pip_size=self.pip_size,
-                config=config,
-            )
-
-        raise ValueError(f"Unknown strategy type: {strategy_type}")
+        register_all_strategies()
+        return registry.create(
+            instrument=self.instrument,
+            pip_size=self.pip_size,
+            strategy_config=self.strategy_config,
+        )
 
     def on_tick(self, *, tick: Tick, state: ExecutionState) -> StrategyResult:
         """Process tick through strategy.

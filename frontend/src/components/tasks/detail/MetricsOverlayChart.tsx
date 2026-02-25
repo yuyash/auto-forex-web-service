@@ -17,10 +17,7 @@ import {
   type IChartApi,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import {
-  fetchMetricSnapshots,
-  type MetricSnapshotPoint,
-} from '../../../utils/fetchMetricSnapshots';
+import { fetchMetrics, type MetricPoint } from '../../../utils/fetchMetrics';
 import { TaskType } from '../../../types/common';
 
 export interface UseMetricsOverlayOptions {
@@ -35,12 +32,12 @@ export interface UseMetricsOverlayOptions {
 }
 
 function resampleSnapshots(
-  snapshots: MetricSnapshotPoint[],
+  snapshots: MetricPoint[],
   candleTimestamps: number[]
-): MetricSnapshotPoint[] {
+): MetricPoint[] {
   if (snapshots.length === 0 || candleTimestamps.length === 0) return [];
   const lastSnapshotTime = snapshots[snapshots.length - 1].t;
-  const result: MetricSnapshotPoint[] = [];
+  const result: MetricPoint[] = [];
   let si = 0;
   for (const ct of candleTimestamps) {
     if (ct > lastSnapshotTime) break;
@@ -110,7 +107,7 @@ export function useMetricsOverlay({
   const seriesRef = useRef<ReturnType<typeof attachSeries> | null>(null);
   const attachedToChart = useRef<IChartApi | null>(null);
 
-  const [snapshots, setSnapshots] = useState<MetricSnapshotPoint[]>([]);
+  const [snapshots, setSnapshots] = useState<MetricPoint[]>([]);
 
   // Track the latest timestamp for incremental fetching.
   const sinceRef = useRef<number | null>(null);
@@ -121,7 +118,7 @@ export function useMetricsOverlay({
       const sinceIso = sinceRef.current
         ? new Date(sinceRef.current * 1000).toISOString()
         : undefined;
-      const data = await fetchMetricSnapshots(
+      const data = await fetchMetrics(
         taskId,
         taskType,
         10_000,
@@ -153,7 +150,7 @@ export function useMetricsOverlay({
   useEffect(() => {
     let cancelled = false;
 
-    fetchMetricSnapshots(taskId, taskType, 10_000, undefined, celeryTaskId)
+    fetchMetrics(taskId, taskType, 10_000, undefined, celeryTaskId)
       .then((data) => {
         if (!cancelled && data.length > 0) {
           setSnapshots(data);
@@ -213,7 +210,7 @@ export function useMetricsOverlay({
 
     if (!hasSnapshots && !hasCandles) return;
 
-    let extended: MetricSnapshotPoint[] = [];
+    let extended: MetricPoint[] = [];
 
     if (hasSnapshots) {
       const aligned = hasCandles

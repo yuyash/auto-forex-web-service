@@ -158,13 +158,27 @@ def register_strategy(
 
 
 def register_all_strategies() -> None:
-    """Register all strategy implementations."""
+    """Auto-discover and register all strategy implementations.
 
-    if not registry.is_registered("floor"):
-        # Import triggers decorator registration.
-        from apps.trading.strategies.floor import strategy as floor_strategy
+    Scans the ``strategies/`` directory for sub-packages that contain a
+    ``strategy`` module and imports them, triggering ``@register_strategy``
+    decorator registration.  This means adding a new strategy only requires
+    creating ``strategies/<name>/strategy.py`` with the decorator — no
+    manual import list to maintain.
+    """
+    import importlib
+    import pkgutil
+    from pathlib import Path
 
-        _ = floor_strategy.FloorStrategy
+    strategies_dir = Path(__file__).parent
+    for _finder, name, is_pkg in pkgutil.iter_modules([str(strategies_dir)]):
+        if is_pkg and name not in ("__pycache__",):
+            module_name = f"apps.trading.strategies.{name}.strategy"
+            try:
+                importlib.import_module(module_name)
+            except ImportError:
+                # Package exists but has no strategy.py — skip silently
+                pass
 
 
 __all__ = [

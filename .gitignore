@@ -196,3 +196,6 @@ static_root/
 
 # Pytest+cov
 coverage.xml
+
+# Generated OpenAPI schema
+backend/schema.yml

@@ -26,7 +26,6 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     # State management fields for frontend button logic
     has_strategy_state = serializers.SerializerMethodField()
     can_resume = serializers.SerializerMethodField()
-    current_tick = serializers.SerializerMethodField()
 
     class Meta:
         model = TradingTask
@@ -48,7 +47,6 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             # State management fields
             "has_strategy_state",
             "can_resume",
-            "current_tick",
             "created_at",
             "updated_at",
         ]
@@ -66,7 +64,6 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "pip_size",
             "has_strategy_state",
             "can_resume",
-            "current_tick",
             "created_at",
             "updated_at",
         ]
@@ -86,40 +83,6 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     def get_can_resume(self, obj: TradingTask) -> bool:
         """Check if task can be resumed with state recovery."""
         return obj.can_resume()
-
-    def get_current_tick(self, obj: TradingTask) -> dict | None:
-        """Return the current tick position and price.
-
-        For running tasks this returns the live tick from ExecutionState.
-        For stopped/completed tasks it returns the last recorded tick so
-        that Unrealized PnL can still be displayed.
-        """
-        from apps.trading.enums import TaskType
-        from apps.trading.models.state import ExecutionState
-
-        if not obj.celery_task_id:
-            return None
-
-        try:
-            state = ExecutionState.objects.filter(
-                task_type=TaskType.TRADING.value,
-                task_id=obj.pk,
-                celery_task_id=obj.celery_task_id,
-            ).first()
-
-            if not state or not state.last_tick_timestamp:
-                return None
-
-            return {
-                "timestamp": state.last_tick_timestamp.isoformat(),
-                "price": str(state.last_tick_price) if state.last_tick_price is not None else None,
-            }
-        except Exception as e:
-            logger.error(
-                f"[TradingTaskSerializer] Error getting current_tick for task {obj.pk}: {e}",
-                exc_info=True,
-            )
-            return None
 
 
 class TradingTaskListSerializer(serializers.ModelSerializer):

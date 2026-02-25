@@ -14,6 +14,7 @@ from .base import (
     TakeProfitEvent,
     VolatilityHedgeNeutralizeEvent,
     VolatilityLockEvent,
+    register_event,
 )
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "TakeProfitEvent",
     "VolatilityHedgeNeutralizeEvent",
     "VolatilityLockEvent",
+    "register_event",
 ]

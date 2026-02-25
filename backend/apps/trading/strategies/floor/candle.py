@@ -58,7 +58,7 @@ class CandleManager:
             state.current_candle_low = mid_price
 
             # 履歴を制限
-            max_candles = self.config.candle_lookback_count + 5
+            max_candles = self.config.entry_signal_lookback_candles + 5
             if len(state.candles) > max_candles:
                 state.candles = state.candles[-max_candles:]
         else:
@@ -79,7 +79,7 @@ class CandleManager:
             Bucket start epoch in seconds
         """
         epoch = int(timestamp.timestamp())
-        granularity = self.config.candle_granularity_seconds
+        granularity = self.config.entry_signal_candle_granularity_seconds
         return epoch - (epoch % granularity)
 
     def get_candle_closes(self, state: FloorStrategyState) -> list[Decimal]:
@@ -133,4 +133,4 @@ class CandleManager:
             True if enough candles
         """
         closes = self.get_candle_closes(state)
-        return len(closes) >= self.config.candle_lookback_count
+        return len(closes) >= self.config.entry_signal_lookback_candles

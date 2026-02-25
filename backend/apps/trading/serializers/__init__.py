@@ -19,6 +19,7 @@ from apps.trading.serializers.strategy import (
     StrategyConfigSerializer,
     StrategyListSerializer,
 )
+from apps.trading.serializers.summary import TaskSummarySerializer
 from apps.trading.serializers.task import (
     BacktestTaskSerializer as BacktestTaskSerializerNew,
 )
@@ -58,6 +59,8 @@ __all__ = [
     # Tick
     "TickDataCSVSerializer",
     "TickDataSerializer",
+    # Summary
+    "TaskSummarySerializer",
     # Trading task
     "TradingTaskCreateSerializer",
     "TradingTaskListSerializer",

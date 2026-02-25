@@ -1,15 +1,28 @@
 {
   "display_name": "Floor Strategy",
   "type": "object",
+  "description": "Configuration for Floor strategy.",
   "properties": {
+    "lot_unit_size": {
+      "type": "integer",
+      "title": "Lot Unit Size",
+      "description": "How many currency units equal 1 lot (e.g. 1000 means 1 lot = 1,000 units).",
+      "default": 1000,
+      "minimum": 1,
+      "group": "Floor Parameters"
+    },
     "base_lot_size": {
       "type": "number",
       "title": "Base Lot Size",
-      "description": "Initial lot size for the first entry."
+      "description": "Lot size used for the very first entry in each layer. All subsequent lot calculations are based on this value.",
+      "default": 1.0,
+      "minimum": 0.01,
+      "group": "Floor Parameters"
     },
     "retracement_lot_mode": {
       "type": "string",
-      "title": "Intra-Layer Retracement Lot Mode",
+      "title": "Retracement Lot Mode",
+      "description": "How the lot size changes with each successive retracement entry within the same layer. Constant: same size every time, Additive: adds a fixed amount, Subtractive: subtracts a fixed amount (min 0.01), Multiplicative: doubles each time (base × 2^N), Divisive: halves each time (base / 2^N).",
       "enum": [
         "constant",
         "additive",
@@ -17,91 +30,33 @@
         "multiplicative",
         "divisive"
       ],
-      "description": "Controls how lot size changes on each retracement entry within a single layer. 'constant' keeps the same lot size, 'additive' adds a fixed amount per retracement, 'subtractive' subtracts a fixed amount (min 0.01), 'multiplicative' doubles each time (base × 2^N), 'divisive' halves each time (base / 2^N)."
+      "default": "additive",
+      "group": "Floor Parameters"
     },
     "retracement_lot_amount": {
       "type": "number",
-      "title": "Intra-Layer Retracement Lot Amount",
-      "description": "The increment value used for intra-layer lot sizing. For 'additive' mode this is added per retracement; for 'subtractive' it is subtracted per retracement.",
+      "title": "Retracement Lot Amount",
+      "description": "The value used to adjust lot size per retracement. In Additive mode: lots = base + amount × N. In Subtractive mode: lots = base − amount × N (min 0.01).",
+      "default": 1.0,
+      "minimum": 0.01,
       "dependsOn": {
         "field": "retracement_lot_mode",
         "values": ["additive", "subtractive"]
-      }
+      },
+      "group": "Floor Parameters"
     },
     "retracement_pips": {
       "type": "number",
-      "title": "Retracement Trigger Pips (Base)",
-      "description": "Base adverse movement in pips required to trigger a retracement entry. This is the starting value for Layer 0; cross-layer progression may modify it for subsequent layers."
-    },
-    "take_profit_pips": {
-      "type": "number",
-      "title": "Take Profit Pips (Base)",
-      "description": "Base profit in pips required to close a position. This is the starting value for Layer 0; cross-layer and intra-layer progression may modify it."
-    },
-    "max_layers": {
-      "type": "integer",
-      "title": "Maximum Layers",
-      "description": "Maximum number of layers that can be opened."
-    },
-    "max_retracements_per_layer": {
-      "type": "integer",
-      "title": "Max Retracements Per Layer",
-      "description": "Max number of retracement entries allowed per layer."
-    },
-    "volatility_lock_multiplier": {
-      "type": "number",
-      "title": "Volatility Lock Multiplier",
-      "description": "ATR multiplier threshold to trigger volatility lock.",
-      "dependsOn": {
-        "field": "volatility_check_enabled",
-        "values": ["true"]
-      }
-    },
-    "retracement_trigger_progression": {
-      "type": "string",
-      "title": "Cross-Layer Retracement Trigger Progression",
-      "enum": [
-        "constant",
-        "additive",
-        "subtractive",
-        "multiplicative",
-        "divisive"
-      ],
-      "description": "Controls how the starting retracement trigger pips change when a new layer opens. Layer 0 uses the base Retracement Pips; subsequent layers apply this progression formula."
-    },
-    "retracement_trigger_increment": {
-      "type": "number",
-      "title": "Cross-Layer Retracement Trigger Increment",
-      "description": "Increment value for cross-layer retracement trigger progression. Used with 'additive' and 'subtractive' modes.",
-      "dependsOn": {
-        "field": "retracement_trigger_progression",
-        "values": ["additive", "subtractive"]
-      }
-    },
-    "take_profit_trigger_progression": {
-      "type": "string",
-      "title": "Cross-Layer Take Profit Progression",
-      "enum": [
-        "constant",
-        "additive",
-        "subtractive",
-        "multiplicative",
-        "divisive"
-      ],
-      "description": "Controls how the starting take-profit pips change when a new layer opens. Layer 0 uses the base Take Profit Pips; subsequent layers apply this progression formula."
-    },
-    "take_profit_trigger_increment": {
-      "type": "number",
-      "title": "Cross-Layer Take Profit Increment",
-      "description": "Increment value for cross-layer take-profit progression. Used with 'additive' and 'subtractive' modes.",
-      "dependsOn": {
-        "field": "take_profit_trigger_progression",
-        "values": ["additive", "subtractive"]
-      }
+      "title": "Retracement Pips",
+      "description": "How many pips the price must move against you before a new retracement entry is opened. This is the base value for Layer 0.",
+      "default": 30,
+      "minimum": 1,
+      "group": "Floor Parameters"
     },
     "take_profit_pips_mode": {
       "type": "string",
-      "title": "Intra-Layer Take Profit Pips Mode",
+      "title": "Take Profit Pips Mode",
+      "description": "How the take-profit target changes for each successive retracement entry within the same layer. Constant keeps the same TP for all entries.",
       "enum": [
         "constant",
         "additive",
@@ -109,163 +64,283 @@
         "multiplicative",
         "divisive"
       ],
-      "description": "Controls how take-profit pips change on each retracement entry within a single layer. 'constant' keeps the same TP for all entries, 'additive' increases TP per retracement, etc."
+      "default": "constant",
+      "group": "Floor Parameters"
+    },
+    "take_profit_pips": {
+      "type": "number",
+      "title": "Take Profit Pips",
+      "description": "How many pips of profit are needed to close a position. This is the base value for the initial entry in Layer 0.",
+      "default": 25,
+      "minimum": 1,
+      "group": "Floor Parameters"
     },
     "take_profit_pips_amount": {
       "type": "number",
-      "title": "Intra-Layer Take Profit Pips Amount",
-      "description": "Increment value for intra-layer take-profit pips adjustment. Used with 'additive' and 'subtractive' modes.",
+      "title": "Take Profit Pips Amount",
+      "description": "Pips added (or subtracted) per retracement entry. Example: base 25 + amount 3 → 1st retracement TP = 28, 2nd = 31.",
+      "default": 5.0,
       "dependsOn": {
         "field": "take_profit_pips_mode",
         "values": ["additive", "subtractive"]
-      }
-    },
-    "entry_signal_lookback_candles": {
-      "type": "integer",
-      "title": "Momentum Lookback Candles",
-      "default": 50,
-      "description": "Number of candles to analyze for trend direction."
-    },
-    "entry_signal_candle_granularity_seconds": {
-      "type": "integer",
-      "title": "Momentum Candle Granularity (seconds)",
-      "default": 60,
-      "description": "Candle size in seconds used for trend lookback."
-    },
-    "lot_unit_size": {
-      "type": "number",
-      "title": "Lot Unit Size",
-      "default": 1000,
-      "description": "Units per 1 lot."
+      },
+      "group": "Floor Parameters"
     },
     "allow_duplicate_units": {
       "type": "boolean",
       "title": "Allow Duplicate Units",
+      "description": "When disabled, the system automatically adjusts position sizes to avoid having two entries with the exact same unit count in the same layer.",
       "default": false,
-      "description": "If false, duplicate position sizes are automatically avoided."
+      "group": "Floor Parameters"
     },
     "hedging_enabled": {
       "type": "boolean",
       "title": "Hedging Enabled",
-      "default": true,
-      "description": "Whether account can hold opposite positions simultaneously. Defaults to true for JP OANDA accounts."
-    },
-    "layer_direction_mode": {
-      "type": "string",
-      "title": "Layer Direction Mode",
-      "enum": ["independent", "inherit"],
-      "default": "independent",
-      "description": "How direction is determined when a new layer is added. 'independent' re-evaluates from recent candle data; 'inherit' uses the same direction as the previous layer."
-    },
-    "margin_rate": {
-      "type": "number",
-      "title": "Margin Rate",
-      "default": 0.04,
-      "description": "Margin requirement rate.",
-      "dependsOn": {
-        "field": "margin_protection_enabled",
-        "values": ["true"]
-      }
-    },
-    "margin_cut_start_ratio": {
-      "type": "number",
-      "title": "Margin Cut Start Ratio",
-      "default": 0.6,
-      "description": "Start forced reduction when margin ratio reaches this value.",
-      "dependsOn": {
-        "field": "margin_protection_enabled",
-        "values": ["true"]
-      }
-    },
-    "margin_cut_target_ratio": {
-      "type": "number",
-      "title": "Margin Cut Target Ratio",
-      "default": 0.5,
-      "description": "Target ratio after forced reduction.",
-      "dependsOn": {
-        "field": "margin_protection_enabled",
-        "values": ["true"]
-      }
-    },
-    "margin_protection_enabled": {
-      "type": "boolean",
-      "title": "Margin Protection Enabled",
-      "default": true,
-      "description": "Enable forced closeout logic based on margin ratio thresholds."
-    },
-    "volatility_check_enabled": {
-      "type": "boolean",
-      "title": "Volatility Check Enabled",
-      "default": true,
-      "description": "Enable ATR-based volatility lock/unlock checks."
-    },
-    "volatility_unlock_multiplier": {
-      "type": "number",
-      "title": "Volatility Unlock Multiplier",
-      "default": 1.5,
-      "description": "ATR multiplier threshold to unlock strategy after lock.",
-      "dependsOn": {
-        "field": "volatility_check_enabled",
-        "values": ["true"]
-      }
+      "description": "Allow holding both long and short positions at the same time. When disabled, positions are closed in FIFO order (US regulation).",
+      "default": false,
+      "group": "Floor Parameters"
     },
     "dynamic_parameter_adjustment_enabled": {
       "type": "boolean",
       "title": "Dynamic Parameter Adjustment",
+      "description": "Automatically widen or tighten retracement triggers and take-profit targets based on current volatility.",
       "default": false,
-      "description": "Adjust triggers/targets based on volatility.",
       "dependsOn": {
         "field": "volatility_check_enabled",
         "values": ["true"]
-      }
-    },
-    "atr_period": {
-      "type": "integer",
-      "title": "ATR Period",
-      "default": 14,
-      "description": "ATR window for lock detection.",
-      "dependsOn": {
-        "field": "volatility_check_enabled",
-        "values": ["true"],
-        "or": [
-          {
-            "field": "dynamic_parameter_adjustment_enabled",
-            "values": ["true"]
-          }
-        ]
-      }
-    },
-    "atr_baseline_period": {
-      "type": "integer",
-      "title": "ATR Baseline Period",
-      "default": 50,
-      "description": "Baseline ATR window used for ATR multiplier comparison.",
-      "dependsOn": {
-        "field": "volatility_check_enabled",
-        "values": ["true"],
-        "or": [
-          {
-            "field": "dynamic_parameter_adjustment_enabled",
-            "values": ["true"]
-          }
-        ]
-      }
+      },
+      "group": "Floor Parameters"
     },
     "market_condition_override_enabled": {
       "type": "boolean",
       "title": "Spread Breaker",
+      "description": "Skip new entries when the bid-ask spread is abnormally wide.",
       "default": true,
-      "description": "Enable temporary rule override on bad market conditions."
+      "group": "Floor Parameters"
     },
     "market_condition_spread_limit_pips": {
       "type": "number",
       "title": "Spread Limit (pips)",
+      "description": "Do not open new entries when the spread exceeds this many pips.",
       "default": 3.0,
-      "description": "Skip new entries when spread exceeds this value.",
       "dependsOn": {
         "field": "market_condition_override_enabled",
         "values": ["true"]
-      }
+      },
+      "group": "Floor Parameters"
+    },
+
+    "max_layers": {
+      "type": "integer",
+      "title": "Maximum Layers",
+      "description": "Maximum number of layers that can be open at the same time. When all retracements in a layer are exhausted, a new layer opens if this limit allows.",
+      "default": 3,
+      "minimum": 1,
+      "group": "Layer Parameters"
+    },
+    "max_retracements_per_layer": {
+      "type": "integer",
+      "title": "Max Retracements Per Layer",
+      "description": "Maximum number of additional retracement entries allowed in a single layer before the strategy moves to a new layer.",
+      "default": 10,
+      "minimum": 1,
+      "group": "Layer Parameters"
+    },
+    "retracement_trigger_progression": {
+      "type": "string",
+      "title": "Retracement Trigger Progression",
+      "description": "How the retracement trigger pips change when a new layer opens. Layer 0 always uses the base Retracement Pips value.",
+      "enum": [
+        "constant",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive"
+      ],
+      "default": "constant",
+      "group": "Layer Parameters"
+    },
+    "retracement_trigger_increment": {
+      "type": "number",
+      "title": "Retracement Trigger Increment",
+      "description": "Pips added (or subtracted) per layer. Example: base 30 + increment 5 → Layer 1 = 35, Layer 2 = 40.",
+      "default": 5.0,
+      "dependsOn": {
+        "field": "retracement_trigger_progression",
+        "values": ["additive", "subtractive"]
+      },
+      "group": "Layer Parameters"
+    },
+    "take_profit_trigger_progression": {
+      "type": "string",
+      "title": "Take Profit Trigger Progression",
+      "description": "How the starting take-profit pips change when a new layer opens. Layer 0 always uses the base Take Profit Pips value.",
+      "enum": [
+        "constant",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive"
+      ],
+      "default": "constant",
+      "group": "Layer Parameters"
+    },
+    "take_profit_trigger_increment": {
+      "type": "number",
+      "title": "Take Profit Trigger Increment",
+      "description": "Pips added (or subtracted) per layer. Example: base 25 + increment 5 → Layer 1 = 30, Layer 2 = 35.",
+      "default": 5.0,
+      "dependsOn": {
+        "field": "take_profit_trigger_progression",
+        "values": ["additive", "subtractive"]
+      },
+      "group": "Layer Parameters"
+    },
+
+    "margin_protection_enabled": {
+      "type": "boolean",
+      "title": "Margin Protection Enabled",
+      "description": "Automatically close positions when margin usage becomes dangerously high.",
+      "default": true,
+      "group": "Margin Parameters"
+    },
+    "margin_rate": {
+      "type": "number",
+      "title": "Margin Rate",
+      "description": "Broker margin rate (e.g. 0.04 = 4% margin, equivalent to 25× leverage).",
+      "default": 0.04,
+      "dependsOn": {
+        "field": "margin_protection_enabled",
+        "values": ["true"]
+      },
+      "group": "Margin Parameters"
+    },
+    "margin_cut_start_ratio": {
+      "type": "number",
+      "title": "Margin Cut Start Ratio",
+      "description": "Start forced position reduction when margin ratio reaches this level (e.g. 0.6 = 60%).",
+      "default": 0.6,
+      "dependsOn": {
+        "field": "margin_protection_enabled",
+        "values": ["true"]
+      },
+      "group": "Margin Parameters"
+    },
+    "margin_cut_target_ratio": {
+      "type": "number",
+      "title": "Margin Cut Target Ratio",
+      "description": "Reduce positions until margin ratio drops to this level (e.g. 0.5 = 50%).",
+      "default": 0.5,
+      "dependsOn": {
+        "field": "margin_protection_enabled",
+        "values": ["true"]
+      },
+      "group": "Margin Parameters"
+    },
+
+    "volatility_check_enabled": {
+      "type": "boolean",
+      "title": "Volatility Check Enabled",
+      "description": "Pause trading when market volatility (ATR) spikes above normal levels.",
+      "default": true,
+      "group": "Volatility Parameters"
+    },
+    "volatility_lock_multiplier": {
+      "type": "number",
+      "title": "Volatility Lock Multiplier",
+      "description": "Pause trading when current ATR exceeds baseline ATR by this multiplier (e.g. 5.0 = 5× normal volatility).",
+      "default": 5.0,
+      "minimum": 1,
+      "dependsOn": {
+        "field": "volatility_check_enabled",
+        "values": ["true"]
+      },
+      "group": "Volatility Parameters"
+    },
+    "volatility_unlock_multiplier": {
+      "type": "number",
+      "title": "Volatility Unlock Multiplier",
+      "description": "Resume trading when current ATR drops below baseline ATR by this multiplier.",
+      "default": 1.5,
+      "dependsOn": {
+        "field": "volatility_check_enabled",
+        "values": ["true"]
+      },
+      "group": "Volatility Parameters"
+    },
+    "atr_period": {
+      "type": "integer",
+      "title": "ATR Period",
+      "description": "Number of candles used to calculate the current ATR value.",
+      "default": 14,
+      "dependsOn": {
+        "field": "volatility_check_enabled",
+        "values": ["true"],
+        "or": [
+          {
+            "field": "dynamic_parameter_adjustment_enabled",
+            "values": ["true"]
+          }
+        ]
+      },
+      "group": "Volatility Parameters"
+    },
+    "atr_baseline_period": {
+      "type": "integer",
+      "title": "ATR Baseline Period",
+      "description": "Number of candles used to calculate the baseline ATR for comparison.",
+      "default": 50,
+      "dependsOn": {
+        "field": "volatility_check_enabled",
+        "values": ["true"],
+        "or": [
+          {
+            "field": "dynamic_parameter_adjustment_enabled",
+            "values": ["true"]
+          }
+        ]
+      },
+      "group": "Volatility Parameters"
+    },
+
+    "entry_signal_lookback_candles": {
+      "type": "integer",
+      "title": "Candle Lookback Count",
+      "description": "Number of candles analyzed to determine the initial entry direction (long or short).",
+      "default": 50,
+      "minimum": 1,
+      "group": "Direction Detection Parameters"
+    },
+    "entry_signal_candle_granularity_seconds": {
+      "type": "integer",
+      "title": "Candle Granularity (seconds)",
+      "description": "Duration of each candle in seconds. 60 = 1-minute candles, 300 = 5-minute candles.",
+      "default": 60,
+      "minimum": 1,
+      "group": "Direction Detection Parameters"
+    },
+    "layer_direction_mode": {
+      "type": "string",
+      "title": "Layer Direction Mode",
+      "description": "How direction is determined when a new layer is added. \"independent\" re-evaluates from recent candle data; \"inherit\" uses the same direction as the previous layer.",
+      "default": "independent",
+      "enum": ["independent", "inherit"],
+      "group": "Direction Detection Parameters"
+    },
+
+    "floor_profiles": {
+      "type": "array",
+      "title": "Floor Profiles",
+      "description": "Optional per-layer overrides for take_profit_pips and retracement_pips. Each entry applies to the corresponding layer index. If empty, the base values with progression formulas are used.",
+      "default": [],
+      "items": {
+        "type": "object",
+        "properties": {
+          "take_profit_pips": { "type": "number" },
+          "retracement_pips": { "type": "number" }
+        }
+      },
+      "group": "Layer Parameters"
     }
   },
   "required": [

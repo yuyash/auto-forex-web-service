@@ -31,9 +31,9 @@ class TaskSubResourceMixin:
 
     task_type_label: str
 
-    @action(detail=True, methods=["get"])
+    @action(detail=True, methods=["get"], url_path="metrics")
     def metric_snapshots(self, request: Request, pk: int | None = None) -> Response:
-        from apps.trading.models.metric_snapshots import MetricSnapshot
+        from apps.trading.models.metrics import Metrics as MetricSnapshot
 
         task = self.get_object()  # type: ignore[attr-defined]
         celery_task_id = request.query_params.get("celery_task_id")
@@ -89,7 +89,7 @@ class TaskSubResourceMixin:
                 "FROM ("
                 "  SELECT timestamp, margin_ratio, current_atr, baseline_atr, volatility_threshold, "
                 "         ROW_NUMBER() OVER (ORDER BY timestamp) AS rn "
-                "  FROM metric_snapshots "
+                "  FROM metrics "
                 "  WHERE task_type = %s AND task_id = %s" + celery_filter + ") sub "
                 "WHERE rn %% %s = 1 "
                 "ORDER BY timestamp"

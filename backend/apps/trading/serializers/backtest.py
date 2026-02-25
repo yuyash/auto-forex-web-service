@@ -17,8 +17,6 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
-    progress = serializers.SerializerMethodField()
-    current_tick = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask
@@ -34,13 +32,10 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "start_time",
             "end_time",
             "initial_balance",
-            "account_currency",
             "commission_per_trade",
             "pip_size",
             "instrument",
             "status",
-            "progress",
-            "current_tick",
             "started_at",
             "completed_at",
             "error_message",
@@ -54,119 +49,12 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "config_name",
             "strategy_type",
             "status",
-            "progress",
-            "current_tick",
             "started_at",
             "completed_at",
             "error_message",
             "created_at",
             "updated_at",
         ]
-
-    def get_progress(self, obj: BacktestTask) -> int:
-        """Calculate progress percentage based on current tick timestamp.
-
-        Returns:
-            int: Progress percentage (0-100)
-        """
-        from apps.trading.enums import TaskStatus, TaskType
-        from apps.trading.models.state import ExecutionState
-
-        # Only calculate progress for running tasks
-        # For completed tasks, return 100; for failed/stopped, return last known progress
-        if obj.status == TaskStatus.COMPLETED:
-            return 100
-        elif obj.status != TaskStatus.RUNNING:
-            # For FAILED, STOPPED, etc., return 0 to avoid showing stale progress
-            return 0
-
-        # Get the execution state for the current celery task only
-        try:
-            # Filter by celery_task_id to get state for current execution only
-            if not obj.celery_task_id:
-                logger.debug(f"[BacktestTaskSerializer] No celery_task_id for task {obj.pk}")
-                return 0
-
-            state = ExecutionState.objects.filter(
-                task_type=TaskType.BACKTEST.value,
-                task_id=obj.pk,
-                celery_task_id=obj.celery_task_id,
-            ).first()
-
-            if not state:
-                logger.debug(f"[BacktestTaskSerializer] No ExecutionState found for task {obj.pk}")
-                return 0
-
-            if not state.last_tick_timestamp:
-                logger.debug(
-                    f"[BacktestTaskSerializer] ExecutionState exists but last_tick_timestamp is None "
-                    f"for task {obj.pk}, ticks_processed={state.ticks_processed}"
-                )
-                return 0
-
-            # Calculate progress based on tick timestamp vs backtest time range
-            total_duration = (obj.end_time - obj.start_time).total_seconds()
-            if total_duration <= 0:
-                logger.warning(
-                    f"[BacktestTaskSerializer] Invalid time range for task {obj.pk}: "
-                    f"start={obj.start_time}, end={obj.end_time}"
-                )
-                return 0
-
-            elapsed = (state.last_tick_timestamp - obj.start_time).total_seconds()
-            progress = int((elapsed / total_duration) * 100)
-
-            logger.debug(
-                f"[BacktestTaskSerializer] Progress for task {obj.pk}: {progress}% "
-                f"(elapsed={elapsed}s, total={total_duration}s, last_tick={state.last_tick_timestamp})"
-            )
-
-            # Clamp between 0 and 99 (never show 100% until completed)
-            return max(0, min(progress, 99))
-
-        except Exception as e:
-            logger.error(
-                f"[BacktestTaskSerializer] Error calculating progress for task {obj.pk}: {e}",
-                exc_info=True,
-            )
-            return 0
-
-    def get_current_tick(self, obj: BacktestTask) -> dict | None:
-        """Return the current tick position and price.
-
-        For running tasks this returns the live tick from ExecutionState.
-        For stopped/completed tasks it returns the last recorded tick so
-        that Unrealized PnL can still be displayed.
-
-        Returns:
-            dict with 'timestamp' (ISO string) and 'price' (string), or None
-        """
-        from apps.trading.enums import TaskType
-        from apps.trading.models.state import ExecutionState
-
-        if not obj.celery_task_id:
-            return None
-
-        try:
-            state = ExecutionState.objects.filter(
-                task_type=TaskType.BACKTEST.value,
-                task_id=obj.pk,
-                celery_task_id=obj.celery_task_id,
-            ).first()
-
-            if not state or not state.last_tick_timestamp:
-                return None
-
-            return {
-                "timestamp": state.last_tick_timestamp.isoformat(),
-                "price": str(state.last_tick_price) if state.last_tick_price is not None else None,
-            }
-        except Exception as e:
-            logger.error(
-                f"[BacktestTaskSerializer] Error getting current_tick for task {obj.pk}: {e}",
-                exc_info=True,
-            )
-            return None
 
 
 class BacktestTaskListSerializer(serializers.ModelSerializer):
@@ -176,7 +64,6 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
     config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
-    progress = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask
@@ -192,11 +79,9 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
             "start_time",
             "end_time",
             "initial_balance",
-            "account_currency",
             "pip_size",
             "instrument",
             "status",
-            "progress",
             "started_at",
             "completed_at",
             "error_message",
@@ -204,72 +89,6 @@ class BacktestTaskListSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields
-
-    def get_progress(self, obj: BacktestTask) -> int:
-        """Calculate progress percentage based on current tick timestamp.
-
-        Returns:
-            int: Progress percentage (0-100)
-        """
-        from apps.trading.enums import TaskStatus, TaskType
-        from apps.trading.models.state import ExecutionState
-
-        # Only calculate progress for running tasks
-        if obj.status != TaskStatus.RUNNING:
-            return 0
-
-        # Get the execution state for the current celery task only
-        try:
-            # Filter by celery_task_id to get state for current execution only
-            if not obj.celery_task_id:
-                logger.debug(f"[BacktestTaskListSerializer] No celery_task_id for task {obj.pk}")
-                return 0
-
-            state = ExecutionState.objects.filter(
-                task_type=TaskType.BACKTEST.value,
-                task_id=obj.pk,
-                celery_task_id=obj.celery_task_id,
-            ).first()
-
-            if not state:
-                logger.debug(
-                    f"[BacktestTaskListSerializer] No ExecutionState found for task {obj.pk}"
-                )
-                return 0
-
-            if not state.last_tick_timestamp:
-                logger.debug(
-                    f"[BacktestTaskListSerializer] ExecutionState exists but last_tick_timestamp is None "
-                    f"for task {obj.pk}, ticks_processed={state.ticks_processed}"
-                )
-                return 0
-
-            # Calculate progress based on tick timestamp vs backtest time range
-            total_duration = (obj.end_time - obj.start_time).total_seconds()
-            if total_duration <= 0:
-                logger.warning(
-                    f"[BacktestTaskListSerializer] Invalid time range for task {obj.pk}: "
-                    f"start={obj.start_time}, end={obj.end_time}"
-                )
-                return 0
-
-            elapsed = (state.last_tick_timestamp - obj.start_time).total_seconds()
-            progress = int((elapsed / total_duration) * 100)
-
-            logger.debug(
-                f"[BacktestTaskListSerializer] Progress for task {obj.pk}: {progress}% "
-                f"(elapsed={elapsed}s, total={total_duration}s, last_tick={state.last_tick_timestamp})"
-            )
-
-            # Clamp between 0 and 99 (never show 100% until completed)
-            return max(0, min(progress, 99))
-
-        except Exception as e:
-            logger.error(
-                f"[BacktestTaskListSerializer] Error calculating progress for task {obj.pk}: {e}",
-                exc_info=True,
-            )
-            return 0
 
 
 class BacktestTaskCreateSerializer(serializers.ModelSerializer):

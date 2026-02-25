@@ -48,8 +48,9 @@ export default function ConfigurationDetailPage() {
   const { strategies } = useStrategies();
 
   // Resolve the schema for the current strategy type.
-  // Prefer the frontend-defined schema (which includes group metadata)
-  // over the API-returned one.
+  // The backend JSON schema is the single source of truth (includes group,
+  // title, description, default, dependsOn). The frontend override map
+  // (STRATEGY_CONFIG_SCHEMAS) is checked first but is normally empty.
   const configSchema: ConfigSchema | undefined = (() => {
     if (!configuration) return undefined;
     const frontendSchema = STRATEGY_CONFIG_SCHEMAS[configuration.strategy_type];

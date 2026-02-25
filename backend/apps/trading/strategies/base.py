@@ -143,3 +143,25 @@ class Strategy(ABC):
         from apps.trading.dataclasses import StrategyResult
 
         return StrategyResult(state=state, events=[])
+
+    def on_position_opened(
+        self,
+        *,
+        state: "ExecutionState",
+        entry_id: int | None,
+        position_id: str,
+    ) -> None:
+        """Called after an entry event creates a position.
+
+        Allows strategies to write the position_id back into their
+        strategy_state for subsequent exit event targeting.
+
+        The default implementation is a no-op. Override in strategies
+        that need to track position IDs (e.g., Floor strategy).
+
+        Args:
+            state: Current execution state (strategy_state is mutable)
+            entry_id: Strategy-internal entry ID (None if not applicable)
+            position_id: UUID string of the created Position
+        """
+        pass
