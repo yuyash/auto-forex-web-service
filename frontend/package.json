@@ -69,6 +69,9 @@
     "vite": "^7.1.12",
     "vitest": "^4.0.6"
   },
+  "overrides": {
+    "react-is": "19.2.4"
+  },
   "prettier": {
     "semi": true,
     "singleQuote": true,
