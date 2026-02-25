@@ -1,12 +1,12 @@
 /**
- * Fetch metric snapshots (margin ratio, volatility) for replay overlay charts.
+ * Fetch metrics (margin ratio, volatility) for replay overlay charts.
  */
 
 import { getAuthToken } from '../api/client';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from './authEvents';
 
-export interface MetricSnapshotPoint {
+export interface MetricPoint {
   /** Unix timestamp (seconds) */
   t: number;
   /** Margin ratio (required_margin / NAV) */
@@ -19,13 +19,13 @@ export interface MetricSnapshotPoint {
   vt: number | null;
 }
 
-export async function fetchMetricSnapshots(
+export async function fetchMetrics(
   taskId: string,
   taskType: TaskType,
   maxPoints?: number,
   since?: string,
   celeryTaskId?: string
-): Promise<MetricSnapshotPoint[]> {
+): Promise<MetricPoint[]> {
   const prefix =
     taskType === TaskType.BACKTEST
       ? '/api/trading/tasks/backtest'
@@ -36,7 +36,7 @@ export async function fetchMetricSnapshots(
   if (since) searchParams.set('since', since);
   if (celeryTaskId) searchParams.set('celery_task_id', celeryTaskId);
   const qs = searchParams.toString();
-  const url = `${prefix}/${taskId}/metric_snapshots/${qs ? `?${qs}` : ''}`;
+  const url = `${prefix}/${taskId}/metrics/${qs ? `?${qs}` : ''}`;
 
   const response = await fetch(url, {
     method: 'GET',
@@ -52,13 +52,13 @@ export async function fetchMetricSnapshots(
   handleAuthErrorStatus(response.status, {
     source: 'http',
     status: response.status,
-    context: 'metric_snapshots',
+    context: 'metrics',
   });
 
   if (!response.ok) return [];
 
   const body = (await response.json().catch(() => ({}))) as {
-    snapshots?: MetricSnapshotPoint[];
+    metrics?: MetricPoint[];
   };
-  return body.snapshots ?? [];
+  return body.metrics ?? [];
 }

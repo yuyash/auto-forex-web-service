@@ -64,8 +64,8 @@ class FloorStrategyConfig:
     take_profit_pips_amount: Decimal
     max_layers: int
     max_retracements_per_layer: int
-    candle_granularity_seconds: int
-    candle_lookback_count: int
+    entry_signal_candle_granularity_seconds: int
+    entry_signal_lookback_candles: int
     hedging_enabled: bool
     layer_direction_mode: str  # "independent" = re-evaluate, "inherit" = same as previous layer
     allow_duplicate_units: bool
@@ -85,24 +85,13 @@ class FloorStrategyConfig:
 
     @staticmethod
     def from_dict(raw: dict[str, Any]) -> "FloorStrategyConfig":
-        """Create normalized config from raw/legacy parameters."""
+        """Create FloorStrategyConfig from a parameters dictionary."""
         lot_unit_size = _to_decimal(raw.get("lot_unit_size", "1000"), "1000")
-        legacy_initial_units = raw.get("initial_units")
-        if legacy_initial_units is not None:
-            base_lot_size = _to_decimal(legacy_initial_units, "1000") / lot_unit_size
-        else:
-            base_lot_size = _to_decimal(raw.get("base_lot_size", "1"), "1")
+        base_lot_size = _to_decimal(raw.get("base_lot_size", "1"), "1")
+        take_profit_pips = _to_decimal(raw.get("take_profit_pips", "25"), "25")
+        retracement_pips = _to_decimal(raw.get("retracement_pips", "30"), "30")
 
-        take_profit_pips = _to_decimal(
-            raw.get("take_profit_pips", raw.get("profit_pips", "25")), "25"
-        )
-        retracement_pips = _to_decimal(
-            raw.get("retracement_pips", raw.get("initial_retracement_pips", "30")), "30"
-        )
         retracement_lot_mode = str(raw.get("retracement_lot_mode", "additive")).strip().lower()
-        # Migrate legacy "inverse" → "divisive"
-        if retracement_lot_mode == "inverse":
-            retracement_lot_mode = "divisive"
         if retracement_lot_mode not in {
             "constant",
             "additive",
@@ -111,16 +100,8 @@ class FloorStrategyConfig:
             "divisive",
         }:
             retracement_lot_mode = "additive"
+        retracement_lot_amount = _to_decimal(raw.get("retracement_lot_amount", "1"), "1")
 
-        retracement_lot_amount = _to_decimal(
-            raw.get(
-                "retracement_lot_amount",
-                raw.get("unit_increment", "1"),
-            ),
-            "1",
-        )
-
-        # Cross-layer retracement trigger progression
         retracement_trigger_progression = (
             str(raw.get("retracement_trigger_progression", "constant")).strip().lower()
         )
@@ -136,7 +117,6 @@ class FloorStrategyConfig:
             raw.get("retracement_trigger_increment", "5"), "5"
         )
 
-        # Cross-layer take-profit trigger progression
         take_profit_trigger_progression = (
             str(raw.get("take_profit_trigger_progression", "constant")).strip().lower()
         )
@@ -152,7 +132,6 @@ class FloorStrategyConfig:
             raw.get("take_profit_trigger_increment", "5"), "5"
         )
 
-        # Intra-layer take-profit pips adjustment
         take_profit_pips_mode = str(raw.get("take_profit_pips_mode", "constant")).strip().lower()
         if take_profit_pips_mode not in {
             "constant",
@@ -163,10 +142,6 @@ class FloorStrategyConfig:
         }:
             take_profit_pips_mode = "constant"
         take_profit_pips_amount = _to_decimal(raw.get("take_profit_pips_amount", "5"), "5")
-
-        max_retracements_per_layer = _to_int(
-            raw.get("max_retracements_per_layer", raw.get("max_additional_entries", 10)), 10
-        )
 
         floor_profiles: list[dict[str, Decimal]] = []
         raw_profiles = raw.get("floor_profiles")
@@ -184,32 +159,6 @@ class FloorStrategyConfig:
                         ),
                     }
                 )
-        else:
-            # Backward compatibility with array-based per-floor keys.
-            tp_values = raw.get("floor_take_profit_pips")
-            rt_values = raw.get("floor_retracement_pips")
-            if isinstance(tp_values, list) or isinstance(rt_values, list):
-                max_len = max(
-                    len(tp_values) if isinstance(tp_values, list) else 0,
-                    len(rt_values) if isinstance(rt_values, list) else 0,
-                )
-                for idx in range(max_len):
-                    tp_val = (
-                        tp_values[idx]
-                        if isinstance(tp_values, list) and idx < len(tp_values)
-                        else take_profit_pips
-                    )
-                    rt_val = (
-                        rt_values[idx]
-                        if isinstance(rt_values, list) and idx < len(rt_values)
-                        else retracement_pips
-                    )
-                    floor_profiles.append(
-                        {
-                            "take_profit_pips": _to_decimal(tp_val, str(take_profit_pips)),
-                            "retracement_pips": _to_decimal(rt_val, str(retracement_pips)),
-                        }
-                    )
 
         return FloorStrategyConfig(
             lot_unit_size=lot_unit_size,
@@ -225,20 +174,12 @@ class FloorStrategyConfig:
             take_profit_pips_mode=take_profit_pips_mode,
             take_profit_pips_amount=take_profit_pips_amount,
             max_layers=_to_int(raw.get("max_layers", "3"), 3),
-            max_retracements_per_layer=max_retracements_per_layer,
-            candle_granularity_seconds=_to_int(
-                raw.get(
-                    "candle_granularity_seconds",
-                    raw.get("entry_signal_candle_granularity_seconds", "60"),
-                ),
-                60,
+            max_retracements_per_layer=_to_int(raw.get("max_retracements_per_layer", "10"), 10),
+            entry_signal_candle_granularity_seconds=_to_int(
+                raw.get("entry_signal_candle_granularity_seconds", "60"), 60
             ),
-            candle_lookback_count=_to_int(
-                raw.get(
-                    "candle_lookback_count",
-                    raw.get("entry_signal_lookback_candles", "20"),
-                ),
-                20,
+            entry_signal_lookback_candles=_to_int(
+                raw.get("entry_signal_lookback_candles", "50"), 50
             ),
             hedging_enabled=_to_bool(raw.get("hedging_enabled", True), True),
             layer_direction_mode=(
@@ -290,8 +231,8 @@ class FloorStrategyConfig:
             "take_profit_pips_amount": str(self.take_profit_pips_amount),
             "max_layers": self.max_layers,
             "max_retracements_per_layer": self.max_retracements_per_layer,
-            "candle_granularity_seconds": self.candle_granularity_seconds,
-            "candle_lookback_count": self.candle_lookback_count,
+            "entry_signal_candle_granularity_seconds": self.entry_signal_candle_granularity_seconds,
+            "entry_signal_lookback_candles": self.entry_signal_lookback_candles,
             "hedging_enabled": self.hedging_enabled,
             "layer_direction_mode": self.layer_direction_mode,
             "allow_duplicate_units": self.allow_duplicate_units,

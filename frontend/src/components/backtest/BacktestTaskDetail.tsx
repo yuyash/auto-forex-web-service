@@ -628,7 +628,7 @@ export const BacktestTaskDetail: React.FC = () => {
             startTime={task.start_time}
             endTime={task.end_time}
             latestExecution={task.latest_execution}
-            currentTick={polledTick ?? task.current_tick ?? null}
+            currentTick={polledTick ?? null}
             enableRealTimeUpdates={
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
@@ -647,11 +647,7 @@ export const BacktestTaskDetail: React.FC = () => {
               (polledStatus?.status || task.status) === TaskStatus.RUNNING
             }
             currentPrice={
-              polledTick?.price != null
-                ? parseFloat(polledTick.price)
-                : task.current_tick?.price != null
-                  ? parseFloat(task.current_tick.price)
-                  : null
+              polledTick?.price != null ? parseFloat(polledTick.price) : null
             }
             pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
           />

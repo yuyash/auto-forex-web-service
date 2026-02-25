@@ -10,8 +10,8 @@ from apps.trading.strategies.floor.models import CandleData, FloorStrategyConfig
 class TestCandleManager:
     def _make_config(self):
         config = MagicMock(spec=FloorStrategyConfig)
-        config.candle_granularity_seconds = 300
-        config.candle_lookback_count = 5
+        config.entry_signal_candle_granularity_seconds = 300
+        config.entry_signal_lookback_candles = 5
         return config
 
     def _make_state(self):
@@ -41,7 +41,7 @@ class TestCandleManager:
 
     def test_has_enough_candles_true(self):
         config = self._make_config()
-        config.candle_lookback_count = 2
+        config.entry_signal_lookback_candles = 2
         mgr = CandleManager(config)
         state = self._make_state()
         state.candles = [

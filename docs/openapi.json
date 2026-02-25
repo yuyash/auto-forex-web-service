@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.2.0",
+        "version": "1.2.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -1300,15 +1300,15 @@
         "/api/market/ticks/": {
             "get": {
                 "operationId": "market_ticks",
-                "description": "Fetch historical tick data from DB.",
+                "description": "Fetch historical tick data from DB with cursor-based pagination.",
                 "parameters": [
                     {
                         "in": "query",
-                        "name": "count",
+                        "name": "cursor",
                         "schema": {
-                            "type": "integer",
-                            "default": 5000
-                        }
+                            "type": "string"
+                        },
+                        "description": "Cursor returned by previous response for pagination"
                     },
                     {
                         "in": "query",
@@ -1324,6 +1324,14 @@
                             "type": "string"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "limit",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Page size (1-5000, default 5000)"
                     },
                     {
                         "in": "query",
@@ -1358,7 +1366,7 @@
                 }
             }
         },
-        "/api/market/ticks/data-range/": {
+        "/api/market/ticks/range/": {
             "get": {
                 "operationId": "market_ticks_range",
                 "description": "Get available date range of tick data per instrument.",
@@ -1925,47 +1933,6 @@
                 }
             }
         },
-        "/api/trading/tasks/backtest/{id}/current-tick/": {
-            "get": {
-                "operationId": "trading_tasks_backtest_current_tick_retrieve",
-                "description": "Return the current tick for a running (or recently stopped) task.\n\nReads the latest tick from ExecutionState so the frontend can\ndisplay chart progress without fetching the full task payload.",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "description": "Unique identifier for this record"
-                        },
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "trading"
-                ],
-                "security": [
-                    {
-                        "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/BacktestTask"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/api/trading/tasks/backtest/{id}/events/": {
             "get": {
                 "operationId": "trading_tasks_backtest_events_retrieve",
@@ -2048,9 +2015,9 @@
                 }
             }
         },
-        "/api/trading/tasks/backtest/{id}/metric_snapshots/": {
+        "/api/trading/tasks/backtest/{id}/metrics/": {
             "get": {
-                "operationId": "trading_tasks_backtest_metric_snapshots_retrieve",
+                "operationId": "trading_tasks_backtest_metrics_retrieve",
                 "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
                     {
@@ -2779,47 +2746,6 @@
                 }
             }
         },
-        "/api/trading/tasks/trading/{id}/current-tick/": {
-            "get": {
-                "operationId": "trading_tasks_trading_current_tick_retrieve",
-                "description": "Return the current tick for a running (or recently stopped) task.\n\nReads the latest tick from ExecutionState so the frontend can\ndisplay chart progress without fetching the full task payload.",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "description": "Unique identifier for this record"
-                        },
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "trading"
-                ],
-                "security": [
-                    {
-                        "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TradingTask"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/api/trading/tasks/trading/{id}/events/": {
             "get": {
                 "operationId": "trading_tasks_trading_events_retrieve",
@@ -2902,9 +2828,9 @@
                 }
             }
         },
-        "/api/trading/tasks/trading/{id}/metric_snapshots/": {
+        "/api/trading/tasks/trading/{id}/metrics/": {
             "get": {
-                "operationId": "trading_tasks_trading_metric_snapshots_retrieve",
+                "operationId": "trading_tasks_trading_metrics_retrieve",
                 "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
                 "parameters": [
                     {
@@ -3369,67 +3295,6 @@
                     }
                 }
             }
-        },
-        "/api/trading/ticks/": {
-            "get": {
-                "operationId": "trading_ticks_list",
-                "description": "Return ticks for a given instrument, date range, and count.",
-                "parameters": [
-                    {
-                        "in": "query",
-                        "name": "count",
-                        "schema": {
-                            "type": "integer",
-                            "default": 5000
-                        }
-                    },
-                    {
-                        "in": "query",
-                        "name": "from_time",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "in": "query",
-                        "name": "instrument",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "to_time",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "tags": [
-                    "Trading"
-                ],
-                "security": [
-                    {
-                        "JWTAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TradingTickDataResponse"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
         }
     },
     "components": {
@@ -3531,11 +3396,6 @@
                         "readOnly": true,
                         "description": "User who created this backtest task"
                     },
-                    "config": {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Strategy configuration used by this task"
-                    },
                     "config_id": {
                         "type": "string",
                         "format": "uuid",
@@ -3573,11 +3433,6 @@
                         "pattern": "^-?\\d{0,13}(?:\\.\\d{0,2})?$",
                         "description": "Initial account balance for backtest"
                     },
-                    "account_currency": {
-                        "type": "string",
-                        "description": "Account base currency (e.g., USD, JPY)",
-                        "maxLength": 3
-                    },
                     "commission_per_trade": {
                         "type": "string",
                         "format": "decimal",
@@ -3595,35 +3450,20 @@
                         "type": "string",
                         "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
                         "maxLength": 20
-                    },
-                    "progress": {
-                        "type": "integer",
-                        "description": "Calculate backtest progress percentage based on current tick timestamp.\n\nProgress is calculated as:\n(current_tick_timestamp - start_time) / (end_time - start_time) * 100\n\nArgs:\n    obj: BacktestTask instance\n\nReturns:\n    int: Progress percentage (0-100)",
-                        "readOnly": true
-                    },
-                    "current_tick": {
-                        "type": "object",
-                        "additionalProperties": {},
-                        "nullable": true,
-                        "description": "Return the current tick position and price.\n\nFor running tasks this returns the live tick from ExecutionState.\nFor stopped/completed tasks it returns the last recorded tick so\nthat Unrealized PnL can still be displayed.\n\nReturns:\n    dict with 'timestamp' (ISO string) and 'price' (string), or None",
-                        "readOnly": true
                     }
                 },
                 "required": [
                     "celery_task_id",
                     "completed_at",
-                    "config",
                     "config_id",
                     "config_name",
                     "created_at",
-                    "current_tick",
                     "duration",
                     "end_time",
                     "error_message",
                     "error_traceback",
                     "id",
                     "name",
-                    "progress",
                     "start_time",
                     "started_at",
                     "status",
@@ -3790,11 +3630,6 @@
                         "type": "string",
                         "description": "Optional description of this backtest task"
                     },
-                    "config": {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Strategy configuration used by this task"
-                    },
                     "data_source": {
                         "allOf": [
                             {
@@ -3819,12 +3654,6 @@
                         "pattern": "^-?\\d{0,13}(?:\\.\\d{0,2})?$",
                         "description": "Initial account balance for backtest"
                     },
-                    "account_currency": {
-                        "type": "string",
-                        "minLength": 1,
-                        "description": "Account base currency (e.g., USD, JPY)",
-                        "maxLength": 3
-                    },
                     "commission_per_trade": {
                         "type": "string",
                         "format": "decimal",
@@ -3846,7 +3675,6 @@
                     }
                 },
                 "required": [
-                    "config",
                     "end_time",
                     "name",
                     "start_time"
@@ -4240,6 +4068,10 @@
                     "instrument": {
                         "type": "string"
                     },
+                    "next_cursor": {
+                        "type": "string",
+                        "nullable": true
+                    },
                     "ticks": {
                         "type": "array",
                         "items": {
@@ -4250,6 +4082,7 @@
                 "required": [
                     "count",
                     "instrument",
+                    "next_cursor",
                     "ticks"
                 ]
             },
@@ -5780,11 +5613,6 @@
                         "readOnly": true,
                         "description": "User who created this trading task"
                     },
-                    "config": {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Strategy configuration used by this task"
-                    },
                     "config_id": {
                         "type": "string",
                         "format": "uuid",
@@ -5829,13 +5657,6 @@
                     "strategy_state": {
                         "readOnly": true,
                         "description": "Strategy-specific state for persistence across restarts"
-                    },
-                    "current_tick": {
-                        "type": "object",
-                        "additionalProperties": {},
-                        "nullable": true,
-                        "description": "Return the current tick position and price.\n\nFor running tasks this returns the live tick from ExecutionState.\nFor stopped/completed tasks it returns the last recorded tick so\nthat Unrealized PnL can still be displayed.\n\nReturns:\n    dict with 'timestamp' (ISO string) and 'price' (string), or None",
-                        "readOnly": true
                     }
                 },
                 "required": [
@@ -5843,11 +5664,9 @@
                     "account_type",
                     "celery_task_id",
                     "completed_at",
-                    "config",
                     "config_id",
                     "config_name",
                     "created_at",
-                    "current_tick",
                     "duration",
                     "error_message",
                     "error_traceback",
@@ -5932,11 +5751,6 @@
                         "type": "string",
                         "description": "Optional description of this trading task"
                     },
-                    "config": {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Strategy configuration used by this task"
-                    },
                     "oanda_account": {
                         "type": "integer",
                         "description": "OANDA account used for trading"
@@ -5960,58 +5774,8 @@
                     }
                 },
                 "required": [
-                    "config",
                     "name",
                     "oanda_account"
-                ]
-            },
-            "TradingTickDataResponse": {
-                "type": "object",
-                "properties": {
-                    "count": {
-                        "type": "integer"
-                    },
-                    "instrument": {
-                        "type": "string"
-                    },
-                    "ticks": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/TradingTickItem"
-                        }
-                    }
-                },
-                "required": [
-                    "count",
-                    "instrument",
-                    "ticks"
-                ]
-            },
-            "TradingTickItem": {
-                "type": "object",
-                "properties": {
-                    "instrument": {
-                        "type": "string"
-                    },
-                    "timestamp": {
-                        "type": "string"
-                    },
-                    "bid": {
-                        "type": "string"
-                    },
-                    "ask": {
-                        "type": "string"
-                    },
-                    "mid": {
-                        "type": "string"
-                    }
-                },
-                "required": [
-                    "ask",
-                    "bid",
-                    "instrument",
-                    "mid",
-                    "timestamp"
                 ]
             },
             "UserLogin": {

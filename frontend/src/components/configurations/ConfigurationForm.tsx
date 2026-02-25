@@ -184,8 +184,9 @@ const ConfigurationForm = ({
   const initialStrategySchema = useMemo<ConfigSchema | undefined>(() => {
     if (!initialStrategyType) return undefined;
 
-    // Prefer the frontend-defined schema (which includes group metadata)
-    // over the API-returned one.
+    // The backend JSON schema is the single source of truth.
+    // STRATEGY_CONFIG_SCHEMAS is checked first as an optional override
+    // but is normally empty.
     const frontendSchema = STRATEGY_CONFIG_SCHEMAS[initialStrategyType];
     if (frontendSchema) return frontendSchema;
 
@@ -255,8 +256,8 @@ const ConfigurationForm = ({
   const strategySchema = useMemo<ConfigSchema | undefined>(() => {
     if (!selectedStrategyType) return undefined;
 
-    // Prefer the frontend-defined schema (which includes group metadata)
-    // over the API-returned one.
+    // The backend JSON schema is the single source of truth.
+    // STRATEGY_CONFIG_SCHEMAS is checked first as an optional override.
     const frontendSchema = STRATEGY_CONFIG_SCHEMAS[selectedStrategyType];
     if (frontendSchema) return frontendSchema;
 

@@ -27,7 +27,6 @@ export interface TradingTask {
   celery_task_id?: string;
   error_message?: string;
   pip_size?: string;
-  current_tick?: { timestamp: string; price: string | null } | null;
   created_at: string;
   updated_at: string;
 }
