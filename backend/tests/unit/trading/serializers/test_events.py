@@ -32,6 +32,20 @@ class TestTradingEventSerializer:
         result = serializer.get_event_type_display(obj)
         assert result == "nonexistent_type"
 
+    def test_get_event_scope_task(self):
+        serializer = TradingEventSerializer()
+        obj = MagicMock()
+        obj.event_type = EventType.STATUS_CHANGED.value
+        obj.details = {"kind": "task_stop_requested"}
+        assert serializer.get_event_scope(obj) == "task"
+
+    def test_get_event_scope_trading(self):
+        serializer = TradingEventSerializer()
+        obj = MagicMock()
+        obj.event_type = EventType.OPEN_POSITION.value
+        obj.details = {"event_type": "initial_entry", "strategy_event_type": "initial_entry"}
+        assert serializer.get_event_scope(obj) == "trading"
+
 
 class TestTradeSerializer:
     """Test TradeSerializer."""

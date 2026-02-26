@@ -18,7 +18,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.trading.enums import StopMode, TaskStatus
-from apps.trading.models import BacktestTask, TradingEvent, TradingTask
+from apps.trading.models import (
+    BacktestTask,
+    StrategyEventRecord,
+    TradingEvent,
+    TradingTask,
+)
 from apps.trading.tasks import (
     run_backtest_task,
     run_trading_task,
@@ -51,6 +56,45 @@ class TaskService:
         if celery_task_id:
             return AsyncResult(celery_task_id)
         return None
+
+    @staticmethod
+    def _emit_task_lifecycle_event(
+        *,
+        task: BacktestTask | TradingTask,
+        kind: str,
+        description: str,
+        extra_details: dict[str, object] | None = None,
+    ) -> None:
+        task_type = "backtest" if isinstance(task, BacktestTask) else "trading"
+        details = {
+            "kind": kind,
+            "status": str(task.status),
+            "task_name": str(getattr(task, "name", "")),
+        }
+        if extra_details:
+            details.update(extra_details)
+
+        try:
+            TradingEvent.objects.create(
+                event_type="status_changed",
+                severity="info",
+                description=description,
+                user=getattr(task, "user", None),
+                account=getattr(task, "oanda_account", None),
+                instrument=getattr(task, "instrument", None),
+                task_type=task_type,
+                task_id=task.pk,
+                execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
+                celery_task_id=getattr(task, "celery_task_id", None),
+                details=details,
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging path
+            logger.warning(
+                "[SERVICE:EVENT] Failed to persist lifecycle event - task_id=%s, kind=%s, error=%s",
+                task.pk,
+                kind,
+                exc,
+            )
 
     def start_task(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
         """Submit a task to Celery for execution.
@@ -247,6 +291,11 @@ class TaskService:
                 task.pk,
                 task.celery_task_id,
                 task.status,
+            )
+            self._emit_task_lifecycle_event(
+                task=task,
+                kind="task_start_requested",
+                description="Task start requested",
             )
 
             from celery import current_app
@@ -477,6 +526,12 @@ class TaskService:
                 )
 
             logger.info(f"[SERVICE:STOP] SUCCESS - Stop initiated for task_id={task_id}")
+            self._emit_task_lifecycle_event(
+                task=task,
+                kind="task_stop_requested",
+                description="Task stop requested",
+                extra_details={"mode": stop_mode.value},
+            )
 
             return True
         except ValueError:
@@ -535,6 +590,11 @@ class TaskService:
             # Update task status to PAUSED
             task.status = TaskStatus.PAUSED
             task.save(update_fields=["status", "updated_at"])
+            self._emit_task_lifecycle_event(
+                task=task,
+                kind="task_paused",
+                description="Task paused",
+            )
 
             logger.info(
                 "Task paused successfully",
@@ -602,6 +662,11 @@ class TaskService:
             task.status = TaskStatus.STOPPED
             task.completed_at = timezone.now()
             task.save(update_fields=["status", "completed_at", "updated_at"])
+            self._emit_task_lifecycle_event(
+                task=task,
+                kind="task_cancelled",
+                description="Task cancelled",
+            )
 
             logger.info(
                 "Task cancelled successfully",
@@ -710,8 +775,12 @@ class TaskService:
             events_deleted = TradingEvent.objects.filter(
                 task_type=task_type, task_id=task.pk
             ).delete()
+            strategy_events_deleted = StrategyEventRecord.objects.filter(
+                task_type=task_type, task_id=task.pk
+            ).delete()
             logger.info(
-                f"[SERVICE:RESTART] Events cleared - task_id={task_id}, count={events_deleted[0]}"
+                f"[SERVICE:RESTART] Events cleared - task_id={task_id}, trading_count={events_deleted[0]}, "
+                f"strategy_count={strategy_events_deleted[0]}"
             )
 
             # Clear execution state
@@ -750,6 +819,11 @@ class TaskService:
                 raise RuntimeError(
                     f"Failed to reset task status: expected CREATED, got {task.status}"
                 )
+            self._emit_task_lifecycle_event(
+                task=task,
+                kind="task_restart_requested",
+                description="Task restart requested",
+            )
 
             # Resubmit the task
             logger.info(f"[SERVICE:RESTART] Resubmitting task - task_id={task_id}")
@@ -833,6 +907,11 @@ class TaskService:
             task.celery_task_id = None
             task.status = TaskStatus.CREATED
             task.save(update_fields=["celery_task_id", "status", "updated_at"])
+            self._emit_task_lifecycle_event(
+                task=task,
+                kind="task_resume_requested",
+                description="Task resume requested",
+            )
 
             logger.info(
                 "Task resumed, resubmitting",

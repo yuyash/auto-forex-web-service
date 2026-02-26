@@ -118,3 +118,87 @@ class TradingEvent(models.Model):
             instrument=context.instrument,
             details=event.to_dict(),
         )
+
+
+class StrategyEventRecord(models.Model):
+    """Persistent log for strategy-internal events.
+
+    These events are emitted by strategies for visualization/diagnostics and are
+    intentionally decoupled from order execution in EventHandler.
+    """
+
+    event_type = models.CharField(max_length=64, db_index=True)
+    severity = models.CharField(max_length=16, default="info", db_index=True)
+    description = models.TextField()
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="strategy_events",
+    )
+    account = models.ForeignKey(
+        "market.OandaAccounts",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="strategy_events",
+    )
+    instrument = models.CharField(max_length=32, null=True, blank=True, db_index=True)
+
+    task_type = models.CharField(max_length=32, blank=True, default="", db_index=True)
+    task_id = models.UUIDField(null=True, blank=True, db_index=True)
+    execution_run_id = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        help_text="Execution run identifier for run-scoped event queries",
+    )
+    celery_task_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Celery task ID for tracking specific execution",
+    )
+
+    details = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "strategy_events"
+        verbose_name = "Strategy Event"
+        verbose_name_plural = "Strategy Events"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["task_type", "task_id", "-created_at"]),
+            models.Index(fields=["task_type", "task_id", "execution_run_id", "-created_at"]),
+            models.Index(fields=["event_type", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.created_at.isoformat()} [{self.severity}] {self.event_type}"
+
+    @classmethod
+    def from_event(
+        cls,
+        *,
+        event: "StrategyEvent",
+        context: "EventContext",
+        celery_task_id: str | None = None,
+        execution_run_id: int = 0,
+    ) -> "StrategyEventRecord":
+        """Create a StrategyEventRecord from a StrategyEvent."""
+        return cls(
+            task_type=context.task_type.value,
+            task_id=context.task_id,
+            execution_run_id=execution_run_id,
+            celery_task_id=celery_task_id,
+            event_type=event.event_type,
+            severity="info",
+            description=str(event.to_dict()),
+            user=context.user,
+            account=context.account,
+            instrument=context.instrument,
+            details=event.to_dict(),
+        )

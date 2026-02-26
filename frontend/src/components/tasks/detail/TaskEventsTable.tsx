@@ -19,7 +19,11 @@ import {
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
-import { useTaskEvents, type TaskEvent } from '../../../hooks/useTaskEvents';
+import {
+  useTaskEvents,
+  type TaskEvent,
+  type TaskEventSource,
+} from '../../../hooks/useTaskEvents';
 import { TaskType } from '../../../types/common';
 
 interface TaskEventsTableProps {
@@ -36,6 +40,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
   enableRealTimeUpdates = false,
 }) => {
   const [severityFilter, setSeverityFilter] = useState<string>('');
+  const [sourceFilter, setSourceFilter] = useState<TaskEventSource>('trading');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
   const [isReloading, setIsReloading] = useState(false);
@@ -44,6 +49,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
     taskId,
     taskType,
     executionRunId,
+    source: sourceFilter,
     severity: severityFilter || undefined,
     page: page + 1,
     pageSize: rowsPerPage,
@@ -91,6 +97,10 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
 
   const handleSeverityChange = (value: string) => {
     setSeverityFilter(value);
+    setPage(0);
+  };
+  const handleSourceChange = (value: TaskEventSource) => {
+    setSourceFilter(value);
     setPage(0);
   };
 
@@ -222,6 +232,20 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
         }}
       >
         <Typography variant="h6">Task Events</Typography>
+        <FormControl sx={{ minWidth: 170 }}>
+          <InputLabel>Category</InputLabel>
+          <Select
+            value={sourceFilter}
+            label="Category"
+            onChange={(e) =>
+              handleSourceChange(e.target.value as TaskEventSource)
+            }
+          >
+            <MenuItem value="task">Task Events</MenuItem>
+            <MenuItem value="trading">Trading Events</MenuItem>
+            <MenuItem value="strategy">Strategy Events</MenuItem>
+          </Select>
+        </FormControl>
         <FormControl sx={{ minWidth: 150 }}>
           <InputLabel>Severity Filter</InputLabel>
           <Select

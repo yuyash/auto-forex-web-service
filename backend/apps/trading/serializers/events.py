@@ -7,7 +7,7 @@ from typing import Any, cast
 from rest_framework import serializers
 
 from apps.trading.enums import Direction, EventType
-from apps.trading.models import TradingEvent
+from apps.trading.models import StrategyEventRecord, TradingEvent
 
 
 class TradingEventSerializer(serializers.ModelSerializer):
@@ -17,6 +17,9 @@ class TradingEventSerializer(serializers.ModelSerializer):
     event_type_display = serializers.SerializerMethodField(
         help_text="Human-readable display name for the event type.",
     )
+    event_scope = serializers.SerializerMethodField(
+        help_text="Event scope: trading or task.",
+    )
 
     class Meta:
         model = TradingEvent
@@ -24,6 +27,7 @@ class TradingEventSerializer(serializers.ModelSerializer):
             "id",
             "event_type",
             "event_type_display",
+            "event_scope",
             "severity",
             "description",
             "user",
@@ -39,6 +43,45 @@ class TradingEventSerializer(serializers.ModelSerializer):
 
     def get_event_type_display(self, obj: TradingEvent) -> str:
         """Return the human-readable label for the event type."""
+        try:
+            return EventType(obj.event_type).label
+        except ValueError:
+            return obj.event_type
+
+    def get_event_scope(self, obj: TradingEvent) -> str:
+        details = obj.details if isinstance(obj.details, dict) else {}
+        return EventType.scope_of(obj.event_type, details=details)
+
+
+class StrategyEventSerializer(serializers.ModelSerializer):
+    """Serializer for strategy-internal events."""
+
+    event_type_display = serializers.SerializerMethodField(
+        help_text="Human-readable display name for the event type.",
+    )
+    event_scope = serializers.CharField(default="strategy", read_only=True)
+
+    class Meta:
+        model = StrategyEventRecord
+        fields = [
+            "id",
+            "event_type",
+            "event_type_display",
+            "event_scope",
+            "severity",
+            "description",
+            "user",
+            "account",
+            "instrument",
+            "task_type",
+            "task_id",
+            "execution_run_id",
+            "details",
+            "created_at",
+        ]
+        read_only_fields = ["id", "event_type_display", "event_scope", "created_at"]
+
+    def get_event_type_display(self, obj: StrategyEventRecord) -> str:
         try:
             return EventType(obj.event_type).label
         except ValueError:

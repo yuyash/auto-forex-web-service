@@ -5,7 +5,7 @@ This package organizes trading models into logical modules:
 - backtest: BacktestTask
 - trading: TradingTask
 - state: ExecutionState
-- events: TradingEvent
+- events: TradingEvent, StrategyEventRecord
 - celery: CeleryTaskStatus
 - logs: TaskLog
 - trades: Trades
@@ -24,7 +24,7 @@ from apps.trading.models.configs import (
     StrategyConfigurationManager,
 )
 from apps.trading.models.equities import Equity
-from apps.trading.models.events import TradingEvent
+from apps.trading.models.events import StrategyEventRecord, TradingEvent
 from apps.trading.models.floor import Layer
 from apps.trading.models.logs import TaskLog
 from apps.trading.models.metrics import Metrics
@@ -50,6 +50,7 @@ __all__ = [
     "ExecutionState",
     # Events
     "TradingEvent",
+    "StrategyEventRecord",
     # Celery
     "CeleryTaskStatus",
     # Logs

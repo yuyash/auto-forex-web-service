@@ -46,7 +46,7 @@ class Trade(models.Model):
         max_length=10,
         null=True,
         blank=True,
-        help_text="Trade direction (LONG/SHORT). Null for close-only trades (e.g. take profit).",
+        help_text="Trade direction (LONG/SHORT). Null for close-only trades.",
     )
     units = models.IntegerField(
         help_text="Number of units traded",
@@ -69,7 +69,7 @@ class Trade(models.Model):
     )
     execution_method = models.CharField(
         max_length=64,
-        help_text="Event type that triggered trade (e.g., INITIAL_ENTRY, RETRACEMENT)",
+        help_text="Event type that triggered trade (e.g., OPEN_POSITION, CLOSE_POSITION)",
     )
     layer_index = models.IntegerField(
         null=True,
