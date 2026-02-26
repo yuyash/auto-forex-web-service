@@ -1,4 +1,4 @@
-from django.db import migrations
+from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
@@ -7,8 +7,14 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql="ALTER TABLE trades ALTER COLUMN direction DROP NOT NULL;",
-            reverse_sql=migrations.RunSQL.noop,
+        migrations.AlterField(
+            model_name="trade",
+            name="direction",
+            field=models.CharField(
+                blank=True,
+                help_text="Trade direction (LONG/SHORT). Null for close-only trades.",
+                max_length=10,
+                null=True,
+            ),
         ),
     ]
